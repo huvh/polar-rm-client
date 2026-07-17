@@ -670,10 +670,12 @@ def test_hud_modes_and_rmui_modules() -> None:
     assert module_list_style.options == MODULE_LIST_STYLES
     assert "PolarTextList" in MODULE_LIST_STYLES
     assert "PolarRainbowRight" in MODULE_LIST_STYLES
+    assert "DebugWhiteList" in MODULE_LIST_STYLES
     assert "PolarLegacy" not in MODULE_LIST_STYLES
     assert "RainbowRight" not in MODULE_LIST_STYLES
     assert set(MODULE_LIST_RENDERER_KEYS) == set(MODULE_LIST_STYLES)
     assert len(set(MODULE_LIST_RENDERER_KEYS.values())) == len(MODULE_LIST_STYLES)
+    assert MODULE_LIST_RENDERER_KEYS["DebugWhiteList"] == "debug_white_list"
     for style in ("LiquidArrayList", "LiquidArrayTags", "LiquidArrayCompact", "LiquidArrayDock"):
         assert style in MODULE_LIST_STYLES
     assert hud.get_setting("ModuleList Surface").options == ["Native", "LiquidGlass"]

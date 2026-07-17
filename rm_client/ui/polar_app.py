@@ -7104,6 +7104,8 @@ class PolarRMWindow(QOpenGLWidget):
             self.draw_module_list_robot_cards(p, width, layout.anchor_y)
         elif style in ("LiquidArrayList", "LiquidArrayTags", "LiquidArrayCompact", "LiquidArrayDock"):
             self.draw_module_list_liquid_array(p, width, style, layout.anchor_y, layout.available_height)
+        elif style == "DebugWhiteList":
+            self.draw_module_list_debug_white(p, width, layout.anchor_y, layout.available_height)
         else:
             self.draw_module_list_polar_text(p, max(layout.anchor_y, 64.0))
         p.restore()
@@ -7229,6 +7231,109 @@ class PolarRMWindow(QOpenGLWidget):
             )
         entries.sort(key=lambda item: item["order"])
         return entries
+
+    def arraylist_shadow_image(self) -> QImage | None:
+        """Debug.jar client/arraylistshadow.png (87×37 black + soft alpha)."""
+        cached = getattr(self, "_arraylist_shadow_image", None)
+        if cached is not None:
+            return cached if not cached.isNull() else None
+        candidates = (
+            Path(__file__).resolve().parents[2] / "assets" / "hud" / "arraylistshadow.png",
+            self.workspace / "rm_custom_client" / "assets" / "hud" / "arraylistshadow.png",
+            self.workspace / "assets" / "hud" / "arraylistshadow.png",
+        )
+        image = QImage()
+        for path in candidates:
+            if path.exists():
+                image = QImage(str(path))
+                if not image.isNull():
+                    break
+        self._arraylist_shadow_image = image
+        return image if not image.isNull() else None
+
+    def draw_string_with_shadow_mc(
+        self,
+        p: QPainter,
+        text: str,
+        x: float,
+        y: float,
+        font: QFont,
+        *,
+        main: QColor | None = None,
+    ) -> None:
+        """Minecraft 1.8 drawStringWithShadow: shadow (RGB&0xFCFCFC)>>2 at +1,+1, then main."""
+        main = main or QColor(255, 255, 255, 255)
+        sr = (main.red() & 0xFC) >> 2
+        sg = (main.green() & 0xFC) >> 2
+        sb = (main.blue() & 0xFC) >> 2
+        p.setFont(font)
+        p.setPen(QColor(sr, sg, sb, main.alpha()))
+        p.drawText(QPointF(x + 1.0, y + 1.0 + QFontMetricsF(font).ascent()), text)
+        p.setPen(main)
+        p.drawText(QPointF(x, y + QFontMetricsF(font).ascent()), text)
+
+    def draw_module_list_debug_white(
+        self,
+        p: QPainter,
+        width: int,
+        start_y: float | None = None,
+        available_height: float | None = None,
+    ) -> None:
+        """Debug.jar fluorescent-white ArrayList (MODLIST_WHITE.md / modlist-white.html).
+
+        Tahoma 16 PLAIN + Color.WHITE α=1 + drawStringWithShadow + arraylistshadow
+        underlay at α≈0.7. Right-aligned, stringWidth descending. No rainbow / side
+        bar / solid black strip.
+        """
+        # jar tahoma16: pixel size 16, PLAIN, antiAlias off.
+        font = self.font("tahoma", 12.0)
+        font.setPixelSize(16)
+        font.setBold(False)
+        font.setStyleStrategy(QFont.StyleStrategy.NoAntialias)
+        metrics = QFontMetricsF(font)
+        row_h = 16.0
+        pad_right = 2.0
+        pad_top = 2.0 if start_y is None else float(start_y)
+        pad_x = 6.0
+        pad_y = 2.0
+        shadow_alpha = 0.70
+
+        visible = [m for m in self.registry.enabled_modules() if m.name not in ("HUD", "ClickGui")]
+        rows = []
+        for module in visible:
+            name = module.name
+            w = metrics.horizontalAdvance(name)
+            rows.append((module, name, w))
+        rows.sort(key=lambda item: (-item[2], item[1].lower()))
+
+        y0 = pad_top
+        height_limit = self.height() if available_height is None else y0 + available_height
+        max_rows = max(1, int((height_limit - y0 - 4.0) // row_h))
+        rows = rows[:max_rows]
+        shadow = self.arraylist_shadow_image()
+
+        p.save()
+        p.setRenderHint(QPainter.RenderHint.TextAntialiasing, False)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing, False)
+        for index, (_module, name, text_w) in enumerate(rows):
+            x = float(width) - text_w - pad_right
+            y = y0 + index * row_h
+            # Soft underlay: black+α texture drawn with white×0.7 → dark soft plate.
+            if shadow is not None and not shadow.isNull():
+                dest = QRectF(x - pad_x, y - pad_y, text_w + pad_x * 2.0, row_h + pad_y * 2.0)
+                p.save()
+                p.setOpacity(shadow_alpha)
+                p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
+                p.drawImage(dest, shadow)
+                p.restore()
+            else:
+                # Fallback soft plate if asset missing (still no solid bar).
+                dest = QRectF(x - pad_x, y - pad_y, text_w + pad_x * 2.0, row_h + pad_y * 2.0)
+                p.fillRect(dest, QColor(0, 0, 0, int(255 * 0.22 * shadow_alpha)))
+            self.draw_string_with_shadow_mc(
+                p, name, x, y, font, main=QColor(255, 255, 255, 255),
+            )
+        p.restore()
 
     def draw_module_list_liquid_array(
         self,

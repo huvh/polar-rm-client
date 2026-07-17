@@ -55,6 +55,8 @@ MODULE_LIST_STYLES = [
     "LiquidArrayTags",
     "LiquidArrayCompact",
     "LiquidArrayDock",
+    # Debug.jar HUD.renderArray fluorescent white ArrayList (MODLIST_WHITE.md).
+    "DebugWhiteList",
 ]
 
 # 每种可见样式都必须拥有独立视觉签名，避免配置项互相覆盖。
@@ -71,6 +73,7 @@ MODULE_LIST_RENDERER_KEYS = {
     "LiquidArrayTags": "liquid_array:tags",
     "LiquidArrayCompact": "liquid_array:compact",
     "LiquidArrayDock": "liquid_array:dock",
+    "DebugWhiteList": "debug_white_list",
 }
 
 TACTICAL_MAP_STATUS_DISPLAYS = [

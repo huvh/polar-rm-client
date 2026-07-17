@@ -21,6 +21,8 @@ class FontBook:
             "material": "MaterialIcons-Regular.ttf",
             "polaricon": "*icon-Regular.ttf",
             "pingfang": "pingfang_sc_regular.ttf",
+            # Debug.jar HUD ArrayList tahoma16 (MODLIST_WHITE.md).
+            "tahoma": "tahoma.ttf",
         }
         for key, filename in candidates.items():
             path = self._find_font(workspace, filename)
@@ -46,9 +48,14 @@ class FontBook:
                 "polaricon": "Segoe UI",
                 "museo": "Segoe UI",
                 "pingfang": "Microsoft YaHei UI",
+                "tahoma": "Tahoma",
             }.get(key, "Segoe UI")
         font = QFont(family)
         font.setPointSizeF(size)
         if weight is not None:
             font.setWeight(weight)
+        if key == "tahoma":
+            # jar createFont tahoma16: PLAIN, antiAlias off → pixel-sharp white list.
+            font.setBold(False)
+            font.setStyleStrategy(QFont.StyleStrategy.NoAntialias)
         return font
