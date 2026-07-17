@@ -8470,17 +8470,29 @@ class PolarRMWindow(QOpenGLWidget):
     def gpu_alpha(self, source: QColor, alpha: float) -> QColor:
         return with_alpha(source, alpha)
 
+    def gui_primary_text(self, alpha: float = 1.0) -> QColor:
+        """High-contrast primary label on dark PolarPanel glass (near pure white)."""
+        return self.gpu_alpha(color("#ffffff"), alpha)
+
+    def gui_secondary_text(self, alpha: float = 1.0) -> QColor:
+        """Secondary/meta text — intentionally brighter than THEME.muted."""
+        return self.gpu_alpha(color("#e2e4ea"), alpha)
+
+    def gui_disabled_text(self, alpha: float = 1.0) -> QColor:
+        """Disabled module name — still scannable without squinting."""
+        return self.gpu_alpha(color("#c6c8d0"), alpha)
+
     def build_gpu_panel_gui(self, commands: ClickGuiDrawList, width: int, height: int, alpha: float) -> None:
         scale = self.get_gui_scale_for_bounds(width, height, 600.0, 440.0, 76.0, 82.0) * (0.98 + 0.02 * alpha)
         panel = QRectF(width / 2 - 300 * scale, height / 2 - 200 * scale, 600 * scale, 400 * scale)
         commands.rect(panel, 8 * scale, color("#101014", 0.96 * alpha), color("#ffffff", 0.13 * alpha), 1.0)
         # Match draw_profile_widget: title + Chinese profile/scale subtitle.
-        commands.text(QRectF(panel.left() + 14 * scale, panel.top() + 10 * scale, 200 * scale, 18 * scale), "POLAR-RM", self.font("poppins_bold", 14 * scale), self.gpu_alpha(THEME.text, alpha))
+        commands.text(QRectF(panel.left() + 14 * scale, panel.top() + 10 * scale, 200 * scale, 18 * scale), "POLAR-RM", self.font("poppins_bold", 14 * scale), self.gui_primary_text(alpha))
         commands.text(
-            QRectF(panel.left() + 14 * scale, panel.top() + 28 * scale, 220 * scale, 14 * scale),
+            QRectF(panel.left() + 14 * scale, panel.top() + 28 * scale, 240 * scale, 14 * scale),
             f"配置 {self.current_profile()} | 缩放 {self.get_gui_scale():.2f}",
-            self.font("poppins_regular", 7.6 * scale),
-            self.gpu_alpha(THEME.muted, alpha),
+            self.font("poppins_medium", 8.2 * scale),
+            self.gui_secondary_text(alpha),
         )
         category_bar = QRectF(panel.left() + 414 * scale, panel.top() + 18 * scale, 166 * scale, 28 * scale)
         step = category_bar.width() / len(CATEGORIES)
@@ -8489,7 +8501,13 @@ class PolarRMWindow(QOpenGLWidget):
         commands.rect(QRectF(category_bar.left() + current * step + 2 * scale, category_bar.top() + 2 * scale, step - 4 * scale, category_bar.height() - 4 * scale), 8 * scale, color("#ffffff", 0.08 * alpha), color("#ffffff", 0.20 * alpha), 1.0)
         for index, category in enumerate(CATEGORIES):
             box = QRectF(category_bar.left() + index * step, category_bar.top(), step, category_bar.height())
-            commands.text(box, self.category_icon(category), self.font("material", 12.0 * scale, QFont.Weight.Bold), self.gpu_alpha(THEME.text if category == self.selected_category else color("#7e7e85"), alpha), Qt.AlignmentFlag.AlignCenter)
+            commands.text(
+                box,
+                self.category_icon(category),
+                self.font("material", 12.0 * scale, QFont.Weight.Bold),
+                self.gui_primary_text(alpha) if category == self.selected_category else self.gui_secondary_text(alpha * 0.92),
+                Qt.AlignmentFlag.AlignCenter,
+            )
             self.add_hotspot(box, "select_category", category, tooltip=category)
 
         module_rect = QRectF(panel.left() + 12 * scale, panel.top() + 43 * scale, 160 * scale, 316 * scale)
@@ -8497,10 +8515,15 @@ class PolarRMWindow(QOpenGLWidget):
         self.panel_modules_rect = module_rect
         self.panel_settings_rect = settings_rect
         commands.rect(module_rect, 4 * scale, color("#ffffff", 0.055 * alpha), color("#ffffff", 0.035 * alpha), 1.0)
-        commands.text(module_rect.adjusted(10 * scale, 7 * scale, -10 * scale, -module_rect.height() + 30 * scale), self.selected_category, self.font("poppins_bold", 12.0 * scale), self.gpu_alpha(THEME.text, alpha))
+        commands.text(
+            module_rect.adjusted(10 * scale, 7 * scale, -10 * scale, -module_rect.height() + 30 * scale),
+            self.selected_category,
+            self.font("poppins_bold", 12.4 * scale),
+            self.gui_primary_text(alpha),
+        )
         modules = self.panel_modules()
         top = module_rect.top() + 38 * scale
-        row_h = 22 * scale
+        row_h = 23 * scale
         module_clip = module_rect.adjusted(0, 32 * scale, 0, -4 * scale)
         max_scroll = max(0.0, len(modules) * row_h - module_clip.height())
         target_scroll = max(0.0, min(max_scroll, self.panel_module_scroll.get(self.selected_category, 0.0)))
@@ -8515,20 +8538,30 @@ class PolarRMWindow(QOpenGLWidget):
         selected_index = float(next((i for i, item in enumerate(modules) if item is self.selected_module), 0))
         selected_y = self.gui_motion.value("gpu.panel.module", selected_index, self.anim_duration(0.18), Easings.ease_out_expo, initial=selected_index)
         if modules:
-            commands.rect(QRectF(module_rect.left() + 6 * scale, top + selected_y * row_h, module_rect.width() - 12 * scale, 19 * scale), 5 * scale, color("#ffffff", 0.08 * alpha), clip=module_clip)
+            commands.rect(QRectF(module_rect.left() + 6 * scale, top + selected_y * row_h, module_rect.width() - 12 * scale, 20 * scale), 5 * scale, color("#ffffff", 0.10 * alpha), clip=module_clip)
         for index, module in enumerate(modules):
-            row = QRectF(module_rect.left() + 6 * scale, top + index * row_h, module_rect.width() - 12 * scale, 19 * scale)
+            row = QRectF(module_rect.left() + 6 * scale, top + index * row_h, module_rect.width() - 12 * scale, 20 * scale)
             self.build_gpu_module_row(commands, row, module, scale, alpha, module_clip, select_only=True)
 
         commands.rect(settings_rect, 4 * scale, color("#ffffff", 0.075 * alpha), color("#ffffff", 0.08 * alpha), 1.0)
-        commands.text(settings_rect.adjusted(12 * scale, 9 * scale, -72 * scale, -settings_rect.height() + 38 * scale), self.selected_module.name, self.font("poppins_bold", 13.0 * scale), self.gpu_alpha(THEME.text, alpha))
+        commands.text(
+            settings_rect.adjusted(12 * scale, 9 * scale, -72 * scale, -settings_rect.height() + 38 * scale),
+            self.selected_module.name,
+            self.font("poppins_bold", 13.5 * scale),
+            self.gui_primary_text(alpha),
+        )
         self.build_gpu_toggle(commands, QRectF(settings_rect.right() - 57 * scale, settings_rect.top() + 13 * scale, 36 * scale, 16 * scale), self.selected_module.enabled, alpha, ("module_toggle", self.selected_module.name))
         content = settings_rect.adjusted(10 * scale, 43 * scale, -10 * scale, -10 * scale)
         scroll = self.gui_motion.value(f"gpu.settings.scroll.{self.selected_module.name}", self.settings_scroll.get(self.selected_module.name, 0.0), self.anim_duration(0.12), Easings.ease_out_cubic, initial=self.settings_scroll.get(self.selected_module.name, 0.0))
         self.build_gpu_settings(commands, self.selected_module, content, scale, alpha, scroll)
         search = QRectF(width / 2 - 104 * scale, min(height - 60.0, panel.bottom() + 15 * scale), 208 * scale, 23 * scale)
         commands.rect(search, search.height() / 2, color("#16161b", 0.94 * alpha), color("#ffffff", 0.16 * alpha), 1.0)
-        commands.text(search.adjusted(12 * scale, 0, -12 * scale, 0), self.search_query or "Search modules...", self.font("poppins_regular", 7.8 * scale), self.gpu_alpha(THEME.text if self.search_query else color("#77777d"), alpha))
+        commands.text(
+            search.adjusted(12 * scale, 0, -12 * scale, 0),
+            self.search_query or "Search modules...",
+            self.font("poppins_medium", 8.2 * scale),
+            self.gui_primary_text(alpha) if self.search_query else self.gui_secondary_text(alpha * 0.9),
+        )
         self.add_hotspot(search, "search_focus")
 
     def build_gpu_old_gui(self, commands: ClickGuiDrawList, width: int, height: int, alpha: float) -> None:
@@ -8856,21 +8889,19 @@ class PolarRMWindow(QOpenGLWidget):
             text_color = THEME.text
             radius = 0.0
         else:
-            # PanelClickGui uses glassy white hover surfaces and white-glow
-            # enabled text.  The previous blue-grey tiles were a POLAR
-            # invention and made this mode visually unrelated to Polar Old.
-            fill = color("#ffffff", (0.025 + 0.055 * enabled) * alpha)
-            outline = color("#ffffff", 0.035 * alpha)
-            text_color = THEME.text if module.enabled else color("#aaaaaa")
+            # PanelClickGui: glassy rows + high-contrast names (scan without squinting).
+            fill = color("#ffffff", (0.03 + 0.07 * enabled) * alpha)
+            outline = color("#ffffff", 0.05 * alpha)
+            text_color = color("#ffffff") if module.enabled else color("#c6c8d0")
             radius = 5 * scale if compact else 0.0
         commands.rect(row, radius, fill, outline, 1.0, gradient=gradient, clip=clip)
-        # Panel mode matches QPainter: medium weight + slightly brighter enabled text.
+        # Panel: slightly larger medium weight so labels pop on dark glass.
         if style == "panel":
-            name_font = self.font("poppins_medium" if module.enabled else "poppins_regular", 8.6 * scale)
+            name_font = self.font("poppins_medium", 9.3 * scale)
             key_w = 30 * scale
             name_rect = row.adjusted(6 * scale, 0, -(key_w + 12 * scale), 0)
         else:
-            name_font = self.font("poppins_regular", (7.2 if compact else 8.2) * scale)
+            name_font = self.font("poppins_medium", (7.6 if compact else 8.6) * scale)
             key_w = 20 * scale
             name_rect = row.adjusted(7 * scale, 0, -32 * scale, 0)
         label = self.elide_for_gpu(name_font, module.name, name_rect.width())
@@ -8879,14 +8910,14 @@ class PolarRMWindow(QOpenGLWidget):
             key = QRectF(row.right() - 34 * scale, row.top() + 2 * scale, 30 * scale, max(10 * scale, row.height() - 4 * scale))
         else:
             key = QRectF(row.right() - 25 * scale, row.top() + 3 * scale, 20 * scale, max(10 * scale, row.height() - 6 * scale))
-        commands.rect(key, 4 * scale, color("#ffffff", 0.05 * alpha), color("#ffffff", 0.08 * alpha), 1.0, clip=clip)
+        commands.rect(key, 4 * scale, color("#ffffff", 0.07 * alpha), color("#ffffff", 0.12 * alpha), 1.0, clip=clip)
         # PanelClickGui always labels the bind chip "KEY" (see draw_panel_module_list).
         # Other GPU modes keep the compact bind / placeholder.
         if style == "panel":
             key_label = "KEY"
         else:
             key_label = self.compact_keybind(module.keybind) if module.keybind and module.keybind != "None" else "--"
-        commands.text(key, key_label, self.font("poppins_medium", 6.3 * scale), self.gpu_alpha(THEME.muted, alpha), Qt.AlignmentFlag.AlignCenter, clip)
+        commands.text(key, key_label, self.font("poppins_medium", 6.8 * scale), self.gui_secondary_text(alpha), Qt.AlignmentFlag.AlignCenter, clip)
         self._hotspot_clip = clip
         if style == "panel":
             self.add_hotspot(row.adjusted(0, 0, -36 * scale, 0), "module_toggle" if not select_only else "module_select", module.name, button=1, tooltip=module.description)
@@ -8901,41 +8932,55 @@ class PolarRMWindow(QOpenGLWidget):
     def build_gpu_settings(self, commands: ClickGuiDrawList, module: Module, content: QRectF, scale: float, alpha: float, scroll: float) -> None:
         y = content.top() - scroll
         self._hotspot_clip = content
-        bind = QRectF(content.left(), y, content.width(), 27 * scale)
-        commands.rect(bind.adjusted(0, 2 * scale, 0, -3 * scale), 5 * scale, color("#ffffff", 0.04 * alpha), color("#ffffff", 0.06 * alpha), 1.0, clip=content)
-        commands.text(bind.adjusted(8 * scale, 0, -112 * scale, 0), "Keybind", self.font("poppins_regular", 8 * scale), self.gpu_alpha(THEME.muted, alpha), clip=content)
+        bind = QRectF(content.left(), y, content.width(), 28 * scale)
+        commands.rect(bind.adjusted(0, 2 * scale, 0, -3 * scale), 5 * scale, color("#ffffff", 0.05 * alpha), color("#ffffff", 0.08 * alpha), 1.0, clip=content)
+        commands.text(bind.adjusted(8 * scale, 0, -112 * scale, 0), "Keybind", self.font("poppins_medium", 8.8 * scale), self.gui_secondary_text(alpha), clip=content)
         key = QRectF(bind.right() - 103 * scale, bind.top() + 5 * scale, 96 * scale, 18 * scale)
-        commands.rect(key, 5 * scale, color("#ffffff", 0.06 * alpha), color("#ffffff", 0.10 * alpha), 1.0, clip=content)
-        commands.text(key, module.keybind, self.font("poppins_medium", 7.6 * scale), self.gpu_alpha(THEME.text, alpha), Qt.AlignmentFlag.AlignCenter, content)
+        commands.rect(key, 5 * scale, color("#ffffff", 0.08 * alpha), color("#ffffff", 0.14 * alpha), 1.0, clip=content)
+        commands.text(key, module.keybind, self.font("poppins_medium", 8.2 * scale), self.gui_primary_text(alpha), Qt.AlignmentFlag.AlignCenter, content)
         self.add_hotspot(key, "module_bind", module.name, tooltip="打开按键绑定")
         y = bind.bottom()
         for setting in module.settings:
-            row = QRectF(content.left(), y, content.width(), 30 * scale)
+            row = QRectF(content.left(), y, content.width(), 31 * scale)
             self.build_gpu_setting_row(commands, setting, row, scale, alpha, content)
             y = row.bottom()
         self._hotspot_clip = None
 
     def build_gpu_setting_row(self, commands: ClickGuiDrawList, setting: Setting, row: QRectF, scale: float, alpha: float, clip: QRectF | None) -> None:
         body = row.adjusted(0, 2 * scale, 0, -3 * scale)
-        commands.rect(body, 5 * scale, color("#ffffff", 0.035 * alpha), clip=clip)
-        commands.text(body.adjusted(8 * scale, 0, -120 * scale, 0), setting.name, self.font("poppins_regular", 8 * scale), self.gpu_alpha(color("#d7d7dc"), alpha), clip=clip)
+        commands.rect(body, 5 * scale, color("#ffffff", 0.045 * alpha), clip=clip)
+        # Setting names are the densest text — keep them bright and a bit larger.
+        commands.text(
+            body.adjusted(8 * scale, 0, -120 * scale, 0),
+            setting.name,
+            self.font("poppins_medium", 8.8 * scale),
+            self.gui_primary_text(alpha),
+            clip=clip,
+        )
         if setting.kind == "bool":
             self.build_gpu_toggle(commands, QRectF(body.right() - 39 * scale, body.top() + 6 * scale, 30 * scale, 13 * scale), bool(setting.value), alpha, ("setting_toggle", setting), clip)
         elif setting.kind == "number":
-            commands.text(QRectF(body.right() - 78 * scale, body.top(), 70 * scale, body.height() * 0.48), setting.display_value(), self.font("poppins_medium", 7.6 * scale), self.gpu_alpha(THEME.text, alpha), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, clip)
+            commands.text(
+                QRectF(body.right() - 78 * scale, body.top(), 70 * scale, body.height() * 0.48),
+                setting.display_value(),
+                self.font("poppins_medium", 8.2 * scale),
+                self.gui_primary_text(alpha),
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+                clip,
+            )
             bar = QRectF(body.left() + body.width() * 0.42, body.bottom() - 9 * scale, body.width() * 0.52, 5 * scale)
-            commands.rect(bar, 2.5 * scale, color("#ffffff", 0.17 * alpha), clip=clip)
+            commands.rect(bar, 2.5 * scale, color("#ffffff", 0.22 * alpha), clip=clip)
             commands.rect(QRectF(bar.left(), bar.top(), max(bar.height(), bar.width() * setting.ratio()), bar.height()), 2.5 * scale, color("#f15bd5", alpha), clip=clip)
             self.add_hotspot(bar.adjusted(-4 * scale, -7 * scale, 4 * scale, 7 * scale), "setting_slider", setting)
         elif setting.kind == "mode":
             box = QRectF(body.right() - 112 * scale, body.top() + 5 * scale, 103 * scale, body.height() - 10 * scale)
-            commands.rect(box, 5 * scale, color("#303036", 0.95 * alpha), color("#ffffff", 0.08 * alpha), 1.0, clip=clip)
-            commands.text(box.adjusted(5 * scale, 0, -5 * scale, 0), str(setting.value), self.font("poppins_medium", 7 * scale), self.gpu_alpha(THEME.text, alpha), Qt.AlignmentFlag.AlignCenter, clip)
+            commands.rect(box, 5 * scale, color("#303036", 0.95 * alpha), color("#ffffff", 0.12 * alpha), 1.0, clip=clip)
+            commands.text(box.adjusted(5 * scale, 0, -5 * scale, 0), str(setting.value), self.font("poppins_medium", 7.6 * scale), self.gui_primary_text(alpha), Qt.AlignmentFlag.AlignCenter, clip)
             self.add_hotspot(box, "setting_mode_next", setting, tooltip="左键/右键循环切换")
         elif setting.kind == "action":
             button = body.adjusted(8 * scale, 4 * scale, -8 * scale, -4 * scale)
-            commands.rect(button, 5 * scale, color("#ffffff", 0.92 * alpha), color("#56fff0", 0.35 * alpha), 1.0, clip=clip)
-            commands.text(button, setting.name, self.font("poppins_medium", 7.4 * scale), self.gpu_alpha(color("#090a0d"), alpha), Qt.AlignmentFlag.AlignCenter, clip)
+            commands.rect(button, 5 * scale, color("#ffffff", 0.94 * alpha), color("#56fff0", 0.40 * alpha), 1.0, clip=clip)
+            commands.text(button, setting.name, self.font("poppins_medium", 8.0 * scale), self.gpu_alpha(color("#090a0d"), alpha), Qt.AlignmentFlag.AlignCenter, clip)
             self.add_hotspot(button, "config_action", setting.name, tooltip=setting.description)
 
     def build_gpu_inline_settings(self, commands: ClickGuiDrawList, module: Module, y: float, x: float, width: float, scale: float, alpha: float, clip: QRectF, key: str, max_rows: int) -> None:
@@ -9091,10 +9136,10 @@ class PolarRMWindow(QOpenGLWidget):
             ("panel.module-list.shell", round(scale, 3)),
             lambda layer, shell: rounded_rect(layer, shell, 4 * scale, color("#ffffff", 0.055), color("#ffffff", 0.035)),
         )
-        self.draw_text(p, rect.adjusted(10 * scale, 7 * scale, -10 * scale, -rect.height() + 30 * scale), self.selected_category, self.font("poppins_bold", 12.5 * scale), THEME.text)
+        self.draw_text(p, rect.adjusted(10 * scale, 7 * scale, -10 * scale, -rect.height() + 30 * scale), self.selected_category, self.font("poppins_bold", 12.5 * scale), color("#f4f5f8"))
         modules = self.panel_modules()
         top = rect.top() + 38 * scale
-        row_h = 22 * scale
+        row_h = 23 * scale
         module_clip = rect.adjusted(0, 32 * scale, 0, -4 * scale)
         max_scroll = max(0.0, len(modules) * row_h - module_clip.height())
         target_scroll = max(0.0, min(max_scroll, self.panel_module_scroll.get(self.selected_category, 0.0)))
@@ -9117,24 +9162,24 @@ class PolarRMWindow(QOpenGLWidget):
         p.save()
         p.setClipRect(module_clip)
         if modules:
-            selection = QRectF(rect.left() + 6 * scale, top + indicator_index * row_h, rect.width() - 12 * scale, 19 * scale)
-            rounded_rect(p, selection, 5 * scale, color("#ffffff", 0.055), color("#ffffff", 0.045))
+            selection = QRectF(rect.left() + 6 * scale, top + indicator_index * row_h, rect.width() - 12 * scale, 20 * scale)
+            rounded_rect(p, selection, 5 * scale, color("#ffffff", 0.08), color("#ffffff", 0.06))
         self._hotspot_clip = module_clip
         for i, module in enumerate(modules):
-            row = QRectF(rect.left() + 6 * scale, top + i * row_h, rect.width() - 12 * scale, 19 * scale)
+            row = QRectF(rect.left() + 6 * scale, top + i * row_h, rect.width() - 12 * scale, 20 * scale)
             enabled_v = self.gui_motion.value(f"panel.enabled.{module.name}", 1.0 if module.enabled else 0.0, self.anim_duration(0.22), Easings.ease_out_cubic)
             if enabled_v > 0.01:
-                rounded_rect(p, row, 5 * scale, color("#ffffff", 0.035 * enabled_v))
-            label_color = THEME.text if module.enabled else color("#ababaf")
-            label_font = self.font("poppins_medium", 8.6 * scale)
+                rounded_rect(p, row, 5 * scale, color("#ffffff", 0.05 * enabled_v))
+            label_color = color("#ffffff") if module.enabled else color("#c6c8d0")
+            label_font = self.font("poppins_medium", 9.3 * scale)
             label = self.elide(p, label_font, module.name, row.width() - 42 * scale)
             if enabled_v > 0.01:
-                glow_text(p, label, row.left() + 6 * scale, cap_center_y(p, label_font, row), label_font, label_color, accent_color(i), 4 * enabled_v)
+                glow_text(p, label, row.left() + 6 * scale, cap_center_y(p, label_font, row), label_font, label_color, accent_color(i), 3 * enabled_v)
             else:
-                self.draw_text(p, row.adjusted(6 * scale, 0, -42 * scale, 0), label, self.font("poppins_regular", 8.6 * scale), label_color)
+                self.draw_text(p, row.adjusted(6 * scale, 0, -42 * scale, 0), label, label_font, label_color)
             key_box = QRectF(row.right() - 34 * scale, row.top() + 2 * scale, 30 * scale, row.height() - 4 * scale)
-            rounded_rect(p, key_box, 4 * scale, color("#ffffff", 0.045), color("#ffffff", 0.06))
-            self.draw_text(p, key_box, "KEY", self.font("poppins_medium", 6.3 * scale), THEME.muted, Qt.AlignmentFlag.AlignCenter)
+            rounded_rect(p, key_box, 4 * scale, color("#ffffff", 0.06), color("#ffffff", 0.10))
+            self.draw_text(p, key_box, "KEY", self.font("poppins_medium", 6.8 * scale), color("#d0d2da"), Qt.AlignmentFlag.AlignCenter)
             self.add_hotspot(row.adjusted(0, 0, -36 * scale, 0), "module_select", module.name, button=1, tooltip=module.description)
             self.add_hotspot(row.adjusted(0, 0, -36 * scale, 0), "module_bind", module.name, button=3, tooltip="绑定按键")
             self.add_hotspot(key_box, "module_bind", module.name, tooltip="绑定按键")
@@ -9149,7 +9194,7 @@ class PolarRMWindow(QOpenGLWidget):
             lambda layer, shell: rounded_rect(layer, shell, 4 * scale, color("#1a1a20", 0.92), color("#ffffff", 0.08)),
         )
         header = QRectF(rect.left() + 12 * scale, rect.top() + 9 * scale, rect.width() - 24 * scale, 29 * scale)
-        self.draw_text(p, header.adjusted(0, 0, -72 * scale, 0), module.name, self.font("poppins_bold", 13.5 * scale), THEME.text)
+        self.draw_text(p, header.adjusted(0, 0, -72 * scale, 0), module.name, self.font("poppins_bold", 13.8 * scale), color("#f4f5f8"))
         self.draw_toggle_switch(p, QRectF(rect.right() - 57 * scale, rect.top() + 13 * scale, 36 * scale, 16 * scale), module.enabled, ("module_toggle", module.name))
 
         content = rect.adjusted(10 * scale, 43 * scale, -10 * scale, -10 * scale)
@@ -9163,30 +9208,30 @@ class PolarRMWindow(QOpenGLWidget):
             initial=self.settings_scroll.get(module.name, 0.0),
         )
         y = content.top() - scroll
-        y = self.draw_bind_row(p, QRectF(content.left(), y, content.width(), 27 * scale), module, scale, content)
+        y = self.draw_bind_row(p, QRectF(content.left(), y, content.width(), 28 * scale), module, scale, content)
         for setting in module.settings:
-            y = self.draw_setting_row(p, setting, QRectF(content.left(), y, content.width(), 30 * scale), scale)
+            y = self.draw_setting_row(p, setting, QRectF(content.left(), y, content.width(), 31 * scale), scale)
         if not module.settings:
-            self.draw_text(p, QRectF(content.left(), y, content.width(), 44 * scale), module.description or "No settings", self.font("poppins_regular", 8.4 * scale), THEME.muted)
+            self.draw_text(p, QRectF(content.left(), y, content.width(), 44 * scale), module.description or "No settings", self.font("poppins_medium", 8.8 * scale), color("#d0d2da"))
         p.restore()
 
     def draw_bind_row(self, p: QPainter, rect: QRectF, module: Module, scale: float, clip_rect: QRectF | None = None, compact: bool = False) -> float:
         visible = clip_rect is None or self.rect_visible(rect, clip_rect)
         if visible:
             content_rect = rect.adjusted(0, 2 * scale, 0, -3 * scale)
-            rounded_rect(p, content_rect, 5 * scale, color("#ffffff", 0.03 if compact else 0.035), color("#ffffff", 0.055))
+            rounded_rect(p, content_rect, 5 * scale, color("#ffffff", 0.04 if compact else 0.05), color("#ffffff", 0.08))
             if compact or rect.width() < 160 * scale:
                 box_w = min(74.0 * scale, max(48.0 * scale, content_rect.width() * 0.52))
                 box = QRectF(content_rect.right() - box_w - 6 * scale, content_rect.top() + 4 * scale, box_w, max(13.0 * scale, content_rect.height() - 8 * scale))
                 label_rect = QRectF(content_rect.left() + 7 * scale, content_rect.top(), max(18.0 * scale, box.left() - content_rect.left() - 11 * scale), content_rect.height())
-                self.draw_text(p, label_rect, "Keybind", self.font("poppins_regular", 7.0 * scale), THEME.muted)
+                self.draw_text(p, label_rect, "Keybind", self.font("poppins_medium", 7.6 * scale), color("#d0d2da"))
                 key_text = self.compact_keybind(module.keybind)
             else:
-                self.draw_text(p, rect.adjusted(8 * scale, 0, -112 * scale, 0), "Keybind", self.font("poppins_regular", 8.4 * scale), THEME.muted)
+                self.draw_text(p, rect.adjusted(8 * scale, 0, -112 * scale, 0), "Keybind", self.font("poppins_medium", 8.8 * scale), color("#d0d2da"))
                 box = QRectF(rect.right() - 103 * scale, rect.top() + 5 * scale, 96 * scale, 18 * scale)
                 key_text = module.keybind
-            rounded_rect(p, box, 5 * scale, color("#ffffff", 0.055), color("#ffffff", 0.10))
-            self.draw_text(p, box, key_text, self.font("poppins_medium", (6.9 if compact else 7.8) * scale), THEME.text, Qt.AlignmentFlag.AlignCenter)
+            rounded_rect(p, box, 5 * scale, color("#ffffff", 0.07), color("#ffffff", 0.14))
+            self.draw_text(p, box, key_text, self.font("poppins_medium", (7.4 if compact else 8.2) * scale), color("#f4f5f8"), Qt.AlignmentFlag.AlignCenter)
             self.add_hotspot(box, "module_bind", module.name, tooltip="打开按键绑定覆盖层")
         return rect.bottom()
 
@@ -9195,22 +9240,22 @@ class PolarRMWindow(QOpenGLWidget):
             return self.draw_compact_setting_row(p, setting, rect, scale)
         row_h = rect.height()
         content_rect = rect.adjusted(0, 2 * scale, 0, -3 * scale)
-        rounded_rect(p, content_rect, 5 * scale, color("#ffffff", 0.03 if not compact else 0.02))
-        label_font = self.font("poppins_regular", (8.2 if not compact else 7.4) * scale)
-        value_font = self.font("poppins_medium", (7.8 if not compact else 7.0) * scale)
-        self.draw_text(p, content_rect.adjusted(8 * scale, 0, -120 * scale, 0), setting.name, label_font, color("#d7d7dc"))
+        rounded_rect(p, content_rect, 5 * scale, color("#ffffff", 0.04 if not compact else 0.03))
+        label_font = self.font("poppins_medium", (8.8 if not compact else 7.8) * scale)
+        value_font = self.font("poppins_medium", (8.2 if not compact else 7.4) * scale)
+        self.draw_text(p, content_rect.adjusted(8 * scale, 0, -120 * scale, 0), setting.name, label_font, color("#f4f5f8"))
         if setting.kind == "bool":
             self.draw_toggle_switch(p, QRectF(content_rect.right() - 39 * scale, content_rect.top() + 6 * scale, 30 * scale, 13 * scale), bool(setting.value), ("setting_toggle", setting))
         elif setting.kind == "number":
             value = setting.display_value()
-            self.draw_text(p, QRectF(content_rect.right() - 78 * scale, content_rect.top(), 70 * scale, content_rect.height() * 0.48), value, value_font, THEME.text, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            self.draw_text(p, QRectF(content_rect.right() - 78 * scale, content_rect.top(), 70 * scale, content_rect.height() * 0.48), value, value_font, color("#f4f5f8"), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             bar = QRectF(content_rect.left() + content_rect.width() * 0.42, content_rect.bottom() - 9 * scale, content_rect.width() * 0.52, 5 * scale)
-            draw_bar(p, bar, setting.ratio(), THEME.pink, color("#ffffff", 0.17), 2.5 * scale)
+            draw_bar(p, bar, setting.ratio(), THEME.pink, color("#ffffff", 0.22), 2.5 * scale)
             self.add_hotspot(bar.adjusted(-4 * scale, -7 * scale, 4 * scale, 7 * scale), "setting_slider", setting)
         elif setting.kind == "mode":
             box = QRectF(content_rect.right() - 112 * scale, content_rect.top() + 5 * scale, 103 * scale, content_rect.height() - 10 * scale)
-            rounded_rect(p, box, 5 * scale, color("#303036", 0.95), color("#ffffff", 0.08))
-            self.draw_text(p, box.adjusted(6 * scale, 0, -6 * scale, 0), str(setting.value), value_font, THEME.text, Qt.AlignmentFlag.AlignCenter)
+            rounded_rect(p, box, 5 * scale, color("#303036", 0.95), color("#ffffff", 0.12))
+            self.draw_text(p, box.adjusted(6 * scale, 0, -6 * scale, 0), str(setting.value), value_font, color("#f4f5f8"), Qt.AlignmentFlag.AlignCenter)
             self.add_hotspot(box, "setting_mode_next", setting, tooltip="左键/右键循环切换")
         elif setting.kind == "action":
             button = content_rect.adjusted(8 * scale, 4 * scale, -8 * scale, -4 * scale)
