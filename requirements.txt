@@ -1,6 +1,47 @@
-PySide6
-opencv-python
-openvino
-numpy
-paho-mqtt
-pyserial
+# =============================================================================
+# POLAR-RM 运行依赖（pip install -r requirements.txt）
+# 仅包含 Python 包。资源类开源（击杀特效图/音、同济模型权重）已随仓库分发，
+# 不能写成 pip 包——见下方「非 pip / 已内置资源」。
+# =============================================================================
+
+# --- GUI / 渲染（ClickGUI、HUD、OpenGL 路径）---
+PySide6>=6.6,<7
+
+# --- 图传 / 图像 / 数值 ---
+opencv-python>=4.8
+numpy>=1.26
+
+# --- 同济 Local 视觉（OpenVINO 加载 yolov5.xml/.bin）---
+# 权重文件见：同济自瞄/sp_vision_25/assets/（已入库，非 pip）
+# 完整 C++ 自瞄工程：https://github.com/TongjiSuperPower/sp_vision_25 （需另 clone/编译，UDP 外挂）
+openvino>=2024.0
+
+# --- 通信预留 ---
+paho-mqtt>=2.0
+pyserial>=3.5
+
+# =============================================================================
+# 非 pip / 已内置资源（不要写成 git+https 伪依赖，pip 装不上）
+# =============================================================================
+#
+# 1) EliminationFX / GD656 击杀特效
+#    - 路径：assets/kill_fx/gd656/（PNG + OGG，已入库）
+#    - 来源：GD656 Kill Icon 模组资源（Minecraft 模组，不是 Python 库）
+#    - 发布页：https://www.mcmod.cn/class/21672.html
+#    - 许可：上游 README 写明 MIT；本仓库保留 SOURCE-GD656-README.md
+#
+# 2) 同济装甲检测权重（Local 小框）
+#    - 路径：同济自瞄/sp_vision_25/assets/yolov5.xml + yolov5.bin（已入库 ~3MB）
+#    - 上游完整视觉：https://github.com/TongjiSuperPower/sp_vision_25 （MIT，C++）
+#    - POLAR 侧用 openvino + tongji_yolo.py 对齐推理；不 pip 安装整个 sp_vision
+#    - 真机/完整外挂：clone 上游后自行编译，客户端 Vision Source=Tongji 收 UDP :9871
+#
+# 3) UI 音效等
+#    - assets/ui_sounds/（已入库；部分来自 LiquidBounce，见目录内 LICENSE）
+#
+# 4) 战术地图
+#    - assets/maps/*.png（已入库）
+#
+# 可选（本仓库代码未 import，一般不必装）：
+#   onnxruntime   # 仅当自行跑 ONNX 工具链时
+# =============================================================================

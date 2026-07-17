@@ -9,10 +9,14 @@
 
 ```powershell
 cd rm_custom_client
+python -m venv .venv
+.\.venv\Scripts\pip install -r requirements.txt
 .\.venv\Scripts\python.exe main.py
 ```
 
-如果虚拟环境不存在，先执行 `pip install -r requirements.txt` 安装依赖。
+`requirements.txt` 只装 **Python 包**（PySide6、OpenCV、OpenVINO、numpy、MQTT/串口等）。
+
+击杀特效（GD656 图/音）和同济 Local 检测权重（`yolov5.xml/.bin`）**已随本仓库资源目录提供**，不是 pip 包，无需再从 GitHub 用 pip 安装。完整同济 C++ 自瞄工程见 [TongjiSuperPower/sp_vision_25](https://github.com/TongjiSuperPower/sp_vision_25)，仅在真机/UDP 外挂时另 clone 编译。详情见 `requirements.txt` 注释与 `THIRD_PARTY_NOTICES.md`。
 
 启动后会先进入两级 POLAR 选择界面，然后再进入图传/HUD 主界面。启动选择页默认使用德克萨斯视频壁纸和鼠标视差；摄像头会延迟到进入主 HUD 后才打开，避免启动页直接显示真实摄像头画面。
 
