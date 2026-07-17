@@ -7232,22 +7232,110 @@ class PolarRMWindow(QOpenGLWidget):
         entries.sort(key=lambda item: item["order"])
         return entries
 
+    def _client_asset_path(self, *parts: str) -> Path:
+        """Resolve assets under rm_custom_client/ regardless of workspace root."""
+        here = Path(__file__).resolve().parents[2]  # .../rm_custom_client
+        primary = here.joinpath(*parts)
+        if primary.exists():
+            return primary
+        alt = self.workspace / "rm_custom_client" / Path(*parts)
+        if alt.exists():
+            return alt
+        return self.workspace.joinpath(*parts)
+
+    def debug_tahoma16_raw(self):
+        """Load jar/visual-demo tahoma.ttf as QRawFont @ 16px (not system Tahoma)."""
+        from PySide6.QtGui import QRawFont
+
+        raw = getattr(self, "_debug_tahoma16_raw", None)
+        if raw is not None and raw.isValid():
+            return raw
+        path = self._client_asset_path("assets", "fonts", "tahoma.ttf")
+        # Pixel size 16 = Fonts.tahoma16. PreferNoHinting ≈ jar antiAlias off.
+        raw = QRawFont(str(path), 16.0) if path.exists() else QRawFont()
+        self._debug_tahoma16_raw = raw
+        return raw
+
+    def debug_tahoma16_font(self) -> QFont:
+        """QFont mirror of tahoma16 for metrics fallback only."""
+        from PySide6.QtGui import QFontDatabase
+
+        path = self._client_asset_path("assets", "fonts", "tahoma.ttf")
+        font_id = getattr(self, "_debug_tahoma_font_id", -1)
+        if font_id < 0 and path.exists():
+            font_id = QFontDatabase.addApplicationFont(str(path))
+            self._debug_tahoma_font_id = font_id
+        families = QFontDatabase.applicationFontFamilies(font_id) if font_id >= 0 else []
+        family = families[0] if families else "Tahoma"
+        font = QFont(family)
+        font.setPixelSize(16)
+        font.setBold(False)
+        font.setWeight(QFont.Weight.Normal)
+        font.setStyleStrategy(QFont.StyleStrategy.NoAntialias)
+        font.setHintingPreference(QFont.HintingPreference.PreferNoHinting)
+        return font
+
+    def measure_debug_tahoma16(self, text: str) -> float:
+        raw = self.debug_tahoma16_raw()
+        if raw is not None and raw.isValid():
+            indexes = raw.glyphIndexesForString(text)
+            if indexes:
+                advances = raw.advancesForGlyphIndexes(indexes)
+                return float(sum(adv.x() for adv in advances))
+        return float(QFontMetricsF(self.debug_tahoma16_font()).horizontalAdvance(text))
+
+    def draw_debug_tahoma16_text(
+        self,
+        p: QPainter,
+        text: str,
+        x: float,
+        y: float,
+        color: QColor,
+    ) -> None:
+        """Draw PLAIN tahoma16 with top-left origin (canvas textBaseline=top)."""
+        from PySide6.QtGui import QRawFont
+
+        raw = self.debug_tahoma16_raw()
+        if raw is None or not raw.isValid():
+            # Absolute last resort: QFont path (still NoAntialias tahoma face).
+            font = self.debug_tahoma16_font()
+            box = QRectF(x, y, self.measure_debug_tahoma16(text) + 2.0, 18.0)
+            p.setFont(font)
+            p.setPen(color)
+            p.drawText(box, int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop), text)
+            return
+        indexes = raw.glyphIndexesForString(text)
+        if not indexes:
+            return
+        advances = raw.advancesForGlyphIndexes(indexes)
+        # y is top; QRawFont paths are baseline-relative.
+        baseline = y + float(raw.ascent())
+        cursor = float(x)
+        p.save()
+        p.setBrush(color)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing, False)
+        p.setRenderHint(QPainter.RenderHint.TextAntialiasing, False)
+        for glyph_id, advance in zip(indexes, advances):
+            path = raw.pathForGlyph(glyph_id)
+            if not path.isEmpty():
+                p.save()
+                p.translate(cursor, baseline)
+                p.fillPath(path, color)
+                p.restore()
+            cursor += float(advance.x())
+        p.restore()
+
     def arraylist_shadow_image(self) -> QImage | None:
         """Debug.jar client/arraylistshadow.png (87×37 black + soft alpha)."""
         cached = getattr(self, "_arraylist_shadow_image", None)
         if cached is not None:
             return cached if not cached.isNull() else None
-        candidates = (
-            Path(__file__).resolve().parents[2] / "assets" / "hud" / "arraylistshadow.png",
-            self.workspace / "rm_custom_client" / "assets" / "hud" / "arraylistshadow.png",
-            self.workspace / "assets" / "hud" / "arraylistshadow.png",
-        )
-        image = QImage()
-        for path in candidates:
-            if path.exists():
-                image = QImage(str(path))
-                if not image.isNull():
-                    break
+        path = self._client_asset_path("assets", "hud", "arraylistshadow.png")
+        image = QImage(str(path)) if path.exists() else QImage()
+        # Ensure premultiplied so α soft edge composites correctly on GPU blit.
+        if not image.isNull():
+            image = image.convertToFormat(QImage.Format.Format_ARGB32_Premultiplied)
         self._arraylist_shadow_image = image
         return image if not image.isNull() else None
 
@@ -7257,20 +7345,20 @@ class PolarRMWindow(QOpenGLWidget):
         text: str,
         x: float,
         y: float,
-        font: QFont,
         *,
         main: QColor | None = None,
     ) -> None:
-        """Minecraft 1.8 drawStringWithShadow: shadow (RGB&0xFCFCFC)>>2 at +1,+1, then main."""
+        """MC 1.8 drawStringWithShadow on Debug tahoma16 (top-left origin)."""
         main = main or QColor(255, 255, 255, 255)
-        sr = (main.red() & 0xFC) >> 2
-        sg = (main.green() & 0xFC) >> 2
-        sb = (main.blue() & 0xFC) >> 2
-        p.setFont(font)
-        p.setPen(QColor(sr, sg, sb, main.alpha()))
-        p.drawText(QPointF(x + 1.0, y + 1.0 + QFontMetricsF(font).ascent()), text)
-        p.setPen(main)
-        p.drawText(QPointF(x, y + QFontMetricsF(font).ascent()), text)
+        # (color & 0xFCFCFC) >> 2 → white shadow ≈ #3F3F3F
+        shadow = QColor(
+            (main.red() & 0xFC) >> 2,
+            (main.green() & 0xFC) >> 2,
+            (main.blue() & 0xFC) >> 2,
+            main.alpha(),
+        )
+        self.draw_debug_tahoma16_text(p, text, x + 1.0, y + 1.0, shadow)
+        self.draw_debug_tahoma16_text(p, text, x, y, main)
 
     def draw_module_list_debug_white(
         self,
@@ -7279,18 +7367,14 @@ class PolarRMWindow(QOpenGLWidget):
         start_y: float | None = None,
         available_height: float | None = None,
     ) -> None:
-        """Debug.jar fluorescent-white ArrayList (MODLIST_WHITE.md / modlist-white.html).
+        """Debug fluorescent-white ArrayList — 1:1 modlist-white.html / MODLIST_WHITE.md.
 
-        Tahoma 16 PLAIN + Color.WHITE α=1 + drawStringWithShadow + arraylistshadow
-        underlay at α≈0.7. Right-aligned, stringWidth descending. No rainbow / side
-        bar / solid black strip.
+        Font: assets/fonts/tahoma.ttf via QRawFont @16 (jar tahoma16, not system UI).
+        Color: #FFFFFF α=1. Shadow: +1,+1 ≈#3F3F3F. Underlay: arraylistshadow.png @0.7.
+        Layout: right, x=W-w-2, y=2+i*16, width-desc. No rainbow / side bar / solid strip.
+        CPU-raster then blit (stable on OpenGL FBO).
         """
-        # jar tahoma16: pixel size 16, PLAIN, antiAlias off.
-        font = self.font("tahoma", 12.0)
-        font.setPixelSize(16)
-        font.setBold(False)
-        font.setStyleStrategy(QFont.StyleStrategy.NoAntialias)
-        metrics = QFontMetricsF(font)
+        raw = self.debug_tahoma16_raw()
         row_h = 16.0
         pad_right = 2.0
         pad_top = 2.0 if start_y is None else float(start_y)
@@ -7299,40 +7383,61 @@ class PolarRMWindow(QOpenGLWidget):
         shadow_alpha = 0.70
 
         visible = [m for m in self.registry.enabled_modules() if m.name not in ("HUD", "ClickGui")]
-        rows = []
-        for module in visible:
-            name = module.name
-            w = metrics.horizontalAdvance(name)
-            rows.append((module, name, w))
-        rows.sort(key=lambda item: (-item[2], item[1].lower()))
+        rows: list[tuple[str, float]] = [
+            (module.name, self.measure_debug_tahoma16(module.name)) for module in visible
+        ]
+        rows.sort(key=lambda item: (-item[1], item[0].lower()))
 
         y0 = pad_top
-        height_limit = self.height() if available_height is None else y0 + available_height
+        height_limit = float(self.height()) if available_height is None else y0 + float(available_height)
         max_rows = max(1, int((height_limit - y0 - 4.0) // row_h))
         rows = rows[:max_rows]
+        if not rows:
+            return
+
+        max_text_w = max(w for _, w in rows)
+        layer_w = int(math.ceil(max_text_w + pad_x * 2.0 + pad_right + 8.0))
+        layer_h = int(math.ceil(y0 + len(rows) * row_h + pad_y + 8.0))
+        layer_w = max(8, min(layer_w, max(8, int(width))))
+        layer_h = max(8, layer_h)
+        # CPU 1:1 pixel buffer — jar antiAlias off; no GL font substitution.
+        layer = QImage(layer_w, layer_h, QImage.Format.Format_ARGB32_Premultiplied)
+        layer.fill(0)
+        ip = QPainter(layer)
+        ip.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
+        # Glyph fills: light AA only on soft shadow stretch, not on pixel text.
+        ip.setRenderHint(QPainter.RenderHint.Antialiasing, False)
+        ip.setRenderHint(QPainter.RenderHint.TextAntialiasing, False)
+        ip.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+
         shadow = self.arraylist_shadow_image()
+        origin_x = float(width) - float(layer_w)
+
+        for index, (name, text_w) in enumerate(rows):
+            screen_x = float(width) - text_w - pad_right
+            local_x = screen_x - origin_x
+            local_y = y0 + index * row_h
+
+            # Soft underlay first (arraylistshadow.png), jar color 1,1,1,0.7.
+            dest = QRectF(local_x - pad_x, local_y - pad_y, text_w + pad_x * 2.0, row_h + pad_y * 2.0)
+            if shadow is not None and not shadow.isNull():
+                ip.save()
+                ip.setOpacity(shadow_alpha)
+                ip.drawImage(dest, shadow)
+                ip.restore()
+            else:
+                ip.fillRect(dest, QColor(0, 0, 0, 40))
+
+            # Full white + MC pixel shadow on top of soft plate.
+            self.draw_string_with_shadow_mc(
+                ip, name, local_x, local_y, main=QColor(255, 255, 255, 255),
+            )
+        ip.end()
 
         p.save()
-        p.setRenderHint(QPainter.RenderHint.TextAntialiasing, False)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing, False)
-        for index, (_module, name, text_w) in enumerate(rows):
-            x = float(width) - text_w - pad_right
-            y = y0 + index * row_h
-            # Soft underlay: black+α texture drawn with white×0.7 → dark soft plate.
-            if shadow is not None and not shadow.isNull():
-                dest = QRectF(x - pad_x, y - pad_y, text_w + pad_x * 2.0, row_h + pad_y * 2.0)
-                p.save()
-                p.setOpacity(shadow_alpha)
-                p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
-                p.drawImage(dest, shadow)
-                p.restore()
-            else:
-                # Fallback soft plate if asset missing (still no solid bar).
-                dest = QRectF(x - pad_x, y - pad_y, text_w + pad_x * 2.0, row_h + pad_y * 2.0)
-                p.fillRect(dest, QColor(0, 0, 0, int(255 * 0.22 * shadow_alpha)))
-            self.draw_string_with_shadow_mc(
-                p, name, x, y, font, main=QColor(255, 255, 255, 255),
-            )
+        p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, False)
+        p.drawImage(QPointF(origin_x, 0.0), layer)
         p.restore()
 
     def draw_module_list_liquid_array(
