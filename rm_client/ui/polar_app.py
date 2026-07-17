@@ -3938,40 +3938,34 @@ class PolarRMWindow(QOpenGLWidget):
         line_width: float = 1.15,
         glow: float = 0.85,
         alpha: float = 1.0,
-        supersample: float = 2.0,
+        device_scale: float = 1.0,
     ) -> tuple[QImage, float]:
-        """CPU-only fluorescent white ring (Debug Box ESP recipe).
+        """CPU fluorescent white ring at device pixels (sharp on 2K).
 
-        Never call drawEllipse on an OpenGL paint device — Qt's AA path paints a
-        translucent rectangular atlas (the white square bug). Rasterize here,
-        then blit the premultiplied image.
-
-        Returns (image, half_extent_logical) so the caller can center the blit.
+        Never drawEllipse on OpenGL (white square atlas). Rasterize 1:1 for the
+        current painter scale — no Smooth downscale mush.
         """
         glow = max(0.0, min(1.0, float(glow)))
         alpha = max(0.0, min(1.0, float(alpha)))
-        # Cache at full opacity; callers that need dimmed rings should pass alpha=1
-        # and multiply painter opacity instead.
+        px = max(1.0, float(device_scale))
         cache_key = (
-            int(round(float(radius) * 2.0)),
-            int(round(float(line_width) * 100.0)),
+            int(round(float(radius) * px * 2.0)),
+            int(round(float(line_width) * px * 100.0)),
             int(round(glow * 100.0)),
+            int(round(px * 100.0)),
         )
         if alpha >= 0.999 and cache_key in self._fluorescent_circle_cache:
             return self._fluorescent_circle_cache[cache_key]
 
-        ss = max(1.0, float(supersample))
-        r = max(0.5, float(radius) * ss)
-        base_w = max(0.75, float(line_width) * ss)
-        # Outer bloom needs headroom so soft strokes are not clipped.
-        pad = base_w * 0.5 + (2.5 * glow + 8.0 * glow) * 0.5 + 3.0 * ss
+        r = max(0.5, float(radius) * px)
+        base_w = max(0.75, float(line_width) * px)
+        pad = base_w * 0.5 + (2.5 * glow + 8.0 * glow) * 0.5 * px + 3.0 * px
         half = int(math.ceil(r + pad))
         size = max(8, half * 2)
         image = QImage(size, size, QImage.Format.Format_ARGB32_Premultiplied)
         image.fill(0)
         ip = QPainter(image)
         ip.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        ip.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
         ip.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
         ip.setBrush(Qt.BrushStyle.NoBrush)
         center = QPointF(size * 0.5, size * 0.5)
@@ -3985,29 +3979,17 @@ class PolarRMWindow(QOpenGLWidget):
             ip.setPen(pen)
             ip.drawEllipse(center, r, r)
 
-        # Multi-pass pure #FFFFFF bloom → core (stronger than thin demo default,
-        # still no cyan tint / no fill). Matches jar "fluorescent" AA look.
         if glow > 0.01:
-            stroke(0.05 * glow * alpha, base_w + 12.0 * glow)
+            stroke(0.05 * glow * alpha, base_w + 12.0 * glow * px / max(1.0, px))
             stroke(0.10 * glow * alpha, base_w + 7.0 * glow)
             stroke(0.18 * glow * alpha, base_w + 3.8 * glow)
             stroke(0.32 * glow * alpha, base_w + 1.8 * glow)
         stroke(1.00 * alpha, base_w)
-        # Crisp inner filament so the ring reads bright, not chalky.
-        stroke(0.70 * alpha, max(0.65 * ss, base_w * 0.48))
+        stroke(0.70 * alpha, max(0.65 * px, base_w * 0.48))
         ip.end()
-        if ss != 1.0:
-            out_w = max(1, int(round(size / ss)))
-            image = image.scaled(
-                out_w,
-                out_w,
-                Qt.AspectRatioMode.IgnoreAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-        half_logical = image.width() * 0.5
+        half_logical = size * 0.5 / px
         if alpha >= 0.999:
             self._fluorescent_circle_cache[cache_key] = (image, half_logical)
-            # Bound cache growth when user scrubs Circle Size.
             if len(self._fluorescent_circle_cache) > 48:
                 oldest = next(iter(self._fluorescent_circle_cache))
                 if oldest != cache_key:
@@ -4025,23 +4007,27 @@ class PolarRMWindow(QOpenGLWidget):
         glow: float = 0.85,
         alpha: float = 1.0,
     ) -> None:
-        """Fluorescent white ellipse via CPU raster + blit (never GL drawEllipse)."""
+        """Fluorescent white ellipse via device-scale CPU raster + crisp blit."""
         rx = max(0.5, float(radius_x))
         ry = max(0.5, float(radius_x if radius_y is None else radius_y))
-        # Non-circle ellipses fall back to segment approximation on CPU image later if needed.
         radius = max(rx, ry)
+        device_scale = self.painter_device_scale(p)
         image, half = self.rasterize_fluorescent_white_circle(
-            radius, line_width=line_width, glow=glow, alpha=alpha, supersample=2.0,
+            radius, line_width=line_width, glow=glow, alpha=alpha, device_scale=device_scale,
         )
         if rx != ry and ry > 0.5:
-            # Scale Y for ellipse while keeping X radius.
-            target = QRectF(center.x() - half * (rx / radius), center.y() - half * (ry / radius),
-                            half * 2.0 * (rx / radius), half * 2.0 * (ry / radius))
+            target = QRectF(
+                center.x() - half * (rx / radius),
+                center.y() - half * (ry / radius),
+                half * 2.0 * (rx / radius),
+                half * 2.0 * (ry / radius),
+            )
         else:
             target = QRectF(center.x() - half, center.y() - half, half * 2.0, half * 2.0)
         p.save()
         p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
-        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+        # No SmoothPixmapTransform — 2K soft upscale was the blur.
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, False)
         p.drawImage(target, image)
         p.restore()
 
@@ -7243,12 +7229,11 @@ class PolarRMWindow(QOpenGLWidget):
             return alt
         return self.workspace.joinpath(*parts)
 
-    def debug_tahoma16_font(self) -> QFont:
-        """jar tahoma16 from assets/fonts/tahoma.ttf (PLAIN, 16px).
+    def debug_tahoma_font(self, pixel_size: int = 16) -> QFont:
+        """jar tahoma from assets/fonts/tahoma.ttf (PLAIN).
 
-        visual-demo/modlist-white.html uses the same TTF via @font-face DebugTahoma.
-        We register the file and draw with text AA so it matches the canvas demo
-        (browser always AA); jar is antiAlias-off but still this face, not Segoe.
+        pixel_size is device pixels — at 2K we rasterize at hud_scale*dpr so the
+        blit is 1:1 and does not soft-upscale a 16px buffer (the 2K blur bug).
         """
         from PySide6.QtGui import QFontDatabase
 
@@ -7260,18 +7245,27 @@ class PolarRMWindow(QOpenGLWidget):
         families = QFontDatabase.applicationFontFamilies(font_id) if font_id >= 0 else []
         family = families[0] if families else "Tahoma"
         font = QFont(family)
-        font.setPixelSize(16)
+        font.setPixelSize(max(8, int(pixel_size)))
         font.setBold(False)
         font.setItalic(False)
         font.setWeight(QFont.Weight.Normal)
         font.setKerning(True)
-        # Match modlist-white.html canvas fillText look (readable fluorescent white).
         font.setHintingPreference(QFont.HintingPreference.PreferFullHinting)
+        # Prefer crisp edges on high-DPI; AA is mild, not SmoothPixmap soft mush.
         font.setStyleStrategy(QFont.StyleStrategy.PreferAntialias)
         return font
 
+    def debug_tahoma16_font(self) -> QFont:
+        return self.debug_tahoma_font(16)
+
     def measure_debug_tahoma16(self, text: str) -> float:
         return float(QFontMetricsF(self.debug_tahoma16_font()).horizontalAdvance(text))
+
+    @staticmethod
+    def painter_device_scale(p: QPainter) -> float:
+        """Logical→device scale from current painter transform (hud_scale * dpr)."""
+        t = p.transform()
+        return max(1.0, abs(float(t.m11())), abs(float(t.m22())))
 
     def arraylist_shadow_image(self) -> QImage | None:
         """arraylistshadow.png baked for jar draw: black soft plate @ effective α.
@@ -7321,8 +7315,11 @@ class PolarRMWindow(QOpenGLWidget):
         x: float,
         y: float,
         *,
+        font: QFont | None = None,
         main: QColor | None = None,
         text_w: float | None = None,
+        row_h: float = 16.0,
+        shadow_px: float = 1.0,
     ) -> None:
         """MC 1.8 drawStringWithShadow — top baseline like canvas textBaseline=top."""
         main = main or QColor(255, 255, 255, 255)
@@ -7332,15 +7329,14 @@ class PolarRMWindow(QOpenGLWidget):
             (main.blue() & 0xFC) >> 2,
             main.alpha(),
         )
-        font = self.debug_tahoma16_font()
+        font = font or self.debug_tahoma16_font()
         metrics = QFontMetricsF(font)
         tw = float(text_w if text_w is not None else metrics.horizontalAdvance(text))
-        # Height 16 matches FONT.size row; AlignTop = canvas top baseline.
-        box = QRectF(x, y, tw + 3.0, 16.0)
+        box = QRectF(x, y, tw + 3.0 * max(1.0, shadow_px), row_h)
         flags = int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         p.setFont(font)
         p.setPen(shadow)
-        p.drawText(box.translated(1.0, 1.0), flags, text)
+        p.drawText(box.translated(shadow_px, shadow_px), flags, text)
         p.setPen(main)
         p.drawText(box, flags, text)
 
@@ -7351,26 +7347,29 @@ class PolarRMWindow(QOpenGLWidget):
         start_y: float | None = None,
         available_height: float | None = None,
     ) -> None:
-        """Debug fluorescent-white ArrayList (screenshot-verified vs modlist-white.html).
+        """Debug fluorescent-white ArrayList (modlist-white.html / MODLIST_WHITE.md).
 
-        - tahoma.ttf @ 16px PLAIN full white α=1
-        - MC +1,+1 shadow ≈ #3F3F3F
-        - arraylistshadow soft plate under each name
-        - right align, width-desc, y = 2 + i*16
-        - no rainbow / side bar / solid strip
+        Rasterizes at **device pixels** (hud_scale × dpr) so 2K stays sharp — never
+        draw 16px then Smooth upscale under p.scale(hud_scale).
         """
-        font = self.debug_tahoma16_font()
-        metrics = QFontMetricsF(font)
+        # Logical layout (jar coords).
         row_h = 16.0
         pad_right = 2.0
         pad_top = 2.0 if start_y is None else float(start_y)
         pad_x = 6.0
         pad_y = 2.0
+        # Device scale: at 2K hud_scale~1.4 and dpr=1 → raster ~1.4×; with dpr=1.25 even higher.
+        device_scale = self.painter_device_scale(p)
+        px = max(1.0, device_scale)
+        font_px = max(12, int(round(16.0 * px)))
+        font = self.debug_tahoma_font(font_px)
+        metrics = QFontMetricsF(font)
+        # Measure in logical units (font is device-px; divide by scale).
+        def measure_logical(name: str) -> float:
+            return float(metrics.horizontalAdvance(name)) / px
 
         visible = [m for m in self.registry.enabled_modules() if m.name not in ("HUD", "ClickGui")]
-        rows: list[tuple[str, float]] = [
-            (module.name, float(metrics.horizontalAdvance(module.name))) for module in visible
-        ]
+        rows: list[tuple[str, float]] = [(module.name, measure_logical(module.name)) for module in visible]
         rows.sort(key=lambda item: (-item[1], item[0].lower()))
 
         y0 = pad_top
@@ -7381,44 +7380,64 @@ class PolarRMWindow(QOpenGLWidget):
             return
 
         max_text_w = max(w for _, w in rows)
-        layer_w = int(math.ceil(max_text_w + pad_x * 2.0 + pad_right + 10.0))
-        layer_h = int(math.ceil(y0 + len(rows) * row_h + pad_y + 10.0))
-        layer_w = max(8, min(layer_w, max(8, int(width))))
-        layer_h = max(8, layer_h)
-
-        # Paint soft plates + text at device scale without 2× downscale wash-out
-        # (downscale was killing arraylistshadow alpha in screenshots).
+        layer_w_l = max_text_w + pad_x * 2.0 + pad_right + 10.0
+        layer_h_l = y0 + len(rows) * row_h + pad_y + 10.0
+        layer_w_l = max(8.0, min(layer_w_l, float(width)))
+        layer_h_l = max(8.0, layer_h_l)
+        # Physical buffer: 1 device pixel per buffer pixel → crisp after transform.
+        layer_w = max(8, int(math.ceil(layer_w_l * px)))
+        layer_h = max(8, int(math.ceil(layer_h_l * px)))
         layer = QImage(layer_w, layer_h, QImage.Format.Format_ARGB32_Premultiplied)
         layer.fill(0)
         ip = QPainter(layer)
         ip.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
         ip.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
-        ip.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        ip.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+        ip.setRenderHint(QPainter.RenderHint.Antialiasing, False)
+        # Nearest for shadow stretch keeps plate edges from milky blur at 2K.
+        ip.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, False)
 
         shadow = self.arraylist_shadow_image()
-        origin_x = float(width) - float(layer_w)
+        origin_x = float(width) - layer_w_l
+        shadow_px = max(1.0, round(px))  # MC +1,+1 in device pixels
 
-        for index, (name, text_w) in enumerate(rows):
-            screen_x = float(width) - text_w - pad_right
-            local_x = screen_x - origin_x
-            local_y = y0 + index * row_h
-
-            dest = QRectF(local_x - pad_x, local_y - pad_y, text_w + pad_x * 2.0, row_h + pad_y * 2.0)
+        for index, (name, text_w_l) in enumerate(rows):
+            screen_x = float(width) - text_w_l - pad_right
+            local_x_l = screen_x - origin_x
+            local_y_l = y0 + index * row_h
+            # Device-space coords inside layer.
+            dx = local_x_l * px
+            dy = local_y_l * px
+            tw = text_w_l * px
+            rh = row_h * px
+            dest = QRectF(
+                dx - pad_x * px,
+                dy - pad_y * px,
+                tw + pad_x * 2.0 * px,
+                rh + pad_y * 2.0 * px,
+            )
             if shadow is not None and not shadow.isNull():
                 ip.drawImage(dest, shadow)
             else:
                 ip.fillRect(dest, QColor(0, 0, 0, 90))
 
             self.draw_string_with_shadow_mc(
-                ip, name, local_x, local_y, main=QColor(255, 255, 255, 255), text_w=text_w,
+                ip,
+                name,
+                dx,
+                dy,
+                font=font,
+                main=QColor(255, 255, 255, 255),
+                text_w=tw,
+                row_h=rh,
+                shadow_px=shadow_px,
             )
         ip.end()
 
         p.save()
         p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
-        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
-        p.drawImage(QPointF(origin_x, 0.0), layer)
+        # Fast blit — SmoothPixmapTransform here is what made 2K look muddy.
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, False)
+        p.drawImage(QRectF(origin_x, 0.0, layer_w_l, layer_h_l), layer)
         p.restore()
 
     def draw_module_list_liquid_array(
