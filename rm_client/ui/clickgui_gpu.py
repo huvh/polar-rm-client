@@ -590,15 +590,20 @@ class ClickGuiGpuRenderer:
         self.atlas_misses += 1
 
         raster_font = QFont(font)
+        # Snap sizes to whole device pixels — fractional pt × dpr is a top cause of mushy 1K GUI text.
         if raster_font.pointSizeF() > 0:
-            raster_font.setPointSizeF(raster_font.pointSizeF() * self._pixel_ratio)
+            logical_px = raster_font.pointSizeF() * (96.0 / 72.0)
+            raster_font.setPixelSize(max(1, int(round(logical_px * self._pixel_ratio))))
         elif raster_font.pixelSize() > 0:
-            raster_font.setPixelSize(max(1, round(raster_font.pixelSize() * self._pixel_ratio)))
+            raster_font.setPixelSize(max(1, int(round(raster_font.pixelSize() * self._pixel_ratio))))
+        raster_font.setHintingPreference(QFont.HintingPreference.PreferFullHinting)
+        raster_font.setStyleStrategy(QFont.StyleStrategy.PreferAntialias)
+        raster_font.setKerning(True)
 
         metrics = QFontMetricsF(raster_font)
         ordered_chars = sorted(chars)
         bounds_by_char = {char: metrics.boundingRect(char) for char in ordered_chars}
-        padding = max(2, int(math.ceil(self._pixel_ratio * 1.5)))
+        padding = max(3, int(math.ceil(self._pixel_ratio * 2.0)))
         max_glyph_width = max(
             1,
             int(math.ceil(max((bounds.width() for bounds in bounds_by_char.values()), default=1.0))),
@@ -631,6 +636,7 @@ class ClickGuiGpuRenderer:
         painter = QPainter(image)
         painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Source)
         painter.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, False)
         painter.setFont(raster_font)
         painter.setPen(QColor(255, 255, 255, 255))
         glyphs: dict[str, _Glyph] = {}
@@ -644,16 +650,16 @@ class ClickGuiGpuRenderer:
             glyph_width = max(0.0, bounds.width())
             glyph_height = max(0.0, bounds.height())
             if glyph_width > 0.0 and glyph_height > 0.0:
-                painter.drawText(
-                    QPointF(atlas_x - bounds.left(), atlas_y - bounds.top()),
-                    char,
-                )
-            inset = 0.5
+                # Integer baseline position for stable stems at 1K.
+                pen_x = round(atlas_x - bounds.left())
+                pen_y = round(atlas_y - bounds.top())
+                painter.drawText(QPointF(pen_x, pen_y), char)
+            # Tight UV (no 0.5 inset) so Nearest sampling does not thin strokes.
             glyphs[char] = _Glyph(
-                (atlas_x + inset) / atlas_width,
-                (atlas_y + inset) / atlas_height,
-                (atlas_x + max(inset, glyph_width - inset)) / atlas_width,
-                (atlas_y + max(inset, glyph_height - inset)) / atlas_height,
+                atlas_x / atlas_width,
+                atlas_y / atlas_height,
+                (atlas_x + glyph_width) / atlas_width,
+                (atlas_y + glyph_height) / atlas_height,
                 advance,
                 bounds.left(),
                 bounds.top(),
@@ -666,8 +672,9 @@ class ClickGuiGpuRenderer:
             image,
             QOpenGLTexture.MipMapGeneration.DontGenerateMipMaps,
         )
-        new_texture.setMinificationFilter(QOpenGLTexture.Filter.Linear)
-        new_texture.setMagnificationFilter(QOpenGLTexture.Filter.Linear)
+        # Nearest keeps ClickGUI labels crisp at 1K; Linear was milk-blurring small Poppins.
+        new_texture.setMinificationFilter(QOpenGLTexture.Filter.Nearest)
+        new_texture.setMagnificationFilter(QOpenGLTexture.Filter.Nearest)
         new_texture.setWrapMode(QOpenGLTexture.WrapMode.ClampToEdge)
         published = _GlyphAtlas(new_texture, glyphs, raster_font, self._pixel_ratio)
         old = self.atlases.get(key)
@@ -701,11 +708,14 @@ class ClickGuiGpuRenderer:
                 end += 1
             items = commands[index:end]
             self._apply_clip(functions, items[0].clip, width, height)
+            # Lighter drop shadow so main strokes stay readable on 1K glass panels.
             shadows: list[GpuText] = []
             for item in items:
-                shadow_alpha = max(36, min(138, round(item.color.alpha() * 0.62)))
+                if item.color.alpha() < 40:
+                    continue
+                shadow_alpha = max(28, min(96, round(item.color.alpha() * 0.42)))
                 shadow_rect = QRectF(item.rect)
-                shadow_rect.translate(0.75, 1.0)
+                shadow_rect.translate(1.0, 1.0)
                 shadows.append(
                     GpuText(
                         shadow_rect,
@@ -717,7 +727,8 @@ class ClickGuiGpuRenderer:
                     )
                 )
             atlas = self.atlases[font_key]
-            self._draw_text_batch(functions, shadows, atlas, width, height)
+            if shadows:
+                self._draw_text_batch(functions, shadows, atlas, width, height)
             self._draw_text_batch(functions, items, atlas, width, height)
             index = end
 
@@ -751,25 +762,28 @@ class ClickGuiGpuRenderer:
                 y = rect.bottom() - line_height
             else:
                 y = rect.top()
-            x = round(x)
-            y = round(y)
-            baseline = y + metrics.ascent()
+            x = float(round(x))
+            y = float(round(y))
+            baseline = float(round(y + metrics.ascent()))
             cursor = x
             for char in command.text:
                 glyph = atlas.glyphs.get(char)
                 if glyph is None:
                     continue
-                glyph_x = cursor + glyph.offset_x
-                glyph_y = baseline + glyph.offset_y
+                # Integer quad origin → Nearest atlas samples stay sharp at 1K.
+                glyph_x = float(round(cursor + glyph.offset_x))
+                glyph_y = float(round(baseline + glyph.offset_y))
+                glyph_w = float(max(1.0, round(glyph.width))) if glyph.width > 0.0 else 0.0
+                glyph_h = float(max(1.0, round(glyph.height))) if glyph.height > 0.0 else 0.0
                 if (
-                    glyph.width > 0.0
-                    and glyph.height > 0.0
-                    and glyph_x + glyph.width >= rect.left()
+                    glyph_w > 0.0
+                    and glyph_h > 0.0
+                    and glyph_x + glyph_w >= rect.left()
                     and glyph_x <= rect.right()
                 ):
                     packed.extend(struct.pack(
                         "12f",
-                        glyph_x, glyph_y, glyph.width, glyph.height,
+                        glyph_x, glyph_y, glyph_w, glyph_h,
                         glyph.u0, glyph.v0, glyph.u1, glyph.v1,
                         *self._rgba(command.color),
                     ))
