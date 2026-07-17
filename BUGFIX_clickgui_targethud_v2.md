@@ -23,5 +23,12 @@ git push origin --delete fix/clickgui-targethud-v2
 
 ## 改动文件
 
-- `rm_client/ui/polar_app.py` — ROI TargetHUD + hotspot snapshot  
+- `rm_client/ui/polar_app.py` — ROI TargetHUD + hotspot snapshot；EliminationFX 改走动态层；GUI 打开时清 target 层；字库纹理状态恢复  
 - `rm_client/ui/gpu_frame_compositor.py` — `upload_target_region`  
+
+## 后续修复（同分支）
+
+| 问题 | 原因 | 处理 |
+|------|------|------|
+| EliminationFX 动画僵死 | 画在静态 overlay，只随 `static_key` 刷新 | 改到 `paint_hud_motion_overlay` 每帧画 |
+| ClickGUI 字被盖住/发糊 | `targetTex` 合成在最上层，环盖在面板上；atlas 纹理 unit 可能被污染 | GUI 打开时 clear target 层；render 前 `_restore_qt_texture_state`；atlas 失败重试一次 |

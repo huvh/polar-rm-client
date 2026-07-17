@@ -1460,7 +1460,8 @@ class PolarRMWindow(QOpenGLWidget):
             tongji_result,
             draw_motion=not split_motion_layer,
         )
-        self.draw_elimination_fx(p, width, height)
+        # EliminationFX is always drawn from paint_hud_motion_overlay so the
+        # GPU static-layer cache cannot freeze kill-icon timelines.
         if self.hover_tooltip and not self.gui_visible:
             self.draw_tooltip(p, self.hover_point, self.hover_tooltip)
 
@@ -1609,6 +1610,10 @@ class PolarRMWindow(QOpenGLWidget):
         self.draw_chassis_gimbal_indicator(p, logical_width, logical_height)
         self.draw_telemetry_strip(p, logical_width, logical_height)
         p.restore()
+        # Full-resolution kill icons/score popups; not under hud_scale transform.
+        # Keep off while ClickGUI owns the screen so module labels stay readable.
+        if self.gui_timeline.progress <= 0.01 and not self.economy_visible:
+            self.draw_elimination_fx(p, width, height)
         self.dynamic_hud_ms = (time.perf_counter() - started_at) * 1000.0
 
     def paint_combat_target_overlay(
@@ -1650,7 +1655,14 @@ class PolarRMWindow(QOpenGLWidget):
         can leave a semi-transparent rectangular atlas around antialiased arcs;
         exact ``glTexSubImage2D`` replace on a small ROI removes that residue
         without tanking frame rate.
+
+        While ClickGUI / economy owns the screen the target layer is cleared so
+        the ring does not composite over module labels (targetTex is topmost).
         """
+        gui_open = self.gui_timeline.progress > 0.01 or self.economy_visible
+        if gui_open:
+            return self.gpu_compositor.clear_target_layer(functions)
+
         if not self.gpu_compositor.clear_target_layer(functions):
             return False
 
@@ -1749,30 +1761,58 @@ class PolarRMWindow(QOpenGLWidget):
                         self.hotspots.extend(gpu_hotspots)
                     else:
                         self.build_gpu_clickgui(width, height, gui_alpha)
+                pixel_ratio = self.devicePixelRatioF()
                 if not gpu_atlas_prepared:
                     # Direct compatibility callers do not have the outer
                     # compositor's frame-boundary preparation step.
-                    self.clickgui_gpu.prepare_frame(commands, self.devicePixelRatioF())
+                    self.clickgui_gpu.prepare_frame(commands, pixel_ratio)
                     gpu_atlas_prepared = True
                 p.beginNativePainting()
                 context = self.context()
+                functions = context.extraFunctions() if context is not None else None
+                # QPainter / target-layer uploads may leave non-zero texture units
+                # dirty; reset unit 0 before sampling glyph atlases.
+                if functions is not None:
+                    self.gpu_compositor._restore_qt_texture_state(functions, clear_bindings=True)
                 rendered = bool(
                     context
+                    and functions is not None
                     and self.clickgui_gpu.render(
-                        context.extraFunctions(),
+                        functions,
                         commands,
                         width,
                         height,
-                        self.devicePixelRatioF(),
+                        pixel_ratio,
                         atlas_prepared=gpu_atlas_prepared,
                     )
                 )
                 p.endNativePainting()
                 if not rendered:
-                    backend = click_gui.get_setting("Render Backend") if click_gui else None
-                    if backend:
-                        backend.value = "Compatibility Painter"
-                    direct_gpu = False
+                    # Incomplete atlas snapshot must not permanently flip the user
+                    # off Unified GPU; retry prepare+render once this frame.
+                    if context is not None and functions is not None:
+                        try:
+                            self.clickgui_gpu.prepare_frame(commands, pixel_ratio)
+                            self.gpu_compositor._restore_qt_texture_state(functions, clear_bindings=True)
+                            p.beginNativePainting()
+                            rendered = bool(
+                                self.clickgui_gpu.render(
+                                    functions,
+                                    commands,
+                                    width,
+                                    height,
+                                    pixel_ratio,
+                                    atlas_prepared=True,
+                                )
+                            )
+                            p.endNativePainting()
+                        except Exception:
+                            rendered = False
+                    if not rendered:
+                        backend = click_gui.get_setting("Render Backend") if click_gui else None
+                        if backend:
+                            backend.value = "Compatibility Painter"
+                        direct_gpu = False
             if not direct_gpu:
                 p.save()
                 p.setOpacity(gui_alpha)
