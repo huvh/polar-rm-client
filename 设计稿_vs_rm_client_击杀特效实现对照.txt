@@ -1,0 +1,517 @@
+================================================================================
+视觉击杀可靠性修复 —— 实际代码变更说明（给 GPT / 其它模型对齐用）
+================================================================================
+项目：POLAR-RM / rm_custom_client
+包名：rm_client
+变更目的：解决「装甲灯熄灭后几乎打不出击杀特效」
+备份目录（改前快照）：
+  rm_custom_client/_backup_vision_kill_20260713_000155/
+  内含：combat_events.py, tongji_yolo.py, polar_app.py, smoke_test.py,
+        README_战果判定与阵营.md
+
+未改文件（保持原样）：
+  - rm_client/ui/polar_app.py   （process_vision_kill_events / accept / draw 未动）
+  - rm_client/kill_fx.py
+  - OfficialMatchFeed / CombatEvent 字段结构
+  - Evidence Mode 路由逻辑
+
+已改文件：
+  1) rm_client/combat_events.py     —— VisionKillDetector 重写（核心）
+  2) rm_client/tongji_yolo.py       —— LocalTargetSelector 延长关联
+  3) tests/smoke_test.py            —— 新增/调整用例
+  4) README_战果判定与阵营.md        —— 产品语义同步
+
+
+================================================================================
+一、改前问题（必须对齐的背景）
+================================================================================
+
+改前 VisionKillDetector 只认一条路径：
+
+  敌方 red/blue 亮灯 → 同一轨道连续观测 color/light_state=extinguish
+  → extinguish_frames>=3 且 duration>=0.25s
+  → 且触发判断写在 for armor in observations 循环内
+
+实战失败主因：
+  灯灭后 YOLO 经常「框直接消失」，没有 extinguish 类连续帧
+  → 进度不累计、触发分支不跑 → 几乎永不 VISION_CONFIRMED
+
+次要问题：
+  - 曝光 hold 时清空 extinguish_frames（击杀瞬间 AE 变暗最易误清）
+  - 颜色仍报 red/blue 但灯已暗 → 每帧当 lit 重置进度
+  - LocalTargetSelector 丢检 0.35s/3 帧就 track_id++ → lit 历史作废
+
+
+================================================================================
+二、改后总体行为（对齐目标语义）
+================================================================================
+
+必须先有敌方「确认亮灯」历史（lit_at），然后 **任一路径** 可确认击杀：
+
+  A. classic extinguish
+     detail = "vision_confirmed_lamp_off"
+  B. dim lamp（颜色可能仍是 red/blue，但 light_strength 持续很低）
+     detail = "vision_confirmed_dim_lamp"
+  C. miss-to-kill（亮灯后短时 detections 中不再出现该目标）
+     detail = "vision_confirmed_miss_after_lit"
+
+仍不触发：
+  - 从未亮过
+  - 友军灯色
+  - predicted=True
+  - conf < 0.70
+  - 已 _eliminated 且未重新确认亮灯
+
+仍走原管线：
+  detector.process → list[CombatEvent]
+  → polar_app.accept_combat_event → kill_fx.trigger
+  （UI 层无需改即可消费新 detail）
+
+
+================================================================================
+三、文件 1：combat_events.py —— 完整变更规格
+================================================================================
+
+位置：rm_client/combat_events.py
+类：_VisionTrack, VisionKillDetector
+OfficialMatchFeed / CombatEvent / decode_proto 等 **未改**。
+
+--------------------------------------------------------------------------------
+3.1 _VisionTrack 字段（改后）
+--------------------------------------------------------------------------------
+
+  lit_at: float = 0.0
+  extinguish_start: float = 0.0
+  extinguish_frames: int = 0
+  dim_start: float = 0.0              # 新增
+  dim_frames: int = 0                 # 新增
+  miss_start: float = 0.0             # 新增
+  miss_frames: int = 0                # 新增
+  triggered: bool = False
+  last_seen_at: float = 0.0
+  last_frame_token: object | None = None
+  last_color: str = ""                # 新增
+  last_light_strength: float = 0.0    # 新增
+  last_victim_id: int = 0             # 新增（emit 时用，丢检时没有 armor 对象）
+  target_identity: str = ""           # 新增
+  seen_this_frame: bool = False       # 新增（每帧 process 开头清 False）
+
+--------------------------------------------------------------------------------
+3.2 VisionKillDetector 类常量（改后，全部在类体上）
+--------------------------------------------------------------------------------
+
+  # 经典 extinguish
+  EXTINGUISH_MIN_FRAMES = 3
+  EXTINGUISH_MIN_DURATION = 0.20      # 改前 0.25
+
+  # 过暗辅助
+  DIM_STRENGTH = 0.22                 # <= 此值为 dim
+  LIT_STRENGTH = 0.40                 # >= 此值为确认亮灯
+  DIM_MIN_FRAMES = 3
+  DIM_MIN_DURATION = 0.20
+
+  # 丢检确认
+  MISS_MIN_FRAMES = 4
+  MISS_MIN_DURATION = 0.28
+  LIT_MIN_HISTORY = 0.15              # 亮灯至少存在这么久才允许确认
+  MISS_MAX_AFTER_LIT = 2.5            # 亮灯过久再丢，偏遮挡，不 miss-kill
+
+  # 曝光
+  EXPOSURE_DELTA = 0.28               # 改前 0.20
+  EXPOSURE_HOLD = 0.20                # 改前 0.40；且策略改为 Pause 不清零
+
+  TRACK_TTL = 8.0
+  CONF_MIN = 0.70
+
+--------------------------------------------------------------------------------
+3.3 保留的公开 API（签名未破）
+--------------------------------------------------------------------------------
+
+  VisionKillDetector()
+  .reset()
+  .target_identity(armor) -> str      # 优先 target_id，否则 armor_id
+  ._track_key(armor) -> f"{identity}:{label}"
+  .is_extinguished(armor) -> bool
+      color=="extinguish" OR light_state in (extinguish,extinguished,off,dead)
+  .is_suppressed(armor) -> bool       # identity in _eliminated
+  .process(observations, *, alliance, frame_luminance=None, frame_token=None, now=None)
+      -> list[CombatEvent]
+  .last_status: str                   # HUD 用
+
+--------------------------------------------------------------------------------
+3.4 新增内部方法
+--------------------------------------------------------------------------------
+
+  _reset_extinguish_progress(track)
+      清 extinguish/dim/miss 的 start 与 frames
+
+  _mark_lit(track, *, target_identity, now, frame_token, victim_id, color, strength)
+      - _eliminated.discard(identity)
+      - lit_at=now, triggered=False
+      - 记录 identity/victim/color/strength/frame_token
+      - _reset_extinguish_progress
+      - status=LIT_TRACKED
+
+  _count_progress(track, *, now, frame_token, exposure_hold, kind)
+      kind in ("extinguish", "dim")
+      if exposure_hold:
+          status=EXPOSURE_HOLD; return   # 暂停，不清零
+      fresh_frame = frame_token is None or track.last_frame_token != frame_token
+      extinguish 分支：
+          设 extinguish_start；fresh 则 frames++
+          清 dim 与 miss 进度
+      dim 分支：
+          设 dim_start；fresh 则 frames++
+          清 miss 进度
+
+  _emit(track, *, now, detail) -> CombatEvent
+      triggered=True
+      _eliminated.add(identity)
+      status=VISION_CONFIRMED
+      return CombatEvent(
+          "elimination", "vision", True, now,
+          victim_id=track.last_victim_id,
+          detail=detail,
+      )
+
+  _finalize_tracks(now, *, vision_frame_advanced) -> list[CombatEvent]
+      对每条 track（未 triggered、有 lit_at、不在 eliminated）：
+        若 lit_age < LIT_MIN_HISTORY: skip
+
+        1) extinguish_frames>=3 且 duration>=0.20
+           → emit detail=vision_confirmed_lamp_off
+
+        2) dim_frames>=3 且 duration>=0.20
+           → emit detail=vision_confirmed_dim_lamp
+
+        3) not seen_this_frame:
+           - 仅当 vision_frame_advanced 时 miss_frames += 1
+             （避免 UI 60fps 重复消费同一视觉快照误杀）
+           - 若 miss_start 未设则设 now
+           - miss_ok = frames>=4 OR duration>=0.28
+           - 且 lit_age <= 2.5
+           → emit detail=vision_confirmed_miss_after_lit
+
+        4) seen_this_frame:
+           清 miss_start/miss_frames（保留 extinguish/dim 进度）
+
+--------------------------------------------------------------------------------
+3.5 process() 主流程（改后，必须按此顺序实现）
+--------------------------------------------------------------------------------
+
+  now = perf_counter() if now is None else now
+  last_status = "NO_DETECTION"
+
+  # 轨道 TTL
+  保留 last_seen_at 在 TRACK_TTL 内的 tracks
+  所有 track.seen_this_frame = False
+
+  # 视觉帧是否推进
+  vision_frame_advanced = (frame_token is None) or (frame_token != _last_scene_frame_token)
+
+  # 曝光：仅在视觉帧推进且有 luminance 时更新
+  if frame_luminance is not None and vision_frame_advanced:
+      if last_luminance 存在 and |Δ| > EXPOSURE_DELTA:
+          _exposure_hold_until = now + EXPOSURE_HOLD
+      更新 last_luminance、_last_scene_frame_token
+  elif vision_frame_advanced:
+      只更新 _last_scene_frame_token
+
+  exposure_hold = now < _exposure_hold_until
+  alliance_l = alliance.lower()
+
+  for armor in observations:
+      if predicted: continue
+
+      color = color.lower()
+      light_strength = float(...)
+      light_state = light_state.lower()
+      extinguished = is_extinguished(armor)
+      lit_color = color in (red,blue) and not extinguished
+
+      strength_known = light_strength > 1e-6
+      dim_by_strength = lit_color and strength_known and light_strength <= DIM_STRENGTH
+      confirmed_lit = lit_color and (
+          light_strength >= LIT_STRENGTH
+          or (not strength_known and light_state not in extinguish类)
+      )
+      # strength==0 常见于未采样：颜色红/蓝且非灭灯态 → 当确认亮灯
+      hysteresis = lit_color and not dim_by_strength and not confirmed_lit
+
+      if not lit_color and not extinguished:
+          INVALID_LIGHT_STATE; continue
+
+      if lit_color and color == alliance_l:
+          # 友军：解屏蔽，不进敌方轨道
+          _eliminated.discard(identity); OWN_TEAM_FILTERED; continue
+
+      if confidence < CONF_MIN:
+          LOW_CONFIDENCE; continue
+
+      track = tracks.setdefault(track_key, _VisionTrack())
+      更新 last_seen_at, seen_this_frame=True, target_identity,
+            last_victim_id=armor_id, last_color, last_light_strength
+
+      if confirmed_lit:
+          _mark_lit(...); continue
+
+      if identity in _eliminated:
+          ELIMINATED_SUPPRESSED; continue
+
+      if lit_at <= 0:
+          NO_LIT_HISTORY; 清进度; continue
+
+      if hysteresis:
+          # 中间带 0.22~0.40：保持 lit 历史，不重置灭灯进度
+          HYSTERESIS; continue
+
+      if extinguished:
+          _count_progress(..., kind="extinguish")
+          status: EXPOSURE_HOLD / REFLECTION_IGNORED / MODEL_CONFIRMED / WAITING_FRESH_FRAMES
+          continue
+          # 注意：model_extinguish 且 strength>0.38 仍累计（抗反光），status=REFLECTION_IGNORED
+
+      if dim_by_strength:
+          _count_progress(..., kind="dim")
+          status=DIM_TRACKED（非 hold 时）
+          continue
+
+      INVALID_LIGHT_STATE
+
+  return _finalize_tracks(now, vision_frame_advanced=vision_frame_advanced)
+
+--------------------------------------------------------------------------------
+3.6 与改前关键差异对照表
+--------------------------------------------------------------------------------
+
+  点                    | 改前                              | 改后
+  ----------------------|-----------------------------------|----------------------------------
+  触发位置              | for 循环内直接 emit               | 帧末 _finalize_tracks
+  丢检                  | 不处理                            | miss-to-kill 主路径之一
+  过暗                  | 无；非 extinguish 且 strength>0.38 清零 | dim 累计；中间带 hysteresis
+  确认亮灯              | 任意 red/blue 非 extinguish       | strength>=0.40 或 strength 未知
+  曝光 hold             | 清空 extinguish 进度              | 暂停累计，保留 frames
+  曝光阈值              | Δ>0.20 hold 0.40s                 | Δ>0.28 hold 0.20s
+  extinguish 时长       | 0.25s                             | 0.20s
+  BRIGHTNESS_BLOCKED    | 有，清空进度                      | 删除该硬清零路径
+  detail 种类           | 仅 vision_confirmed_lamp_off      | 三种 detail（见上）
+  miss 计数             | 无                                | 仅 vision_frame_advanced 时 +1
+
+--------------------------------------------------------------------------------
+3.7 last_status 取值（HUD：KILL VISION | xxx）
+--------------------------------------------------------------------------------
+
+  NO_DETECTION, INVALID_LIGHT_STATE, OWN_TEAM_FILTERED, LOW_CONFIDENCE,
+  LIT_TRACKED, NO_LIT_HISTORY, HYSTERESIS, EXPOSURE_HOLD,
+  DIM_TRACKED, MISS_TRACKED, ELIMINATED_SUPPRESSED,
+  MODEL_CONFIRMED, WAITING_FRESH_FRAMES, REFLECTION_IGNORED,
+  VISION_CONFIRMED
+
+  仍用优先级字典：只允许 status 升级或同级覆盖（_set_status）
+
+
+================================================================================
+四、文件 2：tongji_yolo.py —— LocalTargetSelector
+================================================================================
+
+位置：rm_client/tongji_yolo.py
+类：LocalTargetSelector
+TongjiYoloV5 / LocalDetection / LocalAlignedVision 其它逻辑未改。
+
+--------------------------------------------------------------------------------
+4.1 新增 _hold_limits()
+--------------------------------------------------------------------------------
+
+  if self.color == "extinguish" or (color 非空 and color not in red/blue/purple):
+      return (0.70秒, 8帧)   # 灭灯后更长关联
+  else:
+      return (0.55秒, 6帧)   # 改前固定约 0.35秒 / 3帧
+
+--------------------------------------------------------------------------------
+4.2 mark_missed
+--------------------------------------------------------------------------------
+
+  默认 max_seconds/max_frames 取自 _hold_limits()
+  超过则 reset()（清 center/name/color/missed，**不**在此递增 track_id）
+
+--------------------------------------------------------------------------------
+4.3 select
+--------------------------------------------------------------------------------
+
+  空检测：mark_missed(); return None
+
+  非空：若 missed_frames > hold_frames 或 now-last_seen > hold_s → reset()
+
+  compatible 匹配放宽（同 name 且满足其一即可）：
+      - item.color == self.color
+      - item.color == "extinguish" or self.color == "extinguish"
+      - item.light_strength <= 0.22
+      - self.color in (red,blue) and item.color in (red,blue)
+        # 允许红蓝互跳仍同目标（分类抖）
+
+  附近 gate：max(48, diagonal*0.16) 内取最近
+
+  匹配失败才 track_id += 1 并按 conf 选新目标
+  匹配成功（亮→灭）：**不因颜色变化单独 +1 track_id**
+
+  平滑 center 0.38*new + 0.62*old；更新 name/color；missed=0；last_seen=now
+  return (candidate_index, track_id)
+
+
+================================================================================
+五、文件 3：tests/smoke_test.py
+================================================================================
+
+保留并微调：
+  test_kill_fx_assets_and_dual_evidence
+    - 经典 lit→extinguish 路径仍过
+    - 额外 assert detail == "vision_confirmed_lamp_off"
+    - 同 frame_token 不重复累计；>2s lit 间隔仍可确认
+
+新增：
+  test_vision_kill_miss_after_lit
+    lit @1.0 → 空检测 token 2,2(重复),3,4,5 @1.20~1.40
+    → 1 event, detail=vision_confirmed_miss_after_lit, is_suppressed True
+
+  test_vision_kill_no_lit_history_no_miss
+    从未 lit，空检测 → 0 events
+
+  test_vision_kill_exposure_pauses_not_clears
+    lit → 2 帧 extinguish → luminance 大跳 EXPOSURE_HOLD
+    → hold 期间不清零 → hold 结束后再累计确认 lamp_off
+
+  test_vision_kill_dim_lamp
+    lit strength=0.8 → 连续 dim strength=0.12 color 仍 blue
+    → detail=vision_confirmed_dim_lamp
+
+调整：
+  test_local_target_identity_survives_extinguish
+    - 仍要求 lit→空2帧→extinguish 同 track_id
+    - 换 id 条件改为 last_seen_at -= 0.80（适配 0.55/0.70 延长窗）
+
+
+================================================================================
+六、文件 4：README_战果判定与阵营.md
+================================================================================
+
+重写「视觉击杀如何确认」为三条路径 + 曝光 Pause + KILL VISION 状态提示。
+Auto 描述改为：官方赛事场景且击杀相关 MQTT 新鲜时才压视觉（与 polar_app 现有逻辑一致，本文未改 polar_app）。
+
+
+================================================================================
+七、未改但依赖的上下游（GPT 对齐时不要破坏）
+================================================================================
+
+polar_app.py（未改）：
+  process_vision_kill_events:
+    Evidence Referee Only → return
+    Auto and scenario==OfficialEvent and is_kill_data_fresh → return
+    else:
+      events = vision_kill_detector.process(
+          result.detections,
+          alliance=alliance_side(),
+          frame_luminance=_vision_scene_luminance,
+          frame_token=(result.timestamp_ns, result.sequence),
+      )
+      state.vision_kill_status = detector.last_status
+      for e in events: accept_combat_event(e)
+
+  accept_combat_event:
+    Evidence 二次过滤 → 计数 → Dynamic Island → kill_fx.trigger
+
+  vision_result_for_display:
+    隐藏 is_extinguished 或 is_suppressed 的目标（检测仍用 raw）
+
+CombatEvent 字段未改；source 仍为 "vision"；kind 仍为 "elimination"。
+
+
+================================================================================
+八、伪代码（完整可照抄）
+--------------------------------------------------------------------------------
+
+  # 每帧 process(observations, alliance, frame_luminance, frame_token, now)
+
+  mark all tracks seen_this_frame=False
+  vision_frame_advanced = token changed
+  update exposure_hold if advanced and |Δlum| > 0.28 → hold 0.20s (Pause policy)
+
+  for armor in observations:
+      skip predicted / low conf / invalid color
+      skip own alliance lit colors
+      track = get_or_create(identity:label)
+      track.seen_this_frame = True
+      record victim_id, color, strength
+
+      if confirmed_lit:           # strength>=0.40 or strength unknown
+          mark_lit; clear progress; continue
+      if eliminated: continue
+      if never lit: continue
+      if hysteresis: continue     # 0.22 < strength < 0.40
+      if extinguish class:
+          count extinguish (pause if exposure hold); continue
+      if dim strength:
+          count dim (pause if exposure hold); continue
+
+  for track in tracks:
+      if extinguish ready: emit lamp_off
+      elif dim ready: emit dim_lamp
+      elif not seen and miss ready and lit_age in [0.15, 2.5]:
+          emit miss_after_lit   # miss_frames only if vision_frame_advanced
+      elif seen:
+          clear miss counters
+
+  return events
+
+
+================================================================================
+九、验收标准（对齐实现必须通过）
+================================================================================
+
+单元（smoke）：
+  [ ] classic extinguish → vision_confirmed_lamp_off
+  [ ] miss after lit → vision_confirmed_miss_after_lit
+  [ ] no lit history + empty → 0 events
+  [ ] exposure hold pauses not clears → 仍可 lamp_off
+  [ ] dim lamp → vision_confirmed_dim_lamp
+  [ ] track_id survives extinguish across short miss；0.8s 后可换 id
+
+人工联调：
+  [ ] Evidence=Vision Only，Alliance=己方
+  [ ] 敌方亮灯 → KILL VISION | LIT_TRACKED
+  [ ] 关灯/遮灯/框消失 → 约 0.3s 内 VISION_CONFIRMED + 击杀特效
+  [ ] Test Elimination 仍正常
+  [ ] 友军不触发
+
+
+================================================================================
+十、给 GPT 的硬性约束
+================================================================================
+
+1. 不要把触发写回「仅 for observations 内」而丢掉帧末 finalize。
+2. 不要恢复曝光 hold 清零 extinguish_frames。
+3. 不要实现「无 lit_at 的框消失=击杀」。
+4. 不要让 UI tick 在同一 frame_token 下把 miss_frames 刷到 4。
+5. 不要改 CombatEvent 字段名/KillFx 接口，除非同步全链路。
+6. polar_app 可不改；若改 Evidence，保持 OfficialEvent + is_kill_data_fresh 语义。
+7. detail 字符串请保持三选一，便于日志对齐：
+     vision_confirmed_lamp_off
+     vision_confirmed_dim_lamp
+     vision_confirmed_miss_after_lit
+8. 时基一律 time.perf_counter()（或测试注入的 now），不用 datetime。
+
+
+================================================================================
+十一、撤销方法
+================================================================================
+
+从备份目录拷回：
+  _backup_vision_kill_20260713_000155/combat_events.py
+  → rm_client/combat_events.py
+  同理 tongji_yolo.py / smoke_test.py / README_战果判定与阵营.md
+  （polar_app.py 备份了但本次未改）
+
+
+================================================================================
+文档版本：代码变更对齐说明 v1（以仓库已落地实现为准）
+用途：交给 GPT/同事按此规格复现或审查，勿再按旧「仅 5 帧 extinguish」设计稿实现
+================================================================================
