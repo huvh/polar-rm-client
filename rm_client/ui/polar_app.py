@@ -4712,19 +4712,12 @@ class PolarRMWindow(QOpenGLWidget):
         p.drawLine(QPointF(cx, cy + 6), QPointF(cx, cy + size))
 
     def draw_chassis_gimbal_indicator(self, p: QPainter, width: int, height: int) -> None:
-        """Bottom HUD: top-down chassis heading vs gun/gimbal heading.
-
-        Previous liquid-glass + opaque body rects read as stacked abstract
-        blocks.  This path uses a dark readable plate, a thin compass ring,
-        a hull chevron for the chassis, and a distinct barrel arrow for the
-        muzzle / gimbal yaw.
-        """
         module = self.registry.get("ChassisGimbalIndicator")
         if module is None or not module.enabled:
             return
         style_setting = module.get_setting("Style")
         style = str(style_setting.value) if style_setting else "Minimal"
-        size = self.get_setting_number(module, "Size", 56.0)
+        size = self.get_setting_number(module, "Size", 74.0)
         smooth = max(0.05, min(1.0, self.get_setting_number(module, "Smooth", 0.35)))
         show_angle = self.setting_bool(module, "Show Angle", True)
         show_mode = self.setting_bool(module, "Show Mode", True)
@@ -4738,193 +4731,123 @@ class PolarRMWindow(QOpenGLWidget):
         micro = self.hud_density() == "CombatCompact"
 
         if micro:
-            size = min(max(48.0, size), 64.0)
-            center = QPointF(width / 2.0, height - 86.0)
+            size = min(size, 56.0)
+            center = QPointF(width / 2.0, height - 98.0)
             active = self.anim.value("hud.chassis_gimbal.micro", 1.0, self.anim_duration(0.20), Easings.ease_out_pow4, initial=0.0)
             p.save()
             p.setOpacity(active)
-            # Soft disc so thin strokes stay visible over video / solid fills.
-            disc = QPainterPath()
-            disc.addEllipse(center, size * 0.52, size * 0.52)
-            p.fillPath(disc, color("#05080e", 0.62))
-            p.setPen(QPen(color("#ffffff", 0.10 + 0.10 * alert), 1.0))
-            p.setBrush(Qt.BrushStyle.NoBrush)
-            p.drawEllipse(center, size * 0.52, size * 0.52)
-            self.draw_chassis_gimbal_compass_base(p, center, size * 0.40, style, spin, pulse)
+            self.draw_chassis_gimbal_compass_base(p, center, size * 0.43, style, spin, pulse)
             self.draw_chassis_body_direction(p, center, size, chassis_yaw, style, spin, pulse)
             self.draw_gimbal_turret_direction(p, center, size, gimbal_yaw, alert)
             if show_angle or alert > 0.66:
-                self.draw_text(
-                    p,
-                    QRectF(center.x() - 40, center.y() + size * 0.46, 80, 14),
-                    f"{relative_yaw:+.0f}°",
-                    self.font("poppins_medium", 7.4),
-                    self.hud_accent() if alert < 0.66 else self.hud_warning(),
-                    Qt.AlignmentFlag.AlignCenter,
-                )
+                self.draw_text(p, QRectF(center.x() - 36, center.y() + size * 0.42, 72, 13), f"{relative_yaw:+.0f}°", self.font("poppins_medium", 7.2), self.hud_accent() if alert < 0.66 else self.hud_warning(), Qt.AlignmentFlag.AlignCenter)
             if show_mode:
-                self.draw_text(
-                    p,
-                    QRectF(center.x() - 40, center.y() - size * 0.68, 80, 12),
-                    mode_text,
-                    self.font("poppins_medium", 6.6),
-                    self.hud_warning() if spin else THEME.muted,
-                    Qt.AlignmentFlag.AlignCenter,
-                )
+                self.draw_text(p, QRectF(center.x() - 36, center.y() - size * 0.62, 72, 11), mode_text, self.font("poppins_medium", 6.5), THEME.muted, Qt.AlignmentFlag.AlignCenter)
             p.restore()
             return
 
-        panel_w = max(150.0, size * 2.15)
-        panel_h = size + 46.0
+        panel_w = max(142.0, size * 2.05)
+        panel_h = size + 42.0
         x = width / 2.0 - panel_w / 2.0
-        y = max(112.0, height - 64.0 - panel_h - 14.0)
+        y = max(112.0, height - 64.0 - panel_h - 18.0)
         rect = QRectF(x, y, panel_w, panel_h)
         active = self.anim.value("hud.chassis_gimbal.panel", 1.0, self.anim_duration(0.24), Easings.ease_out_pow4, initial=0.0)
 
         p.save()
         p.setOpacity(active)
-        # Solid dark plate (not muddy liquid-glass tile) so hull/gun strokes read cleanly.
-        rounded_rect(p, rect, 11, color("#05080e", 0.78), color("#ffffff", 0.10 + 0.08 * alert), 1.1)
+        # Layout/geometry follows main & gestalt-lab.  Avoid MainGlass here: on the
+        # GPU dynamic FBO it collapses into a muddy gold tile under the hull.
+        if self.hud_clean():
+            rounded_rect(p, rect, 10, color("#070b12", 0.74), color("#ffffff", 0.12 + 0.06 * alert), 1.15)
+            inner = rect.adjusted(1.2, 1.2, -1.2, -1.2)
+            rounded_rect(p, inner, 9, color("#ffffff", 0.03), color("#ffffff", 0.04), 1.0)
+        else:
+            glow_rect(p, rect, 10, 0.10 * alert)
+            rounded_rect(p, rect, 9, self.hud_surface(0.64), self.hud_panel_outline(0.08 + 0.08 * alert))
         top_line = QLinearGradient(rect.left() + 14, rect.top() + 5, rect.right() - 14, rect.top() + 5)
-        top_line.setColorAt(0.0, with_alpha(self.hud_accent(), 0.30 + 0.28 * alert))
-        top_line.setColorAt(1.0, with_alpha(self.hud_warning() if alert > 0.55 else self.hud_accent(), 0.20 + 0.30 * alert))
-        p.setPen(QPen(QBrush(top_line), 1.5))
+        top_line.setColorAt(0.0, with_alpha(self.hud_accent(), 0.25 + 0.30 * alert))
+        top_line.setColorAt(1.0, with_alpha(self.hud_warning() if alert > 0.55 else self.hud_accent(), 0.18 + 0.34 * alert))
+        p.setPen(QPen(QBrush(top_line), 1.6))
         p.drawLine(QPointF(rect.left() + 16, rect.top() + 5), QPointF(rect.right() - 16, rect.top() + 5))
 
-        center = QPointF(rect.center().x(), rect.top() + 16.0 + size * 0.48)
-        radius = size * 0.40
+        center = QPointF(rect.center().x(), rect.top() + 18.0 + size * 0.48)
+        radius = size * 0.43
         self.draw_chassis_gimbal_compass_base(p, center, radius, style, spin, pulse)
         self.draw_chassis_body_direction(p, center, size, chassis_yaw, style, spin, pulse)
         self.draw_gimbal_turret_direction(p, center, size, gimbal_yaw, alert)
 
         if show_angle:
             angle_text = f"REL {relative_yaw:+.0f}°"
-            self.draw_text(
-                p,
-                QRectF(rect.left() + 12, rect.bottom() - 24, rect.width() * 0.58, 16),
-                angle_text,
-                self.font("poppins_medium", 7.6),
-                THEME.text,
-            )
+            self.draw_text(p, QRectF(rect.left() + 11, rect.bottom() - 24, rect.width() * 0.56, 16), angle_text, self.font("poppins_medium", 7.6), THEME.text)
         if show_mode:
-            self.draw_text(
-                p,
-                QRectF(rect.right() - 64, rect.bottom() - 24, 52, 16),
-                mode_text,
-                self.font("poppins_medium", 7.4),
-                self.hud_warning() if spin else THEME.muted,
-                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
-            )
+            self.draw_text(p, QRectF(rect.right() - 64, rect.bottom() - 24, 52, 16), mode_text, self.font("poppins_medium", 7.4), self.hud_warning() if spin else THEME.muted, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         p.restore()
 
     def draw_chassis_gimbal_compass_base(self, p: QPainter, center: QPointF, radius: float, style: str, spin: bool, pulse: float) -> None:
         p.save()
         p.setBrush(Qt.BrushStyle.NoBrush)
-        p.setPen(QPen(color("#ffffff", 0.14), 1.15))
+        p.setPen(QPen(color("#ffffff", 0.10), 1.0))
         p.drawEllipse(center, radius, radius)
-        p.setPen(QPen(color("#ffffff", 0.06), 1.0))
-        p.drawEllipse(center, radius * 0.62, radius * 0.62)
         if style == "Compass":
             for index, angle in enumerate(range(0, 360, 45)):
-                outer = self.direction_point(center, angle, radius + 1.5)
-                inner = self.direction_point(center, angle, radius - (7.0 if index % 2 == 0 else 4.0))
-                p.setPen(QPen(color("#ffffff", 0.34 if index % 2 == 0 else 0.16), 1.1))
+                outer = self.direction_point(center, angle, radius + 2.0)
+                inner = self.direction_point(center, angle, radius - (8.0 if index % 2 == 0 else 5.0))
+                p.setPen(QPen(color("#ffffff", 0.30 if index % 2 == 0 else 0.16), 1.1))
                 p.drawLine(inner, outer)
-            self.draw_text(
-                p,
-                QRectF(center.x() - 8, center.y() - radius - 15, 16, 12),
-                "N",
-                self.font("poppins_bold", 6.8),
-                THEME.muted,
-                Qt.AlignmentFlag.AlignCenter,
-            )
+            self.draw_text(p, QRectF(center.x() - 8, center.y() - radius - 17, 16, 12), "N", self.font("poppins_bold", 6.8), THEME.muted, Qt.AlignmentFlag.AlignCenter)
         if spin:
-            spin_radius = radius + 5.0 + 1.5 * pulse
-            p.setPen(QPen(with_alpha(self.hud_warning(), 0.28 + 0.22 * pulse), 1.15))
+            spin_radius = radius + 7.0 + 2.0 * pulse
+            p.setPen(QPen(with_alpha(self.hud_warning(), 0.30 + 0.22 * pulse), 1.2))
             p.drawEllipse(center, spin_radius, spin_radius)
         p.restore()
 
     def draw_chassis_body_direction(self, p: QPainter, center: QPointF, size: float, yaw_deg: float, style: str, spin: bool, pulse: float) -> None:
-        """Top-down hull: slim body + front chevron (chassis heading)."""
+        """Chassis heading — same silhouette as main/gestalt-lab (top-down hull + nose)."""
         p.save()
         p.translate(center)
         p.rotate(yaw_deg)
         p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-
-        hull_w = size * (0.34 if style == "Minimal" else 0.38)
-        hull_h = size * 0.52
-        nose = size * 0.16
-        outline = color("#e8eef5", 0.78 if spin else 0.70)
-        fill = color("#d7e2ec", 0.16 if style == "Minimal" else 0.20)
-        if spin:
-            outline = with_alpha(self.hud_warning(), 0.55 + 0.20 * pulse)
-
+        # Slightly higher contrast than stock so hull reads over dark plate / video.
+        body_color = color("#ffffff", 0.14 if style == "Minimal" else 0.12)
+        outline = color("#f2f6fb", 0.72)
+        accent = with_alpha(self.hud_warning(), 0.40 + 0.28 * pulse) if spin else color("#ffffff", 0.55)
         if style == "Tank":
-            track_w = size * 0.08
-            track_h = hull_h * 0.92
-            for side in (-1.0, 1.0):
-                track = QRectF(side * (hull_w * 0.55) - track_w * 0.5, -track_h * 0.5, track_w, track_h)
-                rounded_rect(p, track, 2.0, color("#ffffff", 0.06), color("#ffffff", 0.28), 1.0)
-
-        # Main hull (rounded) — keep fill light so it never reads as a solid tile.
-        body = QRectF(-hull_w * 0.5, -hull_h * 0.38, hull_w, hull_h)
-        rounded_rect(p, body, 4.0, fill, outline, 1.35)
-
-        # Forward chevron (chassis nose).
-        nose_path = QPainterPath()
-        nose_path.moveTo(0.0, -hull_h * 0.38 - nose)
-        nose_path.lineTo(-hull_w * 0.34, -hull_h * 0.38 + 1.0)
-        nose_path.lineTo(hull_w * 0.34, -hull_h * 0.38 + 1.0)
-        nose_path.closeSubpath()
-        p.setPen(QPen(outline, 1.2))
-        p.setBrush(color("#ffffff", 0.12))
-        p.drawPath(nose_path)
-
-        # Tiny center mark for hull pivot.
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(color("#ffffff", 0.35))
-        p.drawEllipse(QPointF(0.0, 0.0), size * 0.03, size * 0.03)
+            track_w = size * 0.10
+            track_h = size * 0.58
+            rounded_rect(p, QRectF(-size * 0.30, -track_h / 2, track_w, track_h), 3, color("#ffffff", 0.05), color("#ffffff", 0.22), 1.0)
+            rounded_rect(p, QRectF(size * 0.20, -track_h / 2, track_w, track_h), 3, color("#ffffff", 0.05), color("#ffffff", 0.22), 1.0)
+            rounded_rect(p, QRectF(-size * 0.20, -size * 0.32, size * 0.40, size * 0.64), 5, body_color, outline, 1.25)
+        else:
+            rounded_rect(p, QRectF(-size * 0.22, -size * 0.30, size * 0.44, size * 0.60), 5, body_color, outline, 1.2)
+        # Chassis forward chevron
+        p.setPen(QPen(accent, 1.7 if spin else 1.4))
+        p.drawLine(QPointF(0, -size * 0.30), QPointF(0, -size * 0.50))
+        p.drawLine(QPointF(-size * 0.11, -size * 0.40), QPointF(0, -size * 0.50))
+        p.drawLine(QPointF(size * 0.11, -size * 0.40), QPointF(0, -size * 0.50))
         p.restore()
 
     def draw_gimbal_turret_direction(self, p: QPainter, center: QPointF, size: float, yaw_deg: float, alert: float) -> None:
-        """Gun / gimbal yaw: hub + long barrel arrow (muzzle direction)."""
+        """Gimbal / muzzle yaw — same layout as main/gestalt-lab (hub + barrel + tip)."""
         p.save()
         p.translate(center)
         p.rotate(yaw_deg)
         p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-
-        barrel = with_alpha(self.hud_accent(), 0.92)
+        turret = with_alpha(self.hud_accent(), 0.88)
         if alert > 0.55:
-            barrel = with_alpha(self.hud_warning(), 0.78 + 0.18 * alert)
-        length = size * 0.58
-        width = max(1.6, size * 0.035)
-
-        # Barrel shaft
-        pen = QPen(barrel, width * 1.8)
+            turret = with_alpha(self.hud_warning(), 0.72 + 0.22 * alert)
+        pen = QPen(turret, 2.15)
         pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
         p.setPen(pen)
-        p.drawLine(QPointF(0.0, -size * 0.04), QPointF(0.0, -length + size * 0.08))
-
-        # Muzzle arrowhead
-        tip = QPointF(0.0, -length)
-        left = QPointF(-size * 0.09, -length + size * 0.14)
-        right = QPointF(size * 0.09, -length + size * 0.14)
-        head = QPainterPath()
-        head.moveTo(tip)
-        head.lineTo(left)
-        head.lineTo(right)
-        head.closeSubpath()
+        p.drawLine(QPointF(0, 0), QPointF(0, -size * 0.58))
+        p.drawLine(QPointF(0, -size * 0.58), QPointF(-size * 0.075, -size * 0.46))
+        p.drawLine(QPointF(0, -size * 0.58), QPointF(size * 0.075, -size * 0.46))
+        p.setBrush(color("#05080e", 0.90))
+        p.setPen(QPen(turret, 1.2))
+        p.drawEllipse(QPointF(0, 0), size * 0.095, size * 0.095)
+        p.setBrush(turret)
         p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(barrel)
-        p.drawPath(head)
-
-        # Turret hub (outline ring + core) so it never looks like a stacked tile.
-        p.setBrush(color("#05080e", 0.88))
-        p.setPen(QPen(barrel, 1.35))
-        p.drawEllipse(QPointF(0.0, 0.0), size * 0.10, size * 0.10)
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(barrel)
-        p.drawEllipse(QPointF(0.0, 0.0), size * 0.035, size * 0.035)
+        p.drawEllipse(QPointF(0, 0), size * 0.04, size * 0.04)
         p.restore()
 
     def direction_point(self, center: QPointF, angle_deg: float, radius: float) -> QPointF:
