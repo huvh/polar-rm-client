@@ -1675,8 +1675,11 @@ class PolarRMWindow(QOpenGLWidget):
         visual = self.combat_target_visual(module)
         show_bars = self.setting_bool(module, "Show Bars", False) if module else False
         combat_scale = 1.65 if visual == "Classic" else 2.35
-        # Ring outer radius + stroke + Classic labels / optional bars card.
+        # Ring outer + stroke + clear/enhanced radial plate (blueR + redW/2 + 10).
         ring_extent = 16.0 * combat_scale + 5.0 * combat_scale + 14.0
+        if visual != "Classic":
+            plate_extent = 16.0 * combat_scale + (5.0 * combat_scale * 0.92) * 0.5 + 12.0
+            ring_extent = max(ring_extent, plate_extent)
         if visual == "Classic":
             half_logical = max(ring_extent, 78.0)
         elif show_bars:
@@ -4479,15 +4482,35 @@ class PolarRMWindow(QOpenGLWidget):
         end_deg: float,
         arc_color: QColor,
         width: float,
+        *,
+        glow: float = 0.0,
+        alpha: float | None = None,
     ) -> None:
+        """Jar-style progress arc (visual-demo drawArc).
+
+        Main stroke uses butt/FlatCap so 15/16 red/blue stay interleaved.
+        Enhanced glow is a softer round-cap underlay (demo: width+glow @ α0.2).
+        """
         if end_deg - start_deg < 0.05:
             return
-        pen = QPen(arc_color, width)
+        stroke = QColor(arc_color)
+        if alpha is not None:
+            stroke.setAlphaF(max(0.0, min(1.0, float(alpha) * stroke.alphaF())))
+        rect = QRectF(center.x() - radius, center.y() - radius, radius * 2.0, radius * 2.0)
+        span = -int(round((end_deg - start_deg) * 16.0))
+        start16 = int(round(start_deg * 16.0))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        if glow > 0.0:
+            glow_color = QColor(stroke)
+            glow_color.setAlphaF(max(0.0, min(1.0, glow_color.alphaF() * 0.20)))
+            glow_pen = QPen(glow_color, width + float(glow))
+            glow_pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+            p.setPen(glow_pen)
+            p.drawArc(rect, start16, span)
+        pen = QPen(stroke, width)
         pen.setCapStyle(Qt.PenCapStyle.FlatCap)
         p.setPen(pen)
-        p.setBrush(Qt.BrushStyle.NoBrush)
-        rect = QRectF(center.x() - radius, center.y() - radius, radius * 2.0, radius * 2.0)
-        p.drawArc(rect, int(round(start_deg * 16.0)), -int(round((end_deg - start_deg) * 16.0)))
+        p.drawArc(rect, start16, span)
 
     def draw_combat_target_hud(
         self,
@@ -4536,8 +4559,16 @@ class PolarRMWindow(QOpenGLWidget):
         p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
         p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         if visual != "Classic":
-            # 这里只绘制圆形轨道和弧线。圆环之外保持完全透明，避免离屏
-            # 纹理的矩形边界在 GPU 合成后形成方框。
+            # visual-demo clear/enhanced: circular radial plate + one gray track.
+            # Circle only (no rect fill) so the GPU ROI stays free of square edges.
+            plate_r = blue_radius + red_width * 0.5 + 10.0
+            plate = QRadialGradient(center, plate_r)
+            plate.setColorAt(0.0, color("#140e0a", 0.55))
+            plate.setColorAt(0.72, color("#140e0a", 0.18))
+            plate.setColorAt(1.0, color("#140e0a", 0.0))
+            plate_path = QPainterPath()
+            plate_path.addEllipse(center, plate_r, plate_r)
+            p.fillPath(plate_path, QBrush(plate))
             track_pen = QPen(color("#ffffff", 0.10), max(red_width, blue_width) + 1.0)
             track_pen.setCapStyle(Qt.PenCapStyle.FlatCap)
             p.setPen(track_pen)
@@ -4549,25 +4580,32 @@ class PolarRMWindow(QOpenGLWidget):
         heat_end = ring_end(heat)
         if enhanced and health > 0.5 and frame.self_ghost > health + 0.5:
             self.draw_combat_target_arc(
-                p, center, red_radius, health_end, ring_end(frame.self_ghost), color("#ffdcB4", 0.45), red_width
+                p, center, red_radius, health_end, ring_end(frame.self_ghost),
+                color("#ffdcb4", 0.45), red_width, alpha=0.6,
             )
         if enhanced and heat > 0.5 and frame.heat_ghost > heat + 0.5:
             self.draw_combat_target_arc(
-                p, center, blue_radius, heat_end, ring_end(frame.heat_ghost), color("#b4d2ff", 0.45), blue_width
+                p, center, blue_radius, heat_end, ring_end(frame.heat_ghost),
+                color("#b4d2ff", 0.45), blue_width, alpha=0.6,
             )
         if health > 0.5:
-            if enhanced:
-                self.draw_combat_target_arc(p, center, red_radius, 180.0, health_end, with_alpha(health_color, 0.20), red_width + 3.0)
-            self.draw_combat_target_arc(p, center, red_radius, 180.0, health_end, health_color, red_width)
+            self.draw_combat_target_arc(
+                p, center, red_radius, 180.0, health_end, health_color, red_width,
+                glow=3.0 if enhanced else 0.0,
+            )
         if heat > 0.5:
-            if enhanced:
-                self.draw_combat_target_arc(p, center, blue_radius, 180.0, heat_end, with_alpha(heat_color, 0.20), blue_width + 3.0)
-            self.draw_combat_target_arc(p, center, blue_radius, 180.0, heat_end, heat_color, blue_width)
+            self.draw_combat_target_arc(
+                p, center, blue_radius, 180.0, heat_end, heat_color, blue_width,
+                glow=3.0 if enhanced else 0.0,
+            )
 
-        crosshair_color = color("#ff5555") if frame.aim_anim >= 40.0 else color("#ffffff")
+        # Ring-center reticle only: white = idle (no aimbot), red = TRACK/LOCK.
+        aim_on = frame.aim_anim >= 40.0
+        crosshair_color = color("#ff1a1a") if aim_on else color("#ffffff", 0.85)
         crosshair_pen = QPen(crosshair_color, 1.35)
         crosshair_pen.setCapStyle(Qt.PenCapStyle.FlatCap)
         p.setPen(crosshair_pen)
+        p.setBrush(Qt.BrushStyle.NoBrush)
         for start, end in (
             ((-9.0, 0.0), (-3.0, 0.0)),
             ((3.0, 0.0), (9.0, 0.0)),
