@@ -1583,7 +1583,9 @@ class PolarRMWindow(QOpenGLWidget):
                     self.state,
                     "armor",
                 )
-                self.draw_target_overlay(p, mock_armor, armor_module)
+                # Mock lock overlay only when the plate sits inside FOV circle.
+                if self.vision_target_in_autoaim_fov(mock_armor, logical_width, logical_height):
+                    self.draw_target_overlay(p, mock_armor, armor_module)
             # Fluorescent-white FOV circle (ClickGUI: Draw Fov + Circle Size).
             self.draw_armor_fov_circle(p, logical_width, logical_height, armor_module)
 
@@ -2097,9 +2099,12 @@ class PolarRMWindow(QOpenGLWidget):
         local_result = self.local_vision.latest(timeout)
         if local_result is not None:
             timestamp_ns, sequence, frame_width, frame_height, armors, fps, latency_ms, loss_evidence = local_result
+            self.sync_local_autoaim_fov(frame_width, frame_height)
             local_snapshot = snapshot_from_local_result(
                 timestamp_ns, sequence, frame_width, frame_height, armors, fps, latency_ms, self.local_vision.active_device, loss_evidence
             )
+        else:
+            self.sync_local_autoaim_fov()
         tongji_snapshot: VisionSnapshot | None = None
         packet = self.tongji_receiver.latest(timeout)
         if packet is not None:
@@ -2112,8 +2117,87 @@ class PolarRMWindow(QOpenGLWidget):
             return snapshot.result
         return None
 
+    def autoaim_logical_size(self) -> tuple[float, float]:
+        width = max(1.0, float(self.width()))
+        height = max(1.0, float(self.height()))
+        scale = max(0.001, self.get_hud_scale(int(width), int(height)))
+        return width / scale, height / scale
+
+    def autoaim_circle_radius(self) -> float:
+        """Logical-pixel FOV radius from ArmorAutoAim Circle Size."""
+        module = self.registry.get("ArmorAutoAim")
+        if module is None or not module.enabled:
+            return 0.0
+        return max(8.0, self.get_setting_number(module, "Circle Size", 160.0))
+
+    def sync_local_autoaim_fov(self, source_width: int = 0, source_height: int = 0) -> None:
+        """Push FOV ellipse into local YOLO selector (source pixel space)."""
+        module = self.registry.get("ArmorAutoAim")
+        if module is None or not module.enabled:
+            self.local_vision.configure_autoaim_fov(None)
+            return
+        logical_w, logical_h = self.autoaim_logical_size()
+        radius = self.autoaim_circle_radius()
+        frame_w = max(1, int(source_width) if source_width > 0 else int(round(logical_w)))
+        frame_h = max(1, int(source_height) if source_height > 0 else int(round(logical_h)))
+        # Map HUD circle into source so the on-screen FOV matches lock gate.
+        radius_x = radius * (frame_w / max(1.0, logical_w))
+        radius_y = radius * (frame_h / max(1.0, logical_h))
+        self.local_vision.configure_autoaim_fov(radius_x, radius_y)
+
+    def armor_center_in_autoaim_fov(self, armor, result: VisionResult) -> bool:
+        """True when armor plate center lies inside the fluorescent FOV circle."""
+        module = self.registry.get("ArmorAutoAim")
+        if module is None or not module.enabled:
+            return True
+        if armor is None or len(getattr(armor, "points", ())) < 2:
+            return False
+        logical_w, logical_h = self.autoaim_logical_size()
+        radius = self.autoaim_circle_radius()
+        points = self.armor_esp_points(armor.points, result, int(round(logical_w)), int(round(logical_h)))
+        if not points:
+            return False
+        cx = sum(point.x() for point in points) / len(points)
+        cy = sum(point.y() for point in points) / len(points)
+        return math.hypot(cx - logical_w * 0.5, cy - logical_h * 0.5) <= radius
+
+    def vision_target_in_autoaim_fov(self, target: VisionTarget, width: int, height: int) -> bool:
+        module = self.registry.get("ArmorAutoAim")
+        if module is None or not module.enabled:
+            return True
+        radius = self.autoaim_circle_radius()
+        cx = target.x + target.w * 0.5
+        cy = target.y + target.h * 0.5
+        return math.hypot(cx - width * 0.5, cy - height * 0.5) <= radius
+
+    def apply_autoaim_fov_lock(self, result: VisionResult) -> VisionResult:
+        """Keep all ESP detections; only plates inside FOV may be aim_armor / locked."""
+        module = self.registry.get("ArmorAutoAim")
+        if module is None or not module.enabled:
+            return result
+        aim = result.aim_armor
+        if aim is not None and not self.armor_center_in_autoaim_fov(aim, result):
+            aim = None
+        if aim is None:
+            candidates = [
+                armor
+                for armor in result.detections
+                if len(armor.points) == 4 and self.armor_center_in_autoaim_fov(armor, result)
+            ]
+            if candidates:
+                aim = max(candidates, key=lambda armor: float(armor.confidence))
+        # Predicted plates of the locked target may still draw; aim face only when in FOV.
+        tracking = result.tracking_state
+        if aim is None and (result.detections or result.predicted_armors):
+            if tracking.lower() in ("locked", "tracking"):
+                tracking = "detected"
+        return replace(result, aim_armor=aim, tracking_state=tracking)
+
     def vision_result_for_display(self, result: VisionResult | None) -> VisionResult | None:
-        """将灭灯或已确认战亡目标从可视层移除，原始结果继续供 detector 使用。"""
+        """将灭灯或已确认战亡目标从可视层移除，原始结果继续供 detector 使用。
+
+        Autoaim FOV only strips / reassigns aim_armor; detections stay for full-screen 3D ESP.
+        """
         if result is None:
             return None
         detector = self.vision_kill_detector
@@ -2139,13 +2223,14 @@ class PolarRMWindow(QOpenGLWidget):
             aim = None
         has_visible_target = bool(detections or predicted or aim)
         tracking_state = result.tracking_state if has_visible_target else "lost"
-        return replace(
+        filtered = replace(
             result,
             detections=detections,
             predicted_armors=predicted,
             aim_armor=aim,
             tracking_state=tracking_state,
         )
+        return self.apply_autoaim_fov_lock(filtered)
 
     def interpolated_vision_result(self, now: float | None = None) -> VisionResult | None:
         """Return geometry sampled on the display clock, never on the camera clock."""
@@ -2153,21 +2238,23 @@ class PolarRMWindow(QOpenGLWidget):
         return self._vision_render_result
 
     def has_valid_combat_target(self, result: VisionResult | None) -> bool:
-        """Only a real, visible armor plate may activate the center TargetHUD."""
+        """Only a real, FOV-admitted armor plate may activate the center TargetHUD."""
         if result is None or self._vision_source == "Mock":
             return False
         if result.tracking_state.lower() not in {"detected", "tracking", "locked"}:
             return False
+        # Prefer aim_armor (already FOV-filtered on the display path).
         candidates = []
         if result.aim_armor is not None:
             candidates.append(result.aim_armor)
-        candidates.extend(result.detections)
         for armor in candidates:
             if armor.predicted or armor.held or len(armor.points) != 4:
                 continue
             if self.vision_kill_detector.is_extinguished(armor):
                 continue
             if self.vision_kill_detector.is_suppressed(armor):
+                continue
+            if not self.armor_center_in_autoaim_fov(armor, result):
                 continue
             return True
         return False
@@ -2290,6 +2377,8 @@ class PolarRMWindow(QOpenGLWidget):
             self.state.vision_calibrated = False
             self.state.vision_detection_count = 0
             self.state.vision_prediction_count = 0
+            self.state.target_locked = False
+            self.state.lock_state = False
             return
         display_result = self.vision_result_for_display(result)
         if display_result is not None:
@@ -2297,7 +2386,9 @@ class PolarRMWindow(QOpenGLWidget):
             self.vision_render_interpolator.push(display_result, source=source)
         calibrated = self.vision_result_calibrated(result)
         self.state.vision_calibrated = calibrated
-        self.state.vision_tracking_state = result.tracking_state
+        # Lock / aim telemetry follows FOV-filtered display result; ESP counts stay full.
+        lock_result = display_result if display_result is not None else result
+        self.state.vision_tracking_state = lock_result.tracking_state
         self.state.vision_inference_device = result.inference_device
         self.state.vision_inference_fps = result.inference_fps
         self.state.vision_latency_ms = result.latency_ms
@@ -2306,7 +2397,7 @@ class PolarRMWindow(QOpenGLWidget):
         self.state.vision_prediction_count = len(result.predicted_armors)
         self.state.vision_aim_yaw_deg = result.aim_yaw_deg
         self.state.vision_aim_pitch_deg = result.aim_pitch_deg
-        target = result.aim_armor or next(iter(result.detections), None)
+        target = lock_result.aim_armor
         if target is not None:
             self.state.target_id = target.armor_id if target.armor_id >= 0 else self.state.target_id
             self.state.target_distance_m = target.distance_m or self.state.target_distance_m
@@ -2314,7 +2405,8 @@ class PolarRMWindow(QOpenGLWidget):
                 self.vision_kill_detector.is_extinguished(target)
                 or self.vision_kill_detector.is_suppressed(target)
             )
-            self.state.target_locked = bool(calibrated and result.is_tracking and not terminal)
+            # Only FOV-admitted aim plates may report LOCK.
+            self.state.target_locked = bool(calibrated and lock_result.is_tracking and not terminal)
             self.state.lock_state = self.state.target_locked
         else:
             self.state.target_locked = False
