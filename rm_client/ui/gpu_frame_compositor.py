@@ -347,6 +347,29 @@ class GpuFrameCompositor:
             y,
         )
 
+    def upload_target_region(
+        self,
+        functions,
+        image: QImage,
+        x: int,
+        y: int,
+    ) -> bool:
+        """Replace a small premultiplied region of the isolated TargetHUD FBO.
+
+        Same exact-replace semantics as ``upload_dynamic_image``: CPU-rasterized
+        pixels (including true zero-alpha) overwrite driver residual from Qt's
+        OpenGL paint engine.  Keep the region tight around the ring so this
+        stays cheap every frame.
+        """
+        return self._upload_image_to_fbo(
+            functions,
+            self.target_fbo,
+            image,
+            x,
+            y,
+            sanitize_alpha=True,
+        )
+
     def clear_target_layer(self, functions) -> bool:
         """Clear the isolated TargetHUD layer without involving QPainter."""
         if self.target_fbo is None or not self.target_fbo.bind():

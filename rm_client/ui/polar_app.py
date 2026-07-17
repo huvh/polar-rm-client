@@ -927,6 +927,7 @@ class PolarRMWindow(QOpenGLWidget):
                     self.gpu_compositor.release_layer("overlay")
                     self._gpu_static_ui_key = static_key
                 prepared_clickgui_commands: ClickGuiDrawList | None = None
+                prepared_clickgui_hotspots: list[Hotspot] | None = None
                 prepared_clickgui_atlas = False
                 click_gui = self.registry.get("ClickGui")
                 gui_alpha = self.gui_timeline.progress
@@ -936,6 +937,9 @@ class PolarRMWindow(QOpenGLWidget):
                     and self.clickgui_gpu.available
                 ):
                     prepared_clickgui_commands = self.build_gpu_clickgui(width, height, gui_alpha)
+                    # Snapshot hit targets before motion overlay / overlay clear
+                    # wipes them.  Layout runs once; present reuses this list.
+                    prepared_clickgui_hotspots = list(self.hotspots)
                     self.clickgui_gpu.prepare_frame(prepared_clickgui_commands, ratio)
                     prepared_clickgui_atlas = True
 
@@ -958,6 +962,7 @@ class PolarRMWindow(QOpenGLWidget):
                         width,
                         height,
                         gpu_commands=prepared_clickgui_commands,
+                        gpu_hotspots=prepared_clickgui_hotspots,
                         gpu_atlas_prepared=prepared_clickgui_atlas,
                     )
                 painter.end()
@@ -1638,33 +1643,67 @@ class PolarRMWindow(QOpenGLWidget):
         height: int,
         ratio: float,
     ) -> bool:
-        """Render TargetHUD vectors straight into the isolated target FBO."""
-        device = self.gpu_compositor.paint_device("target")
-        if device is None:
+        """Rasterize the center ring into a tight CPU patch, then sub-image upload.
+
+        Design (same as ``upload_dynamic_image``): keep TargetHUD on its isolated
+        ``target_fbo``, never full-screen CPU frames.  Qt's OpenGL paint engine
+        can leave a semi-transparent rectangular atlas around antialiased arcs;
+        exact ``glTexSubImage2D`` replace on a small ROI removes that residue
+        without tanking frame rate.
+        """
+        if not self.gpu_compositor.clear_target_layer(functions):
             return False
-        try:
-            device.setDevicePixelRatio(ratio)
-            self.gpu_compositor.clear_current(functions, transparent=True)
-            painter = QPainter(device)
-            painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
-            painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-            painter.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
-            scale = self.get_hud_scale(width, height)
-            logical_width = max(1, int(width / scale))
-            logical_height = max(1, int(height / scale))
-            painter.scale(scale, scale)
-            now = time.perf_counter()
-            self.paint_combat_target_overlay(
-                painter,
-                logical_width,
-                logical_height,
-                self.interpolated_vision_result(now),
-                now,
-            )
-            painter.end()
-            return True
-        finally:
-            self.gpu_compositor.release_layer("target")
+
+        scale = self.get_hud_scale(width, height)
+        logical_width = max(1, int(width / scale))
+        logical_height = max(1, int(height / scale))
+        module = self.registry.get("CombatTargetHUD")
+        visual = self.combat_target_visual(module)
+        show_bars = self.setting_bool(module, "Show Bars", False) if module else False
+        combat_scale = 1.65 if visual == "Classic" else 2.35
+        # Ring outer radius + stroke + Classic labels / optional bars card.
+        ring_extent = 16.0 * combat_scale + 5.0 * combat_scale + 14.0
+        if visual == "Classic":
+            half_logical = max(ring_extent, 78.0)
+        elif show_bars:
+            half_logical = max(ring_extent, 130.0)
+        else:
+            half_logical = ring_extent
+        # Presence scale can breathe slightly above 1.0 while fading in.
+        half_logical *= 1.2
+
+        pixel_scale = max(0.001, float(scale) * float(ratio))
+        roi_px = int(math.ceil(half_logical * 2.0 * pixel_scale))
+        roi_px = max(64, min(roi_px, 512))
+        roi_px = (roi_px + 3) // 4 * 4
+
+        image = QImage(roi_px, roi_px, QImage.Format.Format_ARGB32_Premultiplied)
+        image.fill(0)
+        painter = QPainter(image)
+        painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        painter.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
+        # Map full logical HUD space so the screen center lands on the patch center.
+        painter.translate(roi_px * 0.5, roi_px * 0.5)
+        painter.scale(pixel_scale, pixel_scale)
+        painter.translate(-logical_width * 0.5, -logical_height * 0.5)
+        now = time.perf_counter()
+        self.paint_combat_target_overlay(
+            painter,
+            logical_width,
+            logical_height,
+            self.interpolated_vision_result(now),
+            now,
+        )
+        painter.end()
+
+        fb_w = max(1, int(round(float(width) * float(ratio))))
+        fb_h = max(1, int(round(float(height) * float(ratio))))
+        upload_x = int(round(fb_w * 0.5 - roi_px * 0.5))
+        upload_y = int(round(fb_h * 0.5 - roi_px * 0.5))
+        upload_x = max(0, min(upload_x, max(0, fb_w - roi_px)))
+        upload_y = max(0, min(upload_y, max(0, fb_h - roi_px)))
+        return self.gpu_compositor.upload_target_region(functions, image, upload_x, upload_y)
 
     def paint_clickgui_overlay(
         self,
@@ -1673,6 +1712,7 @@ class PolarRMWindow(QOpenGLWidget):
         height: int,
         *,
         gpu_commands: ClickGuiDrawList | None = None,
+        gpu_hotspots: list[Hotspot] | None = None,
         gpu_atlas_prepared: bool = False,
     ) -> None:
         """Draw only the high-frequency ClickGUI layer.
@@ -1693,12 +1733,22 @@ class PolarRMWindow(QOpenGLWidget):
 
         gui_alpha = self.gui_timeline.progress
         if gui_alpha > 0.01:
+            # Drop HUD/map hit targets while ClickGUI owns the pointer.
             self.hotspots.clear()
             p.fillRect(QRectF(0, 0, width, height), with_alpha(THEME.dim, gui_alpha))
             click_gui = self.registry.get("ClickGui")
             direct_gpu = self.setting_mode(click_gui, "Render Backend", "Unified GPU") == "Unified GPU" and self.clickgui_gpu.available
             if direct_gpu:
-                commands = gpu_commands or self.build_gpu_clickgui(width, height, gui_alpha)
+                if gpu_commands is None:
+                    commands = self.build_gpu_clickgui(width, height, gui_alpha)
+                else:
+                    commands = gpu_commands
+                    # Outer path already built layout + atlas once; restore the
+                    # snapshot so clear() above does not leave zero hotspots.
+                    if gpu_hotspots is not None:
+                        self.hotspots.extend(gpu_hotspots)
+                    else:
+                        self.build_gpu_clickgui(width, height, gui_alpha)
                 if not gpu_atlas_prepared:
                     # Direct compatibility callers do not have the outer
                     # compositor's frame-boundary preparation step.
