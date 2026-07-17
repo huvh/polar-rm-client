@@ -589,13 +589,15 @@ class PolarRMWindow(QOpenGLWidget):
         if not self.clickgui_gpu.available:
             return
         labels = {
-            "POLAR-RM", "Search modules...", "Keybind", "None", "POLAR VIEW",
+            "POLAR-RM", "Search modules...", "Keybind", "None", "KEY", "--", "POLAR VIEW",
             "Combat", "Movement", "Vision", "Strategy", "System", "Render",
             "Profile", "Settings", "Module", "Enable", "Disable",
             "SCENE SELECT", "MATCH MODE", "ROBOT PROFILE", "SESSION",
             "DJI Official", "Campus Sim", "Lab Debug", "RMUC 7v7", "RMUL 3v3",
             "Config", "Import", "Wallpaper", "ClickGUI", "Exit", "Back",
             "CUSTOM CLIENT", "Choose runtime environment", "Press 1/2/3 to select. Enter continues.",
+            # Chinese panel subtitle glyphs (配置 / 缩放) + common toast fragments.
+            "配置", "缩放", "已就绪", "已保存", "已加载", "导入",
         }
         for module in self.registry.modules:
             labels.add(module.name)
@@ -7858,7 +7860,14 @@ class PolarRMWindow(QOpenGLWidget):
         scale = self.get_gui_scale_for_bounds(width, height, 600.0, 440.0, 76.0, 82.0) * (0.98 + 0.02 * alpha)
         panel = QRectF(width / 2 - 300 * scale, height / 2 - 200 * scale, 600 * scale, 400 * scale)
         commands.rect(panel, 8 * scale, color("#101014", 0.96 * alpha), color("#ffffff", 0.13 * alpha), 1.0)
-        commands.text(QRectF(panel.left() + 14 * scale, panel.top() + 13 * scale, 190 * scale, 20 * scale), "POLAR-RM", self.font("poppins_bold", 14 * scale), self.gpu_alpha(THEME.text, alpha))
+        # Match draw_profile_widget: title + Chinese profile/scale subtitle.
+        commands.text(QRectF(panel.left() + 14 * scale, panel.top() + 10 * scale, 200 * scale, 18 * scale), "POLAR-RM", self.font("poppins_bold", 14 * scale), self.gpu_alpha(THEME.text, alpha))
+        commands.text(
+            QRectF(panel.left() + 14 * scale, panel.top() + 28 * scale, 220 * scale, 14 * scale),
+            f"配置 {self.current_profile()} | 缩放 {self.get_gui_scale():.2f}",
+            self.font("poppins_regular", 7.6 * scale),
+            self.gpu_alpha(THEME.muted, alpha),
+        )
         category_bar = QRectF(panel.left() + 414 * scale, panel.top() + 18 * scale, 166 * scale, 28 * scale)
         step = category_bar.width() / len(CATEGORIES)
         target = float(CATEGORIES.index(self.selected_category)) if self.selected_category in CATEGORIES else 0.0
@@ -8241,17 +8250,36 @@ class PolarRMWindow(QOpenGLWidget):
             text_color = THEME.text if module.enabled else color("#aaaaaa")
             radius = 5 * scale if compact else 0.0
         commands.rect(row, radius, fill, outline, 1.0, gradient=gradient, clip=clip)
-        name_font = self.font("poppins_regular", (7.2 if compact else 8.2) * scale)
-        name_rect = row.adjusted(7 * scale, 0, -32 * scale, 0)
+        # Panel mode matches QPainter: medium weight + slightly brighter enabled text.
+        if style == "panel":
+            name_font = self.font("poppins_medium" if module.enabled else "poppins_regular", 8.6 * scale)
+            key_w = 30 * scale
+            name_rect = row.adjusted(6 * scale, 0, -(key_w + 12 * scale), 0)
+        else:
+            name_font = self.font("poppins_regular", (7.2 if compact else 8.2) * scale)
+            key_w = 20 * scale
+            name_rect = row.adjusted(7 * scale, 0, -32 * scale, 0)
         label = self.elide_for_gpu(name_font, module.name, name_rect.width())
         commands.text(name_rect, label, name_font, self.gpu_alpha(text_color, alpha), clip=clip)
-        key = QRectF(row.right() - 25 * scale, row.top() + 3 * scale, 20 * scale, max(10 * scale, row.height() - 6 * scale))
+        if style == "panel":
+            key = QRectF(row.right() - 34 * scale, row.top() + 2 * scale, 30 * scale, max(10 * scale, row.height() - 4 * scale))
+        else:
+            key = QRectF(row.right() - 25 * scale, row.top() + 3 * scale, 20 * scale, max(10 * scale, row.height() - 6 * scale))
         commands.rect(key, 4 * scale, color("#ffffff", 0.05 * alpha), color("#ffffff", 0.08 * alpha), 1.0, clip=clip)
-        key_label = self.compact_keybind(module.keybind) if module.keybind and module.keybind != "None" else "--"
-        commands.text(key, key_label, self.font("poppins_bold", 6.2 * scale), self.gpu_alpha(THEME.muted, alpha), Qt.AlignmentFlag.AlignCenter, clip)
+        # PanelClickGui always labels the bind chip "KEY" (see draw_panel_module_list).
+        # Other GPU modes keep the compact bind / placeholder.
+        if style == "panel":
+            key_label = "KEY"
+        else:
+            key_label = self.compact_keybind(module.keybind) if module.keybind and module.keybind != "None" else "--"
+        commands.text(key, key_label, self.font("poppins_medium", 6.3 * scale), self.gpu_alpha(THEME.muted, alpha), Qt.AlignmentFlag.AlignCenter, clip)
         self._hotspot_clip = clip
-        self.add_hotspot(row.adjusted(0, 0, -25 * scale, 0), "module_toggle" if not select_only else "module_select", module.name, button=1, tooltip=module.description)
-        self.add_hotspot(row.adjusted(0, 0, -25 * scale, 0), "module_expand", module.name, button=3, tooltip="展开设置")
+        if style == "panel":
+            self.add_hotspot(row.adjusted(0, 0, -36 * scale, 0), "module_toggle" if not select_only else "module_select", module.name, button=1, tooltip=module.description)
+            self.add_hotspot(row.adjusted(0, 0, -36 * scale, 0), "module_expand", module.name, button=3, tooltip="展开设置")
+        else:
+            self.add_hotspot(row.adjusted(0, 0, -25 * scale, 0), "module_toggle" if not select_only else "module_select", module.name, button=1, tooltip=module.description)
+            self.add_hotspot(row.adjusted(0, 0, -25 * scale, 0), "module_expand", module.name, button=3, tooltip="展开设置")
         self.add_hotspot(key, "module_bind", module.name, tooltip="绑定按键")
 
         self._hotspot_clip = None
