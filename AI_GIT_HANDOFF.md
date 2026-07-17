@@ -27,11 +27,17 @@
 1. 新增 `.gitignore`（忽略 `.venv`、缓存、tmp 截图、release zip、大视频壁纸、用户壁纸、校准数据等）。
 2. 新增 `calibrations/.gitkeep`（保留空目录）。
 3. 新增本文件 `AI_GIT_HANDOFF.md`。
-4. 在 `rm_custom_client` 执行 `git init`，首次提交桌面主线代码到 `main`。
-5. 添加 remote `origin` → `https://github.com/lulunomaro/polar-rm-client.git` 并 `git push -u origin main`。
-6. **未修改**任何业务源码（`main.py`、`rm_client/*.py`、UI 模块等）。
+4. 在 `rm_custom_client` 执行 `git init -b main`，首次提交桌面主线（286 文件）→ commit `fd06f52`。
+5. 添加 remote `origin` → `https://github.com/lulunomaro/polar-rm-client.git`。
+6. 远程原先仅有 GitHub 初始化的 `README.md`（`1864da2`）。已 `git pull --allow-unrelated-histories`；README 冲突时 **保留本地项目 README**（`git checkout --ours`），合并提交 `182f225`。
+7. 已成功 `git push -u origin main`；本地与 `origin/main` 同步（HEAD = `182f225`）。
+8. **未修改**任何业务源码逻辑（`main.py`、`rm_client/*.py` 等按原样入库，未做功能改动）。
 
-若 push 失败，见下文「故障排查」；可能需要用户在本机完成 GitHub 登录（Credential Manager / PAT）。
+### 故障排查（push 被拒 / 认证）
+
+- `rejected (fetch first)`：远程有提交时先 `git pull origin main --allow-unrelated-histories`，解决冲突后再 push。
+- 认证弹窗：Windows Credential Manager；或创建 GitHub PAT 后用 HTTPS 推送。
+- 本机曾无 `gh` CLI / 无 SSH 私钥，当前成功路径是 HTTPS。
 
 ---
 
@@ -135,4 +141,4 @@ git pull
 
 | 日期 | 操作 | 操作者 |
 |------|------|--------|
-| 2026-07-17 | 初始化仓库、`.gitignore`、首次 push `main`、本交接文件 | Grok（本会话） |
+| 2026-07-17 | 初始化仓库、`.gitignore`、合并远程空 README、push `main`（`182f225`）、本交接文件 | Grok（本会话） |
