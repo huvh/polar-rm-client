@@ -7232,8 +7232,8 @@ class PolarRMWindow(QOpenGLWidget):
     def debug_tahoma_font(self, pixel_size: int = 16) -> QFont:
         """jar tahoma from assets/fonts/tahoma.ttf (PLAIN).
 
-        pixel_size is device pixels — at 2K we rasterize at hud_scale*dpr so the
-        blit is 1:1 and does not soft-upscale a 16px buffer (the 2K blur bug).
+        pixel_size is device pixels. jar createFont antiAlias=false → NoAntialias
+        so 1K stays crisp (PreferAntialias made 1080p look soft/milky).
         """
         from PySide6.QtGui import QFontDatabase
 
@@ -7249,10 +7249,10 @@ class PolarRMWindow(QOpenGLWidget):
         font.setBold(False)
         font.setItalic(False)
         font.setWeight(QFont.Weight.Normal)
-        font.setKerning(True)
+        font.setKerning(False)
         font.setHintingPreference(QFont.HintingPreference.PreferFullHinting)
-        # Prefer crisp edges on high-DPI; AA is mild, not SmoothPixmap soft mush.
-        font.setStyleStrategy(QFont.StyleStrategy.PreferAntialias)
+        # jar tahoma16 antiAlias=false — sharp stems on 1K/2K.
+        font.setStyleStrategy(QFont.StyleStrategy.NoAntialias)
         return font
 
     def debug_tahoma16_font(self) -> QFont:
@@ -7321,7 +7321,7 @@ class PolarRMWindow(QOpenGLWidget):
         row_h: float = 16.0,
         shadow_px: float = 1.0,
     ) -> None:
-        """MC 1.8 drawStringWithShadow — top baseline like canvas textBaseline=top."""
+        """MC 1.8 drawStringWithShadow — integer pixels, no AA (jar crisp white)."""
         main = main or QColor(255, 255, 255, 255)
         shadow = QColor(
             (main.red() & 0xFC) >> 2,
@@ -7332,11 +7332,17 @@ class PolarRMWindow(QOpenGLWidget):
         font = font or self.debug_tahoma16_font()
         metrics = QFontMetricsF(font)
         tw = float(text_w if text_w is not None else metrics.horizontalAdvance(text))
-        box = QRectF(x, y, tw + 3.0 * max(1.0, shadow_px), row_h)
-        flags = int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        # Snap to pixel grid — subpixel drawText is the main 1K blur source.
+        ix = float(int(round(x)))
+        iy = float(int(round(y)))
+        sp = float(max(1, int(round(shadow_px))))
+        rh = float(max(int(round(row_h)), metrics.height()))
+        box = QRectF(ix, iy, tw + sp + 2.0, rh)
+        # AlignTop matches canvas textBaseline=top (not VCenter which smears 16px rows).
+        flags = int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         p.setFont(font)
         p.setPen(shadow)
-        p.drawText(box.translated(shadow_px, shadow_px), flags, text)
+        p.drawText(box.translated(sp, sp), flags, text)
         p.setPen(main)
         p.drawText(box, flags, text)
 
@@ -7349,22 +7355,21 @@ class PolarRMWindow(QOpenGLWidget):
     ) -> None:
         """Debug fluorescent-white ArrayList (modlist-white.html / MODLIST_WHITE.md).
 
-        Rasterizes at **device pixels** (hud_scale × dpr) so 2K stays sharp — never
-        draw 16px then Smooth upscale under p.scale(hud_scale).
+        Device-pixel raster + integer coords. No text AA (jar tahoma16 antiAlias off)
+        so 1K stays clear and 2K does not soft-upscale a tiny buffer.
         """
-        # Logical layout (jar coords).
         row_h = 16.0
         pad_right = 2.0
         pad_top = 2.0 if start_y is None else float(start_y)
         pad_x = 6.0
         pad_y = 2.0
-        # Device scale: at 2K hud_scale~1.4 and dpr=1 → raster ~1.4×; with dpr=1.25 even higher.
         device_scale = self.painter_device_scale(p)
-        px = max(1.0, device_scale)
-        font_px = max(12, int(round(16.0 * px)))
+        # Quantize scale so font/layout stay on integer device pixels (avoids 1.34× mush).
+        px = max(1.0, round(device_scale * 4.0) / 4.0)
+        font_px = max(16, int(round(16.0 * px)))
         font = self.debug_tahoma_font(font_px)
         metrics = QFontMetricsF(font)
-        # Measure in logical units (font is device-px; divide by scale).
+
         def measure_logical(name: str) -> float:
             return float(metrics.horizontalAdvance(name)) / px
 
@@ -7384,31 +7389,29 @@ class PolarRMWindow(QOpenGLWidget):
         layer_h_l = y0 + len(rows) * row_h + pad_y + 10.0
         layer_w_l = max(8.0, min(layer_w_l, float(width)))
         layer_h_l = max(8.0, layer_h_l)
-        # Physical buffer: 1 device pixel per buffer pixel → crisp after transform.
         layer_w = max(8, int(math.ceil(layer_w_l * px)))
         layer_h = max(8, int(math.ceil(layer_h_l * px)))
         layer = QImage(layer_w, layer_h, QImage.Format.Format_ARGB32_Premultiplied)
         layer.fill(0)
         ip = QPainter(layer)
         ip.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
-        ip.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
+        # No text AA — gray fringe was reading as "unclear" at 1K.
+        ip.setRenderHint(QPainter.RenderHint.TextAntialiasing, False)
         ip.setRenderHint(QPainter.RenderHint.Antialiasing, False)
-        # Nearest for shadow stretch keeps plate edges from milky blur at 2K.
         ip.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, False)
 
         shadow = self.arraylist_shadow_image()
         origin_x = float(width) - layer_w_l
-        shadow_px = max(1.0, round(px))  # MC +1,+1 in device pixels
+        shadow_px = float(max(1, int(round(px))))
 
         for index, (name, text_w_l) in enumerate(rows):
             screen_x = float(width) - text_w_l - pad_right
             local_x_l = screen_x - origin_x
             local_y_l = y0 + index * row_h
-            # Device-space coords inside layer.
-            dx = local_x_l * px
-            dy = local_y_l * px
-            tw = text_w_l * px
-            rh = row_h * px
+            dx = float(int(round(local_x_l * px)))
+            dy = float(int(round(local_y_l * px)))
+            tw = float(int(round(text_w_l * px)))
+            rh = float(max(int(round(row_h * px)), int(math.ceil(metrics.height()))))
             dest = QRectF(
                 dx - pad_x * px,
                 dy - pad_y * px,
@@ -7416,9 +7419,9 @@ class PolarRMWindow(QOpenGLWidget):
                 rh + pad_y * 2.0 * px,
             )
             if shadow is not None and not shadow.isNull():
-                ip.drawImage(dest, shadow)
+                ip.drawImage(dest.toRect(), shadow)
             else:
-                ip.fillRect(dest, QColor(0, 0, 0, 90))
+                ip.fillRect(dest.toRect(), QColor(0, 0, 0, 90))
 
             self.draw_string_with_shadow_mc(
                 ip,
@@ -7435,9 +7438,11 @@ class PolarRMWindow(QOpenGLWidget):
 
         p.save()
         p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
-        # Fast blit — SmoothPixmapTransform here is what made 2K look muddy.
         p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, False)
-        p.drawImage(QRectF(origin_x, 0.0, layer_w_l, layer_h_l), layer)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing, False)
+        # Integer target rect when possible for 1:1 device mapping.
+        target = QRectF(origin_x, 0.0, layer_w_l, layer_h_l)
+        p.drawImage(target, layer)
         p.restore()
 
     def draw_module_list_liquid_array(
