@@ -4714,10 +4714,15 @@ class PolarRMWindow(QOpenGLWidget):
     def draw_chassis_gimbal_indicator(self, p: QPainter, width: int, height: int) -> None:
         """Bottom chassis/gimbal compass (main & gestalt-lab layout).
 
-        IMPORTANT: never stroke this widget with QPainter directly onto an
-        OpenGL paint device.  On the GPU dynamic FBO, Qt's AA path turns the
-        hull and barrel into opaque stacked tiles (what users saw as "abstract
-        blocks").  Always CPU-raster a tiny QImage, then blit once.
+        Liquid glass (README 液态玻璃规范): register the lens on the live
+        painter via draw_hud_liquid_glass (GPU → add_glass; CPU → liquid_glass).
+        Never put an opaque frosted plate under the content — that violates
+        “采样镜片后方场景” and looks like a dark card.
+
+        IMPORTANT: never stroke hull/barrel with QPainter directly onto an
+        OpenGL paint device. On the GPU dynamic FBO, Qt's AA path turns them
+        into opaque stacked tiles. CPU-raster icon+text to a tiny QImage, blit
+        once above the glass (text/icons always on top of the lens).
         """
         module = self.registry.get("ChassisGimbalIndicator")
         if module is None or not module.enabled:
@@ -4741,6 +4746,8 @@ class PolarRMWindow(QOpenGLWidget):
             size = min(max(48.0, size), 64.0)
             center = QPointF(width / 2.0, height - 86.0)
             active = self.anim.value("hud.chassis_gimbal.micro", 1.0, self.anim_duration(0.20), Easings.ease_out_pow4, initial=0.0)
+            disc_r = size * 0.54
+            disc_rect = QRectF(center.x() - disc_r, center.y() - disc_r, disc_r * 2.0, disc_r * 2.0)
             pad = 14.0
             img_w = int(math.ceil(size * 1.55 + pad * 2))
             img_h = int(math.ceil(size * 1.65 + pad * 2))
@@ -4751,18 +4758,12 @@ class PolarRMWindow(QOpenGLWidget):
             ip.setRenderHint(QPainter.RenderHint.Antialiasing, True)
             ip.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
             ip.translate(-origin.x(), -origin.y())
-            # Readable disc under thin strokes (CombatCompact default path).
-            disc = QPainterPath()
-            disc.addEllipse(center, size * 0.54, size * 0.54)
-            ip.fillPath(disc, color("#05080e", 0.72))
-            ip.setPen(QPen(color("#ffffff", 0.12 + 0.08 * alert), 1.1))
-            ip.setBrush(Qt.BrushStyle.NoBrush)
-            ip.drawEllipse(center, size * 0.54, size * 0.54)
+            # Content only — glass is registered on the live painter below.
             self.draw_chassis_gimbal_compass_base(ip, center, size * 0.40, style, spin, pulse)
             self.draw_chassis_body_direction(ip, center, size, chassis_yaw, style, spin, pulse)
             self.draw_gimbal_turret_direction(ip, center, size, gimbal_yaw, alert)
             if show_angle or alert > 0.66:
-                self.draw_text(
+                self.draw_glass_text(
                     ip,
                     QRectF(center.x() - 40, center.y() + size * 0.46, 80, 14),
                     f"{relative_yaw:+.0f}°",
@@ -4771,7 +4772,7 @@ class PolarRMWindow(QOpenGLWidget):
                     Qt.AlignmentFlag.AlignCenter,
                 )
             if show_mode:
-                self.draw_text(
+                self.draw_glass_text(
                     ip,
                     QRectF(center.x() - 40, center.y() - size * 0.68, 80, 12),
                     mode_text,
@@ -4782,6 +4783,8 @@ class PolarRMWindow(QOpenGLWidget):
             ip.end()
             p.save()
             p.setOpacity(active)
+            # Circular island lens under strokes (LensIsland: radius = half height).
+            self.draw_hud_liquid_glass(p, disc_rect, disc_r, surface="LensIsland", hover=0.12 * alert)
             p.drawImage(origin, image)
             p.restore()
             return
@@ -4792,6 +4795,7 @@ class PolarRMWindow(QOpenGLWidget):
         y = max(112.0, height - 64.0 - panel_h - 18.0)
         rect = QRectF(x, y, panel_w, panel_h)
         active = self.anim.value("hud.chassis_gimbal.panel", 1.0, self.anim_duration(0.24), Easings.ease_out_pow4, initial=0.0)
+        glass_radius = 10.0
 
         img_w = int(math.ceil(panel_w)) + 6
         img_h = int(math.ceil(panel_h)) + 6
@@ -4803,14 +4807,7 @@ class PolarRMWindow(QOpenGLWidget):
         ip.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
         ip.translate(-origin.x(), -origin.y())
 
-        # Dark frosted plate (main/gestalt layout; no MainGlass on GPU FBO).
-        if self.hud_clean():
-            rounded_rect(ip, rect, 10, color("#070b12", 0.78), color("#ffffff", 0.13 + 0.06 * alert), 1.15)
-            inner = rect.adjusted(1.2, 1.2, -1.2, -1.2)
-            rounded_rect(ip, inner, 9, color("#ffffff", 0.035), color("#ffffff", 0.045), 1.0)
-        else:
-            glow_rect(ip, rect, 10, 0.10 * alert)
-            rounded_rect(ip, rect, 9, self.hud_surface(0.64), self.hud_panel_outline(0.08 + 0.08 * alert))
+        # Content layer only (no frosted plate — glass is the backdrop).
         top_line = QLinearGradient(rect.left() + 14, rect.top() + 5, rect.right() - 14, rect.top() + 5)
         top_line.setColorAt(0.0, with_alpha(self.hud_accent(), 0.25 + 0.30 * alert))
         top_line.setColorAt(1.0, with_alpha(self.hud_warning() if alert > 0.55 else self.hud_accent(), 0.18 + 0.34 * alert))
@@ -4825,9 +4822,15 @@ class PolarRMWindow(QOpenGLWidget):
 
         if show_angle:
             angle_text = f"REL {relative_yaw:+.0f}°"
-            self.draw_text(ip, QRectF(rect.left() + 11, rect.bottom() - 24, rect.width() * 0.56, 16), angle_text, self.font("poppins_medium", 7.6), THEME.text)
+            self.draw_glass_text(
+                ip,
+                QRectF(rect.left() + 11, rect.bottom() - 24, rect.width() * 0.56, 16),
+                angle_text,
+                self.font("poppins_medium", 7.6),
+                THEME.text,
+            )
         if show_mode:
-            self.draw_text(
+            self.draw_glass_text(
                 ip,
                 QRectF(rect.right() - 64, rect.bottom() - 24, 52, 16),
                 mode_text,
@@ -4839,6 +4842,12 @@ class PolarRMWindow(QOpenGLWidget):
 
         p.save()
         p.setOpacity(active)
+        # MainGlass / LensRegular: sample scene, edge refraction only; content blit above.
+        if self.hud_clean():
+            self.draw_hud_liquid_glass(p, rect, glass_radius, surface="MainGlass", hover=0.10 * alert)
+        else:
+            glow_rect(p, rect, glass_radius, 0.10 * alert)
+            self.draw_hud_liquid_glass(p, rect, glass_radius, surface="MainGlass", hover=0.14 * alert)
         p.drawImage(origin, image)
         p.restore()
 
