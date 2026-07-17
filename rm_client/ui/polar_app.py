@@ -7243,21 +7243,13 @@ class PolarRMWindow(QOpenGLWidget):
             return alt
         return self.workspace.joinpath(*parts)
 
-    def debug_tahoma16_raw(self):
-        """Load jar/visual-demo tahoma.ttf as QRawFont @ 16px (not system Tahoma)."""
-        from PySide6.QtGui import QRawFont
-
-        raw = getattr(self, "_debug_tahoma16_raw", None)
-        if raw is not None and raw.isValid():
-            return raw
-        path = self._client_asset_path("assets", "fonts", "tahoma.ttf")
-        # Pixel size 16 = Fonts.tahoma16. PreferNoHinting ≈ jar antiAlias off.
-        raw = QRawFont(str(path), 16.0) if path.exists() else QRawFont()
-        self._debug_tahoma16_raw = raw
-        return raw
-
     def debug_tahoma16_font(self) -> QFont:
-        """QFont mirror of tahoma16 for metrics fallback only."""
+        """jar tahoma16 from assets/fonts/tahoma.ttf (PLAIN, 16px).
+
+        visual-demo/modlist-white.html uses the same TTF via @font-face DebugTahoma.
+        We register the file and draw with text AA so it matches the canvas demo
+        (browser always AA); jar is antiAlias-off but still this face, not Segoe.
+        """
         from PySide6.QtGui import QFontDatabase
 
         path = self._client_asset_path("assets", "fonts", "tahoma.ttf")
@@ -7270,74 +7262,57 @@ class PolarRMWindow(QOpenGLWidget):
         font = QFont(family)
         font.setPixelSize(16)
         font.setBold(False)
+        font.setItalic(False)
         font.setWeight(QFont.Weight.Normal)
-        font.setStyleStrategy(QFont.StyleStrategy.NoAntialias)
-        font.setHintingPreference(QFont.HintingPreference.PreferNoHinting)
+        font.setKerning(True)
+        # Match modlist-white.html canvas fillText look (readable fluorescent white).
+        font.setHintingPreference(QFont.HintingPreference.PreferFullHinting)
+        font.setStyleStrategy(QFont.StyleStrategy.PreferAntialias)
         return font
 
     def measure_debug_tahoma16(self, text: str) -> float:
-        raw = self.debug_tahoma16_raw()
-        if raw is not None and raw.isValid():
-            indexes = raw.glyphIndexesForString(text)
-            if indexes:
-                advances = raw.advancesForGlyphIndexes(indexes)
-                return float(sum(adv.x() for adv in advances))
         return float(QFontMetricsF(self.debug_tahoma16_font()).horizontalAdvance(text))
 
-    def draw_debug_tahoma16_text(
-        self,
-        p: QPainter,
-        text: str,
-        x: float,
-        y: float,
-        color: QColor,
-    ) -> None:
-        """Draw PLAIN tahoma16 with top-left origin (canvas textBaseline=top)."""
-        from PySide6.QtGui import QRawFont
-
-        raw = self.debug_tahoma16_raw()
-        if raw is None or not raw.isValid():
-            # Absolute last resort: QFont path (still NoAntialias tahoma face).
-            font = self.debug_tahoma16_font()
-            box = QRectF(x, y, self.measure_debug_tahoma16(text) + 2.0, 18.0)
-            p.setFont(font)
-            p.setPen(color)
-            p.drawText(box, int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop), text)
-            return
-        indexes = raw.glyphIndexesForString(text)
-        if not indexes:
-            return
-        advances = raw.advancesForGlyphIndexes(indexes)
-        # y is top; QRawFont paths are baseline-relative.
-        baseline = y + float(raw.ascent())
-        cursor = float(x)
-        p.save()
-        p.setBrush(color)
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing, False)
-        p.setRenderHint(QPainter.RenderHint.TextAntialiasing, False)
-        for glyph_id, advance in zip(indexes, advances):
-            path = raw.pathForGlyph(glyph_id)
-            if not path.isEmpty():
-                p.save()
-                p.translate(cursor, baseline)
-                p.fillPath(path, color)
-                p.restore()
-            cursor += float(advance.x())
-        p.restore()
-
     def arraylist_shadow_image(self) -> QImage | None:
-        """Debug.jar client/arraylistshadow.png (87×37 black + soft alpha)."""
-        cached = getattr(self, "_arraylist_shadow_image", None)
+        """arraylistshadow.png baked for jar draw: black soft plate @ effective α.
+
+        Source max A≈57 is nearly invisible on game HUD after stretch. Bake a
+        soft plate that keeps the same 87×37 shape but peaks near α≈0.55 so the
+        white text still reads as fluorescent (dark cushion under full white).
+        """
+        cached = getattr(self, "_arraylist_shadow_baked", None)
         if cached is not None:
             return cached if not cached.isNull() else None
         path = self._client_asset_path("assets", "hud", "arraylistshadow.png")
-        image = QImage(str(path)) if path.exists() else QImage()
-        # Ensure premultiplied so α soft edge composites correctly on GPU blit.
-        if not image.isNull():
-            image = image.convertToFormat(QImage.Format.Format_ARGB32_Premultiplied)
-        self._arraylist_shadow_image = image
-        return image if not image.isNull() else None
+        if not path.exists():
+            self._arraylist_shadow_baked = QImage()
+            return None
+        src = QImage(str(path)).convertToFormat(QImage.Format.Format_ARGB32)
+        if src.isNull():
+            self._arraylist_shadow_baked = QImage()
+            return None
+        peak = 1
+        for yy in range(src.height()):
+            for xx in range(src.width()):
+                peak = max(peak, src.pixelColor(xx, yy).alpha())
+        # Source peak A≈57 is nearly invisible after stretch on HUD. Keep the
+        # same soft footprint but raise peak so white text still "pops" (demo look).
+        # Still far from a solid black bar (no fill strip).
+        target_peak = 190.0
+        scale = target_peak / float(peak)
+        out = QImage(src.size(), QImage.Format.Format_ARGB32_Premultiplied)
+        out.fill(0)
+        for yy in range(src.height()):
+            for xx in range(src.width()):
+                a = src.pixelColor(xx, yy).alpha()
+                if a <= 0:
+                    continue
+                aa = max(0, min(255, int(round(a * scale))))
+                # Premultiplied black (RGB 0, alpha aa).
+                out.setPixel(xx, yy, (aa << 24))
+        self._arraylist_shadow_baked = out
+        self._arraylist_shadow_image = out
+        return out
 
     def draw_string_with_shadow_mc(
         self,
@@ -7347,18 +7322,27 @@ class PolarRMWindow(QOpenGLWidget):
         y: float,
         *,
         main: QColor | None = None,
+        text_w: float | None = None,
     ) -> None:
-        """MC 1.8 drawStringWithShadow on Debug tahoma16 (top-left origin)."""
+        """MC 1.8 drawStringWithShadow — top baseline like canvas textBaseline=top."""
         main = main or QColor(255, 255, 255, 255)
-        # (color & 0xFCFCFC) >> 2 → white shadow ≈ #3F3F3F
         shadow = QColor(
             (main.red() & 0xFC) >> 2,
             (main.green() & 0xFC) >> 2,
             (main.blue() & 0xFC) >> 2,
             main.alpha(),
         )
-        self.draw_debug_tahoma16_text(p, text, x + 1.0, y + 1.0, shadow)
-        self.draw_debug_tahoma16_text(p, text, x, y, main)
+        font = self.debug_tahoma16_font()
+        metrics = QFontMetricsF(font)
+        tw = float(text_w if text_w is not None else metrics.horizontalAdvance(text))
+        # Height 16 matches FONT.size row; AlignTop = canvas top baseline.
+        box = QRectF(x, y, tw + 3.0, 16.0)
+        flags = int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        p.setFont(font)
+        p.setPen(shadow)
+        p.drawText(box.translated(1.0, 1.0), flags, text)
+        p.setPen(main)
+        p.drawText(box, flags, text)
 
     def draw_module_list_debug_white(
         self,
@@ -7367,24 +7351,25 @@ class PolarRMWindow(QOpenGLWidget):
         start_y: float | None = None,
         available_height: float | None = None,
     ) -> None:
-        """Debug fluorescent-white ArrayList — 1:1 modlist-white.html / MODLIST_WHITE.md.
+        """Debug fluorescent-white ArrayList (screenshot-verified vs modlist-white.html).
 
-        Font: assets/fonts/tahoma.ttf via QRawFont @16 (jar tahoma16, not system UI).
-        Color: #FFFFFF α=1. Shadow: +1,+1 ≈#3F3F3F. Underlay: arraylistshadow.png @0.7.
-        Layout: right, x=W-w-2, y=2+i*16, width-desc. No rainbow / side bar / solid strip.
-        CPU-raster then blit (stable on OpenGL FBO).
+        - tahoma.ttf @ 16px PLAIN full white α=1
+        - MC +1,+1 shadow ≈ #3F3F3F
+        - arraylistshadow soft plate under each name
+        - right align, width-desc, y = 2 + i*16
+        - no rainbow / side bar / solid strip
         """
-        raw = self.debug_tahoma16_raw()
+        font = self.debug_tahoma16_font()
+        metrics = QFontMetricsF(font)
         row_h = 16.0
         pad_right = 2.0
         pad_top = 2.0 if start_y is None else float(start_y)
         pad_x = 6.0
         pad_y = 2.0
-        shadow_alpha = 0.70
 
         visible = [m for m in self.registry.enabled_modules() if m.name not in ("HUD", "ClickGui")]
         rows: list[tuple[str, float]] = [
-            (module.name, self.measure_debug_tahoma16(module.name)) for module in visible
+            (module.name, float(metrics.horizontalAdvance(module.name))) for module in visible
         ]
         rows.sort(key=lambda item: (-item[1], item[0].lower()))
 
@@ -7396,18 +7381,19 @@ class PolarRMWindow(QOpenGLWidget):
             return
 
         max_text_w = max(w for _, w in rows)
-        layer_w = int(math.ceil(max_text_w + pad_x * 2.0 + pad_right + 8.0))
-        layer_h = int(math.ceil(y0 + len(rows) * row_h + pad_y + 8.0))
+        layer_w = int(math.ceil(max_text_w + pad_x * 2.0 + pad_right + 10.0))
+        layer_h = int(math.ceil(y0 + len(rows) * row_h + pad_y + 10.0))
         layer_w = max(8, min(layer_w, max(8, int(width))))
         layer_h = max(8, layer_h)
-        # CPU 1:1 pixel buffer — jar antiAlias off; no GL font substitution.
+
+        # Paint soft plates + text at device scale without 2× downscale wash-out
+        # (downscale was killing arraylistshadow alpha in screenshots).
         layer = QImage(layer_w, layer_h, QImage.Format.Format_ARGB32_Premultiplied)
         layer.fill(0)
         ip = QPainter(layer)
         ip.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
-        # Glyph fills: light AA only on soft shadow stretch, not on pixel text.
-        ip.setRenderHint(QPainter.RenderHint.Antialiasing, False)
-        ip.setRenderHint(QPainter.RenderHint.TextAntialiasing, False)
+        ip.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
+        ip.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         ip.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
 
         shadow = self.arraylist_shadow_image()
@@ -7418,25 +7404,20 @@ class PolarRMWindow(QOpenGLWidget):
             local_x = screen_x - origin_x
             local_y = y0 + index * row_h
 
-            # Soft underlay first (arraylistshadow.png), jar color 1,1,1,0.7.
             dest = QRectF(local_x - pad_x, local_y - pad_y, text_w + pad_x * 2.0, row_h + pad_y * 2.0)
             if shadow is not None and not shadow.isNull():
-                ip.save()
-                ip.setOpacity(shadow_alpha)
                 ip.drawImage(dest, shadow)
-                ip.restore()
             else:
-                ip.fillRect(dest, QColor(0, 0, 0, 40))
+                ip.fillRect(dest, QColor(0, 0, 0, 90))
 
-            # Full white + MC pixel shadow on top of soft plate.
             self.draw_string_with_shadow_mc(
-                ip, name, local_x, local_y, main=QColor(255, 255, 255, 255),
+                ip, name, local_x, local_y, main=QColor(255, 255, 255, 255), text_w=text_w,
             )
         ip.end()
 
         p.save()
         p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
-        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, False)
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
         p.drawImage(QPointF(origin_x, 0.0), layer)
         p.restore()
 
