@@ -272,6 +272,8 @@ class PolarRMWindow(QOpenGLWidget):
         self.registry = build_default_registry()
         self.state = RobotState()
         self.combat_hud_animator = CombatHudAnimator()
+        # CPU fluorescent FOV ring cache: (radius_px, line_w, glow) → (image, half_extent).
+        self._fluorescent_circle_cache: dict[tuple[int, int, int], tuple[QImage, float]] = {}
         self._combat_hud_last_time = time.perf_counter()
         self.scenario_manager = ScenarioManager("LabDebug")
         self.match_mode_manager = MatchModeManager("RMUC7v7")
@@ -3901,12 +3903,13 @@ class PolarRMWindow(QOpenGLWidget):
                 p.drawLine(start, end)
 
         if glow > 0.01:
-            # Canvas shadowBlur stand-in (wider, weaker).
-            stroke(0.10 * glow * alpha, base_w + 2.5 * glow + 6.0 * glow)
-            # Soft AA pass (LINE_SMOOTH).
-            stroke(0.22 * glow * alpha, base_w + 2.5 * glow)
-        # Core jar stroke — RGB 1,1,1 opaque (scaled by alpha).
+            # Multi-pass pure white bloom (CPU/raster-safe; avoid fat single AA pass).
+            stroke(0.06 * glow * alpha, base_w + 8.0 * glow)
+            stroke(0.12 * glow * alpha, base_w + 4.0 * glow)
+            stroke(0.28 * glow * alpha, base_w + 1.8 * glow)
+        # Core jar stroke — RGB 1,1,1.
         stroke(1.0 * alpha, base_w)
+        stroke(0.55 * alpha, max(0.55, base_w * 0.45))
         p.restore()
 
     def draw_fluorescent_white_polyline(
@@ -3928,6 +3931,89 @@ class PolarRMWindow(QOpenGLWidget):
             p, segments, line_width=line_width, glow=glow, alpha=alpha, dashed=dashed,
         )
 
+    def rasterize_fluorescent_white_circle(
+        self,
+        radius: float,
+        *,
+        line_width: float = 1.15,
+        glow: float = 0.85,
+        alpha: float = 1.0,
+        supersample: float = 2.0,
+    ) -> tuple[QImage, float]:
+        """CPU-only fluorescent white ring (Debug Box ESP recipe).
+
+        Never call drawEllipse on an OpenGL paint device — Qt's AA path paints a
+        translucent rectangular atlas (the white square bug). Rasterize here,
+        then blit the premultiplied image.
+
+        Returns (image, half_extent_logical) so the caller can center the blit.
+        """
+        glow = max(0.0, min(1.0, float(glow)))
+        alpha = max(0.0, min(1.0, float(alpha)))
+        # Cache at full opacity; callers that need dimmed rings should pass alpha=1
+        # and multiply painter opacity instead.
+        cache_key = (
+            int(round(float(radius) * 2.0)),
+            int(round(float(line_width) * 100.0)),
+            int(round(glow * 100.0)),
+        )
+        if alpha >= 0.999 and cache_key in self._fluorescent_circle_cache:
+            return self._fluorescent_circle_cache[cache_key]
+
+        ss = max(1.0, float(supersample))
+        r = max(0.5, float(radius) * ss)
+        base_w = max(0.75, float(line_width) * ss)
+        # Outer bloom needs headroom so soft strokes are not clipped.
+        pad = base_w * 0.5 + (2.5 * glow + 8.0 * glow) * 0.5 + 3.0 * ss
+        half = int(math.ceil(r + pad))
+        size = max(8, half * 2)
+        image = QImage(size, size, QImage.Format.Format_ARGB32_Premultiplied)
+        image.fill(0)
+        ip = QPainter(image)
+        ip.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        ip.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+        ip.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
+        ip.setBrush(Qt.BrushStyle.NoBrush)
+        center = QPointF(size * 0.5, size * 0.5)
+
+        def stroke(a: float, width: float) -> None:
+            if a <= 0.001 or width <= 0.05:
+                return
+            pen = QPen(QColor(255, 255, 255, max(1, min(255, round(255.0 * a)))), width)
+            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+            pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+            ip.setPen(pen)
+            ip.drawEllipse(center, r, r)
+
+        # Multi-pass pure #FFFFFF bloom → core (stronger than thin demo default,
+        # still no cyan tint / no fill). Matches jar "fluorescent" AA look.
+        if glow > 0.01:
+            stroke(0.05 * glow * alpha, base_w + 12.0 * glow)
+            stroke(0.10 * glow * alpha, base_w + 7.0 * glow)
+            stroke(0.18 * glow * alpha, base_w + 3.8 * glow)
+            stroke(0.32 * glow * alpha, base_w + 1.8 * glow)
+        stroke(1.00 * alpha, base_w)
+        # Crisp inner filament so the ring reads bright, not chalky.
+        stroke(0.70 * alpha, max(0.65 * ss, base_w * 0.48))
+        ip.end()
+        if ss != 1.0:
+            out_w = max(1, int(round(size / ss)))
+            image = image.scaled(
+                out_w,
+                out_w,
+                Qt.AspectRatioMode.IgnoreAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+        half_logical = image.width() * 0.5
+        if alpha >= 0.999:
+            self._fluorescent_circle_cache[cache_key] = (image, half_logical)
+            # Bound cache growth when user scrubs Circle Size.
+            if len(self._fluorescent_circle_cache) > 48:
+                oldest = next(iter(self._fluorescent_circle_cache))
+                if oldest != cache_key:
+                    self._fluorescent_circle_cache.pop(oldest, None)
+        return image, half_logical
+
     def draw_fluorescent_white_ellipse(
         self,
         p: QPainter,
@@ -3935,47 +4021,45 @@ class PolarRMWindow(QOpenGLWidget):
         radius_x: float,
         radius_y: float | None = None,
         *,
-        line_width: float = 1.0,
-        glow: float = 0.35,
+        line_width: float = 1.15,
+        glow: float = 0.85,
         alpha: float = 1.0,
     ) -> None:
-        """Center FOV / circle frame using the same fluorescent-white stroke recipe."""
-        ry = float(radius_x if radius_y is None else radius_y)
+        """Fluorescent white ellipse via CPU raster + blit (never GL drawEllipse)."""
         rx = max(0.5, float(radius_x))
-        ry = max(0.5, ry)
-        base_w = max(0.5, float(line_width))
-        glow = max(0.0, min(1.0, float(glow)))
-        alpha = max(0.0, min(1.0, float(alpha)))
+        ry = max(0.5, float(radius_x if radius_y is None else radius_y))
+        # Non-circle ellipses fall back to segment approximation on CPU image later if needed.
+        radius = max(rx, ry)
+        image, half = self.rasterize_fluorescent_white_circle(
+            radius, line_width=line_width, glow=glow, alpha=alpha, supersample=2.0,
+        )
+        if rx != ry and ry > 0.5:
+            # Scale Y for ellipse while keeping X radius.
+            target = QRectF(center.x() - half * (rx / radius), center.y() - half * (ry / radius),
+                            half * 2.0 * (rx / radius), half * 2.0 * (ry / radius))
+        else:
+            target = QRectF(center.x() - half, center.y() - half, half * 2.0, half * 2.0)
         p.save()
-        p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        p.setBrush(Qt.BrushStyle.NoBrush)
-
-        def stroke(a: float, width: float) -> None:
-            if a <= 0.001:
-                return
-            pen = QPen(QColor(255, 255, 255, max(1, min(255, round(255.0 * a)))), width)
-            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-            pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
-            p.setPen(pen)
-            p.drawEllipse(center, rx, ry)
-
-        if glow > 0.01:
-            stroke(0.10 * glow * alpha, base_w + 2.5 * glow + 6.0 * glow)
-            stroke(0.22 * glow * alpha, base_w + 2.5 * glow)
-        stroke(1.0 * alpha, base_w)
+        p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+        p.drawImage(target, image)
         p.restore()
 
     def draw_armor_fov_circle(self, p: QPainter, width: int, height: int, module: Module | None) -> None:
-        """Screen-center fluorescent white circle; size from ClickGUI Circle Size."""
+        """Screen-center fluorescent white FOV ring; size from ClickGUI Circle Size.
+
+        CPU-rasterized so the OpenGL paint engine cannot leave a white square
+        atlas around the ring.
+        """
         if module is None or not module.enabled:
             return
         if not self.setting_bool(module, "Draw Fov", True):
             return
         radius = max(8.0, self.get_setting_number(module, "Circle Size", 160.0))
         center = QPointF(width * 0.5, height * 0.5)
-        # jar lineWidth 1.0; glow default matches visual-demo slider 0.35.
+        # Stronger glow than thin canvas default so it reads as jar fluorescent white.
         self.draw_fluorescent_white_ellipse(
-            p, center, radius, line_width=1.0, glow=0.35, alpha=1.0,
+            p, center, radius, line_width=1.15, glow=0.90, alpha=1.0,
         )
 
     def draw_white_outline_lock(self, p: QPainter, rect: QRectF, target: VisionTarget, locked: bool) -> None:
@@ -3991,7 +4075,7 @@ class PolarRMWindow(QOpenGLWidget):
             rect.bottomLeft() + QPointF(0.5, -0.5),
         ]
         self.draw_fluorescent_white_polyline(
-            p, corners, closed=True, line_width=1.0, glow=0.35, alpha=alpha,
+            p, corners, closed=True, line_width=1.0, glow=0.85, alpha=alpha,
         )
         corner = min(22.0, rect.width() * 0.22)
         corner_segs: list[tuple[QPointF, QPointF]] = []
@@ -4007,7 +4091,7 @@ class PolarRMWindow(QOpenGLWidget):
         ):
             corner_segs.append((start, start + QPointF(dx, dy)))
         self.draw_fluorescent_white_segments(
-            p, corner_segs, line_width=1.15, glow=0.35, alpha=alpha,
+            p, corner_segs, line_width=1.15, glow=0.85, alpha=alpha,
         )
         check_origin = QPointF(rect.right() - 18, rect.top() + 12)
         p.setPen(QPen(accent, 1.8))
@@ -4105,7 +4189,7 @@ class PolarRMWindow(QOpenGLWidget):
             edges.append((back[i], back[(i + 1) % 4]))
             edges.append((front[i], back[i]))
         self.draw_fluorescent_white_segments(
-            p, edges, line_width=base_w, glow=0.35, alpha=alpha, dashed=ghost,
+            p, edges, line_width=base_w, glow=0.85, alpha=alpha, dashed=ghost,
         )
         if label:
             box = front_poly.boundingRect()
@@ -4166,7 +4250,7 @@ class PolarRMWindow(QOpenGLWidget):
             edges.append((back[i], back[(i + 1) % 4]))
             edges.append((front[i], back[i]))
         self.draw_fluorescent_white_segments(
-            p, edges, line_width=base_w, glow=0.35, alpha=alpha, dashed=ghost,
+            p, edges, line_width=base_w, glow=0.85, alpha=alpha, dashed=ghost,
         )
         if label:
             box = front_poly.boundingRect()
@@ -4205,7 +4289,7 @@ class PolarRMWindow(QOpenGLWidget):
         alpha = 0.46 if predicted else 1.0
         # jar glLineWidth(1.0); module default Line Width 2.0 → base 1.0.
         base_w = max(0.75, float(line_width) * 0.5 * (0.85 if predicted else 1.0))
-        glow = 0.35
+        glow = 0.85
 
         if len(back) == 4:
             back_edges = [(back[i], back[(i + 1) % 4]) for i in range(4)]
@@ -4274,7 +4358,7 @@ class PolarRMWindow(QOpenGLWidget):
         alpha = max(0.0, min(1.0, float(alpha)))
         # jar lineWidth 1.0; module Line Width default 2.0 → base ~1.0.
         core_width = max(0.75, float(width) * 0.5 * (0.85 if predicted else 1.0))
-        glow = 0.35
+        glow = 0.85
         if len(back) == 4:
             batch.fluorescent_polyline(
                 back,
