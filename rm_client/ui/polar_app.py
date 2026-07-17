@@ -4712,6 +4712,13 @@ class PolarRMWindow(QOpenGLWidget):
         p.drawLine(QPointF(cx, cy + 6), QPointF(cx, cy + size))
 
     def draw_chassis_gimbal_indicator(self, p: QPainter, width: int, height: int) -> None:
+        """Bottom chassis/gimbal compass (main & gestalt-lab layout).
+
+        IMPORTANT: never stroke this widget with QPainter directly onto an
+        OpenGL paint device.  On the GPU dynamic FBO, Qt's AA path turns the
+        hull and barrel into opaque stacked tiles (what users saw as "abstract
+        blocks").  Always CPU-raster a tiny QImage, then blit once.
+        """
         module = self.registry.get("ChassisGimbalIndicator")
         if module is None or not module.enabled:
             return
@@ -4731,18 +4738,51 @@ class PolarRMWindow(QOpenGLWidget):
         micro = self.hud_density() == "CombatCompact"
 
         if micro:
-            size = min(size, 56.0)
-            center = QPointF(width / 2.0, height - 98.0)
+            size = min(max(48.0, size), 64.0)
+            center = QPointF(width / 2.0, height - 86.0)
             active = self.anim.value("hud.chassis_gimbal.micro", 1.0, self.anim_duration(0.20), Easings.ease_out_pow4, initial=0.0)
+            pad = 14.0
+            img_w = int(math.ceil(size * 1.55 + pad * 2))
+            img_h = int(math.ceil(size * 1.65 + pad * 2))
+            origin = QPointF(center.x() - img_w * 0.5, center.y() - img_h * 0.5)
+            image = QImage(img_w, img_h, QImage.Format.Format_ARGB32_Premultiplied)
+            image.fill(0)
+            ip = QPainter(image)
+            ip.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+            ip.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
+            ip.translate(-origin.x(), -origin.y())
+            # Readable disc under thin strokes (CombatCompact default path).
+            disc = QPainterPath()
+            disc.addEllipse(center, size * 0.54, size * 0.54)
+            ip.fillPath(disc, color("#05080e", 0.72))
+            ip.setPen(QPen(color("#ffffff", 0.12 + 0.08 * alert), 1.1))
+            ip.setBrush(Qt.BrushStyle.NoBrush)
+            ip.drawEllipse(center, size * 0.54, size * 0.54)
+            self.draw_chassis_gimbal_compass_base(ip, center, size * 0.40, style, spin, pulse)
+            self.draw_chassis_body_direction(ip, center, size, chassis_yaw, style, spin, pulse)
+            self.draw_gimbal_turret_direction(ip, center, size, gimbal_yaw, alert)
+            if show_angle or alert > 0.66:
+                self.draw_text(
+                    ip,
+                    QRectF(center.x() - 40, center.y() + size * 0.46, 80, 14),
+                    f"{relative_yaw:+.0f}°",
+                    self.font("poppins_medium", 7.4),
+                    self.hud_accent() if alert < 0.66 else self.hud_warning(),
+                    Qt.AlignmentFlag.AlignCenter,
+                )
+            if show_mode:
+                self.draw_text(
+                    ip,
+                    QRectF(center.x() - 40, center.y() - size * 0.68, 80, 12),
+                    mode_text,
+                    self.font("poppins_medium", 6.6),
+                    self.hud_warning() if spin else THEME.muted,
+                    Qt.AlignmentFlag.AlignCenter,
+                )
+            ip.end()
             p.save()
             p.setOpacity(active)
-            self.draw_chassis_gimbal_compass_base(p, center, size * 0.43, style, spin, pulse)
-            self.draw_chassis_body_direction(p, center, size, chassis_yaw, style, spin, pulse)
-            self.draw_gimbal_turret_direction(p, center, size, gimbal_yaw, alert)
-            if show_angle or alert > 0.66:
-                self.draw_text(p, QRectF(center.x() - 36, center.y() + size * 0.42, 72, 13), f"{relative_yaw:+.0f}°", self.font("poppins_medium", 7.2), self.hud_accent() if alert < 0.66 else self.hud_warning(), Qt.AlignmentFlag.AlignCenter)
-            if show_mode:
-                self.draw_text(p, QRectF(center.x() - 36, center.y() - size * 0.62, 72, 11), mode_text, self.font("poppins_medium", 6.5), THEME.muted, Qt.AlignmentFlag.AlignCenter)
+            p.drawImage(origin, image)
             p.restore()
             return
 
@@ -4753,34 +4793,53 @@ class PolarRMWindow(QOpenGLWidget):
         rect = QRectF(x, y, panel_w, panel_h)
         active = self.anim.value("hud.chassis_gimbal.panel", 1.0, self.anim_duration(0.24), Easings.ease_out_pow4, initial=0.0)
 
-        p.save()
-        p.setOpacity(active)
-        # Layout/geometry follows main & gestalt-lab.  Avoid MainGlass here: on the
-        # GPU dynamic FBO it collapses into a muddy gold tile under the hull.
+        img_w = int(math.ceil(panel_w)) + 6
+        img_h = int(math.ceil(panel_h)) + 6
+        origin = QPointF(x - 3.0, y - 3.0)
+        image = QImage(img_w, img_h, QImage.Format.Format_ARGB32_Premultiplied)
+        image.fill(0)
+        ip = QPainter(image)
+        ip.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        ip.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
+        ip.translate(-origin.x(), -origin.y())
+
+        # Dark frosted plate (main/gestalt layout; no MainGlass on GPU FBO).
         if self.hud_clean():
-            rounded_rect(p, rect, 10, color("#070b12", 0.74), color("#ffffff", 0.12 + 0.06 * alert), 1.15)
+            rounded_rect(ip, rect, 10, color("#070b12", 0.78), color("#ffffff", 0.13 + 0.06 * alert), 1.15)
             inner = rect.adjusted(1.2, 1.2, -1.2, -1.2)
-            rounded_rect(p, inner, 9, color("#ffffff", 0.03), color("#ffffff", 0.04), 1.0)
+            rounded_rect(ip, inner, 9, color("#ffffff", 0.035), color("#ffffff", 0.045), 1.0)
         else:
-            glow_rect(p, rect, 10, 0.10 * alert)
-            rounded_rect(p, rect, 9, self.hud_surface(0.64), self.hud_panel_outline(0.08 + 0.08 * alert))
+            glow_rect(ip, rect, 10, 0.10 * alert)
+            rounded_rect(ip, rect, 9, self.hud_surface(0.64), self.hud_panel_outline(0.08 + 0.08 * alert))
         top_line = QLinearGradient(rect.left() + 14, rect.top() + 5, rect.right() - 14, rect.top() + 5)
         top_line.setColorAt(0.0, with_alpha(self.hud_accent(), 0.25 + 0.30 * alert))
         top_line.setColorAt(1.0, with_alpha(self.hud_warning() if alert > 0.55 else self.hud_accent(), 0.18 + 0.34 * alert))
-        p.setPen(QPen(QBrush(top_line), 1.6))
-        p.drawLine(QPointF(rect.left() + 16, rect.top() + 5), QPointF(rect.right() - 16, rect.top() + 5))
+        ip.setPen(QPen(QBrush(top_line), 1.6))
+        ip.drawLine(QPointF(rect.left() + 16, rect.top() + 5), QPointF(rect.right() - 16, rect.top() + 5))
 
         center = QPointF(rect.center().x(), rect.top() + 18.0 + size * 0.48)
         radius = size * 0.43
-        self.draw_chassis_gimbal_compass_base(p, center, radius, style, spin, pulse)
-        self.draw_chassis_body_direction(p, center, size, chassis_yaw, style, spin, pulse)
-        self.draw_gimbal_turret_direction(p, center, size, gimbal_yaw, alert)
+        self.draw_chassis_gimbal_compass_base(ip, center, radius, style, spin, pulse)
+        self.draw_chassis_body_direction(ip, center, size, chassis_yaw, style, spin, pulse)
+        self.draw_gimbal_turret_direction(ip, center, size, gimbal_yaw, alert)
 
         if show_angle:
             angle_text = f"REL {relative_yaw:+.0f}°"
-            self.draw_text(p, QRectF(rect.left() + 11, rect.bottom() - 24, rect.width() * 0.56, 16), angle_text, self.font("poppins_medium", 7.6), THEME.text)
+            self.draw_text(ip, QRectF(rect.left() + 11, rect.bottom() - 24, rect.width() * 0.56, 16), angle_text, self.font("poppins_medium", 7.6), THEME.text)
         if show_mode:
-            self.draw_text(p, QRectF(rect.right() - 64, rect.bottom() - 24, 52, 16), mode_text, self.font("poppins_medium", 7.4), self.hud_warning() if spin else THEME.muted, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            self.draw_text(
+                ip,
+                QRectF(rect.right() - 64, rect.bottom() - 24, 52, 16),
+                mode_text,
+                self.font("poppins_medium", 7.4),
+                self.hud_warning() if spin else THEME.muted,
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+            )
+        ip.end()
+
+        p.save()
+        p.setOpacity(active)
+        p.drawImage(origin, image)
         p.restore()
 
     def draw_chassis_gimbal_compass_base(self, p: QPainter, center: QPointF, radius: float, style: str, spin: bool, pulse: float) -> None:
