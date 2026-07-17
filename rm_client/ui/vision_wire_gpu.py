@@ -102,22 +102,39 @@ class VisionWireBatch:
         alpha: float = 1.0,
         closed: bool = False,
         dashed: bool = False,
+        glow: float = 0.35,
     ) -> None:
+        """Debug Box ESP fluorescent white (esp-box-white.html drawBoxEdges).
+
+        Pure RGB 1,1,1 core at ``width``; soft pass = α(0.22·glow) and width+2.5·glow.
+        """
         alpha = max(0.0, min(1.0, float(alpha)))
+        glow = max(0.0, min(1.0, float(glow)))
+        base_w = max(0.5, float(width))
         dash = 7.0 if dashed else 0.0
         gap = 5.0 if dashed else 0.0
+        if glow > 0.01:
+            # Outer soft stand-in for canvas shadowBlur.
+            self.polyline(
+                points,
+                QColor(255, 255, 255, max(1, round(255 * 0.10 * glow * alpha))),
+                base_w + 2.5 * glow + 6.0 * glow,
+                closed=closed,
+                dash_length=dash,
+                gap_length=gap,
+            )
+            self.polyline(
+                points,
+                QColor(255, 255, 255, max(1, round(255 * 0.22 * glow * alpha))),
+                base_w + 2.5 * glow,
+                closed=closed,
+                dash_length=dash,
+                gap_length=gap,
+            )
         self.polyline(
             points,
-            QColor(255, 255, 255, round(42 * alpha)),
-            width + 2.4,
-            closed=closed,
-            dash_length=dash,
-            gap_length=gap,
-        )
-        self.polyline(
-            points,
-            QColor(255, 255, 255, round(255 * alpha)),
-            width,
+            QColor(255, 255, 255, max(1, round(255 * alpha))),
+            base_w,
             closed=closed,
             dash_length=dash,
             gap_length=gap,
@@ -131,24 +148,36 @@ class VisionWireBatch:
         width: float,
         alpha: float = 1.0,
         dashed: bool = False,
+        glow: float = 0.35,
     ) -> None:
-        """Append a white core and a narrow neutral-white halo."""
+        """Single-edge fluorescent white (same formula as fluorescent_polyline)."""
         alpha = max(0.0, min(1.0, float(alpha)))
+        glow = max(0.0, min(1.0, float(glow)))
+        base_w = max(0.5, float(width))
         dash = 7.0 if dashed else 0.0
         gap = 5.0 if dashed else 0.0
+        if glow > 0.01:
+            self.line(
+                start,
+                end,
+                QColor(255, 255, 255, max(1, round(255 * 0.10 * glow * alpha))),
+                base_w + 2.5 * glow + 6.0 * glow,
+                dash_length=dash,
+                gap_length=gap,
+            )
+            self.line(
+                start,
+                end,
+                QColor(255, 255, 255, max(1, round(255 * 0.22 * glow * alpha))),
+                base_w + 2.5 * glow,
+                dash_length=dash,
+                gap_length=gap,
+            )
         self.line(
             start,
             end,
-            QColor(255, 255, 255, round(42 * alpha)),
-            width + 2.4,
-            dash_length=dash,
-            gap_length=gap,
-        )
-        self.line(
-            start,
-            end,
-            QColor(255, 255, 255, round(255 * alpha)),
-            width,
+            QColor(255, 255, 255, max(1, round(255 * alpha))),
+            base_w,
             dash_length=dash,
             gap_length=gap,
         )

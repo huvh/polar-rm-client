@@ -1584,6 +1584,8 @@ class PolarRMWindow(QOpenGLWidget):
                     "armor",
                 )
                 self.draw_target_overlay(p, mock_armor, armor_module)
+            # Fluorescent-white FOV circle (ClickGUI: Draw Fov + Circle Size).
+            self.draw_armor_fov_circle(p, logical_width, logical_height, armor_module)
 
         energy_module = self.registry.get("EnergyAutoAim")
         if energy_module and energy_module.enabled and self._vision_source == "Mock":
@@ -3769,15 +3771,138 @@ class PolarRMWindow(QOpenGLWidget):
         label = self.target_overlay_label(target)
         self.draw_pill(p, QPointF(rect.left(), rect.top() - 27), label, main)
 
+    def draw_fluorescent_white_segments(
+        self,
+        p: QPainter,
+        segments: list[tuple[QPointF, QPointF]],
+        *,
+        line_width: float = 1.0,
+        glow: float = 0.35,
+        alpha: float = 1.0,
+        dashed: bool = False,
+    ) -> None:
+        """Debug 3D Box ESP fluorescent white (visual-demo esp-box-white.html).
+
+        Pure #FFFFFF core at ``line_width`` (~1.0 jar). Soft pass:
+        alpha = 0.22 * glow, width = line_width + 2.5 * glow, round caps.
+        No fill, no pulse, no cyan tint.
+        """
+        if not segments:
+            return
+        base_w = max(0.5, float(line_width))
+        glow = max(0.0, min(1.0, float(glow)))
+        alpha = max(0.0, min(1.0, float(alpha)))
+        style = Qt.PenStyle.DashLine if dashed else Qt.PenStyle.SolidLine
+        p.save()
+        p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        p.setBrush(Qt.BrushStyle.NoBrush)
+
+        def stroke(a: float, width: float) -> None:
+            if a <= 0.001 or width <= 0.01:
+                return
+            pen = QPen(QColor(255, 255, 255, max(1, min(255, round(255.0 * a)))), width)
+            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+            pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+            pen.setStyle(style)
+            p.setPen(pen)
+            for start, end in segments:
+                p.drawLine(start, end)
+
+        if glow > 0.01:
+            # Canvas shadowBlur stand-in (wider, weaker).
+            stroke(0.10 * glow * alpha, base_w + 2.5 * glow + 6.0 * glow)
+            # Soft AA pass (LINE_SMOOTH).
+            stroke(0.22 * glow * alpha, base_w + 2.5 * glow)
+        # Core jar stroke — RGB 1,1,1 opaque (scaled by alpha).
+        stroke(1.0 * alpha, base_w)
+        p.restore()
+
+    def draw_fluorescent_white_polyline(
+        self,
+        p: QPainter,
+        points: list[QPointF],
+        *,
+        closed: bool = True,
+        line_width: float = 1.0,
+        glow: float = 0.35,
+        alpha: float = 1.0,
+        dashed: bool = False,
+    ) -> None:
+        if len(points) < 2:
+            return
+        limit = len(points) if closed else len(points) - 1
+        segments = [(points[i], points[(i + 1) % len(points)]) for i in range(limit)]
+        self.draw_fluorescent_white_segments(
+            p, segments, line_width=line_width, glow=glow, alpha=alpha, dashed=dashed,
+        )
+
+    def draw_fluorescent_white_ellipse(
+        self,
+        p: QPainter,
+        center: QPointF,
+        radius_x: float,
+        radius_y: float | None = None,
+        *,
+        line_width: float = 1.0,
+        glow: float = 0.35,
+        alpha: float = 1.0,
+    ) -> None:
+        """Center FOV / circle frame using the same fluorescent-white stroke recipe."""
+        ry = float(radius_x if radius_y is None else radius_y)
+        rx = max(0.5, float(radius_x))
+        ry = max(0.5, ry)
+        base_w = max(0.5, float(line_width))
+        glow = max(0.0, min(1.0, float(glow)))
+        alpha = max(0.0, min(1.0, float(alpha)))
+        p.save()
+        p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        p.setBrush(Qt.BrushStyle.NoBrush)
+
+        def stroke(a: float, width: float) -> None:
+            if a <= 0.001:
+                return
+            pen = QPen(QColor(255, 255, 255, max(1, min(255, round(255.0 * a)))), width)
+            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+            pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+            p.setPen(pen)
+            p.drawEllipse(center, rx, ry)
+
+        if glow > 0.01:
+            stroke(0.10 * glow * alpha, base_w + 2.5 * glow + 6.0 * glow)
+            stroke(0.22 * glow * alpha, base_w + 2.5 * glow)
+        stroke(1.0 * alpha, base_w)
+        p.restore()
+
+    def draw_armor_fov_circle(self, p: QPainter, width: int, height: int, module: Module | None) -> None:
+        """Screen-center fluorescent white circle; size from ClickGUI Circle Size."""
+        if module is None or not module.enabled:
+            return
+        if not self.setting_bool(module, "Draw Fov", True):
+            return
+        radius = max(8.0, self.get_setting_number(module, "Circle Size", 160.0))
+        center = QPointF(width * 0.5, height * 0.5)
+        # jar lineWidth 1.0; glow default matches visual-demo slider 0.35.
+        self.draw_fluorescent_white_ellipse(
+            p, center, radius, line_width=1.0, glow=0.35, alpha=1.0,
+        )
+
     def draw_white_outline_lock(self, p: QPainter, rect: QRectF, target: VisionTarget, locked: bool) -> None:
-        main = color("#ffffff", 0.94 if locked else 0.62)
+        alpha = 0.94 if locked else 0.62
         accent = self.hud_accent() if locked else self.hud_danger()
         p.save()
         p.setBrush(Qt.BrushStyle.NoBrush)
-        p.setPen(QPen(main, 1.25))
-        p.drawRect(rect.adjusted(0.5, 0.5, -0.5, -0.5))
+        # Full fluorescent white box outline (Debug Box ESP recipe).
+        corners = [
+            rect.topLeft() + QPointF(0.5, 0.5),
+            rect.topRight() + QPointF(-0.5, 0.5),
+            rect.bottomRight() + QPointF(-0.5, -0.5),
+            rect.bottomLeft() + QPointF(0.5, -0.5),
+        ]
+        self.draw_fluorescent_white_polyline(
+            p, corners, closed=True, line_width=1.0, glow=0.35, alpha=alpha,
+        )
         corner = min(22.0, rect.width() * 0.22)
-        p.setPen(QPen(main, 2.1))
+        corner_segs: list[tuple[QPointF, QPointF]] = []
         for start, dx, dy in (
             (rect.topLeft(), corner, 0),
             (rect.topLeft(), 0, corner),
@@ -3788,12 +3913,20 @@ class PolarRMWindow(QOpenGLWidget):
             (rect.bottomRight(), -corner, 0),
             (rect.bottomRight(), 0, -corner),
         ):
-            p.drawLine(start, start + QPointF(dx, dy))
+            corner_segs.append((start, start + QPointF(dx, dy)))
+        self.draw_fluorescent_white_segments(
+            p, corner_segs, line_width=1.15, glow=0.35, alpha=alpha,
+        )
         check_origin = QPointF(rect.right() - 18, rect.top() + 12)
         p.setPen(QPen(accent, 1.8))
         p.drawLine(check_origin + QPointF(-7, 0), check_origin + QPointF(-2, 5))
         p.drawLine(check_origin + QPointF(-2, 5), check_origin + QPointF(8, -7))
-        self.draw_pill(p, QPointF(rect.left(), rect.top() - 27), self.target_overlay_label(target), main)
+        self.draw_pill(
+            p,
+            QPointF(rect.left(), rect.top() - 27),
+            self.target_overlay_label(target),
+            color("#ffffff", alpha),
+        )
         p.restore()
 
     def draw_minimal_bracket_lock(self, p: QPainter, rect: QRectF, target: VisionTarget, locked: bool) -> None:
@@ -3867,57 +4000,28 @@ class PolarRMWindow(QOpenGLWidget):
     def draw_3d_esp_box(self, p: QPainter, front: list[QPointF], back: list[QPointF], c: QColor, line_width: float, *, glass: bool, ghost: bool, label: str | None = None) -> None:
         if len(front) != 4 or len(back) != 4:
             return
-        front_poly, back_poly = QPolygonF(front), QPolygonF(back)
-        p.save()
-        p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        dash = Qt.PenStyle.DashLine if ghost else Qt.PenStyle.SolidLine
-        if glass and not ghost:
-            # Glass 仅保留两块最可见侧面，避免四个平面都叠在一起发脏。
-            for index in (0, 1):
-                following = (index + 1) % 4
-                side = QPolygonF([front[index], front[following], back[following], back[index]])
-                gradient = QLinearGradient(side.boundingRect().topLeft(), side.boundingRect().bottomRight())
-                gradient.setColorAt(0.0, with_alpha(c, 0.035))
-                gradient.setColorAt(1.0, with_alpha(c, 0.15))
-                p.setPen(Qt.PenStyle.NoPen)
-                p.setBrush(QBrush(gradient))
-                p.drawPolygon(side)
-            gradient = QLinearGradient(front_poly.boundingRect().topLeft(), front_poly.boundingRect().bottomRight())
-            gradient.setColorAt(0.0, with_alpha(c, 0.12))
-            gradient.setColorAt(1.0, with_alpha(c, 0.015))
-            p.setBrush(QBrush(gradient))
-            p.setPen(Qt.PenStyle.NoPen)
-            p.drawPolygon(front_poly)
-
-        # POLAR 线框层级：弱背框、少量深度棱、强前角标。
-        p.setBrush(Qt.BrushStyle.NoBrush)
-        p.setPen(QPen(with_alpha(c, 0.22 if ghost else 0.34), max(0.75, line_width * 0.55), dash, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
-        p.drawPolygon(back_poly)
-        p.setPen(QPen(with_alpha(c, 0.42 if ghost else 0.56), max(0.75, line_width * 0.65), dash, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
-        for index in (0, 2):
-            p.drawLine(front[index], back[index])
-        p.setPen(QPen(c, max(0.9, line_width * (0.70 if ghost else 0.82)), dash, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+        front_poly = QPolygonF(front)
+        # jar base width 1.0; module Line Width defaults to 2.0 → map to ~1.0.
+        base_w = max(0.75, float(line_width) * 0.5)
+        alpha = max(0.15, min(1.0, c.alphaF() if isinstance(c, QColor) else 1.0))
         if ghost:
-            p.drawPolygon(front_poly)
-        else:
-            # 实体板只留四个角标，不再把一整张前脸描两遍。
-            for index, point in enumerate(front):
-                previous = front[(index - 1) % 4]
-                following = front[(index + 1) % 4]
-                for neighbor in (previous, following):
-                    vector = neighbor - point
-                    length = math.hypot(vector.x(), vector.y())
-                    if length <= 0.01:
-                        continue
-                    segment = min(10.0, max(3.0, length * 0.22)) / length
-                    p.drawLine(point, point + QPointF(vector.x() * segment, vector.y() * segment))
-        p.restore()
+            alpha *= 0.72
+        # Full 12-edge outlined box — fluorescent white only (no fill default).
+        edges: list[tuple[QPointF, QPointF]] = []
+        for i in range(4):
+            edges.append((front[i], front[(i + 1) % 4]))
+            edges.append((back[i], back[(i + 1) % 4]))
+            edges.append((front[i], back[i]))
+        self.draw_fluorescent_white_segments(
+            p, edges, line_width=base_w, glow=0.35, alpha=alpha, dashed=ghost,
+        )
         if label:
             box = front_poly.boundingRect()
+            white = color("#ffffff", alpha)
             if ghost:
-                self.draw_text(p, QRectF(box.left(), box.top() - 16, 44, 13), label, self.font("poppins_medium", 7.0), c)
+                self.draw_text(p, QRectF(box.left(), box.top() - 16, 44, 13), label, self.font("poppins_medium", 7.0), white)
             else:
-                self.draw_pill(p, QPointF(box.left(), box.top() - 22), label, c)
+                self.draw_pill(p, QPointF(box.left(), box.top() - 22), label, white)
 
     @staticmethod
     def constrain_prediction_geometry(
@@ -3956,39 +4060,29 @@ class PolarRMWindow(QOpenGLWidget):
         ghost: bool,
         label: str | None = None,
     ) -> None:
-        """绘制轻量角框，避免预测面变成大面积实心色块。"""
+        """Outlined 3D armor box — fluorescent white wire only (no solid faces)."""
         if len(front) != 4 or len(back) != 4:
             return
-        front_poly, back_poly = QPolygonF(front), QPolygonF(back)
-        dash = Qt.PenStyle.DashLine if ghost else Qt.PenStyle.SolidLine
-        p.save()
-        p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        if glass and not ghost:
-            p.setPen(Qt.PenStyle.NoPen)
-            p.setBrush(with_alpha(c, 0.028))
-            p.drawPolygon(front_poly)
-        p.setBrush(Qt.BrushStyle.NoBrush)
-        p.setPen(QPen(with_alpha(c, 0.18 if ghost else 0.30), max(0.7, line_width * 0.48), dash, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
-        p.drawPolygon(back_poly)
-        p.setPen(QPen(with_alpha(c, 0.38 if ghost else 0.54), max(0.75, line_width * 0.58), dash, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
-        for index in (0, 2):
-            p.drawLine(front[index], back[index])
-        p.setPen(QPen(c, max(0.85, line_width * (0.62 if ghost else 0.82)), dash, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
-        for index, point in enumerate(front):
-            for neighbor in (front[(index - 1) % 4], front[(index + 1) % 4]):
-                vector = neighbor - point
-                length = math.hypot(vector.x(), vector.y())
-                if length <= 0.01:
-                    continue
-                segment = min(9.0 if ghost else 12.0, max(3.0, length * 0.24)) / length
-                p.drawLine(point, point + QPointF(vector.x() * segment, vector.y() * segment))
-        p.restore()
+        front_poly = QPolygonF(front)
+        base_w = max(0.75, float(line_width) * 0.5)
+        alpha = max(0.15, min(1.0, c.alphaF() if isinstance(c, QColor) else 1.0))
+        if ghost:
+            alpha *= 0.72
+        edges: list[tuple[QPointF, QPointF]] = []
+        for i in range(4):
+            edges.append((front[i], front[(i + 1) % 4]))
+            edges.append((back[i], back[(i + 1) % 4]))
+            edges.append((front[i], back[i]))
+        self.draw_fluorescent_white_segments(
+            p, edges, line_width=base_w, glow=0.35, alpha=alpha, dashed=ghost,
+        )
         if label:
             box = front_poly.boundingRect()
+            white = color("#ffffff", alpha)
             if ghost:
-                self.draw_text(p, QRectF(box.left(), box.top() - 16, 44, 13), label, self.font("poppins_medium", 7.0), c)
+                self.draw_text(p, QRectF(box.left(), box.top() - 16, 44, 13), label, self.font("poppins_medium", 7.0), white)
             else:
-                self.draw_pill(p, QPointF(box.left(), box.top() - 22), label, c)
+                self.draw_pill(p, QPointF(box.left(), box.top() - 22), label, white)
 
     def draw_polar_mechanical_wire(
         self,
@@ -4001,7 +4095,11 @@ class PolarRMWindow(QOpenGLWidget):
         predicted: bool,
         label: str | None = None,
     ) -> None:
-        """绘制无填充的机械装甲线框，避免预测面形成半透明色块。"""
+        """Mechanical armor wireframe — Debug Box ESP fluorescent white 1:1.
+
+        Pure #FFFFFF soft+core strokes only; no fill faces. Matches
+        visual-demo/esp-box-white.html (glow=0.35, base width ~1.0).
+        """
         if len(front) != 4:
             return
 
@@ -4013,40 +4111,38 @@ class PolarRMWindow(QOpenGLWidget):
 
         front_poly = QPolygonF(front)
         alpha = 0.46 if predicted else 1.0
-        dash = Qt.PenStyle.DashLine if predicted else Qt.PenStyle.SolidLine
-        width = max(0.8, line_width * (0.72 if predicted else 0.92))
-        p.save()
-        p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        p.setBrush(Qt.BrushStyle.NoBrush)
+        # jar glLineWidth(1.0); module default Line Width 2.0 → base 1.0.
+        base_w = max(0.75, float(line_width) * 0.5 * (0.85 if predicted else 1.0))
+        glow = 0.35
 
         if len(back) == 4:
-            back_poly = QPolygonF(back)
-            p.setPen(QPen(color("#ffffff", alpha * 0.18), max(0.65, width * 0.62), Qt.PenStyle.DashLine))
-            p.drawPolygon(back_poly)
-            p.setPen(QPen(color("#ffffff", alpha * 0.24), max(0.7, width * 0.68), Qt.PenStyle.DashLine))
-            for index in range(4):
-                p.drawLine(front[index], back[index])
+            back_edges = [(back[i], back[(i + 1) % 4]) for i in range(4)]
+            depth_edges = [(front[i], back[i]) for i in range(4)]
+            self.draw_fluorescent_white_segments(
+                p, back_edges, line_width=base_w * 0.85, glow=glow, alpha=alpha * 0.55, dashed=True,
+            )
+            self.draw_fluorescent_white_segments(
+                p, depth_edges, line_width=base_w * 0.9, glow=glow, alpha=alpha * 0.65, dashed=True,
+            )
 
-        glow_alpha = 0.16 if predicted else 0.28
-        p.setPen(QPen(color("#ffffff", glow_alpha), width + 4.0, dash, Qt.PenCapStyle.FlatCap, Qt.PenJoinStyle.MiterJoin))
-        p.drawPolygon(front_poly)
-        p.setPen(QPen(color("#ffffff", 0.30 if predicted else 0.62), width + 1.8, dash, Qt.PenCapStyle.FlatCap, Qt.PenJoinStyle.MiterJoin))
-        p.drawPolygon(front_poly)
-        p.setPen(QPen(color("#ffffff", alpha), width, dash, Qt.PenCapStyle.FlatCap, Qt.PenJoinStyle.MiterJoin))
-        p.drawPolygon(front_poly)
+        self.draw_fluorescent_white_polyline(
+            p, front, closed=True, line_width=base_w, glow=glow, alpha=alpha, dashed=predicted,
+        )
 
         edge_lengths = [
             math.hypot(front[(index + 1) % 4].x() - front[index].x(), front[(index + 1) % 4].y() - front[index].y())
             for index in range(4)
         ]
-        p.setPen(QPen(color("#ffffff", alpha * 0.68), max(0.65, width * 0.72), dash, Qt.PenCapStyle.FlatCap))
+        brace: list[tuple[QPointF, QPointF]] = []
         if edge_lengths[0] + edge_lengths[2] >= edge_lengths[1] + edge_lengths[3]:
             for amount in (0.24, 0.76):
-                p.drawLine(lerp(front[0], front[1], amount), lerp(front[3], front[2], amount))
+                brace.append((lerp(front[0], front[1], amount), lerp(front[3], front[2], amount)))
         else:
             for amount in (0.24, 0.76):
-                p.drawLine(lerp(front[1], front[2], amount), lerp(front[0], front[3], amount))
-        p.restore()
+                brace.append((lerp(front[1], front[2], amount), lerp(front[0], front[3], amount)))
+        self.draw_fluorescent_white_segments(
+            p, brace, line_width=max(0.65, base_w * 0.72), glow=glow, alpha=alpha * 0.68, dashed=predicted,
+        )
 
         if label:
             box = front_poly.boundingRect()
@@ -4077,28 +4173,33 @@ class PolarRMWindow(QOpenGLWidget):
         label: str | None = None,
         label_scale: float = 1.0,
     ) -> None:
-        """Append fluorescent white linework without any filled geometry."""
+        """Append fluorescent white linework without any filled geometry.
+
+        Formula matches visual-demo/esp-box-white.html (glow=0.35, pure #FFFFFF).
+        """
         if len(front) != 4:
             return
         alpha = max(0.0, min(1.0, float(alpha)))
-        core_width = max(0.75, float(width) * (0.74 if predicted else 0.94))
+        # jar lineWidth 1.0; module Line Width default 2.0 → base ~1.0.
+        core_width = max(0.75, float(width) * 0.5 * (0.85 if predicted else 1.0))
+        glow = 0.35
         if len(back) == 4:
-            batch.polyline(
+            batch.fluorescent_polyline(
                 back,
-                QColor(255, 255, 255, round(42 * alpha)),
-                max(0.6, core_width * 0.62),
+                width=max(0.6, core_width * 0.85),
+                alpha=alpha * 0.55,
                 closed=True,
-                dash_length=6.0,
-                gap_length=4.5,
+                dashed=True,
+                glow=glow,
             )
             for index in range(4):
-                batch.line(
+                batch.fluorescent_line(
                     front[index],
                     back[index],
-                    QColor(255, 255, 255, round(58 * alpha)),
-                    max(0.65, core_width * 0.68),
-                    dash_length=5.0,
-                    gap_length=4.0,
+                    width=max(0.65, core_width * 0.9),
+                    alpha=alpha * 0.65,
+                    dashed=True,
+                    glow=glow,
                 )
         batch.fluorescent_polyline(
             front,
@@ -4106,6 +4207,7 @@ class PolarRMWindow(QOpenGLWidget):
             alpha=alpha,
             closed=True,
             dashed=predicted,
+            glow=glow,
         )
 
         def lerp(a: QPointF, b: QPointF, amount: float) -> QPointF:
@@ -4129,9 +4231,10 @@ class PolarRMWindow(QOpenGLWidget):
             batch.fluorescent_line(
                 start,
                 end,
-                width=max(0.6, core_width * 0.68),
+                width=max(0.6, core_width * 0.72),
                 alpha=alpha * 0.68,
                 dashed=predicted,
+                glow=glow,
             )
 
         if label:
