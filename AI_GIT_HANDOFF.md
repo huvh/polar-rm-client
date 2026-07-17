@@ -66,29 +66,31 @@ python -m venv .venv
 
 ---
 
-## 4. 平行工作线（尚未导入本仓库）
+## 4. 平行工作线（已导入）
 
-用户另有一份**文件夹拷贝**当作 Gestalt 实验室分支：
+| 分支 | 含义 | 远程 |
+|------|------|------|
+| `main` | 桌面 POLAR 正式客户端线 | `origin/main` |
+| `gestalt-lab` | Gestalt 实验室联调线（孤儿分支快照） | `origin/gestalt-lab` @ `ea14aff` |
 
-- 路径：`G:\SteamLibrary\steamapps\common\GestaltSystem\RMaccseeplan\rm_custom_client`
-- 含 `gestalt_*`、`input_bridge`、`start_lab_launcher.bat`、`workshop_telemetry_relay` 等
-- 与桌面 `main` **已分叉**（互有独有文件），**尚未**作为 `gestalt-lab` 分支导入
+**来源（仅导入了客户端目录，不是整个 RMaccseeplan 旁路工具）：**
 
-**下一步（仅当用户要求时）：**
+- `G:\SteamLibrary\steamapps\common\GestaltSystem\RMaccseeplan\rm_custom_client`
+- 含 `gestalt_*`、`input_bridge`、`tongji_pipeline`、`start_lab_launcher.bat`、`workshop_telemetry_relay`、`assets/launcher` 等
+- **未**纳入同级目录：`polar_input_bridge`、`sp_vision_py`、`sp_vision_25_gestalt_system_bridge-main` 等（仍在 G 盘原位）
+- 导入时排除：`.venv`、`__pycache__`、缓存、`tmp_*`
+- 从 `main` 附带了同济权重 `同济自瞄/sp_vision_25/assets/yolov5.*`（便于分支自洽）
+- G 盘原文件夹**未删除、未改写为唯一真源**；Git 与拷贝可并存
+
+**切换：**
 
 ```powershell
 cd C:\Users\lulu\Desktop\claude\openzenuicodexver\rm_custom_client
 git checkout main
-git checkout --orphan gestalt-lab
-git rm -rf .   # 清空索引；确认 cwd 正确
-robocopy "G:\SteamLibrary\steamapps\common\GestaltSystem\RMaccseeplan\rm_custom_client" . /E /XD .venv __pycache__ .git .wallpaper_cache tmp_render_checks tmp_selfcheck
-# 保留本仓库的 .gitignore 与 AI_GIT_HANDOFF.md（若被覆盖则从 main 取回）
-git checkout main -- .gitignore AI_GIT_HANDOFF.md
-git add .
-git commit -m "Import gestalt-lab snapshot from RMaccseeplan"
-git push -u origin gestalt-lab
-git checkout main
+git checkout gestalt-lab
 ```
+
+换分支前先 commit 或 stash。日常在 Gestalt 游戏旁开发仍可用 G 盘拷贝；要以 Git 为准时在本仓库切 `gestalt-lab` 再同步到 G。
 
 **不要**用整夹复制覆盖已跟踪的 Git 工作区来「同步」。
 
@@ -142,3 +144,5 @@ git pull
 | 日期 | 操作 | 操作者 |
 |------|------|--------|
 | 2026-07-17 | 初始化仓库、`.gitignore`、合并远程空 README、push `main`（`182f225`）、本交接文件 | Grok（本会话） |
+| 2026-07-17 | 上传同济 yolov5 权重至 `main`（`65347dc`） | Grok（本会话） |
+| 2026-07-17 | 从 G: RMaccseeplan\rm_custom_client 导入孤儿分支 `gestalt-lab` 并 push（`ea14aff`） | Grok（本会话） |
