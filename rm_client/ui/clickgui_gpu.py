@@ -101,6 +101,36 @@ class _GlyphAtlas:
     glyphs: dict[str, "_Glyph"]
     raster_font: QFont
     ratio: float
+    sample_scale: float
+
+
+@dataclass(frozen=True)
+class SmallTextPolicy:
+    """Rasterization policy for compact labels on low-resolution displays."""
+
+    oversample_limit_px: float = 18.0
+    oversample_scale: float = 2.0
+    medium_limit_px: float = 16.0
+
+    def sample_scale_for(self, physical_pixel_size: float) -> float:
+        return self.oversample_scale if physical_pixel_size <= self.oversample_limit_px else 1.0
+
+    def prepare_font(self, font: QFont, physical_pixel_size: float, sample_scale: float) -> QFont:
+        prepared = QFont(font)
+        prepared.setPixelSize(max(1, int(round(physical_pixel_size * sample_scale))))
+        if physical_pixel_size <= self.medium_limit_px and prepared.weight() < QFont.Weight.Medium:
+            prepared.setWeight(QFont.Weight.Medium)
+        prepared.setHintingPreference(QFont.HintingPreference.PreferFullHinting)
+        prepared.setStyleStrategy(QFont.StyleStrategy.PreferAntialias)
+        prepared.setKerning(True)
+        return prepared
+
+    @staticmethod
+    def should_snap(rect: QRectF) -> bool:
+        return (
+            abs(rect.left() - round(rect.left())) < 0.001
+            and abs(rect.top() - round(rect.top())) < 0.001
+        )
 
 
 @dataclass(frozen=True)
@@ -145,6 +175,7 @@ class ClickGuiGpuRenderer:
         self.atlas_generation = 0
         self.atlas_snapshot = GlyphAtlasSnapshot(0, ())
         self._atlas_locked = False
+        self.small_text_policy = SmallTextPolicy()
 
     def initialize(self) -> bool:
         if self.available:
@@ -591,11 +622,15 @@ class ClickGuiGpuRenderer:
 
         raster_font = QFont(font)
         # Snap sizes to whole device pixels — fractional pt × dpr is a top cause of mushy 1K GUI text.
-        if raster_font.pointSizeF() > 0:
-            logical_px = raster_font.pointSizeF() * (96.0 / 72.0)
-            raster_font.setPixelSize(max(1, int(round(logical_px * self._pixel_ratio))))
-        elif raster_font.pixelSize() > 0:
-            raster_font.setPixelSize(max(1, int(round(raster_font.pixelSize() * self._pixel_ratio))))
+        if font.pointSizeF() > 0:
+            logical_px = font.pointSizeF() * (96.0 / 72.0)
+        elif font.pixelSize() > 0:
+            logical_px = float(font.pixelSize())
+        else:
+            logical_px = 12.0
+        physical_px = max(1.0, logical_px * self._pixel_ratio)
+        sample_scale = self.small_text_policy.sample_scale_for(physical_px)
+        raster_font = self.small_text_policy.prepare_font(font, physical_px, sample_scale)
         raster_font.setHintingPreference(QFont.HintingPreference.PreferFullHinting)
         raster_font.setStyleStrategy(QFont.StyleStrategy.PreferAntialias)
         raster_font.setKerning(True)
@@ -603,7 +638,7 @@ class ClickGuiGpuRenderer:
         metrics = QFontMetricsF(raster_font)
         ordered_chars = sorted(chars)
         bounds_by_char = {char: metrics.boundingRect(char) for char in ordered_chars}
-        padding = max(3, int(math.ceil(self._pixel_ratio * 2.0)))
+        padding = max(4, int(math.ceil(self._pixel_ratio * sample_scale * 2.0)))
         max_glyph_width = max(
             1,
             int(math.ceil(max((bounds.width() for bounds in bounds_by_char.values()), default=1.0))),
@@ -634,7 +669,7 @@ class ClickGuiGpuRenderer:
         image = QImage(atlas_width, atlas_height, QImage.Format.Format_ARGB32_Premultiplied)
         image.fill(Qt.GlobalColor.transparent)
         painter = QPainter(image)
-        painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Source)
+        painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
         painter.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, False)
         painter.setFont(raster_font)
@@ -653,18 +688,24 @@ class ClickGuiGpuRenderer:
                 # Integer baseline position for stable stems at 1K.
                 pen_x = round(atlas_x - bounds.left())
                 pen_y = round(atlas_y - bounds.top())
+                if sample_scale > 1.0:
+                    painter.setPen(QColor(255, 255, 255, 72))
+                    for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+                        painter.drawText(QPointF(pen_x + dx, pen_y + dy), char)
+                    painter.setPen(QColor(255, 255, 255, 255))
                 painter.drawText(QPointF(pen_x, pen_y), char)
             # Tight UV (no 0.5 inset) so Nearest sampling does not thin strokes.
+            inset = 0.5 if glyph_width > 1.0 and glyph_height > 1.0 else 0.0
             glyphs[char] = _Glyph(
-                atlas_x / atlas_width,
-                atlas_y / atlas_height,
-                (atlas_x + glyph_width) / atlas_width,
-                (atlas_y + glyph_height) / atlas_height,
-                advance,
-                bounds.left(),
-                bounds.top(),
-                glyph_width,
-                glyph_height,
+                (atlas_x + inset) / atlas_width,
+                (atlas_y + inset) / atlas_height,
+                (atlas_x + glyph_width - inset) / atlas_width,
+                (atlas_y + glyph_height - inset) / atlas_height,
+                advance / sample_scale,
+                bounds.left() / sample_scale,
+                bounds.top() / sample_scale,
+                glyph_width / sample_scale,
+                glyph_height / sample_scale,
             )
         painter.end()
 
@@ -673,10 +714,10 @@ class ClickGuiGpuRenderer:
             QOpenGLTexture.MipMapGeneration.DontGenerateMipMaps,
         )
         # Nearest keeps ClickGUI labels crisp at 1K; Linear was milk-blurring small Poppins.
-        new_texture.setMinificationFilter(QOpenGLTexture.Filter.Nearest)
-        new_texture.setMagnificationFilter(QOpenGLTexture.Filter.Nearest)
+        new_texture.setMinificationFilter(QOpenGLTexture.Filter.Linear)
+        new_texture.setMagnificationFilter(QOpenGLTexture.Filter.Linear)
         new_texture.setWrapMode(QOpenGLTexture.WrapMode.ClampToEdge)
-        published = _GlyphAtlas(new_texture, glyphs, raster_font, self._pixel_ratio)
+        published = _GlyphAtlas(new_texture, glyphs, raster_font, self._pixel_ratio, sample_scale)
         old = self.atlases.get(key)
         self.atlases[key] = published
         self.atlas_generation += 1
@@ -736,6 +777,7 @@ class ClickGuiGpuRenderer:
         assert self.text_program is not None
         metrics = QFontMetricsF(atlas.raster_font)
         ratio = self._pixel_ratio
+        sample_scale = max(1.0, atlas.sample_scale)
         packed = bytearray()
         for command in commands:
             rect = QRectF(
@@ -749,7 +791,7 @@ class ClickGuiGpuRenderer:
                 for char in command.text
                 if char in atlas.glyphs
             )
-            line_height = min(rect.height(), metrics.height())
+            line_height = min(rect.height(), metrics.height() / sample_scale)
             if command.alignment & Qt.AlignmentFlag.AlignHCenter:
                 x = rect.center().x() - min(rect.width(), text_width) * 0.5
             elif command.alignment & Qt.AlignmentFlag.AlignRight:
@@ -762,19 +804,26 @@ class ClickGuiGpuRenderer:
                 y = rect.bottom() - line_height
             else:
                 y = rect.top()
-            x = float(round(x))
-            y = float(round(y))
-            baseline = float(round(y + metrics.ascent()))
+            snap = self.small_text_policy.should_snap(command.rect)
+            if snap:
+                x = float(round(x))
+                y = float(round(y))
+            baseline = y + metrics.ascent() / sample_scale
+            if snap:
+                baseline = float(round(baseline))
             cursor = x
             for char in command.text:
                 glyph = atlas.glyphs.get(char)
                 if glyph is None:
                     continue
                 # Integer quad origin → Nearest atlas samples stay sharp at 1K.
-                glyph_x = float(round(cursor + glyph.offset_x))
-                glyph_y = float(round(baseline + glyph.offset_y))
-                glyph_w = float(max(1.0, round(glyph.width))) if glyph.width > 0.0 else 0.0
-                glyph_h = float(max(1.0, round(glyph.height))) if glyph.height > 0.0 else 0.0
+                glyph_x = cursor + glyph.offset_x
+                glyph_y = baseline + glyph.offset_y
+                if snap:
+                    glyph_x = float(round(glyph_x))
+                    glyph_y = float(round(glyph_y))
+                glyph_w = max(0.5, glyph.width) if glyph.width > 0.0 else 0.0
+                glyph_h = max(0.5, glyph.height) if glyph.height > 0.0 else 0.0
                 if (
                     glyph_w > 0.0
                     and glyph_h > 0.0

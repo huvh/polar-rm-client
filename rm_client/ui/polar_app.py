@@ -83,6 +83,7 @@ from .fonts import FontBook
 from .gui_cache import ClickGuiLayerCache
 from .clickgui_gpu import ClickGuiDrawList, ClickGuiGpuRenderer
 from .gpu_frame_compositor import GpuFrameCompositor, LensMaterial
+from .island_icon_gpu import IslandIconCommand, IslandIconGpuRenderer
 from .liquid_glass import LiquidGlassRenderer
 from .layout import HudAnchorStack
 from .startup_gl import StartupGpuCompositor, TextureOrigin
@@ -331,6 +332,9 @@ class PolarRMWindow(QOpenGLWidget):
         self.gui_cache = ClickGuiLayerCache()
         self.clickgui_gpu = ClickGuiGpuRenderer()
         self.vision_wire_gpu = VisionWireGpuRenderer()
+        self.island_icon_gpu = IslandIconGpuRenderer()
+        self._gpu_island_icon_commands: list[IslandIconCommand] = []
+        self._collect_gpu_island_icons = False
         self.gpu_compositor = GpuFrameCompositor()
         self._gpu_frame_recording = False
         self._gpu_background_key: tuple[object, ...] | None = None
@@ -552,6 +556,7 @@ class PolarRMWindow(QOpenGLWidget):
     def initializeGL(self) -> None:
         self.gpu_compositor.initialize()
         self.vision_wire_gpu.initialize()
+        self.island_icon_gpu.initialize()
         if not self.clickgui_gpu.initialize():
             click_gui = self.registry.get("ClickGui")
             backend = click_gui.get_setting("Render Backend") if click_gui else None
@@ -952,6 +957,7 @@ class PolarRMWindow(QOpenGLWidget):
                     return False
                 device.setDevicePixelRatio(ratio)
                 self.gpu_compositor.clear_current(functions, transparent=True)
+                self.begin_gpu_island_icon_collection()
                 painter = QPainter(device)
                 if not self.home_visible:
                     self.paint_hud_motion_overlay(
@@ -970,6 +976,7 @@ class PolarRMWindow(QOpenGLWidget):
                         gpu_atlas_prepared=prepared_clickgui_atlas,
                     )
                 painter.end()
+                self.flush_gpu_island_icons(functions, width, height, ratio)
                 self.gpu_compositor.release_layer("dynamic")
                 if not self.paint_gpu_target_hud_layer(functions, width, height, ratio):
                     return False
@@ -1129,6 +1136,7 @@ class PolarRMWindow(QOpenGLWidget):
                 dynamic_device.setDevicePixelRatio(ratio)
                 self.gpu_compositor.clear_current(functions, transparent=True)
                 dynamic_started = time.perf_counter()
+                self.begin_gpu_island_icon_collection()
                 dynamic_painter = QPainter(dynamic_device)
                 if not self.home_visible:
                     self.paint_hud_motion_overlay(
@@ -1138,6 +1146,7 @@ class PolarRMWindow(QOpenGLWidget):
                     )
                     self.paint_clickgui_overlay(dynamic_painter, width, height)
                 dynamic_painter.end()
+                self.flush_gpu_island_icons(functions, width, height, ratio)
                 self.gpu_compositor.last_dynamic_ms = (time.perf_counter() - dynamic_started) * 1000.0
                 self.gpu_compositor.release_layer("dynamic")
             if not self.gpu_compositor.render_glass(functions):
@@ -5464,8 +5473,32 @@ class PolarRMWindow(QOpenGLWidget):
             return "Radar"
         return "POLAR-RM"
 
+    def begin_gpu_island_icon_collection(self) -> None:
+        self._gpu_island_icon_commands.clear()
+        self._collect_gpu_island_icons = self.island_icon_gpu.available
+
+    def flush_gpu_island_icons(self, functions, width: int, height: int, ratio: float) -> None:
+        self._collect_gpu_island_icons = False
+        if not self._gpu_island_icon_commands or not self.island_icon_gpu.available:
+            self._gpu_island_icon_commands.clear()
+            return
+        self.island_icon_gpu.render(
+            functions,
+            self._gpu_island_icon_commands,
+            width,
+            height,
+            ratio,
+        )
+        self._gpu_island_icon_commands.clear()
+
     def draw_dynamic_island_icon(self, p: QPainter, rect: QRectF, kind: str, main: QColor, amount: float) -> None:
         amount = max(0.0, min(1.0, amount))
+        if self._collect_gpu_island_icons and self.island_icon_gpu.available:
+            mapped_rect = p.transform().mapRect(rect)
+            self._gpu_island_icon_commands.append(
+                IslandIconCommand(QRectF(mapped_rect), kind, QColor(main), amount)
+            )
+            return
         p.save()
         p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         icon_path = QPainterPath()

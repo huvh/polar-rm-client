@@ -41,6 +41,8 @@ from rm_client.ui.animation import (
 )
 from rm_client.ui.gui_cache import ClickGuiLayerCache
 from rm_client.ui.gpu_frame_compositor import compose_combined_backdrop_pixel
+from rm_client.ui.clickgui_gpu import SmallTextPolicy
+from rm_client.ui.island_icon_gpu import island_icon_coverage
 from rm_client.ui.layout import HudAnchorStack
 from rm_client.ui.startup_gl import TextureOrigin, normalize_image_for_texture
 from rm_client.ui.vision_motion import (
@@ -1466,6 +1468,18 @@ def test_robot_launcher_and_polar_inertial_scroll() -> None:
     app.processEvents()
 
 
+def test_small_text_policy_and_island_icon_alpha() -> None:
+    policy = SmallTextPolicy()
+    assert policy.sample_scale_for(12.0) == 2.0
+    assert policy.sample_scale_for(18.0) == 2.0
+    assert policy.sample_scale_for(19.0) == 1.0
+    assert island_icon_coverage(0.5, 0.5) == 1.0
+    assert island_icon_coverage(0.0, 0.0) == 0.0
+    assert island_icon_coverage(1.0, 0.0) == 0.0
+    assert island_icon_coverage(0.0, 1.0) == 0.0
+    assert island_icon_coverage(1.0, 1.0) == 0.0
+
+
 def test_texture_origin_and_combined_backdrop() -> None:
     from PySide6.QtGui import QColor, QImage
 
@@ -1655,7 +1669,8 @@ def test_ordered_gpu_commands_and_line_only_vision_batch() -> None:
         alpha=0.82,
         closed=True,
     )
-    assert len(wire.lines) == 8
+    # Three glow passes plus the white core are emitted for each edge.
+    assert len(wire.lines) == 16
     assert not wire.labels.commands
     for line in wire.lines:
         assert line.color.red() == line.color.green() == line.color.blue() == 255
@@ -1699,6 +1714,7 @@ if __name__ == "__main__":
     test_prediction_geometry_is_bounded()
     test_robot_profiles_and_economy_rules()
     test_robot_launcher_and_polar_inertial_scroll()
+    test_small_text_policy_and_island_icon_alpha()
     test_texture_origin_and_combined_backdrop()
     test_island_animation_reversal_and_hud_stack()
     test_combat_target_hud_math_and_rendering()
