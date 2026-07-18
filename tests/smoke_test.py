@@ -22,7 +22,12 @@ from rm_client.combat_hud import (
 from rm_client.kill_fx import KillFxLayout, KillFxRenderer, PRESET_ELEMENTS, VALORANT_STYLES
 from rm_client.match_modes import MATCH_MODES, MatchModeManager
 from rm_client.model import GUI_MODES, HUD_MODES, MODULE_LIST_RENDERER_KEYS, MODULE_LIST_STYLES, TACTICAL_MAP_STATUS_DISPLAYS, RobotState, build_default_registry
-from rm_client.economy import EconomyCommandBridge, available_actions
+from rm_client.economy import (
+    EconomyCommandBridge,
+    available_actions,
+    encode_air_support_command,
+    encode_common_command,
+)
 from rm_client.robot_profiles import apply_profile_to_state, profile_by_key, profiles_for_match, resolve_performance
 from rm_client.protocol import RefereeFrameCodec
 from rm_client.scenarios import ScenarioManager
@@ -1068,7 +1073,7 @@ def test_scenario_manager() -> None:
     assert registry.get("MQTTLink").get_setting("Host").value == "192.168.12.1"
     assert registry.get("SerialBridge").get_setting("Mock Writes").value is True
     assert mqtt.host == "192.168.12.1"
-    assert mqtt.mock_output is True
+    assert mqtt.mock_output is False
     assert udp.port == 3334
     assert control.mock_output is True
     manager.set_scenario("CampusSimulation")
@@ -1084,6 +1089,17 @@ def test_official_mqtt_bridge_mock_publish() -> None:
     bridge.publish_custom_control(b"abc")
     assert bridge.publish_records[-1].topic == "CustomControl"
     assert bridge.publish_records[-1].mock_output is True
+    assert bridge.publish_common_command(b"one", now=10.0) is True
+    assert bridge.publish_records[-1].topic == "CommonCommand"
+    assert bridge.publish_records[-1].qos == 1
+    record_count = len(bridge.publish_records)
+    assert bridge.publish_common_command(b"too-fast", now=10.05) is False
+    assert len(bridge.publish_records) == record_count
+    assert "10Hz" in bridge.last_error
+    assert bridge.publish_common_command(b"two", now=10.101) is True
+    assert bridge.publish_air_support_command(b"air", now=10.0) is True
+    assert bridge.publish_records[-1].topic == "AirSupportCommand"
+    assert bridge.publish_records[-1].qos == 1
 
 
 def test_robot_state_tick() -> None:
@@ -1402,16 +1418,116 @@ def test_robot_profiles_and_economy_rules() -> None:
     assert state.ammo_capacity == 180
     assert state.remaining_ammo == 180
     state.remaining_economy = 500
+    state.total_economy_obtained = 700
     state.stage_countdown_sec = 300
-    actions = {action.key: action for action in available_actions(state)}
-    assert actions["ammo17"].enabled is True
-    assert actions["remote_heal"].cost == 90
+    state.in_supply_zone = True
+    state.out_of_combat = True
+    state.can_remote_ammo = True
+    state.can_remote_heal = True
+    state.economy_mock_mode = True
+
+    state.match_mode = "RMUL3v3"
+    state.robot_profile = "Hero"
+    rmul_hero = {offer.key: offer for offer in available_actions(state)}
+    assert (rmul_hero["rmul_hero_42_1"].minimum, rmul_hero["rmul_hero_42_1"].cost) == (1, 10)
+    assert (rmul_hero["rmul_hero_42_10"].minimum, rmul_hero["rmul_hero_42_10"].cost) == (10, 100)
+
+    state.robot_profile = "Infantry1"
+    rmul_infantry = {offer.key: offer for offer in available_actions(state)}
+    assert (rmul_infantry["rmul_infantry_17_10"].minimum, rmul_infantry["rmul_infantry_17_10"].cost) == (10, 10)
+    assert (rmul_infantry["rmul_infantry_17_100"].minimum, rmul_infantry["rmul_infantry_17_100"].cost) == (100, 100)
+
+    state.robot_profile = "Sentinel"
+    rmul_sentinel = available_actions(state)
+    assert len(rmul_sentinel) == 1
+    assert rmul_sentinel[0].status_only is True
+    assert rmul_sentinel[0].enabled is False
+
+    state.match_mode = "RMUC7v7"
+    state.robot_profile = "Hero"
+    state.current_health = state.max_health
+    rmuc_hero = {offer.key: offer for offer in available_actions(state)}
+    assert (rmuc_hero["rmuc_hero_42_1"].minimum, rmuc_hero["rmuc_hero_42_1"].cost) == (1, 10)
+    assert (rmuc_hero["rmuc_hero_42_10"].minimum, rmuc_hero["rmuc_hero_42_10"].cost) == (10, 100)
+    assert (rmuc_hero["rmuc_hero_remote_42_10"].minimum, rmuc_hero["rmuc_hero_remote_42_10"].cost) == (10, 150)
+    assert rmuc_hero["rmuc_remote_heal"].confirmation == "hold"
+
+    state.robot_profile = "Infantry2"
+    rmuc_infantry = {offer.key: offer for offer in available_actions(state)}
+    assert (rmuc_infantry["rmuc_infantry_17_10"].minimum, rmuc_infantry["rmuc_infantry_17_10"].cost) == (10, 10)
+    assert (rmuc_infantry["rmuc_infantry_17_100"].minimum, rmuc_infantry["rmuc_infantry_17_100"].cost) == (100, 100)
+    assert (rmuc_infantry["rmuc_infantry_remote_17_100"].minimum, rmuc_infantry["rmuc_infantry_remote_17_100"].cost) == (100, 150)
+
+    state.robot_profile = "Engineer"
+    state.current_health = state.max_health
+    assert available_actions(state) == []
+    state.current_health = 0
+    state.respawn_can_free = True
+    state.respawn_can_pay = True
+    state.respawn_gold_cost = 137
+    engineer_revive = {offer.key: offer for offer in available_actions(state)}
+    assert set(engineer_revive) == {"rmuc_confirm_respawn", "rmuc_gold_respawn"}
+    assert engineer_revive["rmuc_gold_respawn"].cost == 137
+    assert engineer_revive["rmuc_gold_respawn"].estimated is False
+
+    state.robot_profile = "Aerial"
+    state.current_health = state.max_health
+    state.air_support_active = False
+    state.air_support_can_free = True
+    air_support = {offer.key: offer for offer in available_actions(state)}
+    assert set(air_support) == {"rmuc_air_support_paid", "rmuc_air_support_free"}
+    assert all(offer.topic == "AirSupportCommand" for offer in air_support.values())
+
+    assert encode_common_command(1, 10) == b"\x08\x01\x10\x0a"
+    assert encode_common_command(5, 150) == b"\x08\x05\x10\x96\x01"
+    assert encode_air_support_command(2) == b"\x08\x02"
+
+    state.robot_profile = "Infantry2"
+    state.current_health = state.max_health
+    state.remaining_economy = 500
+    state.remaining_ammo = 180
+    state.ammo_capacity = 180
+    state.economy_status_revision = 0
+    state.economy_command_status = ""
+    mock_offer = {offer.key: offer for offer in available_actions(state)}["rmuc_infantry_17_10"]
     bridge = EconomyCommandBridge()
-    request = bridge.submit(state, actions["ammo17"])
-    assert request.mock is True
-    assert request.action == "ammo17"
-    assert state.remaining_ammo == 280
-    assert state.ammo_capacity == 280
+    transaction = bridge.submit(state, mock_offer, mock=True, now=10.0)
+    assert transaction.request.mock is True
+    assert transaction.request.command_type == 1
+    assert transaction.request.command_param == 10
+    assert state.remaining_economy == 500
+    assert state.remaining_ammo == 180
+    assert bridge.update(state, now=10.20).status == "pending"
+    assert bridge.update(state, now=10.40).status == "succeeded"
+    assert state.remaining_economy == 490
+    assert state.remaining_ammo == 190
+
+    state.remaining_economy = 500
+    state.remaining_ammo = 180
+    state.economy_status_revision = 5
+    state.economy_command_status = "rejected"
+    sent = []
+    official = EconomyCommandBridge()
+    official.sender = lambda request: sent.append(request) is None
+    official_transaction = official.submit(state, mock_offer, mock=False, now=20.0)
+    assert len(sent) == 1
+    assert state.remaining_economy == 500
+    assert state.remaining_ammo == 180
+    assert official.update(state, now=20.10).status == "pending"
+    state.economy_status_revision += 1
+    assert official.update(state, now=20.20).status == "rejected"
+
+    state.economy_command_status = ""
+    state.economy_status_revision += 1
+    accepted = EconomyCommandBridge()
+    accepted.sender = lambda _request: True
+    accepted_transaction = accepted.submit(state, mock_offer, mock=False, now=30.0)
+    state.economy_status_revision += 1
+    assert accepted.update(state, now=30.10).status == "pending"
+    state.remaining_economy -= 10
+    state.remaining_ammo += 10
+    state.economy_status_revision += 1
+    assert accepted.update(state, now=30.20).status == "succeeded"
 
     hero_profile = profile_by_key("RMUC7v7", "Hero")
     apply_profile_to_state(state, hero_profile, resolve_performance("RMUC7v7", "Hero"), 1)
@@ -1424,7 +1540,83 @@ def test_robot_profiles_and_economy_rules() -> None:
     economy_module = registry.get("EconomyPanel")
     assert robot_module is not None and robot_module.get_setting("Role") is not None
     assert economy_module is not None and economy_module.keybind == "B"
+    assert economy_module.get_setting("Mock Requests").value is True
+    assert registry.get("ProjectileShop") is not None
     assert registry.get("UIScale").get_setting("HUD Refresh Rate").value == "144"
+
+
+def test_official_economy_status_decode() -> None:
+    import struct
+
+    def varint(value: int) -> bytes:
+        output = bytearray()
+        while True:
+            byte = value & 0x7F
+            value >>= 7
+            if value:
+                output.append(byte | 0x80)
+            else:
+                output.append(byte)
+                return bytes(output)
+
+    def field(number: int, value: int) -> bytes:
+        return varint(number << 3) + varint(value)
+
+    feed = OfficialMatchFeed()
+    _events, logistics = feed.consume(
+        "GlobalLogisticsStatus",
+        field(1, 320) + field(2, 780) + field(3, 2) + field(4, 1),
+        alliance="Red",
+        local_robot_id=3,
+    )
+    assert logistics["remaining_economy"] == 320
+    assert logistics["total_economy_obtained"] == 780
+    assert logistics["_economy_revision_increment"] == 1
+
+    _events, respawn = feed.consume(
+        "RobotRespawnStatus",
+        field(1, 1) + field(2, 100) + field(3, 35) + field(4, 1) + field(5, 140) + field(6, 1),
+        alliance="Red",
+        local_robot_id=3,
+    )
+    assert respawn["respawn_pending"] is True
+    assert respawn["respawn_progress"] == 0.35
+    assert respawn["respawn_gold_cost"] == 140
+
+    dynamic_payload = (
+        field(1, 275)
+        + varint((2 << 3) | 5)
+        + struct.pack("<f", 42.5)
+        + field(4, 63)
+        + field(5, 88)
+        + field(8, 24)
+        + field(9, 156)
+        + field(10, 1)
+        + field(12, 1)
+        + field(13, 1)
+    )
+    _events, dynamic = feed.consume(
+        "RobotDynamicStatus",
+        dynamic_payload,
+        alliance="Red",
+        local_robot_id=3,
+    )
+    assert dynamic["current_health"] == 275
+    assert abs(dynamic["current_heat"] - 42.5) < 0.001
+    assert dynamic["remaining_ammo"] == 156
+    assert dynamic["out_of_combat"] is True
+    assert dynamic["can_remote_heal"] is True
+    assert dynamic["can_remote_ammo"] is True
+
+    _events, air = feed.consume(
+        "AirSupportStatusSync",
+        field(1, 1) + field(2, 18) + field(3, 7),
+        alliance="Red",
+        local_robot_id=3,
+    )
+    assert air["air_support_active"] is True
+    assert air["air_support_can_free"] is True
+    assert air["air_support_cost_coins"] == 7
 
 
 def test_robot_launcher_and_polar_inertial_scroll() -> None:
@@ -1713,6 +1905,7 @@ if __name__ == "__main__":
     test_clickgui_offscreen_modes()
     test_prediction_geometry_is_bounded()
     test_robot_profiles_and_economy_rules()
+    test_official_economy_status_decode()
     test_robot_launcher_and_polar_inertial_scroll()
     test_small_text_policy_and_island_icon_alpha()
     test_texture_origin_and_combined_backdrop()

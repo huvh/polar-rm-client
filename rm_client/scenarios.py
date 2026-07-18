@@ -54,7 +54,7 @@ SCENARIOS: dict[str, ScenarioConfig] = {
         safety=SafetyProfile(
             mock_writes=True,
             allow_real_serial=False,
-            allow_mqtt_publish=False,
+            allow_mqtt_publish=True,
             enforce_official_limits=True,
         ),
     ),

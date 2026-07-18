@@ -2,6 +2,9 @@
 
 > 液态玻璃、Dynamic Island、页面过渡和高刷新动画的实现必须遵循
 > [《POLAR-RM 液态玻璃与灵动动画规范》](README_液态玻璃与灵动动画规范.md)。
+>
+> 弹丸、补血、复活和空中支援的规则与正式请求边界见
+> [《POLAR-RM 经济操作与裁判链路》](README_经济操作与裁判链路.md)。
 
 这是一个使用 Python 编写的 RoboMaster 2026 自定义客户端。当前版本基于 PySide6/QPainter 渲染，提供 POLAR 风格 ClickGUI 结构：同一套 RM 模块注册表、四种 GUI 模式、共享设置系统、进入 HUD 后启用摄像头图传、POLAR 风格覆盖层、按键绑定捕获、本地配置文件，以及 MQTT/UDP/串口等通信接口预留。
 
@@ -18,7 +21,7 @@ python -m venv .venv
 
 击杀特效（GD656 图/音）和同济 Local 检测权重（`yolov5.xml/.bin`）**已随本仓库资源目录提供**，不是 pip 包，无需再从 GitHub 用 pip 安装。完整同济 C++ 自瞄工程见 [TongjiSuperPower/sp_vision_25](https://github.com/TongjiSuperPower/sp_vision_25)，仅在真机/UDP 外挂时另 clone 编译。详情见 `requirements.txt` 注释与 `THIRD_PARTY_NOTICES.md`。
 
-启动后会先进入两级 POLAR 选择界面，然后再进入图传/HUD 主界面。启动选择页默认使用德克萨斯视频壁纸和鼠标视差；摄像头会延迟到进入主 HUD 后才打开，避免启动页直接显示真实摄像头画面。
+启动后会依次选择运行场景、比赛制式和机器人配置，然后进入图传/HUD 主界面。启动选择页默认使用德克萨斯视频壁纸和鼠标视差；摄像头会延迟到进入主 HUD 后才打开，避免启动页直接显示真实摄像头画面。
 
 ## 启动壁纸
 
@@ -37,9 +40,7 @@ python -m venv .venv
 - `Balanced30`：降低玻璃缓存分辨率和动画负载。
 - `Source`：跟随壁纸媒体的原始帧率。
 
-`StartupVisual -> Glass Style` 可选 `ReGlass` 或 `Legacy`，默认 `ReGlass`。`Glass Strength` 控制暗色 tint、边缘折射和 rim light 的整体强度。ReGlass 样式使用稳定的双层背景模糊：内部使用轻模糊，边缘窄带使用更强模糊和局部折射；鼠标静止时面板不会持续改变亮度。
-
-视频解码、颜色转换和双层模糊预处理在后台线程运行，界面只消费完整发布的最新帧，不会因解码落后而积累播放延迟。视觉实现参考本地 MIT 许可的 ReGlass 项目分层思路，不包含其 Minecraft 或 GLSL 源码。
+`StartupVisual -> Glass Style` 默认使用 `LiquidGlass`。镜片先组合壁纸/视频与控件轨道，再在圆角内侧执行折射和边缘色散；文字与图标保持在镜片上层。视频解码在后台线程运行，界面只消费完整发布的最新帧，不会因解码落后而积累播放延迟。
 
 第一级选择运行场景：
 
@@ -60,6 +61,8 @@ python -m venv .venv
 - `F9`：切换 GUI 模式。
 - 长按 `Tab`：放大 `TacticalMap`；松开 `Tab` 后回到缩略小地图。修改 `TacticalMap` 模块绑定键后，新的绑定键也会作为长按查看键。
 - 启动页：`1/2/3` 选择运行场景，然后 `1/2` 选择 `RMUC7v7/RMUL3v3`；`Backspace` 返回场景选择。
+- `B`：打开/关闭独立经济工作区；`ProjectileShop` 绑定键直接进入弹丸页。
+- 经济工作区：滚轮/方向键浏览，`Enter` 确认，远程弹丸、补血、复活和支援需长按 600ms，`Esc` 取消或关闭。
 - 左键点击模块：根据当前 GUI 模式选择模块或切换模块开关。
 - 右键点击模块：在内嵌式 GUI 中展开/折叠设置。
 - 模块右侧 `KEY`/`K` 按钮或 `Keybind` 设置行：打开 POLAR 风格按键绑定覆盖层。
@@ -148,7 +151,7 @@ python -m venv .venv
 - `RobotTargetHUD`：目标血量、热量、距离和锁定状态卡片。
 - `ModuleList`、`KeyBinds`、`Watermark`、`DynamicIsland`：可配置 RM HUD 覆盖层。
 - RMUI 语义模块：`GimbalPower`、`PowerLimit`、`SpeedLimit`、`Capacitor`、`FrictionWheel`、`LockState`、`BuffStatus`、`ProjectileAllowance`、`JumpPTEWheelLES`。
-- 比赛 HUD 语义模块：`MatchMode`、`TacticalMap`、`MatchTimer`、`BaseOutpostStatus`、`VictoryPointStatus`、`EconomyPanel`、`ProjectileShop`、`ThermalPowerPanel`、`BuffTimeline`。
+- 比赛 HUD 语义模块：`MatchMode`、`TacticalMap`、`MatchTimer`、`BaseOutpostStatus`、`VictoryPointStatus`、`EconomyPanel`、`ProjectileShop`、`ThermalPowerPanel`、`BuffTimeline`。`EconomyPanel` 提供独立工作区，并按比赛制式、机器人、实时金币、弹量、脱战和复活状态过滤操作。
 
 当前没有实现真实发射和真实底盘控制。所有控制输出默认都是 mock/stub。
 

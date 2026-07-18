@@ -220,6 +220,7 @@ class OfficialMqttBridge(MQTTTransport):
         self.publish_records: list[MqttPublishRecord] = []
         self._received_messages: deque[tuple[str, bytes, float]] = deque(maxlen=512)
         self._received_lock = threading.Lock()
+        self._command_publish_at: dict[str, float] = {}
 
     def _on_message(self, client, userdata, msg) -> None:
         super()._on_message(client, userdata, msg)
@@ -233,26 +234,47 @@ class OfficialMqttBridge(MQTTTransport):
             self._received_messages.clear()
         return messages
 
-    def publish_binary(self, topic: str, payload: bytes, qos: int = 1) -> None:
+    def publish_binary(self, topic: str, payload: bytes, qos: int = 1) -> bool:
         record = MqttPublishRecord(topic=topic, payload=payload, qos=qos, timestamp=time.time(), mock_output=self.mock_output)
         self.publish_records.append(record)
         if self.mock_output:
-            return
+            return True
         if self.client is None:
             self.last_error = "未连接 MQTT 客户端"
-            return
+            return False
         try:
             self.client.publish(topic, payload, qos=qos)
+            return True
         except Exception as exc:
             self.last_error = str(exc)
+            return False
 
-    def publish_keyboard_mouse(self, payload: bytes) -> None:
-        self.publish_binary("KeyboardMouseControl", payload, qos=1)
+    def publish_match_command(self, topic: str, payload: bytes, *, qos: int = 1, now: float | None = None) -> bool:
+        """Publish a referee command while enforcing the protocol's 10 Hz ceiling."""
 
-    def publish_custom_control(self, data: bytes) -> None:
+        now = time.perf_counter() if now is None else float(now)
+        previous = self._command_publish_at.get(topic, -1.0)
+        if previous >= 0.0 and now - previous < 0.10:
+            self.last_error = f"{topic} 发布频率超过 10Hz"
+            return False
+        accepted = self.publish_binary(topic, payload, qos=qos)
+        if accepted:
+            self._command_publish_at[topic] = now
+        return accepted
+
+    def publish_common_command(self, payload: bytes, *, now: float | None = None) -> bool:
+        return self.publish_match_command("CommonCommand", payload, qos=1, now=now)
+
+    def publish_air_support_command(self, payload: bytes, *, now: float | None = None) -> bool:
+        return self.publish_match_command("AirSupportCommand", payload, qos=1, now=now)
+
+    def publish_keyboard_mouse(self, payload: bytes) -> bool:
+        return self.publish_binary("KeyboardMouseControl", payload, qos=1)
+
+    def publish_custom_control(self, data: bytes) -> bool:
         if len(data) > 30:
             raise ValueError("CustomControl 载荷最多 30 字节")
-        self.publish_binary("CustomControl", data, qos=1)
+        return self.publish_binary("CustomControl", data, qos=1)
 
 
 class VideoPipeline:

@@ -268,6 +268,23 @@ class RobotState:
     total_projectiles_fired: int = 12
     remaining_economy: int = 260
     total_economy_obtained: int = 620
+    in_supply_zone: bool = True
+    out_of_combat: bool = True
+    can_remote_heal: bool = True
+    can_remote_ammo: bool = True
+    respawn_pending: bool = False
+    respawn_progress: float = 0.0
+    respawn_can_free: bool = False
+    respawn_gold_cost: int = 0
+    respawn_can_pay: bool = False
+    air_support_active: bool = False
+    air_support_can_free: bool = False
+    air_support_free_time_sec: int = 0
+    air_support_cost_coins: int = 0
+    economy_mock_mode: bool = True
+    economy_managed: bool = False
+    economy_status_revision: int = 0
+    economy_command_status: str = ""
     tech_level: int = 1
     encryption_level: int = 0
     robot_id: int = 3
@@ -386,11 +403,13 @@ class RobotState:
         self.energy_rune_rotation = "CCW" if int(elapsed / 4) % 2 else "CW"
         self.latency_ms = int(28 + 12 * abs(math.sin(elapsed * 0.7)))
         ammo_capacity = max(0, int(self.ammo_capacity))
-        self.remaining_ammo = max(0, int(ammo_capacity - (self.stage_elapsed_sec * 0.18) % max(1, min(80, ammo_capacity))))
+        if not self.economy_managed:
+            self.remaining_ammo = max(0, int(ammo_capacity - (self.stage_elapsed_sec * 0.18) % max(1, min(80, ammo_capacity))))
         self.projectile_allowance_17mm = max(0, int(180 - (self.stage_elapsed_sec * 0.23) % 120))
         self.projectile_allowance_42mm = max(0, int(12 - (self.stage_elapsed_sec * 0.035) % 8))
-        self.remaining_economy = max(0, int(260 + 80 * math.sin(elapsed * 0.16)))
-        self.total_economy_obtained = 620 + int(self.stage_elapsed_sec * 1.7)
+        if not self.economy_managed:
+            self.remaining_economy = max(0, int(260 + 80 * math.sin(elapsed * 0.16)))
+            self.total_economy_obtained = 620 + int(self.stage_elapsed_sec * 1.7)
         self.tech_level = 1 + (int(elapsed / 38) % 3)
         self.encryption_level = int(elapsed / 55) % 2
         self.projectile_shop_state = "READY" if self.remaining_economy >= self.projectile_shop_price else "WAIT"
@@ -962,7 +981,7 @@ def build_default_registry() -> ModuleRegistry:
                 bool_setting("Mock Requests", True),
             ],
             enabled=True,
-            description="GlobalLogisticsStatus 金币和科技等级信息显示。",
+            description="按比赛模式与机器人状态提供弹丸、恢复、复活和支援操作。",
         ),
         Module(
             "ProjectileShop",
@@ -974,7 +993,7 @@ def build_default_registry() -> ModuleRegistry:
                 bool_setting("Show Cost", True),
             ],
             enabled=True,
-            description="模拟弹丸购买/请求面板；队内协议确认前不真实发送。",
+            description="直接打开经济工作区弹丸页；正式请求等待裁判状态确认。",
         ),
         Module(
             "ThermalPowerPanel",

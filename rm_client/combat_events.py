@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 import math
+import struct
 import time
 from typing import Any, Iterable
 
@@ -95,6 +96,16 @@ def _field_bytes(fields: dict[int, list[int | bytes]], field: int) -> bytes:
     return bytes(value) if isinstance(value, bytes) else b""
 
 
+def _field_float(fields: dict[int, list[int | bytes]], field: int, default: float = 0.0) -> float:
+    values = fields.get(field, ())
+    if not values:
+        return default
+    value = values[-1]
+    if isinstance(value, bytes) and len(value) == 4:
+        return float(struct.unpack("<f", value)[0])
+    return float(value) if isinstance(value, int) else default
+
+
 def _packed_uints(value: int | bytes) -> list[int]:
     if isinstance(value, int):
         return [value]
@@ -165,6 +176,14 @@ class OfficialMatchFeed:
                 "stage_countdown_sec": _field_int(fields, 6),
                 "stage_elapsed_sec": _field_int(fields, 7),
             })
+        elif name == "GlobalLogisticsStatus":
+            updates.update({
+                "remaining_economy": _field_int(fields, 1),
+                "total_economy_obtained": _field_int(fields, 2),
+                "tech_level": _field_int(fields, 3),
+                "encryption_level": _field_int(fields, 4),
+                "_economy_revision_increment": 1,
+            })
         elif name == "GlobalUnitStatus":
             health_values = fields.get(11) or fields.get(6) or []
             health = [number for value in health_values for number in _packed_uints(value)]
@@ -189,6 +208,39 @@ class OfficialMatchFeed:
             if alive_state == 2:
                 kind = "death" if robot_id == local_robot_id else "elimination"
                 events.append(CombatEvent(kind, "referee", True, now, victim_id=robot_id, detail="alive_state"))
+        elif name == "RobotRespawnStatus":
+            total = max(0, _field_int(fields, 2))
+            current = max(0, _field_int(fields, 3))
+            updates.update({
+                "respawn_pending": bool(_field_int(fields, 1)),
+                "respawn_progress": min(1.0, current / total) if total > 0 else 0.0,
+                "respawn_can_free": bool(_field_int(fields, 4)),
+                "respawn_gold_cost": _field_int(fields, 5),
+                "respawn_can_pay": bool(_field_int(fields, 6)),
+                "_economy_revision_increment": 1,
+            })
+        elif name == "RobotDynamicStatus":
+            updates.update({
+                "current_health": _field_int(fields, 1),
+                "current_heat": _field_float(fields, 2),
+                "current_chassis_energy": _field_int(fields, 4),
+                "current_buffer_energy": _field_int(fields, 5),
+                "total_projectiles_fired": _field_int(fields, 8),
+                "remaining_ammo": _field_int(fields, 9),
+                "out_of_combat": bool(_field_int(fields, 10)),
+                "can_remote_heal": bool(_field_int(fields, 12)),
+                "can_remote_ammo": bool(_field_int(fields, 13)),
+                "_economy_revision_increment": 1,
+            })
+        elif name == "AirSupportStatusSync":
+            free_time = _field_int(fields, 2)
+            updates.update({
+                "air_support_active": _field_int(fields, 1) == 1,
+                "air_support_free_time_sec": free_time,
+                "air_support_can_free": free_time > 0,
+                "air_support_cost_coins": _field_int(fields, 3),
+                "_economy_revision_increment": 1,
+            })
         elif name == "Event":
             event_id = _field_int(fields, 1)
             event_data = _parse_event_param(_field_bytes(fields, 2))

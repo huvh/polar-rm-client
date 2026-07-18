@@ -156,11 +156,13 @@ BottomLeftFbo = OpenGL FBO
 - hover 只更新当前项和上一项的 transform、高光与 opacity。
 - 鼠标移动不得重建背景、blur、文字或整页热点。
 
-### Vape One
+### POLAR One 与经济工作区
 
-- 收起态为顶部 POLAR 胶囊，展开态为主面板。
+- 收起态为顶部 POLAR 胶囊，展开态为主面板；经济工作区使用同一套根容器动效。
 - 根容器使用一个可逆时间线和一个 stencil/scissor。
 - 列表和设置区各有独立惯性滚动，不得依赖根面板重新布局。
+- 根容器使用 `LensStrong`，文字密集的商品、详情和状态区使用 `LensRegular`；内层不得再嵌套玻璃。
+- 720p/900p 使用双栏响应布局，1080p 以上可用三栏；切换布局不得改变商品与交易语义。
 
 ### 战术地图
 
@@ -171,7 +173,7 @@ BottomLeftFbo = OpenGL FBO
 ## 8. 动画规则
 
 - 动画使用单调时钟，与视频或摄像头帧率分离。
-- 页面过渡 420ms；Vape 展开 620ms、收拢 480ms。
+- 页面过渡 420ms；POLAR One 与经济工作区展开 620ms、收拢 480ms。
 - 动画必须可从当前进度反向，不得重置起点。
 - hover 使用低振幅位移，最大 1–3 逻辑像素。
 - 禁止持续呼吸、循环扫光和无意义振荡。
@@ -191,7 +193,7 @@ BottomLeftFbo = OpenGL FBO
 
 | 材质 | 必须使用的位置 | 规则 |
 |---|---|---|
-| `LensStrong` | 启动主卡、比赛模式卡、机器人卡、Vape One 根容器、选中胶囊、滑块、圆形按钮 | 直接用 Combined Backdrop 替换镜片像素；不叠加 blur、白雾、整框描边或阴影 |
+| `LensStrong` | 启动主卡、比赛模式卡、机器人卡、POLAR One/经济工作区根容器、选中胶囊、滑块、圆形按钮 | 直接用 Combined Backdrop 替换镜片像素；不叠加 blur、白雾、整框描边或阴影 |
 | `LensRegular` | SESSION、模块设置区、文字密集状态行、小地图状态卡 | 使用相同折射数学，只允许轻微柔化以保护文字；内层行不是第二层玻璃 |
 | `LensIsland` | 顶部灵动岛、通知岛、模式切换胶囊 | 圆角恒为高度一半；尺寸、裁剪、圆角与内容透明度共享一个 morph 进度 |
 
@@ -238,7 +240,7 @@ $env:PYTHONPATH='.'
 3. 镜片外 alpha 为零，无白色方块或长条。
 4. 四角方向测试覆盖静态图、MP4、摄像头和 FBO。
 5. 一级、二级、三级往返 100 次，无残影。
-6. Dynamic Island、Vape One 和战术地图可中途反向。
+6. Dynamic Island、POLAR One、经济工作区和战术地图可中途反向。
 7. 记录上传、blur、glass、static UI、dynamic UI 和 present 的 P50/P95。
 
 | 现象 | 优先检查 |

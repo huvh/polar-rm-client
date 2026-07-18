@@ -38,7 +38,16 @@ from ..combat_hud import CombatHudAnimator, VALID_COMBAT_HUD_VISUALS, ring_end
 from ..combat_events import CombatEvent, OfficialMatchFeed, VisionKillDetector
 from ..config_store import ClientConfigStore, apply_registry_config, export_client_config
 from ..control import KeyboardControlBridge
-from ..economy import EconomyAction, EconomyCommandBridge, available_actions
+from ..economy import (
+    CATEGORY_TITLES,
+    TRANSACTION_LABELS,
+    EconomyAction,
+    EconomyCommandBridge,
+    EconomyContext,
+    EconomyOffer,
+    EconomyRequest,
+    available_actions,
+)
 from ..model import (
     CATEGORIES,
     GUI_MODES,
@@ -298,6 +307,7 @@ class PolarRMWindow(QOpenGLWidget):
         self.serial = SerialBridgeStub()
         self.control = KeyboardControlBridge(self.serial, mock_output=True)
         self.economy_bridge = EconomyCommandBridge()
+        self.economy_bridge.sender = self.send_economy_request
         self.config_store = ClientConfigStore(self.workspace / "rm_custom_client" / "configs")
         self.calibration = CameraCalibrationManager(self.workspace)
         self.calibration.load("polar_webcam")
@@ -451,8 +461,17 @@ class PolarRMWindow(QOpenGLWidget):
         self.polar_settings_scroll_motion: dict[str, InertialScroll] = {}
         self.economy_visible = False
         self.economy_selected = 0
-        self.economy_quantity = 1
+        self.economy_selected_key = ""
+        self.economy_category = "ammo"
         self.economy_opened_at = 0.0
+        self.economy_morph = MorphState(progress=0.0, target=0.0, duration=0.62)
+        self.economy_scroll_motion = InertialScroll()
+        self.economy_armed_key = ""
+        self.economy_armed_until = 0.0
+        self.economy_hold_key = ""
+        self.economy_hold_started = 0.0
+        self.economy_hold_rect = QRectF()
+        self.economy_last_status_sequence = 0
         self._gpu_warm_pending = True
 
         self.apply_match_mode(self.match_mode_manager.current.key, close_home=False, announce=False)
@@ -493,6 +512,7 @@ class PolarRMWindow(QOpenGLWidget):
             requested_hz = 144.0
         self.render_fps_target = max(120.0, min(self.render_fps_cap, requested_hz))
         self.polar_unified_scroll = self.polar_unified_scroll_motion.update(dt)
+        self.economy_scroll_motion.update(dt)
         for motion in self.polar_settings_scroll_motion.values():
             motion.update(dt)
         self.gui_timeline.set_target(1.0 if self.gui_visible else 0.0)
@@ -504,6 +524,21 @@ class PolarRMWindow(QOpenGLWidget):
             now=now,
         )
         self.polar_unified_morph.update(now=now)
+        self.economy_morph.set_target(
+            1.0 if self.economy_visible else 0.0,
+            self.anim_duration(0.62 if self.economy_visible else 0.48),
+            now=now,
+        )
+        self.economy_morph.update(now=now)
+        self.state.economy_mock_mode = self.economy_uses_mock_transport()
+        economy_transaction = self.economy_bridge.update(self.state, now)
+        if (
+            economy_transaction is not None
+            and economy_transaction.status != "pending"
+            and economy_transaction.sequence != self.economy_last_status_sequence
+        ):
+            self.economy_last_status_sequence = economy_transaction.sequence
+            self.toast(economy_transaction.message)
         self.tactical_map_state.update(dt)
         dynamic_payload = self.dynamic_island_payload()
         content_duration = 0.30 if dynamic_payload["kind"] == "module" else 0.80
@@ -540,7 +575,8 @@ class PolarRMWindow(QOpenGLWidget):
             or self.polar_unified_scroll_motion.active
             or self.tactical_map_state.active()
             or self.dynamic_island_state.active()
-            or self.economy_visible
+            or self.economy_morph.active()
+            or self.economy_morph.progress > 0.01
         )
         if self.frame_scheduler.should_request(now, high_rate, self.render_fps_target):
             self.update()
@@ -1753,12 +1789,7 @@ class PolarRMWindow(QOpenGLWidget):
         and ModuleList remain cached in the stable UI FBO.
         """
 
-        economy_alpha = self.anim.value(
-            "hud.economy.open",
-            1.0 if self.economy_visible else 0.0,
-            self.anim_duration(0.24),
-            Easings.ease_out_expo,
-        )
+        economy_alpha = self.economy_morph.progress
         if economy_alpha > 0.01:
             self.hotspots.clear()
             self.draw_economy_overlay(p, width, height, economy_alpha)
@@ -1860,7 +1891,7 @@ class PolarRMWindow(QOpenGLWidget):
         if self.binding_module is not None and not (gui_alpha > 0.01 and self.setting_mode(self.registry.get("ClickGui"), "Render Backend", "Unified GPU") == "Unified GPU" and self.clickgui_gpu.available):
             self.draw_keybind_overlay(p, width, height)
 
-    def draw_economy_overlay(self, p: QPainter, width: int, height: int, alpha: float) -> None:
+    def draw_economy_overlay_legacy(self, p: QPainter, width: int, height: int, alpha: float) -> None:
         actions = available_actions(self.state)
         if not actions:
             return
@@ -1920,6 +1951,338 @@ class PolarRMWindow(QOpenGLWidget):
         self.draw_glass_text(p, submit, "SEND MOCK REQUEST", self.font("poppins_bold", 8 * scale), THEME.text if selected_action.enabled else THEME.muted, Qt.AlignmentFlag.AlignCenter)
         self.add_hotspot(close, "economy_close")
         self.add_hotspot(submit, "economy_submit", self.economy_selected)
+        p.restore()
+
+    def economy_uses_mock_transport(self) -> bool:
+        module = self.registry.get("EconomyPanel")
+        force_mock = self.setting_bool(module, "Mock Requests", True) if module else True
+        return force_mock or self.scenario_manager.current.key != "OfficialEvent"
+
+    def send_economy_request(self, request: EconomyRequest) -> bool:
+        """Send a confirmed economy request without mutating local match state."""
+        if request.mock:
+            return True
+        if self.scenario_manager.current.key != "OfficialEvent":
+            self.mqtt.last_error = "仅官方赛事场景允许发送正式经济请求"
+            return False
+        if request.topic == "AirSupportCommand":
+            return self.mqtt.publish_air_support_command(request.payload)
+        return self.mqtt.publish_common_command(request.payload)
+
+    def economy_offers(self, category: str | None = None) -> list[EconomyOffer]:
+        offers = available_actions(self.state)
+        if category is None:
+            return offers
+        return [offer for offer in offers if offer.category == category]
+
+    def economy_categories(self, offers: list[EconomyOffer] | None = None) -> list[str]:
+        offers = self.economy_offers() if offers is None else offers
+        present = {offer.category for offer in offers}
+        return [key for key in CATEGORY_TITLES if key in present]
+
+    def economy_selected_offer(self) -> EconomyOffer | None:
+        offers = self.economy_offers(self.economy_category)
+        if not offers:
+            return None
+        for offer in offers:
+            if offer.key == self.economy_selected_key:
+                return offer
+        self.economy_selected_key = offers[0].key
+        self.economy_selected = 0
+        return offers[0]
+
+    def open_economy_workspace(self, category: str | None = None) -> None:
+        offers = self.economy_offers()
+        categories = self.economy_categories(offers)
+        if category in categories:
+            self.economy_category = str(category)
+        elif self.economy_category not in categories and categories:
+            self.economy_category = categories[0]
+        self.economy_visible = True
+        self.gui_visible = False
+        self.economy_opened_at = time.perf_counter()
+        self.economy_armed_key = ""
+        self.economy_hold_key = ""
+        self.economy_scroll_motion.position = 0.0
+        self.economy_scroll_motion.target = 0.0
+        selected = self.economy_selected_offer()
+        if selected is not None:
+            self.economy_selected_key = selected.key
+        self.play_gui_transition_sound("expand")
+        self.frame_scheduler.force()
+
+    def close_economy_workspace(self) -> None:
+        if not self.economy_visible:
+            return
+        self.economy_visible = False
+        self.economy_armed_key = ""
+        self.economy_hold_key = ""
+        self.economy_hold_rect = QRectF()
+        self.play_gui_transition_sound("collapse")
+        self.frame_scheduler.force()
+
+    def select_economy_offer(self, key: str) -> None:
+        offers = self.economy_offers(self.economy_category)
+        for index, offer in enumerate(offers):
+            if offer.key == key:
+                self.economy_selected = index
+                self.economy_selected_key = key
+                self.economy_armed_key = ""
+                self.frame_scheduler.force()
+                return
+
+    def submit_economy_offer(self, offer: EconomyOffer) -> None:
+        if not offer.enabled or offer.status_only:
+            self.toast(offer.reason or "当前操作不可用")
+            return
+        latest = self.economy_bridge.latest
+        if latest is not None and latest.status == "pending":
+            self.toast("上一笔请求仍在等待确认")
+            return
+        try:
+            transaction = self.economy_bridge.submit(
+                self.state,
+                offer,
+                1,
+                mock=self.economy_uses_mock_transport(),
+            )
+        except ValueError as exc:
+            self.toast(str(exc))
+            return
+        self.economy_armed_key = ""
+        self.economy_hold_key = ""
+        self.toast(f"{transaction.message} · {offer.short_title}")
+        self.frame_scheduler.force()
+
+    def activate_economy_offer(self, offer: EconomyOffer) -> None:
+        if not offer.enabled or offer.status_only:
+            self.toast(offer.reason or "当前操作不可用")
+            return
+        if offer.confirmation == "hold":
+            self.toast("请按住确认按钮或 Enter 0.6 秒")
+            return
+        now = time.perf_counter()
+        if self.economy_armed_key == offer.key and now <= self.economy_armed_until:
+            self.submit_economy_offer(offer)
+            return
+        self.economy_armed_key = offer.key
+        self.economy_armed_until = now + 1.8
+        self.toast(f"再次确认：{offer.short_title} · {offer.cost} 金币")
+        self.frame_scheduler.force()
+
+    def begin_economy_hold(self, offer: EconomyOffer, rect: QRectF | None = None) -> None:
+        if not offer.enabled or offer.status_only:
+            self.toast(offer.reason or "当前操作不可用")
+            return
+        self.economy_hold_key = offer.key
+        self.economy_hold_started = time.perf_counter()
+        self.economy_hold_rect = QRectF(rect) if rect is not None else QRectF()
+        self.frame_scheduler.force()
+
+    def finish_economy_hold(self, point: QPointF | None = None) -> None:
+        if not self.economy_hold_key:
+            return
+        key = self.economy_hold_key
+        elapsed = time.perf_counter() - self.economy_hold_started
+        inside = point is None or self.economy_hold_rect.isNull() or self.economy_hold_rect.contains(point)
+        self.economy_hold_key = ""
+        self.economy_hold_rect = QRectF()
+        offer = next((item for item in self.economy_offers() if item.key == key), None)
+        if offer is not None and inside and elapsed >= 0.60:
+            self.submit_economy_offer(offer)
+        elif elapsed < 0.60:
+            self.toast("需要按住 0.6 秒确认")
+        self.frame_scheduler.force()
+
+    @staticmethod
+    def economy_lerp_rect(a: QRectF, b: QRectF, progress: float) -> QRectF:
+        t = max(0.0, min(1.0, progress))
+        return QRectF(
+            a.x() + (b.x() - a.x()) * t,
+            a.y() + (b.y() - a.y()) * t,
+            a.width() + (b.width() - a.width()) * t,
+            a.height() + (b.height() - a.height()) * t,
+        )
+
+    def draw_economy_overlay(self, p: QPainter, width: int, height: int, alpha: float) -> None:
+        all_offers = self.economy_offers()
+        categories = self.economy_categories(all_offers)
+        if not categories:
+            return
+        if self.economy_category not in categories:
+            self.economy_category = categories[0]
+        offers = [offer for offer in all_offers if offer.category == self.economy_category]
+        selected = self.economy_selected_offer()
+        context = EconomyContext.from_state(self.state)
+        scale = max(0.76, min(1.12, self.get_auto_ui_scale(width, height, strength=0.30)))
+        morph = Easings.ease_out_expo(max(0.0, min(1.0, alpha)))
+        content_alpha = Easings.ease_out_expo(max(0.0, min(1.0, (morph - 0.12) / 0.88)))
+        compact = width < 1650 or height < 900
+
+        margin = 18.0 * scale
+        target_w = min(1180.0 * scale, width - margin * 2.0)
+        target_h = min(720.0 * scale, height - margin * 2.0)
+        target = QRectF((width - target_w) * 0.5, (height - target_h) * 0.5, target_w, target_h)
+        collapsed = QRectF(width * 0.5 - 170.0 * scale, 26.0 * scale, 340.0 * scale, 48.0 * scale)
+        panel = self.economy_lerp_rect(collapsed, target, morph)
+        radius = panel.height() * 0.5 * (1.0 - morph) + 22.0 * scale * morph
+
+        p.save()
+        p.fillRect(QRectF(0, 0, width, height), color("#020408", 0.34 * alpha))
+        self.draw_liquid_glass_panel(
+            p,
+            panel,
+            radius,
+            accent=THEME.cyan,
+            hover=0.10,
+            scale=scale,
+            surface="ModalGlass",
+        )
+        header_h = 76.0 * scale
+        header = QRectF(panel.left() + 22.0 * scale, panel.top() + 12.0 * scale, panel.width() - 44.0 * scale, header_h - 18.0 * scale)
+        self.draw_glass_text(p, header, "POLAR ECONOMY", self.font("poppins_bold", 15.0 * scale), THEME.text)
+        link = "MOCK" if context.mock_mode else "REFEREE"
+        subtitle = f"{self.match_mode_manager.current.title} · {profile_by_key(context.match_mode, context.robot_profile).title} · {link}"
+        self.draw_glass_text(
+            p,
+            header.adjusted(0, 27.0 * scale, -92.0 * scale, 0),
+            subtitle,
+            self.font("poppins_medium", 8.5 * scale),
+            color("#edf4ff", 0.78),
+        )
+        close = QRectF(header.right() - 42.0 * scale, header.top() + 5.0 * scale, 38.0 * scale, 38.0 * scale)
+        rounded_rect(p, close, close.height() * 0.5, color("#ffffff", 0.08), color("#ffffff", 0.18))
+        self.draw_glass_text(p, close, "×", self.font("poppins_medium", 16.0 * scale), THEME.text, Qt.AlignmentFlag.AlignCenter)
+        self.add_hotspot(close, "economy_close", tooltip="关闭经济工作区 [Esc]")
+
+        if content_alpha <= 0.01 or panel.height() < 180.0 * scale:
+            p.restore()
+            return
+        p.setOpacity(p.opacity() * content_alpha)
+        inner = panel.adjusted(22.0 * scale, header_h, -22.0 * scale, -22.0 * scale)
+        gap = 12.0 * scale
+        left_w = (224.0 if compact else 206.0) * scale
+        middle_w = (0.0 if compact else 360.0 * scale)
+        left = QRectF(inner.left(), inner.top(), left_w, inner.height())
+        if compact:
+            content = QRectF(left.right() + gap, inner.top(), inner.width() - left.width() - gap, inner.height())
+            list_rect = QRectF(content.left(), content.top(), content.width(), content.height() * 0.56 - gap * 0.5)
+            detail = QRectF(content.left(), list_rect.bottom() + gap, content.width(), content.bottom() - list_rect.bottom() - gap)
+        else:
+            list_rect = QRectF(left.right() + gap, inner.top(), middle_w, inner.height())
+            detail = QRectF(list_rect.right() + gap, inner.top(), inner.right() - list_rect.right() - gap, inner.height())
+
+        for rect in (left, list_rect, detail):
+            self.draw_liquid_glass_panel(p, rect, 16.0 * scale, accent=THEME.cyan, hover=0.0, scale=scale, surface="MainGlass")
+
+        pad = 16.0 * scale
+        self.draw_glass_text(p, left.adjusted(pad, 12.0 * scale, -pad, -left.height() + 38.0 * scale), "CURRENT ECONOMY", self.font("poppins_bold", 8.0 * scale), color("#f4f8ff", 0.76))
+        self.draw_glass_text(p, left.adjusted(pad, 34.0 * scale, -pad, -left.height() + 82.0 * scale), f"{context.gold}", self.font("poppins_bold", 27.0 * scale), THEME.text)
+        self.draw_glass_text(p, left.adjusted(pad + 54.0 * scale, 48.0 * scale, -pad, -left.height() + 78.0 * scale), "GOLD", self.font("poppins_medium", 8.0 * scale), color("#f5c85d", 0.96))
+        economy_ratio = context.gold / max(1.0, float(max(context.total_gold, context.gold)))
+        track = QRectF(left.left() + pad, left.top() + 88.0 * scale, left.width() - pad * 2.0, 6.0 * scale)
+        rounded_rect(p, track, 3.0 * scale, color("#ffffff", 0.11))
+        rounded_rect(p, QRectF(track.left(), track.top(), track.width() * economy_ratio, track.height()), 3.0 * scale, color("#f5c85d", 0.94))
+        pending_cost = self.economy_bridge.latest.request.cost if self.economy_bridge.latest and self.economy_bridge.latest.status == "pending" else 0
+        summary = f"累计 {context.total_gold}  ·  待扣 {pending_cost}"
+        self.draw_glass_text(p, left.adjusted(pad, 98.0 * scale, -pad, -left.height() + 124.0 * scale), summary, self.font("poppins_medium", 7.2 * scale), color("#eef4ff", 0.68))
+
+        category_y = left.top() + 142.0 * scale
+        category_h = 42.0 * scale
+        for index, key in enumerate(categories):
+            rect = QRectF(left.left() + pad, category_y + index * (category_h + 8.0 * scale), left.width() - pad * 2.0, category_h)
+            active = key == self.economy_category
+            rounded_rect(p, rect, 12.0 * scale, color("#73e7dc", 0.18 if active else 0.055), color("#b9fff7", 0.42 if active else 0.10))
+            self.draw_glass_text(p, rect.adjusted(13.0 * scale, 0, -10.0 * scale, 0), CATEGORY_TITLES[key], self.font("poppins_bold" if active else "poppins_medium", 9.0 * scale), THEME.text if active else color("#f0f4fb", 0.70))
+            self.add_hotspot(rect, "economy_category", key)
+
+        status_y = left.bottom() - 102.0 * scale
+        hp_ratio = context.current_health / max(1.0, float(context.max_health))
+        ammo_ratio = context.current_ammo / max(1.0, float(context.ammo_capacity or context.current_ammo or 1))
+        for row, (label, value, ratio, accent) in enumerate((
+            ("HP", f"{context.current_health}/{context.max_health}", hp_ratio, color("#64dda1")),
+            ("AMMO", f"{context.current_ammo}/{context.ammo_capacity or '--'}", ammo_ratio, color("#64baff")),
+        )):
+            y = status_y + row * 42.0 * scale
+            self.draw_glass_text(p, QRectF(left.left() + pad, y, left.width() - pad * 2.0, 18.0 * scale), f"{label}  {value}", self.font("poppins_medium", 7.2 * scale), color("#f4f7fb", 0.76))
+            bar = QRectF(left.left() + pad, y + 21.0 * scale, left.width() - pad * 2.0, 4.0 * scale)
+            rounded_rect(p, bar, 2.0 * scale, color("#ffffff", 0.10))
+            rounded_rect(p, QRectF(bar.left(), bar.top(), bar.width() * max(0.0, min(1.0, ratio)), bar.height()), 2.0 * scale, accent)
+
+        list_pad = 13.0 * scale
+        title_h = 34.0 * scale
+        self.draw_glass_text(p, list_rect.adjusted(list_pad, 7.0 * scale, -list_pad, -list_rect.height() + title_h), CATEGORY_TITLES[self.economy_category], self.font("poppins_bold", 10.0 * scale), THEME.text)
+        viewport = list_rect.adjusted(list_pad, title_h, -list_pad, -list_pad)
+        card_h = (70.0 if compact else 76.0) * scale
+        card_gap = 8.0 * scale
+        self.economy_scroll_motion.set_bounds(max(0.0, len(offers) * (card_h + card_gap) - card_gap - viewport.height()))
+        p.save()
+        p.setClipRect(viewport)
+        previous_clip = getattr(self, "_hotspot_clip", None)
+        self._hotspot_clip = viewport
+        scroll = self.economy_scroll_motion.position
+        for index, offer in enumerate(offers):
+            rect = QRectF(viewport.left(), viewport.top() + index * (card_h + card_gap) - scroll, viewport.width(), card_h)
+            if not rect.intersects(viewport):
+                continue
+            active = selected is not None and offer.key == selected.key
+            hovered = rect.contains(self.hover_point)
+            rounded_rect(p, rect, 11.0 * scale, color("#ffffff", 0.095 if active else 0.048), color("#78e8dd", 0.52 if active else 0.15 if hovered else 0.08))
+            self.draw_glass_text(p, rect.adjusted(13.0 * scale, 5.0 * scale, -12.0 * scale, -rect.height() + 30.0 * scale), offer.short_title, self.font("poppins_bold", 8.6 * scale), THEME.text if offer.enabled else color("#d5d9de", 0.55))
+            price = "状态" if offer.status_only else f"{offer.cost} G"
+            self.draw_glass_text(p, rect.adjusted(13.0 * scale, 5.0 * scale, -13.0 * scale, -rect.height() + 30.0 * scale), price, self.font("poppins_bold", 7.6 * scale), color("#f5c85d", 0.96 if offer.enabled else 0.50), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            secondary = offer.reason if not offer.enabled else offer.description
+            self.draw_glass_text(p, rect.adjusted(13.0 * scale, 31.0 * scale, -13.0 * scale, -8.0 * scale), secondary, self.font("poppins_medium", 6.8 * scale), color("#f7f9fc", 0.65 if offer.enabled else 0.48))
+            self.add_hotspot(rect, "economy_offer", offer.key, tooltip=offer.reason or offer.description)
+        self._hotspot_clip = previous_clip
+        p.restore()
+
+        detail_pad = 17.0 * scale
+        if selected is not None:
+            self.draw_glass_text(p, detail.adjusted(detail_pad, 12.0 * scale, -detail_pad, -detail.height() + 42.0 * scale), selected.title, self.font("poppins_bold", 11.0 * scale), THEME.text)
+            tag = "预计价格" if selected.estimated else ("MOCK" if context.mock_mode else "裁判系统")
+            self.draw_glass_text(p, detail.adjusted(detail_pad, 42.0 * scale, -detail_pad, -detail.height() + 67.0 * scale), f"{selected.unit} · {selected.cost} 金币 · {tag}", self.font("poppins_medium", 7.7 * scale), color("#f5cf72", 0.88))
+            self.draw_glass_text(p, detail.adjusted(detail_pad, 69.0 * scale, -detail_pad, -detail.height() + 112.0 * scale), selected.description, self.font("poppins_medium", 7.4 * scale), color("#f1f5fb", 0.72))
+            state_text = selected.reason if not selected.enabled else "操作条件已满足"
+            state_color = color("#ffb06f", 0.90) if not selected.enabled else color("#70e0ae", 0.92)
+            self.draw_glass_text(p, detail.adjusted(detail_pad, 110.0 * scale, -detail_pad, -detail.height() + 138.0 * scale), state_text, self.font("poppins_bold", 7.5 * scale), state_color)
+
+        history_top = detail.top() + (154.0 if compact else 174.0) * scale
+        self.draw_glass_text(p, QRectF(detail.left() + detail_pad, history_top, detail.width() - detail_pad * 2.0, 24.0 * scale), "TRANSACTIONS", self.font("poppins_bold", 7.4 * scale), color("#f4f8ff", 0.66))
+        history = list(reversed(self.economy_bridge.history[-3:]))
+        for index, transaction in enumerate(history):
+            y = history_top + 28.0 * scale + index * 34.0 * scale
+            label = TRANSACTION_LABELS.get(transaction.status, transaction.status)
+            status_color = color("#70e0ae") if transaction.status == "succeeded" else color("#ffb96b") if transaction.status in ("rejected", "timed_out") else color("#72bfff")
+            self.draw_glass_text(p, QRectF(detail.left() + detail_pad, y, detail.width() - detail_pad * 2.0, 18.0 * scale), f"{label} · {transaction.offer.short_title}", self.font("poppins_medium", 7.0 * scale), status_color)
+            self.draw_glass_text(p, QRectF(detail.left() + detail_pad, y + 15.0 * scale, detail.width() - detail_pad * 2.0, 16.0 * scale), transaction.message, self.font("poppins_medium", 6.4 * scale), color("#f2f5fa", 0.58))
+
+        button = QRectF(detail.left() + detail_pad, detail.bottom() - 54.0 * scale, detail.width() - detail_pad * 2.0, 38.0 * scale)
+        if selected is None:
+            button_text = "NO OFFER"
+            button_enabled = False
+            action = "economy_confirm"
+        elif not selected.enabled or selected.status_only:
+            button_text = selected.reason or "当前不可用"
+            button_enabled = False
+            action = "economy_confirm"
+        elif selected.confirmation == "hold":
+            hold_progress = max(0.0, min(1.0, (time.perf_counter() - self.economy_hold_started) / 0.60)) if self.economy_hold_key == selected.key else 0.0
+            button_text = "按住 0.6 秒确认" if hold_progress <= 0.0 else f"确认中 {round(hold_progress * 100)}%"
+            button_enabled = True
+            action = "economy_confirm_hold"
+        else:
+            armed = self.economy_armed_key == selected.key and time.perf_counter() <= self.economy_armed_until
+            button_text = "再次点击确认" if armed else "选择此操作"
+            button_enabled = True
+            action = "economy_confirm"
+        rounded_rect(p, button, button.height() * 0.5, color("#64ddd0", 0.24 if button_enabled else 0.06), color("#a9fff5", 0.52 if button_enabled else 0.12))
+        if selected is not None and selected.confirmation == "hold" and self.economy_hold_key == selected.key:
+            progress = max(0.0, min(1.0, (time.perf_counter() - self.economy_hold_started) / 0.60))
+            rounded_rect(p, QRectF(button.left(), button.top(), button.width() * progress, button.height()), button.height() * 0.5, color("#65e5d7", 0.32))
+        self.draw_glass_text(p, button, button_text, self.font("poppins_bold", 8.0 * scale), THEME.text if button_enabled else color("#d4dae0", 0.52), Qt.AlignmentFlag.AlignCenter)
+        if selected is not None and button_enabled:
+            self.add_hotspot(button, action, selected.key)
         p.restore()
 
     def draw_startup_gpu_background(self) -> bool:
@@ -2285,6 +2648,10 @@ class PolarRMWindow(QOpenGLWidget):
     def consume_official_messages(self) -> None:
         for topic, payload, _received_at in self.mqtt.drain_received_messages():
             events, updates = self.official_feed.consume(topic, payload, alliance=self.alliance_side(), local_robot_id=self.state.robot_id)
+            revision_increment = int(updates.pop("_economy_revision_increment", 0))
+            if revision_increment > 0:
+                self.state.economy_status_revision += revision_increment
+                self.state.economy_command_status = ""
             self._official_state_updates.update(updates)
             for event in events:
                 self.accept_combat_event(event)
@@ -9781,7 +10148,9 @@ class PolarRMWindow(QOpenGLWidget):
             panel["x"] = point.x() - self.drag["offset_x"]
             panel["y"] = point.y() - self.drag["offset_y"]
 
-    def mouseReleaseEvent(self, _event: QMouseEvent) -> None:
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+        if self.economy_hold_key:
+            self.finish_economy_hold(event.position())
         if self.drag and self.drag.get("type") in {"old_panel", "polar_window"}:
             self.auto_save_config()
         self.drag = None
@@ -9789,6 +10158,11 @@ class PolarRMWindow(QOpenGLWidget):
     def wheelEvent(self, event: QWheelEvent) -> None:
         point = event.position()
         delta = -event.angleDelta().y() / 120.0 * 28.0
+        if self.economy_visible:
+            self.economy_scroll_motion.add_wheel(delta)
+            self.frame_scheduler.force()
+            event.accept()
+            return
         if self.mode_manager.mode == "PolarPanel" and self.panel_modules_rect.contains(point):
             modules = self.panel_modules()
             scale = self.get_gui_scale_for_bounds(self.width(), self.height(), 600.0, 440.0, 76.0, 82.0)
@@ -9850,37 +10224,56 @@ class PolarRMWindow(QOpenGLWidget):
                 return
         key_name = self.key_name(event)
         economy_module = self.registry.get("EconomyPanel")
+        projectile_module = self.registry.get("ProjectileShop")
         economy_key = bool(
             economy_module
             and economy_module.enabled
             and economy_module.keybind != "None"
             and self.keybind_matches(economy_module.keybind, key_name, event)
         )
+        projectile_key = bool(
+            projectile_module
+            and projectile_module.enabled
+            and projectile_module.keybind != "None"
+            and self.keybind_matches(projectile_module.keybind, key_name, event)
+        )
         if event.key() == Qt.Key.Key_Escape and self.economy_visible:
-            self.economy_visible = False
-            self.frame_scheduler.force()
+            self.close_economy_workspace()
             return
         if economy_key and not event.isAutoRepeat() and not self.home_visible:
-            self.economy_visible = not self.economy_visible
-            self.gui_visible = False
-            self.economy_opened_at = time.perf_counter()
-            self.frame_scheduler.force()
+            if self.economy_visible:
+                self.close_economy_workspace()
+            else:
+                self.open_economy_workspace()
+            return
+        if projectile_key and not event.isAutoRepeat() and not self.home_visible:
+            self.open_economy_workspace("ammo")
             return
         if self.economy_visible:
-            actions = available_actions(self.state)
-            if event.key() in (Qt.Key.Key_Left, Qt.Key.Key_Up):
-                self.economy_selected = (self.economy_selected - 1) % max(1, len(actions))
+            categories = self.economy_categories()
+            offers = self.economy_offers(self.economy_category)
+            if event.key() in (Qt.Key.Key_Left, Qt.Key.Key_Right) and categories:
+                index = categories.index(self.economy_category) if self.economy_category in categories else 0
+                index += -1 if event.key() == Qt.Key.Key_Left else 1
+                self.economy_category = categories[index % len(categories)]
+                self.economy_selected_key = ""
+                self.economy_selected_offer()
+                self.economy_scroll_motion.position = 0.0
+                self.economy_scroll_motion.target = 0.0
+                self.frame_scheduler.force()
                 return
-            if event.key() in (Qt.Key.Key_Right, Qt.Key.Key_Down):
-                self.economy_selected = (self.economy_selected + 1) % max(1, len(actions))
+            if event.key() in (Qt.Key.Key_Up, Qt.Key.Key_Down) and offers:
+                selected_index = next((index for index, offer in enumerate(offers) if offer.key == self.economy_selected_key), 0)
+                selected_index += -1 if event.key() == Qt.Key.Key_Up else 1
+                self.select_economy_offer(offers[selected_index % len(offers)].key)
                 return
-            if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter) and actions:
-                action = actions[self.economy_selected]
-                if action.enabled:
-                    self.economy_bridge.submit(self.state, action, self.economy_quantity)
-                    self.toast(f"经济请求已缓存：{action.title}")
-                else:
-                    self.toast(action.reason or "当前操作不可用")
+            if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+                offer = self.economy_selected_offer()
+                if offer is not None and not event.isAutoRepeat():
+                    if offer.confirmation == "hold":
+                        self.begin_economy_hold(offer)
+                    else:
+                        self.activate_economy_offer(offer)
                 return
         if self.search_focus:
             if event.key() == Qt.Key.Key_Backspace:
@@ -9921,6 +10314,9 @@ class PolarRMWindow(QOpenGLWidget):
 
     def keyReleaseEvent(self, event: QKeyEvent) -> None:
         if self.binding_module is not None or self.search_focus:
+            return
+        if self.economy_visible and event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            self.finish_economy_hold()
             return
         if self.handle_tactical_map_hold_event(event, False):
             return
@@ -10105,20 +10501,32 @@ class PolarRMWindow(QOpenGLWidget):
             self.wallpaper_picker_visible = False
         elif action == "wallpaper_block":
             pass
-        elif action == "economy_select":
-            self.economy_selected = max(0, int(payload))
-            self.frame_scheduler.force()
-        elif action == "economy_submit":
-            actions = available_actions(self.state)
-            index = max(0, min(len(actions) - 1, int(payload))) if actions else 0
-            if actions and actions[index].enabled:
-                request = self.economy_bridge.submit(self.state, actions[index], self.economy_quantity)
-                self.toast(f"经济请求已缓存：{actions[index].title} · {request.cost} 金币")
-            elif actions:
-                self.toast(actions[index].reason or "当前操作不可用")
+        elif action == "economy_category":
+            categories = self.economy_categories()
+            category = str(payload)
+            if category in categories:
+                self.economy_category = category
+                self.economy_selected = 0
+                self.economy_selected_key = ""
+                self.economy_armed_key = ""
+                self.economy_scroll_motion.position = 0.0
+                self.economy_scroll_motion.target = 0.0
+                self.economy_scroll_motion.velocity = 0.0
+                self.economy_selected_offer()
+                self.frame_scheduler.force()
+        elif action == "economy_offer":
+            self.select_economy_offer(str(payload))
+        elif action in {"economy_confirm", "economy_confirm_hold"}:
+            key = str(payload)
+            offer = next((item for item in self.economy_offers() if item.key == key), None)
+            if offer is not None:
+                self.select_economy_offer(key)
+                if action == "economy_confirm_hold":
+                    self.begin_economy_hold(offer, rect)
+                else:
+                    self.activate_economy_offer(offer)
         elif action == "economy_close":
-            self.economy_visible = False
-            self.frame_scheduler.force()
+            self.close_economy_workspace()
         elif action == "startup_exit":
             self.close()
 
