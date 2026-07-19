@@ -1006,12 +1006,15 @@ class PolarRMWindow(QOpenGLWidget):
                 self.begin_gpu_island_icon_collection()
                 painter = QPainter(device)
                 if not self.home_visible:
+                    # When the menu is open, draw CombatTargetHUD into this
+                    # layer (under dim+panels). Closed: isolated target_fbo
+                    # owns the ring so it stays crisp over the scene only.
                     self.paint_hud_motion_overlay(
                         painter,
                         width,
                         height,
                         include_vision=not native_vision_owner,
-                        include_target_hud=False,
+                        include_target_hud=self.menu_overlay_active(),
                     )
                     self.paint_clickgui_overlay(
                         painter,
@@ -1185,10 +1188,13 @@ class PolarRMWindow(QOpenGLWidget):
                 self.begin_gpu_island_icon_collection()
                 dynamic_painter = QPainter(dynamic_device)
                 if not self.home_visible:
+                    # Fallback path has no isolated target_fbo upload; combat
+                    # ring stays in this dynamic pass (under ClickGUI when open).
                     self.paint_hud_motion_overlay(
                         dynamic_painter,
                         width,
                         height,
+                        include_target_hud=True,
                     )
                     self.paint_clickgui_overlay(dynamic_painter, width, height)
                 dynamic_painter.end()
@@ -1276,9 +1282,6 @@ class PolarRMWindow(QOpenGLWidget):
             self.state.stage_countdown_sec,
             self.state.last_event,
             enabled_state,
-            # Rebuild static FBO when menu owns the screen so battle chrome
-            # (target card / right panels) cannot linger under ClickGUI.
-            self.menu_overlay_active(),
         )
 
     def paint_gpu_background(self, functions, width: int, height: int, ratio: float) -> bool:
@@ -1608,10 +1611,10 @@ class PolarRMWindow(QOpenGLWidget):
             )
 
     def menu_overlay_active(self) -> bool:
-        """True while ClickGUI or Economy workspace owns the screen.
+        """True while ClickGUI or Economy workspace is open (or animating).
 
-        Battle chrome (ModuleList, map, chassis, telemetry, FOV, …) must stay
-        off so it cannot stack under / through the menu glass.
+        Battle HUD stays visible for live visual tuning, but must paint *under*
+        the menu (dynamic layer order + no topmost targetTex over panel text).
         """
         return bool(self.gui_timeline.progress > 0.01 or self.economy_visible or self.economy_morph.progress > 0.01)
 
@@ -1625,16 +1628,15 @@ class PolarRMWindow(QOpenGLWidget):
         include_vision: bool = True,
         include_target_hud: bool = True,
     ) -> None:
-        """以 UI 高刷新率绘制与图传帧率无关的战斗 HUD 动效。"""
+        """以 UI 高刷新率绘制与图传帧率无关的战斗 HUD 动效。
+
+        ClickGUI 打开时仍绘制 ModuleList / 小地图 / 底盘等，便于边调边看；
+        本层在 dynamic FBO 里先于 ClickGUI 绘制，菜单 dim + 面板盖在上面，
+        不抢标签可读性。
+        """
         started_at = time.perf_counter()
         now = started_at
         hud = self.registry.get("HUD")
-        # ClickGUI / economy open → draw none of the battle chrome that would
-        # fight panel labels (modlist, map, bottom chassis, FOV, …).
-        if self.menu_overlay_active():
-            self.dynamic_hud_ms = (time.perf_counter() - started_at) * 1000.0
-            return
-
         scale = self.get_hud_scale(width, height)
         logical_width = max(1, int(width / scale))
         logical_height = max(1, int(height / scale))
@@ -1687,6 +1689,7 @@ class PolarRMWindow(QOpenGLWidget):
         if self.setting_bool(hud, "Dynamic Island", True):
             self.draw_dynamic_island(p, logical_width)
         tactical_map = self.registry.get("TacticalMap")
+        # Always show map while tuning ClickGUI unless caller forces it off.
         draw_map = True if include_map is None else include_map
         if draw_map and tactical_map and tactical_map.enabled:
             self.draw_tactical_map_hud(p, logical_width, logical_height)
@@ -1707,7 +1710,9 @@ class PolarRMWindow(QOpenGLWidget):
         self.draw_telemetry_strip(p, logical_width, logical_height)
         p.restore()
         # Full-resolution kill icons/score popups; not under hud_scale transform.
-        self.draw_elimination_fx(p, width, height)
+        # While menu is open, skip elim FX so card bursts do not flash over panels.
+        if not self.menu_overlay_active():
+            self.draw_elimination_fx(p, width, height)
         self.dynamic_hud_ms = (time.perf_counter() - started_at) * 1000.0
 
     def paint_combat_target_overlay(
@@ -1750,8 +1755,10 @@ class PolarRMWindow(QOpenGLWidget):
         exact ``glTexSubImage2D`` replace on a small ROI removes that residue
         without tanking frame rate.
 
-        While ClickGUI / economy owns the screen the target layer is cleared so
-        the ring does not composite over module labels (targetTex is topmost).
+        While ClickGUI / economy is open the topmost targetTex is cleared and
+        the ring is painted into the dynamic layer *under* the menu instead
+        (see paint_hud_motion_overlay include_target_hud). targetTex is always
+        composited above dynamic, so leaving it live would cover panel text.
         """
         if self.menu_overlay_active():
             return self.gpu_compositor.clear_target_layer(functions)
@@ -2912,6 +2919,14 @@ class PolarRMWindow(QOpenGLWidget):
         surface: str = "MainGlass",
         hover: float = 0.0,
     ) -> None:
+        # While ClickGUI/economy is open, battle HUD still draws for preview but
+        # must not register extra glass lenses that steal blur samples / stack
+        # under panel glass. Use a cheap translucent plate instead.
+        if self.menu_overlay_active():
+            fill = color("#05080e", 0.42 + 0.10 * max(0.0, min(1.0, hover)))
+            edge = color("#ffffff", 0.08 + 0.06 * max(0.0, min(1.0, hover)))
+            rounded_rect(p, rect, radius, fill, edge, 0.8)
+            return
         if self._gpu_frame_recording and self.gpu_compositor.available:
             mapped = p.transform().mapRect(rect)
             self.gpu_compositor.add_glass(
@@ -4123,45 +4138,44 @@ class PolarRMWindow(QOpenGLWidget):
         # 真实装甲视觉接入后不允许旧 Mock 能量框叠到图传上。
         draw_energy = energy_enabled and self._vision_source == "Mock"
         primary_target = energy_target if draw_energy else armor_target
-        menu_open = self.menu_overlay_active()
         hud_scale = self.get_hud_scale(width, height)
         scaled_width = max(1, int(width / hud_scale))
         scaled_height = max(1, int(height / hud_scale))
         p.save()
         p.scale(hud_scale, hud_scale)
-        # While ClickGUI/economy owns the screen, leave the static layer empty of
-        # battle chrome so panels are not fighting ModuleList / TargetHUD / map.
-        if not menu_open:
-            if self.setting_bool(hud, "Watermark", True):
-                self.draw_watermark(p)
-            if self.registry.get("MatchTimer") and self.registry.get("MatchTimer").enabled:
-                self.draw_match_header(p, scaled_width)
-            bottom_left = HudAnchorStack(22.0, scaled_height - 60.0, 8.0)
-            if self.setting_bool(hud, "Target HUD", True):
-                title = "EnergyTargetHUD" if primary_target.kind == "energy" else "RobotTargetHUD"
-                self.draw_target_hud_by_style(p, primary_target, title, bottom_left)
-            diagnostics = list(self._bottom_left_diagnostics)
-            if self.hud_density() != "DebugFull" and diagnostics:
-                diagnostics = [max(diagnostics, key=lambda item: item[2])]
-            else:
-                diagnostics.sort(key=lambda item: item[2])
-            for text_value, text_color, _priority in diagnostics:
-                diagnostic_rect = bottom_left.take(220.0, 22.0)
-                self.draw_pill(p, diagnostic_rect.topLeft(), text_value, text_color)
-            if hud:
-                mode_setting = hud.get_setting("Right Display")
-                mode = str(mode_setting.value) if mode_setting else HUD_MODES[0]
-                # ModuleList RGB lives on the motion overlay by default so static
-                # FBO never freezes hue. Other right-panel modes stay here.
-                self.draw_right_hud_mode(
-                    p,
-                    scaled_width,
-                    scaled_height,
-                    mode,
-                    primary_target,
-                    hud_scale,
-                    draw_module_list=draw_module_list,
-                )
+        # Static battle chrome stays on while ClickGUI is open so ModuleList /
+        # TargetHUD / right panels remain visible for live tuning. ClickGUI
+        # paints later on the dynamic layer (with a dim) and covers the center.
+        if self.setting_bool(hud, "Watermark", True):
+            self.draw_watermark(p)
+        if self.registry.get("MatchTimer") and self.registry.get("MatchTimer").enabled:
+            self.draw_match_header(p, scaled_width)
+        bottom_left = HudAnchorStack(22.0, scaled_height - 60.0, 8.0)
+        if self.setting_bool(hud, "Target HUD", True):
+            title = "EnergyTargetHUD" if primary_target.kind == "energy" else "RobotTargetHUD"
+            self.draw_target_hud_by_style(p, primary_target, title, bottom_left)
+        diagnostics = list(self._bottom_left_diagnostics)
+        if self.hud_density() != "DebugFull" and diagnostics:
+            diagnostics = [max(diagnostics, key=lambda item: item[2])]
+        else:
+            diagnostics.sort(key=lambda item: item[2])
+        for text_value, text_color, _priority in diagnostics:
+            diagnostic_rect = bottom_left.take(220.0, 22.0)
+            self.draw_pill(p, diagnostic_rect.topLeft(), text_value, text_color)
+        if hud:
+            mode_setting = hud.get_setting("Right Display")
+            mode = str(mode_setting.value) if mode_setting else HUD_MODES[0]
+            # ModuleList RGB lives on the motion overlay by default so static
+            # FBO never freezes hue. Other right-panel modes stay here.
+            self.draw_right_hud_mode(
+                p,
+                scaled_width,
+                scaled_height,
+                mode,
+                primary_target,
+                hud_scale,
+                draw_module_list=draw_module_list,
+            )
         p.restore()
         if draw_motion:
             self.paint_hud_motion_overlay(p, width, height)
