@@ -5262,8 +5262,15 @@ class PolarRMWindow(QOpenGLWidget):
         if presence is not None and not presence.visible:
             return
         visual = self.combat_target_visual(module)
+        # Prefer display frame_dt (stable 60–144 Hz) over paint-to-paint delta so
+        # approachJar / heatGhost match visual-demo rAF pacing. Fall back only
+        # when frame_dt is unavailable (offline raster tools).
         now = time.perf_counter()
-        dt = max(0.0, min(0.05, now - self._combat_hud_last_time))
+        frame_dt = float(getattr(self, "frame_dt", 0.0) or 0.0)
+        if frame_dt > 1e-6:
+            dt = max(0.0, min(0.05, frame_dt))
+        else:
+            dt = max(0.0, min(0.05, now - self._combat_hud_last_time))
         self._combat_hud_last_time = now
         aim_override = None
         if presence is not None and presence.phase in {"Grace10s", "Fading"}:
@@ -5314,16 +5321,18 @@ class PolarRMWindow(QOpenGLWidget):
             track_radius = (red_radius + blue_radius) * 0.5
             p.drawEllipse(center, track_radius, track_radius)
 
-        health_end = ring_end(health)
-        heat_end = ring_end(heat)
+        # visual-demo drawRmHud order: ghost → red solid → blue solid.
+        # Cap end at 180+360 so a full ring never overshoots (demo Math.min).
+        health_end = min(ring_end(health), 180.0 + 360.0)
+        heat_end = min(ring_end(heat), 180.0 + 360.0)
         if enhanced and health > 0.5 and frame.self_ghost > health + 0.5:
             self.draw_combat_target_arc(
-                p, center, red_radius, health_end, ring_end(frame.self_ghost),
+                p, center, red_radius, health_end, min(ring_end(frame.self_ghost), 180.0 + 360.0),
                 color("#ffdcb4", 0.45), red_width, alpha=0.6,
             )
         if enhanced and heat > 0.5 and frame.heat_ghost > heat + 0.5:
             self.draw_combat_target_arc(
-                p, center, blue_radius, heat_end, ring_end(frame.heat_ghost),
+                p, center, blue_radius, heat_end, min(ring_end(frame.heat_ghost), 180.0 + 360.0),
                 color("#b4d2ff", 0.45), blue_width, alpha=0.6,
             )
         if health > 0.5:

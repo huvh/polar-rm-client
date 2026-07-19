@@ -375,7 +375,25 @@ class RobotState:
         duration = max(1, int(self.match_duration_sec))
         self.stage_countdown_sec = max(0, duration - int(elapsed) % (duration + 1))
         self.stage_elapsed_sec = max(0, duration - self.stage_countdown_sec)
-        self.current_heat = 88 + 58 * math.sin(elapsed * 0.9)
+        # Desktop mock heat: staged cool + burst fire (visual-demo RM heat).
+        # Continuous sine made the blue ring approachJar mushy with no settle.
+        if getattr(self, "_mock_heat_sim", None) is None:
+            from .combat_hud import MockHeatStageSimulator
+
+            self._mock_heat_sim = MockHeatStageSimulator()
+            start_pct = (
+                (float(self.current_heat) / float(self.max_heat) * 100.0)
+                if self.max_heat > 0
+                else 0.0
+            )
+            self._mock_heat_sim.reset(max(0.0, min(100.0, start_pct)))
+        heat_pct = self._mock_heat_sim.tick(
+            dt,
+            now=time.perf_counter(),
+            self_max_hp=float(max(1, self.max_health)),
+            ammo=int(self.remaining_ammo),
+        )
+        self.current_heat = max(0.0, float(self.max_heat) * (heat_pct / 100.0))
         self.current_chassis_energy = int(55 + 25 * math.sin(elapsed * 0.55))
         self.current_buffer_energy = int(38 + 18 * math.cos(elapsed * 0.42))
         self.chassis_power_w = max(0.0, 58.0 + 18.0 * math.sin(elapsed * 0.64))

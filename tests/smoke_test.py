@@ -17,6 +17,10 @@ from rm_client.combat_hud import (
     approach_bar,
     approach_jar,
     ghost_follow,
+    meter_settled,
+    stage_drop_pct,
+    HEAT_PER_SHOT,
+    MockHeatStageSimulator,
     ring_end,
 )
 from rm_client.kill_fx import KillFxLayout, KillFxRenderer, PRESET_ELEMENTS, VALORANT_STYLES
@@ -1738,6 +1742,22 @@ def test_combat_target_hud_math_and_rendering() -> None:
     assert abs(approach_jar(100.0, 0.0, 1.0 / 60.0) - 85.0) < 1e-9
     assert abs(approach_bar(50.0, 52.0, 1.0 / 60.0) - 50.8) < 1e-9
     assert abs(ghost_follow(100.0, 80.0, 1.0 / 60.0, 12.0) - 98.8) < 1e-9
+    assert meter_settled(50.0, 50.2)
+    assert not meter_settled(50.0, 60.0)
+    # visual-demo: max=20 → stage drop 10% (SELF_HIT_HP=2)
+    assert abs(stage_drop_pct(20.0) - 10.0) < 1e-9
+    sim = MockHeatStageSimulator()
+    sim.reset(0.0)
+    sim.heat_pct = 0.0
+    # Instant fire jump
+    before = sim.heat_pct
+    sim.heat_pct = min(100.0, before + HEAT_PER_SHOT)
+    assert sim.heat_pct == HEAT_PER_SHOT
+    # Stage cool only after settle + delay
+    sim.heat_anim = sim.heat_pct
+    sim.last_fire_at = 0.0
+    cooled = sim.tick(0.1, now=1.0, self_max_hp=20.0, ammo=100)
+    assert cooled < HEAT_PER_SHOT  # at least one stage drop after settle
 
     state = RobotState()
     state.current_health = 450
