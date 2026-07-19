@@ -384,9 +384,10 @@ class RobotState:
             start_pct = (
                 (float(self.current_heat) / float(self.max_heat) * 100.0)
                 if self.max_heat > 0
-                else 0.0
+                else 48.0
             )
-            self._mock_heat_sim.reset(max(0.0, min(100.0, start_pct)))
+            # Prefer a mid heat so the outer blue ring is visible on boot.
+            self._mock_heat_sim.reset(max(36.0, min(100.0, start_pct if start_pct > 5.0 else 48.0)))
         heat_pct = self._mock_heat_sim.tick(
             dt,
             now=time.perf_counter(),

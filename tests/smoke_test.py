@@ -1747,17 +1747,19 @@ def test_combat_target_hud_math_and_rendering() -> None:
     # visual-demo: max=20 → stage drop 10% (SELF_HIT_HP=2)
     assert abs(stage_drop_pct(20.0) - 10.0) < 1e-9
     sim = MockHeatStageSimulator()
-    sim.reset(0.0)
-    sim.heat_pct = 0.0
+    sim.reset(48.0)
+    assert sim.heat_pct >= 36.0
     # Instant fire jump
     before = sim.heat_pct
     sim.heat_pct = min(100.0, before + HEAT_PER_SHOT)
-    assert sim.heat_pct == HEAT_PER_SHOT
-    # Stage cool only after settle + delay
+    assert sim.heat_pct == before + HEAT_PER_SHOT
+    # Stage cool after settle + delay (10% demo-style steps, floor 12%)
     sim.heat_anim = sim.heat_pct
     sim.last_fire_at = 0.0
+    sim._started_at = 1.0
     cooled = sim.tick(0.1, now=1.0, self_max_hp=20.0, ammo=100)
-    assert cooled < HEAT_PER_SHOT  # at least one stage drop after settle
+    assert cooled < before + HEAT_PER_SHOT
+    assert cooled >= 12.0
 
     state = RobotState()
     state.current_health = 450

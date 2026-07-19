@@ -183,24 +183,27 @@ class MockHeatStageSimulator:
     """
 
     def __init__(self) -> None:
-        self.heat_pct = 0.0  # 0..100 logic heat (demo ``state.heat``)
-        self.heat_anim = 0.0  # local settle tracker (demo heatAnim)
-        self.last_fire_at = -1e9
+        self.heat_pct = 48.0  # start mid so outer blue ring is visible immediately
+        self.heat_anim = 48.0
+        self.last_fire_at = 0.0
         self.heat_gap_wait = 0.0
         self._phase_t = 0.0
         self._burst_shots_left = 0
         self._burst_cooldown = 0.0
-        self._next_burst_at = 1.2
+        self._next_burst_at = 0.8
+        self._started_at = 0.0
 
-    def reset(self, heat_pct: float = 0.0) -> None:
-        self.heat_pct = clamp_percent(heat_pct)
+    def reset(self, heat_pct: float = 48.0) -> None:
+        # Keep a readable floor so the outer blue arc is not empty for long.
+        self.heat_pct = clamp_percent(max(float(heat_pct), 36.0))
         self.heat_anim = self.heat_pct
-        self.last_fire_at = -1e9
+        self.last_fire_at = 0.0  # set on first tick to "now" so we do not cool from t=-∞
         self.heat_gap_wait = 0.0
         self._phase_t = 0.0
         self._burst_shots_left = 0
         self._burst_cooldown = 0.0
-        self._next_burst_at = 1.2
+        self._next_burst_at = 0.8
+        self._started_at = 0.0
 
     def tick(
         self,
@@ -212,6 +215,9 @@ class MockHeatStageSimulator:
     ) -> float:
         """Advance mock heat logic; return heat percent 0..100."""
         dt = max(0.0, min(0.1, float(dt)))
+        if self._started_at <= 0.0:
+            self._started_at = now
+            self.last_fire_at = now  # suppress instant staged cool on boot
         self._phase_t += dt
         self._burst_cooldown = max(0.0, self._burst_cooldown - dt)
 
@@ -219,9 +225,9 @@ class MockHeatStageSimulator:
         self.heat_anim = approach_jar(self.heat_anim, self.heat_pct, dt)
 
         # 2) Periodic fire bursts → instant +HEAT_PER_SHOT jumps.
-        if self._burst_shots_left <= 0 and self._phase_t >= self._next_burst_at and self.heat_pct < 88.0:
-            self._burst_shots_left = 3 + int(self._phase_t * 7) % 3
-            self._next_burst_at = self._phase_t + 2.8 + (int(self._phase_t) % 5) * 0.15
+        if self._burst_shots_left <= 0 and self._phase_t >= self._next_burst_at and self.heat_pct < 90.0:
+            self._burst_shots_left = 4 + int(self._phase_t * 7) % 2
+            self._next_burst_at = self._phase_t + 2.4 + (int(self._phase_t) % 4) * 0.12
         if self._burst_shots_left > 0 and ammo > 0 and self.heat_pct < 100.0 - 0.5:
             if self._burst_cooldown <= 0.0:
                 self.heat_pct = min(100.0, self.heat_pct + HEAT_PER_SHOT)
@@ -233,14 +239,18 @@ class MockHeatStageSimulator:
             self._burst_shots_left = 0
             self._burst_cooldown = 0.8
 
-        # 3) Staged cool — gate on settle (visual-demo tickHeatStages).
+        # 3) Staged cool — demo uses stageDropPct(selfMax); for RM robots max HP
+        #    is huge (~600) so 2/600 ≈ 0.3% stages look continuous and can
+        #    empty the blue ring between bursts. Mock uses a 10% step (demo
+        #    selfMax=20 feel) so settle + trail stay readable.
         if self.heat_pct > 0.0 and (now - self.last_fire_at) >= HEAT_COOL_DELAY:
             if meter_settled(self.heat_anim, self.heat_pct):
                 self.heat_gap_wait += dt
                 if self.heat_gap_wait >= HEAT_STAGE_GAP:
                     self.heat_gap_wait = 0.0
-                    drop = stage_drop_pct(self_max_hp)
-                    self.heat_pct = max(0.0, self.heat_pct - drop)
+                    drop = max(10.0, stage_drop_pct(self_max_hp))
+                    # Floor so the outer ring is not empty most of the time.
+                    self.heat_pct = max(12.0, self.heat_pct - drop)
             else:
                 self.heat_gap_wait = 0.0
         else:

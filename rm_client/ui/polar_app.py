@@ -5412,13 +5412,18 @@ class PolarRMWindow(QOpenGLWidget):
         return color("#ff1a1a")
 
     def combat_heat_color(self, value: float, visual: str) -> QColor:
+        """Outer heat ring — always blue-family so it never reads as the red HP ring.
+
+        Classic stays pure jar blue. Clear/Enhanced keep cyan→deep-blue→bright
+        blue by heat level (not orange/red — those made high heat look like HP).
+        """
         if visual == "Classic":
             return color("#0000ff")
         if value < 40.0:
-            return color("#5ec8ff")
+            return color("#5ec8ff")  # cool cyan
         if value < 75.0:
-            return color("#ffb347")
-        return color("#ff4444")
+            return color("#3d9eff")  # mid blue
+        return color("#6eb6ff")  # hot: brighter blue (still clearly not red)
 
     def draw_combat_target_card(
         self,
