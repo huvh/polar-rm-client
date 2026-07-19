@@ -1276,6 +1276,9 @@ class PolarRMWindow(QOpenGLWidget):
             self.state.stage_countdown_sec,
             self.state.last_event,
             enabled_state,
+            # Rebuild static FBO when menu owns the screen so battle chrome
+            # (target card / right panels) cannot linger under ClickGUI.
+            self.menu_overlay_active(),
         )
 
     def paint_gpu_background(self, functions, width: int, height: int, ratio: float) -> bool:
@@ -1604,6 +1607,14 @@ class PolarRMWindow(QOpenGLWidget):
                 Qt.AlignmentFlag.AlignCenter,
             )
 
+    def menu_overlay_active(self) -> bool:
+        """True while ClickGUI or Economy workspace owns the screen.
+
+        Battle chrome (ModuleList, map, chassis, telemetry, FOV, …) must stay
+        off so it cannot stack under / through the menu glass.
+        """
+        return bool(self.gui_timeline.progress > 0.01 or self.economy_visible or self.economy_morph.progress > 0.01)
+
     def paint_hud_motion_overlay(
         self,
         p: QPainter,
@@ -1618,6 +1629,12 @@ class PolarRMWindow(QOpenGLWidget):
         started_at = time.perf_counter()
         now = started_at
         hud = self.registry.get("HUD")
+        # ClickGUI / economy open → draw none of the battle chrome that would
+        # fight panel labels (modlist, map, bottom chassis, FOV, …).
+        if self.menu_overlay_active():
+            self.dynamic_hud_ms = (time.perf_counter() - started_at) * 1000.0
+            return
+
         scale = self.get_hud_scale(width, height)
         logical_width = max(1, int(width / scale))
         logical_height = max(1, int(height / scale))
@@ -1667,34 +1684,30 @@ class PolarRMWindow(QOpenGLWidget):
                 display_result,
                 now,
             )
-        if self.setting_bool(hud, "Dynamic Island", True) and not self.gui_visible:
+        if self.setting_bool(hud, "Dynamic Island", True):
             self.draw_dynamic_island(p, logical_width)
         tactical_map = self.registry.get("TacticalMap")
-        draw_map = not self.gui_visible if include_map is None else include_map
+        draw_map = True if include_map is None else include_map
         if draw_map and tactical_map and tactical_map.enabled:
             self.draw_tactical_map_hud(p, logical_width, logical_height)
         # ModuleList lives here so OpenZen RGB + row anim tick every frame.
-        # Skip while ClickGUI/economy owns the screen (labels would fight panels).
-        if self.gui_timeline.progress <= 0.01 and not self.economy_visible:
-            if self.setting_bool(hud, "Module List", True):
-                mode_setting = hud.get_setting("Right Display") if hud else None
-                mode = str(mode_setting.value) if mode_setting else HUD_MODES[0]
-                if mode in ("ModuleListHud", "TacticalMapHud"):
-                    self.draw_module_list_hud(p, logical_width, logical_height)
-                elif self.setting_bool(hud, "KeyBinds", True) and mode != "KeyBindsHud":
-                    self.draw_keybinds_strip(p, logical_width, logical_height)
-            elif self.setting_bool(hud, "KeyBinds", True):
-                mode_setting = hud.get_setting("Right Display") if hud else None
-                mode = str(mode_setting.value) if mode_setting else HUD_MODES[0]
-                if mode != "KeyBindsHud":
-                    self.draw_keybinds_strip(p, logical_width, logical_height)
+        if self.setting_bool(hud, "Module List", True):
+            mode_setting = hud.get_setting("Right Display") if hud else None
+            mode = str(mode_setting.value) if mode_setting else HUD_MODES[0]
+            if mode in ("ModuleListHud", "TacticalMapHud"):
+                self.draw_module_list_hud(p, logical_width, logical_height)
+            elif self.setting_bool(hud, "KeyBinds", True) and mode != "KeyBindsHud":
+                self.draw_keybinds_strip(p, logical_width, logical_height)
+        elif self.setting_bool(hud, "KeyBinds", True):
+            mode_setting = hud.get_setting("Right Display") if hud else None
+            mode = str(mode_setting.value) if mode_setting else HUD_MODES[0]
+            if mode != "KeyBindsHud":
+                self.draw_keybinds_strip(p, logical_width, logical_height)
         self.draw_chassis_gimbal_indicator(p, logical_width, logical_height)
         self.draw_telemetry_strip(p, logical_width, logical_height)
         p.restore()
         # Full-resolution kill icons/score popups; not under hud_scale transform.
-        # Keep off while ClickGUI owns the screen so module labels stay readable.
-        if self.gui_timeline.progress <= 0.01 and not self.economy_visible:
-            self.draw_elimination_fx(p, width, height)
+        self.draw_elimination_fx(p, width, height)
         self.dynamic_hud_ms = (time.perf_counter() - started_at) * 1000.0
 
     def paint_combat_target_overlay(
@@ -1740,8 +1753,7 @@ class PolarRMWindow(QOpenGLWidget):
         While ClickGUI / economy owns the screen the target layer is cleared so
         the ring does not composite over module labels (targetTex is topmost).
         """
-        gui_open = self.gui_timeline.progress > 0.01 or self.economy_visible
-        if gui_open:
+        if self.menu_overlay_active():
             return self.gpu_compositor.clear_target_layer(functions)
 
         if not self.gpu_compositor.clear_target_layer(functions):
@@ -4111,42 +4123,45 @@ class PolarRMWindow(QOpenGLWidget):
         # 真实装甲视觉接入后不允许旧 Mock 能量框叠到图传上。
         draw_energy = energy_enabled and self._vision_source == "Mock"
         primary_target = energy_target if draw_energy else armor_target
+        menu_open = self.menu_overlay_active()
         hud_scale = self.get_hud_scale(width, height)
         scaled_width = max(1, int(width / hud_scale))
         scaled_height = max(1, int(height / hud_scale))
         p.save()
         p.scale(hud_scale, hud_scale)
-        if self.setting_bool(hud, "Watermark", True):
-            self.draw_watermark(p)
-        if self.registry.get("MatchTimer") and self.registry.get("MatchTimer").enabled:
-            self.draw_match_header(p, scaled_width)
-        bottom_left = HudAnchorStack(22.0, scaled_height - 60.0, 8.0)
-        if self.setting_bool(hud, "Target HUD", True):
-            title = "EnergyTargetHUD" if primary_target.kind == "energy" else "RobotTargetHUD"
-            self.draw_target_hud_by_style(p, primary_target, title, bottom_left)
-        diagnostics = list(self._bottom_left_diagnostics)
-        if self.hud_density() != "DebugFull" and diagnostics:
-            diagnostics = [max(diagnostics, key=lambda item: item[2])]
-        else:
-            diagnostics.sort(key=lambda item: item[2])
-        for text_value, text_color, _priority in diagnostics:
-            diagnostic_rect = bottom_left.take(220.0, 22.0)
-            self.draw_pill(p, diagnostic_rect.topLeft(), text_value, text_color)
-        if hud:
-            mode_setting = hud.get_setting("Right Display")
-            mode = str(mode_setting.value) if mode_setting else HUD_MODES[0]
-            # ModuleList RGB lives on the motion overlay by default so static FBO
-            # never freezes hue. Pass draw_module_list=True only for offline
-            # raster tests that skip the motion pass.
-            self.draw_right_hud_mode(
-                p,
-                scaled_width,
-                scaled_height,
-                mode,
-                primary_target,
-                hud_scale,
-                draw_module_list=draw_module_list,
-            )
+        # While ClickGUI/economy owns the screen, leave the static layer empty of
+        # battle chrome so panels are not fighting ModuleList / TargetHUD / map.
+        if not menu_open:
+            if self.setting_bool(hud, "Watermark", True):
+                self.draw_watermark(p)
+            if self.registry.get("MatchTimer") and self.registry.get("MatchTimer").enabled:
+                self.draw_match_header(p, scaled_width)
+            bottom_left = HudAnchorStack(22.0, scaled_height - 60.0, 8.0)
+            if self.setting_bool(hud, "Target HUD", True):
+                title = "EnergyTargetHUD" if primary_target.kind == "energy" else "RobotTargetHUD"
+                self.draw_target_hud_by_style(p, primary_target, title, bottom_left)
+            diagnostics = list(self._bottom_left_diagnostics)
+            if self.hud_density() != "DebugFull" and diagnostics:
+                diagnostics = [max(diagnostics, key=lambda item: item[2])]
+            else:
+                diagnostics.sort(key=lambda item: item[2])
+            for text_value, text_color, _priority in diagnostics:
+                diagnostic_rect = bottom_left.take(220.0, 22.0)
+                self.draw_pill(p, diagnostic_rect.topLeft(), text_value, text_color)
+            if hud:
+                mode_setting = hud.get_setting("Right Display")
+                mode = str(mode_setting.value) if mode_setting else HUD_MODES[0]
+                # ModuleList RGB lives on the motion overlay by default so static
+                # FBO never freezes hue. Other right-panel modes stay here.
+                self.draw_right_hud_mode(
+                    p,
+                    scaled_width,
+                    scaled_height,
+                    mode,
+                    primary_target,
+                    hud_scale,
+                    draw_module_list=draw_module_list,
+                )
         p.restore()
         if draw_motion:
             self.paint_hud_motion_overlay(p, width, height)
