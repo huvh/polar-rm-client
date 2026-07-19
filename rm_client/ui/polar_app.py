@@ -1282,6 +1282,10 @@ class PolarRMWindow(QOpenGLWidget):
             self.state.stage_countdown_sec,
             self.state.last_event,
             enabled_state,
+            # Rebuild static FBO when economy owns the stage so map/modlist
+            # cannot linger under the glass workspace.
+            bool(self.economy_visible or self.economy_morph.progress > 0.01),
+            bool(self.gui_timeline.progress > 0.01),
         )
 
     def paint_gpu_background(self, functions, width: int, height: int, ratio: float) -> bool:
@@ -1611,12 +1615,12 @@ class PolarRMWindow(QOpenGLWidget):
             )
 
     def menu_overlay_active(self) -> bool:
-        """True while ClickGUI or Economy workspace is open (or animating).
-
-        Battle HUD stays visible for live visual tuning, but must paint *under*
-        the menu (dynamic layer order + no topmost targetTex over panel text).
-        """
+        """True while ClickGUI or Economy workspace is open (or animating)."""
         return bool(self.gui_timeline.progress > 0.01 or self.economy_visible or self.economy_morph.progress > 0.01)
+
+    def economy_stage_active(self) -> bool:
+        """Economy owns the stage — hide battle chrome under the glass sheet."""
+        return bool(self.economy_visible or self.economy_morph.progress > 0.01)
 
     def paint_hud_motion_overlay(
         self,
@@ -1630,13 +1634,15 @@ class PolarRMWindow(QOpenGLWidget):
     ) -> None:
         """以 UI 高刷新率绘制与图传帧率无关的战斗 HUD 动效。
 
-        ClickGUI 打开时仍绘制 ModuleList / 小地图 / 底盘等，便于边调边看；
-        本层在 dynamic FBO 里先于 ClickGUI 绘制，菜单 dim + 面板盖在上面，
-        不抢标签可读性。
+        ClickGUI 打开时仍绘制 ModuleList / 小地图 / 底盘等，便于边调边看。
+        经济工作区打开时必须清空本层，避免 FOV/地图/列表压在镜片下。
         """
         started_at = time.perf_counter()
         now = started_at
         hud = self.registry.get("HUD")
+        if self.economy_stage_active():
+            self.dynamic_hud_ms = (time.perf_counter() - started_at) * 1000.0
+            return
         scale = self.get_hud_scale(width, height)
         logical_width = max(1, int(width / scale))
         logical_height = max(1, int(height / scale))
@@ -2055,6 +2061,8 @@ class PolarRMWindow(QOpenGLWidget):
         selected = self.economy_selected_offer()
         if selected is not None:
             self.economy_selected_key = selected.key
+        # Drop static HUD chrome (map / modlist / watermark) under the glass.
+        self._gpu_static_ui_key = None
         self.play_gui_transition_sound("expand")
         self.frame_scheduler.force()
 
@@ -2065,6 +2073,7 @@ class PolarRMWindow(QOpenGLWidget):
         self.economy_armed_key = ""
         self.economy_hold_key = ""
         self.economy_hold_rect = QRectF()
+        self._gpu_static_ui_key = None
         self.play_gui_transition_sound("collapse")
         self.frame_scheduler.force()
 
@@ -2167,17 +2176,18 @@ class PolarRMWindow(QOpenGLWidget):
     ) -> None:
         """Content-layer plate on top of root glass (NOT a second nested lens).
 
-        README: root = LensStrong; product/detail/status = content layer only.
+        Opaque enough to read on 1K/2K while leaving edge refraction of the
+        root LensStrong shell visible (README: no nested glass).
         """
-        fill_a = 0.22 + 0.16 * max(0.0, min(1.0, hover)) + (0.10 if active else 0.0)
-        edge_a = 0.10 + 0.18 * max(0.0, min(1.0, hover)) + (0.22 if active else 0.0)
+        fill_a = 0.52 + 0.14 * max(0.0, min(1.0, hover)) + (0.12 if active else 0.0)
+        edge_a = 0.16 + 0.22 * max(0.0, min(1.0, hover)) + (0.28 if active else 0.0)
         rounded_rect(
             p,
             rect,
             radius,
-            color("#071018", fill_a),
+            color("#081018", fill_a),
             color("#b8f7ef", edge_a),
-            0.9,
+            1.0,
         )
 
     def _economy_label(
@@ -2213,32 +2223,34 @@ class PolarRMWindow(QOpenGLWidget):
         module = self.registry.get("EconomyPanel")
         open_style = self.setting_mode(module, "Open Style", "Dynamic Island")
         island_style = open_style == "Dynamic Island"
-        scale = max(0.82, min(1.12, self.get_auto_ui_scale(width, height, strength=0.22)))
+        scale = max(0.82, min(1.10, self.get_auto_ui_scale(width, height, strength=0.20)))
         morph = Easings.ease_out_expo(max(0.0, min(1.0, alpha)))
         content_alpha = Easings.ease_out_expo(max(0.0, min(1.0, (morph - 0.12) / 0.88)))
         compact = width < 1480 or height < 860
 
-        margin = max(14.0, 18.0 * scale)
-        target_w = min(width - margin * 2.0, max(960.0, width * 0.88), 1980.0)
-        target_h = min(height - margin * 2.0, max(560.0, height * 0.86), 1180.0)
+        # Centered sheet with breathing room (live capture showed full-bleed
+        # content colliding with map/modlist). Cap absolute size on 2K+.
+        margin = max(28.0, min(width, height) * 0.05)
+        target_w = min(width - margin * 2.0, max(920.0, width * 0.72), 1680.0)
+        target_h = min(height - margin * 2.0, max(540.0, height * 0.74), 980.0)
         target = QRectF((width - target_w) * 0.5, (height - target_h) * 0.5, target_w, target_h)
         # Island capsule (collapsed) — radius = half height (LensIsland rule).
         island_h = 48.0 * scale
-        island_w = min(max(280.0 * scale, 360.0 * scale), width * 0.46)
+        island_w = min(max(300.0 * scale, 380.0 * scale), width * 0.42)
         collapsed = QRectF(width * 0.5 - island_w * 0.5, 22.0 * scale, island_w, island_h)
         if island_style:
             panel = self.economy_lerp_rect(collapsed, target, morph)
             # Capsule when collapsed → rounded sheet when expanded.
-            radius = island_h * 0.5 * (1.0 - morph) + 18.0 * scale * morph
+            radius = island_h * 0.5 * (1.0 - morph) + 20.0 * scale * morph
         else:
             # Full Sheet: fade from slightly smaller center sheet.
             sheet0 = QRectF(target.center().x() - target.width() * 0.42, target.center().y() - target.height() * 0.42, target.width() * 0.84, target.height() * 0.84)
             panel = self.economy_lerp_rect(sheet0, target, morph)
-            radius = 18.0 * scale
+            radius = 20.0 * scale
 
         p.save()
-        # Soft dim only — do not paint opaque frosted plates over the scene.
-        p.fillRect(QRectF(0, 0, width, height), color("#02060c", 0.38 * alpha))
+        # Strong dim so the glass sheet reads as a modal island over the scene.
+        p.fillRect(QRectF(0, 0, width, height), color("#02060c", 0.58 * alpha))
 
         # Root LensStrong (ModalGlass). One shell only — no nested glass panels.
         self.draw_liquid_glass_panel(
@@ -2246,10 +2258,13 @@ class PolarRMWindow(QOpenGLWidget):
             panel,
             radius,
             accent=color("#5ec8ff"),
-            hover=0.12 + 0.08 * morph,
+            hover=0.18 + 0.08 * morph,
             scale=scale,
             surface="ModalGlass",
         )
+        # Soft inner wash (content layer, not a second glass) for text contrast.
+        wash = panel.adjusted(6.0 * scale, 6.0 * scale, -6.0 * scale, -6.0 * scale)
+        rounded_rect(p, wash, max(12.0, radius - 4.0 * scale), color("#050b12", 0.28), color("#ffffff", 0.04), 0.8)
 
         # Collapsed island label lives on the pill while morphing open.
         if morph < 0.92:
@@ -2591,15 +2606,23 @@ class PolarRMWindow(QOpenGLWidget):
             button_enabled = True
             action = "economy_confirm"
 
-        # Confirm = island-style capsule strong lens (not a flat green bar).
+        # Confirm = island capsule: glass lens + solid tint so label stays legible.
         self.draw_liquid_glass_panel(
             p,
             button,
             button.height() * 0.5,
             accent=color("#5ce7d8") if button_enabled else color("#8a9298", 0.45),
-            hover=0.42 if button_enabled else 0.0,
+            hover=0.50 if button_enabled else 0.0,
             scale=scale,
             surface="ProminentGlass" if button_enabled else "SubGlass",
+        )
+        rounded_rect(
+            p,
+            button,
+            button.height() * 0.5,
+            color("#0d8f82", 0.55 if button_enabled else 0.18),
+            color("#b8fff6", 0.55 if button_enabled else 0.14),
+            1.2,
         )
         if selected is not None and selected.confirmation == "hold" and self.economy_hold_key == selected.key:
             progress = max(0.0, min(1.0, (now - self.economy_hold_started) / 0.60))
@@ -2608,7 +2631,7 @@ class PolarRMWindow(QOpenGLWidget):
             clip.addRoundedRect(button, button.height() * 0.5, button.height() * 0.5)
             p.save()
             p.setClipPath(clip)
-            rounded_rect(p, fill, button.height() * 0.5, color("#65e5d7", 0.35))
+            rounded_rect(p, fill, button.height() * 0.5, color("#65e5d7", 0.45))
             p.restore()
         self.draw_glass_text(
             p,
@@ -4461,39 +4484,37 @@ class PolarRMWindow(QOpenGLWidget):
         scaled_height = max(1, int(height / hud_scale))
         p.save()
         p.scale(hud_scale, hud_scale)
-        # Static battle chrome stays on while ClickGUI is open so ModuleList /
-        # TargetHUD / right panels remain visible for live tuning. ClickGUI
-        # paints later on the dynamic layer (with a dim) and covers the center.
-        if self.setting_bool(hud, "Watermark", True):
-            self.draw_watermark(p)
-        if self.registry.get("MatchTimer") and self.registry.get("MatchTimer").enabled:
-            self.draw_match_header(p, scaled_width)
-        bottom_left = HudAnchorStack(22.0, scaled_height - 60.0, 8.0)
-        if self.setting_bool(hud, "Target HUD", True):
-            title = "EnergyTargetHUD" if primary_target.kind == "energy" else "RobotTargetHUD"
-            self.draw_target_hud_by_style(p, primary_target, title, bottom_left)
-        diagnostics = list(self._bottom_left_diagnostics)
-        if self.hud_density() != "DebugFull" and diagnostics:
-            diagnostics = [max(diagnostics, key=lambda item: item[2])]
-        else:
-            diagnostics.sort(key=lambda item: item[2])
-        for text_value, text_color, _priority in diagnostics:
-            diagnostic_rect = bottom_left.take(220.0, 22.0)
-            self.draw_pill(p, diagnostic_rect.topLeft(), text_value, text_color)
-        if hud:
-            mode_setting = hud.get_setting("Right Display")
-            mode = str(mode_setting.value) if mode_setting else HUD_MODES[0]
-            # ModuleList RGB lives on the motion overlay by default so static
-            # FBO never freezes hue. Other right-panel modes stay here.
-            self.draw_right_hud_mode(
-                p,
-                scaled_width,
-                scaled_height,
-                mode,
-                primary_target,
-                hud_scale,
-                draw_module_list=draw_module_list,
-            )
+        # Economy owns a clean glass stage — omit battle chrome from the static
+        # FBO. ClickGUI still keeps chrome underneath for live visual tuning.
+        if not self.economy_stage_active():
+            if self.setting_bool(hud, "Watermark", True):
+                self.draw_watermark(p)
+            if self.registry.get("MatchTimer") and self.registry.get("MatchTimer").enabled:
+                self.draw_match_header(p, scaled_width)
+            bottom_left = HudAnchorStack(22.0, scaled_height - 60.0, 8.0)
+            if self.setting_bool(hud, "Target HUD", True):
+                title = "EnergyTargetHUD" if primary_target.kind == "energy" else "RobotTargetHUD"
+                self.draw_target_hud_by_style(p, primary_target, title, bottom_left)
+            diagnostics = list(self._bottom_left_diagnostics)
+            if self.hud_density() != "DebugFull" and diagnostics:
+                diagnostics = [max(diagnostics, key=lambda item: item[2])]
+            else:
+                diagnostics.sort(key=lambda item: item[2])
+            for text_value, text_color, _priority in diagnostics:
+                diagnostic_rect = bottom_left.take(220.0, 22.0)
+                self.draw_pill(p, diagnostic_rect.topLeft(), text_value, text_color)
+            if hud:
+                mode_setting = hud.get_setting("Right Display")
+                mode = str(mode_setting.value) if mode_setting else HUD_MODES[0]
+                self.draw_right_hud_mode(
+                    p,
+                    scaled_width,
+                    scaled_height,
+                    mode,
+                    primary_target,
+                    hud_scale,
+                    draw_module_list=draw_module_list,
+                )
         p.restore()
         if draw_motion:
             self.paint_hud_motion_overlay(p, width, height)
