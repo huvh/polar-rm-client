@@ -3726,11 +3726,39 @@ class PolarRMWindow(QOpenGLWidget):
             x += button_w + gap
         p.restore()
 
+    def set_wallpaper_picker_visible(self, visible: bool) -> None:
+        """Open/close the wallpaper library and invalidate launcher static FBOs.
+
+        Opening paints the picker into the overlay FBO (overwriting the
+        launcher). Closing must drop both the startup-page and battle-ui static
+        keys so the launcher is rebuilt; otherwise the picker stays on screen
+        and Close appears broken even though ``wallpaper_picker_visible`` is
+        already False.
+        """
+        visible = bool(visible)
+        if self.wallpaper_picker_visible == visible:
+            if visible:
+                self.frame_scheduler.force()
+            return
+        self.wallpaper_picker_visible = visible
+        if visible:
+            self.anim.reset("startup.wallpaper.open", 0.0)
+        self._startup_static_page_key = None
+        self._gpu_static_ui_key = None
+        try:
+            self.gpu_compositor.clear_static_glass()
+            self.gpu_compositor.clear_frame_glass()
+        except Exception:
+            pass
+        self.frame_scheduler.force()
+
     def draw_wallpaper_picker(self, p: QPainter, width: int, height: int) -> None:
         open_v = self.anim.value("startup.wallpaper.open", 1.0, self.anim_duration(0.24), Easings.ease_out_pow4, initial=0.0)
         full = QRectF(0, 0, width, height)
         p.fillRect(full, color("#02050a", 0.54 * open_v))
-        self.add_hotspot(full, "wallpaper_close")
+        # Backdrop close is registered first; the panel blocks it; the footer
+        # Close button is registered last so it always wins hit-testing.
+        self.add_hotspot(full, "wallpaper_close", tooltip="关闭壁纸库")
 
         scale = max(0.76, min(1.18, self.get_auto_ui_scale(width, height, strength=0.38)))
         panel_w = min(width - 64.0 * scale, 1120.0 * scale)
@@ -10311,7 +10339,7 @@ class PolarRMWindow(QOpenGLWidget):
             return
         if self.home_visible and self.wallpaper_picker_visible:
             if event.key() == Qt.Key.Key_Escape:
-                self.wallpaper_picker_visible = False
+                self.set_wallpaper_picker_visible(False)
             return
         if self.home_visible:
             if self.handle_startup_key(event):
@@ -10575,24 +10603,29 @@ class PolarRMWindow(QOpenGLWidget):
             self.gui_visible = True
             self.toast("ConfigManager opened from launcher")
         elif action == "startup_open_wallpaper":
-            self.wallpaper_picker_visible = True
             profiles = self.startup_wallpaper.profile_names()
             visual_module = self.registry.get("StartupVisual")
             current = self.setting_mode(visual_module, "Wallpaper Profile", "TexasMP4")
             self.wallpaper_picker_page = profiles.index(current) // 4 if current in profiles else 0
+            self.set_wallpaper_picker_visible(True)
         elif action == "wallpaper_select":
             self.apply_wallpaper_profile(str(payload))
+            self.frame_scheduler.force()
         elif action == "wallpaper_import":
             self.import_wallpaper_from_dialog()
+            self.frame_scheduler.force()
         elif action == "wallpaper_remove":
             self.remove_wallpaper_profile(str(payload))
+            self.frame_scheduler.force()
         elif action == "wallpaper_reset":
             self.reset_wallpaper_profile()
+            self.frame_scheduler.force()
         elif action == "wallpaper_page":
             count = max(1, math.ceil(len(self.startup_wallpaper.profile_names()) / 4))
             self.wallpaper_picker_page = max(0, min(count - 1, self.wallpaper_picker_page + int(payload)))
+            self.frame_scheduler.force()
         elif action == "wallpaper_close":
-            self.wallpaper_picker_visible = False
+            self.set_wallpaper_picker_visible(False)
         elif action == "wallpaper_block":
             pass
         elif action == "economy_category":
