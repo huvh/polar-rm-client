@@ -97,7 +97,17 @@ from .liquid_glass import LiquidGlassRenderer
 from .layout import HudAnchorStack
 from .startup_gl import StartupGpuCompositor, TextureOrigin
 from .vision_wire_gpu import VisionWireBatch, VisionWireGpuRenderer
-from .paint import accent_color, cap_center_y, draw_bar, glow_rect, glow_text, rounded_rect, text_width, with_alpha
+from .paint import (
+    accent_color,
+    cap_center_y,
+    draw_bar,
+    glow_rect,
+    glow_text,
+    rainbow_color_index,
+    rounded_rect,
+    text_width,
+    with_alpha,
+)
 from .theme import THEME, color
 from .vision_motion import (
     AngleRenderTrack,
@@ -1508,6 +1518,9 @@ class PolarRMWindow(QOpenGLWidget):
             energy_target,
             tongji_result,
             draw_motion=not split_motion_layer,
+            # Always leave ModuleList off the static FBO. The motion overlay
+            # owns RGB rainbow + style switches every display frame.
+            draw_module_list=False,
         )
         # EliminationFX is always drawn from paint_hud_motion_overlay so the
         # GPU static-layer cache cannot freeze kill-icon timelines.
@@ -1660,6 +1673,21 @@ class PolarRMWindow(QOpenGLWidget):
         draw_map = not self.gui_visible if include_map is None else include_map
         if draw_map and tactical_map and tactical_map.enabled:
             self.draw_tactical_map_hud(p, logical_width, logical_height)
+        # ModuleList lives here so OpenZen RGB + row anim tick every frame.
+        # Skip while ClickGUI/economy owns the screen (labels would fight panels).
+        if self.gui_timeline.progress <= 0.01 and not self.economy_visible:
+            if self.setting_bool(hud, "Module List", True):
+                mode_setting = hud.get_setting("Right Display") if hud else None
+                mode = str(mode_setting.value) if mode_setting else HUD_MODES[0]
+                if mode in ("ModuleListHud", "TacticalMapHud"):
+                    self.draw_module_list_hud(p, logical_width, logical_height)
+                elif self.setting_bool(hud, "KeyBinds", True) and mode != "KeyBindsHud":
+                    self.draw_keybinds_strip(p, logical_width, logical_height)
+            elif self.setting_bool(hud, "KeyBinds", True):
+                mode_setting = hud.get_setting("Right Display") if hud else None
+                mode = str(mode_setting.value) if mode_setting else HUD_MODES[0]
+                if mode != "KeyBindsHud":
+                    self.draw_keybinds_strip(p, logical_width, logical_height)
         self.draw_chassis_gimbal_indicator(p, logical_width, logical_height)
         self.draw_telemetry_strip(p, logical_width, logical_height)
         p.restore()
@@ -4072,6 +4100,7 @@ class PolarRMWindow(QOpenGLWidget):
         tongji_result: VisionResult | None = None,
         *,
         draw_motion: bool = True,
+        draw_module_list: bool = False,
     ) -> None:
         hud = self.registry.get("HUD")
         armor_module = self.registry.get("ArmorAutoAim")
@@ -4106,7 +4135,18 @@ class PolarRMWindow(QOpenGLWidget):
         if hud:
             mode_setting = hud.get_setting("Right Display")
             mode = str(mode_setting.value) if mode_setting else HUD_MODES[0]
-            self.draw_right_hud_mode(p, scaled_width, scaled_height, mode, primary_target, hud_scale)
+            # ModuleList RGB lives on the motion overlay by default so static FBO
+            # never freezes hue. Pass draw_module_list=True only for offline
+            # raster tests that skip the motion pass.
+            self.draw_right_hud_mode(
+                p,
+                scaled_width,
+                scaled_height,
+                mode,
+                primary_target,
+                hud_scale,
+                draw_module_list=draw_module_list,
+            )
         p.restore()
         if draw_motion:
             self.paint_hud_motion_overlay(p, width, height)
@@ -5917,13 +5957,17 @@ class PolarRMWindow(QOpenGLWidget):
         mode: str,
         target: VisionTarget,
         hud_scale: float = 1.0,
+        *,
+        draw_module_list: bool = True,
     ) -> None:
         hud = self.registry.get("HUD")
-        if mode == "ModuleListHud" and self.setting_bool(hud, "Module List", True):
+        if draw_module_list and mode == "ModuleListHud" and self.setting_bool(hud, "Module List", True):
             if not self.queue_gpu_module_list(p, width, height, hud_scale):
                 self.draw_module_list_hud(p, width, height)
         elif mode == "TacticalMapHud":
-            if self.setting_bool(hud, "Module List", True):
+            # Map itself is painted on the motion layer; ModuleList co-located
+            # with it must also tick on the motion layer for RGB animation.
+            if draw_module_list and self.setting_bool(hud, "Module List", True):
                 if not self.queue_gpu_module_list(p, width, height, hud_scale):
                     self.draw_module_list_hud(p, width, height)
         elif mode == "KeyBindsHud" and self.setting_bool(hud, "KeyBinds", True):
@@ -5937,7 +5981,12 @@ class PolarRMWindow(QOpenGLWidget):
         elif mode == "RMIndicatorsHud" and self.setting_bool(hud, "RM Indicators", True):
             self.draw_rm_indicators_hud(p, width)
         right_list_active = mode in ("ModuleListHud", "TacticalMapHud") and self.setting_bool(hud, "Module List", True)
-        if mode != "KeyBindsHud" and not right_list_active and self.setting_bool(hud, "KeyBinds", True):
+        if (
+            draw_module_list
+            and mode != "KeyBindsHud"
+            and not right_list_active
+            and self.setting_bool(hud, "KeyBinds", True)
+        ):
             self.draw_keybinds_strip(p, width, height)
 
     def queue_gpu_module_list(self, p: QPainter, width: int, height: int, hud_scale: float) -> bool:
@@ -7510,12 +7559,12 @@ class PolarRMWindow(QOpenGLWidget):
             if row_h <= 0.1:
                 continue
             rect = QRectF(x - row_w + entry["slide"], y, row_w, row_h)
-            accent = accent_color(idx, time.perf_counter() * 0.38)
+            accent = rainbow_color_index(idx, speed=10, step=8)
             p.save()
             p.setOpacity(entry["alpha"])
-            rounded_rect(p, rect, 6, color("#050507", 0.52), color("#ffffff", 0.06), 0.8)
+            rounded_rect(p, rect, 6, color("#050507", 0.52), with_alpha(accent, 0.14), 0.8)
             index_rect = QRectF(rect.left(), rect.top(), 20.0, rect.height())
-            rounded_rect(p, index_rect, 6, with_alpha(accent, 0.78))
+            rounded_rect(p, index_rect, 6, with_alpha(accent, 0.82))
             self.draw_text(p, index_rect, str(idx + 1), self.font("poppins_bold", 6.6), THEME.text, Qt.AlignmentFlag.AlignCenter)
             cat = module.category[:3].upper()
             self.draw_text(p, QRectF(rect.right() - 27, rect.top(), 24, rect.height()), cat, category_font, THEME.text, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
@@ -7753,28 +7802,25 @@ class PolarRMWindow(QOpenGLWidget):
         start_y: float | None = None,
         available_height: float | None = None,
     ) -> None:
-        """Debug fluorescent-white ArrayList (modlist-white.html / MODLIST_WHITE.md).
+        """Debug fluorescent-white ArrayList (MODLIST_WHITE / jar ArrayList).
 
-        Device-pixel raster + integer coords. No text AA (jar tahoma16 antiAlias off)
-        so 1K stays clear and 2K does not soft-upscale a tiny buffer.
+        Right-aligned, width-desc sorted, tahoma16 + MC shadow + soft plate.
+        Drawn in logical coords under the hud_scale transform (motion layer) so
+        the list no longer double-scales through an offscreen device buffer.
         """
         row_h = 16.0
-        pad_right = 2.0
+        pad_right = 3.0
         pad_top = 2.0 if start_y is None else float(start_y)
-        pad_x = 6.0
+        pad_x = 7.0
         pad_y = 2.0
-        device_scale = self.painter_device_scale(p)
-        # Quantize scale so font/layout stay on integer device pixels (avoids 1.34× mush).
-        px = max(1.0, round(device_scale * 4.0) / 4.0)
-        font_px = max(16, int(round(16.0 * px)))
-        font = self.debug_tahoma_font(font_px)
+        # Logical 16px tahoma under p.scale(hud_scale) → crisp jar-size glyphs.
+        font = self.debug_tahoma_font(16)
         metrics = QFontMetricsF(font)
 
-        def measure_logical(name: str) -> float:
-            return float(metrics.horizontalAdvance(name)) / px
-
         visible = [m for m in self.registry.enabled_modules() if m.name not in ("HUD", "ClickGui")]
-        rows: list[tuple[str, float]] = [(module.name, measure_logical(module.name)) for module in visible]
+        rows: list[tuple[str, float]] = [
+            (module.name, float(metrics.horizontalAdvance(module.name))) for module in visible
+        ]
         rows.sort(key=lambda item: (-item[1], item[0].lower()))
 
         y0 = pad_top
@@ -7784,65 +7830,52 @@ class PolarRMWindow(QOpenGLWidget):
         if not rows:
             return
 
-        max_text_w = max(w for _, w in rows)
-        layer_w_l = max_text_w + pad_x * 2.0 + pad_right + 10.0
-        layer_h_l = y0 + len(rows) * row_h + pad_y + 10.0
-        layer_w_l = max(8.0, min(layer_w_l, float(width)))
-        layer_h_l = max(8.0, layer_h_l)
-        layer_w = max(8, int(math.ceil(layer_w_l * px)))
-        layer_h = max(8, int(math.ceil(layer_h_l * px)))
-        layer = QImage(layer_w, layer_h, QImage.Format.Format_ARGB32_Premultiplied)
-        layer.fill(0)
-        ip = QPainter(layer)
-        ip.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
-        # No text AA — gray fringe was reading as "unclear" at 1K.
-        ip.setRenderHint(QPainter.RenderHint.TextAntialiasing, False)
-        ip.setRenderHint(QPainter.RenderHint.Antialiasing, False)
-        ip.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, False)
-
         shadow = self.arraylist_shadow_image()
-        origin_x = float(width) - layer_w_l
-        shadow_px = float(max(1, int(round(px))))
+        p.save()
+        p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
+        p.setRenderHint(QPainter.RenderHint.TextAntialiasing, False)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing, False)
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, False)
 
-        for index, (name, text_w_l) in enumerate(rows):
-            screen_x = float(width) - text_w_l - pad_right
-            local_x_l = screen_x - origin_x
-            local_y_l = y0 + index * row_h
-            dx = float(int(round(local_x_l * px)))
-            dy = float(int(round(local_y_l * px)))
-            tw = float(int(round(text_w_l * px)))
-            rh = float(max(int(round(row_h * px)), int(math.ceil(metrics.height()))))
+        for index, (name, text_w) in enumerate(rows):
+            x = float(width) - text_w - pad_right
+            y = y0 + index * row_h
+            ix = float(int(round(x)))
+            iy = float(int(round(y)))
+            tw = float(int(round(text_w)))
+            rh = float(max(int(round(row_h)), int(math.ceil(metrics.height()))))
             dest = QRectF(
-                dx - pad_x * px,
-                dy - pad_y * px,
-                tw + pad_x * 2.0 * px,
-                rh + pad_y * 2.0 * px,
+                ix - pad_x,
+                iy - pad_y,
+                tw + pad_x * 2.0,
+                rh + pad_y * 2.0,
             )
             if shadow is not None and not shadow.isNull():
-                ip.drawImage(dest.toRect(), shadow)
+                p.drawImage(dest.toRect(), shadow)
             else:
-                ip.fillRect(dest.toRect(), QColor(0, 0, 0, 90))
+                # Soft dark cushion so pure white still "pops" on bright frames.
+                p.fillRect(dest.toRect(), QColor(0, 0, 0, 120))
+            # Extra soft plate under the jar shadow PNG (source peak is low after
+            # stretch) so fluorescent white stays readable on light game frames.
+            p.fillRect(
+                int(ix - 2),
+                int(iy - 1),
+                int(tw + 6),
+                int(rh + 3),
+                QColor(0, 0, 0, 55),
+            )
 
             self.draw_string_with_shadow_mc(
-                ip,
+                p,
                 name,
-                dx,
-                dy,
+                ix,
+                iy,
                 font=font,
                 main=QColor(255, 255, 255, 255),
                 text_w=tw,
                 row_h=rh,
-                shadow_px=shadow_px,
+                shadow_px=1.0,
             )
-        ip.end()
-
-        p.save()
-        p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
-        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, False)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing, False)
-        # Integer target rect when possible for 1:1 device mapping.
-        target = QRectF(origin_x, 0.0, layer_w_l, layer_h_l)
-        p.drawImage(target, layer)
         p.restore()
 
     def draw_module_list_liquid_array(
@@ -7892,15 +7925,16 @@ class PolarRMWindow(QOpenGLWidget):
             rect = QRectF(x + entry["slide"], y, row_w, h)
             hovered = rect.contains(self.hover_point)
             hover = self.anim.value(f"hud.liquid_array.hover.{module.name}", 1.0 if hovered else 0.0, self.anim_duration(0.15), Easings.ease_out_cubic)
-            accent = self.hud_accent()
+            # OpenZen-style per-row RGB for rail / name / tags.
+            row_rgb = rainbow_color_index(index, speed=10, step=8)
             p.save()
             p.setOpacity(p.opacity() * entry["alpha"])
             if surface == "LiquidGlass":
                 self.draw_hud_liquid_glass(p, rect, 4.0 if compact else 5.0, surface="SubGlass" if compact else "MainGlass", hover=hover)
             elif not compact or hovered:
-                rounded_rect(p, rect, 4.0 if compact else 5.0, color("#03060b", 0.48 + 0.16 * hover), color("#ffffff", 0.045 + 0.07 * hover), 0.7)
+                rounded_rect(p, rect, 4.0 if compact else 5.0, color("#03060b", 0.48 + 0.16 * hover), with_alpha(row_rgb, 0.12 + 0.10 * hover), 0.7)
             rail = QRectF(rect.right() - 4.0, rect.top() + 2.0, 3.0, max(2.0, rect.height() - 4.0)) if right_aligned else QRectF(rect.left() + 1.0, rect.top() + 2.0, 3.0, max(2.0, rect.height() - 4.0))
-            rounded_rect(p, rail, 1.2, with_alpha(accent, 0.76 + 0.18 * hover))
+            rounded_rect(p, rail, 1.2, with_alpha(row_rgb, 0.88 + 0.12 * hover))
             text_rect = rect.adjusted(8.0 if not right_aligned else 7.0, 0.0, -8.0 if right_aligned else -7.0, 0.0)
             if not right_aligned:
                 text_rect.adjust(4.0, 0.0, 0.0, 0.0)
@@ -7915,23 +7949,24 @@ class PolarRMWindow(QOpenGLWidget):
                     if surface == "LiquidGlass" and not compact:
                         self.draw_hud_liquid_glass(p, tag_rect, 3.5, surface="SubGlass", hover=hover)
                     else:
-                        rounded_rect(p, tag_rect, 3.5, with_alpha(accent, 0.12 + 0.08 * hover), with_alpha(accent, 0.22), 0.6)
+                        rounded_rect(p, tag_rect, 3.5, with_alpha(row_rgb, 0.14 + 0.08 * hover), with_alpha(row_rgb, 0.28), 0.6)
                 if right_aligned:
                     text_rect.setLeft(tag_rect.right() + 5.0)
                 else:
                     text_rect.setRight(tag_rect.left() - 5.0)
                 self.draw_text(p, tag_rect, tag, tag_font, THEME.text if tags_variant else THEME.muted, Qt.AlignmentFlag.AlignCenter)
             align = Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter if right_aligned else Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
-            self.draw_text(p, text_rect, module.name, name_font, THEME.text, align)
+            # Name uses full RGB like OpenZen ModuleListHud text.
+            self.draw_text(p, text_rect, module.name, name_font, with_alpha(row_rgb, 0.96), align)
             if dock:
                 progress = self.anim.value(f"hud.liquid_array.progress.{module.name}", 1.0 if module.enabled else 0.0, self.anim_duration(0.20), Easings.ease_out_cubic, initial=1.0)
                 bar = QRectF(rect.left() + 7.0, rect.bottom() - 2.3, max(2.0, (rect.width() - 14.0) * progress), 1.1)
-                rounded_rect(p, bar, 0.55, with_alpha(accent, 0.62))
+                rounded_rect(p, bar, 0.55, with_alpha(row_rgb, 0.72))
             self.add_hotspot(rect, "module_toggle", module.name, tooltip=f"{module.name} | {module.category} | {module.keybind}")
             p.restore()
 
     def draw_module_list_polar_text(self, p: QPainter, start_y: float | None = None) -> None:
-        """紧凑裸文字列表；FPS 仅由 POLAR-RM 水印统一显示。"""
+        """OpenZen ModuleListHud-style left bare text with animated RGB."""
         font = self.font("pingfang", 9.2)
         entries = self.module_list_entries(p, font, right_aligned=False)
         x = 18.0
@@ -7939,38 +7974,53 @@ class PolarRMWindow(QOpenGLWidget):
         for idx, entry in enumerate(entries):
             module = entry["module"]
             alpha = entry["alpha"]
-            h = 11.0 * entry["height"]
+            h = 12.0 * entry["height"]
             if h <= 0.1:
                 continue
             p.save()
             p.setOpacity(alpha)
-            c = accent_color(idx, 0.0)
-            text_rect = QRectF(x + entry["slide"], row_y, 220, h)
-            self.draw_text(p, text_rect.translated(1.0, 1.0), module.name, font, color("#000000", 0.72))
-            self.draw_text(p, text_rect, module.name, font, with_alpha(c, 0.90))
+            # OpenZen: getRainbowColor(10, index * 8) + text shadow.
+            c = rainbow_color_index(idx, speed=10, step=8)
+            text_rect = QRectF(x + entry["slide"], row_y, 260, h)
+            self.draw_text(p, text_rect.translated(1.0, 1.0), module.name, font, color("#000000", 0.78))
+            self.draw_text(p, text_rect, module.name, font, c)
             p.restore()
-            row_y += h
+            row_y += h + 1.0 * entry["height"]
 
     def draw_module_list_rainbow_right(self, p: QPainter, width: int, start_y: float | None = None) -> None:
+        """Right-aligned OpenZen RGB ArrayList with soft shadow plate."""
         font = self.font("poppins_medium", 9.6)
         entries = self.module_list_entries(p, font, right_aligned=True)
-        x = width - 18
+        x = width - 14.0
         y = 18.0 if start_y is None else start_y
+        shadow_img = self.arraylist_shadow_image()
         for idx, entry in enumerate(entries):
             module = entry["module"]
-            row_w = text_width(p, font, module.name) + 16
-            row_h = 18.0 * entry["height"]
+            label = module.name
+            tw = text_width(p, font, label)
+            row_w = tw + 18.0
+            row_h = 17.0 * entry["height"]
             if row_h <= 0.1:
                 continue
             row = QRectF(x - row_w + entry["slide"], y, row_w, row_h)
+            rgb = rainbow_color_index(idx, speed=10, step=8)
             p.save()
             p.setOpacity(entry["alpha"])
-            shadow = row.translated(1.0, 1.0)
+            # Soft underlay so rainbow glyphs stay readable on bright scene.
+            plate = row.adjusted(-4.0, -1.0, 4.0, 1.0)
+            if shadow_img is not None and not shadow_img.isNull():
+                p.drawImage(plate.toRect(), shadow_img)
+            else:
+                rounded_rect(p, plate, 3.0, color("#000000", 0.38))
+            # Right RGB accent bar (classic client ArrayList rail).
+            bar = QRectF(row.right() - 2.5, row.top() + 2.0, 2.5, max(2.0, row.height() - 4.0))
+            rounded_rect(p, bar, 1.0, rgb)
             align = Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
-            self.draw_text(p, shadow, module.name, font, color("#000000", 0.54), align)
-            self.draw_text(p, row, module.name, font, with_alpha(accent_color(idx, time.perf_counter() * 0.22), 0.76), align)
+            text_box = row.adjusted(0.0, 0.0, -6.0, 0.0)
+            self.draw_text(p, text_box.translated(1.0, 1.0), label, font, color("#000000", 0.70), align)
+            self.draw_text(p, text_box, label, font, rgb, align)
             p.restore()
-            y += row_h
+            y += row_h + 1.5 * entry["height"]
 
     def draw_module_list_glow_rows(self, p: QPainter, width: int, start_y: float | None = None) -> None:
         font = self.font("poppins_medium", 8.8)
@@ -7985,13 +8035,20 @@ class PolarRMWindow(QOpenGLWidget):
             if row_h <= 0.1:
                 continue
             rect = QRectF(x - row_w + entry["slide"], y, row_w, row_h)
+            c = rainbow_color_index(idx, speed=10, step=8)
             p.save()
             p.setOpacity(entry["alpha"])
             glow_rect(p, rect, 7, 0.08)
-            rounded_rect(p, rect, 6, color("#050506", 0.68), color("#ffffff", 0.10))
-            c = accent_color(idx, time.perf_counter())
-            rounded_rect(p, QRectF(rect.right() - 4, rect.top() + 3, 2, max(3, rect.height() - 6)), 1, c)
-            self.draw_text(p, rect.adjusted(10, 0, -12, 0), label, font, THEME.text, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            rounded_rect(p, rect, 6, color("#050506", 0.68), with_alpha(c, 0.22))
+            rounded_rect(p, QRectF(rect.right() - 4, rect.top() + 3, 2.5, max(3, rect.height() - 6)), 1, c)
+            self.draw_text(
+                p,
+                rect.adjusted(10, 0, -12, 0),
+                label,
+                font,
+                c,
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+            )
             p.restore()
             y += row_h + 3.0 * entry["height"]
 
@@ -8045,7 +8102,14 @@ class PolarRMWindow(QOpenGLWidget):
         for idx, entry in enumerate(shown):
             module = entry["module"]
             label_w = text_width(p, font, module.name)
-            self.draw_text(p, QRectF(x, rect.top(), label_w + 6, rect.height()), module.name, font, accent_color(idx), Qt.AlignmentFlag.AlignCenter)
+            self.draw_text(
+                p,
+                QRectF(x, rect.top(), label_w + 6, rect.height()),
+                module.name,
+                font,
+                rainbow_color_index(idx, speed=10, step=8),
+                Qt.AlignmentFlag.AlignCenter,
+            )
             x += label_w + 24
         p.restore()
 
@@ -8076,8 +8140,9 @@ class PolarRMWindow(QOpenGLWidget):
             p.setOpacity(entry["alpha"])
             rounded_rect(p, name_rect, 5, color("#000000", 0.36), color("#ffffff", 0.08))
             rounded_rect(p, key_rect, 5, color("#000000", 0.36), color("#ffffff", 0.08))
-            self.draw_text(p, name_rect.adjusted(6, 0, -6, 0), module.name, name_font, THEME.text, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-            self.draw_text(p, key_rect, key, key_font, accent_color(idx), Qt.AlignmentFlag.AlignCenter)
+            row_rgb = rainbow_color_index(idx, speed=10, step=8)
+            self.draw_text(p, name_rect.adjusted(6, 0, -6, 0), module.name, name_font, row_rgb, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            self.draw_text(p, key_rect, key, key_font, row_rgb, Qt.AlignmentFlag.AlignCenter)
             p.restore()
             row_y += row_h + 3 * entry["height"]
 
@@ -8100,16 +8165,16 @@ class PolarRMWindow(QOpenGLWidget):
                 continue
             rect = QRectF(x - total_w + entry["slide"], y, total_w, row_h)
             icon_w = 21.0
-            c = accent_color(idx, 0.0)
+            c = rainbow_color_index(idx, speed=10, step=8)
             ratio = 0.52 + (idx % 5) * 0.075
             p.save()
             p.setOpacity(entry["alpha"])
-            rounded_rect(p, QRectF(rect.left() + icon_w, rect.top(), rect.width() - icon_w, row_h), 5, color("#1e1e23", 0.46), color("#ffffff", 0.06))
+            rounded_rect(p, QRectF(rect.left() + icon_w, rect.top(), rect.width() - icon_w, row_h), 5, color("#1e1e23", 0.46), with_alpha(c, 0.14))
             rounded_rect(p, QRectF(rect.left() + icon_w, rect.top(), max(4.0, (rect.width() - icon_w) * ratio), row_h), 5, with_alpha(c, 0.42))
-            rounded_rect(p, QRectF(rect.left(), rect.top(), icon_w, row_h), 5, with_alpha(c, 0.72))
+            rounded_rect(p, QRectF(rect.left(), rect.top(), icon_w, row_h), 5, with_alpha(c, 0.78))
             self.draw_text(p, QRectF(rect.left(), rect.top(), icon_w, row_h), str(idx + 1), value_font, THEME.text, Qt.AlignmentFlag.AlignCenter)
-            self.draw_text(p, QRectF(rect.left() + icon_w + 6, rect.top(), rect.width() - icon_w - 46, row_h), module.name, name_font, THEME.text)
-            self.draw_text(p, QRectF(rect.right() - 42, rect.top(), 36, row_h), category, value_font, THEME.text, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            self.draw_text(p, QRectF(rect.left() + icon_w + 6, rect.top(), rect.width() - icon_w - 46, row_h), module.name, name_font, c)
+            self.draw_text(p, QRectF(rect.right() - 42, rect.top(), 36, row_h), category, value_font, with_alpha(c, 0.90), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             p.restore()
             y += row_h + 2.0 * entry["height"]
 
@@ -8126,18 +8191,18 @@ class PolarRMWindow(QOpenGLWidget):
             if row_h <= 0.1:
                 continue
             rect = QRectF(x - row_w + entry["slide"], y, row_w, row_h)
-            c = accent_color(idx, time.perf_counter())
+            c = rainbow_color_index(idx, speed=10, step=8)
             p.save()
             p.setOpacity(entry["alpha"])
             glow_rect(p, rect, 9, 0.07)
-            rounded_rect(p, rect, 8, color("#000000", 0.38), color("#ffffff", 0.08))
+            rounded_rect(p, rect, 8, color("#000000", 0.38), with_alpha(c, 0.18))
             badge = QRectF(rect.left() + 5, rect.top() + 5, 20, max(4.0, rect.height() - 10))
-            rounded_rect(p, badge, 7, with_alpha(c, 0.60), color("#ffffff", 0.10))
+            rounded_rect(p, badge, 7, with_alpha(c, 0.70), color("#ffffff", 0.10))
             self.draw_text(p, badge, module.category[0], self.font("poppins_bold", 8.2), THEME.text, Qt.AlignmentFlag.AlignCenter)
-            self.draw_text(p, rect.adjusted(32, 3, -54, -13), module.name, font, THEME.text)
+            self.draw_text(p, rect.adjusted(32, 3, -54, -13), module.name, font, c)
             self.draw_text(p, rect.adjusted(32, 15, -54, -2), module.category, sub_font, THEME.muted)
             chip = QRectF(rect.right() - 46, rect.top() + 6, 38, max(4.0, rect.height() - 12))
-            rounded_rect(p, chip, 6, color("#ffffff", 0.05), color("#ffffff", 0.08))
+            rounded_rect(p, chip, 6, with_alpha(c, 0.14), with_alpha(c, 0.28))
             self.draw_text(p, chip, module.keybind if module.keybind != "None" else "ON", sub_font, c, Qt.AlignmentFlag.AlignCenter)
             p.restore()
             y += row_h + 5.0 * entry["height"]
