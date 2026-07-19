@@ -2189,7 +2189,7 @@ class PolarRMWindow(QOpenGLWidget):
         self.draw_text(p, rect, text, font, c, flags)
 
     def draw_economy_overlay(self, p: QPainter, width: int, height: int, alpha: float) -> None:
-        """Economy workspace: one strong glass shell + solid readable content cards."""
+        """Economy workspace: responsive 1K/2K layout + solid readable content."""
         all_offers = self.economy_offers()
         categories = self.economy_categories(all_offers)
         if not categories:
@@ -2199,23 +2199,26 @@ class PolarRMWindow(QOpenGLWidget):
         offers = [offer for offer in all_offers if offer.category == self.economy_category]
         selected = self.economy_selected_offer()
         context = EconomyContext.from_state(self.state)
-        scale = max(0.80, min(1.18, self.get_auto_ui_scale(width, height, strength=0.30)))
+        # Softer scale so 2K does not blow up fonts while the panel stays wide.
+        scale = max(0.82, min(1.12, self.get_auto_ui_scale(width, height, strength=0.22)))
         morph = Easings.ease_out_expo(max(0.0, min(1.0, alpha)))
         content_alpha = Easings.ease_out_expo(max(0.0, min(1.0, (morph - 0.10) / 0.90)))
-        compact = width < 1650 or height < 900
+        # Stack list+detail when short or narrow (720p / laptop 1K).
+        compact = width < 1480 or height < 860
 
-        margin = 20.0 * scale
-        target_w = min(1220.0 * scale, width - margin * 2.0)
-        target_h = min(740.0 * scale, height - margin * 2.0)
+        # Fill most of the viewport on 1K/2K instead of a tiny fixed 1220 box.
+        margin = max(14.0, 18.0 * scale)
+        target_w = min(width - margin * 2.0, max(960.0, width * 0.88))
+        target_h = min(height - margin * 2.0, max(560.0, height * 0.86))
+        target_w = min(target_w, 1980.0)
+        target_h = min(target_h, 1180.0)
         target = QRectF((width - target_w) * 0.5, (height - target_h) * 0.5, target_w, target_h)
         collapsed = QRectF(width * 0.5 - 180.0 * scale, 24.0 * scale, 360.0 * scale, 50.0 * scale)
         panel = self.economy_lerp_rect(collapsed, target, morph)
-        radius = panel.height() * 0.5 * (1.0 - morph) + 20.0 * scale * morph
+        radius = panel.height() * 0.5 * (1.0 - morph) + 18.0 * scale * morph
 
         p.save()
-        # Stronger dim so glass samples a darker scene and text contrast rises.
         p.fillRect(QRectF(0, 0, width, height), color("#02060c", 0.52 * alpha))
-        # Single outer liquid-glass shell (avoid nested glass that looks muddy).
         self.draw_liquid_glass_panel(
             p,
             panel,
@@ -2225,144 +2228,153 @@ class PolarRMWindow(QOpenGLWidget):
             scale=scale,
             surface="ModalGlass",
         )
-        # Inner dark wash so content is never floating on bare blur only.
         inner_wash = panel.adjusted(8.0 * scale, 8.0 * scale, -8.0 * scale, -8.0 * scale)
-        rounded_rect(p, inner_wash, max(12.0, radius - 6.0 * scale), color("#050b12", 0.55), color("#ffffff", 0.06), 0.9)
+        rounded_rect(p, inner_wash, max(12.0, radius - 6.0 * scale), color("#050b12", 0.58), color("#ffffff", 0.06), 0.9)
 
-        header_h = 72.0 * scale
-        header = QRectF(panel.left() + 24.0 * scale, panel.top() + 14.0 * scale, panel.width() - 48.0 * scale, header_h - 16.0 * scale)
-        self._economy_label(p, header, "战斗经济", self.font("poppins_bold", 18.0 * scale), color("#ffffff"))
+        header_h = 64.0 * scale
+        header = QRectF(panel.left() + 22.0 * scale, panel.top() + 12.0 * scale, panel.width() - 44.0 * scale, header_h - 12.0 * scale)
+        self._economy_label(p, header, "战斗经济", self.font("poppins_bold", 17.0 * scale), color("#ffffff"))
         link = "模拟模式" if context.mock_mode else "裁判系统"
         profile_title = profile_by_key(context.match_mode, context.robot_profile).title
         subtitle = f"{self.match_mode_manager.current.title}  ·  {profile_title}  ·  {link}"
         self._economy_label(
             p,
-            header.adjusted(0, 28.0 * scale, -100.0 * scale, 0),
+            header.adjusted(0, 26.0 * scale, -96.0 * scale, 0),
             subtitle,
-            self.font("poppins_medium", 9.2 * scale),
+            self.font("poppins_medium", 8.8 * scale),
             color("#d7e8f8", 0.92),
         )
-        close = QRectF(header.right() - 44.0 * scale, header.top() + 4.0 * scale, 40.0 * scale, 40.0 * scale)
+        close = QRectF(header.right() - 40.0 * scale, header.top() + 2.0 * scale, 38.0 * scale, 38.0 * scale)
         rounded_rect(p, close, close.height() * 0.5, color("#1a2430", 0.92), color("#ffffff", 0.28), 1.2)
-        self._economy_label(p, close, "×", self.font("poppins_bold", 18.0 * scale), color("#ffffff"), Qt.AlignmentFlag.AlignCenter)
+        self._economy_label(p, close, "×", self.font("poppins_bold", 17.0 * scale), color("#ffffff"), Qt.AlignmentFlag.AlignCenter)
         self.add_hotspot(close, "economy_close", tooltip="关闭经济工作区 [Esc]")
 
         if content_alpha <= 0.01 or panel.height() < 180.0 * scale:
             p.restore()
             return
         p.setOpacity(p.opacity() * content_alpha)
-        inner = panel.adjusted(22.0 * scale, header_h + 4.0 * scale, -22.0 * scale, -20.0 * scale)
-        gap = 12.0 * scale
-        left_w = (236.0 if compact else 220.0) * scale
-        middle_w = (0.0 if compact else 380.0 * scale)
+        inner = panel.adjusted(18.0 * scale, header_h + 2.0 * scale, -18.0 * scale, -16.0 * scale)
+        gap = 10.0 * scale
+        # Flex columns: left ~20%, list ~40%, detail rest (wide on 2K).
+        left_w = max(180.0 * scale, min(260.0 * scale, inner.width() * 0.20))
         left = QRectF(inner.left(), inner.top(), left_w, inner.height())
+        rest = inner.width() - left_w - gap
         if compact:
-            content = QRectF(left.right() + gap, inner.top(), inner.width() - left.width() - gap, inner.height())
-            list_rect = QRectF(content.left(), content.top(), content.width(), content.height() * 0.54 - gap * 0.5)
+            content = QRectF(left.right() + gap, inner.top(), rest, inner.height())
+            # Give list a bit more than half so offers stay scannable on 720p.
+            list_h = max(180.0 * scale, content.height() * 0.48)
+            list_rect = QRectF(content.left(), content.top(), content.width(), list_h)
             detail = QRectF(content.left(), list_rect.bottom() + gap, content.width(), content.bottom() - list_rect.bottom() - gap)
         else:
-            list_rect = QRectF(left.right() + gap, inner.top(), middle_w, inner.height())
+            list_w = max(320.0 * scale, min(rest * 0.48, rest - 280.0 * scale))
+            list_rect = QRectF(left.right() + gap, inner.top(), list_w, inner.height())
             detail = QRectF(list_rect.right() + gap, inner.top(), inner.right() - list_rect.right() - gap, inner.height())
 
         for rect in (left, list_rect, detail):
-            self._economy_solid_panel(p, rect, 14.0 * scale, fill_alpha=0.88, edge_alpha=0.18)
+            if rect.width() > 4.0 and rect.height() > 4.0:
+                self._economy_solid_panel(p, rect, 12.0 * scale, fill_alpha=0.90, edge_alpha=0.18)
 
-        pad = 16.0 * scale
+        pad = 14.0 * scale
+        gold_font = self.font("poppins_bold", 26.0 * scale)
         self._economy_label(
             p,
-            left.adjusted(pad, 12.0 * scale, -pad, -left.height() + 36.0 * scale),
+            left.adjusted(pad, 10.0 * scale, -pad, -left.height() + 32.0 * scale),
             "当前金币",
-            self.font("poppins_bold", 9.5 * scale),
+            self.font("poppins_bold", 9.0 * scale),
             color("#cfe4f7"),
         )
+        gold_text = f"{context.gold}"
+        gold_rect = QRectF(left.left() + pad, left.top() + 30.0 * scale, left.width() - pad * 2.0 - 22.0 * scale, 40.0 * scale)
+        self._economy_label(p, gold_rect, gold_text, gold_font, color("#ffffff"))
         self._economy_label(
             p,
-            left.adjusted(pad, 34.0 * scale, -pad, -left.height() + 88.0 * scale),
-            f"{context.gold}",
-            self.font("poppins_bold", 30.0 * scale),
-            color("#ffffff"),
-        )
-        self._economy_label(
-            p,
-            left.adjusted(pad + 8.0 * scale + text_width(p, self.font("poppins_bold", 30.0 * scale), f"{context.gold}"), 52.0 * scale, -pad, -left.height() + 82.0 * scale),
+            QRectF(gold_rect.left() + text_width(p, gold_font, gold_text) + 6.0 * scale, gold_rect.top() + 12.0 * scale, 24.0 * scale, 24.0 * scale),
             "G",
-            self.font("poppins_bold", 12.0 * scale),
+            self.font("poppins_bold", 11.0 * scale),
             color("#ffd56a"),
         )
         economy_ratio = context.gold / max(1.0, float(max(context.total_gold, context.gold)))
-        track = QRectF(left.left() + pad, left.top() + 94.0 * scale, left.width() - pad * 2.0, 8.0 * scale)
-        rounded_rect(p, track, 4.0 * scale, color("#000000", 0.45), color("#ffffff", 0.10), 0.8)
-        rounded_rect(p, QRectF(track.left(), track.top(), max(4.0, track.width() * economy_ratio), track.height()), 4.0 * scale, color("#ffd56a", 0.96))
+        track = QRectF(left.left() + pad, left.top() + 78.0 * scale, left.width() - pad * 2.0, 7.0 * scale)
+        rounded_rect(p, track, 3.5 * scale, color("#000000", 0.45), color("#ffffff", 0.10), 0.8)
+        rounded_rect(p, QRectF(track.left(), track.top(), max(4.0, track.width() * economy_ratio), track.height()), 3.5 * scale, color("#ffd56a", 0.96))
         pending_cost = self.economy_bridge.latest.request.cost if self.economy_bridge.latest and self.economy_bridge.latest.status == "pending" else 0
-        summary = f"累计获得 {context.total_gold}   待扣 {pending_cost}"
+        summary = f"累计 {context.total_gold} · 待扣 {pending_cost}"
         self._economy_label(
             p,
-            left.adjusted(pad, 108.0 * scale, -pad, -left.height() + 132.0 * scale),
+            left.adjusted(pad, 90.0 * scale, -pad, -left.height() + 112.0 * scale),
             summary,
-            self.font("poppins_medium", 8.0 * scale),
+            self.font("poppins_medium", 7.6 * scale),
             color("#d5e6f6", 0.88),
         )
 
-        category_y = left.top() + 148.0 * scale
-        category_h = 44.0 * scale
+        # Categories fill remaining space between summary and status bars.
+        status_block_h = 96.0 * scale
+        category_top = left.top() + 122.0 * scale
+        category_bottom = left.bottom() - status_block_h - 8.0 * scale
+        cat_count = max(1, len(categories))
+        cat_gap = 7.0 * scale
+        cat_avail = max(40.0 * scale, category_bottom - category_top)
+        category_h = min(44.0 * scale, max(32.0 * scale, (cat_avail - cat_gap * (cat_count - 1)) / cat_count))
         self._economy_label(
             p,
-            QRectF(left.left() + pad, category_y - 22.0 * scale, left.width() - pad * 2.0, 18.0 * scale),
+            QRectF(left.left() + pad, category_top - 18.0 * scale, left.width() - pad * 2.0, 16.0 * scale),
             "分类",
-            self.font("poppins_bold", 8.2 * scale),
+            self.font("poppins_bold", 8.0 * scale),
             color("#b9d4ea"),
         )
         for index, key in enumerate(categories):
-            rect = QRectF(left.left() + pad, category_y + index * (category_h + 8.0 * scale), left.width() - pad * 2.0, category_h)
+            rect = QRectF(left.left() + pad, category_top + index * (category_h + cat_gap), left.width() - pad * 2.0, category_h)
+            if rect.bottom() > category_bottom + 1.0:
+                break
             active = key == self.economy_category
             rounded_rect(
                 p,
                 rect,
-                11.0 * scale,
+                10.0 * scale,
                 color("#1a8f9e", 0.55 if active else 0.18),
                 color("#9ffff2", 0.70 if active else 0.16),
                 1.2,
             )
             self._economy_label(
                 p,
-                rect.adjusted(14.0 * scale, 0, -10.0 * scale, 0),
+                rect.adjusted(12.0 * scale, 0, -8.0 * scale, 0),
                 CATEGORY_TITLES.get(key, key),
-                self.font("poppins_bold", 11.0 * scale),
+                self.font("poppins_bold", 10.5 * scale),
                 color("#ffffff") if active else color("#e8f2fb", 0.88),
             )
             self.add_hotspot(rect, "economy_category", key)
 
-        status_y = left.bottom() - 108.0 * scale
+        status_y = left.bottom() - status_block_h
         hp_ratio = context.current_health / max(1.0, float(context.max_health))
         ammo_ratio = context.current_ammo / max(1.0, float(context.ammo_capacity or context.current_ammo or 1))
         for row, (label, value, ratio, accent) in enumerate((
             ("血量", f"{context.current_health}/{context.max_health}", hp_ratio, color("#64dda1")),
             ("弹丸", f"{context.current_ammo}/{context.ammo_capacity or '--'}", ammo_ratio, color("#64baff")),
         )):
-            y = status_y + row * 46.0 * scale
+            y = status_y + row * 44.0 * scale
             self._economy_label(
                 p,
-                QRectF(left.left() + pad, y, left.width() - pad * 2.0, 18.0 * scale),
+                QRectF(left.left() + pad, y, left.width() - pad * 2.0, 16.0 * scale),
                 f"{label}  {value}",
-                self.font("poppins_medium", 8.4 * scale),
+                self.font("poppins_medium", 8.0 * scale),
                 color("#eef6ff"),
             )
-            bar = QRectF(left.left() + pad, y + 22.0 * scale, left.width() - pad * 2.0, 6.0 * scale)
+            bar = QRectF(left.left() + pad, y + 20.0 * scale, left.width() - pad * 2.0, 6.0 * scale)
             rounded_rect(p, bar, 3.0 * scale, color("#000000", 0.40), color("#ffffff", 0.08), 0.7)
             rounded_rect(p, QRectF(bar.left(), bar.top(), bar.width() * max(0.0, min(1.0, ratio)), bar.height()), 3.0 * scale, accent)
 
-        list_pad = 14.0 * scale
-        title_h = 36.0 * scale
+        list_pad = 12.0 * scale
+        title_h = 32.0 * scale
         self._economy_label(
             p,
-            list_rect.adjusted(list_pad, 10.0 * scale, -list_pad, -list_rect.height() + title_h),
+            list_rect.adjusted(list_pad, 8.0 * scale, -list_pad, -list_rect.height() + title_h),
             f"可选操作 · {CATEGORY_TITLES.get(self.economy_category, self.economy_category)}",
-            self.font("poppins_bold", 11.5 * scale),
+            self.font("poppins_bold", 11.0 * scale),
             color("#ffffff"),
         )
-        viewport = list_rect.adjusted(list_pad, title_h + 4.0 * scale, -list_pad, -list_pad)
-        card_h = (78.0 if compact else 84.0) * scale
-        card_gap = 9.0 * scale
+        viewport = list_rect.adjusted(list_pad, title_h + 2.0 * scale, -list_pad, -list_pad)
+        card_h = max(64.0 * scale, min(82.0 * scale, viewport.height() * 0.28 if compact else 78.0 * scale))
+        card_gap = 8.0 * scale
         self.economy_scroll_motion.set_bounds(max(0.0, len(offers) * (card_h + card_gap) - card_gap - viewport.height()))
         p.save()
         p.setClipRect(viewport)
@@ -2378,120 +2390,133 @@ class PolarRMWindow(QOpenGLWidget):
             rounded_rect(
                 p,
                 rect,
-                12.0 * scale,
+                11.0 * scale,
                 color("#14202c", 0.96 if active else 0.78 if hovered else 0.70),
                 color("#7cf0e4", 0.85 if active else 0.28 if hovered else 0.14),
                 1.3,
             )
             if active:
-                accent_bar = QRectF(rect.left(), rect.top() + 8.0 * scale, 4.0 * scale, rect.height() - 16.0 * scale)
+                accent_bar = QRectF(rect.left(), rect.top() + 6.0 * scale, 4.0 * scale, max(8.0, rect.height() - 12.0 * scale))
                 rounded_rect(p, accent_bar, 2.0 * scale, color("#5ce7d8", 0.95))
             title_color = color("#ffffff") if offer.enabled else color("#a8b0b8", 0.70)
+            price_w = 88.0 * scale
             self._economy_label(
                 p,
-                rect.adjusted(16.0 * scale, 10.0 * scale, -90.0 * scale, -rect.height() + 38.0 * scale),
+                rect.adjusted(14.0 * scale, 8.0 * scale, -price_w - 8.0 * scale, -rect.height() + 34.0 * scale),
                 offer.short_title,
-                self.font("poppins_bold", 11.0 * scale),
+                self.font("poppins_bold", 10.5 * scale),
                 title_color,
             )
             price = "仅状态" if offer.status_only else f"{offer.cost} 金币"
             self._economy_label(
                 p,
-                rect.adjusted(16.0 * scale, 10.0 * scale, -14.0 * scale, -rect.height() + 38.0 * scale),
+                rect.adjusted(14.0 * scale, 8.0 * scale, -12.0 * scale, -rect.height() + 34.0 * scale),
                 price,
-                self.font("poppins_bold", 10.0 * scale),
+                self.font("poppins_bold", 9.5 * scale),
                 color("#ffd56a") if offer.enabled else color("#b8a878", 0.55),
                 Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
             )
             secondary = offer.reason if not offer.enabled else offer.description
             self._economy_label(
                 p,
-                rect.adjusted(16.0 * scale, 40.0 * scale, -14.0 * scale, -10.0 * scale),
+                rect.adjusted(14.0 * scale, 36.0 * scale, -12.0 * scale, -8.0 * scale),
                 secondary,
-                self.font("poppins_medium", 8.4 * scale),
+                self.font("poppins_medium", 8.0 * scale),
                 color("#d7e6f5", 0.92 if offer.enabled else 0.55),
             )
             self.add_hotspot(rect, "economy_offer", offer.key, tooltip=offer.reason or offer.description)
         self._hotspot_clip = previous_clip
         p.restore()
 
-        detail_pad = 18.0 * scale
-        if selected is not None:
+        # Detail: pin confirm button, keep history above it (no overlap on 720p).
+        detail_pad = 14.0 * scale
+        button_h = 44.0 * scale
+        button = QRectF(
+            detail.left() + detail_pad,
+            detail.bottom() - button_h - 12.0 * scale,
+            max(40.0, detail.width() - detail_pad * 2.0),
+            button_h,
+        )
+        content_bottom = button.top() - 10.0 * scale
+        if selected is not None and detail.height() > 80.0 * scale:
             self._economy_label(
                 p,
-                detail.adjusted(detail_pad, 14.0 * scale, -detail_pad, -detail.height() + 46.0 * scale),
+                QRectF(detail.left() + detail_pad, detail.top() + 10.0 * scale, detail.width() - detail_pad * 2.0, 28.0 * scale),
                 selected.title,
-                self.font("poppins_bold", 14.0 * scale),
+                self.font("poppins_bold", 13.0 * scale),
                 color("#ffffff"),
             )
             tag = "预计价格" if selected.estimated else ("模拟请求" if context.mock_mode else "裁判系统")
             self._economy_label(
                 p,
-                detail.adjusted(detail_pad, 48.0 * scale, -detail_pad, -detail.height() + 76.0 * scale),
+                QRectF(detail.left() + detail_pad, detail.top() + 40.0 * scale, detail.width() - detail_pad * 2.0, 22.0 * scale),
                 f"{selected.unit}  ·  {selected.cost} 金币  ·  {tag}",
-                self.font("poppins_medium", 9.5 * scale),
+                self.font("poppins_medium", 9.0 * scale),
                 color("#ffd56a"),
             )
             self._economy_label(
                 p,
-                detail.adjusted(detail_pad, 80.0 * scale, -detail_pad, -detail.height() + 128.0 * scale),
+                QRectF(detail.left() + detail_pad, detail.top() + 66.0 * scale, detail.width() - detail_pad * 2.0, 40.0 * scale),
                 selected.description,
-                self.font("poppins_medium", 9.2 * scale),
+                self.font("poppins_medium", 8.6 * scale),
                 color("#e4eef8"),
             )
             state_text = selected.reason if not selected.enabled else "可以购买"
             state_color = color("#ffb06f") if not selected.enabled else color("#70e0ae")
             self._economy_label(
                 p,
-                detail.adjusted(detail_pad, 128.0 * scale, -detail_pad, -detail.height() + 156.0 * scale),
+                QRectF(detail.left() + detail_pad, detail.top() + 108.0 * scale, detail.width() - detail_pad * 2.0, 22.0 * scale),
                 state_text,
-                self.font("poppins_bold", 10.0 * scale),
+                self.font("poppins_bold", 9.5 * scale),
                 state_color,
             )
 
-        history_top = detail.top() + (170.0 if compact else 188.0) * scale
-        self._economy_label(
-            p,
-            QRectF(detail.left() + detail_pad, history_top, detail.width() - detail_pad * 2.0, 22.0 * scale),
-            "最近交易",
-            self.font("poppins_bold", 9.5 * scale),
-            color("#cfe0f0"),
-        )
-        history = list(reversed(self.economy_bridge.history[-3:]))
-        if not history:
+        history_top = detail.top() + 140.0 * scale
+        history_max_bottom = content_bottom - 4.0 * scale
+        if history_top + 40.0 * scale < history_max_bottom:
             self._economy_label(
                 p,
-                QRectF(detail.left() + detail_pad, history_top + 28.0 * scale, detail.width() - detail_pad * 2.0, 20.0 * scale),
-                "暂无记录",
-                self.font("poppins_medium", 8.5 * scale),
-                color("#9aafc0"),
+                QRectF(detail.left() + detail_pad, history_top, detail.width() - detail_pad * 2.0, 20.0 * scale),
+                "最近交易",
+                self.font("poppins_bold", 9.0 * scale),
+                color("#cfe0f0"),
             )
-        for index, transaction in enumerate(history):
-            y = history_top + 28.0 * scale + index * 38.0 * scale
-            label = TRANSACTION_LABELS.get(transaction.status, transaction.status)
-            status_color = (
-                color("#70e0ae")
-                if transaction.status == "succeeded"
-                else color("#ffb96b")
-                if transaction.status in ("rejected", "timed_out")
-                else color("#72bfff")
-            )
-            self._economy_label(
-                p,
-                QRectF(detail.left() + detail_pad, y, detail.width() - detail_pad * 2.0, 18.0 * scale),
-                f"{label} · {transaction.offer.short_title}",
-                self.font("poppins_bold", 8.8 * scale),
-                status_color,
-            )
-            self._economy_label(
-                p,
-                QRectF(detail.left() + detail_pad, y + 18.0 * scale, detail.width() - detail_pad * 2.0, 16.0 * scale),
-                transaction.message,
-                self.font("poppins_medium", 8.0 * scale),
-                color("#d0deec", 0.90),
-            )
-
-        button = QRectF(detail.left() + detail_pad, detail.bottom() - 58.0 * scale, detail.width() - detail_pad * 2.0, 46.0 * scale)
+            history = list(reversed(self.economy_bridge.history[-3:]))
+            if not history:
+                if history_top + 40.0 * scale < history_max_bottom:
+                    self._economy_label(
+                        p,
+                        QRectF(detail.left() + detail_pad, history_top + 24.0 * scale, detail.width() - detail_pad * 2.0, 18.0 * scale),
+                        "暂无记录",
+                        self.font("poppins_medium", 8.2 * scale),
+                        color("#9aafc0"),
+                    )
+            for index, transaction in enumerate(history):
+                y = history_top + 24.0 * scale + index * 36.0 * scale
+                if y + 32.0 * scale > history_max_bottom:
+                    break
+                label = TRANSACTION_LABELS.get(transaction.status, transaction.status)
+                status_color = (
+                    color("#70e0ae")
+                    if transaction.status == "succeeded"
+                    else color("#ffb96b")
+                    if transaction.status in ("rejected", "timed_out")
+                    else color("#72bfff")
+                )
+                self._economy_label(
+                    p,
+                    QRectF(detail.left() + detail_pad, y, detail.width() - detail_pad * 2.0, 16.0 * scale),
+                    f"{label} · {transaction.offer.short_title}",
+                    self.font("poppins_bold", 8.4 * scale),
+                    status_color,
+                )
+                self._economy_label(
+                    p,
+                    QRectF(detail.left() + detail_pad, y + 16.0 * scale, detail.width() - detail_pad * 2.0, 14.0 * scale),
+                    transaction.message,
+                    self.font("poppins_medium", 7.6 * scale),
+                    color("#d0deec", 0.90),
+                )
         now = time.perf_counter()
         pending = self.economy_bridge.latest is not None and self.economy_bridge.latest.status == "pending"
         if selected is None:
