@@ -1619,7 +1619,7 @@ class PolarRMWindow(QOpenGLWidget):
         return bool(self.gui_timeline.progress > 0.01 or self.economy_visible or self.economy_morph.progress > 0.01)
 
     def economy_stage_active(self) -> bool:
-        """Economy owns the stage — hide battle chrome under the glass sheet."""
+        """True while economy workspace is open/animating (same stage as menu overlay)."""
         return bool(self.economy_visible or self.economy_morph.progress > 0.01)
 
     def paint_hud_motion_overlay(
@@ -1634,15 +1634,12 @@ class PolarRMWindow(QOpenGLWidget):
     ) -> None:
         """以 UI 高刷新率绘制与图传帧率无关的战斗 HUD 动效。
 
-        ClickGUI 打开时仍绘制 ModuleList / 小地图 / 底盘等，便于边调边看。
-        经济工作区打开时必须清空本层，避免 FOV/地图/列表压在镜片下。
+        ClickGUI / 经济工作区打开时仍绘制 ModuleList / 小地图 / 底盘等，
+        便于边调边看；菜单层叠在 HUD 之上。
         """
         started_at = time.perf_counter()
         now = started_at
         hud = self.registry.get("HUD")
-        if self.economy_stage_active():
-            self.dynamic_hud_ms = (time.perf_counter() - started_at) * 1000.0
-            return
         scale = self.get_hud_scale(width, height)
         logical_width = max(1, int(width / scale))
         logical_height = max(1, int(height / scale))
@@ -2169,33 +2166,20 @@ class PolarRMWindow(QOpenGLWidget):
         self,
         p: QPainter,
         rect: QRectF,
-        radius: float,
         *,
         hover: float = 0.0,
         active: bool = False,
     ) -> None:
-        """ZenClient content row on root glass — white α hover, never a second lens.
-
-        OpenZen ModuleListPanel: HOVER_BG = white @20. Keep fills translucent so
-        root LensStrong edge refraction stays visible (README: no nested glass).
-        """
+        """Island capsule row on root glass — radius = half height, never a second lens."""
         h = max(0.0, min(1.0, hover))
-        # Soft dark underlay only when selected/hovered so text stays readable on bright
-        # scene bars while still leaving most of the root lens transparent.
+        radius = rect.height() * 0.5
         if active or h > 0.08:
-            rounded_rect(p, rect, radius, color("#041018", 0.16 + 0.10 * h + (0.08 if active else 0.0)))
-        fill_a = 0.04 + 0.06 * h + (0.05 if active else 0.0)
-        edge_a = 0.07 + 0.10 * h + (0.16 if active else 0.0)
-        rounded_rect(
-            p,
-            rect,
-            radius,
-            color("#ffffff", fill_a),
-            color("#ffffff", edge_a),
-            0.9,
-        )
+            rounded_rect(p, rect, radius, color("#041018", 0.18 + 0.10 * h + (0.08 if active else 0.0)))
+        fill_a = 0.045 + 0.07 * h + (0.05 if active else 0.0)
+        edge_a = 0.08 + 0.12 * h + (0.18 if active else 0.0)
+        rounded_rect(p, rect, radius, color("#ffffff", fill_a), color("#ffffff", edge_a), 0.9)
         if active:
-            bar = QRectF(rect.left() + 3.0, rect.top() + 7.0, 3.0, max(6.0, rect.height() - 14.0))
+            bar = QRectF(rect.left() + 10.0, rect.center().y() - 7.0, 3.0, 14.0)
             rounded_rect(p, bar, 1.5, color("#5ce7d8", 0.95))
 
     def _economy_dim_around(
@@ -2217,13 +2201,19 @@ class PolarRMWindow(QOpenGLWidget):
         hole.addRoundedRect(panel, radius, radius)
         p.fillPath(path.subtracted(hole), dim)
 
+    def _economy_island_well(self, p: QPainter, rect: QRectF, radius: float) -> None:
+        """Soft floating island well — content layer only, keeps root lens visible."""
+        if rect.width() < 4.0 or rect.height() < 4.0:
+            return
+        rounded_rect(p, rect, radius, color("#041018", 0.12), color("#ffffff", 0.08), 0.9)
+
     def draw_economy_overlay(self, p: QPainter, width: int, height: int, alpha: float) -> None:
-        """Economy workspace: ZenClient chrome + README liquid glass + Dynamic Island morph.
+        """Economy workspace: liquid glass + Dynamic Island morph + island chrome.
 
         - Collapse = top LensIsland capsule (radius = half height)
-        - Expand = one LensStrong root panel (ModalGlass / clear)
-        - Content = white-α rows / hairlines on top of the root lens (no nested glass)
-        - Confirm = small island capsule (ProminentGlass CTA only)
+        - Expand = one highly-rounded LensStrong shell (not a hard rectangle)
+        - Columns = floating island wells with gaps (no spreadsheet hairlines)
+        - Rows / chips / CTA = full capsules (radius = half height)
         """
         all_offers = self.economy_offers()
         categories = self.economy_categories(all_offers)
@@ -2242,18 +2232,19 @@ class PolarRMWindow(QOpenGLWidget):
         content_alpha = Easings.ease_out_expo(max(0.0, min(1.0, (morph - 0.12) / 0.88)))
         compact = width < 1480 or height < 860
 
-        # Centered sheet; leave scene margin so glass edge refraction has color to sample.
-        margin = max(32.0, min(width, height) * 0.055)
-        target_w = min(width - margin * 2.0, max(900.0, width * 0.70), 1580.0)
-        target_h = min(height - margin * 2.0, max(520.0, height * 0.72), 920.0)
+        # Centered shell; large continuous radius so expanded form still reads as an island.
+        margin = max(36.0, min(width, height) * 0.06)
+        target_w = min(width - margin * 2.0, max(880.0, width * 0.68), 1520.0)
+        target_h = min(height - margin * 2.0, max(500.0, height * 0.70), 880.0)
         target = QRectF((width - target_w) * 0.5, (height - target_h) * 0.5, target_w, target_h)
-        # Island capsule (collapsed) — LensIsland rule: radius = half height.
         island_h = 44.0 * scale
         island_w = min(max(280.0 * scale, 360.0 * scale), width * 0.40)
         collapsed = QRectF(width * 0.5 - island_w * 0.5, 18.0 * scale, island_w, island_h)
+        # Expanded corner stays very round (squircle-ish), never a hard 12–16 box.
+        expand_r = min(40.0 * scale, min(target_w, target_h) * 0.08)
         if island_style:
             panel = self.economy_lerp_rect(collapsed, target, morph)
-            radius = island_h * 0.5 * (1.0 - morph) + 22.0 * scale * morph
+            radius = island_h * 0.5 * (1.0 - morph) + expand_r * morph
         else:
             sheet0 = QRectF(
                 target.center().x() - target.width() * 0.42,
@@ -2262,32 +2253,35 @@ class PolarRMWindow(QOpenGLWidget):
                 target.height() * 0.84,
             )
             panel = self.economy_lerp_rect(sheet0, target, morph)
-            radius = 22.0 * scale
+            radius = expand_r
 
         p.save()
-        # Dim around the shell only — glass center samples undimmed scene (true liquid glass).
-        self._economy_dim_around(p, width, height, panel, 0.48 * alpha, radius)
+        # Soft full-screen dim (HUD remains visible underneath, same idea as ClickGUI).
+        p.fillRect(QRectF(0, 0, width, height), color("#02060c", 0.36 * alpha))
+        # Extra punch around shell so glass still samples a bright Combined Backdrop.
+        self._economy_dim_around(p, width, height, panel, 0.10 * alpha, radius)
 
-        # Single root LensStrong shell. No nested glass under content.
         self.draw_liquid_glass_panel(
             p,
             panel,
             radius,
             accent=color("#7dffb3"),
-            hover=0.22 + 0.10 * morph,
+            hover=0.24 + 0.10 * morph,
             scale=scale,
             surface="ModalGlass",
         )
-        # Hairline specular rim only (content layer). No dark wash — keeps center clear.
         p.setBrush(Qt.BrushStyle.NoBrush)
-        p.setPen(QPen(color("#ffffff", 0.14 * morph), 1.0))
+        p.setPen(QPen(color("#ffffff", 0.16 * morph), 1.1))
         p.drawRoundedRect(panel.adjusted(0.5, 0.5, -0.5, -0.5), radius, radius)
-        # Top specular strip — Zen / liquid-glass recipe, very light.
         if morph > 0.35:
-            top_hi = QRectF(panel.left() + 18.0 * scale, panel.top() + 10.0 * scale, panel.width() - 36.0 * scale, 1.0)
-            rounded_rect(p, top_hi, 0.5, color("#ffffff", 0.12 * content_alpha))
+            top_hi = QRectF(
+                panel.left() + radius * 0.55,
+                panel.top() + 11.0 * scale,
+                panel.width() - radius * 1.1,
+                1.0,
+            )
+            rounded_rect(p, top_hi, 0.5, color("#ffffff", 0.14 * content_alpha))
 
-        # Collapsed island label while morphing open.
         if morph < 0.88:
             island_label = f"经济  ·  {context.gold} G"
             if morph < 0.52:
@@ -2300,8 +2294,8 @@ class PolarRMWindow(QOpenGLWidget):
                     Qt.AlignmentFlag.AlignCenter,
                 )
 
-        header_h = 56.0 * scale
-        header = QRectF(panel.left() + 22.0 * scale, panel.top() + 14.0 * scale, panel.width() - 44.0 * scale, header_h - 12.0 * scale)
+        header_h = 58.0 * scale
+        header = QRectF(panel.left() + 26.0 * scale, panel.top() + 16.0 * scale, panel.width() - 52.0 * scale, header_h - 14.0 * scale)
         if content_alpha > 0.02:
             p.save()
             p.setOpacity(p.opacity() * content_alpha)
@@ -2311,16 +2305,15 @@ class PolarRMWindow(QOpenGLWidget):
             subtitle = f"{self.match_mode_manager.current.title}  ·  {profile_title}  ·  {link}"
             self.draw_glass_text(
                 p,
-                header.adjusted(0, 24.0 * scale, -110.0 * scale, 0),
+                header.adjusted(0, 24.0 * scale, -120.0 * scale, 0),
                 subtitle,
                 self.font("poppins_medium", 8.2 * scale),
                 color("#c8d8e8", 0.88),
             )
-            # Close + gold island chips (content layer only — no nested glass).
             close = QRectF(header.right() - 36.0 * scale, header.top() + 2.0 * scale, 34.0 * scale, 34.0 * scale)
-            gold_chip_w = 96.0 * scale
+            gold_chip_w = 100.0 * scale
             gold_chip = QRectF(close.left() - 10.0 * scale - gold_chip_w, header.top() + 4.0 * scale, gold_chip_w, 30.0 * scale)
-            rounded_rect(p, gold_chip, gold_chip.height() * 0.5, color("#000000", 0.18), color("#ffd56a", 0.36), 1.0)
+            rounded_rect(p, gold_chip, gold_chip.height() * 0.5, color("#000000", 0.20), color("#ffd56a", 0.40), 1.0)
             self.draw_glass_text(
                 p,
                 gold_chip,
@@ -2329,7 +2322,7 @@ class PolarRMWindow(QOpenGLWidget):
                 color("#ffd56a"),
                 Qt.AlignmentFlag.AlignCenter,
             )
-            rounded_rect(p, close, close.height() * 0.5, color("#000000", 0.16), color("#ffffff", 0.18), 1.0)
+            rounded_rect(p, close, close.height() * 0.5, color("#000000", 0.18), color("#ffffff", 0.20), 1.0)
             self.draw_glass_text(p, close, "×", self.font("poppins_bold", 15.0 * scale), color("#ffffff"), Qt.AlignmentFlag.AlignCenter)
             self.add_hotspot(close, "economy_close", tooltip="关闭经济工作区 [Esc]")
             p.restore()
@@ -2338,41 +2331,39 @@ class PolarRMWindow(QOpenGLWidget):
             p.restore()
             return
         p.setOpacity(p.opacity() * content_alpha)
-        inner = panel.adjusted(18.0 * scale, header_h + 4.0 * scale, -18.0 * scale, -16.0 * scale)
-        gap = 0.0  # hairline columns, no plate gutters
-        left_w = max(168.0 * scale, min(236.0 * scale, inner.width() * 0.19))
-        left = QRectF(inner.left(), inner.top(), left_w, inner.height())
-        rest = inner.width() - left_w
-        if compact:
-            content = QRectF(left.right(), inner.top(), rest, inner.height())
-            list_h = max(160.0 * scale, content.height() * 0.46)
-            list_rect = QRectF(content.left(), content.top(), content.width(), list_h)
-            detail = QRectF(content.left(), list_rect.bottom(), content.width(), content.bottom() - list_rect.bottom())
-        else:
-            list_w = max(290.0 * scale, min(rest * 0.48, rest - 250.0 * scale))
-            list_rect = QRectF(left.right(), inner.top(), list_w, inner.height())
-            detail = QRectF(list_rect.right(), inner.top(), inner.right() - list_rect.right(), inner.height())
 
-        # Column hairlines (Zen separators) — never opaque wells.
-        sep = color("#ffffff", 0.10)
-        if not compact:
-            for x in (left.right(), list_rect.right()):
-                p.fillRect(QRectF(x, inner.top() + 6.0 * scale, 1.0, inner.height() - 12.0 * scale), sep)
+        # Floating island columns with real gaps — not a squared grid with hairlines.
+        col_gap = 12.0 * scale
+        inner = panel.adjusted(20.0 * scale, header_h + 6.0 * scale, -20.0 * scale, -18.0 * scale)
+        left_w = max(172.0 * scale, min(228.0 * scale, inner.width() * 0.20))
+        rest = max(40.0, inner.width() - left_w - col_gap)
+        well_r = 22.0 * scale
+        if compact:
+            left = QRectF(inner.left(), inner.top(), left_w, inner.height())
+            content = QRectF(left.right() + col_gap, inner.top(), rest, inner.height())
+            list_h = max(150.0 * scale, content.height() * 0.44)
+            list_rect = QRectF(content.left(), content.top(), content.width(), list_h)
+            detail = QRectF(content.left(), list_rect.bottom() + col_gap, content.width(), content.bottom() - list_rect.bottom() - col_gap)
         else:
-            p.fillRect(QRectF(left.right(), inner.top() + 6.0 * scale, 1.0, inner.height() - 12.0 * scale), sep)
-            p.fillRect(QRectF(list_rect.left() + 12.0 * scale, list_rect.bottom(), list_rect.width() - 24.0 * scale, 1.0), sep)
+            list_w = max(280.0 * scale, min(rest * 0.48, rest - 250.0 * scale - col_gap))
+            left = QRectF(inner.left(), inner.top(), left_w, inner.height())
+            list_rect = QRectF(left.right() + col_gap, inner.top(), list_w, inner.height())
+            detail = QRectF(list_rect.right() + col_gap, inner.top(), inner.right() - list_rect.right() - col_gap, inner.height())
+
+        for well in (left, list_rect, detail):
+            self._economy_island_well(p, well, well_r)
 
         pad = 16.0 * scale
         gold_font = self.font("poppins_bold", 28.0 * scale)
         self.draw_glass_text(
             p,
-            left.adjusted(pad, 8.0 * scale, -pad, -left.height() + 28.0 * scale),
+            left.adjusted(pad, 12.0 * scale, -pad, -left.height() + 30.0 * scale),
             "当前金币",
-            self.font("poppins_bold", 8.4 * scale),
+            self.font("poppins_bold", 8.2 * scale),
             color("#aebcc8"),
         )
         gold_text = f"{context.gold}"
-        gold_rect = QRectF(left.left() + pad, left.top() + 28.0 * scale, left.width() - pad * 2.0 - 22.0 * scale, 40.0 * scale)
+        gold_rect = QRectF(left.left() + pad, left.top() + 32.0 * scale, left.width() - pad * 2.0 - 22.0 * scale, 40.0 * scale)
         self.draw_glass_text(p, gold_rect, gold_text, gold_font, color("#ffffff"))
         self.draw_glass_text(
             p,
@@ -2382,27 +2373,31 @@ class PolarRMWindow(QOpenGLWidget):
             color("#ffd56a"),
         )
         economy_ratio = context.gold / max(1.0, float(max(context.total_gold, context.gold)))
-        track = QRectF(left.left() + pad, left.top() + 76.0 * scale, left.width() - pad * 2.0, 5.0 * scale)
-        rounded_rect(p, track, 2.5 * scale, color("#ffffff", 0.08), color("#ffffff", 0.04), 0.5)
-        rounded_rect(p, QRectF(track.left(), track.top(), max(4.0, track.width() * economy_ratio), track.height()), 2.5 * scale, color("#ffd56a", 0.92))
+        track = QRectF(left.left() + pad, left.top() + 80.0 * scale, left.width() - pad * 2.0, 6.0 * scale)
+        rounded_rect(p, track, track.height() * 0.5, color("#ffffff", 0.08), color("#ffffff", 0.04), 0.5)
+        rounded_rect(
+            p,
+            QRectF(track.left(), track.top(), max(6.0, track.width() * economy_ratio), track.height()),
+            track.height() * 0.5,
+            color("#ffd56a", 0.92),
+        )
         pending_cost = self.economy_bridge.latest.request.cost if self.economy_bridge.latest and self.economy_bridge.latest.status == "pending" else 0
         summary = f"累计 {context.total_gold} · 待扣 {pending_cost}"
         self.draw_glass_text(
             p,
-            left.adjusted(pad, 88.0 * scale, -pad, -left.height() + 108.0 * scale),
+            left.adjusted(pad, 92.0 * scale, -pad, -left.height() + 112.0 * scale),
             summary,
             self.font("poppins_medium", 7.4 * scale),
             color("#9aafc0", 0.92),
         )
 
-        # Category pills — Zen content chips, not nested SubGlass.
-        status_block_h = 96.0 * scale
-        category_top = left.top() + 122.0 * scale
-        category_bottom = left.bottom() - status_block_h - 8.0 * scale
+        status_block_h = 100.0 * scale
+        category_top = left.top() + 124.0 * scale
+        category_bottom = left.bottom() - status_block_h - 10.0 * scale
         cat_count = max(1, len(categories))
-        cat_gap = 6.0 * scale
+        cat_gap = 8.0 * scale
         cat_avail = max(40.0 * scale, category_bottom - category_top)
-        category_h = min(38.0 * scale, max(30.0 * scale, (cat_avail - cat_gap * (cat_count - 1)) / cat_count))
+        category_h = min(40.0 * scale, max(32.0 * scale, (cat_avail - cat_gap * (cat_count - 1)) / cat_count))
         self.draw_glass_text(
             p,
             QRectF(left.left() + pad, category_top - 18.0 * scale, left.width() - pad * 2.0, 16.0 * scale),
@@ -2417,14 +2412,13 @@ class PolarRMWindow(QOpenGLWidget):
             active = key == self.economy_category
             chip_r = rect.height() * 0.5
             if active:
-                # Soft dark plate under accent so bright scene bars don't wash out the chip.
-                rounded_rect(p, rect, chip_r, color("#041018", 0.28), color("#5ce7d8", 0.55), 1.1)
+                rounded_rect(p, rect, chip_r, color("#041018", 0.30), color("#5ce7d8", 0.55), 1.1)
                 rounded_rect(p, rect, chip_r, color("#5ce7d8", 0.14), color("#5ce7d8", 0.0), 0.0)
             else:
-                rounded_rect(p, rect, chip_r, color("#041018", 0.14), color("#ffffff", 0.12), 0.9)
+                rounded_rect(p, rect, chip_r, color("#041018", 0.16), color("#ffffff", 0.12), 0.9)
             self.draw_glass_text(
                 p,
-                rect.adjusted(12.0 * scale, 0, -8.0 * scale, 0),
+                rect.adjusted(14.0 * scale, 0, -10.0 * scale, 0),
                 CATEGORY_TITLES.get(key, key),
                 self.font("poppins_bold", 10.0 * scale),
                 color("#ffffff") if active else color("#c8d6e4", 0.90),
@@ -2438,7 +2432,7 @@ class PolarRMWindow(QOpenGLWidget):
             ("血量", f"{context.current_health}/{context.max_health}", hp_ratio, color("#64dda1")),
             ("弹丸", f"{context.current_ammo}/{context.ammo_capacity or '--'}", ammo_ratio, color("#64baff")),
         )):
-            y = status_y + row * 44.0 * scale
+            y = status_y + row * 46.0 * scale
             self.draw_glass_text(
                 p,
                 QRectF(left.left() + pad, y, left.width() - pad * 2.0, 16.0 * scale),
@@ -2446,22 +2440,27 @@ class PolarRMWindow(QOpenGLWidget):
                 self.font("poppins_medium", 7.8 * scale),
                 color("#e8f0f8"),
             )
-            bar = QRectF(left.left() + pad, y + 20.0 * scale, left.width() - pad * 2.0, 4.0 * scale)
-            rounded_rect(p, bar, 2.0 * scale, color("#ffffff", 0.08), color("#ffffff", 0.04), 0.5)
-            rounded_rect(p, QRectF(bar.left(), bar.top(), bar.width() * max(0.0, min(1.0, ratio)), bar.height()), 2.0 * scale, accent)
+            bar = QRectF(left.left() + pad, y + 20.0 * scale, left.width() - pad * 2.0, 5.0 * scale)
+            rounded_rect(p, bar, bar.height() * 0.5, color("#ffffff", 0.08), color("#ffffff", 0.04), 0.5)
+            rounded_rect(
+                p,
+                QRectF(bar.left(), bar.top(), bar.width() * max(0.0, min(1.0, ratio)), bar.height()),
+                bar.height() * 0.5,
+                accent,
+            )
 
         list_pad = 14.0 * scale
         title_h = 28.0 * scale
         self.draw_glass_text(
             p,
-            list_rect.adjusted(list_pad, 8.0 * scale, -list_pad, -list_rect.height() + title_h),
+            list_rect.adjusted(list_pad, 12.0 * scale, -list_pad, -list_rect.height() + title_h + 4.0 * scale),
             f"可选操作 · {CATEGORY_TITLES.get(self.economy_category, self.economy_category)}",
             self.font("poppins_bold", 10.5 * scale),
             color("#ffffff"),
         )
-        viewport = list_rect.adjusted(list_pad, title_h + 2.0 * scale, -list_pad, -list_pad)
-        card_h = max(56.0 * scale, min(72.0 * scale, viewport.height() * 0.26 if compact else 66.0 * scale))
-        card_gap = 6.0 * scale
+        viewport = list_rect.adjusted(list_pad, title_h + 6.0 * scale, -list_pad, -list_pad)
+        card_h = max(54.0 * scale, min(68.0 * scale, viewport.height() * 0.26 if compact else 62.0 * scale))
+        card_gap = 8.0 * scale
         self.economy_scroll_motion.set_bounds(max(0.0, len(offers) * (card_h + card_gap) - card_gap - viewport.height()))
         p.save()
         p.setClipRect(viewport)
@@ -2480,12 +2479,12 @@ class PolarRMWindow(QOpenGLWidget):
                 self.anim_duration(0.14),
                 Easings.ease_out_expo,
             )
-            self._economy_zen_row(p, rect, 12.0 * scale, hover=hover_v, active=active)
+            self._economy_zen_row(p, rect, hover=hover_v, active=active)
             title_color = color("#ffffff") if offer.enabled else color("#9aa3ac", 0.72)
             price_w = 88.0 * scale
             self.draw_glass_text(
                 p,
-                rect.adjusted(14.0 * scale, 8.0 * scale, -price_w - 8.0 * scale, -rect.height() + 32.0 * scale),
+                rect.adjusted(18.0 * scale, 8.0 * scale, -price_w - 10.0 * scale, -rect.height() + 32.0 * scale),
                 offer.short_title,
                 self.font("poppins_bold", 10.5 * scale),
                 title_color,
@@ -2493,7 +2492,7 @@ class PolarRMWindow(QOpenGLWidget):
             price = "仅状态" if offer.status_only else f"{offer.cost} 金币"
             self.draw_glass_text(
                 p,
-                rect.adjusted(14.0 * scale, 8.0 * scale, -12.0 * scale, -rect.height() + 32.0 * scale),
+                rect.adjusted(18.0 * scale, 8.0 * scale, -14.0 * scale, -rect.height() + 32.0 * scale),
                 price,
                 self.font("poppins_bold", 9.5 * scale),
                 color("#ffd56a") if offer.enabled else color("#b8a878", 0.55),
@@ -2502,7 +2501,7 @@ class PolarRMWindow(QOpenGLWidget):
             secondary = offer.reason if not offer.enabled else offer.description
             self.draw_glass_text(
                 p,
-                rect.adjusted(14.0 * scale, 32.0 * scale, -12.0 * scale, -8.0 * scale),
+                rect.adjusted(18.0 * scale, 32.0 * scale, -14.0 * scale, -8.0 * scale),
                 secondary,
                 self.font("poppins_medium", 7.8 * scale),
                 color("#b8c8d8", 0.90 if offer.enabled else 0.55),
@@ -2511,12 +2510,11 @@ class PolarRMWindow(QOpenGLWidget):
         self._hotspot_clip = previous_clip
         p.restore()
 
-        # Detail + island confirm capsule pinned to bottom.
         detail_pad = 16.0 * scale
-        button_h = 44.0 * scale
+        button_h = 46.0 * scale
         button = QRectF(
             detail.left() + detail_pad,
-            detail.bottom() - button_h - 12.0 * scale,
+            detail.bottom() - button_h - 14.0 * scale,
             max(40.0, detail.width() - detail_pad * 2.0),
             button_h,
         )
@@ -2524,7 +2522,7 @@ class PolarRMWindow(QOpenGLWidget):
         if selected is not None and detail.height() > 80.0 * scale:
             self.draw_glass_text(
                 p,
-                QRectF(detail.left() + detail_pad, detail.top() + 10.0 * scale, detail.width() - detail_pad * 2.0, 28.0 * scale),
+                QRectF(detail.left() + detail_pad, detail.top() + 14.0 * scale, detail.width() - detail_pad * 2.0, 28.0 * scale),
                 selected.title,
                 self.font("poppins_bold", 13.5 * scale),
                 color("#ffffff"),
@@ -2532,14 +2530,14 @@ class PolarRMWindow(QOpenGLWidget):
             tag = "预计价格" if selected.estimated else ("模拟请求" if context.mock_mode else "裁判系统")
             self.draw_glass_text(
                 p,
-                QRectF(detail.left() + detail_pad, detail.top() + 40.0 * scale, detail.width() - detail_pad * 2.0, 22.0 * scale),
+                QRectF(detail.left() + detail_pad, detail.top() + 44.0 * scale, detail.width() - detail_pad * 2.0, 22.0 * scale),
                 f"{selected.unit}  ·  {selected.cost} 金币  ·  {tag}",
                 self.font("poppins_medium", 9.0 * scale),
                 color("#ffd56a"),
             )
             self.draw_glass_text(
                 p,
-                QRectF(detail.left() + detail_pad, detail.top() + 66.0 * scale, detail.width() - detail_pad * 2.0, 40.0 * scale),
+                QRectF(detail.left() + detail_pad, detail.top() + 70.0 * scale, detail.width() - detail_pad * 2.0, 40.0 * scale),
                 selected.description,
                 self.font("poppins_medium", 8.4 * scale),
                 color("#d0dce8"),
@@ -2548,13 +2546,13 @@ class PolarRMWindow(QOpenGLWidget):
             state_color = color("#ffb06f") if not selected.enabled else color("#70e0ae")
             self.draw_glass_text(
                 p,
-                QRectF(detail.left() + detail_pad, detail.top() + 108.0 * scale, detail.width() - detail_pad * 2.0, 22.0 * scale),
+                QRectF(detail.left() + detail_pad, detail.top() + 112.0 * scale, detail.width() - detail_pad * 2.0, 22.0 * scale),
                 state_text,
                 self.font("poppins_bold", 9.5 * scale),
                 state_color,
             )
 
-        history_top = detail.top() + 140.0 * scale
+        history_top = detail.top() + 144.0 * scale
         history_max_bottom = content_bottom - 4.0 * scale
         if history_top + 40.0 * scale < history_max_bottom:
             self.draw_glass_text(
@@ -2634,7 +2632,6 @@ class PolarRMWindow(QOpenGLWidget):
             button_enabled = True
             action = "economy_confirm"
 
-        # Confirm = island capsule strong lens (allowed small CTA); tint stays translucent.
         self.draw_liquid_glass_panel(
             p,
             button,
@@ -4522,37 +4519,35 @@ class PolarRMWindow(QOpenGLWidget):
         scaled_height = max(1, int(height / hud_scale))
         p.save()
         p.scale(hud_scale, hud_scale)
-        # Economy owns a clean glass stage — omit battle chrome from the static
-        # FBO. ClickGUI still keeps chrome underneath for live visual tuning.
-        if not self.economy_stage_active():
-            if self.setting_bool(hud, "Watermark", True):
-                self.draw_watermark(p)
-            if self.registry.get("MatchTimer") and self.registry.get("MatchTimer").enabled:
-                self.draw_match_header(p, scaled_width)
-            bottom_left = HudAnchorStack(22.0, scaled_height - 60.0, 8.0)
-            if self.setting_bool(hud, "Target HUD", True):
-                title = "EnergyTargetHUD" if primary_target.kind == "energy" else "RobotTargetHUD"
-                self.draw_target_hud_by_style(p, primary_target, title, bottom_left)
-            diagnostics = list(self._bottom_left_diagnostics)
-            if self.hud_density() != "DebugFull" and diagnostics:
-                diagnostics = [max(diagnostics, key=lambda item: item[2])]
-            else:
-                diagnostics.sort(key=lambda item: item[2])
-            for text_value, text_color, _priority in diagnostics:
-                diagnostic_rect = bottom_left.take(220.0, 22.0)
-                self.draw_pill(p, diagnostic_rect.topLeft(), text_value, text_color)
-            if hud:
-                mode_setting = hud.get_setting("Right Display")
-                mode = str(mode_setting.value) if mode_setting else HUD_MODES[0]
-                self.draw_right_hud_mode(
-                    p,
-                    scaled_width,
-                    scaled_height,
-                    mode,
-                    primary_target,
-                    hud_scale,
-                    draw_module_list=draw_module_list,
-                )
+        # Keep battle chrome under both ClickGUI and Economy (live visual tuning).
+        if self.setting_bool(hud, "Watermark", True):
+            self.draw_watermark(p)
+        if self.registry.get("MatchTimer") and self.registry.get("MatchTimer").enabled:
+            self.draw_match_header(p, scaled_width)
+        bottom_left = HudAnchorStack(22.0, scaled_height - 60.0, 8.0)
+        if self.setting_bool(hud, "Target HUD", True):
+            title = "EnergyTargetHUD" if primary_target.kind == "energy" else "RobotTargetHUD"
+            self.draw_target_hud_by_style(p, primary_target, title, bottom_left)
+        diagnostics = list(self._bottom_left_diagnostics)
+        if self.hud_density() != "DebugFull" and diagnostics:
+            diagnostics = [max(diagnostics, key=lambda item: item[2])]
+        else:
+            diagnostics.sort(key=lambda item: item[2])
+        for text_value, text_color, _priority in diagnostics:
+            diagnostic_rect = bottom_left.take(220.0, 22.0)
+            self.draw_pill(p, diagnostic_rect.topLeft(), text_value, text_color)
+        if hud:
+            mode_setting = hud.get_setting("Right Display")
+            mode = str(mode_setting.value) if mode_setting else HUD_MODES[0]
+            self.draw_right_hud_mode(
+                p,
+                scaled_width,
+                scaled_height,
+                mode,
+                primary_target,
+                hud_scale,
+                draw_module_list=draw_module_list,
+            )
         p.restore()
         if draw_motion:
             self.paint_hud_motion_overlay(p, width, height)
