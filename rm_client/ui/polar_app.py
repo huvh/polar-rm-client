@@ -2202,10 +2202,15 @@ class PolarRMWindow(QOpenGLWidget):
         p.fillPath(path.subtracted(hole), dim)
 
     def _economy_island_well(self, p: QPainter, rect: QRectF, radius: float) -> None:
-        """Soft floating island well — content layer only, keeps root lens visible."""
+        """Island floating well — liquid glass with refraction and background sampling."""
         if rect.width() < 4.0 or rect.height() < 4.0:
             return
-        rounded_rect(p, rect, radius, color("#041018", 0.12), color("#ffffff", 0.08), 0.9)
+        self.draw_liquid_glass_panel(
+            p, rect, radius,
+            accent=color("#a8d5f0", 0.42),
+            hover=0.0,
+            surface="MainGlass",
+        )
 
     def draw_economy_overlay(self, p: QPainter, width: int, height: int, alpha: float) -> None:
         """Economy workspace: liquid glass + Dynamic Island morph + island chrome.
@@ -2270,9 +2275,6 @@ class PolarRMWindow(QOpenGLWidget):
             scale=scale,
             surface="ModalGlass",
         )
-        p.setBrush(Qt.BrushStyle.NoBrush)
-        p.setPen(QPen(color("#ffffff", 0.16 * morph), 1.1))
-        p.drawRoundedRect(panel.adjusted(0.5, 0.5, -0.5, -0.5), radius, radius)
         if morph > 0.35:
             top_hi = QRectF(
                 panel.left() + radius * 0.55,
