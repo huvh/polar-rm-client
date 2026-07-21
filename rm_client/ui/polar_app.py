@@ -93,6 +93,7 @@ from .gui_cache import ClickGuiLayerCache
 from .clickgui_gpu import ClickGuiDrawList, ClickGuiGpuRenderer
 from .gpu_frame_compositor import GpuFrameCompositor, LensMaterial
 from .island_icon_gpu import IslandIconCommand, IslandIconGpuRenderer
+from .economy_glass import draw_economy_glass, draw_economy_glass_capsule, draw_economy_glass_well
 from .liquid_glass import LiquidGlassRenderer
 from .layout import HudAnchorStack
 from .startup_gl import StartupGpuCompositor, TextureOrigin
@@ -1669,7 +1670,9 @@ class PolarRMWindow(QOpenGLWidget):
                 if self.vision_target_in_autoaim_fov(mock_armor, logical_width, logical_height):
                     self.draw_target_overlay(p, mock_armor, armor_module)
             # Fluorescent-white FOV circle (ClickGUI: Draw Fov + Circle Size).
-            self.draw_armor_fov_circle(p, logical_width, logical_height, armor_module)
+            # Skip when economy/menu overlay is open so it doesn't bleed through glass.
+            if not self.menu_overlay_active():
+                self.draw_armor_fov_circle(p, logical_width, logical_height, armor_module)
 
         energy_module = self.registry.get("EnergyAutoAim")
         if energy_module and energy_module.enabled and self._vision_source == "Mock":
@@ -2170,18 +2173,8 @@ class PolarRMWindow(QOpenGLWidget):
         hover: float = 0.0,
         active: bool = False,
     ) -> None:
-        """Island capsule row on root glass — dark glass tint, no white overlay."""
-        h = max(0.0, min(1.0, hover))
-        radius = rect.height() * 0.5
-        # Dark glass fill — never white
-        fill_a = 0.10 + 0.08 * h + (0.10 if active else 0.0)
-        rounded_rect(p, rect, radius, color("#0a1420", fill_a))
-        # Subtle teal edge instead of white
-        edge_a = 0.10 + 0.14 * h + (0.22 if active else 0.0)
-        rounded_rect(p, rect, radius, color("#0a1420", 0.0), color("#5ce7d8", edge_a), 0.8)
-        if active:
-            bar = QRectF(rect.left() + 10.0, rect.center().y() - 7.0, 3.0, 14.0)
-            rounded_rect(p, bar, 1.5, color("#5ce7d8", 0.95))
+        """Island capsule row — AndroidLiquidGlass-kmp style, no white overlay."""
+        draw_economy_glass_capsule(p, rect, hover=hover, active=active)
 
     def _economy_dim_around(
         self,
@@ -2203,13 +2196,8 @@ class PolarRMWindow(QOpenGLWidget):
         p.fillPath(path.subtracted(hole), dim)
 
     def _economy_island_well(self, p: QPainter, rect: QRectF, radius: float) -> None:
-        """Island floating well — subtle dark glass, no white border."""
-        if rect.width() < 4.0 or rect.height() < 4.0:
-            return
-        # Dark glass well with subtle teal edge — avoids the white border from liquid_glass CPU path
-        rounded_rect(p, rect, radius, color("#0a1420", 0.14), color("#5ce7d8", 0.10), 0.8)
-        # Inner highlight for depth
-        rounded_rect(p, rect.adjusted(1.0, 1.0, -1.0, -1.0), max(1.0, radius - 1.0), color("#0a1420", 0.0), color("#ffffff", 0.04), 0.5)
+        """Island floating well — AndroidLiquidGlass-kmp recessed glass."""
+        draw_economy_glass_well(p, rect, radius)
 
     def draw_economy_overlay(self, p: QPainter, width: int, height: int, alpha: float) -> None:
         """Economy workspace: liquid glass + Dynamic Island morph + island chrome.
@@ -2265,14 +2253,16 @@ class PolarRMWindow(QOpenGLWidget):
         # Extra punch around shell so glass still samples a bright Combined Backdrop.
         self._economy_dim_around(p, width, height, panel, 0.10 * alpha, radius)
 
-        self.draw_liquid_glass_panel(
+        draw_economy_glass(
             p,
             panel,
             radius,
-            accent=color("#7dffb3"),
-            hover=0.24 + 0.10 * morph,
-            scale=scale,
-            surface="ModalGlass",
+            edge_width=12.0 * scale,
+            highlight_intensity=0.30 + 0.08 * morph,
+            shadow_radius=20.0 * scale,
+            shadow_alpha=0.16 * alpha,
+            tint_alpha=0.07,
+            edge_tint_alpha=0.12,
         )
         if morph > 0.35:
             top_hi = QRectF(
@@ -2411,12 +2401,7 @@ class PolarRMWindow(QOpenGLWidget):
             if rect.bottom() > category_bottom + 1.0:
                 break
             active = key == self.economy_category
-            chip_r = rect.height() * 0.5
-            if active:
-                rounded_rect(p, rect, chip_r, color("#041018", 0.30), color("#5ce7d8", 0.55), 1.1)
-                rounded_rect(p, rect, chip_r, color("#5ce7d8", 0.14), color("#5ce7d8", 0.0), 0.0)
-            else:
-                rounded_rect(p, rect, chip_r, color("#0a1420", 0.16), color("#5ce7d8", 0.10), 0.8)
+            draw_economy_glass_capsule(p, rect, hover=0.0, active=active)
             self.draw_glass_text(
                 p,
                 rect.adjusted(14.0 * scale, 0, -10.0 * scale, 0),
@@ -2633,23 +2618,27 @@ class PolarRMWindow(QOpenGLWidget):
             button_enabled = True
             action = "economy_confirm"
 
-        self.draw_liquid_glass_panel(
+        draw_economy_glass(
             p,
             button,
             button.height() * 0.5,
-            accent=color("#7dffb3") if button_enabled else color("#8a9298", 0.45),
-            hover=0.58 if button_enabled else 0.0,
-            scale=scale,
-            surface="ProminentGlass" if button_enabled else "MainGlass",
+            edge_width=6.0 * scale,
+            highlight_intensity=0.38 if button_enabled else 0.10,
+            shadow_radius=10.0 * scale,
+            shadow_alpha=0.12,
+            tint_alpha=0.10 if button_enabled else 0.06,
+            tint_color="#0a2820" if button_enabled else "#0a1420",
+            edge_tint_alpha=0.16 if button_enabled else 0.06,
         )
-        rounded_rect(
-            p,
-            button,
-            button.height() * 0.5,
-            color("#1a6b58", 0.18 if button_enabled else 0.08),
-            color("#b8fff0", 0.50 if button_enabled else 0.12),
-            1.1,
-        )
+        if button_enabled:
+            rounded_rect(
+                p,
+                button,
+                button.height() * 0.5,
+                color("#1a6b58", 0.14),
+                color("#5ce7d8", 0.40),
+                1.0,
+            )
         if selected is not None and selected.confirmation == "hold" and self.economy_hold_key == selected.key:
             progress = max(0.0, min(1.0, (now - self.economy_hold_started) / 0.60))
             fill = QRectF(button.left(), button.top(), max(8.0, button.width() * progress), button.height())
