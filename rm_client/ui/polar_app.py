@@ -94,6 +94,7 @@ from .clickgui_gpu import ClickGuiDrawList, ClickGuiGpuRenderer
 from .gpu_frame_compositor import GpuFrameCompositor, LensMaterial
 from .island_icon_gpu import IslandIconCommand, IslandIconGpuRenderer
 from .economy_glass import draw_economy_glass, draw_economy_glass_capsule, draw_economy_glass_well
+from .economy_workspace import EconomyIslandState, EconomyWorkspaceLayer
 from .liquid_glass import LiquidGlassRenderer
 from .layout import HudAnchorStack
 from .startup_gl import StartupGpuCompositor, TextureOrigin
@@ -475,8 +476,11 @@ class PolarRMWindow(QOpenGLWidget):
         self.economy_selected_key = ""
         self.economy_category = "ammo"
         self.economy_opened_at = 0.0
-        self.economy_morph = MorphState(progress=0.0, target=0.0, duration=0.62)
-        self.economy_scroll_motion = InertialScroll()
+        self.economy_island = EconomyIslandState()
+        self.economy_workspace_layer = EconomyWorkspaceLayer()
+        self.economy_category_scroll = InertialScroll()
+        self.economy_offers_scroll = InertialScroll()
+        self.economy_detail_scroll = InertialScroll()
         self.economy_armed_key = ""
         self.economy_armed_until = 0.0
         self.economy_hold_key = ""
@@ -523,7 +527,9 @@ class PolarRMWindow(QOpenGLWidget):
             requested_hz = 144.0
         self.render_fps_target = max(120.0, min(self.render_fps_cap, requested_hz))
         self.polar_unified_scroll = self.polar_unified_scroll_motion.update(dt)
-        self.economy_scroll_motion.update(dt)
+        self.economy_category_scroll.update(dt)
+        self.economy_offers_scroll.update(dt)
+        self.economy_detail_scroll.update(dt)
         for motion in self.polar_settings_scroll_motion.values():
             motion.update(dt)
         self.gui_timeline.set_target(1.0 if self.gui_visible else 0.0)
@@ -535,12 +541,11 @@ class PolarRMWindow(QOpenGLWidget):
             now=now,
         )
         self.polar_unified_morph.update(now=now)
-        self.economy_morph.set_target(
+        self.economy_island.set_target(
             1.0 if self.economy_visible else 0.0,
             self.anim_duration(0.62 if self.economy_visible else 0.48),
-            now=now,
         )
-        self.economy_morph.update(now=now)
+        self.economy_island.update()
         self.state.economy_mock_mode = self.economy_uses_mock_transport()
         economy_transaction = self.economy_bridge.update(self.state, now)
         if (
@@ -586,8 +591,8 @@ class PolarRMWindow(QOpenGLWidget):
             or self.polar_unified_scroll_motion.active
             or self.tactical_map_state.active()
             or self.dynamic_island_state.active()
-            or self.economy_morph.active()
-            or self.economy_morph.progress > 0.01
+            or self.economy_island.active
+            or self.economy_island.progress > 0.01
         )
         if self.frame_scheduler.should_request(now, high_rate, self.render_fps_target):
             self.update()
@@ -961,75 +966,97 @@ class PolarRMWindow(QOpenGLWidget):
                         return False
                 self._gpu_static_ui_key = static_key
             else:
-                if rebuild_hud_static:
-                    device = self.gpu_compositor.paint_device("overlay")
+                economy_active = self.economy_island.progress > 0.01 or self.economy_visible
+                if economy_active and self.clickgui_gpu.available:
+                    # Economy-exclusive path: keep camera background, suppress all battle HUD.
+                    self.gpu_compositor.clear_static_glass()
+                    self._gpu_static_ui_key = None
+                    commands = self.build_gpu_economy_workspace(width, height)
+                    self.clickgui_gpu.prepare_frame(commands, ratio)
+                    device = self.gpu_compositor.paint_device("dynamic")
                     if device is None:
                         return False
                     device.setDevicePixelRatio(ratio)
                     self.gpu_compositor.clear_current(functions, transparent=True)
+                    self.gpu_compositor.release_layer("dynamic")
+                    # Render economy commands via GPU atlas renderer into the glass layer
                     self.gpu_compositor.begin_static_glass()
-                    painter = QPainter(device)
-                    self.paint_overlay(
-                        None,
-                        startup_background_ready=True,
-                        hud_background_ready=True,
-                        painter=painter,
-                        logical_size=(width, height),
-                        include_interactive=False,
-                        split_motion_layer=True,
-                    )
-                    painter.end()
                     self.gpu_compositor.end_static_glass()
-                    self.gpu_compositor.release_layer("overlay")
-                    self._gpu_static_ui_key = static_key
-                prepared_clickgui_commands: ClickGuiDrawList | None = None
-                prepared_clickgui_hotspots: list[Hotspot] | None = None
-                prepared_clickgui_atlas = False
-                click_gui = self.registry.get("ClickGui")
-                gui_alpha = self.gui_timeline.progress
-                if (
-                    gui_alpha > 0.01
-                    and self.setting_mode(click_gui, "Render Backend", "Unified GPU") == "Unified GPU"
-                    and self.clickgui_gpu.available
-                ):
-                    prepared_clickgui_commands = self.build_gpu_clickgui(width, height, gui_alpha)
-                    # Snapshot hit targets before motion overlay / overlay clear
-                    # wipes them.  Layout runs once; present reuses this list.
-                    prepared_clickgui_hotspots = list(self.hotspots)
-                    self.clickgui_gpu.prepare_frame(prepared_clickgui_commands, ratio)
-                    prepared_clickgui_atlas = True
+                    if not self.clickgui_gpu.render(
+                        functions, commands, width, height, ratio, atlas_prepared=True,
+                    ):
+                        return False
+                    self.gpu_compositor.clear_target_layer(functions)
+                else:
+                    if rebuild_hud_static:
+                        device = self.gpu_compositor.paint_device("overlay")
+                        if device is None:
+                            return False
+                        device.setDevicePixelRatio(ratio)
+                        self.gpu_compositor.clear_current(functions, transparent=True)
+                        self.gpu_compositor.begin_static_glass()
+                        painter = QPainter(device)
+                        self.paint_overlay(
+                            None,
+                            startup_background_ready=True,
+                            hud_background_ready=True,
+                            painter=painter,
+                            logical_size=(width, height),
+                            include_interactive=False,
+                            split_motion_layer=True,
+                        )
+                        painter.end()
+                        self.gpu_compositor.end_static_glass()
+                        self.gpu_compositor.release_layer("overlay")
+                        self._gpu_static_ui_key = static_key
+                    prepared_clickgui_commands: ClickGuiDrawList | None = None
+                    prepared_clickgui_hotspots: list[Hotspot] | None = None
+                    prepared_clickgui_atlas = False
+                    click_gui = self.registry.get("ClickGui")
+                    gui_alpha = self.gui_timeline.progress
+                    if (
+                        gui_alpha > 0.01
+                        and self.setting_mode(click_gui, "Render Backend", "Unified GPU") == "Unified GPU"
+                        and self.clickgui_gpu.available
+                    ):
+                        prepared_clickgui_commands = self.build_gpu_clickgui(width, height, gui_alpha)
+                        # Snapshot hit targets before motion overlay / overlay clear
+                        # wipes them.  Layout runs once; present reuses this list.
+                        prepared_clickgui_hotspots = list(self.hotspots)
+                        self.clickgui_gpu.prepare_frame(prepared_clickgui_commands, ratio)
+                        prepared_clickgui_atlas = True
 
-                device = self.gpu_compositor.paint_device("dynamic")
-                if device is None:
-                    return False
-                device.setDevicePixelRatio(ratio)
-                self.gpu_compositor.clear_current(functions, transparent=True)
-                self.begin_gpu_island_icon_collection()
-                painter = QPainter(device)
-                if not self.home_visible:
-                    # When the menu is open, draw CombatTargetHUD into this
-                    # layer (under dim+panels). Closed: isolated target_fbo
-                    # owns the ring so it stays crisp over the scene only.
-                    self.paint_hud_motion_overlay(
-                        painter,
-                        width,
-                        height,
-                        include_vision=not native_vision_owner,
-                        include_target_hud=self.menu_overlay_active(),
-                    )
-                    self.paint_clickgui_overlay(
-                        painter,
-                        width,
-                        height,
-                        gpu_commands=prepared_clickgui_commands,
-                        gpu_hotspots=prepared_clickgui_hotspots,
-                        gpu_atlas_prepared=prepared_clickgui_atlas,
-                    )
-                painter.end()
-                self.flush_gpu_island_icons(functions, width, height, ratio)
-                self.gpu_compositor.release_layer("dynamic")
-                if not self.paint_gpu_target_hud_layer(functions, width, height, ratio):
-                    return False
+                    device = self.gpu_compositor.paint_device("dynamic")
+                    if device is None:
+                        return False
+                    device.setDevicePixelRatio(ratio)
+                    self.gpu_compositor.clear_current(functions, transparent=True)
+                    self.begin_gpu_island_icon_collection()
+                    painter = QPainter(device)
+                    if not self.home_visible:
+                        # When the menu is open, draw CombatTargetHUD into this
+                        # layer (under dim+panels). Closed: isolated target_fbo
+                        # owns the ring so it stays crisp over the scene only.
+                        self.paint_hud_motion_overlay(
+                            painter,
+                            width,
+                            height,
+                            include_vision=not native_vision_owner,
+                            include_target_hud=self.menu_overlay_active(),
+                        )
+                        self.paint_clickgui_overlay(
+                            painter,
+                            width,
+                            height,
+                            gpu_commands=prepared_clickgui_commands,
+                            gpu_hotspots=prepared_clickgui_hotspots,
+                            gpu_atlas_prepared=prepared_clickgui_atlas,
+                        )
+                    painter.end()
+                    self.flush_gpu_island_icons(functions, width, height, ratio)
+                    self.gpu_compositor.release_layer("dynamic")
+                    if not self.paint_gpu_target_hud_layer(functions, width, height, ratio):
+                        return False
 
             if not self.gpu_compositor.prepare_blur(
                 functions,
@@ -1285,7 +1312,7 @@ class PolarRMWindow(QOpenGLWidget):
             enabled_state,
             # Rebuild static FBO when economy owns the stage so map/modlist
             # cannot linger under the glass workspace.
-            bool(self.economy_visible or self.economy_morph.progress > 0.01),
+            bool(self.economy_visible or self.economy_island.progress > 0.01),
             bool(self.gui_timeline.progress > 0.01),
         )
 
@@ -1617,11 +1644,11 @@ class PolarRMWindow(QOpenGLWidget):
 
     def menu_overlay_active(self) -> bool:
         """True while ClickGUI or Economy workspace is open (or animating)."""
-        return bool(self.gui_timeline.progress > 0.01 or self.economy_visible or self.economy_morph.progress > 0.01)
+        return bool(self.gui_timeline.progress > 0.01 or self.economy_visible or self.economy_island.progress > 0.01)
 
     def economy_stage_active(self) -> bool:
         """True while economy workspace is open/animating (same stage as menu overlay)."""
-        return bool(self.economy_visible or self.economy_morph.progress > 0.01)
+        return bool(self.economy_visible or self.economy_island.progress > 0.01)
 
     def paint_hud_motion_overlay(
         self,
@@ -1842,10 +1869,12 @@ class PolarRMWindow(QOpenGLWidget):
         and ModuleList remain cached in the stable UI FBO.
         """
 
-        economy_alpha = self.economy_morph.progress
+        economy_alpha = self.economy_island.progress
         if economy_alpha > 0.01:
             self.hotspots.clear()
-            self.draw_economy_overlay(p, width, height, economy_alpha)
+            # Only fall back to QPainter compat path when GPU is unavailable
+            if not self.clickgui_gpu.available:
+                self.draw_economy_overlay_compat(p, width, height, economy_alpha)
 
         gui_alpha = self.gui_timeline.progress
         if gui_alpha > 0.01:
@@ -2056,8 +2085,12 @@ class PolarRMWindow(QOpenGLWidget):
         self.economy_opened_at = time.perf_counter()
         self.economy_armed_key = ""
         self.economy_hold_key = ""
-        self.economy_scroll_motion.position = 0.0
-        self.economy_scroll_motion.target = 0.0
+        self.economy_category_scroll.position = 0.0
+        self.economy_category_scroll.target = 0.0
+        self.economy_offers_scroll.position = 0.0
+        self.economy_offers_scroll.target = 0.0
+        self.economy_detail_scroll.position = 0.0
+        self.economy_detail_scroll.target = 0.0
         selected = self.economy_selected_offer()
         if selected is not None:
             self.economy_selected_key = selected.key
@@ -2199,7 +2232,7 @@ class PolarRMWindow(QOpenGLWidget):
         """Island floating well — AndroidLiquidGlass-kmp recessed glass."""
         draw_economy_glass_well(p, rect, radius)
 
-    def draw_economy_overlay(self, p: QPainter, width: int, height: int, alpha: float) -> None:
+    def draw_economy_overlay_compat(self, p: QPainter, width: int, height: int, alpha: float) -> None:
         """Economy workspace: liquid glass + Dynamic Island morph + island chrome.
 
         - Collapse = top LensIsland capsule (radius = half height)
@@ -2447,12 +2480,12 @@ class PolarRMWindow(QOpenGLWidget):
         viewport = list_rect.adjusted(list_pad, title_h + 6.0 * scale, -list_pad, -list_pad)
         card_h = max(54.0 * scale, min(68.0 * scale, viewport.height() * 0.26 if compact else 62.0 * scale))
         card_gap = 8.0 * scale
-        self.economy_scroll_motion.set_bounds(max(0.0, len(offers) * (card_h + card_gap) - card_gap - viewport.height()))
+        self.economy_offers_scroll.set_bounds(max(0.0, len(offers) * (card_h + card_gap) - card_gap - viewport.height()))
         p.save()
         p.setClipRect(viewport)
         previous_clip = getattr(self, "_hotspot_clip", None)
         self._hotspot_clip = viewport
-        scroll = self.economy_scroll_motion.position
+        scroll = self.economy_offers_scroll.position
         for index, offer in enumerate(offers):
             rect = QRectF(viewport.left(), viewport.top() + index * (card_h + card_gap) - scroll, viewport.width(), card_h)
             if not rect.intersects(viewport):
@@ -8924,6 +8957,305 @@ class PolarRMWindow(QOpenGLWidget):
                 break
         return commands
 
+    def build_gpu_economy_workspace(self, width: int, height: int) -> ClickGuiDrawList:
+        """Build the exclusive economy GPU scene.
+
+        Rules:
+        - Root container: ONE strong lens (add_glass), no nested glass.
+        - Internal panes: plain dark content rects via commands.rect().
+        - Text always above lens (drawn after rects).
+        - All alpha is premultiplied; outside rounded corners alpha is zero.
+        """
+        commands = ClickGuiDrawList()
+        self.hotspots.clear()
+        progress = self.economy_island.progress
+        layout = self.economy_workspace_layer.layout(width, height, progress)
+        if progress < 0.02:
+            return commands
+
+        all_offers = self.economy_offers()
+        categories = self.economy_categories(all_offers)
+        if not categories:
+            return commands
+        if self.economy_category not in categories:
+            self.economy_category = categories[0]
+        offers = [o for o in all_offers if o.category == self.economy_category]
+        selected = self.economy_selected_offer()
+        context = EconomyContext.from_state(self.state)
+        content_alpha = layout.content_alpha
+        panel = layout.panel
+        root_radius = layout.root_radius
+
+        # --- Root lens (single strong glass layer) ---
+        self.gpu_compositor.add_glass(
+            panel, root_radius,
+            strength=1.0,
+            surface="clear",
+            hover=0.0,
+            opacity=min(1.0, progress),
+            material=LensMaterial.STRONG,
+        )
+
+        # --- Full-screen dim behind panel ---
+        commands.rect(QRectF(0, 0, width, height), 0.0, color("#02060c", 0.38 * progress))
+
+        if content_alpha < 0.02:
+            return commands
+
+        # --- Three content panes (plain dark rects, NO glass) ---
+        pane_fill = color("#0a1420", 0.55 * content_alpha)
+        pane_radius = 16.0
+        commands.rect(layout.category_pane, pane_radius, pane_fill)
+        commands.rect(layout.offers_pane, pane_radius, pane_fill)
+        commands.rect(layout.detail_pane, pane_radius, pane_fill)
+
+        # --- Header ---
+        scale = max(0.82, min(1.10, self.get_auto_ui_scale(width, height, strength=0.20)))
+        header = layout.header
+        commands.text(
+            QRectF(header.left(), header.top(), header.width() - 160.0, 28.0),
+            "战斗经济", self.font("poppins_bold", 17.0 * scale),
+            color("#ffffff", content_alpha),
+        )
+        link = "模拟" if context.mock_mode else "裁判"
+        profile_title = profile_by_key(context.match_mode, context.robot_profile).title
+        subtitle = f"{self.match_mode_manager.current.title}  ·  {profile_title}  ·  {link}"
+        commands.text(
+            QRectF(header.left(), header.top() + 26.0, header.width() - 200.0, 18.0),
+            subtitle, self.font("poppins_medium", 8.2 * scale),
+            color("#c8d8e8", 0.88 * content_alpha),
+        )
+
+        # --- Gold chip ---
+        gold_chip = layout.link_chip
+        commands.rect(gold_chip, gold_chip.height() * 0.5, color("#000000", 0.20 * content_alpha), color("#ffd56a", 0.40 * content_alpha), 1.0)
+        commands.text(gold_chip, f"{context.gold} G", self.font("poppins_bold", 10.0 * scale), color("#ffd56a", content_alpha), Qt.AlignmentFlag.AlignCenter)
+
+        # --- Close button (circle) ---
+        close = layout.close_button
+        commands.rect(close, close.height() * 0.5, color("#000000", 0.18 * content_alpha), color("#ffffff", 0.20 * content_alpha), 1.0)
+        commands.text(close, "×", self.font("poppins_bold", 15.0 * scale), color("#ffffff", content_alpha), Qt.AlignmentFlag.AlignCenter)
+        self.add_hotspot(close, "economy_close", tooltip="关闭经济工作区 [Esc]")
+
+        # --- Category pane content ---
+        cat_pane = layout.category_pane
+        pad = 14.0
+        # Gold display
+        commands.text(
+            QRectF(cat_pane.left() + pad, cat_pane.top() + 12.0, cat_pane.width() - pad * 2, 16.0),
+            "当前金币", self.font("poppins_bold", 8.2 * scale), color("#aebcc8", content_alpha),
+        )
+        commands.text(
+            QRectF(cat_pane.left() + pad, cat_pane.top() + 30.0, cat_pane.width() - pad * 2, 36.0),
+            f"{context.gold}", self.font("poppins_bold", 26.0 * scale), color("#ffffff", content_alpha),
+        )
+        # Gold progress track
+        economy_ratio = context.gold / max(1.0, float(max(context.total_gold, context.gold)))
+        track = QRectF(cat_pane.left() + pad, cat_pane.top() + 74.0, cat_pane.width() - pad * 2, 5.0)
+        commands.rect(track, 2.5, color("#ffffff", 0.08 * content_alpha))
+        commands.rect(QRectF(track.left(), track.top(), max(4.0, track.width() * economy_ratio), track.height()), 2.5, color("#ffd56a", 0.92 * content_alpha))
+        # Summary
+        pending_cost = self.economy_bridge.latest.request.cost if self.economy_bridge.latest and self.economy_bridge.latest.status == "pending" else 0
+        commands.text(
+            QRectF(cat_pane.left() + pad, cat_pane.top() + 84.0, cat_pane.width() - pad * 2, 14.0),
+            f"累计 {context.total_gold} · 待扣 {pending_cost}", self.font("poppins_medium", 7.4 * scale), color("#9aafc0", 0.92 * content_alpha),
+        )
+        # Category label
+        commands.text(
+            QRectF(cat_pane.left() + pad, layout.category_viewport.top() - 20.0, cat_pane.width() - pad * 2, 16.0),
+            "分类", self.font("poppins_bold", 7.6 * scale), color("#8fa3b5", content_alpha),
+        )
+        # Category capsules
+        cat_vp = layout.category_viewport
+        cat_h = min(38.0, max(30.0, (cat_vp.height() - 8.0 * (len(categories) - 1)) / max(1, len(categories))))
+        cat_gap = 8.0
+        self.economy_category_scroll.set_bounds(max(0.0, len(categories) * (cat_h + cat_gap) - cat_gap - cat_vp.height()))
+        cat_scroll = self.economy_category_scroll.position
+        for index, key in enumerate(categories):
+            rect = QRectF(cat_vp.left(), cat_vp.top() + index * (cat_h + cat_gap) - cat_scroll, cat_vp.width(), cat_h)
+            if not rect.intersects(cat_vp):
+                continue
+            active = key == self.economy_category
+            chip_r = rect.height() * 0.5
+            if active:
+                commands.rect(rect, chip_r, color("#041018", 0.30 * content_alpha), color("#5ce7d8", 0.55 * content_alpha), 1.1)
+            else:
+                commands.rect(rect, chip_r, color("#0a1420", 0.16 * content_alpha), color("#5ce7d8", 0.10 * content_alpha), 0.8)
+            commands.text(
+                rect.adjusted(14.0, 0, -10.0, 0),
+                CATEGORY_TITLES.get(key, key), self.font("poppins_bold", 10.0 * scale),
+                color("#ffffff", content_alpha) if active else color("#c8d6e4", 0.90 * content_alpha),
+            )
+            self.add_hotspot(rect, "economy_category", key)
+
+        # HP / Ammo status bars
+        status_y = cat_pane.bottom() - 104.0
+        hp_ratio = context.current_health / max(1.0, float(context.max_health))
+        ammo_ratio = context.current_ammo / max(1.0, float(context.ammo_capacity or context.current_ammo or 1))
+        for row, (label, value, ratio, accent_hex) in enumerate((
+            ("血量", f"{context.current_health}/{context.max_health}", hp_ratio, "#64dda1"),
+            ("弹丸", f"{context.current_ammo}/{context.ammo_capacity or '--'}", ammo_ratio, "#64baff"),
+        )):
+            y = status_y + row * 46.0
+            commands.text(
+                QRectF(cat_pane.left() + pad, y, cat_pane.width() - pad * 2, 16.0),
+                f"{label}  {value}", self.font("poppins_medium", 7.8 * scale), color("#e8f0f8", content_alpha),
+            )
+            bar = QRectF(cat_pane.left() + pad, y + 20.0, cat_pane.width() - pad * 2, 5.0)
+            commands.rect(bar, 2.5, color("#ffffff", 0.08 * content_alpha))
+            commands.rect(QRectF(bar.left(), bar.top(), bar.width() * max(0.0, min(1.0, ratio)), bar.height()), 2.5, color(accent_hex, content_alpha))
+
+        # --- Offers pane ---
+        offers_pane = layout.offers_pane
+        list_pad = 14.0
+        commands.text(
+            QRectF(offers_pane.left() + list_pad, offers_pane.top() + 12.0, offers_pane.width() - list_pad * 2, 24.0),
+            f"可选操作 · {CATEGORY_TITLES.get(self.economy_category, self.economy_category)}",
+            self.font("poppins_bold", 10.5 * scale), color("#ffffff", content_alpha),
+        )
+        viewport = layout.offers_viewport
+        card_h = 60.0
+        card_gap = 8.0
+        self.economy_offers_scroll.set_bounds(max(0.0, len(offers) * (card_h + card_gap) - card_gap - viewport.height()))
+        scroll = self.economy_offers_scroll.position
+        for index, offer in enumerate(offers):
+            rect = QRectF(viewport.left(), viewport.top() + index * (card_h + card_gap) - scroll, viewport.width(), card_h)
+            if not rect.intersects(viewport):
+                continue
+            active = selected is not None and offer.key == selected.key
+            card_r = rect.height() * 0.5
+            if active:
+                commands.rect(rect, card_r, color("#0a1420", 0.22 * content_alpha), color("#5ce7d8", 0.32 * content_alpha), 0.9)
+            else:
+                commands.rect(rect, card_r, color("#0a1420", 0.10 * content_alpha), color("#5ce7d8", 0.08 * content_alpha), 0.7)
+            title_color = color("#ffffff", content_alpha) if offer.enabled else color("#9aa3ac", 0.72 * content_alpha)
+            commands.text(
+                QRectF(rect.left() + 18.0, rect.top() + 8.0, rect.width() - 110.0, 24.0),
+                offer.short_title, self.font("poppins_bold", 10.5 * scale), title_color,
+            )
+            price = "仅状态" if offer.status_only else f"{offer.cost} 金币"
+            commands.text(
+                QRectF(rect.left() + 18.0, rect.top() + 8.0, rect.width() - 32.0, 24.0),
+                price, self.font("poppins_bold", 9.5 * scale),
+                color("#ffd56a", content_alpha) if offer.enabled else color("#b8a878", 0.55 * content_alpha),
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+            )
+            secondary = offer.reason if not offer.enabled else offer.description
+            commands.text(
+                QRectF(rect.left() + 18.0, rect.top() + 32.0, rect.width() - 32.0, 20.0),
+                secondary, self.font("poppins_medium", 7.8 * scale),
+                color("#b8c8d8", (0.90 if offer.enabled else 0.55) * content_alpha),
+            )
+            self.add_hotspot(rect, "economy_offer", offer.key, tooltip=offer.reason or offer.description)
+
+        # --- Detail pane ---
+        detail = layout.detail_pane
+        detail_pad = 16.0
+        if selected is not None:
+            commands.text(
+                QRectF(detail.left() + detail_pad, detail.top() + 14.0, detail.width() - detail_pad * 2, 26.0),
+                selected.title, self.font("poppins_bold", 13.5 * scale), color("#ffffff", content_alpha),
+            )
+            tag = "预计价格" if selected.estimated else ("模拟请求" if context.mock_mode else "裁判系统")
+            commands.text(
+                QRectF(detail.left() + detail_pad, detail.top() + 42.0, detail.width() - detail_pad * 2, 20.0),
+                f"{selected.unit}  ·  {selected.cost} 金币  ·  {tag}",
+                self.font("poppins_medium", 9.0 * scale), color("#ffd56a", content_alpha),
+            )
+            commands.text(
+                QRectF(detail.left() + detail_pad, detail.top() + 66.0, detail.width() - detail_pad * 2, 36.0),
+                selected.description, self.font("poppins_medium", 8.4 * scale), color("#d0dce8", content_alpha),
+            )
+            state_text = selected.reason if not selected.enabled else "可以购买"
+            state_color = color("#ffb06f", content_alpha) if not selected.enabled else color("#70e0ae", content_alpha)
+            commands.text(
+                QRectF(detail.left() + detail_pad, detail.top() + 106.0, detail.width() - detail_pad * 2, 20.0),
+                state_text, self.font("poppins_bold", 9.5 * scale), state_color,
+            )
+
+        # Transaction history
+        history_top = detail.top() + 136.0
+        button = layout.action_button
+        history_max_bottom = button.top() - 10.0
+        if history_top + 36.0 < history_max_bottom:
+            commands.text(
+                QRectF(detail.left() + detail_pad, history_top, detail.width() - detail_pad * 2, 18.0),
+                "最近交易", self.font("poppins_bold", 8.6 * scale), color("#8fa3b5", content_alpha),
+            )
+            history = list(reversed(self.economy_bridge.history[-3:]))
+            if not history:
+                commands.text(
+                    QRectF(detail.left() + detail_pad, history_top + 22.0, detail.width() - detail_pad * 2, 16.0),
+                    "暂无记录", self.font("poppins_medium", 8.0 * scale), color("#7a8c9c", content_alpha),
+                )
+            for index, transaction in enumerate(history):
+                y = history_top + 22.0 + index * 34.0
+                if y + 30.0 > history_max_bottom:
+                    break
+                label = TRANSACTION_LABELS.get(transaction.status, transaction.status)
+                status_color = (
+                    color("#70e0ae", content_alpha) if transaction.status == "succeeded"
+                    else color("#ffb96b", content_alpha) if transaction.status in ("rejected", "timed_out")
+                    else color("#72bfff", content_alpha)
+                )
+                commands.text(
+                    QRectF(detail.left() + detail_pad, y, detail.width() - detail_pad * 2, 15.0),
+                    f"{label} · {transaction.offer.short_title}",
+                    self.font("poppins_bold", 8.2 * scale), status_color,
+                )
+                commands.text(
+                    QRectF(detail.left() + detail_pad, y + 15.0, detail.width() - detail_pad * 2, 13.0),
+                    transaction.message, self.font("poppins_medium", 7.4 * scale), color("#a8bac8", 0.90 * content_alpha),
+                )
+
+        # --- Action button ---
+        now = time.perf_counter()
+        pending = self.economy_bridge.latest is not None and self.economy_bridge.latest.status == "pending"
+        if selected is None:
+            button_text = "请先选择商品"
+            button_enabled = False
+            action = "economy_confirm"
+        elif pending:
+            button_text = "请求处理中…"
+            button_enabled = False
+            action = "economy_confirm"
+        elif not selected.enabled or selected.status_only:
+            button_text = selected.reason or "当前不可用"
+            button_enabled = False
+            action = "economy_confirm"
+        elif selected.confirmation == "hold":
+            hold_progress = (
+                max(0.0, min(1.0, (now - self.economy_hold_started) / 0.60))
+                if self.economy_hold_key == selected.key else 0.0
+            )
+            button_text = "按住 0.6 秒确认" if hold_progress <= 0.0 else f"确认中 {round(hold_progress * 100)}%"
+            button_enabled = True
+            action = "economy_confirm_hold"
+        else:
+            armed = self.economy_armed_key == selected.key and now <= self.economy_armed_until
+            if armed:
+                remain = max(0.0, self.economy_armed_until - now)
+                button_text = f"再点一次确认（{remain:.1f}s）"
+            else:
+                button_text = f"确认购买 · {selected.cost} 金币"
+            button_enabled = True
+            action = "economy_confirm"
+
+        btn_r = button.height() * 0.5
+        if button_enabled:
+            commands.rect(button, btn_r, color("#0a2820", 0.22 * content_alpha), color("#5ce7d8", 0.50 * content_alpha), 1.1)
+        else:
+            commands.rect(button, btn_r, color("#0a1420", 0.12 * content_alpha), color("#8a9298", 0.20 * content_alpha), 0.8)
+        commands.text(
+            button, button_text, self.font("poppins_bold", 11.0 * scale),
+            color("#ffffff", content_alpha) if button_enabled else color("#c5ccd3", 0.72 * content_alpha),
+            Qt.AlignmentFlag.AlignCenter,
+        )
+        if selected is not None and button_enabled:
+            self.add_hotspot(button, action, selected.key, tooltip=button_text)
+
+        return commands
+
     def build_gpu_clickgui(self, width: int, height: int, alpha: float) -> ClickGuiDrawList:
         started = time.perf_counter()
         commands = ClickGuiDrawList()
@@ -10632,7 +10964,13 @@ class PolarRMWindow(QOpenGLWidget):
         point = event.position()
         delta = -event.angleDelta().y() / 120.0 * 28.0
         if self.economy_visible:
-            self.economy_scroll_motion.add_wheel(delta)
+            layout = self.economy_workspace_layer.layout(self.width(), self.height(), self.economy_island.progress)
+            if layout.category_viewport.contains(point):
+                self.economy_category_scroll.add_wheel(delta)
+            elif layout.detail_viewport.contains(point):
+                self.economy_detail_scroll.add_wheel(delta)
+            else:
+                self.economy_offers_scroll.add_wheel(delta)
             self.frame_scheduler.force()
             event.accept()
             return
@@ -10731,8 +11069,8 @@ class PolarRMWindow(QOpenGLWidget):
                 self.economy_category = categories[index % len(categories)]
                 self.economy_selected_key = ""
                 self.economy_selected_offer()
-                self.economy_scroll_motion.position = 0.0
-                self.economy_scroll_motion.target = 0.0
+                self.economy_offers_scroll.position = 0.0
+                self.economy_offers_scroll.target = 0.0
                 self.frame_scheduler.force()
                 return
             if event.key() in (Qt.Key.Key_Up, Qt.Key.Key_Down) and offers:
@@ -10987,9 +11325,9 @@ class PolarRMWindow(QOpenGLWidget):
                 self.economy_selected = 0
                 self.economy_selected_key = ""
                 self.economy_armed_key = ""
-                self.economy_scroll_motion.position = 0.0
-                self.economy_scroll_motion.target = 0.0
-                self.economy_scroll_motion.velocity = 0.0
+                self.economy_offers_scroll.position = 0.0
+                self.economy_offers_scroll.target = 0.0
+                self.economy_offers_scroll.velocity = 0.0
                 self.economy_selected_offer()
                 self.frame_scheduler.force()
         elif action == "economy_offer":
