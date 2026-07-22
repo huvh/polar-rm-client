@@ -60,9 +60,13 @@ class EconomyIslandState:
         if dt <= 0.0:
             return self.progress
 
-        # Opening reaches an interactive state quickly, then settles softly.
-        # Closing is slightly faster while preserving current velocity.
-        omega = 13.5 if self.target > self.progress else 16.0
+        # Derive spring omega from the configured duration so that
+        # open/close timing is actually controlled by set_target(duration=...).
+        # Critically damped spring reaches ~98% at t ≈ 4/omega.
+        if self.target > self.progress:
+            omega = 4.5 / max(0.18, self.duration)
+        else:
+            omega = 5.5 / max(0.18, self.duration)
         substeps = max(1, int(math.ceil(dt / (1.0 / 180.0))))
         step = dt / substeps
         stiffness = omega * omega
@@ -136,12 +140,13 @@ class EconomyWorkspaceLayer:
         content_alpha = _smoothstep((progress - 0.18) / 0.42)
         interactive = progress >= 0.48
 
+        # Internal geometry follows the animated panel, not the final target.
         header_h = 66.0
-        header = QRectF(target.left() + 24.0, target.top() + 16.0, target.width() - 48.0, header_h - 14.0)
+        header = QRectF(panel.left() + 24.0, panel.top() + 16.0, panel.width() - 48.0, header_h - 14.0)
         close_button = QRectF(header.right() - 36.0, header.top() + 4.0, 34.0, 34.0)
         link_chip = QRectF(close_button.left() - 122.0, header.top() + 6.0, 108.0, 30.0)
 
-        inner = target.adjusted(18.0, header_h + 8.0, -18.0, -18.0)
+        inner = panel.adjusted(18.0, header_h + 8.0, -18.0, -18.0)
         gap = 12.0
         left_w = _clamp(inner.width() * (0.205 if compact else 0.19), 208.0, 274.0)
         category_pane = QRectF(inner.left(), inner.top(), left_w, inner.height())

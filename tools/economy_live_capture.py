@@ -1,8 +1,11 @@
 """Real-device validation of EconomyPanel via QScreen.grabWindow.
 
-Captures the actual on-screen pixels of a live PolarRMWindow at multiple
-resolutions.  Does NOT use grabFramebuffer() or offscreen platforms.
-Screenshots are written to C:\\tmp\\polar-rm-validation\\.
+Requirements (audit):
+- MUST use QScreen.grabWindow(window.winId()), NOT grabFramebuffer().
+- MUST capture animation mid-frames (not just force progress=1.0).
+- MUST verify economy panel pixels are actually present in the screenshot.
+- MUST report actual window size and DPR.
+- Output: C:\\tmp\\polar-rm-validation\\
 """
 
 from __future__ import annotations
@@ -14,7 +17,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QTimer, QRectF
 from PySide6.QtGui import QColor, QImage, QLinearGradient, QPainter, QPixmap, QSurfaceFormat
 from PySide6.QtWidgets import QApplication
 
@@ -29,6 +32,8 @@ RESOLUTIONS = [
     ("1920x1080", 1920, 1080),
     ("2560x1440", 2560, 1440),
 ]
+
+FAILURES: list[str] = []
 
 
 def make_scene(w: int, h: int) -> QImage:
@@ -54,6 +59,49 @@ def grab_window(window: PolarRMWindow) -> QPixmap:
     return screen.grabWindow(int(window.winId()))
 
 
+def check_economy_pixels(pixmap: QPixmap, name: str) -> bool:
+    """Verify that the economy panel actually rendered visible content.
+
+    Checks the center region for non-background pixels (the dim overlay +
+    panel content should produce dark-blue/teal pixels distinct from the
+    synthetic background gradient).
+    """
+    if pixmap.isNull():
+        FAILURES.append(f"{name}: grabWindow returned null")
+        return False
+    img = pixmap.toImage().convertToFormat(QImage.Format.Format_RGB888)
+    w, h = img.width(), img.height()
+    # Sample a grid in the center 60% of the image
+    x0, x1 = int(w * 0.2), int(w * 0.8)
+    y0, y1 = int(h * 0.2), int(h * 0.8)
+    dark_count = 0
+    teal_count = 0
+    total = 0
+    step = max(1, min((x1 - x0), (y1 - y0)) // 40)
+    for y in range(y0, y1, step):
+        for x in range(x0, x1, step):
+            c = img.pixelColor(x, y)
+            r, g, b = c.red(), c.green(), c.blue()
+            total += 1
+            # Dark panel pixels: low brightness
+            if r < 60 and g < 60 and b < 80:
+                dark_count += 1
+            # Teal accent pixels
+            if g > 150 and b > 150 and r < 120:
+                teal_count += 1
+    dark_ratio = dark_count / max(1, total)
+    teal_ratio = teal_count / max(1, total)
+    # Economy panel should produce at least 5% dark panel pixels
+    if dark_ratio < 0.05:
+        FAILURES.append(
+            f"{name}: economy panel not visible (dark_ratio={dark_ratio:.3f}, "
+            f"teal_ratio={teal_ratio:.3f}, sampled={total})"
+        )
+        return False
+    print(f"    pixel check OK: dark={dark_ratio:.3f} teal={teal_ratio:.3f} ({total} samples)")
+    return True
+
+
 def main() -> int:
     surface = QSurfaceFormat()
     surface.setVersion(3, 3)
@@ -72,12 +120,19 @@ def main() -> int:
         eco.get_setting("Open Style").value = "Dynamic Island"
     window.show()
 
-    state = {"i": 0, "phase": "open"}
+    state = {"i": 0, "phase": "mid_open", "frame": 0}
 
     def run_job() -> None:
         idx = state["i"]
         if idx >= len(RESOLUTIONS):
-            print(f"\nAll captures done. Output: {OUT}")
+            print(f"\n{'='*60}")
+            if FAILURES:
+                print(f"FAILURES ({len(FAILURES)}):")
+                for f in FAILURES:
+                    print(f"  - {f}")
+            else:
+                print("ALL CHECKS PASSED")
+            print(f"Output: {OUT}")
             window.close()
             app.quit()
             return
@@ -85,7 +140,7 @@ def main() -> int:
         name, w, h = RESOLUTIONS[idx]
         phase = state["phase"]
 
-        if phase == "open":
+        if phase == "mid_open":
             # Resize and prepare scene
             window.resize(w, h)
             window.home_visible = False
@@ -97,53 +152,89 @@ def main() -> int:
             window._last_capture_sequence += 1
             window._gpu_background_key = None
             window._gpu_static_ui_key = None
-            # Open economy workspace
+            # Open economy workspace — let animation run naturally
             window.open_economy_workspace("ammo")
-            window.economy_island.progress = 1.0
-            window.economy_island.target = 1.0
-            window.economy_island.velocity = 0.0
             window.frame_scheduler.force()
             window.update()
-            # Wait for animation to settle, then capture
-            QTimer.singleShot(800, lambda: capture(name, w, h, "open"))
+            # Capture mid-animation frame (~200ms in)
+            state["phase"] = "mid_capture"
+            QTimer.singleShot(200, run_job)
+
+        elif phase == "mid_capture":
+            # Capture animation mid-frame
+            pixmap = grab_window(window)
+            dpr = window.devicePixelRatioF()
+            actual_w = window.width()
+            actual_h = window.height()
+            path = OUT / f"economy_{name}_mid_open.png"
+            if not pixmap.isNull():
+                pixmap.save(str(path))
+            print(f"  [{name}] mid_open: window={actual_w}x{actual_h} dpr={dpr:.2f} "
+                  f"island={window.economy_island.progress:.3f} "
+                  f"grab={pixmap.width()}x{pixmap.height()}")
+            # Wait for animation to settle
+            state["phase"] = "settled"
+            QTimer.singleShot(700, run_job)
+
+        elif phase == "settled":
+            # Capture settled open state
+            pixmap = grab_window(window)
+            path = OUT / f"economy_{name}_open.png"
+            if not pixmap.isNull():
+                pixmap.save(str(path))
+            progress = window.economy_island.progress
+            hotspots = len([h for h in window.hotspots if str(h.action).startswith("economy")])
+            print(f"  [{name}] open: island={progress:.3f} hotspots={hotspots} "
+                  f"grab={pixmap.width()}x{pixmap.height()}")
+            # Pixel verification
+            check_economy_pixels(pixmap, f"{name}_open")
+            # Verify animation actually settled
+            if progress < 0.95:
+                FAILURES.append(f"{name}_open: animation did not settle (progress={progress:.3f})")
+            # Verify hotspots exist
+            if hotspots < 3:
+                FAILURES.append(f"{name}_open: too few hotspots ({hotspots})")
+            state["phase"] = "close"
+            QTimer.singleShot(100, run_job)
 
         elif phase == "close":
-            # Close economy workspace
+            # Close economy workspace — let animation run naturally
             window.close_economy_workspace()
-            window.economy_island.progress = 0.0
-            window.economy_island.target = 0.0
-            window.economy_island.velocity = 0.0
             window.frame_scheduler.force()
             window.update()
-            QTimer.singleShot(600, lambda: capture(name, w, h, "closed"))
-
-    def capture(name: str, w: int, h: int, phase: str) -> None:
-        pixmap = grab_window(window)
-        if pixmap.isNull():
-            print(f"  WARN: grabWindow returned null for {name}_{phase}")
-        else:
-            path = OUT / f"economy_{name}_{phase}.png"
-            pixmap.save(str(path))
-            print(f"  saved {path.name} ({pixmap.width()}x{pixmap.height()})")
-
-        print(
-            f"  gpu={window.gpu_compositor.available} "
-            f"island={window.economy_island.progress:.2f} "
-            f"hotspots={len([h for h in window.hotspots if str(h.action).startswith('economy')])}"
-        )
-
-        if phase == "open":
-            # Transition to close phase
-            state["phase"] = "close"
+            state["phase"] = "close_capture"
             QTimer.singleShot(200, run_job)
-        else:
+
+        elif phase == "close_capture":
+            # Capture mid-close frame
+            pixmap = grab_window(window)
+            path = OUT / f"economy_{name}_mid_close.png"
+            if not pixmap.isNull():
+                pixmap.save(str(path))
+            print(f"  [{name}] mid_close: island={window.economy_island.progress:.3f}")
+            state["phase"] = "closed"
+            QTimer.singleShot(600, run_job)
+
+        elif phase == "closed":
+            # Capture fully closed state
+            pixmap = grab_window(window)
+            path = OUT / f"economy_{name}_closed.png"
+            if not pixmap.isNull():
+                pixmap.save(str(path))
+            progress = window.economy_island.progress
+            print(f"  [{name}] closed: island={progress:.3f}")
+            if progress > 0.05:
+                FAILURES.append(f"{name}_closed: animation did not close (progress={progress:.3f})")
             # Move to next resolution
-            state["phase"] = "open"
+            state["phase"] = "mid_open"
             state["i"] += 1
             QTimer.singleShot(200, run_job)
 
     QTimer.singleShot(600, run_job)
     app.exec()
+
+    if FAILURES:
+        return 1
     return 0
 
 

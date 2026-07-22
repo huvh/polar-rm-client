@@ -916,7 +916,13 @@ class PolarRMWindow(QOpenGLWidget):
             )
             # Clear this isolated layer on every page so an ESP frame cannot
             # survive a HUD-to-launcher transition.
-            native_vision_owner = self.paint_gpu_vision_layer(functions, width, height, ratio)
+            economy_active = not startup_scene and (self.economy_island.progress > 0.01 or self.economy_visible)
+            if economy_active:
+                # Economy-exclusive: skip vision/ESP layer entirely.
+                native_vision_owner = False
+                self.gpu_compositor.end_vision_layer()
+            else:
+                native_vision_owner = self.paint_gpu_vision_layer(functions, width, height, ratio)
 
             if startup_scene:
                 transition_active = (
@@ -966,26 +972,34 @@ class PolarRMWindow(QOpenGLWidget):
                         return False
                 self._gpu_static_ui_key = static_key
             else:
-                economy_active = self.economy_island.progress > 0.01 or self.economy_visible
                 if economy_active and self.clickgui_gpu.available:
                     # Economy-exclusive path: keep camera background, suppress all battle HUD.
+                    # Clear overlay (map/modlist) and static glass so nothing bleeds through.
                     self.gpu_compositor.clear_static_glass()
                     self._gpu_static_ui_key = None
+                    overlay_device = self.gpu_compositor.paint_device("overlay")
+                    if overlay_device is not None:
+                        overlay_device.setDevicePixelRatio(ratio)
+                        self.gpu_compositor.clear_current(functions, transparent=True)
+                        self.gpu_compositor.release_layer("overlay")
+
+                    # Build economy GPU commands (also registers root glass via add_glass).
                     commands = self.build_gpu_economy_workspace(width, height)
                     self.clickgui_gpu.prepare_frame(commands, ratio)
+
+                    # Bind dynamic FBO, render economy UI into it, THEN release.
                     device = self.gpu_compositor.paint_device("dynamic")
                     if device is None:
                         return False
                     device.setDevicePixelRatio(ratio)
                     self.gpu_compositor.clear_current(functions, transparent=True)
-                    self.gpu_compositor.release_layer("dynamic")
-                    # Render economy commands via GPU atlas renderer into the glass layer
-                    self.gpu_compositor.begin_static_glass()
-                    self.gpu_compositor.end_static_glass()
                     if not self.clickgui_gpu.render(
                         functions, commands, width, height, ratio, atlas_prepared=True,
                     ):
+                        self.gpu_compositor.release_layer("dynamic")
                         return False
+                    self.gpu_compositor.release_layer("dynamic")
+                    # Ensure target HUD ring is empty.
                     self.gpu_compositor.clear_target_layer(functions)
                 else:
                     if rebuild_hud_static:
@@ -9078,15 +9092,17 @@ class PolarRMWindow(QOpenGLWidget):
             active = key == self.economy_category
             chip_r = rect.height() * 0.5
             if active:
-                commands.rect(rect, chip_r, color("#041018", 0.30 * content_alpha), color("#5ce7d8", 0.55 * content_alpha), 1.1)
+                commands.rect(rect, chip_r, color("#041018", 0.30 * content_alpha), color("#5ce7d8", 0.55 * content_alpha), 1.1, clip=cat_vp)
             else:
-                commands.rect(rect, chip_r, color("#0a1420", 0.16 * content_alpha), color("#5ce7d8", 0.10 * content_alpha), 0.8)
+                commands.rect(rect, chip_r, color("#0a1420", 0.16 * content_alpha), color("#5ce7d8", 0.10 * content_alpha), 0.8, clip=cat_vp)
             commands.text(
                 rect.adjusted(14.0, 0, -10.0, 0),
                 CATEGORY_TITLES.get(key, key), self.font("poppins_bold", 10.0 * scale),
                 color("#ffffff", content_alpha) if active else color("#c8d6e4", 0.90 * content_alpha),
+                clip=cat_vp,
             )
-            self.add_hotspot(rect, "economy_category", key)
+            if layout.interactive:
+                self.add_hotspot(rect, "economy_category", key)
 
         # HP / Ammo status bars
         status_y = cat_pane.bottom() - 104.0
@@ -9125,13 +9141,14 @@ class PolarRMWindow(QOpenGLWidget):
             active = selected is not None and offer.key == selected.key
             card_r = rect.height() * 0.5
             if active:
-                commands.rect(rect, card_r, color("#0a1420", 0.22 * content_alpha), color("#5ce7d8", 0.32 * content_alpha), 0.9)
+                commands.rect(rect, card_r, color("#0a1420", 0.22 * content_alpha), color("#5ce7d8", 0.32 * content_alpha), 0.9, clip=viewport)
             else:
-                commands.rect(rect, card_r, color("#0a1420", 0.10 * content_alpha), color("#5ce7d8", 0.08 * content_alpha), 0.7)
+                commands.rect(rect, card_r, color("#0a1420", 0.10 * content_alpha), color("#5ce7d8", 0.08 * content_alpha), 0.7, clip=viewport)
             title_color = color("#ffffff", content_alpha) if offer.enabled else color("#9aa3ac", 0.72 * content_alpha)
             commands.text(
                 QRectF(rect.left() + 18.0, rect.top() + 8.0, rect.width() - 110.0, 24.0),
                 offer.short_title, self.font("poppins_bold", 10.5 * scale), title_color,
+                clip=viewport,
             )
             price = "仅状态" if offer.status_only else f"{offer.cost} 金币"
             commands.text(
@@ -9139,58 +9156,72 @@ class PolarRMWindow(QOpenGLWidget):
                 price, self.font("poppins_bold", 9.5 * scale),
                 color("#ffd56a", content_alpha) if offer.enabled else color("#b8a878", 0.55 * content_alpha),
                 Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+                clip=viewport,
             )
             secondary = offer.reason if not offer.enabled else offer.description
             commands.text(
                 QRectF(rect.left() + 18.0, rect.top() + 32.0, rect.width() - 32.0, 20.0),
                 secondary, self.font("poppins_medium", 7.8 * scale),
                 color("#b8c8d8", (0.90 if offer.enabled else 0.55) * content_alpha),
+                clip=viewport,
             )
-            self.add_hotspot(rect, "economy_offer", offer.key, tooltip=offer.reason or offer.description)
+            if layout.interactive:
+                self.add_hotspot(rect, "economy_offer", offer.key, tooltip=offer.reason or offer.description)
 
         # --- Detail pane ---
         detail = layout.detail_pane
         detail_pad = 16.0
+        detail_vp = layout.detail_viewport
+        # Compute detail content height for scroll bounds
+        detail_content_h = 136.0  # selected info block
+        history = list(reversed(self.economy_bridge.history[-3:]))
+        detail_content_h += 22.0 + max(1, len(history)) * 34.0 if history else 40.0
+        self.economy_detail_scroll.set_bounds(max(0.0, detail_content_h - detail_vp.height()))
+        detail_scroll = self.economy_detail_scroll.position
         if selected is not None:
             commands.text(
-                QRectF(detail.left() + detail_pad, detail.top() + 14.0, detail.width() - detail_pad * 2, 26.0),
+                QRectF(detail.left() + detail_pad, detail_vp.top() + 0.0 - detail_scroll, detail.width() - detail_pad * 2, 26.0),
                 selected.title, self.font("poppins_bold", 13.5 * scale), color("#ffffff", content_alpha),
+                clip=detail_vp,
             )
             tag = "预计价格" if selected.estimated else ("模拟请求" if context.mock_mode else "裁判系统")
             commands.text(
-                QRectF(detail.left() + detail_pad, detail.top() + 42.0, detail.width() - detail_pad * 2, 20.0),
+                QRectF(detail.left() + detail_pad, detail_vp.top() + 28.0 - detail_scroll, detail.width() - detail_pad * 2, 20.0),
                 f"{selected.unit}  ·  {selected.cost} 金币  ·  {tag}",
                 self.font("poppins_medium", 9.0 * scale), color("#ffd56a", content_alpha),
+                clip=detail_vp,
             )
             commands.text(
-                QRectF(detail.left() + detail_pad, detail.top() + 66.0, detail.width() - detail_pad * 2, 36.0),
+                QRectF(detail.left() + detail_pad, detail_vp.top() + 52.0 - detail_scroll, detail.width() - detail_pad * 2, 36.0),
                 selected.description, self.font("poppins_medium", 8.4 * scale), color("#d0dce8", content_alpha),
+                clip=detail_vp,
             )
             state_text = selected.reason if not selected.enabled else "可以购买"
             state_color = color("#ffb06f", content_alpha) if not selected.enabled else color("#70e0ae", content_alpha)
             commands.text(
-                QRectF(detail.left() + detail_pad, detail.top() + 106.0, detail.width() - detail_pad * 2, 20.0),
+                QRectF(detail.left() + detail_pad, detail_vp.top() + 92.0 - detail_scroll, detail.width() - detail_pad * 2, 20.0),
                 state_text, self.font("poppins_bold", 9.5 * scale), state_color,
+                clip=detail_vp,
             )
 
         # Transaction history
-        history_top = detail.top() + 136.0
+        history_top = detail_vp.top() + 122.0 - detail_scroll
         button = layout.action_button
-        history_max_bottom = button.top() - 10.0
-        if history_top + 36.0 < history_max_bottom:
+        if history_top + 36.0 < detail_vp.bottom():
             commands.text(
                 QRectF(detail.left() + detail_pad, history_top, detail.width() - detail_pad * 2, 18.0),
                 "最近交易", self.font("poppins_bold", 8.6 * scale), color("#8fa3b5", content_alpha),
+                clip=detail_vp,
             )
-            history = list(reversed(self.economy_bridge.history[-3:]))
             if not history:
                 commands.text(
                     QRectF(detail.left() + detail_pad, history_top + 22.0, detail.width() - detail_pad * 2, 16.0),
                     "暂无记录", self.font("poppins_medium", 8.0 * scale), color("#7a8c9c", content_alpha),
+                    clip=detail_vp,
                 )
             for index, transaction in enumerate(history):
                 y = history_top + 22.0 + index * 34.0
-                if y + 30.0 > history_max_bottom:
+                if y + 30.0 > detail_vp.bottom():
                     break
                 label = TRANSACTION_LABELS.get(transaction.status, transaction.status)
                 status_color = (
@@ -9202,10 +9233,12 @@ class PolarRMWindow(QOpenGLWidget):
                     QRectF(detail.left() + detail_pad, y, detail.width() - detail_pad * 2, 15.0),
                     f"{label} · {transaction.offer.short_title}",
                     self.font("poppins_bold", 8.2 * scale), status_color,
+                    clip=detail_vp,
                 )
                 commands.text(
                     QRectF(detail.left() + detail_pad, y + 15.0, detail.width() - detail_pad * 2, 13.0),
                     transaction.message, self.font("poppins_medium", 7.4 * scale), color("#a8bac8", 0.90 * content_alpha),
+                    clip=detail_vp,
                 )
 
         # --- Action button ---
@@ -10967,10 +11000,11 @@ class PolarRMWindow(QOpenGLWidget):
             layout = self.economy_workspace_layer.layout(self.width(), self.height(), self.economy_island.progress)
             if layout.category_viewport.contains(point):
                 self.economy_category_scroll.add_wheel(delta)
+            elif layout.offers_viewport.contains(point):
+                self.economy_offers_scroll.add_wheel(delta)
             elif layout.detail_viewport.contains(point):
                 self.economy_detail_scroll.add_wheel(delta)
-            else:
-                self.economy_offers_scroll.add_wheel(delta)
+            # Outside all three viewports: ignore scroll (no fallback).
             self.frame_scheduler.force()
             event.accept()
             return
