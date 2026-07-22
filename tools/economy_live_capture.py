@@ -34,6 +34,7 @@ RESOLUTIONS = [
 ]
 
 FAILURES: list[str] = []
+SKIPPED: list[str] = []
 
 
 def make_scene(w: int, h: int) -> QImage:
@@ -59,12 +60,56 @@ def grab_window(window: PolarRMWindow) -> QPixmap:
     return screen.grabWindow(int(window.winId()))
 
 
-def check_economy_pixels(pixmap: QPixmap, name: str) -> bool:
-    """Verify that the economy panel actually rendered visible content.
+def check_size(pixmap: QPixmap, window: PolarRMWindow, req_w: int, req_h: int, name: str) -> bool:
+    """Verify grab size matches window_size * DPR. Flag SKIPPED if screen too small."""
+    if pixmap.isNull():
+        FAILURES.append(f"{name}: grabWindow returned null")
+        return False
+    dpr = window.devicePixelRatioF()
+    actual_w = window.width()
+    actual_h = window.height()
+    expected_pw = int(actual_w * dpr)
+    expected_ph = int(actual_h * dpr)
+    grab_w, grab_h = pixmap.width(), pixmap.height()
+    # Get physical screen geometry
+    screen = QApplication.primaryScreen()
+    screen_geo = screen.geometry() if screen else None
+    screen_pw = int(screen_geo.width() * dpr) if screen_geo else 99999
+    screen_ph = int(screen_geo.height() * dpr) if screen_geo else 99999
+    # Window could not be resized to requested (logical screen too small)
+    if actual_w < req_w - 2 or actual_h < req_h - 2:
+        SKIPPED.append(
+            f"{name}: window clipped to {actual_w}x{actual_h} "
+            f"(requested {req_w}x{req_h}, screen too small)"
+        )
+        return False
+    # Window extends beyond physical screen — grab will be clipped
+    if expected_pw > screen_pw + 4 or expected_ph > screen_ph + 4:
+        SKIPPED.append(
+            f"{name}: window {actual_w}x{actual_h} (physical {expected_pw}x{expected_ph}) "
+            f"exceeds screen physical {screen_pw}x{screen_ph}"
+        )
+        return False
+    # Grab size should match window * DPR (allow +-4px for WM decorations)
+    if abs(grab_w - expected_pw) > 4 or abs(grab_h - expected_ph) > 4:
+        FAILURES.append(
+            f"{name}: grab size {grab_w}x{grab_h} != expected {expected_pw}x{expected_ph} "
+            f"(window={actual_w}x{actual_h} dpr={dpr:.2f})"
+        )
+        return False
+    return True
 
-    Checks the center region for non-background pixels (the dim overlay +
-    panel content should produce dark-blue/teal pixels distinct from the
-    synthetic background gradient).
+
+def check_economy_pixels(pixmap: QPixmap, name: str) -> bool:
+    """Verify economy panel rendered real content (not just a dim overlay).
+
+    Checks for THREE distinct pixel classes that a dim-only layer cannot produce:
+    1. White/bright text pixels (title, labels) — high R+G+B, low saturation
+    2. Teal/cyan accent pixels (category capsules, card borders, button)
+    3. Dark panel body pixels (pane fills)
+
+    A mere full-screen dim would only produce class 3 (darkened background),
+    so we require class 1 OR class 2 to be present.
     """
     if pixmap.isNull():
         FAILURES.append(f"{name}: grabWindow returned null")
@@ -76,29 +121,43 @@ def check_economy_pixels(pixmap: QPixmap, name: str) -> bool:
     y0, y1 = int(h * 0.2), int(h * 0.8)
     dark_count = 0
     teal_count = 0
+    white_text_count = 0
     total = 0
-    step = max(1, min((x1 - x0), (y1 - y0)) // 40)
+    step = max(1, min((x1 - x0), (y1 - y0)) // 50)
     for y in range(y0, y1, step):
         for x in range(x0, x1, step):
             c = img.pixelColor(x, y)
             r, g, b = c.red(), c.green(), c.blue()
             total += 1
-            # Dark panel pixels: low brightness
-            if r < 60 and g < 60 and b < 80:
+            # Dark panel body: very low brightness, bluish tint
+            if r < 50 and g < 55 and b < 75:
                 dark_count += 1
-            # Teal accent pixels
-            if g > 150 and b > 150 and r < 120:
+            # Teal/cyan accent: green+blue high, red low
+            if g > 140 and b > 140 and r < 130 and (g + b) > (r * 3):
                 teal_count += 1
+            # White/bright text: all channels high, low saturation
+            if r > 180 and g > 180 and b > 180:
+                white_text_count += 1
     dark_ratio = dark_count / max(1, total)
     teal_ratio = teal_count / max(1, total)
-    # Economy panel should produce at least 5% dark panel pixels
+    text_ratio = white_text_count / max(1, total)
+
+    # Require dark panel body (proves panel geometry rendered)
     if dark_ratio < 0.05:
         FAILURES.append(
-            f"{name}: economy panel not visible (dark_ratio={dark_ratio:.3f}, "
-            f"teal_ratio={teal_ratio:.3f}, sampled={total})"
+            f"{name}: no panel body (dark={dark_ratio:.3f}, teal={teal_ratio:.3f}, "
+            f"text={text_ratio:.3f}, sampled={total})"
         )
         return False
-    print(f"    pixel check OK: dark={dark_ratio:.3f} teal={teal_ratio:.3f} ({total} samples)")
+    # Require teal OR white text (proves actual UI content, not just dim)
+    if teal_ratio < 0.002 and text_ratio < 0.002:
+        FAILURES.append(
+            f"{name}: no UI content pixels (teal={teal_ratio:.4f}, text={text_ratio:.4f}). "
+            f"Only dim overlay detected — panel content not rendered."
+        )
+        return False
+    print(f"    pixel check OK: dark={dark_ratio:.3f} teal={teal_ratio:.4f} "
+          f"text={text_ratio:.4f} ({total} samples)")
     return True
 
 
@@ -126,6 +185,10 @@ def main() -> int:
         idx = state["i"]
         if idx >= len(RESOLUTIONS):
             print(f"\n{'='*60}")
+            if SKIPPED:
+                print(f"SKIPPED ({len(SKIPPED)}):")
+                for s in SKIPPED:
+                    print(f"  ~ {s}")
             if FAILURES:
                 print(f"FAILURES ({len(FAILURES)}):")
                 for f in FAILURES:
@@ -186,8 +249,11 @@ def main() -> int:
             hotspots = len([h for h in window.hotspots if str(h.action).startswith("economy")])
             print(f"  [{name}] open: island={progress:.3f} hotspots={hotspots} "
                   f"grab={pixmap.width()}x{pixmap.height()}")
-            # Pixel verification
-            check_economy_pixels(pixmap, f"{name}_open")
+            # Size validation (flags SKIPPED if screen too small)
+            size_ok = check_size(pixmap, window, w, h, f"{name}_open")
+            if size_ok:
+                # Pixel verification (requires text OR teal, not just dim)
+                check_economy_pixels(pixmap, f"{name}_open")
             # Verify animation actually settled
             if progress < 0.95:
                 FAILURES.append(f"{name}_open: animation did not settle (progress={progress:.3f})")

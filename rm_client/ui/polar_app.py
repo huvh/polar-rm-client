@@ -918,9 +918,9 @@ class PolarRMWindow(QOpenGLWidget):
             # survive a HUD-to-launcher transition.
             economy_active = not startup_scene and (self.economy_island.progress > 0.01 or self.economy_visible)
             if economy_active:
-                # Economy-exclusive: skip vision/ESP layer entirely.
+                # Economy-exclusive: skip vision/ESP layer entirely and clear stale content.
                 native_vision_owner = False
-                self.gpu_compositor.end_vision_layer()
+                self.gpu_compositor.clear_vision_layer(functions)
             else:
                 native_vision_owner = self.paint_gpu_vision_layer(functions, width, height, ratio)
 
@@ -2101,10 +2101,13 @@ class PolarRMWindow(QOpenGLWidget):
         self.economy_hold_key = ""
         self.economy_category_scroll.position = 0.0
         self.economy_category_scroll.target = 0.0
+        self.economy_category_scroll.velocity = 0.0
         self.economy_offers_scroll.position = 0.0
         self.economy_offers_scroll.target = 0.0
+        self.economy_offers_scroll.velocity = 0.0
         self.economy_detail_scroll.position = 0.0
         self.economy_detail_scroll.target = 0.0
+        self.economy_detail_scroll.velocity = 0.0
         selected = self.economy_selected_offer()
         if selected is not None:
             self.economy_selected_key = selected.key
@@ -9010,8 +9013,16 @@ class PolarRMWindow(QOpenGLWidget):
             material=LensMaterial.STRONG,
         )
 
-        # --- Full-screen dim behind panel ---
-        commands.rect(QRectF(0, 0, width, height), 0.0, color("#02060c", 0.38 * progress))
+        # --- Dim only OUTSIDE the panel so the glass lens stays bright ---
+        # Drawing a full-screen rect here would composite above the glass layer
+        # and flatten the refraction. Instead, mask the four borders around panel.
+        dim_a = 0.38 * progress
+        dim_color = color("#02060c", dim_a)
+        px, py, pw, ph = panel.x(), panel.y(), panel.width(), panel.height()
+        commands.rect(QRectF(0, 0, width, max(0.0, py)), 0.0, dim_color)  # top
+        commands.rect(QRectF(0, py + ph, width, max(0.0, height - py - ph)), 0.0, dim_color)  # bottom
+        commands.rect(QRectF(0, py, max(0.0, px), ph), 0.0, dim_color)  # left
+        commands.rect(QRectF(px + pw, py, max(0.0, width - px - pw), ph), 0.0, dim_color)  # right
 
         if content_alpha < 0.02:
             return commands
@@ -9284,7 +9295,7 @@ class PolarRMWindow(QOpenGLWidget):
             color("#ffffff", content_alpha) if button_enabled else color("#c5ccd3", 0.72 * content_alpha),
             Qt.AlignmentFlag.AlignCenter,
         )
-        if selected is not None and button_enabled:
+        if selected is not None and button_enabled and layout.interactive:
             self.add_hotspot(button, action, selected.key, tooltip=button_text)
 
         return commands
@@ -11367,6 +11378,9 @@ class PolarRMWindow(QOpenGLWidget):
         elif action == "economy_offer":
             self.select_economy_offer(str(payload))
         elif action in {"economy_confirm", "economy_confirm_hold"}:
+            # Hard gate: reject transactions if the workspace animation has not settled.
+            if self.economy_island.progress < 0.48:
+                return
             key = str(payload)
             offer = next((item for item in self.economy_offers() if item.key == key), None)
             if offer is not None:

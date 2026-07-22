@@ -391,6 +391,16 @@ class GpuFrameCompositor:
         if self.vision_fbo is not None:
             self.vision_fbo.release()
 
+    def clear_vision_layer(self, functions) -> bool:
+        """Explicitly clear the vision FBO to transparent (bind, clear, release)."""
+        if self.vision_fbo is None or not self.vision_fbo.bind():
+            return False
+        try:
+            self.clear_current(functions, transparent=True)
+            return True
+        finally:
+            self.vision_fbo.release()
+
     def _upload_image_to_fbo(
         self,
         functions,
