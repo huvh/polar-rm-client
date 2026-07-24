@@ -119,6 +119,7 @@ class GlassCommand:
     refraction_amount_px: float = -9.0
     chromatic_aberration: float = 0.28
     depth_effect: float = 0.22
+    frost_amount: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -497,6 +498,7 @@ class GpuFrameCompositor:
         refraction_amount_px: float | None = None,
         chromatic_aberration: float | None = None,
         depth_effect: float | None = None,
+        frost_amount: float = 0.0,
     ) -> None:
         if rect.isEmpty():
             return
@@ -527,6 +529,7 @@ class GpuFrameCompositor:
             -abs(float(refraction_amount_px if refraction_amount_px is not None else default_amount)),
             max(0.0, min(2.0, float(chromatic_aberration if chromatic_aberration is not None else default_chromatic))),
             max(0.0, min(1.0, float(depth_effect if depth_effect is not None else default_depth))),
+            max(0.0, min(1.0, float(frost_amount))),
         )
         target = self._static_glass_commands if self._recording_static_glass else self._frame_glass_commands
         target.append(command)
@@ -653,6 +656,7 @@ class GpuFrameCompositor:
                     float(command.chromatic_aberration),
                 )
                 functions.glUniform1f(self.glass_program.uniformLocation("depthEffect"), float(command.depth_effect))
+                functions.glUniform1f(self.glass_program.uniformLocation("frostAmount"), float(command.frost_amount))
                 self._draw_quad(functions, self.glass_program)
 
             self.glass_program.release()
@@ -856,6 +860,7 @@ class GpuFrameCompositor:
             uniform float refractionAmountPx;
             uniform float chromaticAberration;
             uniform float depthEffect;
+            uniform float frostAmount;
             out vec4 fragColor;
 
             vec4 combinedAt(vec2 position) {
@@ -939,9 +944,16 @@ class GpuFrameCompositor:
                     max(1.0, min(halfSize.x, halfSize.y))
                 );
 
-                // 镜片中心直接显示 Combined Backdrop，不混入模糊或雾层。
+                // 镜片中心：frostAmount > 0 时混入模糊（iOS 风格毛玻璃）。
                 if (inside >= lensHeight) {
                     vec4 centerColor = combinedAt(sourceUv);
+                    if (frostAmount > 0.001) {
+                        vec3 blurred = texture(
+                            blurTex,
+                            clamp(sourceUv + sceneUvOffset, vec2(0.001), vec2(0.999))
+                        ).rgb;
+                        centerColor.rgb = mix(centerColor.rgb, blurred, frostAmount);
+                    }
                     float alpha = centerColor.a * coverage * opacity;
                     fragColor = vec4(centerColor.rgb * alpha, alpha);
                     return;
