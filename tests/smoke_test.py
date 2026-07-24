@@ -1443,9 +1443,13 @@ def test_robot_profiles_and_economy_rules() -> None:
 
     state.robot_profile = "Sentinel"
     rmul_sentinel = available_actions(state)
-    assert len(rmul_sentinel) == 1
-    assert rmul_sentinel[0].status_only is True
-    assert rmul_sentinel[0].enabled is False
+    # In mock mode, revive offer is visible even when alive (disabled).
+    assert len(rmul_sentinel) == 2
+    sentinel_map = {offer.key: offer for offer in rmul_sentinel}
+    assert sentinel_map["rmul_sentinel_ammo_status"].status_only is True
+    assert sentinel_map["rmul_sentinel_ammo_status"].enabled is False
+    assert sentinel_map["rmul_auto_respawn"].status_only is True
+    assert sentinel_map["rmul_auto_respawn"].enabled is False
 
     state.match_mode = "RMUC7v7"
     state.robot_profile = "Hero"

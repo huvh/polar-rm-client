@@ -326,21 +326,21 @@ def available_actions(state: Any) -> list[EconomyOffer]:
                     status_only=True,
                 )
             )
-        if not context.alive:
+        if not context.alive or context.mock_mode:
             offers.append(
                 _offer(
                     key="rmul_auto_respawn",
                     category="revive",
                     title="自动复活进度",
-                    short_title=f"{round(context.respawn_progress * 100)}%",
-                    description="联盟赛使用自动复活，不支持金币立即复活",
+                    short_title=f"{round(context.respawn_progress * 100)}%" if not context.alive else "待命",
+                    description="联盟赛使用自动复活，不支持金币立即复活" if not context.alive else "当前存活中，复活选项不可用",
                     unit="自动",
                     quantity=0,
                     cost=0,
                     command_type=0,
                     command_param=0,
                     enabled=False,
-                    reason="等待自动复活",
+                    reason="当前存活中" if context.alive else "等待自动复活",
                     status_only=True,
                 )
             )
