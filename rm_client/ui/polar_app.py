@@ -9027,12 +9027,16 @@ class PolarRMWindow(QOpenGLWidget):
         if content_alpha < 0.02:
             return commands
 
-        # --- Three content panes (plain dark rects, NO glass) ---
-        pane_fill = color("#0a1420", 0.55 * content_alpha)
+        # --- Three content panes (liquid glass: transparent center, subtle edge) ---
+        # AndroidLiquidGlass-kmp principle: glass is TRANSPARENT in the center,
+        # only edges have refraction/highlight. The root add_glass() provides blur.
+        # Pane fills must be nearly transparent so the blurred background shows through.
+        pane_fill = color("#0a1420", 0.10 * content_alpha)
+        pane_edge = color("#a0d8e8", 0.14 * content_alpha)
         pane_radius = 16.0
-        commands.rect(layout.category_pane, pane_radius, pane_fill)
-        commands.rect(layout.offers_pane, pane_radius, pane_fill)
-        commands.rect(layout.detail_pane, pane_radius, pane_fill)
+        commands.rect(layout.category_pane, pane_radius, pane_fill, pane_edge, 0.8)
+        commands.rect(layout.offers_pane, pane_radius, pane_fill, pane_edge, 0.8)
+        commands.rect(layout.detail_pane, pane_radius, pane_fill, pane_edge, 0.8)
 
         # --- Header ---
         scale = max(0.82, min(1.10, self.get_auto_ui_scale(width, height, strength=0.20)))

@@ -142,14 +142,14 @@ def check_economy_pixels(pixmap: QPixmap, name: str) -> bool:
     teal_ratio = teal_count / max(1, total)
     text_ratio = white_text_count / max(1, total)
 
-    # Require dark panel body (proves panel geometry rendered)
-    if dark_ratio < 0.05:
+    # Liquid glass style: panels are transparent, so "dark body" pixels are rare.
+    # Instead verify glass edges (teal) and text are present.
+    if teal_ratio < 0.005 and text_ratio < 0.001:
         FAILURES.append(
-            f"{name}: no panel body (dark={dark_ratio:.3f}, teal={teal_ratio:.3f}, "
-            f"text={text_ratio:.3f}, sampled={total})"
+            f"{name}: no glass/content pixels (dark={dark_ratio:.3f}, teal={teal_ratio:.4f}, "
+            f"text={text_ratio:.4f}, sampled={total}). Panel not rendered."
         )
         return False
-    # Require teal OR white text (proves actual UI content, not just dim)
     if teal_ratio < 0.002 and text_ratio < 0.002:
         FAILURES.append(
             f"{name}: no UI content pixels (teal={teal_ratio:.4f}, text={text_ratio:.4f}). "
