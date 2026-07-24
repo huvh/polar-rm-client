@@ -972,22 +972,35 @@ class PolarRMWindow(QOpenGLWidget):
                         return False
                 self._gpu_static_ui_key = static_key
             else:
-                if economy_active and self.clickgui_gpu.available:
-                    # Economy-exclusive path: keep camera background, suppress all battle HUD.
-                    # Clear overlay (map/modlist) and static glass so nothing bleeds through.
-                    self.gpu_compositor.clear_static_glass()
-                    self._gpu_static_ui_key = None
-                    overlay_device = self.gpu_compositor.paint_device("overlay")
-                    if overlay_device is not None:
-                        overlay_device.setDevicePixelRatio(ratio)
-                        self.gpu_compositor.clear_current(functions, transparent=True)
-                        self.gpu_compositor.release_layer("overlay")
+                # Always render static HUD overlay (map/modlist/telemetry) so battle
+                # info remains visible under the economy glass panel.
+                if rebuild_hud_static:
+                    device = self.gpu_compositor.paint_device("overlay")
+                    if device is None:
+                        return False
+                    device.setDevicePixelRatio(ratio)
+                    self.gpu_compositor.clear_current(functions, transparent=True)
+                    self.gpu_compositor.begin_static_glass()
+                    painter = QPainter(device)
+                    self.paint_overlay(
+                        None,
+                        startup_background_ready=True,
+                        hud_background_ready=True,
+                        painter=painter,
+                        logical_size=(width, height),
+                        include_interactive=False,
+                        split_motion_layer=True,
+                    )
+                    painter.end()
+                    self.gpu_compositor.end_static_glass()
+                    self.gpu_compositor.release_layer("overlay")
+                    self._gpu_static_ui_key = static_key
 
-                    # Build economy GPU commands (also registers root glass via add_glass).
+                if economy_active and self.clickgui_gpu.available:
+                    # Economy panel: render into dynamic layer on top of HUD.
                     commands = self.build_gpu_economy_workspace(width, height)
                     self.clickgui_gpu.prepare_frame(commands, ratio)
 
-                    # Bind dynamic FBO, render economy UI into it, THEN release.
                     device = self.gpu_compositor.paint_device("dynamic")
                     if device is None:
                         return False
@@ -999,30 +1012,8 @@ class PolarRMWindow(QOpenGLWidget):
                         self.gpu_compositor.release_layer("dynamic")
                         return False
                     self.gpu_compositor.release_layer("dynamic")
-                    # Ensure target HUD ring is empty.
                     self.gpu_compositor.clear_target_layer(functions)
                 else:
-                    if rebuild_hud_static:
-                        device = self.gpu_compositor.paint_device("overlay")
-                        if device is None:
-                            return False
-                        device.setDevicePixelRatio(ratio)
-                        self.gpu_compositor.clear_current(functions, transparent=True)
-                        self.gpu_compositor.begin_static_glass()
-                        painter = QPainter(device)
-                        self.paint_overlay(
-                            None,
-                            startup_background_ready=True,
-                            hud_background_ready=True,
-                            painter=painter,
-                            logical_size=(width, height),
-                            include_interactive=False,
-                            split_motion_layer=True,
-                        )
-                        painter.end()
-                        self.gpu_compositor.end_static_glass()
-                        self.gpu_compositor.release_layer("overlay")
-                        self._gpu_static_ui_key = static_key
                     prepared_clickgui_commands: ClickGuiDrawList | None = None
                     prepared_clickgui_hotspots: list[Hotspot] | None = None
                     prepared_clickgui_atlas = False

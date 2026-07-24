@@ -395,22 +395,22 @@ def available_actions(state: Any) -> list[EconomyOffer]:
         )
 
     ground_profiles = combat_profiles or profile == "Engineer"
-    if ground_profiles and not context.alive:
-        confirm_enabled = context.respawn_can_free or context.mock_mode
+    if ground_profiles and (not context.alive or context.mock_mode):
+        confirm_enabled = (context.respawn_can_free or context.mock_mode) and not context.alive
         offers.append(
             _offer(
                 key="rmuc_confirm_respawn",
                 category="revive",
                 title="确认复活",
                 short_title="确认复活",
-                description="确认当前可用的免费或普通复活流程",
+                description="确认当前可用的免费或普通复活流程" if not context.alive else "当前存活中，复活选项不可用",
                 unit="一次",
                 quantity=1,
                 cost=0,
                 command_type=3,
                 command_param=0,
                 enabled=confirm_enabled,
-                reason="裁判系统尚未开放确认复活" if not confirm_enabled else "",
+                reason="当前存活中" if context.alive else ("裁判系统尚未开放确认复活" if not confirm_enabled else ""),
                 confirmation="hold",
             )
         )
@@ -419,8 +419,8 @@ def available_actions(state: Any) -> list[EconomyOffer]:
         if revive_cost <= 0 and context.mock_mode:
             revive_cost = _rmuc_time_step(state) * 80 + max(1, int(getattr(state, "level", 1))) * 20
             estimated = True
-        can_pay = (context.respawn_can_pay or context.mock_mode) and revive_cost > 0
-        enabled, reason = _enabled(context.gold, revive_cost, can_pay, "等待裁判系统下发复活价格")
+        can_pay = ((context.respawn_can_pay or context.mock_mode) and revive_cost > 0) and not context.alive
+        enabled, reason = _enabled(context.gold, revive_cost, can_pay, "当前存活中" if context.alive else "等待裁判系统下发复活价格")
         offers.append(
             _offer(
                 key="rmuc_gold_respawn",

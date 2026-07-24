@@ -1464,7 +1464,10 @@ def test_robot_profiles_and_economy_rules() -> None:
 
     state.robot_profile = "Engineer"
     state.current_health = state.max_health
-    assert available_actions(state) == []
+    # In mock mode, revive offers are visible even when alive (but disabled).
+    engineer_alive = {offer.key: offer for offer in available_actions(state)}
+    assert set(engineer_alive) == {"rmuc_confirm_respawn", "rmuc_gold_respawn"}
+    assert all(not offer.enabled for offer in engineer_alive.values())
     state.current_health = 0
     state.respawn_can_free = True
     state.respawn_can_pay = True
