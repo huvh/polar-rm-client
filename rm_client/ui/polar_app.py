@@ -9005,7 +9005,7 @@ class PolarRMWindow(QOpenGLWidget):
             hover=0.0,
             opacity=min(1.0, progress),
             material=LensMaterial.STRONG,
-            frost_amount=0.65,
+            frost_amount=0.82,
         )
 
         # --- Dim only OUTSIDE the panel so the glass lens stays bright ---

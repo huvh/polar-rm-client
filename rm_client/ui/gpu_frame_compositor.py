@@ -944,14 +944,33 @@ class GpuFrameCompositor:
                     max(1.0, min(halfSize.x, halfSize.y))
                 );
 
-                // 镜片中心：frostAmount > 0 时混入模糊（iOS 风格毛玻璃）。
+                // 镜片中心：frostAmount > 0 时混入多重模糊 + 饱和度增强（iOS 下拉栏风格）。
                 if (inside >= lensHeight) {
                     vec4 centerColor = combinedAt(sourceUv);
                     if (frostAmount > 0.001) {
-                        vec3 blurred = texture(
-                            blurTex,
-                            clamp(sourceUv + sceneUvOffset, vec2(0.001), vec2(0.999))
-                        ).rgb;
+                        // Multi-tap blur: sample blurTex at multiple offsets for
+                        // iOS-style heavy frosted glass (simulates ~12px Gaussian).
+                        vec2 texel = 1.0 / viewport;
+                        float frostRadius = 4.0;
+                        vec2 uvBase = clamp(sourceUv + sceneUvOffset, vec2(0.001), vec2(0.999));
+                        vec3 blurred = texture(blurTex, uvBase).rgb * 0.20;
+                        blurred += texture(blurTex, clamp(uvBase + vec2(texel.x, 0.0) * frostRadius, vec2(0.001), vec2(0.999))).rgb * 0.10;
+                        blurred += texture(blurTex, clamp(uvBase - vec2(texel.x, 0.0) * frostRadius, vec2(0.001), vec2(0.999))).rgb * 0.10;
+                        blurred += texture(blurTex, clamp(uvBase + vec2(0.0, texel.y) * frostRadius, vec2(0.001), vec2(0.999))).rgb * 0.10;
+                        blurred += texture(blurTex, clamp(uvBase - vec2(0.0, texel.y) * frostRadius, vec2(0.001), vec2(0.999))).rgb * 0.10;
+                        blurred += texture(blurTex, clamp(uvBase + texel * frostRadius, vec2(0.001), vec2(0.999))).rgb * 0.075;
+                        blurred += texture(blurTex, clamp(uvBase - texel * frostRadius, vec2(0.001), vec2(0.999))).rgb * 0.075;
+                        blurred += texture(blurTex, clamp(uvBase + vec2(texel.x, -texel.y) * frostRadius, vec2(0.001), vec2(0.999))).rgb * 0.075;
+                        blurred += texture(blurTex, clamp(uvBase + vec2(-texel.x, texel.y) * frostRadius, vec2(0.001), vec2(0.999))).rgb * 0.075;
+                        blurred += texture(blurTex, clamp(uvBase + vec2(texel.x, 0.0) * frostRadius * 2.0, vec2(0.001), vec2(0.999))).rgb * 0.05;
+                        blurred += texture(blurTex, clamp(uvBase - vec2(texel.x, 0.0) * frostRadius * 2.0, vec2(0.001), vec2(0.999))).rgb * 0.05;
+                        blurred += texture(blurTex, clamp(uvBase + vec2(0.0, texel.y) * frostRadius * 2.0, vec2(0.001), vec2(0.999))).rgb * 0.05;
+                        blurred += texture(blurTex, clamp(uvBase - vec2(0.0, texel.y) * frostRadius * 2.0, vec2(0.001), vec2(0.999))).rgb * 0.05;
+                        // Vibrancy: boost saturation to 1.5x (AndroidLiquidGlass-kmp vibrancy()).
+                        float lum = dot(blurred, vec3(0.2126, 0.7152, 0.0722));
+                        blurred = mix(vec3(lum), blurred, 1.5);
+                        // Slight darkening for iOS dark-mode glass depth.
+                        blurred *= 0.88;
                         centerColor.rgb = mix(centerColor.rgb, blurred, frostAmount);
                     }
                     float alpha = centerColor.a * coverage * opacity;
