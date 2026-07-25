@@ -1006,6 +1006,20 @@ class PolarRMWindow(QOpenGLWidget):
                         return False
                     device.setDevicePixelRatio(ratio)
                     self.gpu_compositor.clear_current(functions, transparent=True)
+                    # Draw battle HUD motion elements (telemetry, chassis, dynamic island)
+                    # so they remain visible under the economy glass panel.
+                    self.begin_gpu_island_icon_collection()
+                    painter = QPainter(device)
+                    self.paint_hud_motion_overlay(
+                        painter,
+                        width,
+                        height,
+                        include_vision=not native_vision_owner,
+                        include_target_hud=False,
+                    )
+                    painter.end()
+                    self.flush_gpu_island_icons(functions, width, height, ratio)
+                    # Economy panel GPU render on top of HUD motion.
                     if not self.clickgui_gpu.render(
                         functions, commands, width, height, ratio, atlas_prepared=True,
                     ):
