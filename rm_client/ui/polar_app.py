@@ -998,6 +998,9 @@ class PolarRMWindow(QOpenGLWidget):
 
                 if economy_active and self.clickgui_gpu.available:
                     # Economy panel: render into dynamic layer on top of HUD.
+                    # Static overlay (map/modlist) already rendered above and will be
+                    # blurred by the glass shader. Do NOT draw HUD motion overlay here
+                    # to avoid telemetry/chassis/modlist overlapping the economy content.
                     commands = self.build_gpu_economy_workspace(width, height)
                     self.clickgui_gpu.prepare_frame(commands, ratio)
 
@@ -1006,20 +1009,6 @@ class PolarRMWindow(QOpenGLWidget):
                         return False
                     device.setDevicePixelRatio(ratio)
                     self.gpu_compositor.clear_current(functions, transparent=True)
-                    # Draw battle HUD motion elements (telemetry, chassis, dynamic island)
-                    # so they remain visible under the economy glass panel.
-                    self.begin_gpu_island_icon_collection()
-                    painter = QPainter(device)
-                    self.paint_hud_motion_overlay(
-                        painter,
-                        width,
-                        height,
-                        include_vision=not native_vision_owner,
-                        include_target_hud=False,
-                    )
-                    painter.end()
-                    self.flush_gpu_island_icons(functions, width, height, ratio)
-                    # Economy panel GPU render on top of HUD motion.
                     if not self.clickgui_gpu.render(
                         functions, commands, width, height, ratio, atlas_prepared=True,
                     ):
