@@ -948,24 +948,30 @@ class GpuFrameCompositor:
                 if (inside >= lensHeight) {
                     vec4 centerColor = combinedAt(sourceUv);
                     if (frostAmount > 0.001) {
-                        // Multi-tap blur: sample blurTex at multiple offsets for
-                        // iOS-style heavy frosted glass (simulates ~12px Gaussian).
+                        // iOS-style heavy frosted glass: large-radius multi-tap blur
+                        // scaled by frostAmount for per-panel control.
                         vec2 texel = 1.0 / viewport;
-                        float frostRadius = 4.0;
+                        float frostRadius = frostAmount * 10.0;
                         vec2 uvBase = clamp(sourceUv + sceneUvOffset, vec2(0.001), vec2(0.999));
-                        vec3 blurred = texture(blurTex, uvBase).rgb * 0.20;
-                        blurred += texture(blurTex, clamp(uvBase + vec2(texel.x, 0.0) * frostRadius, vec2(0.001), vec2(0.999))).rgb * 0.10;
-                        blurred += texture(blurTex, clamp(uvBase - vec2(texel.x, 0.0) * frostRadius, vec2(0.001), vec2(0.999))).rgb * 0.10;
-                        blurred += texture(blurTex, clamp(uvBase + vec2(0.0, texel.y) * frostRadius, vec2(0.001), vec2(0.999))).rgb * 0.10;
-                        blurred += texture(blurTex, clamp(uvBase - vec2(0.0, texel.y) * frostRadius, vec2(0.001), vec2(0.999))).rgb * 0.10;
-                        blurred += texture(blurTex, clamp(uvBase + texel * frostRadius, vec2(0.001), vec2(0.999))).rgb * 0.075;
-                        blurred += texture(blurTex, clamp(uvBase - texel * frostRadius, vec2(0.001), vec2(0.999))).rgb * 0.075;
-                        blurred += texture(blurTex, clamp(uvBase + vec2(texel.x, -texel.y) * frostRadius, vec2(0.001), vec2(0.999))).rgb * 0.075;
-                        blurred += texture(blurTex, clamp(uvBase + vec2(-texel.x, texel.y) * frostRadius, vec2(0.001), vec2(0.999))).rgb * 0.075;
-                        blurred += texture(blurTex, clamp(uvBase + vec2(texel.x, 0.0) * frostRadius * 2.0, vec2(0.001), vec2(0.999))).rgb * 0.05;
-                        blurred += texture(blurTex, clamp(uvBase - vec2(texel.x, 0.0) * frostRadius * 2.0, vec2(0.001), vec2(0.999))).rgb * 0.05;
-                        blurred += texture(blurTex, clamp(uvBase + vec2(0.0, texel.y) * frostRadius * 2.0, vec2(0.001), vec2(0.999))).rgb * 0.05;
-                        blurred += texture(blurTex, clamp(uvBase - vec2(0.0, texel.y) * frostRadius * 2.0, vec2(0.001), vec2(0.999))).rgb * 0.05;
+                        vec3 blurred = texture(blurTex, uvBase).rgb * 0.16;
+                        // Ring 1 (radius = frostRadius)
+                        blurred += texture(blurTex, clamp(uvBase + vec2(texel.x, 0.0) * frostRadius, vec2(0.001), vec2(0.999))).rgb * 0.08;
+                        blurred += texture(blurTex, clamp(uvBase - vec2(texel.x, 0.0) * frostRadius, vec2(0.001), vec2(0.999))).rgb * 0.08;
+                        blurred += texture(blurTex, clamp(uvBase + vec2(0.0, texel.y) * frostRadius, vec2(0.001), vec2(0.999))).rgb * 0.08;
+                        blurred += texture(blurTex, clamp(uvBase - vec2(0.0, texel.y) * frostRadius, vec2(0.001), vec2(0.999))).rgb * 0.08;
+                        blurred += texture(blurTex, clamp(uvBase + texel * frostRadius * 0.707, vec2(0.001), vec2(0.999))).rgb * 0.06;
+                        blurred += texture(blurTex, clamp(uvBase - texel * frostRadius * 0.707, vec2(0.001), vec2(0.999))).rgb * 0.06;
+                        blurred += texture(blurTex, clamp(uvBase + vec2(texel.x, -texel.y) * frostRadius * 0.707, vec2(0.001), vec2(0.999))).rgb * 0.06;
+                        blurred += texture(blurTex, clamp(uvBase + vec2(-texel.x, texel.y) * frostRadius * 0.707, vec2(0.001), vec2(0.999))).rgb * 0.06;
+                        // Ring 2 (radius = frostRadius * 2)
+                        blurred += texture(blurTex, clamp(uvBase + vec2(texel.x, 0.0) * frostRadius * 2.0, vec2(0.001), vec2(0.999))).rgb * 0.04;
+                        blurred += texture(blurTex, clamp(uvBase - vec2(texel.x, 0.0) * frostRadius * 2.0, vec2(0.001), vec2(0.999))).rgb * 0.04;
+                        blurred += texture(blurTex, clamp(uvBase + vec2(0.0, texel.y) * frostRadius * 2.0, vec2(0.001), vec2(0.999))).rgb * 0.04;
+                        blurred += texture(blurTex, clamp(uvBase - vec2(0.0, texel.y) * frostRadius * 2.0, vec2(0.001), vec2(0.999))).rgb * 0.04;
+                        blurred += texture(blurTex, clamp(uvBase + texel * frostRadius * 1.414, vec2(0.001), vec2(0.999))).rgb * 0.03;
+                        blurred += texture(blurTex, clamp(uvBase - texel * frostRadius * 1.414, vec2(0.001), vec2(0.999))).rgb * 0.03;
+                        blurred += texture(blurTex, clamp(uvBase + vec2(texel.x, -texel.y) * frostRadius * 1.414, vec2(0.001), vec2(0.999))).rgb * 0.03;
+                        blurred += texture(blurTex, clamp(uvBase + vec2(-texel.x, texel.y) * frostRadius * 1.414, vec2(0.001), vec2(0.999))).rgb * 0.03;
                         // Vibrancy: boost saturation to 1.5x (AndroidLiquidGlass-kmp vibrancy()).
                         float lum = dot(blurred, vec3(0.2126, 0.7152, 0.0722));
                         blurred = mix(vec3(lum), blurred, 1.5);
