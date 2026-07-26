@@ -1560,13 +1560,35 @@ def test_robot_profiles_and_economy_rules() -> None:
 def test_economy_workspace_top_anchor_and_reversal() -> None:
     layer = EconomyWorkspaceLayer()
     compact_start = layer.layout(1280, 720, 0.0)
+    compact_island = layer.layout(1280, 720, 0.15)
+    compact_reveal = layer.layout(1280, 720, 0.48)
+    compact_categories = layer.layout(1280, 720, 0.62)
+    compact_offers = layer.layout(1280, 720, 0.72)
+    compact_detail = layer.layout(1280, 720, 0.84)
     compact_open = layer.layout(1280, 720, 1.0)
     desktop_open = layer.layout(1600, 900, 1.0)
 
-    # The sheet grows from the top island: neither its collapsed nor expanded
-    # geometry may drift toward a centered modal.
+    # The sheet grows from a top island rather than drifting into a centered
+    # modal. The source control-center layer starts 48dp above its resting
+    # position, so the presentation geometry moves down continuously before
+    # settling at the shared top anchor.
     assert compact_start.collapsed.top() == compact_open.target_panel.top()
-    assert compact_start.panel.top() == compact_open.panel.top()
+    assert compact_start.panel.top() < compact_island.panel.top() < compact_open.panel.top()
+    assert abs(compact_open.panel.top() - compact_open.target_panel.top()) < 0.01
+    assert compact_island.panel.height() < compact_reveal.panel.height() < compact_open.panel.height()
+    assert compact_island.body_progress < compact_reveal.body_progress < compact_open.body_progress
+    # The sheet forms before its final-size content appears.  Categories,
+    # offers, and detail deliberately reveal in that order instead of being
+    # squeezed into the intermediate island geometry.
+    assert compact_reveal.content_alpha == 0.0
+    assert 0.0 < compact_categories.category_alpha <= 1.0
+    assert compact_categories.offers_alpha == 0.0
+    assert compact_offers.offers_alpha > 0.0
+    assert compact_detail.detail_alpha > 0.0
+    assert compact_categories.category_alpha >= compact_categories.offers_alpha >= compact_categories.detail_alpha
+    assert compact_island.body_clip.height() < compact_reveal.body_clip.height() < compact_open.body_clip.height()
+    assert compact_island.header_alpha > compact_island.content_alpha
+    assert compact_open.grab_handle.width() == 36.0
     assert compact_open.compact is True
     assert desktop_open.compact is False
     for pane in (

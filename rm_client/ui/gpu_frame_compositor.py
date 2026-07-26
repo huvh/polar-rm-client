@@ -120,6 +120,7 @@ class GlassCommand:
     chromatic_aberration: float = 0.28
     depth_effect: float = 0.22
     frost_amount: float = 0.0
+    vibrancy_amount: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -499,6 +500,7 @@ class GpuFrameCompositor:
         chromatic_aberration: float | None = None,
         depth_effect: float | None = None,
         frost_amount: float = 0.0,
+        vibrancy_amount: float = 0.0,
     ) -> None:
         if rect.isEmpty():
             return
@@ -530,6 +532,7 @@ class GpuFrameCompositor:
             max(0.0, min(2.0, float(chromatic_aberration if chromatic_aberration is not None else default_chromatic))),
             max(0.0, min(1.0, float(depth_effect if depth_effect is not None else default_depth))),
             max(0.0, min(1.0, float(frost_amount))),
+            max(0.0, min(1.0, float(vibrancy_amount))),
         )
         target = self._static_glass_commands if self._recording_static_glass else self._frame_glass_commands
         target.append(command)
@@ -657,6 +660,7 @@ class GpuFrameCompositor:
                 )
                 functions.glUniform1f(self.glass_program.uniformLocation("depthEffect"), float(command.depth_effect))
                 functions.glUniform1f(self.glass_program.uniformLocation("frostAmount"), float(command.frost_amount))
+                functions.glUniform1f(self.glass_program.uniformLocation("vibrancyAmount"), float(command.vibrancy_amount))
                 self._draw_quad(functions, self.glass_program)
 
             self.glass_program.release()
@@ -861,7 +865,24 @@ class GpuFrameCompositor:
             uniform float chromaticAberration;
             uniform float depthEffect;
             uniform float frostAmount;
+            uniform float vibrancyAmount;
             out vec4 fragColor;
+
+            vec3 applyVibrancy(vec3 color) {
+                // AndroidLiquidGlass-kmp's vibrancy() is a saturation=1.5
+                // color-control matrix. The amount lets a sheet fade the
+                // same material in with its pull-down progress.
+                float saturation = 1.0 + 0.5 * clamp(vibrancyAmount, 0.0, 1.0);
+                float invSaturation = 1.0 - saturation;
+                float r = 0.213 * invSaturation;
+                float g = 0.715 * invSaturation;
+                float b = 0.072 * invSaturation;
+                return vec3(
+                    dot(color, vec3(r + saturation, g, b)),
+                    dot(color, vec3(r, g + saturation, b)),
+                    dot(color, vec3(r, g, b + saturation))
+                );
+            }
 
             vec4 combinedAt(vec2 position) {
                 vec2 sampleUv = clamp(position, vec2(0.001), vec2(0.999));
@@ -870,7 +891,9 @@ class GpuFrameCompositor:
                     clamp(sampleUv + sceneUvOffset, vec2(0.001), vec2(0.999))
                 );
                 vec4 control = texture(controlTex, sampleUv);
-                return control + scene * (1.0 - control.a);
+                vec4 combined = control + scene * (1.0 - control.a);
+                combined.rgb = applyVibrancy(combined.rgb);
+                return combined;
             }
 
             float sdRoundedRect(vec2 position, vec2 halfSize, float cornerRadius) {
@@ -944,12 +967,14 @@ class GpuFrameCompositor:
                     max(1.0, min(halfSize.x, halfSize.y))
                 );
 
-                // 镜片中心：frostAmount > 0 时混入多重模糊 + 饱和度增强（iOS 下拉栏风格）。
+                // The source control-center uses a shallow 4dp blur inside
+                // the otherwise clear center of its pull-down surface.
                 if (inside >= lensHeight) {
                     vec4 centerColor = combinedAt(sourceUv);
                     if (frostAmount > 0.001) {
-                        // iOS-style heavy frosted glass: large-radius multi-tap blur
-                        // scaled by frostAmount for per-panel control.
+                        // Keep the source blur shallow. This is not a modal
+                        // frosted-card treatment; it only protects dense copy
+                        // while the live scene remains legible through glass.
                         vec2 texel = 1.0 / viewport;
                         float frostRadius = frostAmount * 10.0;
                         vec2 uvBase = clamp(sourceUv + sceneUvOffset, vec2(0.001), vec2(0.999));
@@ -975,8 +1000,11 @@ class GpuFrameCompositor:
                         // Vibrancy: boost saturation to 1.5x (AndroidLiquidGlass-kmp vibrancy()).
                         float lum = dot(blurred, vec3(0.2126, 0.7152, 0.0722));
                         blurred = mix(vec3(lum), blurred, 1.5);
-                        // Slight darkening for iOS dark-mode glass depth.
-                        blurred *= 0.88;
+                        // The control-center surface carries only a five
+                        // percent container tint. Keep the blurred source
+                        // bright enough for copy to remain legible instead of
+                        // turning a rich camera feed into a dark modal.
+                        blurred *= 0.96;
                         centerColor.rgb = mix(centerColor.rgb, blurred, frostAmount);
                     }
                     float alpha = centerColor.a * coverage * opacity;
