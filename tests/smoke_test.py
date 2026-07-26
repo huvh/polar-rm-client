@@ -53,7 +53,7 @@ from rm_client.ui.gpu_frame_compositor import compose_combined_backdrop_pixel
 from rm_client.ui.clickgui_gpu import SmallTextPolicy
 from rm_client.ui.island_icon_gpu import island_icon_coverage
 from rm_client.ui.layout import HudAnchorStack
-from rm_client.ui.economy_workspace import EconomyIslandState, EconomyWorkspaceLayer
+from rm_client.ui.economy_workspace import EconomyIslandState, EconomyWorkspaceLayer, adaptive_backdrop_dim
 from rm_client.ui.startup_gl import TextureOrigin, normalize_image_for_texture
 from rm_client.ui.vision_motion import (
     AngleRenderTrack,
@@ -1622,6 +1622,14 @@ def test_economy_workspace_top_anchor_and_reversal() -> None:
         state.update(now=tick / 120.0)
     assert state.progress == 0.0
     assert state.velocity == 0.0
+
+    # A dark live feed remains visibly behind the pull-down surface.  The
+    # source-style dim layer only protects copy over genuinely bright content.
+    assert adaptive_backdrop_dim(0.22, 1.0) == 0.0
+    assert adaptive_backdrop_dim(0.58, 1.0) == 0.0
+    assert 0.0 < adaptive_backdrop_dim(0.70, 1.0) < 0.35
+    assert adaptive_backdrop_dim(0.90, 1.0) == 0.35
+    assert adaptive_backdrop_dim(0.90, 0.0) == 0.0
 
 
 def test_official_economy_status_decode() -> None:

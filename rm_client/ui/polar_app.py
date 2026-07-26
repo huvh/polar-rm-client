@@ -94,7 +94,7 @@ from .clickgui_gpu import ClickGuiDrawList, ClickGuiGpuRenderer
 from .gpu_frame_compositor import GpuFrameCompositor, LensMaterial
 from .island_icon_gpu import IslandIconCommand, IslandIconGpuRenderer
 from .economy_glass import draw_economy_glass, draw_economy_glass_capsule, draw_economy_glass_well
-from .economy_workspace import EconomyIslandState, EconomyWorkspaceLayer
+from .economy_workspace import EconomyIslandState, EconomyWorkspaceLayer, adaptive_backdrop_dim
 from .liquid_glass import LiquidGlassRenderer
 from .layout import HudAnchorStack
 from .startup_gl import StartupGpuCompositor, TextureOrigin
@@ -1114,6 +1114,13 @@ class PolarRMWindow(QOpenGLWidget):
             selected = self.economy_selected_offer()
             latest = self.economy_bridge.latest
             context = EconomyContext.from_state(self.state)
+            scene_luminance = self._vision_scene_luminance
+            if scene_luminance <= 0.0:
+                scene_luminance = float(getattr(self.state, "vision_scene_luminance", 0.0))
+            # Camera luminance varies with every source frame.  A coarse bucket
+            # preserves the iOS-like adaptive contrast without invalidating the
+            # shared control/blur textures during ordinary video noise.
+            dim_bucket = round(adaptive_backdrop_dim(scene_luminance, 1.0) * 20.0) / 20.0
             key = (
                 "economy",
                 width,
@@ -1131,6 +1138,7 @@ class PolarRMWindow(QOpenGLWidget):
                 latest.status if latest is not None else "",
                 latest.request.offer.key if latest is not None else "",
                 round(self.economy_island.progress, 2),
+                dim_bucket,
             )
         else:
             key = (
@@ -1150,10 +1158,9 @@ class PolarRMWindow(QOpenGLWidget):
         self.gpu_compositor.clear_current(functions, transparent=True)
         if economy_active:
             # The control-center material dims the backdrop *before* its lens
-            # samples it.  Keeping this mask in the control backdrop means the
-            # root sheet stays bright and refractive while the surroundings
-            # recede; drawing it in the content layer would flatten the lens
-            # into a desktop-modal overlay.
+            # samples it.  The source demo uses a fixed dim layer because its
+            # backdrop is white; a live camera is often already dark, so only
+            # bright scenes receive a bounded adaptive dim.
             painter = QPainter(device)
             painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
             layout = self.economy_workspace_layer.layout(
@@ -1163,15 +1170,17 @@ class PolarRMWindow(QOpenGLWidget):
             )
             context = EconomyContext.from_state(self.state)
             painter.setPen(Qt.PenStyle.NoPen)
-            dim_alpha = 0.40 * layout.body_progress
+            scene_luminance = self._vision_scene_luminance
+            if scene_luminance <= 0.0:
+                scene_luminance = float(getattr(self.state, "vision_scene_luminance", 0.0))
+            dim_alpha = adaptive_backdrop_dim(scene_luminance, layout.body_progress)
             if dim_alpha > 0.001:
-                panel = layout.panel
                 dim = color("#000000", dim_alpha)
                 painter.setBrush(dim)
-                painter.drawRect(QRectF(0.0, 0.0, float(width), max(0.0, panel.top())))
-                painter.drawRect(QRectF(0.0, panel.bottom(), float(width), max(0.0, float(height) - panel.bottom())))
-                painter.drawRect(QRectF(0.0, panel.top(), max(0.0, panel.left()), panel.height()))
-                painter.drawRect(QRectF(panel.right(), panel.top(), max(0.0, float(width) - panel.right()), panel.height()))
+                # Keep one coherent backdrop beneath both the desktop and the
+                # lens.  Punching a hole around the panel made the surrounding
+                # camera look like an unrelated dark modal layer.
+                painter.drawRect(QRectF(0.0, 0.0, float(width), float(height)))
             if layout.body_progress >= 0.22:
                 gold_ratio = context.gold / max(1.0, float(max(context.total_gold, context.gold)))
                 gold_track = QRectF(

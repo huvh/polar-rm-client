@@ -16,6 +16,21 @@ def _smoothstep(value: float) -> float:
     return value * value * (3.0 - 2.0 * value)
 
 
+def adaptive_backdrop_dim(scene_luminance: float, progress: float) -> float:
+    """Return the source-style dim amount without burying a dark camera feed.
+
+    The Control Center reference uses a 40% black dim over a bright demo
+    backdrop.  A fixed mask makes a live, already-dark camera feed disappear,
+    so this keeps the same maximum-layer behavior only once the source is
+    genuinely bright.  The result remains part of the combined backdrop and
+    therefore participates in the root lens instead of becoming a modal veil.
+    """
+    brightness = _clamp(scene_luminance, 0.0, 1.0)
+    reveal = _clamp(progress, 0.0, 1.0)
+    bright_scene = _smoothstep((brightness - 0.58) / 0.25)
+    return 0.35 * bright_scene * reveal
+
+
 def _lerp_rect(start: QRectF, end: QRectF, progress: float) -> QRectF:
     progress = _clamp(progress, 0.0, 1.0)
     return QRectF(
