@@ -878,7 +878,8 @@ class PolarRMWindow(QOpenGLWidget):
             if self.frame_image is None or self.frame_image.isNull() or not self.hud_video_gpu.available:
                 return False
             self.hud_video_gpu.update_frame(self.frame_image, canvas, self._last_capture_sequence, 1.0 / 30.0, 0.0)
-            if not self.hud_video_gpu.render(functions, canvas):
+            self.hud_video_gpu.discard_interpolation_history()
+            if not self.hud_video_gpu.render(functions, canvas, interpolate=False):
                 return False
             self.paint_overlay(None, hud_background_ready=True)
             return True
@@ -1539,17 +1540,20 @@ class PolarRMWindow(QOpenGLWidget):
                             soft=snapshot.soft_glass,
                             lens=snapshot.glass,
                         )
-        elif raw_video_path and self.frame_image is not None and not self.frame_image.isNull() and self.hud_video_gpu.available:
-            self.hud_video_gpu.update_frame(self.frame_image, canvas, self._last_capture_sequence, 1.0 / 30.0, 0.0)
-            raw_drawn = self.hud_video_gpu.render(functions, canvas)
+        # Live camera frames deliberately do not use StartupGpuCompositor's
+        # current/previous texture pair.  A changing QImage can otherwise race
+        # texture reuse on some Windows drivers, producing an intermittent
+        # flipped or repeated frame.  Painting the latest immutable QImage into
+        # this private FBO still leaves the final composition entirely on the
+        # GPU, while guaranteeing that each display frame has one orientation.
         if not raw_drawn:
             painter = QPainter(device)
             painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
             painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, not self.high_res_optimize(width, height))
             if self.home_visible:
                 self.draw_startup_background(painter, width, height)
-            elif self.frame_pixmap is not None and not self.frame_pixmap.isNull():
-                painter.drawPixmap(canvas, self.frame_pixmap, QRectF(self.frame_pixmap.rect()))
+            elif self.frame_image is not None and not self.frame_image.isNull():
+                painter.drawImage(canvas, self.frame_image, QRectF(self.frame_image.rect()))
             else:
                 self.draw_synthetic_video(painter, width, height)
             painter.end()
@@ -2849,8 +2853,9 @@ class PolarRMWindow(QOpenGLWidget):
                 1.0 / 60.0,
                 0.0,
             )
+            self.hud_video_gpu.discard_interpolation_history()
             context = self.context()
-            return bool(context and self.hud_video_gpu.render(context.functions(), canvas))
+            return bool(context and self.hud_video_gpu.render(context.functions(), canvas, interpolate=False))
         except Exception as exc:
             self.hud_video_gpu.last_error = str(exc)
             self.hud_video_gpu.available = False
