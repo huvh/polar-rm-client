@@ -1185,10 +1185,10 @@ class PolarRMWindow(QOpenGLWidget):
             if layout.body_progress >= 0.22:
                 gold_ratio = context.gold / max(1.0, float(max(context.total_gold, context.gold)))
                 gold_track = QRectF(
-                    layout.category_pane.left() + 14.0,
-                    layout.category_pane.top() + 74.0,
-                    max(1.0, layout.category_pane.width() - 28.0),
-                    5.0,
+                    layout.status_strip.left() + 14.0,
+                    layout.status_strip.bottom() - 8.0,
+                    max(1.0, layout.status_strip.width() * 0.22),
+                    4.0,
                 ).intersected(layout.body_clip)
                 if not gold_track.isEmpty():
                     painter.setBrush(with_alpha(color("#ffd56a"), 0.25))
@@ -9185,19 +9185,11 @@ class PolarRMWindow(QOpenGLWidget):
         def body_clip(rect: QRectF) -> QRectF:
             return QRectF(rect).intersected(layout.body_clip)
 
-        # The work area remains one material. These separators are ordinary
-        # content, not nested pane outlines, so the visual still reads as a
-        # single top-down sheet rather than a grid of translucent cards.
+        # The work area remains one material. A single horizontal divider
+        # separates offers from detail in compact mode.
         divider_color = color("#ffffff", 0.14 * content_alpha)
         inner_clip = layout.body_clip
         if layout.compact:
-            split_x = layout.category_pane.right() + 6.0
-            commands.rect(
-                QRectF(split_x, inner_clip.top() + 4.0, 1.0, max(0.0, inner_clip.height() - 8.0)),
-                0.0,
-                divider_color,
-                clip=inner_clip,
-            )
             split_y = layout.offers_pane.bottom() + 6.0
             commands.rect(
                 QRectF(layout.offers_pane.left(), split_y, layout.offers_pane.width(), 1.0),
@@ -9206,117 +9198,111 @@ class PolarRMWindow(QOpenGLWidget):
                 clip=inner_clip,
             )
         else:
-            for split_x in (
-                layout.category_pane.right() + 6.0,
-                layout.offers_pane.right() + 6.0,
-            ):
-                commands.rect(
-                    QRectF(split_x, inner_clip.top() + 4.0, 1.0, max(0.0, inner_clip.height() - 8.0)),
-                    0.0,
-                    divider_color,
-                    clip=inner_clip,
+            split_x = layout.offers_pane.right() + 6.0
+            commands.rect(
+                QRectF(split_x, inner_clip.top() + 4.0, 1.0, max(0.0, inner_clip.height() - 8.0)),
+                0.0,
+                divider_color,
+                clip=inner_clip,
+            )
+
+        # --- Status strip (compact gold/HP/ammo info) ---
+        strip = layout.status_strip
+        strip_clip = body_clip(strip)
+        if not strip_clip.isEmpty():
+            pad = 14.0
+            economy_ratio = context.gold / max(1.0, float(max(context.total_gold, context.gold)))
+            hp_ratio = context.current_health / max(1.0, float(context.max_health))
+            ammo_ratio = context.current_ammo / max(1.0, float(context.ammo_capacity or context.current_ammo or 1))
+            pending_cost = self.economy_bridge.latest.request.cost if self.economy_bridge.latest and self.economy_bridge.latest.status == "pending" else 0
+            # Gold
+            commands.text(
+                QRectF(strip.left() + pad, strip.top() + 2.0, 120.0, 18.0),
+                f"{context.gold} G", self.font("poppins_bold", 12.0 * scale), color("#ffd56a", category_alpha), clip=strip_clip,
+            )
+            commands.text(
+                QRectF(strip.left() + pad, strip.top() + 20.0, 160.0, 14.0),
+                f"累计 {context.total_gold} · 待扣 {pending_cost}", self.font("poppins_medium", 7.0 * scale), color("#9aafc0", 0.88 * category_alpha), clip=strip_clip,
+            )
+            # HP + Ammo bars (right side of strip)
+            bar_w = min(140.0, strip.width() * 0.18)
+            bar_x = strip.right() - pad - bar_w * 2 - 16.0
+            for col, (label, ratio, accent_hex) in enumerate((
+                ("HP", hp_ratio, "#64dda1"),
+                ("AMMO", ammo_ratio, "#64baff"),
+            )):
+                bx = bar_x + col * (bar_w + 16.0)
+                commands.text(
+                    QRectF(bx, strip.top() + 4.0, bar_w, 12.0),
+                    label, self.font("poppins_bold", 6.6 * scale), color("#aebcc8", 0.82 * category_alpha), clip=strip_clip,
                 )
+                bar = QRectF(bx, strip.top() + 18.0, bar_w, 4.0)
+                commands.rect(bar, 2.0, color("#ffffff", 0.08 * category_alpha), clip=strip_clip)
+                commands.rect(QRectF(bar.left(), bar.top(), bar.width() * max(0.0, min(1.0, ratio)), bar.height()), 2.0, color(accent_hex, category_alpha), clip=strip_clip)
 
-        # --- Category pane content ---
-        cat_pane = layout.category_pane.translated(0.0, layout.category_offset)
-        cat_clip = body_clip(cat_pane)
-        if cat_clip.isEmpty():
-            return commands
-        pad = 14.0
-        # Gold display
-        commands.text(
-            QRectF(cat_pane.left() + pad, cat_pane.top() + 12.0, cat_pane.width() - pad * 2, 16.0),
-            "当前金币", self.font("poppins_bold", 8.2 * scale), color("#aebcc8", category_alpha), clip=cat_clip,
-        )
-        commands.text(
-            QRectF(cat_pane.left() + pad, cat_pane.top() + 30.0, cat_pane.width() - pad * 2, 36.0),
-            f"{context.gold}", self.font("poppins_bold", 26.0 * scale), color("#ffffff", category_alpha), clip=cat_clip,
-        )
-        # Gold progress track
-        economy_ratio = context.gold / max(1.0, float(max(context.total_gold, context.gold)))
-        track = QRectF(cat_pane.left() + pad, cat_pane.top() + 74.0, cat_pane.width() - pad * 2, 5.0)
-        commands.rect(track, 2.5, color("#ffffff", 0.08 * category_alpha), clip=cat_clip)
-        commands.rect(QRectF(track.left(), track.top(), max(4.0, track.width() * economy_ratio), track.height()), 2.5, color("#ffd56a", 0.92 * category_alpha), clip=cat_clip)
-        # Summary
-        pending_cost = self.economy_bridge.latest.request.cost if self.economy_bridge.latest and self.economy_bridge.latest.status == "pending" else 0
-        commands.text(
-            QRectF(cat_pane.left() + pad, cat_pane.top() + 84.0, cat_pane.width() - pad * 2, 14.0),
-            f"累计 {context.total_gold} · 待扣 {pending_cost}", self.font("poppins_medium", 7.4 * scale), color("#9aafc0", 0.92 * category_alpha), clip=cat_clip,
-        )
-        # Category label
-        commands.text(
-            QRectF(cat_pane.left() + pad, layout.category_viewport.top() - 20.0, cat_pane.width() - pad * 2, 16.0),
-            "分类", self.font("poppins_bold", 7.6 * scale), color("#8fa3b5", category_alpha), clip=cat_clip,
-        )
-        # Category capsules
-        cat_vp = layout.category_viewport.translated(0.0, layout.category_offset)
-        cat_vp_clip = body_clip(cat_vp)
-        cat_h = min(38.0, max(30.0, (cat_vp.height() - 8.0 * (len(categories) - 1)) / max(1, len(categories))))
-        cat_gap = 8.0
-        self.economy_category_scroll.set_bounds(max(0.0, len(categories) * (cat_h + cat_gap) - cat_gap - cat_vp.height()))
-        cat_scroll = self.economy_category_scroll.position
-        selected_category_index = float(categories.index(self.economy_category))
-        animated_category_index = self.anim.value(
-            "economy.category.selection",
-            selected_category_index,
-            self.anim_duration(0.20),
-            Easings.ease_out_expo,
-            initial=selected_category_index,
-        )
-        selected_category_rect = QRectF(
-            cat_vp.left(),
-            cat_vp.top() + animated_category_index * (cat_h + cat_gap) - cat_scroll,
-            cat_vp.width(),
-            cat_h,
-        )
-        if selected_category_rect.intersects(cat_vp_clip) and not cat_vp_clip.isEmpty():
-            self.gpu_compositor.add_glass(
-                selected_category_rect.intersected(cat_vp_clip),
-                selected_category_rect.height() * 0.5,
-                strength=0.88,
-                surface="clear",
-                opacity=category_alpha,
-                material=LensMaterial.STRONG,
-                frost_amount=0.0,
-            )
-        for index, key in enumerate(categories):
-            rect = QRectF(cat_vp.left(), cat_vp.top() + index * (cat_h + cat_gap) - cat_scroll, cat_vp.width(), cat_h)
-            if not rect.intersects(cat_vp_clip):
-                continue
-            active = key == self.economy_category
-            hovered = rect.contains(self.hover_point)
-            hover = self.anim.value(
-                f"economy.category.hover.{key}",
-                1.0 if hovered else 0.0,
-                self.anim_duration(0.14),
+        # --- Bottom tab bar (LiquidBottomTabs style) ---
+        tab_bar = layout.tab_bar
+        tab_clip = body_clip(tab_bar)
+        tab_alpha = layout.tab_alpha
+        if not tab_clip.isEmpty() and tab_alpha > 0.01:
+            # Glass container for the tab bar
+            if self.gpu_compositor.available:
+                self.gpu_compositor.add_glass(
+                    tab_bar.intersected(tab_clip),
+                    tab_bar.height() * 0.5,
+                    strength=0.82,
+                    surface="clear",
+                    opacity=tab_alpha,
+                    material=LensMaterial.STRONG,
+                    frost_amount=0.12,
+                    vibrancy_amount=tab_alpha,
+                )
+            # Sliding indicator capsule
+            tab_count = max(1, len(categories))
+            tab_w = (tab_bar.width() - 8.0) / tab_count
+            selected_category_index = float(categories.index(self.economy_category))
+            animated_category_index = self.anim.value(
+                "economy.category.selection",
+                selected_category_index,
+                self.anim_duration(0.22),
                 Easings.ease_out_expo,
+                initial=selected_category_index,
             )
-            draw_rect = rect.translated(0.0, -1.2 * hover)
-            commands.text(
-                draw_rect.adjusted(14.0, 0, -10.0, 0),
-                CATEGORY_TITLES.get(key, key), self.font("poppins_bold", 10.0 * scale),
-                color("#ffffff", category_alpha) if active else color("#c8d6e4", 0.90 * category_alpha),
-                clip=cat_vp_clip,
+            indicator = QRectF(
+                tab_bar.left() + 4.0 + animated_category_index * tab_w,
+                tab_bar.top() + 4.0,
+                tab_w,
+                tab_bar.height() - 8.0,
             )
-            if layout.interactive:
-                self.add_hotspot(rect, "economy_category", key)
-
-        # HP / Ammo status bars
-        status_y = cat_pane.bottom() - 104.0
-        hp_ratio = context.current_health / max(1.0, float(context.max_health))
-        ammo_ratio = context.current_ammo / max(1.0, float(context.ammo_capacity or context.current_ammo or 1))
-        for row, (label, value, ratio, accent_hex) in enumerate((
-            ("血量", f"{context.current_health}/{context.max_health}", hp_ratio, "#64dda1"),
-            ("弹丸", f"{context.current_ammo}/{context.ammo_capacity or '--'}", ammo_ratio, "#64baff"),
-        )):
-            y = status_y + row * 46.0
-            commands.text(
-                QRectF(cat_pane.left() + pad, y, cat_pane.width() - pad * 2, 16.0),
-                f"{label}  {value}", self.font("poppins_medium", 7.8 * scale), color("#e8f0f8", category_alpha), clip=cat_clip,
-            )
-            bar = QRectF(cat_pane.left() + pad, y + 20.0, cat_pane.width() - pad * 2, 5.0)
-            commands.rect(bar, 2.5, color("#ffffff", 0.08 * category_alpha), clip=cat_clip)
-            commands.rect(QRectF(bar.left(), bar.top(), bar.width() * max(0.0, min(1.0, ratio)), bar.height()), 2.5, color(accent_hex, category_alpha), clip=cat_clip)
+            if indicator.intersects(tab_clip):
+                self.gpu_compositor.add_glass(
+                    indicator.intersected(tab_clip),
+                    indicator.height() * 0.5,
+                    strength=0.92,
+                    surface="clear",
+                    opacity=tab_alpha,
+                    material=LensMaterial.STRONG,
+                    refraction_height_px=10.0,
+                    refraction_amount_px=-14.0,
+                    chromatic_aberration=0.18,
+                    frost_amount=0.0,
+                )
+                commands.rect(indicator, indicator.height() * 0.5, color("#ffffff", 0.10 * tab_alpha), clip=tab_clip)
+            # Tab labels
+            for index, key in enumerate(categories):
+                rect = QRectF(tab_bar.left() + 4.0 + index * tab_w, tab_bar.top() + 4.0, tab_w, tab_bar.height() - 8.0)
+                if not rect.intersects(tab_clip):
+                    continue
+                active = key == self.economy_category
+                commands.text(
+                    rect,
+                    CATEGORY_TITLES.get(key, key), self.font("poppins_bold", 9.0 * scale),
+                    color("#ffffff", tab_alpha) if active else color("#c8d6e4", 0.72 * tab_alpha),
+                    Qt.AlignmentFlag.AlignCenter,
+                    tab_clip,
+                )
+                if layout.interactive:
+                    self.add_hotspot(rect, "economy_category", key)
 
         # --- Offers pane ---
         offers_pane = layout.offers_pane.translated(0.0, layout.offers_offset)
@@ -10473,9 +10459,33 @@ class PolarRMWindow(QOpenGLWidget):
                 Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
                 clip,
             )
+            # Liquid glass slider (AndroidLiquidGlass-kmp LiquidSlider style)
             bar = QRectF(body.left() + body.width() * 0.42, body.bottom() - 9 * scale, body.width() * 0.52, 5 * scale)
-            commands.rect(bar, 2.5 * scale, color("#ffffff", 0.22 * alpha), clip=clip)
-            commands.rect(QRectF(bar.left(), bar.top(), max(bar.height(), bar.width() * setting.ratio()), bar.height()), 2.5 * scale, color("#f15bd5", alpha), clip=clip)
+            ratio = max(0.0, min(1.0, setting.ratio()))
+            # Track: capsule background
+            commands.rect(bar, 2.5 * scale, color("#787880", 0.36 * alpha), clip=clip)
+            # Accent fill
+            commands.rect(QRectF(bar.left(), bar.top(), max(bar.height(), bar.width() * ratio), bar.height()), 2.5 * scale, color("#0091ff", 0.92 * alpha), clip=clip)
+            # Glass thumb at current value position
+            thumb_w = 14.0 * scale
+            thumb_h = 10.0 * scale
+            thumb_x = bar.left() + max(0.0, bar.width() - thumb_w) * ratio
+            thumb_rect = QRectF(thumb_x, bar.center().y() - thumb_h * 0.5, thumb_w, thumb_h)
+            press = self.liquid_press_amount(thumb_rect.adjusted(-6, -6, 6, 6))
+            if self.gpu_compositor.available and alpha > 0.3:
+                self.gpu_compositor.add_glass(
+                    thumb_rect,
+                    thumb_rect.height() * 0.5,
+                    strength=0.72 + 0.28 * press,
+                    surface="clear",
+                    opacity=alpha,
+                    material=LensMaterial.STRONG,
+                    refraction_height_px=10.0 * press,
+                    refraction_amount_px=-14.0 * press,
+                    chromatic_aberration=0.32 * press,
+                    frost_amount=0.28 * (1.0 - press),
+                )
+            commands.rect(thumb_rect, thumb_rect.height() * 0.5, color("#ffffff", 0.92 * (1.0 - press * 0.85) * alpha), clip=clip)
             self.add_hotspot(bar.adjusted(-4 * scale, -7 * scale, 4 * scale, 7 * scale), "setting_slider", setting)
         elif setting.kind == "mode":
             box = QRectF(body.right() - 112 * scale, body.top() + 5 * scale, 103 * scale, body.height() - 10 * scale)
@@ -10513,11 +10523,47 @@ class PolarRMWindow(QOpenGLWidget):
         self._hotspot_clip = None
 
     def build_gpu_toggle(self, commands: ClickGuiDrawList, rect: QRectF, enabled: bool, alpha: float, action: tuple[str, Any], clip: QRectF | None = None) -> None:
-        value = self.gui_motion.value(f"gpu.toggle.{id(action[1])}", 1.0 if enabled else 0.0, self.anim_duration(0.18), Easings.ease_out_cubic)
-        commands.rect(rect, rect.height() / 2, color("#43b95b", 0.86 * alpha * value) if enabled else color("#565861", 0.86 * alpha), clip=clip)
-        knob = rect.height() - 4
-        commands.rect(QRectF(rect.left() + 2 + (rect.width() - knob - 4) * value, rect.top() + 2, knob, knob), knob / 2, self.gpu_alpha(THEME.text, alpha), clip=clip)
-        self.add_hotspot(rect.adjusted(-4, -4, 4, 4), action[0], action[1])
+        """Liquid glass toggle inspired by AndroidLiquidGlass-kmp LiquidToggle.
+
+        Track: capsule with color lerp (gray -> accent green).
+        Thumb: capsule glass lens with chromatic aberration on press,
+        white surface that fades out when pressed, spring-animated position.
+        """
+        value = self.gui_motion.value(f"gpu.toggle.{id(action[1])}", 1.0 if enabled else 0.0, self.anim_duration(0.22), Easings.ease_out_expo)
+        # Track: capsule, color lerps from dark gray to accent green
+        track_r = rect.height() * 0.5
+        track_color = color("#30d158", 0.88 * alpha * value) if value > 0.01 else color("#787880", 0.36 * alpha)
+        if 0.01 < value < 0.99:
+            track_color = color("#787880", 0.36 * alpha * (1.0 - value))
+            commands.rect(rect, track_r, track_color, clip=clip)
+            track_color = color("#30d158", 0.88 * alpha * value)
+        commands.rect(rect, track_r, track_color, clip=clip)
+        # Thumb geometry: capsule that slides along the track
+        pad = 2.0
+        thumb_w = rect.height() - pad * 2 + 6.0  # slightly wider than tall (40:24 ratio)
+        thumb_h = rect.height() - pad * 2
+        drag_width = rect.width() - thumb_w - pad * 2
+        thumb_x = rect.left() + pad + drag_width * value
+        thumb_rect = QRectF(thumb_x, rect.top() + pad, thumb_w, thumb_h)
+        # Press feedback: lens + chromatic aberration on the thumb
+        press = self.liquid_press_amount(thumb_rect.adjusted(-6, -6, 6, 6))
+        if self.gpu_compositor.available and alpha > 0.3:
+            self.gpu_compositor.add_glass(
+                thumb_rect,
+                thumb_rect.height() * 0.5,
+                strength=0.72 + 0.28 * press,
+                surface="clear",
+                opacity=alpha,
+                material=LensMaterial.STRONG,
+                refraction_height_px=5.0 * press,
+                refraction_amount_px=-10.0 * press,
+                chromatic_aberration=0.32 * press,
+                frost_amount=0.28 * (1.0 - press),
+            )
+        # White surface overlay (fades out on press like the source)
+        surface_alpha = (1.0 - press * 0.85) * alpha
+        commands.rect(thumb_rect, thumb_rect.height() * 0.5, color("#ffffff", 0.92 * surface_alpha), clip=clip)
+        self.add_hotspot(rect.adjusted(-4, -6, 4, 6), action[0], action[1])
 
     def build_gpu_mode_switcher(self, commands: ClickGuiDrawList, width: int, height: int) -> None:
         gap, margin = 6.0, 18.0
@@ -11265,9 +11311,7 @@ class PolarRMWindow(QOpenGLWidget):
         delta = -event.angleDelta().y() / 120.0 * 28.0
         if self.economy_visible:
             layout = self.economy_workspace_layer.layout(self.width(), self.height(), self.economy_island.progress)
-            if layout.category_viewport.contains(point):
-                self.economy_category_scroll.add_wheel(delta)
-            elif layout.offers_viewport.contains(point):
+            if layout.offers_viewport.contains(point):
                 self.economy_offers_scroll.add_wheel(delta)
             elif layout.detail_viewport.contains(point):
                 self.economy_detail_scroll.add_wheel(delta)

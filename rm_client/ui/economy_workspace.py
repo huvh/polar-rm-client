@@ -128,13 +128,13 @@ class EconomyWorkspaceLayout:
     grab_handle: QRectF
     close_button: QRectF
     link_chip: QRectF
-    category_pane: QRectF
     offers_pane: QRectF
     detail_pane: QRectF
-    category_viewport: QRectF
     offers_viewport: QRectF
     detail_viewport: QRectF
     action_button: QRectF
+    tab_bar: QRectF
+    status_strip: QRectF
     compact: bool
     root_radius: float
     island_progress: float
@@ -144,7 +144,7 @@ class EconomyWorkspaceLayout:
     category_alpha: float
     offers_alpha: float
     detail_alpha: float
-    category_offset: float
+    tab_alpha: float
     offers_offset: float
     detail_offset: float
     body_clip: QRectF
@@ -241,31 +241,36 @@ class EconomyWorkspaceLayer:
 
         inner = target.adjusted(18.0, header_h + 8.0, -18.0, -18.0)
         gap = 12.0
-        left_w = _clamp(inner.width() * (0.27 if compact else 0.19), 224.0, 300.0)
-        category_pane = QRectF(inner.left(), inner.top(), left_w, inner.height())
-        remaining_left = category_pane.right() + gap
-        remaining_w = inner.right() - remaining_left
+
+        # Bottom tab bar replaces the old left category pane (LiquidBottomTabs style).
+        tab_h = 48.0 if compact else 56.0
+        tab_bar = QRectF(inner.left(), inner.bottom() - tab_h, inner.width(), tab_h)
+        tab_alpha = _smoothstep((body_progress - 0.42) / 0.26)
+        # Status strip: compact gold/HP/ammo info between header and content.
+        status_strip = QRectF(inner.left(), inner.top(), inner.width(), 38.0)
+        content_top = status_strip.bottom() + 8.0
+        content_bottom = tab_bar.top() - 8.0
+        content_h = max(60.0, content_bottom - content_top)
 
         if compact:
-            offers_h = max(220.0, inner.height() * 0.51)
-            offers_pane = QRectF(remaining_left, inner.top(), remaining_w, offers_h)
+            offers_h = max(180.0, content_h * 0.52)
+            offers_pane = QRectF(inner.left(), content_top, inner.width(), offers_h)
             detail_pane = QRectF(
-                remaining_left,
+                inner.left(),
                 offers_pane.bottom() + gap,
-                remaining_w,
-                max(80.0, inner.bottom() - offers_pane.bottom() - gap),
+                inner.width(),
+                max(80.0, content_bottom - offers_pane.bottom() - gap),
             )
         else:
-            offers_w = _clamp(remaining_w * 0.46, 390.0, 540.0)
-            offers_pane = QRectF(remaining_left, inner.top(), offers_w, inner.height())
+            offers_w = _clamp(inner.width() * 0.50, 390.0, 560.0)
+            offers_pane = QRectF(inner.left(), content_top, offers_w, content_h)
             detail_pane = QRectF(
                 offers_pane.right() + gap,
-                inner.top(),
+                content_top,
                 max(260.0, inner.right() - offers_pane.right() - gap),
-                inner.height(),
+                content_h,
             )
 
-        category_viewport = category_pane.adjusted(14.0, 126.0, -14.0, -116.0)
         offers_viewport = offers_pane.adjusted(14.0, 48.0, -14.0, -14.0)
         action_button = QRectF(
             detail_pane.left() + 16.0,
@@ -317,13 +322,13 @@ class EconomyWorkspaceLayer:
         grab_handle = present(grab_handle)
         close_button = present(close_button)
         link_chip = present(link_chip)
-        category_pane = present(category_pane)
         offers_pane = present(offers_pane)
         detail_pane = present(detail_pane)
-        category_viewport = present(category_viewport)
         offers_viewport = present(offers_viewport)
         detail_viewport = present(detail_viewport)
         action_button = present(action_button)
+        tab_bar = present(tab_bar)
+        status_strip = present(status_strip)
         body_clip = present(body_clip).intersected(panel)
         root_radius *= layer_scale_y
 
@@ -335,13 +340,13 @@ class EconomyWorkspaceLayer:
             grab_handle=grab_handle,
             close_button=close_button,
             link_chip=link_chip,
-            category_pane=category_pane,
             offers_pane=offers_pane,
             detail_pane=detail_pane,
-            category_viewport=category_viewport,
             offers_viewport=offers_viewport,
             detail_viewport=detail_viewport,
             action_button=action_button,
+            tab_bar=tab_bar,
+            status_strip=status_strip,
             compact=compact,
             root_radius=root_radius,
             island_progress=island_progress,
@@ -351,7 +356,7 @@ class EconomyWorkspaceLayer:
             category_alpha=category_alpha,
             offers_alpha=offers_alpha,
             detail_alpha=detail_alpha,
-            category_offset=category_offset,
+            tab_alpha=tab_alpha,
             offers_offset=offers_offset,
             detail_offset=detail_offset,
             body_clip=body_clip,

@@ -1592,12 +1592,14 @@ def test_economy_workspace_top_anchor_and_reversal() -> None:
     assert compact_open.compact is True
     assert desktop_open.compact is False
     for pane in (
-        compact_open.category_pane,
         compact_open.offers_pane,
         compact_open.detail_pane,
-        desktop_open.category_pane,
+        compact_open.tab_bar,
+        compact_open.status_strip,
         desktop_open.offers_pane,
         desktop_open.detail_pane,
+        desktop_open.tab_bar,
+        desktop_open.status_strip,
     ):
         assert pane.width() > 0.0 and pane.height() > 0.0
 
