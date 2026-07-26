@@ -30,6 +30,12 @@
 
 第三方来源与许可证记录在 `THIRD_PARTY_NOTICES.md`。产品界面、配置值和代码标识统一使用 POLAR-RM 语义。
 
+## 2.1 经济工作区
+
+经济工作区是镜片的独占使用场景：打开或收拢期间，只合成图传、经济 Control Backdrop、经济镜片、经济内容和交互层。地图、模块列表、目标卡、遥测、底盘指示和战斗通知必须从同一帧清空，不能作为“玻璃下方的信息层”。
+
+根容器从顶部胶囊原位向下展开。根、选中分类和确认按钮使用强镜片且 `frostAmount = 0`；文字密集区域使用 Regular 镜片。商品轨道、金币进度和按住确认进度必须先写入 Economy Control Backdrop，再与图传合成为 Combined Backdrop。禁止用半透明深色 pane、加法高光或矩形描边替代镜片。
+
 ## 3. Combined Backdrop
 
 Kyant Slider 的关键不是单独折射背景，而是同时折射背景与滑轨：

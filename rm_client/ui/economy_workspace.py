@@ -117,21 +117,34 @@ class EconomyWorkspaceLayer:
         progress = _clamp(progress, 0.0, 1.0)
         compact = width_f < 1600.0 or height_f < 850.0
 
-        margin_x = 18.0 if compact else 28.0
-        margin_y = 18.0 if compact else 28.0
+        # The economic workspace is a top-anchored island sheet.  Keeping its
+        # top edge fixed makes the collapsed island grow downward instead of
+        # turning into a centered modal halfway through the animation.
+        margin_x = 16.0 if compact else 28.0
+        top_margin = 18.0 if compact else 24.0
+        bottom_margin = 18.0 if compact else 28.0
         target_w = min(1510.0, width_f - margin_x * 2.0)
-        target_h = min(790.0, height_f - margin_y * 2.0)
+        target_h = min(740.0, height_f - top_margin - bottom_margin)
         target = QRectF(
             (width_f - target_w) * 0.5,
-            (height_f - target_h) * 0.5,
+            top_margin,
             target_w,
             target_h,
         )
 
         collapsed_w = min(390.0, max(260.0, width_f * 0.30))
         collapsed_h = 44.0
-        collapsed = QRectF((width_f - collapsed_w) * 0.5, 20.0, collapsed_w, collapsed_h)
-        shape_progress = 1.0 - pow(1.0 - progress, 3.0)
+        collapsed = QRectF(
+            (width_f - collapsed_w) * 0.5,
+            top_margin,
+            collapsed_w,
+            collapsed_h,
+        )
+        # Keep the sheet's visible geometry on the same continuous curve as
+        # the island state.  The old cubic ease-out reached roughly 80% width
+        # before the state had reached 45%, which read as a modal snapping
+        # open instead of a top-anchored island expanding downward.
+        shape_progress = _smoothstep(progress)
         panel = _lerp_rect(collapsed, target, shape_progress)
         root_radius = min(
             panel.height() * 0.5,
@@ -148,13 +161,13 @@ class EconomyWorkspaceLayer:
 
         inner = panel.adjusted(18.0, header_h + 8.0, -18.0, -18.0)
         gap = 12.0
-        left_w = _clamp(inner.width() * (0.205 if compact else 0.19), 208.0, 274.0)
+        left_w = _clamp(inner.width() * (0.27 if compact else 0.19), 224.0, 300.0)
         category_pane = QRectF(inner.left(), inner.top(), left_w, inner.height())
         remaining_left = category_pane.right() + gap
         remaining_w = inner.right() - remaining_left
 
         if compact:
-            offers_h = max(220.0, inner.height() * 0.52)
+            offers_h = max(220.0, inner.height() * 0.51)
             offers_pane = QRectF(remaining_left, inner.top(), remaining_w, offers_h)
             detail_pane = QRectF(
                 remaining_left,

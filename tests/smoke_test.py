@@ -53,6 +53,7 @@ from rm_client.ui.gpu_frame_compositor import compose_combined_backdrop_pixel
 from rm_client.ui.clickgui_gpu import SmallTextPolicy
 from rm_client.ui.island_icon_gpu import island_icon_coverage
 from rm_client.ui.layout import HudAnchorStack
+from rm_client.ui.economy_workspace import EconomyIslandState, EconomyWorkspaceLayer
 from rm_client.ui.startup_gl import TextureOrigin, normalize_image_for_texture
 from rm_client.ui.vision_motion import (
     AngleRenderTrack,
@@ -1556,6 +1557,51 @@ def test_robot_profiles_and_economy_rules() -> None:
     assert registry.get("UIScale").get_setting("HUD Refresh Rate").value == "144"
 
 
+def test_economy_workspace_top_anchor_and_reversal() -> None:
+    layer = EconomyWorkspaceLayer()
+    compact_start = layer.layout(1280, 720, 0.0)
+    compact_open = layer.layout(1280, 720, 1.0)
+    desktop_open = layer.layout(1600, 900, 1.0)
+
+    # The sheet grows from the top island: neither its collapsed nor expanded
+    # geometry may drift toward a centered modal.
+    assert compact_start.collapsed.top() == compact_open.target_panel.top()
+    assert compact_start.panel.top() == compact_open.panel.top()
+    assert compact_open.compact is True
+    assert desktop_open.compact is False
+    for pane in (
+        compact_open.category_pane,
+        compact_open.offers_pane,
+        compact_open.detail_pane,
+        desktop_open.category_pane,
+        desktop_open.offers_pane,
+        desktop_open.detail_pane,
+    ):
+        assert pane.width() > 0.0 and pane.height() > 0.0
+
+    state = EconomyIslandState()
+    state._last_time = 0.0
+    state.set_target(1.0, duration=0.62, now=0.0)
+    for tick in range(1, 31):
+        state.update(now=tick / 120.0)
+    opening_progress = state.progress
+    assert 0.15 < opening_progress < 1.0
+
+    # Reversing from the in-flight value preserves a continuous trajectory.
+    state.set_target(0.0, duration=0.48)
+    state.update(now=31 / 120.0)
+    # A critically damped state may advance for a few display frames while it
+    # dissipates opening velocity. It must remain bounded, then contract.
+    assert 0.0 <= state.progress <= 1.0
+    for tick in range(32, 62):
+        state.update(now=tick / 120.0)
+    assert state.progress < opening_progress
+    for tick in range(62, 200):
+        state.update(now=tick / 120.0)
+    assert state.progress == 0.0
+    assert state.velocity == 0.0
+
+
 def test_official_economy_status_decode() -> None:
     import struct
 
@@ -1934,6 +1980,7 @@ if __name__ == "__main__":
     test_clickgui_offscreen_modes()
     test_prediction_geometry_is_bounded()
     test_robot_profiles_and_economy_rules()
+    test_economy_workspace_top_anchor_and_reversal()
     test_official_economy_status_decode()
     test_robot_launcher_and_polar_inertial_scroll()
     test_small_text_policy_and_island_icon_alpha()
