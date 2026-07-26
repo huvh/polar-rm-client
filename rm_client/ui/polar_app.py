@@ -919,14 +919,10 @@ class PolarRMWindow(QOpenGLWidget):
                 startup_scene=startup_scene,
                 economy_active=economy_active,
             )
-            # Clear this isolated layer on every page so an ESP frame cannot
-            # survive a HUD-to-launcher transition.
-            if economy_active:
-                # Economy-exclusive: skip vision/ESP layer entirely and clear stale content.
-                native_vision_owner = False
-                self.gpu_compositor.clear_vision_layer(functions)
-            else:
-                native_vision_owner = self.paint_gpu_vision_layer(functions, width, height, ratio)
+            # Control Center style: the economy panel is a translucent glass
+            # overlay, NOT a separate scene.  Vision/ESP stays visible beneath
+            # the panel and is blurred by its lens naturally.
+            native_vision_owner = self.paint_gpu_vision_layer(functions, width, height, ratio)
 
             if startup_scene:
                 transition_active = (
@@ -976,19 +972,11 @@ class PolarRMWindow(QOpenGLWidget):
                         return False
                 self._gpu_static_ui_key = static_key
             else:
-                if economy_active:
-                    # The economy workspace is a separate scene, not a translucent
-                    # battle-HUD modal.  Clear both the static content and its glass
-                    # commands so map, ModuleList, telemetry and old lens commands
-                    # cannot bleed through during the island morph.
-                    self.gpu_compositor.clear_static_glass()
-                    device = self.gpu_compositor.paint_device("overlay")
-                    if device is None:
-                        return False
-                    self.gpu_compositor.clear_current(functions, transparent=True)
-                    self.gpu_compositor.release_layer("overlay")
-                    self._gpu_static_ui_key = static_key
-                elif rebuild_hud_static:
+                # Control Center style: the battle HUD (tactical map,
+                # ModuleList, telemetry) stays visible beneath the economy
+                # glass panel.  The panel's own lens blurs it naturally —
+                # a real control center never hides the host application.
+                if rebuild_hud_static:
                     device = self.gpu_compositor.paint_device("overlay")
                     if device is None:
                         return False
