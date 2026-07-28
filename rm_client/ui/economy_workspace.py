@@ -214,7 +214,13 @@ class EconomyWorkspaceLayer:
         # Header follows the morphing root.  The working content itself uses
         # final geometry and is revealed by the root/body clips below.
         header_h = 66.0
-        header = QRectF(panel.left() + 24.0, panel.top() + 16.0, panel.width() - 48.0, header_h - 14.0)
+        header_w = min(720.0, max(220.0, panel.width() - 48.0))
+        header = QRectF(
+            panel.center().x() - header_w * 0.5,
+            panel.top() + 16.0,
+            header_w,
+            header_h - 14.0,
+        )
         grab_handle = QRectF(
             panel.center().x() - 18.0,
             panel.top() + 8.0,
@@ -228,11 +234,15 @@ class EconomyWorkspaceLayer:
         gap = 16.0
 
         # Bottom tab bar replaces the old left category pane (LiquidBottomTabs style).
-        tab_h = 48.0 if compact else 56.0
+        # The source Control Center never applies its 24/48dp lens to a
+        # paper-thin strip. Keep the bottom controls at the 56dp inner-item
+        # height so their refraction remains rounded instead of stretching
+        # into a horizontal smear.
+        tab_h = 56.0
         tab_bar = QRectF(inner.left(), inner.bottom() - tab_h, inner.width(), tab_h)
         tab_alpha = _smoothstep((body_progress - 0.42) / 0.26)
         # Status strip: compact gold/HP/ammo info between header and content.
-        status_strip = QRectF(inner.left(), inner.top(), inner.width(), 38.0)
+        status_strip = QRectF(inner.left(), inner.top(), inner.width(), 56.0)
         content_top = status_strip.bottom() + 8.0
         content_bottom = tab_bar.top() - 8.0
         content_h = max(60.0, content_bottom - content_top)

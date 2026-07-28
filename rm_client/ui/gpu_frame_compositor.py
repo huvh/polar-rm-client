@@ -121,6 +121,7 @@ class GlassCommand:
     depth_effect: float = 0.22
     frost_amount: float = 0.0
     vibrancy_amount: float = 0.0
+    clip_rect: QRectF | None = None
 
 
 @dataclass(frozen=True)
@@ -516,6 +517,7 @@ class GpuFrameCompositor:
         depth_effect: float | None = None,
         frost_amount: float = 0.0,
         vibrancy_amount: float = 0.0,
+        clip_rect: QRectF | None = None,
     ) -> None:
         if rect.isEmpty():
             return
@@ -548,6 +550,7 @@ class GpuFrameCompositor:
             max(0.0, min(1.0, float(depth_effect if depth_effect is not None else default_depth))),
             max(0.0, min(1.0, float(frost_amount))),
             max(0.0, min(1.0, float(vibrancy_amount))),
+            QRectF(clip_rect) if clip_rect is not None else None,
         )
         target = self._static_glass_commands if self._recording_static_glass else self._frame_glass_commands
         target.append(command)
@@ -732,10 +735,19 @@ class GpuFrameCompositor:
                 h = command.rect.height() * ratio
                 if w <= 0.5 or h <= 0.5:
                     continue
-                sx = max(0, int(x) - 2)
-                sy = max(0, int(y) - 2)
-                sw = min(self._size.width() - sx, max(1, int(w) + 4))
-                sh = min(self._size.height() - sy, max(1, int(h) + 4))
+                clip = command.rect
+                if command.clip_rect is not None:
+                    clip = clip.intersected(command.clip_rect)
+                if clip.isEmpty():
+                    continue
+                clip_x = clip.left() * ratio
+                clip_y = self._size.height() - clip.bottom() * ratio
+                clip_w = clip.width() * ratio
+                clip_h = clip.height() * ratio
+                sx = max(0, int(clip_x))
+                sy = max(0, int(clip_y))
+                sw = min(self._size.width() - sx, max(1, int(clip_w + 0.999)))
+                sh = min(self._size.height() - sy, max(1, int(clip_h + 0.999)))
                 functions.glScissor(sx, sy, sw, sh)
                 functions.glUniform4f(
                     self.glass_program.uniformLocation("glassRect"),
@@ -1200,7 +1212,21 @@ class GpuFrameCompositor:
                     ? sevenBandSample(refractedUv, dispersedUv)
                     : combinedAt(refractedUv);
 
-                // 强镜片严格对应 GlassSlider：只进行折射和七段色散。
+                // ControlCenterContent uses HighlightStyle.Default with a
+                // 0.5dp stroke, 0.25dp blur and falloff=2. Keep that narrow,
+                // directional highlight on every material, including the
+                // strong tiles. It is a border response, never a sweep.
+                vec2 highlightNormal = normalize(vec2(0.70710678, 0.70710678));
+                float highlightDirection = pow(
+                    abs(dot(gradientTopLeft, highlightNormal)),
+                    2.0
+                );
+                float highlightStroke = 1.0 - smoothstep(0.25, 0.95, abs(sd));
+                lens.rgb += vec3(1.0) * highlightDirection * highlightStroke
+                    * (0.50 + hoverAmount * 0.08);
+
+                // Strong material matches the source Control Center: the
+                // combined backdrop, vibrancy, refraction and highlight only.
                 if (materialKind == 1) {
                     float alpha = lens.a * coverage * opacity;
                     fragColor = vec4(lens.rgb * alpha, alpha);
@@ -1215,15 +1241,6 @@ class GpuFrameCompositor:
                     clamp(refractedUv + sceneUvOffset, vec2(0.001), vec2(0.999))
                 ).rgb;
                 lens.rgb = mix(lens.rgb, softened, blurMix * edge);
-
-                float rim = 1.0 - smoothstep(0.0, 1.1, abs(sd));
-                vec2 lightDirection = normalize(vec2(-0.38, -0.93));
-                float highlight = pow(
-                    max(0.0, dot(-directionTopLeft, lightDirection)),
-                    8.0
-                );
-                lens.rgb += vec3(0.92, 0.97, 1.0) * rim
-                    * (0.035 + highlight * 0.065 + hoverAmount * 0.018);
 
                 float alpha = lens.a * coverage * opacity;
                 fragColor = vec4(lens.rgb * alpha, alpha);

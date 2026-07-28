@@ -919,6 +919,8 @@ class PolarRMWindow(QOpenGLWidget):
             treatment_changed = self.gpu_compositor.set_backdrop_treatment(
                 active=economy_active,
                 progress=economy_reveal,
+                # ControlCenterContent uses a fixed 4dp render blur. DPR
+                # conversion happens in the compositor.
                 blur_radius_px=4.0,
                 dim_alpha=0.40,
                 include_overlay=True,
@@ -9042,12 +9044,16 @@ class PolarRMWindow(QOpenGLWidget):
             clip: QRectF | None = None,
         ) -> QRectF:
             tile = QRectF(rect)
-            if clip is not None:
-                tile = tile.intersected(clip)
+            visible = tile.intersected(clip) if clip is not None else QRectF(tile)
             alpha = max(0.0, min(1.0, float(opacity)))
-            if tile.isEmpty() or alpha <= 0.01:
+            if visible.isEmpty() or alpha <= 0.01:
                 return QRectF()
             radius = min(34.0, tile.height() * 0.5)
+            # ControlCenterContent is calibrated on a 68dp minimum tile.
+            # Smaller desktop controls must scale both lens depth and travel
+            # together; retaining a 48px travel on a 38px strip creates the
+            # long horizontal distortion visible in the previous build.
+            lens_scale = min(1.0, max(0.20, min(tile.width(), tile.height()) / 68.0))
             self.gpu_compositor.add_glass(
                 tile,
                 radius,
@@ -9055,25 +9061,27 @@ class PolarRMWindow(QOpenGLWidget):
                 surface="clear",
                 opacity=alpha,
                 material=material,
-                refraction_height_px=max(1.0, 24.0 * alpha),
-                refraction_amount_px=-max(1.0, 48.0 * alpha),
+                refraction_height_px=max(1.0, 24.0 * lens_scale * alpha),
+                refraction_amount_px=-max(1.0, 48.0 * lens_scale * alpha),
                 chromatic_aberration=0.0,
                 depth_effect=1.0,
                 frost_amount=0.0,
                 vibrancy_amount=alpha,
+                clip_rect=clip,
             )
             # ControlCenterContent uses a five-percent black container color.
-            commands.rect(tile, radius, color("#000000", 0.05 * alpha))
-            return tile
+            commands.rect(tile, radius, color("#000000", 0.05 * alpha), clip=clip)
+            return visible
 
         # Control Center is a group of independent glass modules over one
         # treated backdrop. It never places one giant frosted card behind all
         # controls.
+        header = layout.header
         header_tile = QRectF(
-            panel.left(),
+            header.left() - 16.0,
             panel.top(),
-            panel.width(),
-            min(panel.height(), 84.0),
+            header.width() + 32.0,
+            min(panel.height(), 68.0),
         )
         add_control_center_tile(
             header_tile,
@@ -9083,7 +9091,6 @@ class PolarRMWindow(QOpenGLWidget):
 
         # --- Island summary: visible before the body begins to reveal. ---
         scale = max(0.82, min(1.10, self.get_auto_ui_scale(width, height, strength=0.20)))
-        header = layout.header
         # This handle belongs to the same root lens. It gives the expanded
         # sheet a clear pull-down affordance without adding another panel.
         handle_alpha = max(0.0, min(0.52, layout.body_progress * 0.52))
@@ -9132,35 +9139,63 @@ class PolarRMWindow(QOpenGLWidget):
         def body_clip(rect: QRectF) -> QRectF:
             return QRectF(rect).intersected(layout.body_clip)
 
-        offers_tile = layout.offers_pane.translated(0.0, layout.offers_offset)
-        detail_tile = layout.detail_pane.translated(0.0, layout.detail_offset)
-        add_control_center_tile(
-            layout.status_strip,
-            category_alpha,
-            material=LensMaterial.REGULAR,
-            clip=layout.body_clip,
+        strip = layout.status_strip
+        status_gap = 8.0
+        source_widths = (304.0, 152.0, 152.0)
+        source_total = sum(source_widths) + status_gap * 2.0
+        status_scale = min(1.0, strip.width() / max(1.0, source_total))
+        status_widths = tuple(value * status_scale for value in source_widths)
+        status_total = sum(status_widths) + status_gap * 2.0
+        status_left = strip.center().x() - status_total * 0.5
+        status_tiles = (
+            QRectF(status_left, strip.top(), status_widths[0], strip.height()),
+            QRectF(
+                status_left + status_widths[0] + status_gap,
+                strip.top(),
+                status_widths[1],
+                strip.height(),
+            ),
+            QRectF(
+                status_left + status_widths[0] + status_gap * 2.0 + status_widths[1],
+                strip.top(),
+                status_widths[2],
+                strip.height(),
+            ),
         )
-        add_control_center_tile(
-            offers_tile,
-            offers_alpha,
-            material=LensMaterial.REGULAR,
-            clip=layout.body_clip,
+        for status_tile in status_tiles:
+            add_control_center_tile(
+                status_tile,
+                category_alpha,
+                material=LensMaterial.REGULAR,
+                clip=layout.body_clip,
+            )
+        tab_bar = layout.tab_bar
+        tab_count = max(1, len(categories))
+        tab_gap = 8.0
+        tab_width = min(
+            152.0,
+            max(1.0, (tab_bar.width() - tab_gap * (tab_count - 1)) / tab_count),
         )
-        add_control_center_tile(
-            detail_tile,
-            detail_alpha,
-            material=LensMaterial.REGULAR,
-            clip=layout.body_clip,
+        tabs_total = tab_width * tab_count + tab_gap * (tab_count - 1)
+        tabs_left = tab_bar.center().x() - tabs_total * 0.5
+        tab_rects = tuple(
+            QRectF(
+                tabs_left + index * (tab_width + tab_gap),
+                tab_bar.top(),
+                tab_width,
+                tab_bar.height(),
+            )
+            for index in range(tab_count)
         )
-        add_control_center_tile(
-            layout.tab_bar,
-            layout.tab_alpha,
-            material=LensMaterial.STRONG,
-            clip=layout.body_clip,
-        )
+        for tab_rect in tab_rects:
+            add_control_center_tile(
+                tab_rect,
+                layout.tab_alpha,
+                material=LensMaterial.STRONG,
+                clip=layout.body_clip,
+            )
 
         # --- Status strip (compact gold/HP/ammo info) ---
-        strip = layout.status_strip
         strip_clip = body_clip(strip)
         if not strip_clip.isEmpty():
             pad = 14.0
@@ -9168,28 +9203,33 @@ class PolarRMWindow(QOpenGLWidget):
             hp_ratio = context.current_health / max(1.0, float(context.max_health))
             ammo_ratio = context.current_ammo / max(1.0, float(context.ammo_capacity or context.current_ammo or 1))
             pending_cost = self.economy_bridge.latest.request.cost if self.economy_bridge.latest and self.economy_bridge.latest.status == "pending" else 0
-            # Gold
+            gold_tile, hp_tile, ammo_tile = status_tiles
             commands.text(
-                QRectF(strip.left() + pad, strip.top() + 2.0, 120.0, 18.0),
+                QRectF(gold_tile.left() + pad, gold_tile.top() + 7.0, gold_tile.width() - pad * 2.0, 20.0),
                 f"{context.gold} G", self.font("poppins_bold", 12.0 * scale), color("#ffd56a", category_alpha), clip=strip_clip,
             )
             commands.text(
-                QRectF(strip.left() + pad, strip.top() + 20.0, 160.0, 14.0),
+                QRectF(gold_tile.left() + pad, gold_tile.top() + 31.0, gold_tile.width() - pad * 2.0, 15.0),
                 f"累计 {context.total_gold} · 待扣 {pending_cost}", self.font("poppins_medium", 7.0 * scale), color("#9aafc0", 0.88 * category_alpha), clip=strip_clip,
             )
-            # HP + Ammo bars (right side of strip)
-            bar_w = min(140.0, strip.width() * 0.18)
-            bar_x = strip.right() - pad - bar_w * 2 - 16.0
-            for col, (label, ratio, accent_hex) in enumerate((
-                ("HP", hp_ratio, "#64dda1"),
-                ("AMMO", ammo_ratio, "#64baff"),
-            )):
-                bx = bar_x + col * (bar_w + 16.0)
+            for tile, (label, value, ratio, accent_hex) in zip(
+                (hp_tile, ammo_tile),
+                (
+                    ("HP", f"{context.current_health}/{context.max_health}", hp_ratio, "#64dda1"),
+                    ("AMMO", f"{context.current_ammo}/{context.ammo_capacity}", ammo_ratio, "#64baff"),
+                ),
+            ):
                 commands.text(
-                    QRectF(bx, strip.top() + 4.0, bar_w, 12.0),
+                    QRectF(tile.left() + pad, tile.top() + 8.0, tile.width() - pad * 2.0, 14.0),
                     label, self.font("poppins_bold", 6.6 * scale), color("#aebcc8", 0.82 * category_alpha), clip=strip_clip,
                 )
-                bar = QRectF(bx, strip.top() + 18.0, bar_w, 4.0)
+                commands.text(
+                    QRectF(tile.left() + pad, tile.top() + 7.0, tile.width() - pad * 2.0, 15.0),
+                    value, self.font("poppins_medium", 7.2 * scale), color("#ffffff", 0.90 * category_alpha),
+                    Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+                    strip_clip,
+                )
+                bar = QRectF(tile.left() + pad, tile.top() + 34.0, tile.width() - pad * 2.0, 4.0)
                 commands.rect(bar, 2.0, color("#ffffff", 0.08 * category_alpha), clip=strip_clip)
                 commands.rect(QRectF(bar.left(), bar.top(), bar.width() * max(0.0, min(1.0, ratio)), bar.height()), 2.0, color(accent_hex, category_alpha), clip=strip_clip)
 
@@ -9198,9 +9238,6 @@ class PolarRMWindow(QOpenGLWidget):
         tab_clip = body_clip(tab_bar)
         tab_alpha = layout.tab_alpha
         if not tab_clip.isEmpty() and tab_alpha > 0.01:
-            # Sliding indicator capsule
-            tab_count = max(1, len(categories))
-            tab_w = (tab_bar.width() - 8.0) / tab_count
             selected_category_index = float(categories.index(self.economy_category))
             animated_category_index = self.anim.value(
                 "economy.category.selection",
@@ -9210,30 +9247,26 @@ class PolarRMWindow(QOpenGLWidget):
                 initial=selected_category_index,
             )
             indicator = QRectF(
-                tab_bar.left() + 4.0 + animated_category_index * tab_w,
-                tab_bar.top() + 4.0,
-                tab_w,
-                tab_bar.height() - 8.0,
+                tab_rects[0].left() + animated_category_index * (tab_width + tab_gap) + 6.0,
+                tab_bar.top() + 6.0,
+                max(1.0, tab_width - 12.0),
+                tab_bar.height() - 12.0,
             )
             if indicator.intersects(tab_clip):
                 commands.rect(
                     indicator,
                     indicator.height() * 0.5,
-                    color("#ffffff", 0.13 * tab_alpha),
-                    color("#ffffff", 0.18 * tab_alpha),
-                    0.8,
+                    color("#0088ff", 0.84 * tab_alpha),
                     clip=tab_clip,
                 )
-            # Tab labels
-            for index, key in enumerate(categories):
-                rect = QRectF(tab_bar.left() + 4.0 + index * tab_w, tab_bar.top() + 4.0, tab_w, tab_bar.height() - 8.0)
+            for rect, key in zip(tab_rects, categories):
                 if not rect.intersects(tab_clip):
                     continue
                 active = key == self.economy_category
                 commands.text(
                     rect,
                     CATEGORY_TITLES.get(key, key), self.font("poppins_bold", 9.0 * scale),
-                    color("#ffffff", tab_alpha) if active else color("#c8d6e4", 0.72 * tab_alpha),
+                    color("#ffffff", tab_alpha) if active else color("#d6e2ec", 0.80 * tab_alpha),
                     Qt.AlignmentFlag.AlignCenter,
                     tab_clip,
                 )
@@ -9244,15 +9277,17 @@ class PolarRMWindow(QOpenGLWidget):
         offers_pane = layout.offers_pane.translated(0.0, layout.offers_offset)
         offers_clip = body_clip(offers_pane)
         list_pad = 14.0
+        viewport = layout.offers_viewport.translated(0.0, layout.offers_offset)
+        viewport_clip = body_clip(viewport)
+        card_h = 68.0
+        card_gap = 8.0
+        card_w = min(520.0, viewport.width())
+        card_left = viewport.center().x() - card_w * 0.5
         commands.text(
-            QRectF(offers_pane.left() + list_pad, offers_pane.top() + 12.0, offers_pane.width() - list_pad * 2, 24.0),
+            QRectF(card_left, offers_pane.top() + 12.0, card_w, 24.0),
             f"可选操作 · {CATEGORY_TITLES.get(self.economy_category, self.economy_category)}",
             self.font("poppins_bold", 10.5 * scale), color("#ffffff", offers_alpha), clip=offers_clip,
         )
-        viewport = layout.offers_viewport.translated(0.0, layout.offers_offset)
-        viewport_clip = body_clip(viewport)
-        card_h = 60.0
-        card_gap = 8.0
         self.economy_offers_scroll.set_bounds(max(0.0, len(offers) * (card_h + card_gap) - card_gap - viewport.height()))
         scroll = self.economy_offers_scroll.position
         if selected is not None:
@@ -9268,9 +9303,9 @@ class PolarRMWindow(QOpenGLWidget):
                 initial=float(selected_offer_index),
             )
             selection_rect = QRectF(
-                viewport.left(),
+                card_left,
                 viewport.top() + animated_offer_index * (card_h + card_gap) - scroll,
-                viewport.width(),
+                card_w,
                 card_h,
             )
             commands.rect(
@@ -9288,9 +9323,15 @@ class PolarRMWindow(QOpenGLWidget):
                 clip=viewport_clip,
             )
         for index, offer in enumerate(offers):
-            rect = QRectF(viewport.left(), viewport.top() + index * (card_h + card_gap) - scroll, viewport.width(), card_h)
+            rect = QRectF(card_left, viewport.top() + index * (card_h + card_gap) - scroll, card_w, card_h)
             if not rect.intersects(viewport_clip):
                 continue
+            add_control_center_tile(
+                rect,
+                offers_alpha,
+                material=LensMaterial.REGULAR,
+                clip=viewport_clip,
+            )
             active = selected is not None and offer.key == selected.key
             hovered = rect.contains(self.hover_point)
             hover = self.anim.value(
@@ -9331,39 +9372,51 @@ class PolarRMWindow(QOpenGLWidget):
         detail_vp = layout.detail_viewport.translated(0.0, layout.detail_offset)
         detail_vp_clip = body_clip(detail_vp)
         # Compute detail content height for scroll bounds
-        detail_content_h = 136.0  # selected info block
+        detail_content_h = 142.0  # selected info module
         history = list(reversed(self.economy_bridge.history[-3:]))
-        detail_content_h += 22.0 + max(1, len(history)) * 34.0 if history else 40.0
+        detail_content_h += 24.0 + max(1, len(history)) * 52.0 if history else 52.0
         self.economy_detail_scroll.set_bounds(max(0.0, detail_content_h - detail_vp.height()))
         detail_scroll = self.economy_detail_scroll.position
+        summary_rect = QRectF(
+            detail_vp.left(),
+            detail_vp.top() - detail_scroll,
+            detail_vp.width(),
+            116.0,
+        )
         if selected is not None:
+            add_control_center_tile(
+                summary_rect,
+                detail_alpha,
+                material=LensMaterial.REGULAR,
+                clip=detail_vp_clip,
+            )
             commands.text(
-                QRectF(detail.left() + detail_pad, detail_vp.top() + 0.0 - detail_scroll, detail.width() - detail_pad * 2, 26.0),
+                QRectF(summary_rect.left() + detail_pad, summary_rect.top() + 8.0, summary_rect.width() - detail_pad * 2, 26.0),
                 selected.title, self.font("poppins_bold", 13.5 * scale), color("#ffffff", detail_alpha),
                 clip=detail_vp_clip,
             )
             tag = "预计价格" if selected.estimated else ("模拟请求" if context.mock_mode else "裁判系统")
             commands.text(
-                QRectF(detail.left() + detail_pad, detail_vp.top() + 28.0 - detail_scroll, detail.width() - detail_pad * 2, 20.0),
+                QRectF(summary_rect.left() + detail_pad, summary_rect.top() + 36.0, summary_rect.width() - detail_pad * 2, 20.0),
                 f"{selected.unit}  ·  {selected.cost} 金币  ·  {tag}",
                 self.font("poppins_medium", 9.0 * scale), color("#ffd56a", detail_alpha),
                 clip=detail_vp_clip,
             )
             commands.text(
-                QRectF(detail.left() + detail_pad, detail_vp.top() + 52.0 - detail_scroll, detail.width() - detail_pad * 2, 36.0),
+                QRectF(summary_rect.left() + detail_pad, summary_rect.top() + 60.0, summary_rect.width() - detail_pad * 2, 28.0),
                 selected.description, self.font("poppins_medium", 8.4 * scale), color("#d0dce8", detail_alpha),
                 clip=detail_vp_clip,
             )
             state_text = selected.reason if not selected.enabled else "可以购买"
             state_color = color("#ffb06f", detail_alpha) if not selected.enabled else color("#70e0ae", detail_alpha)
             commands.text(
-                QRectF(detail.left() + detail_pad, detail_vp.top() + 92.0 - detail_scroll, detail.width() - detail_pad * 2, 20.0),
+                QRectF(summary_rect.left() + detail_pad, summary_rect.top() + 90.0, summary_rect.width() - detail_pad * 2, 18.0),
                 state_text, self.font("poppins_bold", 9.5 * scale), state_color,
                 clip=detail_vp_clip,
             )
 
         # Transaction history
-        history_top = detail_vp.top() + 122.0 - detail_scroll
+        history_top = detail_vp.top() + 128.0 - detail_scroll
         button = layout.action_button.translated(0.0, layout.detail_offset)
         if history_top + 36.0 < detail_vp_clip.bottom():
             commands.text(
@@ -9372,15 +9425,35 @@ class PolarRMWindow(QOpenGLWidget):
                 clip=detail_vp_clip,
             )
             if not history:
-                commands.text(
-                    QRectF(detail.left() + detail_pad, history_top + 22.0, detail.width() - detail_pad * 2, 16.0),
-                    "暂无记录", self.font("poppins_medium", 8.0 * scale), color("#7a8c9c", detail_alpha),
+                empty_rect = QRectF(
+                    detail_vp.left(),
+                    history_top + 22.0,
+                    detail_vp.width(),
+                    44.0,
+                )
+                add_control_center_tile(
+                    empty_rect,
+                    detail_alpha,
+                    material=LensMaterial.REGULAR,
                     clip=detail_vp_clip,
                 )
+                commands.text(
+                    empty_rect.adjusted(detail_pad, 0.0, -detail_pad, 0.0),
+                    "暂无记录", self.font("poppins_medium", 8.0 * scale), color("#7a8c9c", detail_alpha),
+                    Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                    detail_vp_clip,
+                )
             for index, transaction in enumerate(history):
-                y = history_top + 22.0 + index * 34.0
-                if y + 30.0 > detail_vp_clip.bottom():
+                y = history_top + 22.0 + index * 52.0
+                if y + 44.0 > detail_vp_clip.bottom():
                     break
+                history_rect = QRectF(detail_vp.left(), y, detail_vp.width(), 44.0)
+                add_control_center_tile(
+                    history_rect,
+                    detail_alpha,
+                    material=LensMaterial.REGULAR,
+                    clip=detail_vp_clip,
+                )
                 label = TRANSACTION_LABELS.get(transaction.status, transaction.status)
                 status_color = (
                     color("#70e0ae", detail_alpha) if transaction.status == "succeeded"
@@ -9388,13 +9461,13 @@ class PolarRMWindow(QOpenGLWidget):
                     else color("#72bfff", detail_alpha)
                 )
                 commands.text(
-                    QRectF(detail.left() + detail_pad, y, detail.width() - detail_pad * 2, 15.0),
+                    QRectF(history_rect.left() + detail_pad, y + 6.0, history_rect.width() - detail_pad * 2, 15.0),
                     f"{label} · {transaction.offer.short_title}",
                     self.font("poppins_bold", 8.2 * scale), status_color,
                     clip=detail_vp_clip,
                 )
                 commands.text(
-                    QRectF(detail.left() + detail_pad, y + 15.0, detail.width() - detail_pad * 2, 13.0),
+                    QRectF(history_rect.left() + detail_pad, y + 22.0, history_rect.width() - detail_pad * 2, 13.0),
                     transaction.message, self.font("poppins_medium", 7.4 * scale), color("#a8bac8", 0.90 * detail_alpha),
                     clip=detail_vp_clip,
                 )
@@ -9447,24 +9520,15 @@ class PolarRMWindow(QOpenGLWidget):
         if button_draw.isEmpty():
             return commands
         btn_r = button_draw.height() * 0.5
-        self.gpu_compositor.add_glass(
-            button_draw,
-            btn_r,
-            strength=1.0,
-            surface="clear",
-            opacity=detail_alpha,
-            material=LensMaterial.STRONG,
-            refraction_height_px=12.0,
-            refraction_amount_px=-24.0,
-            chromatic_aberration=0.0,
-            depth_effect=0.0,
-            frost_amount=0.0,
-            vibrancy_amount=detail_alpha,
-        )
+        if button_enabled:
+            fill_alpha = (0.78 + 0.10 * hover - 0.08 * press) * detail_alpha
+            button_fill = color("#0088ff", fill_alpha)
+        else:
+            button_fill = color("#ffffff", 0.14 * detail_alpha)
         commands.rect(
             button_draw,
             btn_r,
-            color("#000000", 0.05 * detail_alpha),
+            button_fill,
             clip=detail_clip,
         )
         if selected is not None and selected.confirmation == "hold" and hold_progress > 0.0:

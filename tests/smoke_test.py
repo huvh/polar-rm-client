@@ -1591,6 +1591,13 @@ def test_economy_workspace_top_anchor_and_reversal() -> None:
     assert compact_open.grab_handle.width() == 36.0
     assert compact_open.compact is True
     assert desktop_open.compact is False
+    # Control Center modules use the 56dp inner-control height. Keeping these
+    # surfaces at that height prevents a 24/48dp lens from collapsing into a
+    # long horizontal smear at compact resolutions.
+    assert compact_open.status_strip.height() == 56.0
+    assert compact_open.tab_bar.height() == 56.0
+    assert desktop_open.status_strip.height() == 56.0
+    assert desktop_open.tab_bar.height() == 56.0
     for pane in (
         compact_open.offers_pane,
         compact_open.detail_pane,
@@ -1633,6 +1640,8 @@ def test_economy_workspace_top_anchor_and_reversal() -> None:
 
 
 def test_control_center_backdrop_treatment_only_invalidates_blur_when_needed() -> None:
+    from PySide6.QtCore import QRectF
+
     from rm_client.ui.gpu_frame_compositor import GpuFrameCompositor
 
     compositor = GpuFrameCompositor()
@@ -1643,6 +1652,30 @@ def test_control_center_backdrop_treatment_only_invalidates_blur_when_needed() -
         dim_alpha=0.4,
         include_overlay=True,
     )
+    full_rect = QRectF(20.0, 30.0, 152.0, 152.0)
+    reveal_clip = QRectF(20.0, 80.0, 152.0, 102.0)
+    compositor.add_glass(
+        full_rect,
+        34.0,
+        material="LensStrong",
+        refraction_height_px=24.0,
+        refraction_amount_px=-48.0,
+        chromatic_aberration=0.0,
+        depth_effect=1.0,
+        frost_amount=0.0,
+        vibrancy_amount=1.0,
+        clip_rect=reveal_clip,
+    )
+    command = compositor._frame_glass_commands[-1]
+    # Reveal clipping must only become a scissor. Mutating the lens geometry
+    # changes its SDF and makes the rounded module visibly jump while opening.
+    assert command.rect == full_rect
+    assert command.clip_rect == reveal_clip
+    assert command.refraction_height_px == 24.0
+    assert command.refraction_amount_px == -48.0
+    assert command.chromatic_aberration == 0.0
+    assert command.depth_effect == 1.0
+    assert command.frost_amount == 0.0
     assert not compositor.set_backdrop_treatment(
         active=True,
         progress=0.8,
