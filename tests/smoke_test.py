@@ -1609,14 +1609,14 @@ def test_economy_workspace_top_anchor_and_reversal() -> None:
     for tick in range(1, 31):
         state.update(now=tick / 120.0)
     opening_progress = state.progress
-    assert 0.15 < opening_progress < 1.0
+    assert 0.15 < opening_progress <= 1.12
 
     # Reversing from the in-flight value preserves a continuous trajectory.
     state.set_target(0.0, duration=0.48)
     state.update(now=31 / 120.0)
     # A critically damped state may advance for a few display frames while it
     # dissipates opening velocity. It must remain bounded, then contract.
-    assert 0.0 <= state.progress <= 1.0
+    assert -0.02 <= state.progress <= 1.12
     for tick in range(32, 62):
         state.update(now=tick / 120.0)
     assert state.progress < opening_progress
@@ -1625,13 +1625,39 @@ def test_economy_workspace_top_anchor_and_reversal() -> None:
     assert state.progress == 0.0
     assert state.velocity == 0.0
 
-    # A dark live feed remains visibly behind the pull-down surface.  The
-    # source-style dim layer only protects copy over genuinely bright content.
-    assert adaptive_backdrop_dim(0.22, 1.0) == 0.0
-    assert adaptive_backdrop_dim(0.58, 1.0) == 0.0
-    assert 0.0 < adaptive_backdrop_dim(0.70, 1.0) < 0.35
-    assert adaptive_backdrop_dim(0.90, 1.0) == 0.35
+    # The reference Control Center applies one fixed 40% dim layer to the
+    # complete backdrop, independently of the scene luminance.
+    assert adaptive_backdrop_dim(0.22, 1.0) == 0.40
+    assert adaptive_backdrop_dim(0.90, 0.5) == 0.20
     assert adaptive_backdrop_dim(0.90, 0.0) == 0.0
+
+
+def test_control_center_backdrop_treatment_only_invalidates_blur_when_needed() -> None:
+    from rm_client.ui.gpu_frame_compositor import GpuFrameCompositor
+
+    compositor = GpuFrameCompositor()
+    assert compositor.set_backdrop_treatment(
+        active=True,
+        progress=0.1,
+        blur_radius_px=4.0,
+        dim_alpha=0.4,
+        include_overlay=True,
+    )
+    assert not compositor.set_backdrop_treatment(
+        active=True,
+        progress=0.8,
+        blur_radius_px=4.0,
+        dim_alpha=0.4,
+        include_overlay=True,
+    )
+    assert compositor._backdrop_treatment.progress == 0.8
+    assert compositor.set_backdrop_treatment(
+        active=True,
+        progress=0.8,
+        blur_radius_px=6.0,
+        dim_alpha=0.4,
+        include_overlay=True,
+    )
 
 
 def test_official_economy_status_decode() -> None:

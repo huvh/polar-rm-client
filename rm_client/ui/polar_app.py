@@ -94,7 +94,7 @@ from .clickgui_gpu import ClickGuiDrawList, ClickGuiGpuRenderer
 from .gpu_frame_compositor import GpuFrameCompositor, LensMaterial
 from .island_icon_gpu import IslandIconCommand, IslandIconGpuRenderer
 from .economy_glass import draw_economy_glass, draw_economy_glass_capsule, draw_economy_glass_well
-from .economy_workspace import EconomyIslandState, EconomyWorkspaceLayer, adaptive_backdrop_dim
+from .economy_workspace import EconomyIslandState, EconomyWorkspaceLayer
 from .liquid_glass import LiquidGlassRenderer
 from .layout import HudAnchorStack
 from .startup_gl import StartupGpuCompositor, TextureOrigin
@@ -911,6 +911,18 @@ class PolarRMWindow(QOpenGLWidget):
             economy_active = not startup_scene and (
                 self.economy_island.progress > 0.01 or self.economy_visible
             )
+            economy_reveal = (
+                max(0.0, min(1.0, self.economy_island.progress))
+                if economy_active
+                else 0.0
+            )
+            treatment_changed = self.gpu_compositor.set_backdrop_treatment(
+                active=economy_active,
+                progress=economy_reveal,
+                blur_radius_px=4.0,
+                dim_alpha=0.40,
+                include_overlay=True,
+            )
             control_changed = self.paint_gpu_control_backdrop(
                 functions,
                 width,
@@ -919,10 +931,14 @@ class PolarRMWindow(QOpenGLWidget):
                 startup_scene=startup_scene,
                 economy_active=economy_active,
             )
-            # Control Center style: the economy panel is a translucent glass
-            # overlay, NOT a separate scene.  Vision/ESP stays visible beneath
-            # the panel and is blurred by its lens naturally.
-            native_vision_owner = self.paint_gpu_vision_layer(functions, width, height, ratio)
+            # The host HUD remains visible in the treated backdrop, while its
+            # high-frequency vision layer is suppressed so it cannot punch
+            # crisply through the Control Center surface.
+            if economy_active:
+                self.gpu_compositor.clear_vision_layer(functions)
+                native_vision_owner = False
+            else:
+                native_vision_owner = self.paint_gpu_vision_layer(functions, width, height, ratio)
 
             if startup_scene:
                 transition_active = (
@@ -1069,10 +1085,18 @@ class PolarRMWindow(QOpenGLWidget):
 
             if not self.gpu_compositor.prepare_blur(
                 functions,
-                background_changed=self._gpu_background_changed or control_changed,
+                background_changed=(
+                    self._gpu_background_changed
+                    or control_changed
+                    or treatment_changed
+                    or rebuild_hud_static
+                ),
             ):
                 return False
-            if not self.gpu_compositor.render_glass(functions):
+            if not self.gpu_compositor.render_glass(
+                functions,
+                include_static=not economy_active,
+            ):
                 return False
             return self.gpu_compositor.present(functions, self.defaultFramebufferObject())
         except Exception as exc:
@@ -1100,34 +1124,11 @@ class PolarRMWindow(QOpenGLWidget):
     ) -> bool:
         """绘制位于镜片下方的控件轨道，并返回本次是否更新。"""
         if economy_active:
-            selected = self.economy_selected_offer()
-            latest = self.economy_bridge.latest
-            context = EconomyContext.from_state(self.state)
-            scene_luminance = self._vision_scene_luminance
-            if scene_luminance <= 0.0:
-                scene_luminance = float(getattr(self.state, "vision_scene_luminance", 0.0))
-            # Camera luminance varies with every source frame.  A coarse bucket
-            # preserves the iOS-like adaptive contrast without invalidating the
-            # shared control/blur textures during ordinary video noise.
-            dim_bucket = round(adaptive_backdrop_dim(scene_luminance, 1.0) * 20.0) / 20.0
             key = (
                 "economy",
                 width,
                 height,
                 round(ratio, 3),
-                self.economy_category,
-                selected.key if selected is not None else "",
-                context.gold,
-                context.total_gold,
-                context.current_health,
-                context.max_health,
-                context.current_ammo,
-                context.ammo_capacity,
-                int(getattr(self.state, "economy_status_revision", 0)),
-                latest.status if latest is not None else "",
-                latest.request.offer.key if latest is not None else "",
-                round(self.economy_island.progress, 2),
-                dim_bucket,
             )
         else:
             key = (
@@ -1146,57 +1147,11 @@ class PolarRMWindow(QOpenGLWidget):
         device.setDevicePixelRatio(ratio)
         self.gpu_compositor.clear_current(functions, transparent=True)
         if economy_active:
-            # The control-center material dims the backdrop *before* its lens
-            # samples it.  The source demo uses a fixed dim layer because its
-            # backdrop is white; a live camera is often already dark, so only
-            # bright scenes receive a bounded adaptive dim.
-            painter = QPainter(device)
-            painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-            layout = self.economy_workspace_layer.layout(
-                width,
-                height,
-                self.economy_island.progress,
-            )
-            context = EconomyContext.from_state(self.state)
-            painter.setPen(Qt.PenStyle.NoPen)
-            scene_luminance = self._vision_scene_luminance
-            if scene_luminance <= 0.0:
-                scene_luminance = float(getattr(self.state, "vision_scene_luminance", 0.0))
-            dim_alpha = adaptive_backdrop_dim(scene_luminance, layout.body_progress)
-            if dim_alpha > 0.001:
-                dim = color("#000000", dim_alpha)
-                painter.setBrush(dim)
-                # Keep one coherent backdrop beneath both the desktop and the
-                # lens.  Punching a hole around the panel made the surrounding
-                # camera look like an unrelated dark modal layer.
-                painter.drawRect(QRectF(0.0, 0.0, float(width), float(height)))
-            if layout.body_progress >= 0.22:
-                gold_ratio = context.gold / max(1.0, float(max(context.total_gold, context.gold)))
-                gold_track = QRectF(
-                    layout.status_strip.left() + 14.0,
-                    layout.status_strip.bottom() - 8.0,
-                    max(1.0, layout.status_strip.width() * 0.22),
-                    4.0,
-                ).intersected(layout.body_clip)
-                if not gold_track.isEmpty():
-                    painter.setBrush(with_alpha(color("#ffd56a"), 0.25))
-                    painter.drawRoundedRect(
-                        QRectF(gold_track.left(), gold_track.top(), gold_track.width() * gold_ratio, gold_track.height()),
-                        2.5,
-                        2.5,
-                    )
-                selected = self.economy_selected_offer()
-                if selected is not None:
-                    action_track = QRectF(
-                        layout.action_button.left() + 14.0,
-                        layout.action_button.center().y() - 2.0,
-                        max(1.0, layout.action_button.width() - 28.0),
-                        4.0,
-                    ).intersected(layout.body_clip)
-                    if not action_track.isEmpty():
-                        painter.setBrush(with_alpha(color("#5ce7d8"), 0.30))
-                        painter.drawRoundedRect(action_track, 2.0, 2.0)
-            painter.end()
+            # The reference Control Center applies dim and blur to the complete
+            # captured backdrop in the compositor. This layer intentionally
+            # stays transparent; rebuilding a full-screen QPainter mask on
+            # every spring frame caused both pulsing and avoidable stalls.
+            pass
         elif startup_scene and self.startup_step in {"scenario", "match"}:
             painter = QPainter(device)
             painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
@@ -9079,39 +9034,51 @@ class PolarRMWindow(QOpenGLWidget):
         offers_alpha = layout.offers_alpha
         detail_alpha = layout.detail_alpha
         panel = layout.panel
-        root_radius = layout.root_radius
+        def add_control_center_tile(
+            rect: QRectF,
+            opacity: float,
+            *,
+            material: LensMaterial = LensMaterial.STRONG,
+            clip: QRectF | None = None,
+        ) -> QRectF:
+            tile = QRectF(rect)
+            if clip is not None:
+                tile = tile.intersected(clip)
+            alpha = max(0.0, min(1.0, float(opacity)))
+            if tile.isEmpty() or alpha <= 0.01:
+                return QRectF()
+            radius = min(34.0, tile.height() * 0.5)
+            self.gpu_compositor.add_glass(
+                tile,
+                radius,
+                strength=1.0,
+                surface="clear",
+                opacity=alpha,
+                material=material,
+                refraction_height_px=max(1.0, 24.0 * alpha),
+                refraction_amount_px=-max(1.0, 48.0 * alpha),
+                chromatic_aberration=0.0,
+                depth_effect=1.0,
+                frost_amount=0.0,
+                vibrancy_amount=alpha,
+            )
+            # ControlCenterContent uses a five-percent black container color.
+            commands.rect(tile, radius, color("#000000", 0.05 * alpha))
+            return tile
 
-        # --- Root lens: one continuous pull-down material. ---
-        # The local control-center sample uses a very light container color,
-        # progressively stronger lens depth, and a dimmed scene *outside* the
-        # surface.  The content below is not a stack of dark panes.
-        self.gpu_compositor.add_glass(
-            panel, root_radius,
-            strength=1.0,
-            surface="clear",
-            hover=0.0,
-            opacity=header_alpha,
-            material=LensMaterial.STRONG,
-            # A workspace is a control-center surface, not a small chip.
-            # These are the source control-center lens dimensions in logical
-            # pixels, faded in with the pull-down instead of popping on at
-            # the final frame.
-            refraction_height_px=max(1.0, 24.0 * layout.body_progress),
-            refraction_amount_px=-max(1.0, 48.0 * layout.body_progress),
-            # The Android control-center surface uses vibrancy + a depth
-            # lens. It does not add chromatic edges or a frosted modal fill.
-            chromatic_aberration=0.0,
-            depth_effect=1.0,
-            # ControlCenterContent applies a 4dp backdrop blur while the
-            # sheet is expanded.  This is deliberately shallow: it softens
-            # live camera detail without turning the root into a frosted card.
-            frost_amount=0.24 * layout.body_progress,
-            vibrancy_amount=layout.body_progress,
+        # Control Center is a group of independent glass modules over one
+        # treated backdrop. It never places one giant frosted card behind all
+        # controls.
+        header_tile = QRectF(
+            panel.left(),
+            panel.top(),
+            panel.width(),
+            min(panel.height(), 84.0),
         )
-        commands.rect(
-            panel,
-            root_radius,
-            color("#000000", 0.05 * layout.body_progress),
+        add_control_center_tile(
+            header_tile,
+            header_alpha,
+            material=LensMaterial.STRONG,
         )
 
         # --- Island summary: visible before the body begins to reveal. ---
@@ -9141,27 +9108,19 @@ class PolarRMWindow(QOpenGLWidget):
 
         # --- Gold chip ---
         gold_chip = layout.link_chip
-        self.gpu_compositor.add_glass(
+        commands.rect(
             gold_chip,
             gold_chip.height() * 0.5,
-            strength=0.82,
-            surface="clear",
-            opacity=header_alpha,
-            material=LensMaterial.ISLAND,
-            frost_amount=0.0,
+            color("#ffffff", 0.08 * header_alpha),
         )
         commands.text(gold_chip, f"{context.gold} G", self.font("poppins_bold", 10.0 * scale), color("#ffd56a", header_alpha), Qt.AlignmentFlag.AlignCenter)
 
         # --- Close button (circle) ---
         close = layout.close_button
-        self.gpu_compositor.add_glass(
+        commands.rect(
             close,
             close.height() * 0.5,
-            strength=0.92,
-            surface="clear",
-            opacity=header_alpha,
-            material=LensMaterial.STRONG,
-            frost_amount=0.0,
+            color("#ffffff", 0.10 * header_alpha),
         )
         commands.text(close, "×", self.font("poppins_bold", 15.0 * scale), color("#ffffff", header_alpha), Qt.AlignmentFlag.AlignCenter)
         if header_alpha >= 0.38:
@@ -9173,26 +9132,32 @@ class PolarRMWindow(QOpenGLWidget):
         def body_clip(rect: QRectF) -> QRectF:
             return QRectF(rect).intersected(layout.body_clip)
 
-        # The work area remains one material. A single horizontal divider
-        # separates offers from detail in compact mode.
-        divider_color = color("#ffffff", 0.14 * content_alpha)
-        inner_clip = layout.body_clip
-        if layout.compact:
-            split_y = layout.offers_pane.bottom() + 6.0
-            commands.rect(
-                QRectF(layout.offers_pane.left(), split_y, layout.offers_pane.width(), 1.0),
-                0.0,
-                divider_color,
-                clip=inner_clip,
-            )
-        else:
-            split_x = layout.offers_pane.right() + 6.0
-            commands.rect(
-                QRectF(split_x, inner_clip.top() + 4.0, 1.0, max(0.0, inner_clip.height() - 8.0)),
-                0.0,
-                divider_color,
-                clip=inner_clip,
-            )
+        offers_tile = layout.offers_pane.translated(0.0, layout.offers_offset)
+        detail_tile = layout.detail_pane.translated(0.0, layout.detail_offset)
+        add_control_center_tile(
+            layout.status_strip,
+            category_alpha,
+            material=LensMaterial.REGULAR,
+            clip=layout.body_clip,
+        )
+        add_control_center_tile(
+            offers_tile,
+            offers_alpha,
+            material=LensMaterial.REGULAR,
+            clip=layout.body_clip,
+        )
+        add_control_center_tile(
+            detail_tile,
+            detail_alpha,
+            material=LensMaterial.REGULAR,
+            clip=layout.body_clip,
+        )
+        add_control_center_tile(
+            layout.tab_bar,
+            layout.tab_alpha,
+            material=LensMaterial.STRONG,
+            clip=layout.body_clip,
+        )
 
         # --- Status strip (compact gold/HP/ammo info) ---
         strip = layout.status_strip
@@ -9233,18 +9198,6 @@ class PolarRMWindow(QOpenGLWidget):
         tab_clip = body_clip(tab_bar)
         tab_alpha = layout.tab_alpha
         if not tab_clip.isEmpty() and tab_alpha > 0.01:
-            # Glass container for the tab bar
-            if self.gpu_compositor.available:
-                self.gpu_compositor.add_glass(
-                    tab_bar.intersected(tab_clip),
-                    tab_bar.height() * 0.5,
-                    strength=0.82,
-                    surface="clear",
-                    opacity=tab_alpha,
-                    material=LensMaterial.STRONG,
-                    frost_amount=0.12,
-                    vibrancy_amount=tab_alpha,
-                )
             # Sliding indicator capsule
             tab_count = max(1, len(categories))
             tab_w = (tab_bar.width() - 8.0) / tab_count
@@ -9263,19 +9216,14 @@ class PolarRMWindow(QOpenGLWidget):
                 tab_bar.height() - 8.0,
             )
             if indicator.intersects(tab_clip):
-                self.gpu_compositor.add_glass(
-                    indicator.intersected(tab_clip),
+                commands.rect(
+                    indicator,
                     indicator.height() * 0.5,
-                    strength=0.92,
-                    surface="clear",
-                    opacity=tab_alpha,
-                    material=LensMaterial.STRONG,
-                    refraction_height_px=10.0,
-                    refraction_amount_px=-14.0,
-                    chromatic_aberration=0.18,
-                    frost_amount=0.0,
+                    color("#ffffff", 0.13 * tab_alpha),
+                    color("#ffffff", 0.18 * tab_alpha),
+                    0.8,
+                    clip=tab_clip,
                 )
-                commands.rect(indicator, indicator.height() * 0.5, color("#ffffff", 0.10 * tab_alpha), clip=tab_clip)
             # Tab labels
             for index, key in enumerate(categories):
                 rect = QRectF(tab_bar.left() + 4.0 + index * tab_w, tab_bar.top() + 4.0, tab_w, tab_bar.height() - 8.0)
@@ -9319,22 +9267,26 @@ class PolarRMWindow(QOpenGLWidget):
                 Easings.ease_out_expo,
                 initial=float(selected_offer_index),
             )
-            selected_offer_rect = QRectF(
+            selection_rect = QRectF(
                 viewport.left(),
                 viewport.top() + animated_offer_index * (card_h + card_gap) - scroll,
                 viewport.width(),
                 card_h,
             )
-            if selected_offer_rect.intersects(viewport_clip) and not viewport_clip.isEmpty():
-                self.gpu_compositor.add_glass(
-                    selected_offer_rect.intersected(viewport_clip),
-                    selected_offer_rect.height() * 0.5,
-                    strength=0.80,
-                    surface="sub",
-                    opacity=offers_alpha,
-                    material=LensMaterial.REGULAR,
-                    frost_amount=0.10,
-                )
+            commands.rect(
+                selection_rect,
+                min(18.0, selection_rect.height() * 0.5),
+                color("#ffffff", 0.10 * offers_alpha),
+                color("#ffffff", 0.16 * offers_alpha),
+                0.8,
+                clip=viewport_clip,
+            )
+            commands.rect(
+                QRectF(selection_rect.left() + 5.0, selection_rect.top() + 12.0, 3.0, selection_rect.height() - 24.0),
+                1.5,
+                color("#64e0c1", 0.94 * offers_alpha),
+                clip=viewport_clip,
+            )
         for index, offer in enumerate(offers):
             rect = QRectF(viewport.left(), viewport.top() + index * (card_h + card_gap) - scroll, viewport.width(), card_h)
             if not rect.intersects(viewport_clip):
@@ -9498,11 +9450,22 @@ class PolarRMWindow(QOpenGLWidget):
         self.gpu_compositor.add_glass(
             button_draw,
             btn_r,
-            strength=0.96 if button_enabled else 0.60,
-            surface="clear" if button_enabled else "sub",
+            strength=1.0,
+            surface="clear",
             opacity=detail_alpha,
-            material=LensMaterial.STRONG if button_enabled else LensMaterial.REGULAR,
-            frost_amount=0.0 if button_enabled else 0.10,
+            material=LensMaterial.STRONG,
+            refraction_height_px=12.0,
+            refraction_amount_px=-24.0,
+            chromatic_aberration=0.0,
+            depth_effect=0.0,
+            frost_amount=0.0,
+            vibrancy_amount=detail_alpha,
+        )
+        commands.rect(
+            button_draw,
+            btn_r,
+            color("#000000", 0.05 * detail_alpha),
+            clip=detail_clip,
         )
         if selected is not None and selected.confirmation == "hold" and hold_progress > 0.0:
             progress_track = QRectF(

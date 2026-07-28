@@ -17,18 +17,9 @@ def _smoothstep(value: float) -> float:
 
 
 def adaptive_backdrop_dim(scene_luminance: float, progress: float) -> float:
-    """Return the source-style dim amount without burying a dark camera feed.
-
-    The Control Center reference uses a 40% black dim over a bright demo
-    backdrop.  A fixed mask makes a live, already-dark camera feed disappear,
-    so this keeps the same maximum-layer behavior only once the source is
-    genuinely bright.  The result remains part of the combined backdrop and
-    therefore participates in the root lens instead of becoming a modal veil.
-    """
-    brightness = _clamp(scene_luminance, 0.0, 1.0)
-    reveal = _clamp(progress, 0.0, 1.0)
-    bright_scene = _smoothstep((brightness - 0.58) / 0.25)
-    return 0.35 * bright_scene * reveal
+    """Return the fixed dim layer used by the reference Control Center."""
+    del scene_luminance
+    return 0.40 * _clamp(progress, 0.0, 1.0)
 
 
 def _lerp_rect(start: QRectF, end: QRectF, progress: float) -> QRectF:
@@ -59,11 +50,7 @@ def _layer_transform_rect(
 
 
 class EconomyIslandState:
-    """Reversible critically damped island state driven by render time.
-
-    Changing the target never resets progress or velocity. This lets B/Escape
-    reverse an in-flight open/close transition without a visible jump.
-    """
+    """Reversible spring matching the reference Control Center motion."""
 
     def __init__(self) -> None:
         self.progress = 0.0
@@ -92,24 +79,21 @@ class EconomyIslandState:
         if dt <= 0.0:
             return self.progress
 
-        # Derive spring omega from the configured duration so that
-        # open/close timing is actually controlled by set_target(duration=...).
-        # Critically damped spring reaches ~98% at t ≈ 4/omega.
-        if self.target > self.progress:
-            omega = 4.5 / max(0.18, self.duration)
-        else:
-            omega = 5.5 / max(0.18, self.duration)
+        opening = self.target > self.progress
+        reference_duration = 0.62 if opening else 0.48
+        time_scale = reference_duration / max(0.18, self.duration)
+        stiffness = 300.0 * time_scale * time_scale
+        damping_ratio = 0.5 if opening else 1.0
+        damping = 2.0 * damping_ratio * math.sqrt(stiffness)
         substeps = max(1, int(math.ceil(dt / (1.0 / 180.0))))
         step = dt / substeps
-        stiffness = omega * omega
-        damping = 2.0 * omega
         for _ in range(substeps):
             acceleration = (self.target - self.progress) * stiffness - self.velocity * damping
             self.velocity += acceleration * step
             self.progress += self.velocity * step
-            self.progress = _clamp(self.progress, 0.0, 1.0)
+            self.progress = _clamp(self.progress, -0.02, 1.12)
 
-        if abs(self.target - self.progress) < 0.0005 and abs(self.velocity) < 0.004:
+        if abs(self.target - self.progress) < 0.0005 and abs(self.velocity) < 0.008:
             self.progress = self.target
             self.velocity = 0.0
         return self.progress
@@ -157,7 +141,8 @@ class EconomyWorkspaceLayer:
     def layout(self, width: int, height: int, progress: float) -> EconomyWorkspaceLayout:
         width_f = max(1.0, float(width))
         height_f = max(1.0, float(height))
-        progress = _clamp(progress, 0.0, 1.0)
+        raw_progress = _clamp(progress, -0.02, 1.12)
+        progress = _clamp(raw_progress, 0.0, 1.0)
         compact = width_f < 1600.0 or height_f < 850.0
 
         # The workspace follows the same hierarchy as a system pull-down:
@@ -240,7 +225,7 @@ class EconomyWorkspaceLayer:
         link_chip = QRectF(close_button.left() - 122.0, header.top() + 6.0, 108.0, 30.0)
 
         inner = target.adjusted(18.0, header_h + 8.0, -18.0, -18.0)
-        gap = 12.0
+        gap = 16.0
 
         # Bottom tab bar replaces the old left category pane (LiquidBottomTabs style).
         tab_h = 48.0 if compact else 56.0
@@ -293,15 +278,12 @@ class EconomyWorkspaceLayer:
         )
         body_clip = revealed_body.intersected(panel_body)
 
-        # Match the source control-center GraphicsLayer: while the sheet
-        # enters, its whole hierarchy starts 48dp above the resting position
-        # and has a subtle 0.9x vertical / 1.11x horizontal squeeze.  Applying
-        # this once to the root and every child keeps the grab handle, clips,
-        # hit targets, and content on the same continuous material instead of
-        # making the panel grow while inner controls snap independently.
-        safe_progress = progress
-        layer_scale = 1.0 - 0.10 * (1.0 - safe_progress)
-        layer_scale_x = 1.0 / max(0.001, layer_scale)
+        # ControlCenterContent starts 48dp above its resting position. Shape
+        # deformation happens only while the opening spring overshoots.
+        safe_progress = min(raw_progress, 1.0)
+        overshoot = max(0.0, raw_progress - 1.0)
+        layer_scale = 1.0 + 0.10 * overshoot
+        layer_scale_x = 1.0 / layer_scale
         layer_scale_y = layer_scale
         layer_translate_y = -48.0 * (1.0 - safe_progress)
         pivot_x = panel.center().x()
