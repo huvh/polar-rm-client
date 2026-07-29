@@ -66,11 +66,16 @@ class EconomyIslandState:
         *,
         now: float | None = None,
     ) -> None:
-        self.target = 1.0 if float(target) >= 0.5 else 0.0
+        next_target = 1.0 if float(target) >= 0.5 else 0.0
+        target_changed = next_target != self.target
+        self.target = next_target
         if duration is not None:
             self.duration = max(0.18, float(duration))
-        if now is not None and self._last_time <= 0.0:
-            self._last_time = float(now)
+        if target_changed:
+            # Retarget from the current position and velocity, but start the
+            # new leg at the input event. A stale timer delta must not consume
+            # the first visible frame after reopening.
+            self._last_time = time.perf_counter() if now is None else float(now)
 
     def update(self, *, now: float | None = None) -> float:
         timestamp = time.perf_counter() if now is None else float(now)

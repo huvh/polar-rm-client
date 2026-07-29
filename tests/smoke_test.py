@@ -1619,7 +1619,7 @@ def test_economy_workspace_top_anchor_and_reversal() -> None:
     assert 0.15 < opening_progress <= 1.12
 
     # Reversing from the in-flight value preserves a continuous trajectory.
-    state.set_target(0.0, duration=0.48)
+    state.set_target(0.0, duration=0.48, now=30 / 120.0)
     state.update(now=31 / 120.0)
     # A critically damped state may advance for a few display frames while it
     # dissipates opening velocity. It must remain bounded, then contract.
@@ -1630,6 +1630,16 @@ def test_economy_workspace_top_anchor_and_reversal() -> None:
     for tick in range(62, 200):
         state.update(now=tick / 120.0)
     assert state.progress == 0.0
+    assert state.velocity == 0.0
+
+    # A second open at the same viewport must rebase the spring clock and
+    # advance without relying on a resize to invalidate renderer state.
+    state.set_target(1.0, duration=0.62, now=200 / 120.0)
+    state.update(now=201 / 120.0)
+    assert state.progress > 0.0
+    for tick in range(202, 360):
+        state.update(now=tick / 120.0)
+    assert state.progress == 1.0
     assert state.velocity == 0.0
 
     # The reference Control Center applies one fixed 40% dim layer to the

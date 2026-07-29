@@ -365,6 +365,7 @@ class PolarRMWindow(QOpenGLWidget):
         self._gpu_blur_source_key: tuple[object, ...] | None = None
         self._gpu_static_ui_key: tuple[object, ...] | None = None
         self._startup_static_page_key: tuple[object, ...] | None = None
+        self._economy_scene_epoch = 0
         self._gpu_background_changed = True
         self.clickgui_gpu_layout_ms = 0.0
         self.startup_cache = StartupLayerCache()
@@ -544,8 +545,9 @@ class PolarRMWindow(QOpenGLWidget):
         self.economy_island.set_target(
             1.0 if self.economy_visible else 0.0,
             self.anim_duration(0.62 if self.economy_visible else 0.48),
+            now=now,
         )
-        self.economy_island.update()
+        self.economy_island.update(now=now)
         self.state.economy_mock_mode = self.economy_uses_mock_transport()
         economy_transaction = self.economy_bridge.update(self.state, now)
         if (
@@ -1128,6 +1130,7 @@ class PolarRMWindow(QOpenGLWidget):
         if economy_active:
             key = (
                 "economy",
+                self._economy_scene_epoch,
                 width,
                 height,
                 round(ratio, 3),
@@ -1363,6 +1366,7 @@ class PolarRMWindow(QOpenGLWidget):
             # Rebuild static FBO when economy owns the stage so map/modlist
             # cannot linger under the glass workspace.
             bool(self.economy_visible or self.economy_island.progress > 0.01),
+            self._economy_scene_epoch,
             bool(self.gui_timeline.progress > 0.01),
         )
 
@@ -2127,6 +2131,7 @@ class PolarRMWindow(QOpenGLWidget):
         return offers[0]
 
     def open_economy_workspace(self, category: str | None = None) -> None:
+        now = time.perf_counter()
         offers = self.economy_offers()
         categories = self.economy_categories(offers)
         if category in categories:
@@ -2135,7 +2140,13 @@ class PolarRMWindow(QOpenGLWidget):
             self.economy_category = categories[0]
         self.economy_visible = True
         self.gui_visible = False
-        self.economy_opened_at = time.perf_counter()
+        self.economy_opened_at = now
+        self.economy_island.set_target(
+            1.0,
+            self.anim_duration(0.62),
+            now=now,
+        )
+        self._economy_scene_epoch += 1
         self.economy_armed_key = ""
         self.economy_hold_key = ""
         self.economy_category_scroll.position = 0.0
@@ -2152,19 +2163,37 @@ class PolarRMWindow(QOpenGLWidget):
             self.economy_selected_key = selected.key
         # Drop static HUD chrome (map / modlist / watermark) under the glass.
         self._gpu_static_ui_key = None
+        self._gpu_control_backdrop_key = None
+        self.gpu_compositor.clear_frame_glass()
         self.play_gui_transition_sound("expand")
         self.frame_scheduler.force()
+        self.update()
 
     def close_economy_workspace(self) -> None:
         if not self.economy_visible:
             return
+        now = time.perf_counter()
         self.economy_visible = False
+        self.economy_island.set_target(
+            0.0,
+            self.anim_duration(0.48),
+            now=now,
+        )
+        self._economy_scene_epoch += 1
         self.economy_armed_key = ""
         self.economy_hold_key = ""
         self.economy_hold_rect = QRectF()
         self._gpu_static_ui_key = None
+        self._gpu_control_backdrop_key = None
+        self.gpu_compositor.clear_frame_glass()
+        self.hotspots = [
+            hotspot
+            for hotspot in self.hotspots
+            if not str(hotspot.action).startswith("economy")
+        ]
         self.play_gui_transition_sound("collapse")
         self.frame_scheduler.force()
+        self.update()
 
     def select_economy_offer(self, key: str) -> None:
         offers = self.economy_offers(self.economy_category)
@@ -9130,7 +9159,7 @@ class PolarRMWindow(QOpenGLWidget):
             color("#ffffff", 0.10 * header_alpha),
         )
         commands.text(close, "×", self.font("poppins_bold", 15.0 * scale), color("#ffffff", header_alpha), Qt.AlignmentFlag.AlignCenter)
-        if header_alpha >= 0.38:
+        if self.economy_visible and header_alpha >= 0.38:
             self.add_hotspot(close, "economy_close", tooltip="关闭经济工作区 [Esc]")
 
         if content_alpha < 0.02 or layout.body_clip.isEmpty():
@@ -9270,7 +9299,7 @@ class PolarRMWindow(QOpenGLWidget):
                     Qt.AlignmentFlag.AlignCenter,
                     tab_clip,
                 )
-                if layout.interactive:
+                if self.economy_visible and layout.interactive:
                     self.add_hotspot(rect, "economy_category", key)
 
         # --- Offers pane ---
@@ -9362,7 +9391,7 @@ class PolarRMWindow(QOpenGLWidget):
                 color("#b8c8d8", (0.90 if offer.enabled else 0.55) * offers_alpha),
                 clip=viewport_clip,
             )
-            if layout.interactive:
+            if self.economy_visible and layout.interactive:
                 self.add_hotspot(rect, "economy_offer", offer.key, tooltip=offer.reason or offer.description)
 
         # --- Detail pane ---
@@ -9552,7 +9581,7 @@ class PolarRMWindow(QOpenGLWidget):
             color("#ffffff", detail_alpha) if button_enabled else color("#c5ccd3", 0.72 * detail_alpha),
             Qt.AlignmentFlag.AlignCenter, detail_clip,
         )
-        if selected is not None and button_enabled and layout.interactive:
+        if selected is not None and button_enabled and self.economy_visible and layout.interactive:
             self.add_hotspot(button, action, selected.key, tooltip=button_text)
 
         return commands

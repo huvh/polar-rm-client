@@ -18,8 +18,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from PySide6.QtCore import QTimer, QRectF
+from PySide6.QtCore import QTimer, QRectF, Qt
 from PySide6.QtGui import QColor, QImage, QLinearGradient, QPainter, QPixmap, QSurfaceFormat
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 
 from rm_client.ui.polar_app import PolarRMWindow
@@ -193,6 +194,9 @@ def main(argv: list[str] | None = None) -> int:
     eco = window.registry.get("EconomyPanel")
     if eco and eco.get_setting("Open Style"):
         eco.get_setting("Open Style").value = "Dynamic Island"
+    if eco:
+        eco.enabled = True
+        eco.keybind = "B"
     window.show()
     if not args.fixture:
         # A loading placeholder is useful in the client, but it is not
@@ -378,7 +382,58 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  [{name}] closed: island={progress:.3f}")
             if progress > 0.05:
                 FAILURES.append(f"{name}_closed: animation did not close (progress={progress:.3f})")
-            # Move to next resolution
+            # Reopen at the exact same resolution through the real B-key path.
+            # A resize used to hide stale FBO/cache state between lifecycles.
+            QTest.keyClick(window, Qt.Key.Key_B)
+            state["phase"] = "reopen_mid"
+            QTimer.singleShot(200, run_job)
+
+        elif phase == "reopen_mid":
+            pixmap = grab_window(window)
+            path = OUT / f"economy_{name}_reopen_mid.png"
+            if not pixmap.isNull():
+                pixmap.save(str(path))
+            progress = window.economy_island.progress
+            print(f"  [{name}] reopen_mid: island={progress:.3f}")
+            if not window.economy_visible or progress <= 0.02:
+                FAILURES.append(
+                    f"{name}_reopen_mid: B key did not restart the workspace "
+                    f"(visible={window.economy_visible}, progress={progress:.3f})"
+                )
+            state["phase"] = "reopened"
+            QTimer.singleShot(700, run_job)
+
+        elif phase == "reopened":
+            pixmap = grab_window(window)
+            path = OUT / f"economy_{name}_reopened.png"
+            if not pixmap.isNull():
+                pixmap.save(str(path))
+            progress = window.economy_island.progress
+            hotspots = len([h for h in window.hotspots if str(h.action).startswith("economy")])
+            print(f"  [{name}] reopened: island={progress:.3f} hotspots={hotspots}")
+            if progress < 0.95:
+                FAILURES.append(f"{name}_reopened: second open did not settle (progress={progress:.3f})")
+            if hotspots < 3:
+                FAILURES.append(f"{name}_reopened: second open has too few hotspots ({hotspots})")
+            if not pixmap.isNull():
+                check_economy_pixels(pixmap, f"{name}_reopened")
+            QTest.keyClick(window, Qt.Key.Key_B)
+            state["phase"] = "reopen_closed"
+            QTimer.singleShot(600, run_job)
+
+        elif phase == "reopen_closed":
+            progress = window.economy_island.progress
+            stale_hotspots = [
+                hotspot
+                for hotspot in window.hotspots
+                if str(hotspot.action).startswith("economy")
+            ]
+            if progress > 0.05:
+                FAILURES.append(f"{name}_reopen_closed: second close did not settle (progress={progress:.3f})")
+            if stale_hotspots:
+                FAILURES.append(
+                    f"{name}_reopen_closed: {len(stale_hotspots)} stale economy hotspots remain"
+                )
             state["phase"] = "mid_open"
             state["i"] += 1
             QTimer.singleShot(200, run_job)
