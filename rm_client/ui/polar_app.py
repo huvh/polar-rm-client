@@ -327,7 +327,7 @@ class PolarRMWindow(QOpenGLWidget):
         self.gimbal_command_bridge = GimbalCommandBridge()
         self.composite_vision = CompositeVisionPipeline()
         self.local_vision = LocalAlignedVision(
-            self.workspace / "同济自瞄" / "sp_vision_25" / "assets" / "yolov5.xml"
+            self._client_asset_path("同济自瞄", "sp_vision_25", "assets", "yolov5.xml")
         )
         self.tongji_bridge = TongjiVisionBridge()
         self._vision_source = "Mock"
@@ -2911,7 +2911,7 @@ class PolarRMWindow(QOpenGLWidget):
             self.tongji_receiver.stop()
 
         local_enabled = self._vision_source in ("Local", "Auto") and bridge_enabled
-        model_path = self.workspace / "同济自瞄" / "sp_vision_25" / "assets" / "yolov5.xml"
+        model_path = self._client_asset_path("同济自瞄", "sp_vision_25", "assets", "yolov5.xml")
         device = self.setting_mode(bridge_module, "Local Device", "AUTO")
         if local_enabled and model_path.exists():
             self.local_vision.configure(model_path, device)
