@@ -370,6 +370,25 @@ class RobotState:
     events: deque[str] = field(default_factory=lambda: deque(maxlen=8))
     start_time: float = field(default_factory=time.perf_counter)
 
+    # --- SharkClient ?????????rm_client/backend ???UI ??? ---
+    robot_module_status: dict[str, int] = field(default_factory=dict)
+    robot_positions: list[dict[str, Any]] = field(default_factory=list)
+    buffs: list[dict[str, Any]] = field(default_factory=list)
+    penalties: list[dict[str, Any]] = field(default_factory=list)
+    active_penalty: dict[str, Any] = field(default_factory=dict)
+    radar_detections: list[dict[str, Any]] = field(default_factory=list)
+    path_plan: dict[str, Any] = field(default_factory=dict)
+    tech_core: dict[str, Any] = field(default_factory=dict)
+    performance_sync: dict[str, int] = field(default_factory=dict)
+    deploy_mode: int = 0
+    rune_status: dict[str, Any] = field(default_factory=dict)
+    sentry_status: dict[str, Any] = field(default_factory=dict)
+    dart_status: dict[str, Any] = field(default_factory=dict)
+    sentry_ctrl_result: dict[str, Any] = field(default_factory=dict)
+    special_mechanisms: list[dict[str, Any]] = field(default_factory=list)
+    injury_stats: dict[int, dict[str, Any]] = field(default_factory=dict)
+    backend_stats: dict[str, Any] = field(default_factory=dict)
+
     def tick(self, dt: float) -> None:
         elapsed = time.perf_counter() - self.start_time
         duration = max(1, int(self.match_duration_sec))

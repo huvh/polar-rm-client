@@ -1,0 +1,650 @@
+"""RM2026 ?????????????? SharkClient messages.proto??
+
+?? protobuf wire ???????????
+- ?????????24 ??? dict
+- ?????????12 ??? bytes
+
+???????????
+SharkClient-ref/UDP-MQTT Server/proto/messages.proto?v1.0.0??
+"""
+
+from __future__ import annotations
+
+import struct
+from typing import Any, Callable
+
+# --------------------------------------------------------------------------
+# protobuf wire ?????
+# --------------------------------------------------------------------------
+
+def encode_varint(value: int) -> bytes:
+    value &= 0xFFFFFFFFFFFFFFFF
+    out = bytearray()
+    while True:
+        byte = value & 0x7F
+        value >>= 7
+        if value:
+            out.append(byte | 0x80)
+        else:
+            out.append(byte)
+            return bytes(out)
+
+
+def _tag(field: int, wire: int) -> bytes:
+    return encode_varint((field << 3) | wire)
+
+
+def encode_uint(field: int, value: int) -> bytes:
+    return _tag(field, 0) + encode_varint(max(0, int(value)) & 0xFFFFFFFFFFFFFFFF)
+
+
+def encode_int(field: int, value: int) -> bytes:
+    return _tag(field, 0) + encode_varint(int(value) & 0xFFFFFFFFFFFFFFFF)
+
+
+def encode_bool(field: int, value: bool) -> bytes:
+    return encode_uint(field, 1 if value else 0)
+
+
+def encode_float(field: int, value: float) -> bytes:
+    return _tag(field, 5) + struct.pack("<f", float(value))
+
+
+def encode_bytes(field: int, data: bytes) -> bytes:
+    data = bytes(data)
+    return _tag(field, 2) + encode_varint(len(data)) + data
+
+
+def encode_string(field: int, text: str) -> bytes:
+    return encode_bytes(field, text.encode("utf-8"))
+
+
+def encode_packed_uints(field: int, values: list[int]) -> bytes:
+    payload = b"".join(encode_varint(max(0, int(v)) & 0xFFFFFFFFFFFFFFFF) for v in values)
+    return _tag(field, 2) + encode_varint(len(payload)) + payload
+
+
+def encode_packed_ints(field: int, values: list[int]) -> bytes:
+    payload = b"".join(encode_varint(int(v) & 0xFFFFFFFFFFFFFFFF) for v in values)
+    return _tag(field, 2) + encode_varint(len(payload)) + payload
+
+
+def _read_varint(data: bytes, index: int) -> tuple[int, int] | None:
+    value = 0
+    shift = 0
+    while index < len(data) and shift <= 63:
+        byte = data[index]
+        index += 1
+        value |= (byte & 0x7F) << shift
+        if not byte & 0x80:
+            return value, index
+        shift += 7
+    return None
+
+
+def decode_fields(data: bytes) -> dict[int, list[Any]]:
+    """?? protobuf ?????field -> [value]????? int/bytes?"""
+    values: dict[int, list[Any]] = {}
+    index = 0
+    while index < len(data):
+        key = _read_varint(data, index)
+        if key is None:
+            break
+        tag, index = key
+        field, wire_type = tag >> 3, tag & 0x07
+        if field <= 0:
+            break
+        if wire_type == 0:
+            item = _read_varint(data, index)
+            if item is None:
+                break
+            value, index = item
+        elif wire_type == 1:
+            if index + 8 > len(data):
+                break
+            value = data[index:index + 8]
+            index += 8
+        elif wire_type == 2:
+            length_info = _read_varint(data, index)
+            if length_info is None:
+                break
+            length, index = length_info
+            if length < 0 or index + length > len(data):
+                break
+            value = data[index:index + length]
+            index += length
+        elif wire_type == 5:
+            if index + 4 > len(data):
+                break
+            value = data[index:index + 4]
+            index += 4
+        else:
+            break
+        values.setdefault(field, []).append(value)
+    return values
+
+
+def _u(fields: dict[int, list[Any]], field: int, default: int = 0) -> int:
+    values = fields.get(field)
+    if not values:
+        return default
+    value = values[-1]
+    return int(value) if isinstance(value, int) else default
+
+
+def _i(fields: dict[int, list[Any]], field: int, default: int = 0) -> int:
+    values = fields.get(field)
+    if not values:
+        return default
+    value = values[-1]
+    if not isinstance(value, int):
+        return default
+    if value >= 1 << 63:
+        value -= 1 << 64
+    value &= 0xFFFFFFFF
+    if value >= 1 << 31:
+        value -= 1 << 32
+    return value
+
+
+def _f(fields: dict[int, list[Any]], field: int, default: float = 0.0) -> float:
+    values = fields.get(field)
+    if not values:
+        return default
+    value = values[-1]
+    if isinstance(value, bytes) and len(value) == 4:
+        return float(struct.unpack("<f", value)[0])
+    return float(value) if isinstance(value, int) else default
+
+
+def _b(fields: dict[int, list[Any]], field: int) -> bytes:
+    values = fields.get(field)
+    if not values:
+        return b""
+    value = values[-1]
+    return bytes(value) if isinstance(value, bytes) else b""
+
+
+def _s(fields: dict[int, list[Any]], field: int, default: str = "") -> str:
+    return _b(fields, field).decode("utf-8", errors="replace") or default
+
+
+def _bool(fields: dict[int, list[Any]], field: int, default: bool = False) -> bool:
+    return bool(_u(fields, field, 1 if default else 0))
+
+
+def _packed(fields: dict[int, list[Any]], field: int) -> list[int]:
+    out: list[int] = []
+    for value in fields.get(field, ()):
+        if isinstance(value, int):
+            out.append(value)
+        else:
+            index = 0
+            while index < len(value):
+                item = _read_varint(bytes(value), index)
+                if item is None:
+                    break
+                number, index = item
+                out.append(number)
+    return out
+
+
+def _packed_ints(fields: dict[int, list[Any]], field: int) -> list[int]:
+    out: list[int] = []
+    for value in fields.get(field, ()):
+        if isinstance(value, int):
+            out.append(value)
+        else:
+            index = 0
+            while index < len(value):
+                item = _read_varint(bytes(value), index)
+                if item is None:
+                    break
+                number, index = item
+                if number >= 1 << 63:
+                    number -= 1 << 64
+                number &= 0xFFFFFFFF
+                if number >= 1 << 31:
+                    number -= 1 << 32
+                out.append(number)
+    return out
+
+
+def _sub(fields: dict[int, list[Any]], field: int) -> list[dict[int, list[Any]]]:
+    return [decode_fields(bytes(v)) for v in fields.get(field, ()) if isinstance(v, bytes)]
+
+
+# --------------------------------------------------------------------------
+# ??????? messages.proto?
+# --------------------------------------------------------------------------
+
+UPLINK_MESSAGES = frozenset({
+    "KeyboardMouseControl",
+    "CustomControl",
+    "MapClickInfo",
+    "MapClickInfoNotify",
+    "AssemblyCommand",
+    "RobotPerformanceSelectionCommand",
+    "CommonCommand",
+    "HeroDeployModeEventCommand",
+    "RuneActivateCommand",
+    "DartCommand",
+    "SentryCtrlCommand",
+    "AirSupportCommand",
+})
+
+DOWNLINK_MESSAGES = frozenset({
+    "GameStatus",
+    "GlobalUnitStatus",
+    "GlobalLogisticsStatus",
+    "GlobalSpecialMechanism",
+    "Event",
+    "RobotInjuryStat",
+    "RobotRespawnStatus",
+    "RobotStaticStatus",
+    "RobotDynamicStatus",
+    "RobotModuleStatus",
+    "RobotPosition",
+    "Buff",
+    "PenaltyInfo",
+    "RobotPathPlanInfo",
+    "RadarInfoToClient",
+    "CustomByteBlock",
+    "TechCoreMotionStateSync",
+    "RobotPerformanceSelectionSync",
+    "DeployModeStatusSync",
+    "RuneStatusSync",
+    "SentryStatusSync",
+    "DartSelectTargetStatusSync",
+    "SentryCtrlResult",
+    "AirSupportStatusSync",
+})
+
+ALL_MESSAGES = frozenset(UPLINK_MESSAGES | DOWNLINK_MESSAGES)
+
+
+def topic_message_name(topic: str) -> str:
+    return str(topic).strip().rstrip("/").rsplit("/", 1)[-1]
+
+
+# --------------------------------------------------------------------------
+# ????
+# --------------------------------------------------------------------------
+
+def _decode_game_status(fields: dict[int, list[Any]]) -> dict[str, Any]:
+    return {
+        "current_round": _u(fields, 1),
+        "total_rounds": _u(fields, 2),
+        "red_score": _u(fields, 3),
+        "blue_score": _u(fields, 4),
+        "current_stage": _u(fields, 5),
+        "stage_countdown_sec": _i(fields, 6),
+        "stage_elapsed_sec": _i(fields, 7),
+        "is_paused": _bool(fields, 8),
+    }
+
+
+def _decode_global_unit_status(fields: dict[int, list[Any]]) -> dict[str, Any]:
+    return {
+        "base_health": _u(fields, 1),
+        "base_status": _u(fields, 2),
+        "base_shield": _u(fields, 3),
+        "outpost_health": _u(fields, 4),
+        "outpost_status": _u(fields, 5),
+        "enemy_base_health": _u(fields, 6),
+        "enemy_base_status": _u(fields, 7),
+        "enemy_base_shield": _u(fields, 8),
+        "enemy_outpost_health": _u(fields, 9),
+        "enemy_outpost_status": _u(fields, 10),
+        "robot_health": _packed(fields, 11),
+        "robot_bullets": _packed_ints(fields, 12),
+        "total_damage_ally": _u(fields, 13),
+        "total_damage_enemy": _u(fields, 14),
+    }
+
+
+def _decode_global_logistics(fields: dict[int, list[Any]]) -> dict[str, Any]:
+    return {
+        "remaining_economy": _u(fields, 1),
+        "total_economy_obtained": _u(fields, 2),
+        "tech_level": _u(fields, 3),
+        "encryption_level": _u(fields, 4),
+    }
+
+
+def _decode_special_mechanism(fields: dict[int, list[Any]]) -> dict[str, Any]:
+    return {
+        "mechanism_id": _packed(fields, 1),
+        "mechanism_time_sec": _packed_ints(fields, 2),
+    }
+
+
+def _decode_event(fields: dict[int, list[Any]]) -> dict[str, Any]:
+    return {"event_id": _i(fields, 1), "param": _s(fields, 2)}
+
+
+def _decode_injury(fields: dict[int, list[Any]]) -> dict[str, Any]:
+    return {
+        "total_damage": _u(fields, 1),
+        "collision_damage": _u(fields, 2),
+        "small_projectile_damage": _u(fields, 3),
+        "large_projectile_damage": _u(fields, 4),
+        "dart_splash_damage": _u(fields, 5),
+        "module_offline_damage": _u(fields, 6),
+        "offline_damage": _u(fields, 7),
+        "penalty_damage": _u(fields, 8),
+        "server_kill_damage": _u(fields, 9),
+        "killer_id": _u(fields, 10),
+    }
+
+
+def _decode_respawn(fields: dict[int, list[Any]]) -> dict[str, Any]:
+    return {
+        "is_pending_respawn": _bool(fields, 1),
+        "total_respawn_progress": _u(fields, 2),
+        "current_respawn_progress": _u(fields, 3),
+        "can_free_respawn": _bool(fields, 4),
+        "gold_cost_for_respawn": _u(fields, 5),
+        "can_pay_for_respawn": _bool(fields, 6),
+    }
+
+
+def _decode_static(fields: dict[int, list[Any]]) -> dict[str, Any]:
+    return {
+        "connection_state": _u(fields, 1),
+        "field_state": _u(fields, 2),
+        "alive_state": _u(fields, 3),
+        "robot_id": _u(fields, 4),
+        "robot_type": _u(fields, 5),
+        "performance_system_shooter": _u(fields, 6),
+        "performance_system_chassis": _u(fields, 7),
+        "level": _u(fields, 8),
+        "max_health": _u(fields, 9),
+        "max_heat": _u(fields, 10),
+        "heat_cooldown_rate": _f(fields, 11),
+        "max_power": _u(fields, 12),
+        "max_buffer_energy": _u(fields, 13),
+        "max_chassis_energy": _u(fields, 14),
+    }
+
+
+def _decode_dynamic(fields: dict[int, list[Any]]) -> dict[str, Any]:
+    return {
+        "current_health": _u(fields, 1),
+        "current_heat": _f(fields, 2),
+        "last_projectile_fire_rate": _f(fields, 3),
+        "current_chassis_energy": _u(fields, 4),
+        "current_buffer_energy": _u(fields, 5),
+        "current_experience": _u(fields, 6),
+        "experience_for_upgrade": _u(fields, 7),
+        "total_projectiles_fired": _u(fields, 8),
+        "remaining_ammo": _u(fields, 9),
+        "is_out_of_combat": _bool(fields, 10),
+        "out_of_combat_countdown": _u(fields, 11),
+        "can_remote_heal": _bool(fields, 12),
+        "can_remote_ammo": _bool(fields, 13),
+    }
+
+
+def _decode_module_status(fields: dict[int, list[Any]]) -> dict[str, Any]:
+    return {
+        "power_manager": _u(fields, 1),
+        "rfid": _u(fields, 2),
+        "light_strip": _u(fields, 3),
+        "small_shooter": _u(fields, 4),
+        "big_shooter": _u(fields, 5),
+        "uwb": _u(fields, 6),
+        "armor": _u(fields, 7),
+        "video_transmission": _u(fields, 8),
+        "capacitor": _u(fields, 9),
+        "main_controller": _u(fields, 10),
+        "laser_detection_module": _u(fields, 11),
+    }
+
+
+def _decode_position(fields: dict[int, list[Any]]) -> dict[str, Any]:
+    return {
+        "x": _f(fields, 1),
+        "y": _f(fields, 2),
+        "z": _f(fields, 3),
+        "yaw": _f(fields, 4),
+        "robot_id": _u(fields, 5),
+    }
+
+
+def _decode_buff(fields: dict[int, list[Any]]) -> dict[str, Any]:
+    return {
+        "robot_id": _u(fields, 1),
+        "buff_type": _u(fields, 2),
+        "buff_level": _i(fields, 3),
+        "buff_max_time": _u(fields, 4),
+        "buff_left_time": _u(fields, 5),
+    }
+
+
+def _decode_penalty(fields: dict[int, list[Any]]) -> dict[str, Any]:
+    return {
+        "penalty_type": _u(fields, 1),
+        "penalty_effect_sec": _u(fields, 2),
+        "total_penalty_num": _u(fields, 3),
+    }
+
+
+def _decode_path_plan(fields: dict[int, list[Any]]) -> dict[str, Any]:
+    return {
+        "intention": _u(fields, 1),
+        "start_pos_x": _u(fields, 2),
+        "start_pos_y": _u(fields, 3),
+        "offset_x": _packed_ints(fields, 4),
+        "offset_y": _packed_ints(fields, 5),
+        "sender_id": _u(fields, 6),
+    }
+
+
+def _decode_radar(fields: dict[int, list[Any]]) -> dict[str, Any]:
+    robots = []
+    for sub in _sub(fields, 1):
+        robots.append({
+            "target_pos_x": _u(sub, 1),
+            "target_pos_y": _u(sub, 2),
+            "is_high_light": _u(sub, 3),
+        })
+    return {"robots": robots}
+
+
+def _decode_custom_byte_block(fields: dict[int, list[Any]]) -> dict[str, Any]:
+    return {"data": _b(fields, 1)}
+
+
+def _decode_tech_core(fields: dict[int, list[Any]]) -> dict[str, Any]:
+    return {
+        "maximum_difficulty_level": _u(fields, 1),
+        "basic_state": _u(fields, 2),
+        "putin_state": _u(fields, 3),
+        "move_state": _u(fields, 4),
+        "rotate_state": _u(fields, 5),
+        "enemy_core_status": _u(fields, 6),
+        "remain_time_all": _u(fields, 7),
+        "remain_time_step": _u(fields, 8),
+    }
+
+
+def _decode_performance_sync(fields: dict[int, list[Any]]) -> dict[str, Any]:
+    return {
+        "shooter": _u(fields, 1),
+        "chassis": _u(fields, 2),
+        "sentry_control": _u(fields, 3),
+    }
+
+
+def _decode_deploy(fields: dict[int, list[Any]]) -> dict[str, Any]:
+    return {"status": _u(fields, 1)}
+
+
+def _decode_rune(fields: dict[int, list[Any]]) -> dict[str, Any]:
+    return {
+        "rune_status": _u(fields, 1),
+        "activated_arms": _u(fields, 2),
+        "average_rings": _f(fields, 3),
+    }
+
+
+def _decode_sentry(fields: dict[int, list[Any]]) -> dict[str, Any]:
+    return {
+        "posture_id": _u(fields, 1),
+        "is_weakened": _bool(fields, 2),
+    }
+
+
+def _decode_dart(fields: dict[int, list[Any]]) -> dict[str, Any]:
+    return {"target_id": _u(fields, 1), "open": _u(fields, 2)}
+
+
+def _decode_sentry_result(fields: dict[int, list[Any]]) -> dict[str, Any]:
+    return {"command_id": _u(fields, 1), "result_code": _u(fields, 2)}
+
+
+def _decode_air_support(fields: dict[int, list[Any]]) -> dict[str, Any]:
+    return {
+        "airsupport_status": _u(fields, 1),
+        "left_time": _u(fields, 2),
+        "cost_coins": _u(fields, 3),
+        "is_being_targeted": _u(fields, 4),
+        "shooter_status": _u(fields, 5),
+    }
+
+
+_DOWNLINK_DECODERS: dict[str, Callable[[dict[int, list[Any]]], dict[str, Any]]] = {
+    "GameStatus": _decode_game_status,
+    "GlobalUnitStatus": _decode_global_unit_status,
+    "GlobalLogisticsStatus": _decode_global_logistics,
+    "GlobalSpecialMechanism": _decode_special_mechanism,
+    "Event": _decode_event,
+    "RobotInjuryStat": _decode_injury,
+    "RobotRespawnStatus": _decode_respawn,
+    "RobotStaticStatus": _decode_static,
+    "RobotDynamicStatus": _decode_dynamic,
+    "RobotModuleStatus": _decode_module_status,
+    "RobotPosition": _decode_position,
+    "Buff": _decode_buff,
+    "PenaltyInfo": _decode_penalty,
+    "RobotPathPlanInfo": _decode_path_plan,
+    "RadarInfoToClient": _decode_radar,
+    "CustomByteBlock": _decode_custom_byte_block,
+    "TechCoreMotionStateSync": _decode_tech_core,
+    "RobotPerformanceSelectionSync": _decode_performance_sync,
+    "DeployModeStatusSync": _decode_deploy,
+    "RuneStatusSync": _decode_rune,
+    "SentryStatusSync": _decode_sentry,
+    "DartSelectTargetStatusSync": _decode_dart,
+    "SentryCtrlResult": _decode_sentry_result,
+    "AirSupportStatusSync": _decode_air_support,
+}
+
+
+def decode_message(name: str, payload: bytes) -> dict[str, Any]:
+    """???????? payload???????? dict?"""
+    decoder = _DOWNLINK_DECODERS.get(str(name).strip())
+    if decoder is None:
+        return {}
+    return decoder(decode_fields(bytes(payload)))
+
+
+# --------------------------------------------------------------------------
+# ????
+# --------------------------------------------------------------------------
+
+def encode_keyboard_mouse_control(
+    mouse_x: int = 0,
+    mouse_y: int = 0,
+    mouse_z: int = 0,
+    left_button_down: bool = False,
+    right_button_down: bool = False,
+    keyboard_value: int = 0,
+    mid_button_down: bool = False,
+) -> bytes:
+    return b"".join([
+        encode_int(1, mouse_x),
+        encode_int(2, mouse_y),
+        encode_int(3, mouse_z),
+        encode_bool(4, left_button_down),
+        encode_bool(5, right_button_down),
+        encode_uint(6, keyboard_value),
+        encode_bool(7, mid_button_down),
+    ])
+
+
+def encode_custom_control(data: bytes) -> bytes:
+    return encode_bytes(1, data)
+
+
+def encode_map_click_info(target_x: float, target_y: float, target_z: float) -> bytes:
+    return b"".join([
+        encode_float(1, target_x),
+        encode_float(2, target_y),
+        encode_float(3, target_z),
+    ])
+
+
+def encode_map_click_info_notify(
+    is_send_all: int = 0,
+    robot_id: bytes = b"",
+    mode: int = 1,
+    enemy_id: int = 0,
+    ascii_code: int = 0,
+    mark_type: int = 1,
+    map_x: float = 0.0,
+    map_y: float = 0.0,
+) -> bytes:
+    return b"".join([
+        encode_uint(1, is_send_all),
+        encode_bytes(2, robot_id),
+        encode_uint(3, mode),
+        encode_uint(4, enemy_id),
+        encode_uint(5, ascii_code),
+        encode_uint(6, mark_type),
+        encode_float(7, map_x),
+        encode_float(8, map_y),
+    ])
+
+
+def encode_assembly_command(operation: int, difficulty: int) -> bytes:
+    return b"".join([encode_uint(1, operation), encode_uint(2, difficulty)])
+
+
+def encode_robot_performance_selection_command(
+    shooter: int, chassis: int, sentry_control: int
+) -> bytes:
+    return b"".join([
+        encode_uint(1, shooter),
+        encode_uint(2, chassis),
+        encode_uint(3, sentry_control),
+    ])
+
+
+def encode_common_command(cmd_type: int, param: int) -> bytes:
+    return b"".join([encode_uint(1, cmd_type), encode_uint(2, param)])
+
+
+def encode_hero_deploy_mode_event_command(mode: int) -> bytes:
+    return encode_uint(1, mode)
+
+
+def encode_rune_activate_command(activate: int) -> bytes:
+    return encode_uint(1, activate)
+
+
+def encode_dart_command(target_id: int, open_gate: bool, launch_confirm: bool) -> bytes:
+    return b"".join([
+        encode_uint(1, target_id),
+        encode_bool(2, open_gate),
+        encode_bool(3, launch_confirm),
+    ])
+
+
+def encode_sentry_ctrl_command(command_id: int) -> bytes:
+    return encode_uint(1, command_id)
+
+
+def encode_air_support_command(command_id: int) -> bytes:
+    return encode_uint(1, command_id)

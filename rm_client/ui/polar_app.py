@@ -76,6 +76,7 @@ from ..startup_wallpaper import StartupWallpaperManager
 from ..tongji_bridge import GimbalCommandBridge, TongjiVisionReceiver
 from ..tongji_yolo import LocalAlignedVision
 from ..transports import OfficialMqttBridge, SerialBridgeStub, UDPVideoReceiver, VideoPipeline
+from ..backend import BackendManager
 from ..ui_audio import UiAudioManager
 from ..vision import (
     CameraCaptureWorker,
@@ -309,7 +310,14 @@ class PolarRMWindow(QOpenGLWidget):
         self.camera_worker = CameraCaptureWorker()
         self.camera_started = False
         self._camera_config: tuple[int, int, int] | None = None
-        self.mqtt = OfficialMqttBridge()
+        # SharkClient ???????????? BackendManager ????????? UI?
+        self.backend = BackendManager(
+            workspace=self.workspace,
+            state=self.state,
+            client_id=str(self.state.robot_id),
+            scenario_key=self.scenario_manager.current.key,
+        )
+        self.mqtt = self.backend.mqtt
         self.official_feed = OfficialMatchFeed()
         self.vision_kill_detector = VisionKillDetector()
         self._official_state_updates: dict[str, Any] = {}
@@ -319,9 +327,10 @@ class PolarRMWindow(QOpenGLWidget):
         )
         self.registry.add_toggle_listener(self.on_module_toggled)
         self._vision_scene_luminance = 0.0
-        self.udp = UDPVideoReceiver()
+        # UDP/??? backend ???????????????????
+        self.udp = self.backend.udp
         self.video_pipeline = VideoPipeline()
-        self.serial = SerialBridgeStub()
+        self.serial = self.backend.serial
         self.control = KeyboardControlBridge(self.serial, mock_output=True)
         self.economy_bridge = EconomyCommandBridge()
         self.economy_bridge.sender = self.send_economy_request
@@ -610,6 +619,9 @@ class PolarRMWindow(QOpenGLWidget):
             self.state.udp_video_connected = self.udp.frames_received > 0
             self.state.serial_connected = self.serial.connected
             self.state.tick(logic_dt)
+            # ?????/?? tick + ???????? RobotState?UI ???
+            self.backend.tick()
+            self.backend.apply_updates(self.state)
             self.consume_official_messages()
             self.apply_official_state()
             self.sync_tongji_vision_state()
@@ -3530,9 +3542,7 @@ class PolarRMWindow(QOpenGLWidget):
         self.local_vision.stop()
         self.tongji_receiver.stop()
         self.tongji_bridge.stop()
-        self.mqtt.stop()
-        self.udp.stop()
-        self.serial.stop()
+        self.backend.shutdown()
         super().closeEvent(event)
 
     def ensure_camera_started(self) -> None:
@@ -12806,6 +12816,8 @@ class PolarRMWindow(QOpenGLWidget):
         config = self.scenario_manager.set_scenario(key)
         self.scenario_manager.apply_to_registry(self.registry)
         self.scenario_manager.apply_to_runtime(self.mqtt, self.udp, self.control)
+        # ?????????/?? MQTT?UDP??????????? UI?
+        self.backend.apply_scenario(key)
         if close_home:
             self.home_visible = False
             self.gui_visible = False
