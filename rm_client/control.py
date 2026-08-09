@@ -112,6 +112,13 @@ class KeyboardControlBridge:
             self.last_error = "未连接串口桥接对象"
             return
         try:
-            self.serial_bridge.write(payload)
+            bridge = self.serial_bridge
+            if hasattr(bridge, "write_frame"):
+                # 真实串口走官方 0x0311 CustomControl 帧，而不是裸 JSON
+                ok, reason = bridge.write_frame(0x0311, command.to_custom_control())
+                if not ok:
+                    self.last_error = reason
+            else:
+                bridge.write(payload)
         except Exception as exc:
             self.last_error = str(exc)

@@ -40,6 +40,12 @@ class RefereeFrameCodec:
         return bytes(frame)
 
     def decode(self, stream: bytes) -> list[RefereeFrame]:
+        """解码全部完整帧（保持旧接口，返回帧列表）。"""
+        frames, _consumed = self.decode_with_consumed(stream)
+        return frames
+
+    def decode_with_consumed(self, stream: bytes) -> tuple[list[RefereeFrame], int]:
+        """解码完整帧，并返回已消费字节偏移（供流式读取保留半帧）。"""
         frames: list[RefereeFrame] = []
         index = 0
         while index + 9 <= len(stream):
@@ -63,7 +69,7 @@ class RefereeFrameCodec:
             data = frame_bytes[7:-2]
             frames.append(RefereeFrame(cmd_id=cmd_id, data=data, seq=header[3]))
             index += total_len
-        return frames
+        return frames, index
 
     def _next_seq(self) -> int:
         value = self.seq & 0xFF

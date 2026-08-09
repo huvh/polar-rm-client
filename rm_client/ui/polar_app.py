@@ -310,7 +310,7 @@ class PolarRMWindow(QOpenGLWidget):
         self.camera_worker = CameraCaptureWorker()
         self.camera_started = False
         self._camera_config: tuple[int, int, int] | None = None
-        # SharkClient ???????????? BackendManager ????????? UI?
+        # SharkClient 对齐后端：三种模式统一由 BackendManager 编排（仅接线，不动 UI）
         self.backend = BackendManager(
             workspace=self.workspace,
             state=self.state,
@@ -327,10 +327,12 @@ class PolarRMWindow(QOpenGLWidget):
         )
         self.registry.add_toggle_listener(self.on_module_toggled)
         self._vision_scene_luminance = 0.0
-        # UDP/??? backend ???????????????????
+        # UDP/串口由 backend 提供（保持旧属性名，其余代码无需改动）
         self.udp = self.backend.udp
         self.video_pipeline = VideoPipeline()
         self.serial = self.backend.serial
+        # UDP 组装帧接入 VideoPipeline（转发/后续解码入口）
+        self.backend.udp.external_on_frame = self.video_pipeline.push_udp_packet
         self.control = KeyboardControlBridge(self.serial, mock_output=True)
         self.economy_bridge = EconomyCommandBridge()
         self.economy_bridge.sender = self.send_economy_request
@@ -535,6 +537,8 @@ class PolarRMWindow(QOpenGLWidget):
             self.startup_step = "done"
         self.sync_mode_setting()
         if not self.home_visible:
+            # 自动启动/跳过启动页时按当前场景启动后端（MQTT/UDP/串口）
+            self.backend.apply_scenario(self.scenario_manager.current.key)
             self.refresh_vision_runtime()
         self.toast("ClickGUI 已就绪：PolarPanel")
 
@@ -619,7 +623,7 @@ class PolarRMWindow(QOpenGLWidget):
             self.state.udp_video_connected = self.udp.frames_received > 0
             self.state.serial_connected = self.serial.connected
             self.state.tick(logic_dt)
-            # ?????/?? tick + ???????? RobotState?UI ???
+            # 后端：心跳/安全 tick + 全量协议解码写入 RobotState（UI 只读）
             self.backend.tick()
             self.backend.apply_updates(self.state)
             self.consume_official_messages()
@@ -12816,7 +12820,7 @@ class PolarRMWindow(QOpenGLWidget):
         config = self.scenario_manager.set_scenario(key)
         self.scenario_manager.apply_to_registry(self.registry)
         self.scenario_manager.apply_to_runtime(self.mqtt, self.udp, self.control)
-        # ?????????/?? MQTT?UDP??????????? UI?
+        # 后端按三种模式启动/停止 MQTT、UDP、串口（仅连接层，不动 UI）
         self.backend.apply_scenario(key)
         if close_home:
             self.home_visible = False
@@ -12852,6 +12856,8 @@ class PolarRMWindow(QOpenGLWidget):
         performance = self.current_robot_performance(profile.key)
         level = int(self.get_setting_number(module, "Level", 1))
         apply_profile_to_state(self.state, profile, performance, level)
+        # 机器人档案变更同步 MQTT client_id（裁判按 client_id 识别本机）
+        self.backend.set_client_id(self.state.robot_id)
         if close_home:
             self.home_visible = False
             self.gui_visible = False
@@ -13085,6 +13091,8 @@ class PolarRMWindow(QOpenGLWidget):
         if scenario_setting:
             self.scenario_manager.set_scenario(str(scenario_setting.value))
             self.scenario_manager.apply_to_runtime(self.mqtt, self.udp, self.control)
+            # 配置加载后按场景重建后端连接（host/port/mock 属性变更对已连接的 paho 无效）
+            self.backend.apply_scenario(self.scenario_manager.current.key)
         match_mode = self.registry.get("MatchMode")
         match_setting = match_mode.get_setting("Mode") if match_mode else None
         if match_setting:

@@ -124,6 +124,18 @@ def _topic_name(topic: str) -> str:
     return str(topic).strip().rstrip("/").rsplit("/", 1)[-1]
 
 
+# 官方下行消息名：只有这些才计入“裁判数据在线”，避免 retain/自定义 topic 假阳性
+OFFICIAL_DOWNLINK_MESSAGES = frozenset({
+    "GameStatus", "GlobalUnitStatus", "GlobalLogisticsStatus", "GlobalSpecialMechanism",
+    "Event", "RobotInjuryStat", "RobotRespawnStatus", "RobotStaticStatus",
+    "RobotDynamicStatus", "RobotModuleStatus", "RobotPosition", "Buff", "PenaltyInfo",
+    "RobotPathPlanInfo", "RadarInfoToClient", "CustomByteBlock", "TechCoreMotionStateSync",
+    "RobotPerformanceSelectionSync", "DeployModeStatusSync", "RuneStatusSync",
+    "SentryStatusSync", "DartSelectTargetStatusSync", "SentryCtrlResult",
+    "AirSupportStatusSync",
+})
+
+
 def _parse_event_param(raw: bytes) -> dict[str, Any]:
     if not raw:
         return {}
@@ -158,8 +170,9 @@ class OfficialMatchFeed:
 
     def consume(self, topic: str, payload: bytes, *, alliance: str, local_robot_id: int) -> tuple[list[CombatEvent], dict[str, Any]]:
         now = time.perf_counter()
-        self.last_message_at = now
         name = _topic_name(topic)
+        if name in OFFICIAL_DOWNLINK_MESSAGES:
+            self.last_message_at = now
         if name in {"Event", "GlobalUnitStatus", "RobotInjuryStat", "RobotStaticStatus", "CustomByteBlock"}:
             self.last_kill_data_at = now
         fields = decode_proto_fields(payload)

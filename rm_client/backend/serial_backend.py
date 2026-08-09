@@ -1,10 +1,10 @@
-"""??????? SharkClient ????????????????
+"""串口后端（补齐 SharkClient 没有、本地一直缺的真串口链路）。
 
-- PySerial ???? + ?? 0xA5 ?????RefereeFrameCodec?
-- Mock Writes ???????
-- ?????????????????????????????
-- ??????????????????????
-- ????????????
+- PySerial 真实串口 + 官方 0xA5 帧编解码（RefereeFrameCodec）
+- Mock Writes 模式只记录不写
+- 心跳看门狗：真实模式下长时间无指令自动发停止帧（超时归零）
+- 急停：立即发送停止帧并禁止后续写入，直到释放
+- 后台读线程解析下位机回包
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ CUSTOM_CONTROL_CMD_ID = 0x0311
 
 
 class RmSerialBackend(SerialBridgeStub):
-    """SharkClient ?????????? Stub ???? stub?"""
+    """SharkClient 风格串口后端；端口为 Stub 时退化为 stub。"""
 
     def __init__(
         self,
@@ -42,6 +42,7 @@ class RmSerialBackend(SerialBridgeStub):
         self.last_frame_at = 0.0
         self.heartbeat_interval_s = 0.25
         self.estop_active = False
+        self._last_stop_at = 0.0
         self._serial = None
         self._reader: threading.Thread | None = None
         self._running = False
@@ -54,16 +55,17 @@ class RmSerialBackend(SerialBridgeStub):
             return
         if self.port in ("", "Stub", "stub", "None", "none"):
             self.connected = False
-            self.last_error = "??????????Stub?"
+            self.last_error = "未配置真实串口端口（Stub）"
             return
         try:
             import serial  # type: ignore
             self._serial = serial.Serial(
                 port=self.port, baudrate=self.baud, timeout=0.1,
+                write_timeout=0.5,
             )
             self.connected = bool(self._serial and self._serial.is_open)
             if not self.connected:
-                self.last_error = "??????"
+                self.last_error = "串口打开失败"
                 return
             self._running = True
             self._reader = threading.Thread(target=self._read_loop, name="rm-serial", daemon=True)
@@ -80,6 +82,9 @@ class RmSerialBackend(SerialBridgeStub):
             except Exception:
                 pass
             self._serial = None
+        if self._reader is not None and self._reader.is_alive():
+            self._reader.join(timeout=0.6)
+        self._reader = None
         self.connected = False
 
     # ------------------------------------------------------------------
@@ -92,13 +97,16 @@ class RmSerialBackend(SerialBridgeStub):
         if self.mock_writes:
             return True, "mock"
         if self.estop_active:
-            self.last_error = "????????????"
+            self.last_error = "急停激活，串口写入被禁止"
             return False, self.last_error
         if self._serial is None or not self.connected:
-            self.last_error = "?????"
+            self.last_error = "串口未连接"
             return False, self.last_error
         try:
-            self._serial.write(payload)
+            written = self._serial.write(payload)
+            if written != len(payload):
+                self.last_error = f"串口短写 {written}/{len(payload)} 字节"
+                return False, self.last_error
             self.frames_written += 1
             self.last_write_at = time.perf_counter()
             return True, "ok"
@@ -107,18 +115,20 @@ class RmSerialBackend(SerialBridgeStub):
             return False, str(exc)
 
     # ------------------------------------------------------------------
-    # ??/??
+    # 心跳/急停
     # ------------------------------------------------------------------
     def tick(self, now: float | None = None) -> None:
         if self.mock_writes or not self.connected:
             return
         now = time.perf_counter() if now is None else now
-        # ???????????????????
+        # 与 safety 双向同步急停状态（避免粘滞/矛盾）
+        if self.safety is not None:
+            self.estop_active = bool(self.safety.estop_active)
+        # 超时归零：长时间没有指令就发一次停止帧（节流 1Hz，避免刷屏）
         if self.last_write_at and now - self.last_write_at > self.heartbeat_interval_s:
-            self.write_stop_command()
-        if self.safety is not None and self.safety.estop_active and not self.estop_active:
-            self.estop_active = True
-            self.write_stop_command()
+            if now - self._last_stop_at >= 1.0:
+                self.write_stop_command()
+                self._last_stop_at = now
 
     def trigger_estop(self) -> None:
         self.estop_active = True
@@ -128,7 +138,7 @@ class RmSerialBackend(SerialBridgeStub):
         self.estop_active = False
 
     def write_stop_command(self) -> tuple[bool, str]:
-        """????????vx=vy=wz=0, ????, spin off??"""
+        """发送全零停止帧（vx=vy=wz=0, 限幅保持, spin off）。"""
         payload = encode_custom_control_30(
             seq=self.codec.seq,
             vx=0.0, vy=0.0, wz=0.0,
@@ -146,15 +156,18 @@ class RmSerialBackend(SerialBridgeStub):
                 if not chunk:
                     continue
                 buffer.extend(chunk)
-                frames = self.codec.decode(bytes(buffer))
+                frames, consumed = self.codec.decode_with_consumed(bytes(buffer))
+                if consumed > 0:
+                    del buffer[:consumed]  # 保留半帧，避免分帧数据丢失
                 if frames:
-                    buffer.clear()
                     with self._rx_lock:
                         for frame in frames:
                             self._rx.append(frame)
                             self.frames_read += 1
                             self.last_frame_at = time.perf_counter()
-            except Exception:
+            except Exception as exc:  # pragma: no cover - hardware dependent
+                self.last_error = str(exc)
+                self.connected = False
                 break
 
     def drain_frames(self) -> list[Any]:

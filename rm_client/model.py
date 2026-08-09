@@ -370,7 +370,7 @@ class RobotState:
     events: deque[str] = field(default_factory=lambda: deque(maxlen=8))
     start_time: float = field(default_factory=time.perf_counter)
 
-    # --- SharkClient ?????????rm_client/backend ???UI ??? ---
+    # --- SharkClient 对齐后端新增字段（rm_client/backend 写入，UI 只读） ---
     robot_module_status: dict[str, int] = field(default_factory=dict)
     robot_positions: list[dict[str, Any]] = field(default_factory=list)
     buffs: list[dict[str, Any]] = field(default_factory=list)

@@ -1,11 +1,11 @@
-"""RM2026 ?????????????? SharkClient messages.proto??
+"""RM2026 自定义客户端全量协议层（对齐 SharkClient messages.proto）。
 
-?? protobuf wire ???????????
-- ?????????24 ??? dict
-- ?????????12 ??? bytes
+手写 protobuf wire 编解码，零第三方依赖：
+- 解码全部下行消息（24 条）为 dict
+- 编码全部上行消息（12 条）为 bytes
 
-???????????
-SharkClient-ref/UDP-MQTT Server/proto/messages.proto?v1.0.0??
+消息名与字段号严格对照
+SharkClient-ref/UDP-MQTT Server/proto/messages.proto（v1.0.0）。
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ import struct
 from typing import Any, Callable
 
 # --------------------------------------------------------------------------
-# protobuf wire ?????
+# protobuf wire 基础编解码
 # --------------------------------------------------------------------------
 
 def encode_varint(value: int) -> bytes:
@@ -77,13 +77,13 @@ def _read_varint(data: bytes, index: int) -> tuple[int, int] | None:
         index += 1
         value |= (byte & 0x7F) << shift
         if not byte & 0x80:
-            return value, index
+            return value & 0xFFFFFFFFFFFFFFFF, index
         shift += 7
     return None
 
 
 def decode_fields(data: bytes) -> dict[int, list[Any]]:
-    """?? protobuf ?????field -> [value]????? int/bytes?"""
+    """通用 protobuf 字段解析：field -> [value]，值类型为 int/bytes。"""
     values: dict[int, list[Any]] = {}
     index = 0
     while index < len(data):
@@ -215,7 +215,7 @@ def _sub(fields: dict[int, list[Any]], field: int) -> list[dict[int, list[Any]]]
 
 
 # --------------------------------------------------------------------------
-# ??????? messages.proto?
+# 消息清单（对齐 messages.proto）
 # --------------------------------------------------------------------------
 
 UPLINK_MESSAGES = frozenset({
@@ -264,11 +264,12 @@ ALL_MESSAGES = frozenset(UPLINK_MESSAGES | DOWNLINK_MESSAGES)
 
 
 def topic_message_name(topic: str) -> str:
-    return str(topic).strip().rstrip("/").rsplit("/", 1)[-1]
+    name = str(topic).strip().rstrip("/").rsplit("/", 1)[-1]
+    return name if name in ALL_MESSAGES else ""
 
 
 # --------------------------------------------------------------------------
-# ????
+# 下行解码
 # --------------------------------------------------------------------------
 
 def _decode_game_status(fields: dict[int, list[Any]]) -> dict[str, Any]:
@@ -543,15 +544,25 @@ _DOWNLINK_DECODERS: dict[str, Callable[[dict[int, list[Any]]], dict[str, Any]]] 
 
 
 def decode_message(name: str, payload: bytes) -> dict[str, Any]:
-    """???????? payload???????? dict?"""
+    """按消息名解码下行 payload。
+
+    - 未知消息 / 空 payload / 首个字段就截断时返回 {}（调用方应丢弃）
+    - 成功时附带 __present__（实际出现的字段号集合），供状态层避免
+      把“缺字段的默认值 0”当作有效数据覆盖本地状态
+    """
     decoder = _DOWNLINK_DECODERS.get(str(name).strip())
     if decoder is None:
         return {}
-    return decoder(decode_fields(bytes(payload)))
+    fields = decode_fields(bytes(payload))
+    if not fields:
+        return {}
+    data = decoder(fields)
+    data["__present__"] = frozenset(fields.keys())
+    return data
 
 
 # --------------------------------------------------------------------------
-# ????
+# 上行编码
 # --------------------------------------------------------------------------
 
 def encode_keyboard_mouse_control(
@@ -575,6 +586,9 @@ def encode_keyboard_mouse_control(
 
 
 def encode_custom_control(data: bytes) -> bytes:
+    data = bytes(data)
+    if len(data) > 30:
+        raise ValueError(f"CustomControl 载荷最多 30 字节，实际 {len(data)} 字节")
     return encode_bytes(1, data)
 
 
@@ -588,7 +602,7 @@ def encode_map_click_info(target_x: float, target_y: float, target_z: float) -> 
 
 def encode_map_click_info_notify(
     is_send_all: int = 0,
-    robot_id: bytes = b"",
+    robot_id: bytes = bytes(7),
     mode: int = 1,
     enemy_id: int = 0,
     ascii_code: int = 0,

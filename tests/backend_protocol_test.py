@@ -1,6 +1,6 @@
-"""?????????????? / ??????? / UDP codec ?? / ?????
+"""后端对齐测试：协议编解码往返 / 三模式安全门控 / UDP codec 检测 / 状态应用。
 
-???
+运行：
     .\\.venv\\Scripts\\python.exe tests\\backend_protocol_test.py
 """
 
@@ -17,6 +17,7 @@ from rm_client.backend.manager import BackendManager  # noqa: E402
 from rm_client.backend.safety import OfficialSafety  # noqa: E402
 from rm_client.backend.video_backend import detect_frame_codec  # noqa: E402
 from rm_client.backend.serial_backend import RmSerialBackend  # noqa: E402
+from rm_client.backend.mqtt_backend import RmMqttBackend  # noqa: E402
 from rm_client.model import RobotState, build_default_registry  # noqa: E402
 from rm_client.scenarios import SCENARIOS  # noqa: E402
 
@@ -142,7 +143,7 @@ def test_downlink_decode() -> None:
     check("POS x", abs(data["x"] - 10.5) < 1e-4)
     check("POS yaw", abs(data["yaw"] - 90.0) < 1e-4)
 
-    # RadarInfoToClient ????
+    # RadarInfoToClient 嵌套消息
     sub = b"".join([
         proto.encode_uint(1, 10),
         proto.encode_uint(2, 20),
@@ -171,6 +172,7 @@ def test_safety_modes() -> None:
 
     s = OfficialSafety("LabDebug")
     s.from_scenario(lab)
+    check("fail-closed before GameStatus", s.is_fighting() is False)
     ok, reason = s.can_publish("DartCommand")
     check("LabDebug blocks real publish", ok is False and "mock" in reason)
 
@@ -178,7 +180,7 @@ def test_safety_modes() -> None:
     s.from_scenario(campus)
     s.update_stage("0")
     ok, reason = s.can_publish("CommonCommand")
-    check("Campus non-fighting blocked (official limits)", ok is False and "??" in reason)
+    check("Campus non-fighting blocked (official limits)", ok is False and "阶段" in reason)
     s.update_stage("4")
     ok, reason = s.can_publish("CommonCommand")
     check("Campus fighting allowed", ok is True)
@@ -187,17 +189,17 @@ def test_safety_modes() -> None:
     s.from_scenario(official)
     s.update_stage("0")
     ok, reason = s.can_publish("DartCommand")
-    check("Official non-fighting blocked", ok is False and "??" in reason)
+    check("Official non-fighting blocked", ok is False and "阶段" in reason)
     s.update_stage("4")
     ok, reason = s.can_publish("DartCommand")
     check("Official fighting allowed", ok is True)
-    s.mark_published("DartCommand")  # ???????????
+    s.mark_published("DartCommand")  # 模拟真实发布记录时间戳
     ok, reason = s.can_publish("DartCommand")
     check("Official 10Hz limited", ok is False and "10Hz" in reason)
 
     s.trigger_estop()
     ok, reason = s.can_publish("DartCommand")
-    check("Estop blocks", ok is False and "??" in reason)
+    check("Estop blocks", ok is False and "急停" in reason)
     s.release_estop()
     ok, _ = s.can_publish("CommonCommand")
     check("Estop release", ok is True)
@@ -206,7 +208,7 @@ def test_safety_modes() -> None:
 def test_video_codec_detect() -> None:
     print("[video] codec detect")
     check("mjpeg detect", detect_frame_codec(b"\xff\xd8\xff\xe0rest") == "mjpeg")
-    nal = b"\x00\x00\x00\x01" + bytes([(32 << 1) | 1]) + b"\\x01\\x02"
+    nal = b"\x00\x00\x00\x01" + bytes([(32 << 1) | 1]) + b"\x01\x02"
     check("h265 detect", detect_frame_codec(nal) == "h265")
     check("unknown detect", detect_frame_codec(b"hello") == "unknown")
 
@@ -225,7 +227,7 @@ def test_manager_updates_state() -> None:
     print("[manager] apply_updates -> RobotState")
     state = RobotState()
     manager = BackendManager(state=state, client_id="3", scenario_key="LabDebug")
-    # ????????????? MQTT?
+    # 直接喂解码队列（不依赖真实 MQTT）
     from collections import deque
     import threading as _t
     manager.mqtt._decoded.append(("GameStatus", "GameStatus", {
@@ -260,11 +262,112 @@ def test_manager_updates_state() -> None:
     check("state rune progress", state.energy_rune_progress == 250)
     check("state active_penalty", state.active_penalty["penalty_type"] == 1)
 
-    # ?????????? ? shooter=chassis=3?
+    # 性能值推导（英雄近战 → shooter=chassis=3）
     registry = build_default_registry()
     values = BackendManager.performance_values(registry)
     check("perf default infantry", values["shooter"] == 2 and values["chassis"] == 2)
     manager.shutdown()
+
+
+def test_protocol_regressions() -> None:
+    print("[protocol] regression fixes")
+    check("empty payload -> {}", proto.decode_message("GameStatus", b"") == {})
+    check("truncated varint -> {}", proto.decode_message("GameStatus", b"\x08\x80") == {})
+    payload = proto.encode_uint(1, 0xFFFFFFFFFFFFFFFF)
+    fields = proto.decode_fields(payload)
+    check("varint masked 64-bit", proto._u(fields, 1) == 0xFFFFFFFFFFFFFFFF)
+    payload = proto.encode_uint(4, 3) + proto.encode_uint(9, 600)
+    data = proto.decode_message("RobotStaticStatus", payload)
+    check("present marker", data["__present__"] == frozenset({4, 9}))
+    check("missing field default", data["robot_id"] == 3 and data["max_health"] == 600)
+    payload = proto.encode_map_click_info_notify()
+    fields = proto.decode_fields(payload)
+    check("robot_id default 7 bytes", len(proto._b(fields, 2)) == 7)
+    try:
+        proto.encode_custom_control(b"x" * 31)
+        check("custom_control >30 raises", False)
+    except ValueError:
+        check("custom_control >30 raises", True)
+    check("custom_control 30 ok", len(proto.encode_custom_control(b"x" * 30)) > 0)
+    check("topic unknown -> empty", proto.topic_message_name("CustomLog/1") == "")
+    check("topic known", proto.topic_message_name("GameStatus") == "GameStatus")
+    payload = proto.encode_packed_uints(1, [1, 2]) + proto.encode_uint(1, 3)
+    fields = proto.decode_fields(payload)
+    check("mixed packed+unpacked", proto._packed(fields, 1) == [1, 2, 3])
+
+
+def test_serial_partial_frame() -> None:
+    print("[serial] partial frame retention")
+    from rm_client.protocol import RefereeFrameCodec
+    codec = RefereeFrameCodec()
+    frame_a = codec.encode(0x0311, b"\x01" * 20)
+    frame_b = codec.encode(0x0311, b"\x02" * 20)
+    stream = frame_a + frame_b[:5]
+    frames, consumed = codec.decode_with_consumed(stream)
+    check("one complete frame", len(frames) == 1)
+    check("consumed == len(frame_a)", consumed == len(frame_a))
+    check("partial retained", len(stream) - consumed == 5)
+
+
+def test_codec_regressions() -> None:
+    print("[video] codec regressions")
+    check("h264 sps", detect_frame_codec(b"\x00\x00\x00\x01\x67\x64\x00\x2a") == "h264")
+    check("trailing start code no crash", detect_frame_codec(b"\x00\x00\x00\x01") == "unknown")
+    check("prefixed mjpeg", detect_frame_codec(b"\x00\x00\x00\x2a\xff\xd8\xff") == "mjpeg")
+    check("hevc vps", detect_frame_codec(b"\x00\x00\x00\x01\x41\x01\x01\x02") == "h265")
+
+
+def test_mqtt_publish_rc() -> None:
+    print("[mqtt] publish rc + estop mock + client_id")
+    from rm_client.scenarios import SCENARIOS
+    s = OfficialSafety("OfficialEvent")
+    s.from_scenario(SCENARIOS["OfficialEvent"])
+    s.update_stage("4")
+    backend = RmMqttBackend(host="127.0.0.1", port=3333, client_id="3",
+                            mock_output=False, safety=s)
+    backend.connected = True
+
+    class _InfoErr:
+        rc = 4  # MQTT_ERR_NO_CONN
+
+    class _FakeErr:
+        def publish(self, topic, payload, qos=1):
+            return _InfoErr()
+
+    backend.client = _FakeErr()
+    ok, reason = backend.publish_topic("DartCommand", b"x")
+    check("disconnected publish rc -> False", ok is False and "rc=4" in reason)
+
+    class _InfoOk:
+        rc = 0
+
+    class _FakeOk:
+        def __init__(self):
+            self.calls = []
+        def publish(self, topic, payload, qos=1):
+            self.calls.append((topic, payload))
+            return _InfoOk()
+
+    backend.client = _FakeOk()
+    ok, reason = backend.publish_topic("DartCommand", b"x")
+    check("connected publish ok", ok is True and reason == "ok")
+    ok, reason = backend.publish_topic("DartCommand", b"x")
+    check("10Hz after real publish", ok is False and "10Hz" in reason)
+
+    backend2 = RmMqttBackend(host="127.0.0.1", port=3333, client_id="3",
+                             mock_output=True, safety=s)
+    s.trigger_estop()
+    ok, reason = backend2.publish_topic("DartCommand", b"x")
+    check("estop blocks mock", ok is False and "急停" in reason)
+    s.release_estop()
+
+    from rm_client.backend.manager import BackendManager
+    from rm_client.model import RobotState
+    m = BackendManager(state=RobotState(), client_id="3", scenario_key="LabDebug")
+    m.mqtt._started = True
+    m.set_client_id(7)
+    check("client_id updated", m.mqtt.client_id == "7")
+    m.shutdown()
 
 
 def main() -> None:
@@ -274,6 +377,10 @@ def main() -> None:
     test_video_codec_detect()
     test_serial_backend()
     test_manager_updates_state()
+    test_protocol_regressions()
+    test_serial_partial_frame()
+    test_codec_regressions()
+    test_mqtt_publish_rc()
     print(f"\\nALL PASSED ({PASS} checks)")
 
 

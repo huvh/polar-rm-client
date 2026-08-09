@@ -16,6 +16,7 @@ class FrameAssembler:
 
     def __init__(self) -> None:
         self.frames: dict[int, dict[str, object]] = {}
+        self.dropped_count = 0
 
     def push_packet(self, packet: bytes) -> bytes | None:
         if len(packet) < 8:
@@ -50,6 +51,7 @@ class FrameAssembler:
         ]
         for frame_id in stale:
             self.frames.pop(frame_id, None)
+        self.dropped_count += len(stale)
 
 
 @dataclass
@@ -80,6 +82,9 @@ class UDPVideoReceiver:
             except OSError:
                 pass
             self._socket = None
+        if self._thread is not None and self._thread.is_alive():
+            self._thread.join(timeout=0.6)
+        self._thread = None
 
     def _run(self) -> None:
         try:

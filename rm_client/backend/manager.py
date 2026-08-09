@@ -1,13 +1,13 @@
-"""??????? SharkClient ???????????????
+"""后端管理器：把 SharkClient 风格后端对齐本地三种运行场景。
 
-LabDebug / CampusSimulation / OfficialEvent ???
-- MQTT??????????????????????LabDebug mock?
-- UDP????????codec ???MJPEG ?????
-- ???Stub ??? PySerial + ???? + ??
-- ????????10Hz + ?????? + ???
+LabDebug / CampusSimulation / OfficialEvent 各自：
+- MQTT：真实连接（可收）、按场景决定是否真实发布（LabDebug mock）
+- UDP：监听图传端口、codec 检测、MJPEG 解码、统计
+- 串口：Stub 或真实 PySerial + 心跳归零 + 急停
+- 安全：官方限幅（10Hz + 比赛阶段门控 + 急停）
 
-??????????????? RobotState??? UI ?????????????
-?????? 7 ????????????
+同时把全量下行消息解码结果写入 RobotState（前端 UI 无需改动即可读取新数据），
+并提供缺失的 7 条上行指令编码发布入口。
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ from .safety import OfficialSafety
 from .serial_backend import RmSerialBackend
 from .video_backend import RmVideoBackend
 
-# ??????????? messages.proto ? Shark RoboModeSettings?
+# 官方性能体系取值（对齐 messages.proto 与 Shark RoboModeSettings）
 HERO_MELEE = 3
 HERO_RANGE = 4
 SHOOTER_COOLING = 1
@@ -38,7 +38,7 @@ _STAGE_STR = {0: "NOT_STARTED", 1: "PREPARE", 2: "SELF_CHECK", 3: "COUNTDOWN", 4
 
 
 class BackendManager:
-    """??????? SharkClient ?????"""
+    """本地三种模式的 SharkClient 对齐后端。"""
 
     def __init__(
         self,
@@ -61,7 +61,7 @@ class BackendManager:
         self._apply_config(self.config)
 
     # ------------------------------------------------------------------
-    # ????
+    # 场景应用
     # ------------------------------------------------------------------
     def _apply_config(self, config: Any) -> None:
         self.config = config
@@ -81,11 +81,11 @@ class BackendManager:
         self.scenario_key = key
         config = SCENARIOS[key]
         self._apply_config(config)
-        # ??????? MQTT????????????????
+        # 三种模式都启动 MQTT（可收裁判数据；发布按场景门控）
         self.mqtt.start()
-        # ??????? UDP ???codec ?? + MJPEG ?? + ???
+        # 三种模式都监听 UDP 图传（codec 检测 + MJPEG 解码 + 统计）
         self.udp.start()
-        # ???Stub ?????
+        # 串口：Stub 或真实端口
         self.serial.start()
 
     def tick(self) -> None:
@@ -93,16 +93,27 @@ class BackendManager:
             self.safety.update_stage(self.state.current_stage)
         self.serial.tick()
 
+    def set_client_id(self, robot_id: int) -> None:
+        """机器人档案变更后同步 MQTT client_id 并重建连接。"""
+        new_id = str(int(robot_id))
+        if new_id == self.mqtt.client_id:
+            return
+        was_started = self.mqtt._started
+        self.mqtt.stop()
+        self.mqtt.client_id = new_id
+        if was_started:
+            self.mqtt.start()
+
     def shutdown(self) -> None:
         self.mqtt.stop()
         self.udp.stop()
         self.serial.stop()
 
     # ------------------------------------------------------------------
-    # ???? ? RobotState
+    # 下行消息 → RobotState
     # ------------------------------------------------------------------
     def apply_updates(self, state: RobotState) -> int:
-        """????????? RobotState?????????????"""
+        """消费解码队列并写入 RobotState；返回本次应用的消息条数。"""
         messages = self.mqtt.drain_decoded()
         count = 0
         for _topic, name, data, _ts in messages:
@@ -112,7 +123,13 @@ class BackendManager:
             state.backend_stats = self.stats()
         return count
 
+    @staticmethod
+    def _clean(data: dict[str, Any]) -> dict[str, Any]:
+        """去掉协议层附加的 __present__ 元数据后再存入 state。"""
+        return {k: v for k, v in data.items() if k != "__present__"}
+
     def _apply_one(self, state: RobotState, name: str, data: dict[str, Any]) -> None:
+        present = frozenset(data.get("__present__", ()))
         if name == "GameStatus":
             state.current_round = int(data.get("current_round", state.current_round))
             state.total_rounds = int(data.get("total_rounds", state.total_rounds))
@@ -136,25 +153,32 @@ class BackendManager:
             health = [int(v) for v in data.get("robot_health", ()) if isinstance(v, int)]
             if health:
                 state.official_robot_health = health
+            bullets = [int(v) for v in data.get("robot_bullets", ()) if isinstance(v, int)]
+            if bullets:
+                state.backend_stats["robot_bullets"] = bullets
         elif name == "GlobalLogisticsStatus":
             state.remaining_economy = int(data.get("remaining_economy", state.remaining_economy))
             state.total_economy_obtained = int(data.get("total_economy_obtained", state.total_economy_obtained))
             state.tech_level = int(data.get("tech_level", state.tech_level))
             state.encryption_level = int(data.get("encryption_level", state.encryption_level))
         elif name == "RobotStaticStatus":
-            state.robot_id = int(data.get("robot_id", state.robot_id))
-            state.level = int(data.get("level", state.level))
-            if data.get("max_health"):
+            if 4 in present and data["robot_id"]:
+                state.robot_id = int(data["robot_id"])
+            if 8 in present and data["level"]:
+                state.level = int(data["level"])
+            if 9 in present and data["max_health"]:
                 state.max_health = int(data["max_health"])
                 state.current_health = min(state.current_health, state.max_health)
-            if data.get("max_heat"):
+            if 10 in present and data["max_heat"]:
                 state.max_heat = float(data["max_heat"])
-            if data.get("heat_cooldown_rate"):
+            if 11 in present and data["heat_cooldown_rate"]:
                 state.heat_cooldown_rate = float(data["heat_cooldown_rate"])
-            if data.get("max_power"):
+            if 12 in present and data["max_power"]:
                 state.power_limit = int(data["max_power"])
-            state.performance_sync["shooter"] = int(data.get("performance_system_shooter", 0))
-            state.performance_sync["chassis"] = int(data.get("performance_system_chassis", 0))
+            if 6 in present:
+                state.performance_sync["shooter"] = int(data["performance_system_shooter"])
+            if 7 in present:
+                state.performance_sync["chassis"] = int(data["performance_system_chassis"])
         elif name == "RobotDynamicStatus":
             state.current_health = int(data.get("current_health", state.current_health))
             state.current_heat = float(data.get("current_heat", state.current_heat))
@@ -174,25 +198,25 @@ class BackendManager:
         elif name == "PenaltyInfo":
             self._upsert_penalty(state, data)
         elif name == "RobotPathPlanInfo":
-            state.path_plan = dict(data)
+            state.path_plan = self._clean(data)
         elif name == "RadarInfoToClient":
             state.radar_detections = [dict(r) for r in data.get("robots", ())]
         elif name == "TechCoreMotionStateSync":
-            state.tech_core = dict(data)
+            state.tech_core = self._clean(data)
         elif name == "RobotPerformanceSelectionSync":
             state.performance_sync = {k: int(v) for k, v in data.items()}
         elif name == "DeployModeStatusSync":
             state.deploy_mode = int(data.get("status", 0))
         elif name == "RuneStatusSync":
-            state.rune_status = dict(data)
+            state.rune_status = self._clean(data)
             state.energy_rune_phase = _RUNE_PHASE.get(int(data.get("rune_status", 1)), "INACTIVE")
             state.energy_rune_progress = int(float(data.get("average_rings", 0)) * 100)
         elif name == "SentryStatusSync":
-            state.sentry_status = dict(data)
+            state.sentry_status = self._clean(data)
         elif name == "DartSelectTargetStatusSync":
-            state.dart_status = dict(data)
+            state.dart_status = self._clean(data)
         elif name == "SentryCtrlResult":
-            state.sentry_ctrl_result = dict(data)
+            state.sentry_ctrl_result = self._clean(data)
         elif name == "AirSupportStatusSync":
             state.air_support_active = int(data.get("airsupport_status", 0)) == 1
             state.air_support_free_time_sec = int(data.get("left_time", 0))
@@ -204,8 +228,17 @@ class BackendManager:
                 {"mechanism_id": i, "time_sec": t}
                 for i, t in zip(ids, times)
             ]
+        elif name == "Event":
+            state.backend_stats["last_event"] = {
+                "event_id": int(data.get("event_id", 0)),
+                "param": data.get("param", ""),
+            }
+        elif name == "CustomByteBlock":
+            state.backend_stats["last_custom_block"] = {
+                "len": len(data.get("data", b"")),
+            }
         elif name == "RobotInjuryStat":
-            state.injury_stats[int(data.get("killer_id", 0))] = dict(data)
+            state.injury_stats[int(data.get("killer_id", 0))] = self._clean(data)
         elif name == "RobotRespawnStatus":
             state.respawn_pending = bool(data.get("is_pending_respawn", state.respawn_pending))
             total = max(1, int(data.get("total_respawn_progress", 1)))
@@ -218,39 +251,42 @@ class BackendManager:
     def _upsert_positions(self, state: RobotState, data: dict[str, Any]) -> None:
         robot_id = int(data.get("robot_id", 0))
         positions = list(state.robot_positions)
+        clean = self._clean(data)
         for index, item in enumerate(positions):
             if int(item.get("robot_id", -1)) == robot_id:
-                positions[index] = dict(data)
+                positions[index] = clean
                 break
         else:
-            positions.append(dict(data))
+            positions.append(clean)
         state.robot_positions = positions[-16:]
 
     def _upsert_buff(self, state: RobotState, data: dict[str, Any]) -> None:
         key = (int(data.get("robot_id", 0)), int(data.get("buff_type", 0)))
         buffs = list(state.buffs)
+        clean = self._clean(data)
         for index, item in enumerate(buffs):
             if (int(item.get("robot_id", 0)), int(item.get("buff_type", 0))) == key:
-                buffs[index] = dict(data)
+                buffs[index] = clean
                 break
         else:
-            buffs.append(dict(data))
+            buffs.append(clean)
         state.buffs = buffs[-24:]
 
     def _upsert_penalty(self, state: RobotState, data: dict[str, Any]) -> None:
         penalty_type = int(data.get("penalty_type", 0))
         penalties = list(state.penalties)
+        clean = self._clean(data)
         for index, item in enumerate(penalties):
             if int(item.get("penalty_type", -1)) == penalty_type:
-                penalties[index] = dict(data)
+                penalties[index] = clean
                 break
         else:
-            penalties.append(dict(data))
+            penalties.append(clean)
         state.penalties = penalties[-8:]
-        state.active_penalty = dict(data)
+        state.active_penalty = clean
 
     # ------------------------------------------------------------------
-    # ??????? SharkClient MqttCommandPanel ?????
+    # 上行指令（对齐 SharkClient MqttCommandPanel 全部命令）
     # ------------------------------------------------------------------
     def _publish(self, name: str, payload: bytes) -> tuple[bool, str]:
         return self.mqtt.publish_named(name, payload, qos=1)
@@ -299,7 +335,7 @@ class BackendManager:
         return self._publish("AirSupportCommand", proto.encode_air_support_command(command_id))
 
     # ------------------------------------------------------------------
-    # ?????? RobotProfile ???????????????
+    # 工具：从本地 RobotProfile 设置推导官方性能体系取值并发布
     # ------------------------------------------------------------------
     @staticmethod
     def performance_values(registry: Any) -> dict[str, int]:
