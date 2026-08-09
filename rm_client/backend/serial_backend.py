@@ -93,10 +93,14 @@ class RmSerialBackend(SerialBridgeStub):
         return self.write(frame)
 
     def write(self, payload: bytes) -> tuple[bool, str]:
+        return self._write_payload(payload, bypass_estop=False)
+
+    def _write_payload(self, payload: bytes, *, bypass_estop: bool) -> tuple[bool, str]:
+        """Write one frame; only the internally-built stop frame can bypass E-stop."""
         self.last_write = payload
         if self.mock_writes:
             return True, "mock"
-        if self.estop_active:
+        if self.estop_active and not bypass_estop:
             self.last_error = "急停激活，串口写入被禁止"
             return False, self.last_error
         if self._serial is None or not self.connected:
@@ -145,7 +149,9 @@ class RmSerialBackend(SerialBridgeStub):
             speed_limit=0, power_limit=0, spin_mode=False,
         )
         frame = self.codec.encode(CUSTOM_CONTROL_CMD_ID, payload)
-        return self.write(frame)
+        # The payload above is constructed locally and is always all-zero.
+        # Keeping the bypass private prevents arbitrary commands while latched.
+        return self._write_payload(frame, bypass_estop=True)
 
     # ------------------------------------------------------------------
     def _read_loop(self) -> None:

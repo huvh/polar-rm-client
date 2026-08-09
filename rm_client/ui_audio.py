@@ -21,6 +21,8 @@ class ReliableAudioPool(QObject):
         self._fallback: list[tuple[QMediaPlayer, QAudioOutput]] = []
         self._fallback_index = 0
         self._fallback_voices = max(1, fallback_voices)
+        self._media_effects: dict[str, list[tuple[QMediaPlayer, QAudioOutput]]] = {}
+        self._media_indices: dict[str, int] = defaultdict(int)
         self.last_sound = ""
         self.last_error = ""
         self.backend = "QSoundEffect"
@@ -40,6 +42,24 @@ class ReliableAudioPool(QObject):
                 effect.setSource(QUrl.fromLocalFile(str(path.resolve())))
                 voices.append(effect)
             self._effects[name] = voices
+
+    def preload_media(self, names: Iterable[str], voices_per_sound: int = 1) -> None:
+        """Prime compressed short cues through Qt FFmpeg before first input."""
+
+        voice_count = max(1, int(voices_per_sound))
+        for name in dict.fromkeys(str(item) for item in names):
+            path = self.root / name
+            if not path.is_file() or path.suffix.lower() == ".wav" or name in self._media_effects:
+                continue
+            voices: list[tuple[QMediaPlayer, QAudioOutput]] = []
+            source = QUrl.fromLocalFile(str(path.resolve()))
+            for _ in range(voice_count):
+                output = QAudioOutput(self)
+                player = QMediaPlayer(self)
+                player.setAudioOutput(output)
+                player.setSource(source)
+                voices.append((player, output))
+            self._media_effects[name] = voices
 
     def play(self, name: str, volume: float) -> bool:
         path = self.root / name
@@ -79,6 +99,21 @@ class ReliableAudioPool(QObject):
                 self._play_fallback(self.root / name, volume, "QSoundEffect 加载失败")
 
     def _play_fallback(self, path: Path, volume: float, reason: str) -> bool:
+        try:
+            relative_name = path.resolve().relative_to(self.root.resolve()).as_posix()
+        except ValueError:
+            relative_name = ""
+        preloaded = self._media_effects.get(relative_name, [])
+        if preloaded:
+            index = self._media_indices[relative_name] % len(preloaded)
+            self._media_indices[relative_name] = (index + 1) % len(preloaded)
+            player, output = preloaded[index]
+            player.stop()
+            output.setVolume(max(0.0, min(1.0, volume / 100.0)))
+            player.play()
+            self.backend = "QMediaPlayer"
+            self.last_error = reason
+            return True
         if len(self._fallback) < self._fallback_voices:
             output = QAudioOutput(self)
             player = QMediaPlayer(self)
@@ -101,6 +136,19 @@ class UiAudioManager:
     NO_SOUND = "No Sound"
     AUDIO_EXTENSIONS = frozenset({".wav", ".ogg", ".mp3", ".flac", ".m4a", ".aac"})
     CUSTOM_KINDS = frozenset({"enable", "disable", "invalid"})
+    # Original, unmodified short cues from Sigma Jello 5.1.0.  The ClickGUI
+    # only invokes activate/deactivate for module state changes; the complete
+    # small UI bank is kept available without importing music or minigames.
+    JELLO_SOUNDS = (
+        "jello/activate.mp3",
+        "jello/click.mp3",
+        "jello/clicksound.mp3",
+        "jello/connect.mp3",
+        "jello/deactivate.mp3",
+        "jello/error.mp3",
+        "jello/pop.mp3",
+        "jello/switch.mp3",
+    )
     THEMES = {
         "Custom": {},
         "Polar Classic": {
@@ -126,6 +174,10 @@ class UiAudioManager:
         self.custom_dir.mkdir(parents=True, exist_ok=True)
         self.pool = ReliableAudioPool(self.root, voices_per_sound=2, fallback_voices=4)
         self.pool.preload(name for theme in self.THEMES.values() for name in theme.values())
+        # These are the two exact cues invoked by Sigma's ModListView.  Set
+        # their media sources now so the first module click does not pay MP3
+        # probing/decoder startup on the UI thread.
+        self.pool.preload_media(("jello/activate.mp3", "jello/deactivate.mp3"))
 
     def custom_sound_names(self) -> list[str]:
         sounds = [
@@ -175,6 +227,14 @@ class UiAudioManager:
             sound = self.sound_name(theme, "enable" if enabled else "disable", custom_sounds)
             if sound is not None:
                 self.pool.play(sound, volume)
+
+    def jello_module_toggled(self, enabled: bool, *, active: bool, volume: float) -> None:
+        """Play Sigma's exact module on/off cue, independent of Polar themes."""
+        if active:
+            self.pool.play(
+                "jello/activate.mp3" if enabled else "jello/deactivate.mp3",
+                volume,
+            )
 
     def preview(
         self,

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import math
+from pathlib import Path
 import struct
 import time
 
@@ -49,6 +50,20 @@ class GpuText:
     color: QColor
     alignment: Qt.AlignmentFlag = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
     clip: QRectF | None = None
+    shadow: bool = True
+    rotation_degrees: float = 0.0
+    render_scale: float = 1.0
+    rotation_origin: QPointF | None = None
+    raster_scale: float = 1.0
+    preserve_weight: bool = False
+
+
+@dataclass(frozen=True)
+class GpuImage:
+    rect: QRectF
+    source: str
+    tint: QColor = field(default_factory=lambda: QColor(255, 255, 255, 255))
+    clip: QRectF | None = None
 
 
 @dataclass(frozen=True)
@@ -60,7 +75,7 @@ class GpuUiCommand:
     """
 
     sequence: int
-    payload: GpuRect | GpuText
+    payload: GpuRect | GpuText | GpuImage
     layer: int = 0
     opacity: float = 1.0
 
@@ -69,9 +84,13 @@ class GpuUiCommand:
 class ClickGuiDrawList:
     rects: list[GpuRect] = field(default_factory=list)
     texts: list[GpuText] = field(default_factory=list)
+    images: list[GpuImage] = field(default_factory=list)
     commands: list[GpuUiCommand] = field(default_factory=list)
+    default_text_shadow: bool = True
+    default_text_raster_scale: float = 1.0
+    default_text_preserve_weight: bool = False
 
-    def _append(self, payload: GpuRect | GpuText, *, layer: int = 0, opacity: float = 1.0) -> None:
+    def _append(self, payload: GpuRect | GpuText | GpuImage, *, layer: int = 0, opacity: float = 1.0) -> None:
         self.commands.append(GpuUiCommand(len(self.commands), payload, layer, opacity))
 
     def rect(self, rect: QRectF, radius: float, fill: QColor, outline: QColor | None = None, outline_width: float = 0.0, gradient: QColor | None = None, clip: QRectF | None = None) -> None:
@@ -79,16 +98,53 @@ class ClickGuiDrawList:
         self.rects.append(payload)
         self._append(payload)
 
-    def text(self, rect: QRectF, text: str, font: QFont, color: QColor, alignment: Qt.AlignmentFlag = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, clip: QRectF | None = None) -> None:
+    def text(self, rect: QRectF, text: str, font: QFont, color: QColor, alignment: Qt.AlignmentFlag = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, clip: QRectF | None = None, *, shadow: bool | None = None, rotation_degrees: float = 0.0, render_scale: float = 1.0, rotation_origin: QPointF | None = None, raster_scale: float | None = None, preserve_weight: bool | None = None) -> None:
         if text:
-            payload = GpuText(QRectF(rect), text, QFont(font), QColor(color), alignment, QRectF(clip) if clip else None)
+            draw_shadow = self.default_text_shadow if shadow is None else bool(shadow)
+            payload = GpuText(
+                QRectF(rect),
+                text,
+                QFont(font),
+                QColor(color),
+                alignment,
+                QRectF(clip) if clip else None,
+                draw_shadow,
+                float(rotation_degrees),
+                max(0.01, float(render_scale)),
+                QPointF(rotation_origin) if rotation_origin is not None else None,
+                max(
+                    0.25,
+                    float(
+                        self.default_text_raster_scale
+                        if raster_scale is None
+                        else raster_scale
+                    ),
+                ),
+                (
+                    self.default_text_preserve_weight
+                    if preserve_weight is None
+                    else bool(preserve_weight)
+                ),
+            )
             self.texts.append(payload)
             self._append(payload)
+
+    def image(self, rect: QRectF, source: str | Path, tint: QColor | None = None, clip: QRectF | None = None) -> None:
+        source_path = str(Path(source).expanduser().resolve())
+        payload = GpuImage(
+            QRectF(rect),
+            source_path,
+            QColor(tint) if tint is not None else QColor(255, 255, 255, 255),
+            QRectF(clip) if clip else None,
+        )
+        self.images.append(payload)
+        self._append(payload)
 
     def extend(self, other: "ClickGuiDrawList") -> None:
         """Append another list while preserving its internal draw order."""
         self.rects.extend(other.rects)
         self.texts.extend(other.texts)
+        self.images.extend(other.images)
         for command in other.commands:
             self.commands.append(
                 GpuUiCommand(len(self.commands), command.payload, command.layer, command.opacity)
@@ -102,6 +158,7 @@ class _GlyphAtlas:
     raster_font: QFont
     ratio: float
     sample_scale: float
+    raster_scale: float
 
 
 @dataclass(frozen=True)
@@ -115,10 +172,21 @@ class SmallTextPolicy:
     def sample_scale_for(self, physical_pixel_size: float) -> float:
         return self.oversample_scale if physical_pixel_size <= self.oversample_limit_px else 1.0
 
-    def prepare_font(self, font: QFont, physical_pixel_size: float, sample_scale: float) -> QFont:
+    def prepare_font(
+        self,
+        font: QFont,
+        physical_pixel_size: float,
+        sample_scale: float,
+        *,
+        preserve_weight: bool = False,
+    ) -> QFont:
         prepared = QFont(font)
         prepared.setPixelSize(max(1, int(round(physical_pixel_size * sample_scale))))
-        if physical_pixel_size <= self.medium_limit_px and prepared.weight() < QFont.Weight.Medium:
+        if (
+            not preserve_weight
+            and physical_pixel_size <= self.medium_limit_px
+            and prepared.weight() < QFont.Weight.Medium
+        ):
             prepared.setWeight(QFont.Weight.Medium)
         prepared.setHintingPreference(QFont.HintingPreference.PreferFullHinting)
         prepared.setStyleStrategy(QFont.StyleStrategy.PreferAntialias)
@@ -149,7 +217,7 @@ class _Glyph:
 @dataclass(frozen=True)
 class GlyphAtlasSnapshot:
     generation: int
-    keys: tuple[tuple[str, float, int, float], ...]
+    keys: tuple[tuple[str, float, int, float, float, bool], ...]
 
 
 class ClickGuiGpuRenderer:
@@ -160,13 +228,16 @@ class ClickGuiGpuRenderer:
         self.last_error = ""
         self.rect_program: QOpenGLShaderProgram | None = None
         self.text_program: QOpenGLShaderProgram | None = None
+        self.image_program: QOpenGLShaderProgram | None = None
         self.buffer = QOpenGLBuffer(QOpenGLBuffer.Type.VertexBuffer)
         self.instance_buffer = QOpenGLBuffer(QOpenGLBuffer.Type.VertexBuffer)
         self.vertex_array = QOpenGLVertexArrayObject()
         self.rect_uniforms: dict[str, int] = {}
         self.text_uniforms: dict[str, int] = {}
-        self.atlases: dict[tuple[str, float, int, float], _GlyphAtlas] = {}
-        self._atlas_chars: dict[tuple[str, float, int, float], set[str]] = {}
+        self.image_uniforms: dict[str, int] = {}
+        self.atlases: dict[tuple[str, float, int, float, float, bool], _GlyphAtlas] = {}
+        self.image_textures: dict[str, QOpenGLTexture] = {}
+        self._atlas_chars: dict[tuple[str, float, int, float, float, bool], set[str]] = {}
         self.draw_calls = 0
         self._pixel_ratio = 1.0
         self.last_submit_ms = 0.0
@@ -183,6 +254,7 @@ class ClickGuiGpuRenderer:
         try:
             self.rect_program = self._build_rect_program()
             self.text_program = self._build_text_program()
+            self.image_program = self._build_image_program()
             if not self.vertex_array.create():
                 raise RuntimeError("GPU vertex array creation failed")
             self.buffer.create()
@@ -196,6 +268,10 @@ class ClickGuiGpuRenderer:
                 raise RuntimeError("GPU instance buffer creation failed")
             self.rect_uniforms = self._uniform_locations(self.rect_program, ("viewport",))
             self.text_uniforms = self._uniform_locations(self.text_program, ("viewport", "glyph"))
+            self.image_uniforms = self._uniform_locations(
+                self.image_program,
+                ("viewport", "rect", "sourceTexture", "tint"),
+            )
             self.available = True
             self.last_error = ""
             return True
@@ -204,7 +280,15 @@ class ClickGuiGpuRenderer:
             self.available = False
             return False
 
-    def prewarm(self, fonts: tuple[QFont, ...], labels, device_pixel_ratio: float = 1.0) -> None:
+    def prewarm(
+        self,
+        fonts: tuple[QFont, ...],
+        labels,
+        device_pixel_ratio: float = 1.0,
+        *,
+        raster_scale: float = 1.0,
+        preserve_weight: bool = False,
+    ) -> None:
         """Populate stable glyph atlases before an interactive GUI open."""
         if not self.available:
             return
@@ -213,7 +297,19 @@ class ClickGuiGpuRenderer:
         if not characters:
             return
         for font in fonts:
-            self._ensure_atlas(font, "".join(characters))
+            self._ensure_atlas(
+                font,
+                "".join(characters),
+                raster_scale=raster_scale,
+                preserve_weight=preserve_weight,
+            )
+
+    def prewarm_images(self, sources) -> None:
+        """Upload stable UI sprites while an OpenGL context is current."""
+        if not self.available:
+            return
+        for source in sources:
+            self._ensure_image_texture(str(Path(source).expanduser().resolve()))
 
     @staticmethod
     def _uniform_locations(program: QOpenGLShaderProgram, names: tuple[str, ...]) -> dict[str, int]:
@@ -314,11 +410,21 @@ class ClickGuiGpuRenderer:
             layout(location=1) in vec4 instanceRect;
             layout(location=2) in vec4 instanceUv;
             layout(location=3) in vec4 instanceColor;
+            layout(location=4) in float instanceRotation;
+            layout(location=5) in vec2 instanceRotationOrigin;
             uniform vec2 viewport;
             out vec2 uv;
             flat out vec4 glyphColor;
             void main() {
-                vec2 pixel = instanceRect.xy + position * instanceRect.zw;
+                vec2 unrotated = instanceRect.xy + position * instanceRect.zw;
+                vec2 local = unrotated - instanceRotationOrigin;
+                float c = cos(instanceRotation);
+                float s = sin(instanceRotation);
+                vec2 rotated = vec2(
+                    c * local.x - s * local.y,
+                    s * local.x + c * local.y
+                );
+                vec2 pixel = instanceRotationOrigin + rotated;
                 vec2 ndc = vec2(pixel.x / viewport.x * 2.0 - 1.0, 1.0 - pixel.y / viewport.y * 2.0);
                 gl_Position = vec4(ndc, 0.0, 1.0);
                 uv = mix(instanceUv.xy, instanceUv.zw, position);
@@ -340,6 +446,21 @@ class ClickGuiGpuRenderer:
             }
         """
         return self._build_program(vertex, fragment)
+
+    def _build_image_program(self) -> QOpenGLShaderProgram:
+        fragment = """
+            #version 330
+            in vec2 localUv;
+            out vec4 fragColor;
+            uniform sampler2D sourceTexture;
+            uniform vec4 tint;
+            void main() {
+                vec4 sampleColor = texture(sourceTexture, localUv);
+                float alpha = sampleColor.a * tint.a;
+                fragColor = vec4(sampleColor.rgb * tint.rgb * alpha, alpha);
+            }
+        """
+        return self._build_program(self._vertex_source(), fragment)
 
     @staticmethod
     def _build_program(vertex: str, fragment: str) -> QOpenGLShaderProgram:
@@ -366,13 +487,19 @@ class ClickGuiGpuRenderer:
         *,
         atlas_prepared: bool = False,
     ) -> bool:
-        if not self.available or self.rect_program is None or self.text_program is None:
+        """Render a logical-pixel draw list into the current DPR-sized framebuffer."""
+        if (
+            not self.available
+            or self.rect_program is None
+            or self.text_program is None
+            or self.image_program is None
+        ):
             return False
         self._pixel_ratio = max(1.0, float(device_pixel_ratio))
         try:
             if atlas_prepared:
-                if not self._atlases_ready(commands):
-                    self.last_error = "glyph atlas snapshot is incomplete for this frame"
+                if not self._resources_ready(commands):
+                    self.last_error = "ClickGUI GPU resource snapshot is incomplete for this frame"
                     return False
             else:
                 self.prepare_frame(commands, self._pixel_ratio)
@@ -433,43 +560,86 @@ class ClickGuiGpuRenderer:
             raise RuntimeError("glyph atlas preparation attempted during a render pass")
         self._pixel_ratio = max(1.0, float(device_pixel_ratio))
         self._prepare_atlases(commands)
+        self._prepare_images(commands)
         return self.atlas_snapshot
 
-    def _atlases_ready(self, draw_list: ClickGuiDrawList) -> bool:
+    def _resources_ready(self, draw_list: ClickGuiDrawList) -> bool:
         source = (
             [command.payload for command in draw_list.commands if isinstance(command.payload, GpuText)]
             if draw_list.commands
             else list(draw_list.texts)
         )
         for command in source:
-            atlas = self.atlases.get(self._font_key(command.font))
+            atlas = self.atlases.get(
+                self._font_key(
+                    command.font,
+                    command.raster_scale,
+                    command.preserve_weight,
+                )
+            )
             if atlas is None or any(character not in atlas.glyphs for character in command.text):
                 return False
+        image_source = (
+            [command.payload for command in draw_list.commands if isinstance(command.payload, GpuImage)]
+            if draw_list.commands
+            else list(draw_list.images)
+        )
+        if any(command.source not in self.image_textures for command in image_source):
+            return False
         return True
 
     def _prepare_atlases(self, draw_list: ClickGuiDrawList) -> None:
         """Publish every glyph needed by this frame before drawing begins."""
-        grouped: dict[tuple[str, float, int, float], tuple[QFont, set[str]]] = {}
+        grouped: dict[
+            tuple[str, float, int, float, float, bool],
+            tuple[QFont, set[str], float, bool],
+        ] = {}
         source = (
             [command.payload for command in draw_list.commands if isinstance(command.payload, GpuText)]
             if draw_list.commands
             else list(draw_list.texts)
         )
         for command in source:
-            key = self._font_key(command.font)
+            key = self._font_key(
+                command.font,
+                command.raster_scale,
+                command.preserve_weight,
+            )
             if key not in grouped:
-                grouped[key] = (QFont(command.font), set())
+                grouped[key] = (
+                    QFont(command.font),
+                    set(),
+                    command.raster_scale,
+                    command.preserve_weight,
+                )
             grouped[key][1].update(command.text)
-        for font, characters in grouped.values():
+        for font, characters, raster_scale, preserve_weight in grouped.values():
             if characters:
-                self._ensure_atlas(font, "".join(sorted(characters)))
+                self._ensure_atlas(
+                    font,
+                    "".join(sorted(characters)),
+                    raster_scale=raster_scale,
+                    preserve_weight=preserve_weight,
+                )
         self.atlas_snapshot = GlyphAtlasSnapshot(
             self.atlas_generation,
             tuple(sorted(self.atlases)),
         )
 
+    def _prepare_images(self, draw_list: ClickGuiDrawList) -> None:
+        source = (
+            [command.payload for command in draw_list.commands if isinstance(command.payload, GpuImage)]
+            if draw_list.commands
+            else list(draw_list.images)
+        )
+        for command in source:
+            self._ensure_image_texture(command.source)
+
     @staticmethod
-    def _apply_opacity(payload: GpuRect | GpuText, opacity: float) -> GpuRect | GpuText:
+    def _apply_opacity(
+        payload: GpuRect | GpuText | GpuImage,
+        opacity: float,
+    ) -> GpuRect | GpuText | GpuImage:
         opacity = max(0.0, min(1.0, float(opacity)))
         if opacity >= 0.999:
             return payload
@@ -489,6 +659,13 @@ class ClickGuiGpuRenderer:
                 faded(payload.gradient) if payload.gradient is not None else None,
                 QRectF(payload.clip) if payload.clip is not None else None,
             )
+        if isinstance(payload, GpuImage):
+            return GpuImage(
+                QRectF(payload.rect),
+                payload.source,
+                faded(payload.tint),
+                QRectF(payload.clip) if payload.clip is not None else None,
+            )
         return GpuText(
             QRectF(payload.rect),
             payload.text,
@@ -496,6 +673,12 @@ class ClickGuiGpuRenderer:
             faded(payload.color),
             payload.alignment,
             QRectF(payload.clip) if payload.clip is not None else None,
+            payload.shadow,
+            payload.rotation_degrees,
+            payload.render_scale,
+            QPointF(payload.rotation_origin) if payload.rotation_origin is not None else None,
+            payload.raster_scale,
+            payload.preserve_weight,
         )
 
     def _draw_ordered_commands(
@@ -509,6 +692,7 @@ class ClickGuiGpuRenderer:
         if not draw_list.commands:
             self._draw_rect_batches(functions, draw_list.rects, width, height)
             self._draw_text_batches(functions, draw_list.texts, width, height)
+            self._draw_image_batches(functions, draw_list.images, width, height)
             return
         index = 0
         commands = draw_list.commands
@@ -529,8 +713,10 @@ class ClickGuiGpuRenderer:
             ]
             if payload_type is GpuRect:
                 self._draw_rect_batches(functions, payloads, width, height)
-            else:
+            elif payload_type is GpuText:
                 self._draw_text_batches(functions, payloads, width, height)
+            else:
+                self._draw_image_batches(functions, payloads, width, height)
             index = end
 
     def _bind_quad(self, program: QOpenGLShaderProgram) -> None:
@@ -559,8 +745,16 @@ class ClickGuiGpuRenderer:
         program = self.rect_program
         program.bind()
         uniforms = self.rect_uniforms
-        program.setUniformValue(uniforms["viewport"], float(width), float(height))
         ratio = self._pixel_ratio
+        program.setUniformValue(
+            uniforms["viewport"],
+            # ``render`` passes framebuffer dimensions to every draw helper.
+            # Instance coordinates are converted from logical pixels exactly
+            # once below, so multiplying the viewport by DPR again would make
+            # the whole ClickGUI half-sized on a 200% Windows display.
+            float(width),
+            float(height),
+        )
         packed = bytearray()
         for command in commands:
             packed.extend(struct.pack(
@@ -594,8 +788,83 @@ class ClickGuiGpuRenderer:
         program.release()
         self.draw_calls += 1
 
-    def _font_key(self, font: QFont) -> tuple[str, float, int, float]:
-        return (font.family(), round(font.pointSizeF(), 2), int(font.weight()), self._pixel_ratio)
+    def _ensure_image_texture(self, source: str) -> QOpenGLTexture:
+        cached = self.image_textures.get(source)
+        if cached is not None:
+            return cached
+        if self._atlas_locked:
+            raise RuntimeError("image texture mutation attempted during a render pass")
+        image = QImage(source)
+        if image.isNull():
+            raise RuntimeError(f"ClickGUI image could not be loaded: {source}")
+        image = image.convertToFormat(QImage.Format.Format_RGBA8888)
+        texture = QOpenGLTexture(
+            image,
+            QOpenGLTexture.MipMapGeneration.DontGenerateMipMaps,
+        )
+        texture.setMinificationFilter(QOpenGLTexture.Filter.Linear)
+        texture.setMagnificationFilter(QOpenGLTexture.Filter.Linear)
+        texture.setWrapMode(QOpenGLTexture.WrapMode.ClampToEdge)
+        self.image_textures[source] = texture
+        return texture
+
+    def _draw_image_batches(
+        self,
+        functions,
+        commands: list[GpuImage],
+        width: int,
+        height: int,
+    ) -> None:
+        if not commands:
+            return
+        assert self.image_program is not None
+        program = self.image_program
+        program.bind()
+        uniforms = self.image_uniforms
+        ratio = self._pixel_ratio
+        program.setUniformValue(
+            uniforms["viewport"],
+            float(width),
+            float(height),
+        )
+        program.setUniformValue(uniforms["sourceTexture"], 0)
+        self._bind_quad(program)
+        for command in commands:
+            self._apply_clip(functions, command.clip, width, height)
+            texture = self.image_textures.get(command.source)
+            if texture is None:
+                raise RuntimeError(f"ClickGUI image was not prepared: {command.source}")
+            program.setUniformValue(
+                uniforms["rect"],
+                float(command.rect.left() * ratio),
+                float(command.rect.top() * ratio),
+                float(command.rect.width() * ratio),
+                float(command.rect.height() * ratio),
+            )
+            red, green, blue, alpha = self._rgba(command.tint)
+            program.setUniformValue(uniforms["tint"], red, green, blue, alpha)
+            functions.glActiveTexture(_GL_TEXTURE0)
+            texture.bind(0)
+            functions.glDrawArrays(_GL_TRIANGLE_STRIP, 0, 4)
+            texture.release()
+            self.draw_calls += 1
+        self._unbind_quad(program)
+        program.release()
+
+    def _font_key(
+        self,
+        font: QFont,
+        raster_scale: float = 1.0,
+        preserve_weight: bool = False,
+    ) -> tuple[str, float, int, float, float, bool]:
+        return (
+            font.family(),
+            round(font.pointSizeF(), 2),
+            int(font.weight()),
+            self._pixel_ratio,
+            round(max(0.25, float(raster_scale)), 2),
+            bool(preserve_weight),
+        )
 
     @staticmethod
     def _clip_key(clip: QRectF | None) -> tuple[float, float, float, float] | None:
@@ -603,9 +872,17 @@ class ClickGuiGpuRenderer:
             return None
         return (round(clip.x(), 2), round(clip.y(), 2), round(clip.width(), 2), round(clip.height(), 2))
 
-    def _ensure_atlas(self, font: QFont, text: str) -> _GlyphAtlas:
+    def _ensure_atlas(
+        self,
+        font: QFont,
+        text: str,
+        *,
+        raster_scale: float = 1.0,
+        preserve_weight: bool = False,
+    ) -> _GlyphAtlas:
         """Create a complete atlas page and swap it only at a frame boundary."""
-        key = self._font_key(font)
+        raster_scale = max(0.25, float(raster_scale))
+        key = self._font_key(font, raster_scale, preserve_weight)
         chars = self._atlas_chars.setdefault(key, set())
         before = set(chars)
         chars.update(text)
@@ -627,9 +904,14 @@ class ClickGuiGpuRenderer:
             logical_px = float(font.pixelSize())
         else:
             logical_px = 12.0
-        physical_px = max(1.0, logical_px * self._pixel_ratio)
+        physical_px = max(1.0, logical_px * self._pixel_ratio * raster_scale)
         sample_scale = self.small_text_policy.sample_scale_for(physical_px)
-        raster_font = self.small_text_policy.prepare_font(font, physical_px, sample_scale)
+        raster_font = self.small_text_policy.prepare_font(
+            font,
+            physical_px,
+            sample_scale,
+            preserve_weight=preserve_weight,
+        )
         raster_font.setHintingPreference(QFont.HintingPreference.PreferFullHinting)
         raster_font.setStyleStrategy(QFont.StyleStrategy.PreferAntialias)
         raster_font.setKerning(True)
@@ -637,7 +919,10 @@ class ClickGuiGpuRenderer:
         metrics = QFontMetricsF(raster_font)
         ordered_chars = sorted(chars)
         bounds_by_char = {char: metrics.boundingRect(char) for char in ordered_chars}
-        padding = max(4, int(math.ceil(self._pixel_ratio * sample_scale * 2.0)))
+        padding = max(
+            4,
+            int(math.ceil(self._pixel_ratio * sample_scale * raster_scale * 2.0)),
+        )
         max_glyph_width = max(
             1,
             int(math.ceil(max((bounds.width() for bounds in bounds_by_char.values()), default=1.0))),
@@ -695,16 +980,17 @@ class ClickGuiGpuRenderer:
                 painter.drawText(QPointF(pen_x, pen_y), char)
             # Tight UV (no 0.5 inset) so Nearest sampling does not thin strokes.
             inset = 0.5 if glyph_width > 1.0 and glyph_height > 1.0 else 0.0
+            normalization_scale = sample_scale * raster_scale
             glyphs[char] = _Glyph(
                 (atlas_x + inset) / atlas_width,
                 (atlas_y + inset) / atlas_height,
                 (atlas_x + glyph_width - inset) / atlas_width,
                 (atlas_y + glyph_height - inset) / atlas_height,
-                advance / sample_scale,
-                bounds.left() / sample_scale,
-                bounds.top() / sample_scale,
-                glyph_width / sample_scale,
-                glyph_height / sample_scale,
+                advance / normalization_scale,
+                bounds.left() / normalization_scale,
+                bounds.top() / normalization_scale,
+                glyph_width / normalization_scale,
+                glyph_height / normalization_scale,
             )
         painter.end()
 
@@ -716,7 +1002,14 @@ class ClickGuiGpuRenderer:
         new_texture.setMinificationFilter(QOpenGLTexture.Filter.Linear)
         new_texture.setMagnificationFilter(QOpenGLTexture.Filter.Linear)
         new_texture.setWrapMode(QOpenGLTexture.WrapMode.ClampToEdge)
-        published = _GlyphAtlas(new_texture, glyphs, raster_font, self._pixel_ratio, sample_scale)
+        published = _GlyphAtlas(
+            new_texture,
+            glyphs,
+            raster_font,
+            self._pixel_ratio,
+            sample_scale,
+            raster_scale,
+        )
         old = self.atlases.get(key)
         self.atlases[key] = published
         self.atlas_generation += 1
@@ -727,7 +1020,10 @@ class ClickGuiGpuRenderer:
     def _draw_text_batches(self, functions, commands: list[GpuText], width: int, height: int) -> None:
         if not commands:
             return
-        required = {self._font_key(command.font) for command in commands}
+        required = {
+            self._font_key(command.font, command.raster_scale, command.preserve_weight)
+            for command in commands
+        }
         missing = required - set(self.atlases)
         if missing:
             raise RuntimeError(f"glyph atlas was not prepared for {len(missing)} font page(s)")
@@ -737,12 +1033,20 @@ class ClickGuiGpuRenderer:
         # across glass/control layers and made them appear doubled or pale.
         index = 0
         while index < len(commands):
-            font_key = self._font_key(commands[index].font)
+            font_key = self._font_key(
+                commands[index].font,
+                commands[index].raster_scale,
+                commands[index].preserve_weight,
+            )
             clip_key = self._clip_key(commands[index].clip)
             end = index + 1
             while (
                 end < len(commands)
-                and self._font_key(commands[end].font) == font_key
+                and self._font_key(
+                    commands[end].font,
+                    commands[end].raster_scale,
+                    commands[end].preserve_weight,
+                ) == font_key
                 and self._clip_key(commands[end].clip) == clip_key
             ):
                 end += 1
@@ -751,7 +1055,7 @@ class ClickGuiGpuRenderer:
             # Lighter drop shadow so main strokes stay readable on 1K glass panels.
             shadows: list[GpuText] = []
             for item in items:
-                if item.color.alpha() < 40:
+                if not item.shadow or item.color.alpha() < 40:
                     continue
                 shadow_alpha = max(28, min(96, round(item.color.alpha() * 0.42)))
                 shadow_rect = QRectF(item.rect)
@@ -764,6 +1068,16 @@ class ClickGuiGpuRenderer:
                         QColor(0, 0, 0, shadow_alpha),
                         item.alignment,
                         QRectF(item.clip) if item.clip is not None else None,
+                        False,
+                        item.rotation_degrees,
+                        item.render_scale,
+                        (
+                            QPointF(item.rotation_origin) + QPointF(1.0, 1.0)
+                            if item.rotation_origin is not None
+                            else None
+                        ),
+                        item.raster_scale,
+                        item.preserve_weight,
                     )
                 )
             atlas = self.atlases[font_key]
@@ -776,9 +1090,10 @@ class ClickGuiGpuRenderer:
         assert self.text_program is not None
         metrics = QFontMetricsF(atlas.raster_font)
         ratio = self._pixel_ratio
-        sample_scale = max(1.0, atlas.sample_scale)
+        normalization_scale = max(0.25, atlas.sample_scale * atlas.raster_scale)
         packed = bytearray()
         for command in commands:
+            draw_scale = max(0.01, float(command.render_scale))
             rect = QRectF(
                 command.rect.left() * ratio,
                 command.rect.top() * ratio,
@@ -789,8 +1104,8 @@ class ClickGuiGpuRenderer:
                 atlas.glyphs[char].advance
                 for char in command.text
                 if char in atlas.glyphs
-            )
-            line_height = min(rect.height(), metrics.height() / sample_scale)
+            ) * draw_scale
+            line_height = min(rect.height(), metrics.height() / normalization_scale * draw_scale)
             if command.alignment & Qt.AlignmentFlag.AlignHCenter:
                 x = rect.center().x() - min(rect.width(), text_width) * 0.5
             elif command.alignment & Qt.AlignmentFlag.AlignRight:
@@ -807,7 +1122,7 @@ class ClickGuiGpuRenderer:
             if snap:
                 x = float(round(x))
                 y = float(round(y))
-            baseline = y + metrics.ascent() / sample_scale
+            baseline = y + metrics.ascent() / normalization_scale * draw_scale
             if snap:
                 baseline = float(round(baseline))
             cursor = x
@@ -816,38 +1131,51 @@ class ClickGuiGpuRenderer:
                 if glyph is None:
                     continue
                 # Integer quad origin → Nearest atlas samples stay sharp at 1K.
-                glyph_x = cursor + glyph.offset_x
-                glyph_y = baseline + glyph.offset_y
+                glyph_x = cursor + glyph.offset_x * draw_scale
+                glyph_y = baseline + glyph.offset_y * draw_scale
                 if snap:
                     glyph_x = float(round(glyph_x))
                     glyph_y = float(round(glyph_y))
-                glyph_w = max(0.5, glyph.width) if glyph.width > 0.0 else 0.0
-                glyph_h = max(0.5, glyph.height) if glyph.height > 0.0 else 0.0
+                glyph_w = max(0.5, glyph.width * draw_scale) if glyph.width > 0.0 else 0.0
+                glyph_h = max(0.5, glyph.height * draw_scale) if glyph.height > 0.0 else 0.0
                 if (
                     glyph_w > 0.0
                     and glyph_h > 0.0
                     and glyph_x + glyph_w >= rect.left()
                     and glyph_x <= rect.right()
                 ):
+                    if command.rotation_origin is not None:
+                        pivot_x = command.rotation_origin.x() * ratio
+                        pivot_y = command.rotation_origin.y() * ratio
+                    else:
+                        pivot_x = glyph_x + glyph_w * 0.5
+                        pivot_y = glyph_y + glyph_h * 0.5
                     packed.extend(struct.pack(
-                        "12f",
+                        "15f",
                         glyph_x, glyph_y, glyph_w, glyph_h,
                         glyph.u0, glyph.v0, glyph.u1, glyph.v1,
                         *self._rgba(command.color),
+                        math.radians(command.rotation_degrees),
+                        pivot_x,
+                        pivot_y,
                     ))
-                cursor += glyph.advance
+                cursor += glyph.advance * draw_scale
         if not packed:
             return
         program = self.text_program
         program.bind()
-        program.setUniformValue(self.text_uniforms["viewport"], float(width), float(height))
+        program.setUniformValue(
+            self.text_uniforms["viewport"],
+            float(width),
+            float(height),
+        )
         atlas.texture.bind(0)
         program.setUniformValue(self.text_uniforms["glyph"], 0)
         self._bind_quad(program)
         self.instance_buffer.bind()
         self.instance_buffer.allocate(bytes(packed), len(packed))
-        offsets = ((1, 4, 0), (2, 4, 16), (3, 4, 32))
-        stride = 12 * 4
+        offsets = ((1, 4, 0), (2, 4, 16), (3, 4, 32), (4, 1, 48), (5, 2, 52))
+        stride = 15 * 4
         for location, size, offset in offsets:
             program.enableAttributeArray(location)
             program.setAttributeBuffer(location, _GL_FLOAT, offset, size, stride)
@@ -867,10 +1195,14 @@ class ClickGuiGpuRenderer:
             functions.glDisable(_GL_SCISSOR_TEST)
             return
         ratio = self._pixel_ratio
+        # ``width``/``height`` are already framebuffer pixels here.  Only the
+        # logical clip rectangle needs DPR conversion.
+        framebuffer_width = max(1, int(width))
+        framebuffer_height = max(1, int(height))
         x = max(0, int(math.floor(clip.left() * ratio)))
-        y = max(0, int(math.floor(height - clip.bottom() * ratio)))
-        w = max(0, min(width - x, int(math.ceil(clip.width() * ratio))))
-        h = max(0, min(height - y, int(math.ceil(clip.height() * ratio))))
+        y = max(0, int(math.floor(framebuffer_height - clip.bottom() * ratio)))
+        w = max(0, min(framebuffer_width - x, int(math.ceil(clip.width() * ratio))))
+        h = max(0, min(framebuffer_height - y, int(math.ceil(clip.height() * ratio))))
         functions.glEnable(_GL_SCISSOR_TEST)
         functions.glScissor(x, y, w, h)
 
@@ -879,15 +1211,19 @@ class ClickGuiGpuRenderer:
             atlas.texture.destroy()
         self.atlases.clear()
         self._atlas_chars.clear()
+        for texture in self.image_textures.values():
+            texture.destroy()
+        self.image_textures.clear()
         if self.buffer.isCreated():
             self.buffer.destroy()
         if self.instance_buffer.isCreated():
             self.instance_buffer.destroy()
         if self.vertex_array.isCreated():
             self.vertex_array.destroy()
-        for program in (self.rect_program, self.text_program):
+        for program in (self.rect_program, self.text_program, self.image_program):
             if program is not None:
                 program.removeAllShaders()
         self.rect_program = None
         self.text_program = None
+        self.image_program = None
         self.available = False

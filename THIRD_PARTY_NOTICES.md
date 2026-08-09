@@ -13,4 +13,28 @@
 
 ## OpenZen 与 TestClient
 
-- ModuleList 与 ClickGUI 仅迁移界面结构、布局规则和动效语言，RM 模块及业务逻辑由 POLAR-RM 自身实现。
+- ModuleList 与保留的旧 ClickGUI 仅迁移界面结构、布局规则和动效语言；RM 模块及业务逻辑由 POLAR-RM 自身实现。
+
+## Sigma Jello ClickGUI
+
+- Jello ClickGUI 的坐标、颜色、视觉层级、动画时序、字体、核心 UI 图片和短交互音效取自用户提供的本机 Sigma Jello 5.1.0 JAR，用于本地客户端的一比一界面复刻。
+- 提取基准 JAR 的 SHA-256 为 `3ce1573562fa2c17394400d8c4cafcd9ac8d68ea128040c9eea5f3873bec7406`；提交中的 23 个 Jello 图片、字体和短音效文件均已逐文件哈希回查为该 JAR 内的原始字节。
+- 随项目保存的原始资源仅包括 Helvetica Neue Light/Medium 字体、Options/勾选/滚动条端帽/八方向阴影图片，以及 `activate`、`deactivate` 等八个短 UI 音效；相关权利归各自权利人所有。
+- 未迁移音乐播放器、小游戏、音乐、游戏逻辑或其他 Sigma 运行时代码与资源。
+
+## Minecraft 1.21.11 HUD 资源
+
+- Hotbar、选择框、心、护甲、饱食度、BossBar、状态背景和 `ascii.png` 位图字体来自用户提供的本机 Minecraft 1.21.11 Fabric 客户端 JAR。
+- 提取基准 JAR 的 SHA-256 为 `1473c9489ac50fda3c435049a76a70d61a10b8610db27f5ba9d8756b686cd3bd`；提交中的 22 个 Minecraft HUD 资源文件均已逐文件哈希回查为该 JAR 内的原始字节。
+- 资源只用于本地 Minecraft 战斗 HUD 预设；相关商标、视觉资源和其他权利归 Mojang/Microsoft 及各自权利人所有。本项目未打包完整 Minecraft 客户端或游戏代码。
+
+## rm-native-viewer
+
+- `PDL1` 遥测字段和固定 300 字节 `0x0310` H.264 分块行为参考 <https://github.com/dkjsiogu/rm-native-viewer>。
+- 本项目只实现 Python 侧的边界检查与状态映射，不嵌入其 Rust/Slint 运行时，也未复制临时检查用的仓库快照。
+- 检查到的上游快照根目录未包含明确的 `LICENSE` 文件；若后续复制上游源码或分发其二进制，必须先单独完成授权审查。
+
+## ITL Hero Shoot
+
+- Hero 吊射的 yaw/pitch 标定、炮口出口随 pitch 移动和重定位失效约束参考 RoboMaster 社区文章 <https://bbs.robomaster.com/article/1883342?source=11> 及其示例仓库 <https://github.com/qwq9966qwq/ITL_Hero_Shoot>。
+- 本项目重新实现为无自动发射输出的 fail-closed 决策预览；未把参考项目的仿真结果声明为真车或比赛认证。

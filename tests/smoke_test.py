@@ -1,6 +1,8 @@
 import os
+import math
 from pathlib import Path
 import socket
+import struct
 import threading
 import sys
 from tempfile import TemporaryDirectory
@@ -26,7 +28,19 @@ from rm_client.combat_hud import (
 from rm_client.kill_fx import KillFxLayout, KillFxRenderer, PRESET_ELEMENTS, VALORANT_STYLES
 from rm_client.match_chat import ChatEventAdapter, MatchChatController
 from rm_client.match_modes import MATCH_MODES, MatchModeManager
-from rm_client.model import GUI_MODES, HUD_MODES, MODULE_LIST_RENDERER_KEYS, MODULE_LIST_STYLES, TACTICAL_MAP_STATUS_DISPLAYS, RobotState, build_default_registry
+from rm_client.model import (
+    GUI_MODES,
+    LEGACY_GUI_MODES,
+    PRIMARY_GUI_MODE,
+    HUD_MODES,
+    MODULE_LIST_RENDERER_KEYS,
+    MODULE_LIST_STYLES,
+    TACTICAL_MAP_STATUS_DISPLAYS,
+    GuiModeManager,
+    RobotState,
+    build_default_registry,
+    normalize_gui_mode,
+)
 from rm_client.economy import (
     EconomyCommandBridge,
     available_actions,
@@ -35,6 +49,11 @@ from rm_client.economy import (
 )
 from rm_client.robot_profiles import apply_profile_to_state, profile_by_key, profiles_for_match, resolve_performance
 from rm_client.protocol import RefereeFrameCodec
+from rm_client.hero_lob import HeroLobPlanner
+from rm_client.native_viewer_telemetry import parse_vehicle_telemetry, parse_video_0310_chunk
+from rm_client.backend.manager import BackendManager
+from rm_client.backend.readiness import audit_backend
+from rm_client.backend.serial_backend import RmSerialBackend
 from rm_client.scenarios import ScenarioManager
 from rm_client.startup_wallpaper import PkgVirtualFileSystem, StartupWallpaperManager
 from rm_client.transports import FrameAssembler, OfficialMqttBridge, SerialBridgeStub, UDPVideoReceiver, VideoPipeline
@@ -57,6 +76,7 @@ from rm_client.ui.layout import HudAnchorStack
 from rm_client.ui.overlay_coordinator import OverlayCoordinator, OverlayKind
 from rm_client.ui.quick_action_wheel import DEFAULT_ACTIONS, QuickActionWheelState
 from rm_client.ui.economy_workspace import EconomyIslandState, EconomyWorkspaceLayer, adaptive_backdrop_dim
+from rm_client.ui.minecraft_hud import MinecraftCombatHudRenderer, vanilla_gui_scale
 from rm_client.ui.startup_gl import TextureOrigin, normalize_image_for_texture
 from rm_client.ui.vision_motion import (
     AngleRenderTrack,
@@ -71,17 +91,40 @@ def test_registry() -> None:
     registry = build_default_registry()
     click_gui = registry.get("ClickGui")
     assert click_gui is not None
-    mode = click_gui.get_setting("Mode")
-    assert mode is not None
-    assert mode.options == GUI_MODES
+    assert GUI_MODES == [PRIMARY_GUI_MODE]
+    assert click_gui.get_setting("Mode") is None
+    old_group = click_gui.get_setting("Old ClickGUIs")
+    assert old_group is not None and old_group.kind == "action_group"
+    assert old_group.options == LEGACY_GUI_MODES
+    assert old_group.value is None
+    assert click_gui.keybind == "RightShift"
     assert click_gui.get_setting("Render Backend").options == ["Unified GPU", "Compatibility Painter"]
     assert click_gui.get_setting("Render Backend").value == "Unified GPU"
+    assert click_gui.get_setting("Scale").max_value == 2.0
+    assert click_gui.get_setting("Scale").step == 0.05
+    hero_lob = registry.get("HeroLob")
+    assert hero_lob is not None
+    assert hero_lob.get_setting("Muzzle Length").value == 0.35
+    assert hero_lob.get_setting("Max Roll").value == 8.0
+    assert hero_lob.get_setting("Mock Output").value is True
+    armor_esp_styles = registry.get("Armor3DESP").get_setting("Style").options
+    assert armor_esp_styles[0] == "JelloShadow"
+    assert "PolarMechanicalWire" not in armor_esp_styles
     assert registry.get("ArmorAutoAim") is not None
     assert registry.get("EnergyAutoAim") is not None
     assert registry.get("ArmorAutoAim").get_setting("Lock Style") is not None
     assert registry.get("EnergyAutoAim").get_setting("Rune Type") is not None
     assert registry.get("EnergyAutoAim").get_setting("Lock Style") is not None
     assert registry.get("SpinMode") is not None
+    hero_lob = registry.get("HeroLob")
+    assert hero_lob is not None and hero_lob.enabled is False
+    assert hero_lob.get_setting("Arc").options == ["High", "Low"]
+    assert hero_lob.get_setting("Arm Assisted Lob").kind == "action"
+    mc_hud = registry.get("MinecraftCombatHUD")
+    assert mc_hud is not None and mc_hud.enabled is True
+    assert mc_hud.get_setting("GUI Scale").value == "Auto"
+    assert mc_hud.get_setting("Slot 9").value == "ClickGui"
+    assert "HeroLob" in mc_hud.get_setting("Slot 1").options
     assert registry.get("RobotOverlay") is not None
     direction_indicator = registry.get("ChassisGimbalIndicator")
     assert direction_indicator is not None
@@ -165,8 +208,8 @@ def test_registry() -> None:
     assert registry.get("CameraCalibration").get_setting("Capture Chessboard").kind == "action"
     armor_esp = registry.get("Armor3DESP")
     assert armor_esp is not None
-    assert armor_esp.get_setting("Style").value == "PolarMechanicalWire"
-    assert armor_esp.get_setting("Style").options == ["PolarMechanicalWire", "Wireframe3D", "PolarOutline2D", "Prediction Rack"]
+    assert armor_esp.get_setting("Style").value == "JelloShadow"
+    assert armor_esp.get_setting("Style").options == ["JelloShadow", "Wireframe3D", "PolarOutline2D", "Prediction Rack"]
     assert armor_esp.get_setting("Prediction Labels").value is False
     assert armor_esp.get_setting("Renderer").options == ["GPU Auto", "CPU"]
     config_manager = registry.get("ConfigManager")
@@ -207,6 +250,10 @@ def test_audio_feedback_and_kill_sound_mapping() -> None:
     polar_ui_root = ROOT / "assets" / "ui_sounds" / "polar_ui"
     for name in ("module_toggle.wav", "action_success.wav", "panel_transition.wav"):
         assert (polar_ui_root / name).stat().st_size > 0
+    jello_root = ROOT / "assets" / "ui_sounds" / "jello"
+    for name in UiAudioManager.JELLO_SOUNDS:
+        asset = ROOT / "assets" / "ui_sounds" / name
+        assert asset.is_file() and asset.stat().st_size > 0
 
     class FakePool:
         def __init__(self) -> None:
@@ -242,6 +289,15 @@ def test_audio_feedback_and_kill_sound_mapping() -> None:
     assert manager.pool.played[-1] == ("polar_ui/module_toggle.wav", 45)
     manager.gui_feedback("expand", 45, "Polar UI")
     assert manager.pool.played[-1] == ("polar_ui/panel_transition.wav", 45)
+    manager.jello_module_toggled(True, active=True, volume=45)
+    manager.jello_module_toggled(False, active=True, volume=45)
+    assert manager.pool.played[-2:] == [
+        ("jello/activate.mp3", 45),
+        ("jello/deactivate.mp3", 45),
+    ]
+    before = list(manager.pool.played)
+    manager.jello_module_toggled(True, active=False, volume=45)
+    assert manager.pool.played == before
     with TemporaryDirectory() as temp:
         source = Path(temp) / "my-toggle.wav"
         source.write_bytes(b"RIFF-demo")
@@ -677,6 +733,8 @@ def test_hud_modes_and_rmui_modules() -> None:
     assert hud.get_setting("Density").options == ["CombatCompact", "Balanced", "DebugFull"]
     assert hud.get_setting("Visual Tone").options == ["LiquidClean", "PolarLegacy"]
     assert hud.get_setting("Target Style").options == ["RoundCompact", "BarOnly", "FullCard"]
+    assert hud.get_setting("Combat Preset").options == ["Polar", "Minecraft 1.21.11"]
+    assert hud.get_setting("Combat Preset").value == "Polar"
     assert hud.get_setting("Density").value == "CombatCompact"
     assert hud.get_setting("Visual Tone").value == "LiquidClean"
     assert hud.get_setting("Target Style").value == "RoundCompact"
@@ -685,12 +743,16 @@ def test_hud_modes_and_rmui_modules() -> None:
     assert module_list_style.options == MODULE_LIST_STYLES
     assert "PolarTextList" in MODULE_LIST_STYLES
     assert "PolarRainbowRight" in MODULE_LIST_STYLES
-    assert "DebugWhiteList" in MODULE_LIST_STYLES
+    assert "JelloActiveMods" in MODULE_LIST_STYLES
+    assert "DebugWhiteList" not in MODULE_LIST_STYLES
     assert "PolarLegacy" not in MODULE_LIST_STYLES
     assert "RainbowRight" not in MODULE_LIST_STYLES
     assert set(MODULE_LIST_RENDERER_KEYS) == set(MODULE_LIST_STYLES)
     assert len(set(MODULE_LIST_RENDERER_KEYS.values())) == len(MODULE_LIST_STYLES)
-    assert MODULE_LIST_RENDERER_KEYS["DebugWhiteList"] == "debug_white_list"
+    assert MODULE_LIST_RENDERER_KEYS["JelloActiveMods"] == "jello_active_mods"
+    assert module_list_style.value == "JelloActiveMods"
+    assert hud.get_setting("Jello List Size").options == ["Normal", "Small", "Tiny"]
+    assert hud.get_setting("Jello List Sound").value is True
     for style in ("LiquidArrayList", "LiquidArrayTags", "LiquidArrayCompact", "LiquidArrayDock"):
         assert style in MODULE_LIST_STYLES
     assert hud.get_setting("ModuleList Surface").options == ["Native", "LiquidGlass"]
@@ -778,6 +840,8 @@ def test_config_store_roundtrip() -> None:
         assert "practice" in store.profile_names()
         loaded = store.load("practice")
         assert loaded is not None
+        assert loaded["gui_mode"] == PRIMARY_GUI_MODE
+        assert "Old ClickGUIs" not in loaded["modules"]["ClickGui"]["settings"]
         assert loaded["polar_windows"]["Combat"]["x"] == 80
         assert loaded["quick_action_wheel"]["sectors"] == 6
         assert loaded["quick_action_wheel"]["labels"][0] == "Economy"
@@ -803,8 +867,29 @@ def test_config_store_roundtrip() -> None:
             "modules": {"HUD": {"settings": {"ModuleList Style": "RainbowRight"}}}
         })
         assert fresh.get("HUD").get_setting("ModuleList Style").value == "PolarRainbowRight"
+        apply_registry_config(fresh, {
+            "modules": {"HUD": {"settings": {"ModuleList Style": "DebugWhiteList"}}}
+        })
+        assert fresh.get("HUD").get_setting("ModuleList Style").value == "JelloActiveMods"
+        apply_registry_config(fresh, {
+            "modules": {"Armor3DESP": {"settings": {"Style": "PolarMechanicalWire"}}}
+        })
+        assert fresh.get("Armor3DESP").get_setting("Style").value == "JelloShadow"
+        apply_registry_config(fresh, {
+            "modules": {"Armor3DESP": {"settings": {"Style": "Wireframe3D"}}}
+        })
+        assert fresh.get("Armor3DESP").get_setting("Style").value == "Wireframe3D"
         apply_registry_config(fresh, {"modules": {"MatchMode": {"settings": {"Alliance": "Blue"}}}})
         assert fresh.get("AllianceProfile").get_setting("Side").value == "Blue"
+
+
+def test_jello_mode_migration() -> None:
+    historical = [*LEGACY_GUI_MODES, "VapeUnified", "VapeMulti", "Unknown"]
+    for mode in historical:
+        assert normalize_gui_mode(mode) == PRIMARY_GUI_MODE
+        manager = GuiModeManager(mode)
+        assert manager.mode == PRIMARY_GUI_MODE
+        assert manager.next_mode() == PRIMARY_GUI_MODE
 
 
 def test_tongji_bridge_protocol() -> None:
@@ -1389,7 +1474,256 @@ def test_clickgui_offscreen_modes() -> None:
             draw_list = window.build_gpu_clickgui(1280, 720, 1.0)
             assert draw_list.rects, mode
             assert draw_list.texts, mode
+            assert draw_list.images, mode
             assert window.hotspots, mode
+        for mode in LEGACY_GUI_MODES:
+            assert window.jello_state.open_legacy(mode)
+            window.gui_motion.begin_frame()
+            window.hotspots.clear()
+            draw_list = window.build_gpu_clickgui(1280, 720, 1.0)
+            assert draw_list.rects, mode
+            assert draw_list.texts, mode
+            assert any(hotspot.action == "jello_return" for hotspot in window.hotspots), mode
+        window.jello_state.return_to_jello()
+    finally:
+        window.close()
+    app.processEvents()
+
+
+def test_jello_clickgui_layout_and_old_group() -> None:
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtCore import QEvent, QPointF, QRectF, Qt
+    from PySide6.QtGui import QFont, QKeyEvent
+    from PySide6.QtWidgets import QApplication
+    from rm_client.ui.jello_clickgui import JelloClickGuiState, JelloMainTimeline
+    from rm_client.ui.polar_app import PolarRMWindow
+
+    timeline = JelloMainTimeline()
+    assert timeline.visual_factor() == 0.0
+    timeline.set_target(1.0)
+    assert abs(timeline.visual_factor() - 0.5) < 1e-6
+    timeline.update(0.1125)
+    assert abs(timeline.progress - 0.25) < 1e-6
+    assert abs(timeline.blur_radius() - 20.0) < 1e-6
+    timeline.reset(0.00625)
+    assert timeline.blur_radius() == 1.0  # Java Math.round(0.5F)
+    timeline.reset(0.25)
+    timeline.set_target(1.0)
+    opening_value = timeline.visual_factor()
+    timeline.set_target(0.0)
+    assert abs(timeline.visual_factor() - (2.0 * 0.25 - 0.25**2)) < 1e-6
+    timeline.set_target(1.0)
+    assert abs(timeline.visual_factor() - opening_value) < 1e-6
+    timeline.update(0.3375)
+    assert abs(timeline.progress - 1.0) < 1e-6
+    timeline.set_target(0.0)
+    timeline.update(0.0625)
+    assert abs(timeline.progress - 0.5) < 1e-6
+    assert abs(timeline.visual_factor() - 0.75) < 1e-6
+    timeline.update(0.0625)
+    assert timeline.progress == 0.0
+
+    # Sigma's VerticalScrollBar uses a literal 35 px wheel step in the host,
+    # a 0.05-per-frame fade, and stays active for 500 ms after wheel input.
+    scrollbar_state = JelloClickGuiState()
+    scrollbar_state.mark_scroll("panel:System", now=10.0)
+    assert abs(
+        scrollbar_state.scrollbar_fade(
+            "panel:System", scrollable=True, hovered=False, now=10.0
+        )
+        - 0.05
+    ) < 1e-6
+    for _ in range(19):
+        scrollbar_state.scrollbar_fade(
+            "panel:System", scrollable=True, hovered=False, now=10.49
+        )
+    assert scrollbar_state._scrollbar_fades["panel:System"] == 1.0
+    assert scrollbar_state.scrollbar_fade(
+        "panel:System", scrollable=True, hovered=False, now=10.50
+    ) == 0.95
+    assert scrollbar_state.scrollbar_fade(
+        "panel:System", scrollable=False, hovered=False, now=10.50
+    ) == 0.0
+
+    app = QApplication.instance() or QApplication([])
+    window = PolarRMWindow()
+    try:
+        assert window.font("jello_light", 12.0).weight() == QFont.Weight.Light
+        assert window.font("jello_medium", 12.0).weight() == QFont.Weight.Medium
+        for width, height in ((1280, 720), (1600, 900), (1920, 1080), (2560, 1440)):
+            layout = window.jello_clickgui.layout(width, height, 1.0)
+            assert set(layout.panels) == set(window.jello_state.panel_scroll)
+            assert layout.panels["Combat"] == QRectF(30.0, 30.0, 200.0, 320.0)
+            assert layout.panels["Movement"] == QRectF(240.0, 30.0, 200.0, 320.0)
+            assert layout.panels["Vision"] == QRectF(450.0, 30.0, 200.0, 320.0)
+            assert layout.panels["Strategy"] == QRectF(660.0, 30.0, 200.0, 320.0)
+            assert layout.panels["System"] == QRectF(30.0, 360.0, 200.0, 320.0)
+            assert layout.panels["Render"] == QRectF(240.0, 360.0, 200.0, 320.0)
+            assert layout.options == QRectF(width - 69.0, height - 55.0, 55.0, 41.0)
+            for panel in layout.panels.values():
+                assert panel.left() >= 0.0 and panel.top() >= 0.0
+                assert panel.right() <= width + 0.01
+                assert panel.bottom() <= height + 0.01
+            assert layout.options.right() <= width + 0.01
+            assert layout.options.bottom() <= height + 0.01
+        expected_caps = {
+            (1000, 620): 1000.0 / 1280.0,
+            (1280, 720): 1.0,
+            (1600, 900): 1.25,
+            (1920, 1080): 1.5,
+            (2560, 1440): 2.0,
+        }
+        for (width, height), expected in expected_caps.items():
+            scaled = window.jello_clickgui.layout(width, height, 2.0)
+            assert abs(scaled.scale - expected) < 1e-6
+            for panel in scaled.panels.values():
+                assert panel.left() >= 0.0 and panel.top() >= 0.0
+                assert panel.right() <= width + 0.01
+                assert panel.bottom() <= height + 0.01
+            assert scaled.options.right() <= width + 0.01
+            assert scaled.options.bottom() <= height + 0.01
+        raster_pages = {
+            window.jello_clickgui.raster_scale_for(0.50 + index * 0.05)
+            for index in range(31)
+        }
+        assert raster_pages == {0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0}
+        for asset in window.jello_clickgui.image_assets:
+            assert asset.is_file() and asset.stat().st_size > 0
+
+        window.resize(1280, 720)
+        window.home_visible = False
+        window.gui_visible = True
+        window.gui_timeline.reset(1.0)
+        window.gui_timeline.set_target(1.0)
+        window.jello_state.begin_session()
+        window.gui_motion.begin_frame(time.perf_counter() + 1.0)
+        window.hotspots.clear()
+        main = window.build_gpu_clickgui(1280, 720, 1.0)
+        assert main.rects and main.texts and main.images
+        assert all(command.preserve_weight for command in main.texts)
+        assert {command.raster_scale for command in main.texts} == {1.0}
+        assert {viewport["mode"] for viewport in window.gui_scroll_viewports} == {"jello_panel"}
+        assert any(hotspot.action == "jello_open_settings" and hotspot.payload == "ClickGui" for hotspot in window.hotspots)
+
+        class RoutePool:
+            def __init__(self) -> None:
+                self.played: list[tuple[str, float]] = []
+
+            def play(self, name: str, volume: float) -> None:
+                self.played.append((name, volume))
+
+        original_pool = window.ui_audio.pool
+        routed_pool = RoutePool()
+        window.ui_audio.pool = routed_pool
+        window.on_module_toggled(window.registry.get("ArmorAutoAim"), True, "clickgui")
+        window.on_module_toggled(window.registry.get("ArmorAutoAim"), False, "clickgui")
+        assert routed_pool.played[-2:] == [
+            ("jello/activate.mp3", 45.0),
+            ("jello/deactivate.mp3", 45.0),
+        ]
+        window.ui_audio.pool = original_pool
+
+        window.jello_state.open_settings("ClickGui")
+        window.jello_state.update(0.30)
+        window.jello_state.toggle_old_group()
+        window.jello_state.update(0.30)
+        window.gui_motion.begin_frame(time.perf_counter() + 2.0)
+        window.hotspots.clear()
+        window.build_gpu_clickgui(1280, 720, 1.0)
+        settings_viewport = next(
+            viewport
+            for viewport in window.gui_scroll_viewports
+            if viewport["mode"] == "jello_settings"
+        )
+        window.jello_state.settings_scroll["ClickGui"] = settings_viewport["maximum"]
+        window.hotspots.clear()
+        settings_draw = window.build_gpu_clickgui(1280, 720, 1.0)
+        old_actions = [
+            hotspot.payload
+            for hotspot in window.hotspots
+            if hotspot.action == "jello_open_legacy"
+        ]
+        assert old_actions == LEGACY_GUI_MODES
+        assert any(viewport["mode"] == "jello_settings" for viewport in window.gui_scroll_viewports)
+        # Child zoom is a draw transform, exactly as in Sigma's matrix stack;
+        # it must not allocate a new glyph atlas at every animation frame.
+        assert {
+            round(text.font.pointSizeF(), 2)
+            for text in [*main.texts, *settings_draw.texts]
+            if "Helvetica" in text.font.family()
+        } <= {10.5, 13.5, 15.0, 18.75, 30.0}
+        modal = next(
+            rect.rect
+            for rect in settings_draw.rects
+            if abs(rect.rect.width() - 500.0) < 0.01
+            and abs(rect.rect.height() - 504.0) < 0.01
+        )
+        assert modal == QRectF(390.0, 128.0, 500.0, 504.0)
+
+        # The exact mode widget opens a vertically animated dropdown and uses
+        # an actual option hotspot rather than Polar's click-to-cycle control.
+        window.jello_state.toggle_old_group()
+        window.jello_state.update(0.30)
+        window.hotspots.clear()
+        window.build_gpu_clickgui(1280, 720, 1.0)
+        mode_hotspot = next(
+            hotspot for hotspot in window.hotspots
+            if hotspot.action == "jello_mode_dropdown"
+        )
+        window.dispatch(
+            mode_hotspot.action,
+            mode_hotspot.payload,
+            QPointF(mode_hotspot.rect.center()),
+            1,
+            mode_hotspot.rect,
+        )
+        window.jello_state.update(0.30)
+        window.hotspots.clear()
+        window.build_gpu_clickgui(1280, 720, 1.0)
+        assert {
+            hotspot.payload[1]
+            for hotspot in window.hotspots
+            if hotspot.action == "jello_mode_select"
+        } == {"Unified GPU", "Compatibility Painter"}
+        window.jello_state.close_dropdown(immediate=True)
+
+        assert window.open_legacy_clickgui("VapeUnified")
+        assert window.active_clickgui_mode() == "PolarUnified"
+        assert window.current_config_data()["gui_mode"] == PRIMARY_GUI_MODE
+        assert "Old ClickGUIs" not in window.current_config_data()["modules"]["ClickGui"]["settings"]
+        window.execute_quick_action("clickgui")
+        assert window.active_clickgui_mode() == PRIMARY_GUI_MODE
+        assert window.open_legacy_clickgui("VapeUnified")
+        window.keyPressEvent(QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_Escape, Qt.KeyboardModifier.NoModifier))
+        assert window.active_clickgui_mode() == PRIMARY_GUI_MODE
+        assert window.jello_state.settings_module is None
+        assert window.gui_visible is True
+        window.keyPressEvent(QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_Escape, Qt.KeyboardModifier.NoModifier))
+        assert window.gui_visible is False
+
+        window.set_clickgui_visible(True, announce=False, play_sound=False)
+        window.keyPressEvent(QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_F9, Qt.KeyboardModifier.NoModifier))
+        assert window.active_clickgui_mode() == PRIMARY_GUI_MODE
+        stress_font_pages: set[tuple[str, float, int]] = set()
+        for index in range(100):
+            window.jello_state.begin_session()
+            window.gui_timeline.reset((index % 10) / 10.0)
+            window.gui_timeline.set_target(1.0)
+            stress_draw = window.build_gpu_clickgui(1280, 720, window.gui_timeline.progress)
+            stress_font_pages.update(
+                (
+                    text.font.family(),
+                    round(text.font.pointSizeF(), 2),
+                    int(text.font.weight()),
+                )
+                for text in stress_draw.texts
+                if "Helvetica" in text.font.family()
+            )
+            assert window.jello_state.open_legacy("PolarOld")
+            window.jello_state.request_reset()
+            window.jello_state.finish_reset()
+            assert window.jello_state.legacy_mode is None
+        assert len(stress_font_pages) <= 3
     finally:
         window.close()
     app.processEvents()
@@ -1580,6 +1914,7 @@ def test_economy_workspace_top_anchor_and_reversal() -> None:
     compact_detail = layer.layout(1280, 720, 0.84)
     compact_open = layer.layout(1280, 720, 1.0)
     desktop_open = layer.layout(1600, 900, 1.0)
+    wide_open = layer.layout(1920, 1080, 1.0)
 
     # The sheet grows from a top island rather than drifting into a centered
     # modal. The source control-center layer starts 48dp above its resting
@@ -1604,6 +1939,8 @@ def test_economy_workspace_top_anchor_and_reversal() -> None:
     assert compact_open.grab_handle.width() == 36.0
     assert compact_open.compact is True
     assert desktop_open.compact is False
+    assert desktop_open.three_column is False
+    assert wide_open.three_column is True
     # Control Center modules use the 56dp inner-control height. Keeping these
     # surfaces at that height prevents a 24/48dp lens from collapsing into a
     # long horizontal smear at compact resolutions.
@@ -1611,6 +1948,11 @@ def test_economy_workspace_top_anchor_and_reversal() -> None:
     assert compact_open.tab_bar.height() == 56.0
     assert desktop_open.status_strip.height() == 56.0
     assert desktop_open.tab_bar.height() == 56.0
+    assert wide_open.tab_bar.isEmpty()
+    assert not wide_open.category_pane.isEmpty()
+    assert wide_open.category_pane.right() < wide_open.offers_pane.left()
+    assert wide_open.offers_pane.right() < wide_open.detail_pane.left()
+    assert wide_open.detail_pane.right() <= wide_open.panel.right() + 0.01
     for pane in (
         compact_open.offers_pane,
         compact_open.detail_pane,
@@ -1714,6 +2056,15 @@ def test_control_center_backdrop_treatment_only_invalidates_blur_when_needed() -
         dim_alpha=0.4,
         include_overlay=True,
     )
+    assert compositor.set_backdrop_treatment(
+        active=True,
+        progress=0.8,
+        blur_radius_px=6.0,
+        dim_alpha=0.4,
+        include_overlay=True,
+        blur_kernel="jello_box20",
+    )
+    assert compositor._backdrop_treatment.blur_kernel == "jello_box20"
 
 
 def test_official_economy_status_decode() -> None:
@@ -1811,7 +2162,7 @@ def test_robot_launcher_and_polar_inertial_scroll() -> None:
         assert launcher.rects and launcher.texts
         assert any(hotspot.action == "select_robot_profile" for hotspot in window.hotspots)
 
-        window.mode_manager.set_mode("PolarUnified")
+        window.jello_state.open_legacy("PolarUnified")
         window.gui_visible = True
         window.polar_unified_morph.reset(1.0)
         window.selected_category = "Render"
@@ -1832,10 +2183,23 @@ def test_robot_launcher_and_polar_inertial_scroll() -> None:
 
 
 def test_small_text_policy_and_island_icon_alpha() -> None:
+    from PySide6.QtGui import QFont
+
     policy = SmallTextPolicy()
     assert policy.sample_scale_for(12.0) == 2.0
     assert policy.sample_scale_for(18.0) == 2.0
     assert policy.sample_scale_for(19.0) == 1.0
+    light = QFont("Sans Serif")
+    light.setWeight(QFont.Weight.Light)
+    preserved = policy.prepare_font(
+        light,
+        14.0,
+        policy.sample_scale_for(14.0),
+        preserve_weight=True,
+    )
+    strengthened = policy.prepare_font(light, 14.0, policy.sample_scale_for(14.0))
+    assert preserved.weight() == QFont.Weight.Light
+    assert strengthened.weight() == QFont.Weight.Medium
     assert island_icon_coverage(0.5, 0.5) == 1.0
     assert island_icon_coverage(0.0, 0.0) == 0.0
     assert island_icon_coverage(1.0, 0.0) == 0.0
@@ -2030,15 +2394,16 @@ def test_ordered_gpu_commands_and_line_only_vision_batch() -> None:
     from PySide6.QtCore import QPointF, QRectF
     from PySide6.QtGui import QColor, QFont
 
-    from rm_client.ui.clickgui_gpu import ClickGuiDrawList, GpuRect, GpuText
+    from rm_client.ui.clickgui_gpu import ClickGuiDrawList, GpuImage, GpuRect, GpuText
     from rm_client.ui.vision_wire_gpu import VisionWireBatch
 
     commands = ClickGuiDrawList()
     commands.rect(QRectF(0, 0, 100, 40), 12, QColor(12, 20, 30, 180))
     commands.text(QRectF(8, 4, 84, 24), "POLAR-RM", QFont("Arial", 12), QColor("white"))
+    commands.image(QRectF(72, 4, 20, 15), ROOT / "assets" / "jello" / "options.png")
     commands.rect(QRectF(8, 32, 32, 2), 1, QColor(90, 160, 255, 255))
-    assert [command.sequence for command in commands.commands] == [0, 1, 2]
-    assert [type(command.payload) for command in commands.commands] == [GpuRect, GpuText, GpuRect]
+    assert [command.sequence for command in commands.commands] == [0, 1, 2, 3]
+    assert [type(command.payload) for command in commands.commands] == [GpuRect, GpuText, GpuImage, GpuRect]
 
     wire = VisionWireBatch()
     assert not hasattr(wire, "fill")
@@ -2152,6 +2517,186 @@ def test_overlay_coordinator_wheel_and_match_chat() -> None:
     assert event_chat.messages[-1].text == "Air support ended"
 
 
+def test_native_viewer_telemetry_and_video_0310() -> None:
+    status = b"AUTO READY\x00"
+    fixed_size = struct.calcsize("<4sHHIQIHHHHIBBH9f")
+    packet = struct.pack(
+        "<4sHHIQIHHHHIBBH9f",
+        b"PDL1",
+        1,
+        fixed_size + len(status),
+        0b11,
+        1_725_000_000_000,
+        77,
+        1280,
+        720,
+        5994,
+        125,
+        3200,
+        1,
+        0,
+        12,
+        15.5,
+        0.4,
+        -3.25,
+        -0.2,
+        16.8,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+    ) + status
+    telemetry = parse_vehicle_telemetry(packet)
+    assert telemetry is not None
+    assert telemetry.camera_online and telemetry.gimbal_online
+    assert telemetry.gimbal_mode_name == "AUTO_AIM"
+    assert telemetry.bullet_count == 12
+    assert abs(telemetry.bullet_speed - 16.8) < 1e-4
+    assert telemetry.status_text == "AUTO READY"
+    assert parse_vehicle_telemetry(b"PDL1") is None
+
+    payload = bytes((index * 17) & 0xFF for index in range(297))
+    video_packet = bytes((0b11, 23, 297 & 0xFF)) + payload
+    chunk = parse_video_0310_chunk(video_packet)
+    assert chunk is not None and chunk.codec == "h264"
+    assert chunk.reset and chunk.sequence == 23 and chunk.payload == payload
+    assert parse_video_0310_chunk(bytes((0x80, 0, 0)) + bytes(297)) is None
+
+    state = RobotState()
+    manager = BackendManager(state=state)
+    manager._apply_one(state, "CustomByteBlock", {"data": packet})
+    assert state.native_gimbal_online
+    assert state.native_telemetry_frame_seq == 77
+    assert state.native_status_text == "AUTO READY"
+    state.hero_lob_relocalization_valid = True
+    state.hero_lob_armed = True
+    restarted_packet = bytearray(packet)
+    struct.pack_into("<I", restarted_packet, 20, 2)
+    manager._apply_one(state, "CustomByteBlock", {"data": restarted_packet})
+    assert not state.hero_lob_relocalization_valid
+    assert not state.hero_lob_armed
+
+    # uint32 sequence wrap is not a producer restart and must not destroy a
+    # valid operator calibration.
+    state.native_telemetry_frame_seq = 0xFFFFFFFF
+    state.hero_lob_relocalization_valid = True
+    wrapped_packet = bytearray(packet)
+    struct.pack_into("<I", wrapped_packet, 20, 0)
+    manager._apply_one(state, "CustomByteBlock", {"data": wrapped_packet})
+    assert state.hero_lob_relocalization_valid
+    manager.shutdown()
+
+
+def test_hero_lob_solver_and_fail_closed_readiness() -> None:
+    high = HeroLobPlanner.solve(18.0, 0.0, 16.0, arc="High")
+    low = HeroLobPlanner.solve(18.0, 0.0, 16.0, arc="Low")
+    assert high.reachable and low.reachable
+    assert high.pitch_deg > low.pitch_deg > 0.0
+    assert high.flight_time_s > low.flight_time_s
+    assert not HeroLobPlanner.solve(100.0, 20.0, 5.0).reachable
+    offset = HeroLobPlanner.solve(18.0, 0.0, 16.0, arc="High", muzzle_length_m=0.35)
+    assert offset.reachable and offset.iterations > 0
+    assert abs(offset.pitch_deg - high.pitch_deg) > 1.0e-5
+
+    state = RobotState(robot_profile="Hero")
+    blocked = HeroLobPlanner.readiness(state, hero_range_profile=True)
+    assert not blocked.ready and "gimbal offline" in blocked.reasons
+    state.native_telemetry_at = time.perf_counter()
+    state.native_gimbal_online = True
+    state.native_bullet_count = 12
+    state.hero_lob_yaw_calibrated = True
+    state.hero_lob_pitch_calibrated = True
+    state.hero_lob_relocalization_valid = True
+    state.current_stage = "MATCH"
+    state.remaining_ammo = 12
+    state.current_heat = 20.0
+    state.max_heat = 240.0
+    ready = HeroLobPlanner.readiness(state, hero_range_profile=True)
+    assert ready.ready and ready.reasons == ()
+    roll = math.radians(12.0) * 0.5
+    state.native_quaternion = (math.sin(roll), 0.0, 0.0, math.cos(roll))
+    tilted = HeroLobPlanner.readiness(state, hero_range_profile=True)
+    assert not tilted.ready and "roll/yaw coupling guard" in tilted.reasons
+    state.native_quaternion = (0.0, 0.0, 0.0, 1.0)
+    stale = HeroLobPlanner.readiness(
+        state,
+        hero_range_profile=True,
+        now=state.native_telemetry_at + 0.6,
+    )
+    assert not stale.ready and "telemetry stale" in stale.reasons
+
+
+def test_minecraft_hud_assets_layout_and_render() -> None:
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtCore import QPointF
+    from PySide6.QtGui import QImage, QPainter
+    from PySide6.QtWidgets import QApplication
+
+    app = QApplication.instance() or QApplication([])
+    renderer = MinecraftCombatHudRenderer(ROOT / "assets" / "minecraft_hud")
+    assert renderer.available
+    registry = build_default_registry()
+    module = registry.get("MinecraftCombatHUD")
+    state = RobotState()
+    expected = {
+        (1000, 620): 2,
+        (1280, 720): 3,
+        (1600, 900): 3,
+        (1920, 1080): 4,
+        (2560, 1440): 6,
+    }
+    for (width, height), scale in expected.items():
+        assert vanilla_gui_scale(width, height) == scale
+        lines = renderer.scoreboard_lines(state)
+        layout = renderer.layout(width, height, "Auto", (text for text, _ in lines))
+        assert layout.scale == scale
+        assert layout.hotbar.left() >= 0 and layout.hotbar.right() <= width
+        assert layout.hotbar.bottom() <= height
+        assert layout.scoreboard.left() >= 0 and layout.scoreboard.right() <= width
+        assert layout.scoreboard.bottom() <= height
+        assert layout.slot_at(QPointF(layout.slots[4].center())) == 4
+        image = QImage(width, height, QImage.Format.Format_ARGB32_Premultiplied)
+        image.fill(0)
+        painter = QPainter(image)
+        renderer.draw(painter, width, height, state, registry, module)
+        painter.end()
+        assert image.pixelColor(int(layout.hotbar.center().x()), int(layout.hotbar.center().y())).alpha() > 0
+    assert renderer.assignments(module)[-1] == "ClickGui"
+    assert len(renderer.font._cache) <= renderer.font.cache_limit
+    app.processEvents()
+
+
+def test_estop_zero_frame_bypass_and_backend_readiness() -> None:
+    class FakeSerial:
+        is_open = True
+
+        def __init__(self) -> None:
+            self.frames: list[bytes] = []
+
+        def write(self, payload: bytes) -> int:
+            self.frames.append(bytes(payload))
+            return len(payload)
+
+    backend = RmSerialBackend(port="COM_TEST", mock_writes=False)
+    fake = FakeSerial()
+    backend._serial = fake
+    backend.connected = True
+    backend.trigger_estop()
+    assert backend.estop_active
+    assert len(fake.frames) == 1 and fake.frames[0][0] == 0xA5
+    assert backend.frames_written == 1
+    ok, _message = backend.write(b"unsafe")
+    assert not ok and len(fake.frames) == 1
+
+    state = RobotState()
+    manager = BackendManager(state=state)
+    report = audit_backend(manager, state)
+    assert not report.ready
+    assert report.verdict == "NOT READY FOR REAL MATCH"
+    assert any(gate.requires_live_validation for gate in report.blockers)
+    manager.shutdown()
+
+
 if __name__ == "__main__":
     test_registry()
     test_audio_feedback_and_kill_sound_mapping()
@@ -2170,6 +2715,7 @@ if __name__ == "__main__":
     test_match_modes_and_official_map_assets()
     test_match_mode_manager()
     test_config_store_roundtrip()
+    test_jello_mode_migration()
     test_tongji_bridge_protocol()
     test_tongji_udp_protocol()
     test_local_prediction_snapshot()
@@ -2186,6 +2732,7 @@ if __name__ == "__main__":
     test_robot_state_tick()
     test_pyside_animation_import()
     test_clickgui_offscreen_modes()
+    test_jello_clickgui_layout_and_old_group()
     test_prediction_geometry_is_bounded()
     test_robot_profiles_and_economy_rules()
     test_economy_workspace_top_anchor_and_reversal()
@@ -2197,6 +2744,10 @@ if __name__ == "__main__":
     test_combat_target_hud_math_and_rendering()
     test_ordered_gpu_commands_and_line_only_vision_batch()
     test_overlay_coordinator_wheel_and_match_chat()
+    test_native_viewer_telemetry_and_video_0310()
+    test_hero_lob_solver_and_fail_closed_readiness()
+    test_minecraft_hud_assets_layout_and_render()
+    test_estop_zero_frame_bypass_and_backend_readiness()
     test_liquid_glass_snapshot_stability()
     test_gpu_glass_commands_do_not_accumulate_between_frames()
     test_hud_liquid_glass_snapshot_stability()

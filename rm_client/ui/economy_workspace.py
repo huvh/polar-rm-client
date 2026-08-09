@@ -117,6 +117,7 @@ class EconomyWorkspaceLayout:
     grab_handle: QRectF
     close_button: QRectF
     link_chip: QRectF
+    category_pane: QRectF
     offers_pane: QRectF
     detail_pane: QRectF
     offers_viewport: QRectF
@@ -125,6 +126,7 @@ class EconomyWorkspaceLayout:
     tab_bar: QRectF
     status_strip: QRectF
     compact: bool
+    three_column: bool
     root_radius: float
     island_progress: float
     body_progress: float
@@ -149,6 +151,7 @@ class EconomyWorkspaceLayer:
         raw_progress = _clamp(progress, -0.02, 1.12)
         progress = _clamp(raw_progress, 0.0, 1.0)
         compact = width_f < 1600.0 or height_f < 850.0
+        three_column = width_f >= 1800.0 and height_f >= 1000.0
 
         # The workspace follows the same hierarchy as a system pull-down:
         # first form a compact, readable island, then grow the *same* material
@@ -243,16 +246,32 @@ class EconomyWorkspaceLayer:
         # paper-thin strip. Keep the bottom controls at the 56dp inner-item
         # height so their refraction remains rounded instead of stretching
         # into a horizontal smear.
-        tab_h = 56.0
-        tab_bar = QRectF(inner.left(), inner.bottom() - tab_h, inner.width(), tab_h)
+        tab_h = 0.0 if three_column else 56.0
+        tab_bar = (
+            QRectF()
+            if three_column
+            else QRectF(inner.left(), inner.bottom() - tab_h, inner.width(), tab_h)
+        )
         tab_alpha = _smoothstep((body_progress - 0.42) / 0.26)
         # Status strip: compact gold/HP/ammo info between header and content.
         status_strip = QRectF(inner.left(), inner.top(), inner.width(), 56.0)
         content_top = status_strip.bottom() + 8.0
-        content_bottom = tab_bar.top() - 8.0
+        content_bottom = inner.bottom() if three_column else tab_bar.top() - 8.0
         content_h = max(60.0, content_bottom - content_top)
 
-        if compact:
+        category_pane = QRectF()
+        if three_column:
+            category_w = _clamp(inner.width() * 0.18, 170.0, 210.0)
+            offers_w = _clamp(inner.width() * 0.39, 390.0, 480.0)
+            category_pane = QRectF(inner.left(), content_top, category_w, content_h)
+            offers_pane = QRectF(category_pane.right() + gap, content_top, offers_w, content_h)
+            detail_pane = QRectF(
+                offers_pane.right() + gap,
+                content_top,
+                max(260.0, inner.right() - offers_pane.right() - gap),
+                content_h,
+            )
+        elif compact:
             offers_h = max(180.0, content_h * 0.52)
             offers_pane = QRectF(inner.left(), content_top, inner.width(), offers_h)
             detail_pane = QRectF(
@@ -319,6 +338,7 @@ class EconomyWorkspaceLayer:
         grab_handle = present(grab_handle)
         close_button = present(close_button)
         link_chip = present(link_chip)
+        category_pane = present(category_pane)
         offers_pane = present(offers_pane)
         detail_pane = present(detail_pane)
         offers_viewport = present(offers_viewport)
@@ -337,6 +357,7 @@ class EconomyWorkspaceLayer:
             grab_handle=grab_handle,
             close_button=close_button,
             link_chip=link_chip,
+            category_pane=category_pane,
             offers_pane=offers_pane,
             detail_pane=detail_pane,
             offers_viewport=offers_viewport,
@@ -345,6 +366,7 @@ class EconomyWorkspaceLayer:
             tab_bar=tab_bar,
             status_strip=status_strip,
             compact=compact,
+            three_column=three_column,
             root_radius=root_radius,
             island_progress=island_progress,
             body_progress=body_progress,

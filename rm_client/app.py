@@ -313,7 +313,7 @@ class RMClientApp:
 
     def draw_profile_widget(self, x: float, y: float, scale: float) -> None:
         self.canvas.create_text(x, y, anchor="nw", text="POLAR-RM", fill=TEXT, font=("Segoe UI", int(14 * scale), "bold"))
-        self.canvas.create_text(x, y + 20 * scale, anchor="nw", text=f"Scale {self.get_gui_scale():.2f}  F9 cycle", fill=MUTED, font=self.fonts["small"])
+        self.canvas.create_text(x, y + 20 * scale, anchor="nw", text=f"Scale {self.get_gui_scale():.2f}  Jello Sigma", fill=MUTED, font=self.fonts["small"])
 
     def draw_panel_category_bar(self, x: float, y: float, scale: float) -> None:
         for i, category in enumerate(CATEGORIES):
@@ -540,9 +540,7 @@ class RMClientApp:
             self.toast("ClickGUI 已打开" if self.gui_visible else "ClickGUI 已关闭")
             return
         if event.keysym == "F9":
-            self.mode_manager.next_mode()
-            self.sync_mode_setting()
-            self.toast(f"GUI 模式：{self.mode_manager.mode}")
+            # Retained Tk fallback has no public legacy-GUI cycling either.
             return
         if event.keysym == "Escape":
             self.gui_visible = False
@@ -651,4 +649,9 @@ class RMClientApp:
 
 
 def main() -> None:
-    RMClientApp().run()
+    # Keep the historical ``python -m rm_client.app`` entry point, but never
+    # launch its retained Tk ClickGUI implementation.  All supported startup
+    # paths must enter the single Jello Sigma surface in the GPU client.
+    from .ui.polar_app import main as run_gpu_client
+
+    run_gpu_client()

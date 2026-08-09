@@ -81,7 +81,10 @@ def export_client_config(
 ) -> dict[str, Any]:
     return {
         "version": CONFIG_VERSION,
-        "gui_mode": gui_mode,
+        # Legacy ClickGUI renderers are transient previews. Never serialize
+        # one as the profile's startup surface, even when an older caller
+        # passes a historical mode name.
+        "gui_mode": "JelloSigma",
         "selected_category": selected_category,
         "selected_module": selected_module,
         "module_expanded": sorted(module_expanded),
@@ -94,7 +97,11 @@ def export_client_config(
             module.name: {
                 "enabled": module.enabled,
                 "keybind": module.keybind,
-                "settings": {setting.name: setting.value for setting in module.settings},
+                "settings": {
+                    setting.name: setting.value
+                    for setting in module.settings
+                    if setting.kind != "action_group"
+                },
             }
             for module in registry.modules
         },
@@ -205,11 +212,21 @@ def apply_registry_config(registry: Any, data: dict[str, Any]) -> None:
                     text_value = {
                         "PolarLegacy": "PolarTextList",
                         "RainbowRight": "PolarRainbowRight",
+                        "DebugWhiteList": "JelloActiveMods",
                     }.get(text_value, text_value)
                 elif setting.name == "Render Backend":
                     # 旧版的 GPU Cached 只是缓存合成，升级后统一迁移到真正的 Direct GPU。
                     text_value = {"GPU Cached": "Unified GPU", "Direct GPU": "Unified GPU"}.get(text_value, text_value)
+                elif module.name == "Armor3DESP" and setting.name == "Style":
+                    # The old fluorescent-white default is superseded by the
+                    # Sigma Shadow implementation. Other explicitly selected
+                    # ESP styles remain available unchanged.
+                    text_value = {"PolarMechanicalWire": "JelloShadow"}.get(text_value, text_value)
                 if not setting.options or text_value in setting.options:
                     setting.value = text_value
+            elif setting.kind == "action_group":
+                # Expansion and selected action belong to the live ClickGUI
+                # session and are intentionally never restored from a profile.
+                continue
             else:
                 setting.value = value

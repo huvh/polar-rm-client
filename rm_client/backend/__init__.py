@@ -9,6 +9,7 @@ from .safety import OfficialSafety
 from .mqtt_backend import RmMqttBackend
 from .video_backend import RmVideoBackend
 from .serial_backend import RmSerialBackend
+from .readiness import BackendReadinessReport, ReadinessGate, audit_backend
 from . import protocol
 
 __all__ = [
@@ -17,5 +18,8 @@ __all__ = [
     "RmMqttBackend",
     "RmVideoBackend",
     "RmSerialBackend",
+    "BackendReadinessReport",
+    "ReadinessGate",
+    "audit_backend",
     "protocol",
 ]

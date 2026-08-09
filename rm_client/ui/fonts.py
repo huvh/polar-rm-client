@@ -23,6 +23,8 @@ class FontBook:
             "pingfang": "pingfang_sc_regular.ttf",
             # Debug.jar HUD ArrayList tahoma16 (MODLIST_WHITE.md).
             "tahoma": "tahoma.ttf",
+            "jello_light": "Jello-Helvetica-Neue-Light.ttf",
+            "jello_medium": "Jello-Helvetica-Neue-Medium.ttf",
         }
         for key, filename in candidates.items():
             path = self._find_font(workspace, filename)
@@ -52,6 +54,17 @@ class FontBook:
             }.get(key, "Segoe UI")
         font = QFont(family)
         font.setPointSizeF(size)
+        if key == "jello_light":
+            # The bundled TTF exposes Light as its only named style, but Qt
+            # otherwise reports/request a Normal (400) face. Pin both style
+            # name and weight so the GPU atlas cannot silently thicken it.
+            font.setStyleName("Light")
+            if weight is None:
+                font.setWeight(QFont.Weight.Light)
+        elif key == "jello_medium":
+            font.setStyleName("Medium")
+            if weight is None:
+                font.setWeight(QFont.Weight.Medium)
         if weight is not None:
             font.setWeight(weight)
         if key == "tahoma":

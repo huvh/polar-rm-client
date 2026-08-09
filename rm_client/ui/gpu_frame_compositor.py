@@ -143,6 +143,12 @@ class BackdropTreatment:
     blur_radius_px: float = 2.0
     dim_alpha: float = 0.0
     include_overlay: bool = False
+    # Sigma 5.1.0 does not use the compositor's compact five-tap Gaussian.
+    # Its generated ``jelloblur`` post chain runs Minecraft's 41-sample box
+    # blur horizontally and vertically with an integer radius of 20.  Keep the
+    # kernel explicit so other overlays and the liquid-glass renderer retain
+    # their existing appearance.
+    blur_kernel: str = "compact_gaussian"
 
 
 @dataclass(frozen=True)
@@ -213,6 +219,7 @@ class GpuFrameCompositor:
 
         self.present_program: QOpenGLShaderProgram | None = None
         self.blur_program: QOpenGLShaderProgram | None = None
+        self.jello_blur_program: QOpenGLShaderProgram | None = None
         self.glass_program: QOpenGLShaderProgram | None = None
         self.vertex_buffer = QOpenGLBuffer(QOpenGLBuffer.Type.VertexBuffer)
         self.vertex_array = QOpenGLVertexArrayObject()
@@ -230,6 +237,7 @@ class GpuFrameCompositor:
         try:
             self.present_program = self._build_present_program()
             self.blur_program = self._build_blur_program()
+            self.jello_blur_program = self._build_jello_blur_program()
             self.glass_program = self._build_lens_program()
             if not self.vertex_array.create():
                 raise RuntimeError("GPU compositor VAO creation failed")
@@ -610,6 +618,7 @@ class GpuFrameCompositor:
         blur_radius_px: float = 4.0,
         dim_alpha: float = 0.4,
         include_overlay: bool = True,
+        blur_kernel: str = "compact_gaussian",
     ) -> bool:
         """Publish one complete backdrop treatment at a frame boundary."""
         reveal = max(0.0, min(1.0, float(progress))) if active else 0.0
@@ -619,6 +628,11 @@ class GpuFrameCompositor:
             blur_radius_px=round(max(0.0, float(blur_radius_px)), 4),
             dim_alpha=round(max(0.0, min(1.0, float(dim_alpha))), 5),
             include_overlay=bool(include_overlay),
+            blur_kernel=(
+                "jello_box20"
+                if str(blur_kernel) == "jello_box20"
+                else "compact_gaussian"
+            ),
         )
         if treatment == self._backdrop_treatment:
             return False
@@ -628,6 +642,7 @@ class GpuFrameCompositor:
             previous.active != treatment.active
             or previous.blur_radius_px != treatment.blur_radius_px
             or previous.include_overlay != treatment.include_overlay
+            or previous.blur_kernel != treatment.blur_kernel
         )
         if blur_changed:
             self._treated_blur_valid = False
@@ -699,6 +714,80 @@ class GpuFrameCompositor:
         output_fbo.release()
         return True
 
+    def _render_jello_blur_pair(
+        self,
+        functions,
+        *,
+        temp_fbo: QOpenGLFramebufferObject,
+        output_fbo: QOpenGLFramebufferObject,
+        radius_px: int,
+        include_overlay: bool,
+    ) -> bool:
+        """Run Sigma 5.1.0's literal two-pass Minecraft box blur.
+
+        ``JelloBlurJSON`` installs two ``blur`` passes with ``Radius=20``.
+        Minecraft's bundled fragment shader samples every integer offset from
+        ``-Radius`` through ``+Radius`` and divides by ``2*Radius+1``.  A dense
+        kernel is required here: stretching the normal five-tap glass kernel
+        produces visible copies of HUD text instead of the reference blur.
+        """
+
+        assert self.background_fbo is not None
+        assert self.control_fbo is not None
+        assert self.overlay_fbo is not None
+        assert self.hud_glass_fbo is not None
+        assert self.jello_blur_program is not None
+        program = self.jello_blur_program
+        radius = max(0, min(20, int(radius_px)))
+
+        if not temp_fbo.bind():
+            return False
+        functions.glViewport(0, 0, self._size.width(), self._size.height())
+        functions.glDisable(_GL_BLEND)
+        functions.glDisable(_GL_DEPTH_TEST)
+        functions.glDisable(_GL_SCISSOR_TEST)
+        functions.glDisable(_GL_FRAMEBUFFER_SRGB)
+        program.bind()
+        functions.glActiveTexture(_GL_TEXTURE0)
+        functions.glBindTexture(_GL_TEXTURE_2D, self.background_fbo.texture())
+        functions.glUniform1i(program.uniformLocation("sourceTex"), 0)
+        functions.glActiveTexture(_GL_TEXTURE0 + 1)
+        functions.glBindTexture(_GL_TEXTURE_2D, self.control_fbo.texture())
+        functions.glUniform1i(program.uniformLocation("controlTex"), 1)
+        functions.glActiveTexture(_GL_TEXTURE0 + 2)
+        functions.glBindTexture(_GL_TEXTURE_2D, self.overlay_fbo.texture())
+        functions.glUniform1i(program.uniformLocation("overlayTex"), 2)
+        functions.glActiveTexture(_GL_TEXTURE0 + 3)
+        functions.glBindTexture(_GL_TEXTURE_2D, self.hud_glass_fbo.texture())
+        functions.glUniform1i(program.uniformLocation("hudGlassTex"), 3)
+        functions.glUniform1i(program.uniformLocation("sourceMode"), 0)
+        functions.glUniform1i(program.uniformLocation("radiusPx"), radius)
+        functions.glUniform1i(
+            program.uniformLocation("includeOverlay"),
+            1 if include_overlay else 0,
+        )
+        functions.glUniform2f(program.uniformLocation("direction"), 1.0, 0.0)
+        functions.glUniform2f(
+            program.uniformLocation("texel"),
+            1.0 / max(1.0, float(self._size.width())),
+            1.0 / max(1.0, float(self._size.height())),
+        )
+        self._draw_quad(functions, program)
+        temp_fbo.release()
+
+        if not output_fbo.bind():
+            program.release()
+            return False
+        functions.glActiveTexture(_GL_TEXTURE0)
+        functions.glBindTexture(_GL_TEXTURE_2D, temp_fbo.texture())
+        functions.glUniform1i(program.uniformLocation("sourceTex"), 0)
+        functions.glUniform1i(program.uniformLocation("sourceMode"), 1)
+        functions.glUniform2f(program.uniformLocation("direction"), 0.0, 1.0)
+        self._draw_quad(functions, program)
+        program.release()
+        output_fbo.release()
+        return True
+
     def prepare_blur(self, functions, *, background_changed: bool) -> bool:
         """Build the scene/control blur sampled by native HUD lenses."""
         if not background_changed and self._blur_valid:
@@ -751,13 +840,26 @@ class GpuFrameCompositor:
             return False
         started = time.perf_counter()
         try:
-            self._treated_blur_valid = self._render_blur_pair(
-                functions,
-                temp_fbo=self.treated_blur_temp_fbo,
-                output_fbo=self.treated_blur_fbo,
-                radius_px=max(0.0, treatment.blur_radius_px * self._device_pixel_ratio),
-                include_overlay=treatment.include_overlay,
-            )
+            if treatment.blur_kernel == "jello_box20":
+                # RenderUtil2.setShaderParamsRounded() feeds an integer radius
+                # directly to Minecraft's full-resolution post shader.  It is
+                # intentionally not multiplied by Qt's DPR: the reference
+                # radius is measured in framebuffer pixels.
+                self._treated_blur_valid = self._render_jello_blur_pair(
+                    functions,
+                    temp_fbo=self.treated_blur_temp_fbo,
+                    output_fbo=self.treated_blur_fbo,
+                    radius_px=int(max(0, min(20, round(treatment.blur_radius_px)))),
+                    include_overlay=treatment.include_overlay,
+                )
+            else:
+                self._treated_blur_valid = self._render_blur_pair(
+                    functions,
+                    temp_fbo=self.treated_blur_temp_fbo,
+                    output_fbo=self.treated_blur_fbo,
+                    radius_px=max(0.0, treatment.blur_radius_px * self._device_pixel_ratio),
+                    include_overlay=treatment.include_overlay,
+                )
             self.last_blur_ms += (time.perf_counter() - started) * 1000.0
             return self._treated_blur_valid
         except Exception as exc:
@@ -1150,6 +1252,57 @@ class GpuFrameCompositor:
         """)
 
     @classmethod
+    def _build_jello_blur_program(cls) -> QOpenGLShaderProgram:
+        # Port of the ``assets/minecraft/shaders/program/blur.fsh`` embedded in
+        # sigma-jello-5.1.0.jar.  The source composition is the host equivalent
+        # of Minecraft's main framebuffer before that post chain is applied.
+        return cls._compile(cls._vertex_shader(), """
+            #version 330
+            in vec2 uv;
+            uniform sampler2D sourceTex;
+            uniform sampler2D controlTex;
+            uniform sampler2D overlayTex;
+            uniform sampler2D hudGlassTex;
+            uniform vec2 texel;
+            uniform vec2 direction;
+            uniform int radiusPx;
+            uniform int includeOverlay;
+            uniform int sourceMode;
+            out vec4 fragColor;
+            vec3 sourceAt(vec2 p) {
+                vec2 sampleUv = clamp(p, vec2(0.001), vec2(0.999));
+                if (sourceMode != 0) {
+                    return texture(sourceTex, sampleUv).rgb;
+                }
+                vec3 scene = texture(sourceTex, sampleUv).rgb;
+                vec4 control = texture(controlTex, sampleUv);
+                vec3 combined = control.rgb + scene * (1.0 - control.a);
+                if (includeOverlay != 0) {
+                    vec4 hudGlass = texture(hudGlassTex, sampleUv);
+                    vec4 overlay = texture(overlayTex, sampleUv);
+                    combined = hudGlass.rgb + combined * (1.0 - hudGlass.a);
+                    combined = overlay.rgb + combined * (1.0 - overlay.a);
+                }
+                return combined;
+            }
+            void main() {
+                int radius = clamp(radiusPx, 0, 20);
+                vec3 blurred = vec3(0.0);
+                for (int offset = -20; offset <= 20; ++offset) {
+                    if (abs(offset) <= radius) {
+                        blurred += sourceAt(
+                            uv + texel * direction * float(offset)
+                        );
+                    }
+                }
+                fragColor = vec4(
+                    blurred / float(radius * 2 + 1),
+                    1.0
+                );
+            }
+        """)
+
+    @classmethod
     def _build_lens_program(cls) -> QOpenGLShaderProgram:
         """构建唯一的 Combined Backdrop 液态镜片着色器。"""
         return cls._compile(cls._vertex_shader(), """
@@ -1423,10 +1576,16 @@ class GpuFrameCompositor:
             self.vertex_buffer.destroy()
         if self.vertex_array.isCreated():
             self.vertex_array.destroy()
-        for program in (self.present_program, self.blur_program, self.glass_program):
+        for program in (
+            self.present_program,
+            self.blur_program,
+            self.jello_blur_program,
+            self.glass_program,
+        ):
             if program is not None:
                 program.removeAllShaders()
         self.present_program = None
         self.blur_program = None
+        self.jello_blur_program = None
         self.glass_program = None
         self.available = False

@@ -6,7 +6,7 @@
 > 弹丸、补血、复活和空中支援的规则与正式请求边界见
 > [《POLAR-RM 经济操作与裁判链路》](README_经济操作与裁判链路.md)。
 
-这是一个使用 Python 编写的 RoboMaster 2026 自定义客户端。当前版本基于 PySide6/QPainter 渲染，提供 POLAR 风格 ClickGUI 结构：同一套 RM 模块注册表、四种 GUI 模式、共享设置系统、进入 HUD 后启用摄像头图传、POLAR 风格覆盖层、按键绑定捕获、本地配置文件，以及 MQTT/UDP/串口等通信接口预留。
+这是一个使用 Python 编写的 RoboMaster 2026 自定义客户端。当前版本按本机 JAR 的字节码常量、原始资源和调用时序一比一移植 Sigma Jello 5.1.0 ClickGUI（不是风格模仿），并提供同一套 RM 模块注册表、共享设置系统、进入 HUD 后启用摄像头图传、POLAR 风格覆盖层、按键绑定捕获、本地配置文件，以及 MQTT/UDP/串口等通信接口预留。
 
 ## 运行
 
@@ -58,25 +58,36 @@ python -m venv .venv
 ## 快捷键
 
 - `Right Shift` 或 `F8`：打开/关闭 ClickGUI。
-- `F9`：切换 GUI 模式。
+- `F9`：已停用，不再轮换 ClickGUI。
 - 长按 `Tab`：放大 `TacticalMap`；松开 `Tab` 后回到缩略小地图。修改 `TacticalMap` 模块绑定键后，新的绑定键也会作为长按查看键。
 - 启动页：`1/2/3` 选择运行场景，然后 `1/2` 选择 `RMUC7v7/RMUL3v3`；`Backspace` 返回场景选择。
 - `B`：打开/关闭独立经济工作区；`ProjectileShop` 绑定键直接进入弹丸页。
 - 经济工作区：滚轮/方向键浏览，`Enter` 确认，远程弹丸、补血、复活和支援需长按 600ms，`Esc` 取消或关闭。
-- 左键点击模块：根据当前 GUI 模式选择模块或切换模块开关。
-- 右键点击模块：在内嵌式 GUI 中展开/折叠设置。
-- 模块右侧 `KEY`/`K` 按钮或 `Keybind` 设置行：打开 POLAR 风格按键绑定覆盖层。
-- 按键绑定覆盖层中按任意键即可绑定；按 `ESC` 清空绑定。
-- `PolarOld` 模式中，左键拖动分类标题可移动面板，右键点击分类标题可展开/折叠。
+- Jello 主界面中左键点击模块切换开关，右键打开居中设置面板。
+- `Esc` 先关闭设置面板；临时旧界面中第一次返回 Jello，再次关闭 ClickGUI。
+- 六套旧界面只在 `ClickGui -> Old ClickGUIs` 展开后出现，并且不会写入配置。
 
-## 已实现 GUI 模式
+## ClickGUI
 
-- `PolarOld`：横向可拖拽分类小面板，右键展开，模块内嵌设置，模块高度带动画。
-- `PolarPanel`：居中 `600x400` 主面板，80 alpha 遮罩，`0.98 -> 1.0` 打开缩放，左侧模块列表，右侧设置面板，分类图标栏，搜索栏，Profile/Scale 文本，Toast 和 KeybindOverlay。
-- `PolarNew`：顶部分类列，`120px` 分类面板，深色圆角面板，滚动、tooltip 和可展开设置。
-- `PolarDropdown`：下拉式分类面板，启用行带强调渐变，包含滑条、开关、模式控件和按键绑定入口。
+- `JelloSigma` 是唯一默认主界面：固定六分类 4+2 卡片布局、Sigma 原始字体/图片/颜色、450 ms 入场、125 ms 退场、20 px 模糊和原始模块开关音效。
+- `PolarOld`、`PolarPanel`、`PolarNew`、`PolarDropdown`、`PolarUnified`、`PolarMulti` 保留为临时兼容界面，只能从 `Old ClickGUIs` 进入。
+- 旧配置中的 Polar/Vape 模式会迁移到 `JelloSigma`；临时进入旧界面不会改变下次打开结果。
+- `ClickGui -> Scale` 可在 `0.50x–2.00x` 调节；窗口布局会按可用宽高封顶，GPU 字形页按稳定的 0.25 档位缓存，入场动画不会逐帧创建纹理。
 
-四种模式都操作同一套 RM 模块与设置，不会拆成互相独立的界面。
+## Jello HUD 与 Minecraft 战斗预设
+
+- `HUD -> ModuleList Style -> JelloActiveMods` 使用 Sigma 5.1.0 `ActiveMods` 的原始 Helvetica Neue Light 字体、右上角坐标、150 ms 显隐、宽度排序、缩放枢轴和 `hud_shadow.png`。
+- `Armor3DESP -> Style -> JelloShadow` 替换旧的荧光白机械样式：使用 `#fefefe`、2 px 轮廓和 Sigma 原始阴影图。由于视觉桥只提供投影装甲四边形而不是 Minecraft 实体网格，该模式严格以可用装甲轮廓作为 silhouette，不伪造实体深度。
+- `HUD -> Combat Preset -> Minecraft 1.21.11` 启用从用户本地 1.21.11 JAR 提取的原版 hotbar、心/护甲/饱食度、BossBar、状态图标和位图字体。
+- Minecraft 护甲值表示剩余热量/冷却裕量，饱食度表示实时底盘功率/功率上限；右侧 scoreboard 显示我方、敌方、基地、前哨站、目标、弹量和 Hero 吊射状态。
+- Jello 模块行可拖到九格功能栏；`1–9` 执行对应功能。栏位保存在配置中，拖拽命中区域与当前 Minecraft 整数 GUI Scale 一致。
+
+## Hero 吊射与后端就绪性
+
+- `HeroLob` 提供高/低弧预览、炮口随 pitch 位移的迭代补偿、yaw/pitch 校准、遥测时效、热量、横滚和重定位门禁。
+- 它是 fail-closed 的决策支持功能，**不会发送自动发射或云台命令**；定位重置或遥测异常会自动撤销预备状态。
+- `rm-native-viewer` 的 `PDL1` 遥测和 `0x0310` 固定分块已可识别，但 `0x0310` 连续 H.264 解码尚未接入。
+- 当前实战审查结论为 **NOT READY FOR REAL MATCH**。阻塞项和真车验证清单见 `BACKEND_MATCH_READINESS.md`。
 
 ## HUD 模式
 

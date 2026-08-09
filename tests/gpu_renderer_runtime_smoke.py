@@ -31,12 +31,26 @@ class GpuSmokeWidget(QOpenGLWidget):
         painter.fillRect(self.rect(), QColor("#0c0e15"))
         commands = ClickGuiDrawList()
         commands.rect(QRectF(24, 28, 672, 224), 14, QColor(24, 28, 42, 224), QColor(255, 255, 255, 42), 1.0)
+        commands.image(
+            QRectF(636, 38, 42, 31),
+            Path(__file__).resolve().parents[1] / "assets" / "jello" / "options.png",
+            QColor(255, 255, 255, 180),
+        )
         commands.text(
             QRectF(48, 54, 624, 64),
             "POLAR-RM 字体 GPU 144 FPS",
             QFont("Microsoft YaHei UI", 28),
             QColor("#f7f9ff"),
             Qt.AlignmentFlag.AlignCenter,
+        )
+        commands.text(
+            QRectF(646, 54, 22, 28),
+            ">",
+            QFont("Microsoft YaHei UI", 18),
+            QColor("#f7f9ff"),
+            Qt.AlignmentFlag.AlignCenter,
+            rotation_degrees=90.0,
+            render_scale=0.85,
         )
         for index in range(24):
             commands.text(
@@ -66,7 +80,7 @@ class GpuSmokeWidget(QOpenGLWidget):
         )
         self.error = self.renderer.last_error
         self.draw_call_count = self.renderer.draw_calls
-        self.result = self.result and self.draw_call_count <= 6
+        self.result = self.result and self.draw_call_count <= 8
         painter.endNativePainting()
         painter.end()
 

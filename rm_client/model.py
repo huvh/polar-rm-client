@@ -13,7 +13,9 @@ from .scenarios import SCENARIO_MODES
 
 CATEGORIES = ["Combat", "Movement", "Vision", "Strategy", "System", "Render"]
 
-GUI_MODES = [
+PRIMARY_GUI_MODE = "JelloSigma"
+
+LEGACY_GUI_MODES = [
     "PolarOld",
     "PolarPanel",
     "PolarNew",
@@ -22,6 +24,11 @@ GUI_MODES = [
     "PolarMulti",
 ]
 
+# The public ClickGUI surface intentionally contains one entry. Legacy
+# renderers remain available through ClickGui -> Old ClickGUIs, but they are
+# not normal modes and are never persisted as the startup GUI.
+GUI_MODES = [PRIMARY_GUI_MODE]
+
 GUI_MODE_MIGRATIONS = {
     "VapeUnified": "PolarUnified",
     "VapeMulti": "PolarMulti",
@@ -29,8 +36,13 @@ GUI_MODE_MIGRATIONS = {
 
 
 def normalize_gui_mode(mode: str) -> str:
+    del mode
+    return PRIMARY_GUI_MODE
+
+
+def normalize_legacy_gui_mode(mode: str) -> str | None:
     value = GUI_MODE_MIGRATIONS.get(str(mode), str(mode))
-    return value if value in GUI_MODES else "PolarPanel"
+    return value if value in LEGACY_GUI_MODES else None
 
 HUD_MODES = [
     "ModuleListHud",
@@ -55,8 +67,9 @@ MODULE_LIST_STYLES = [
     "LiquidArrayTags",
     "LiquidArrayCompact",
     "LiquidArrayDock",
-    # Debug.jar HUD.renderArray fluorescent white ArrayList (MODLIST_WHITE.md).
-    "DebugWhiteList",
+    # Exact Sigma Jello ActiveMods renderer.  DebugWhiteList is accepted only
+    # by config migration and is no longer exposed as a visual style.
+    "JelloActiveMods",
 ]
 
 # 每种可见样式都必须拥有独立视觉签名，避免配置项互相覆盖。
@@ -73,7 +86,7 @@ MODULE_LIST_RENDERER_KEYS = {
     "LiquidArrayTags": "liquid_array:tags",
     "LiquidArrayCompact": "liquid_array:compact",
     "LiquidArrayDock": "liquid_array:dock",
-    "DebugWhiteList": "debug_white_list",
+    "JelloActiveMods": "jello_active_mods",
 }
 
 TACTICAL_MAP_STATUS_DISPLAYS = [
@@ -223,15 +236,16 @@ class ModuleRegistry:
 
 
 class GuiModeManager:
-    def __init__(self, initial: str = "PolarPanel") -> None:
+    def __init__(self, initial: str = PRIMARY_GUI_MODE) -> None:
         self.mode = normalize_gui_mode(initial)
 
     def set_mode(self, mode: str) -> None:
         self.mode = normalize_gui_mode(mode)
 
     def next_mode(self) -> str:
-        idx = GUI_MODES.index(self.mode)
-        self.mode = GUI_MODES[(idx + 1) % len(GUI_MODES)]
+        # Jello Sigma is the only public mode. F9 must not reveal retained
+        # legacy renderers.
+        self.mode = PRIMARY_GUI_MODE
         return self.mode
 
 
@@ -364,6 +378,32 @@ class RobotState:
     visual_kill_count: int = 0
     referee_kill_count: int = 0
     vision_scene_luminance: float = 0.0
+    # rm-native-viewer PDL1 telemetry.  ``native_telemetry_at`` is a local
+    # monotonic timestamp; unix_ms remains diagnostic only.
+    native_telemetry_at: float = 0.0
+    native_telemetry_unix_ms: int = 0
+    native_telemetry_frame_seq: int = 0
+    native_camera_online: bool = False
+    native_gimbal_online: bool = False
+    native_gimbal_mode: str = "UNKNOWN"
+    native_bullet_count: int = 0
+    native_bullet_speed: float = 0.0
+    native_yaw_deg: float = 0.0
+    native_yaw_velocity: float = 0.0
+    native_pitch_deg: float = 0.0
+    native_pitch_velocity: float = 0.0
+    native_quaternion: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 1.0)
+    native_status_text: str = ""
+    # Hero lob is operator decision support only; no value below is a fire
+    # command.  Calibration/relocalisation gates intentionally start false.
+    hero_lob_yaw_calibrated: bool = False
+    hero_lob_pitch_calibrated: bool = False
+    hero_lob_relocalization_valid: bool = False
+    hero_lob_armed: bool = False
+    hero_lob_status: str = "OFF"
+    hero_lob_preview_yaw_deg: float = 0.0
+    hero_lob_preview_pitch_deg: float = 0.0
+    hero_lob_flight_time_s: float = 0.0
     fps: float = 0.0
     latency_ms: int = 36
     last_event: str = "Armor target acquired"
@@ -568,6 +608,23 @@ def action_setting(name: str, description: str = "") -> Setting:
     return Setting(name=name, kind="action", value=name, description=description)
 
 
+def action_group_setting(name: str, options: list[str], description: str = "") -> Setting:
+    """Create a transient group of action buttons.
+
+    The selected action and expansion state are intentionally owned by the UI
+    session rather than ``value``, so profiles cannot make a legacy GUI the
+    next startup surface.
+    """
+
+    return Setting(
+        name=name,
+        kind="action_group",
+        value=None,
+        options=list(options),
+        description=description,
+    )
+
+
 def build_default_registry() -> ModuleRegistry:
     modules = [
         Module(
@@ -762,6 +819,39 @@ def build_default_registry() -> ModuleRegistry:
             description="装甲板目标选择和锁定策略预留模块。",
         ),
         Module(
+            "HeroLob",
+            "Combat",
+            "None",
+            [
+                mode_setting("Mode", "Radar Assisted", ["Radar Assisted", "Manual"]),
+                mode_setting("Target", "Enemy Base", ["Enemy Base", "Enemy Outpost", "Manual"]),
+                number_setting("Distance", 18.0, 1.0, 60.0, 0.1, "m"),
+                number_setting("Height Delta", 0.0, -12.0, 12.0, 0.05, "m"),
+                number_setting("Bearing", 0.0, -180.0, 180.0, 0.1, "deg"),
+                mode_setting("Arc", "High", ["High", "Low"]),
+                number_setting("Muzzle Speed", 16.0, 5.0, 35.0, 0.1, "m/s"),
+                number_setting("Gravity", 9.80665, 8.0, 11.0, 0.001, "m/s2"),
+                number_setting("Yaw Offset", 0.0, -20.0, 20.0, 0.05, "deg"),
+                number_setting("Pitch Offset", 0.0, -20.0, 20.0, 0.05, "deg"),
+                number_setting("Muzzle Length", 0.35, 0.0, 1.0, 0.01, "m"),
+                number_setting("Yaw Calibration Tolerance", 1.0, 0.1, 5.0, 0.1, "deg"),
+                number_setting("Pitch Calibration Tolerance", 1.5, 0.1, 5.0, 0.1, "deg"),
+                number_setting("Max Roll", 8.0, 1.0, 20.0, 0.5, "deg"),
+                bool_setting("Require Fresh Telemetry", True),
+                number_setting("Telemetry Timeout", 0.50, 0.10, 2.00, 0.05, "s"),
+                number_setting("Heat Guard", 0.88, 0.40, 1.00, 0.01),
+                bool_setting("Mock Output", True, "Decision support only; this module never fires automatically."),
+                action_setting("Calibrate Lob Yaw", "Align yaw against a known field line."),
+                action_setting("Calibrate Lob Pitch", "Store the operator-confirmed iterative pitch calibration."),
+                action_setting("Confirm Relocalization", "Confirm radar/map relocalization after every reset."),
+                action_setting("Invalidate Relocalization", "Fail closed after a localisation discontinuity."),
+                action_setting("Preview Lob", "Calculate yaw, pitch and flight time without sending a command."),
+                action_setting("Arm Assisted Lob", "Arm decision support only; no fire command is emitted."),
+                action_setting("Disarm Assisted Lob"),
+            ],
+            description="英雄吊射辅助：雷达定位、偏航/俯仰标定与弹道预览。严格失效保护，绝不自动开火。",
+        ),
+        Module(
             "FireControlStub",
             "Combat",
             "None",
@@ -861,12 +951,12 @@ def build_default_registry() -> ModuleRegistry:
             [
                 mode_setting(
                     "Style",
-                    "PolarMechanicalWire",
-                    ["PolarMechanicalWire", "Wireframe3D", "PolarOutline2D", "Prediction Rack"],
+                    "JelloShadow",
+                    ["JelloShadow", "Wireframe3D", "PolarOutline2D", "Prediction Rack"],
                 ),
                 mode_setting("Renderer", "GPU Auto", ["GPU Auto", "CPU"]),
-                bool_setting("Show Prediction", True),
-                bool_setting("Show Labels", True),
+                bool_setting("Show Prediction", False),
+                bool_setting("Show Labels", False),
                 bool_setting("Prediction Labels", False),
                 bool_setting("Show Depth", True),
                 number_setting("Line Width", 2.0, 1.0, 5.0, 0.25, "px"),
@@ -1171,11 +1261,15 @@ def build_default_registry() -> ModuleRegistry:
                 bool_setting("Robot List", True),
                 bool_setting("Status Cards", True),
                 bool_setting("RM Indicators", True),
+                mode_setting("Combat Preset", "Polar", ["Polar", "Minecraft 1.21.11"]),
                 mode_setting("Density", "CombatCompact", ["CombatCompact", "Balanced", "DebugFull"]),
                 mode_setting("Visual Tone", "LiquidClean", ["LiquidClean", "PolarLegacy"]),
                 mode_setting("Target Style", "RoundCompact", ["RoundCompact", "BarOnly", "FullCard"]),
                 mode_setting("Right Display", "ModuleListHud", HUD_MODES),
-                mode_setting("ModuleList Style", "PolarTextList", MODULE_LIST_STYLES),
+                mode_setting("ModuleList Style", "JelloActiveMods", MODULE_LIST_STYLES),
+                mode_setting("Jello List Size", "Normal", ["Normal", "Small", "Tiny"]),
+                bool_setting("Jello List Animations", True),
+                bool_setting("Jello List Sound", True, "Sigma ActiveMods toggle sound."),
                 mode_setting("ModuleList Surface", "LiquidGlass", ["Native", "LiquidGlass"]),
                 mode_setting("ModuleList Alignment", "Right", ["Right", "Left"]),
                 mode_setting("ModuleList Order", "Descending", ["Descending", "Ascending"]),
@@ -1230,6 +1324,26 @@ def build_default_registry() -> ModuleRegistry:
             description="围绕中心准星显示本机血量、射击热量、自瞄状态和弹丸余量。",
         ),
         Module(
+            "MinecraftCombatHUD",
+            "Render",
+            "None",
+            [
+                mode_setting("GUI Scale", "Auto", ["Auto", "1x", "2x", "3x", "4x", "5x", "6x", "7x", "8x"]),
+                *[
+                    mode_setting(f"Slot {index}", default, ["Empty", default])
+                    for index, default in enumerate(
+                        (
+                            "ArmorAutoAim", "ArmorLock", "FrictionWheel", "SpinMode",
+                            "EconomyPanel", "ProjectileShop", "TacticalMap", "MatchChat", "ClickGui",
+                        ),
+                        1,
+                    )
+                ],
+            ],
+            enabled=True,
+            description="Minecraft 1.21.11 战斗 HUD 与九格自定义功能栏；可从 Jello ClickGUI 拖放模块。",
+        ),
+        Module(
             "ChassisGimbalIndicator",
             "Render",
             "None",
@@ -1248,12 +1362,16 @@ def build_default_registry() -> ModuleRegistry:
             "Render",
             "RightShift",
             [
-                mode_setting("Mode", "PolarPanel", GUI_MODES),
-                number_setting("Scale", 1.0, 0.5, 1.5, 0.25),
+                number_setting("Scale", 1.0, 0.5, 2.0, 0.05),
                 mode_setting("Render Backend", "Unified GPU", ["Unified GPU", "Compatibility Painter"]),
                 bool_setting("Save Layout", True),
+                action_group_setting(
+                    "Old ClickGUIs",
+                    LEGACY_GUI_MODES,
+                    "显示所有旧 ClickGUI",
+                ),
             ],
-            description="等价于 POLAR ClickGuiModule 的 GUI 模式切换器。",
+            description="Jello Sigma 5.1.0 主 ClickGUI 一比一复刻；旧界面收纳在 Old ClickGUIs 中。",
         ),
         Module(
             "GimbalPower",
@@ -1364,4 +1482,12 @@ def build_default_registry() -> ModuleRegistry:
             description="把 RMUI JUP/PTE/WHE/LES 状态元素转换为 POLAR 指示器。",
         ),
     ]
+    # Function-bar slots accept any module, but the list is populated only
+    # after registry construction so it cannot drift when modules are added.
+    function_bar = next((module for module in modules if module.name == "MinecraftCombatHUD"), None)
+    function_choices = ["Empty", *(module.name for module in modules if module.name != "MinecraftCombatHUD")]
+    if function_bar is not None:
+        for setting in function_bar.settings:
+            if setting.name.startswith("Slot "):
+                setting.options = list(function_choices)
     return ModuleRegistry(modules)

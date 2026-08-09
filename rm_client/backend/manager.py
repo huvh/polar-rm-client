@@ -16,6 +16,7 @@ import time
 from typing import Any
 
 from ..model import RobotState
+from ..native_viewer_telemetry import parse_vehicle_telemetry, parse_video_0310_chunk
 from ..scenarios import SCENARIOS
 from . import protocol as proto
 from .mqtt_backend import RmMqttBackend
@@ -120,7 +121,11 @@ class BackendManager:
             count += 1
             self._apply_one(state, name, data)
         if messages and state is not None:
-            state.backend_stats = self.stats()
+            runtime_stats = self.stats()
+            for key, value in state.backend_stats.items():
+                if key not in runtime_stats:
+                    runtime_stats[key] = value
+            state.backend_stats = runtime_stats
         return count
 
     @staticmethod
@@ -234,9 +239,75 @@ class BackendManager:
                 "param": data.get("param", ""),
             }
         elif name == "CustomByteBlock":
+            block = bytes(data.get("data", b""))
             state.backend_stats["last_custom_block"] = {
-                "len": len(data.get("data", b"")),
+                "len": len(block),
             }
+            telemetry = parse_vehicle_telemetry(block)
+            if telemetry is not None:
+                previous_sequence = int(state.native_telemetry_frame_seq)
+                status_upper = telemetry.status_text.upper()
+                # Treat a short backward jump as a producer restart/replay,
+                # but do not invalidate calibration at the natural uint32
+                # wrap from 0xffffffff to zero.
+                sequence_restarted = bool(
+                    previous_sequence > 0
+                    and telemetry.frame_seq < previous_sequence
+                    and (previous_sequence - telemetry.frame_seq) < 0x80000000
+                )
+                localisation_reset = bool(
+                    sequence_restarted
+                    or any(
+                        marker in status_upper
+                        for marker in (
+                            "LOCALIZATION LOST",
+                            "LOCALISATION LOST",
+                            "RELOCALIZING",
+                            "RELOCALISING",
+                            "POSE RESET",
+                            "MAP RESET",
+                        )
+                    )
+                )
+                state.native_telemetry_at = time.perf_counter()
+                state.native_telemetry_unix_ms = telemetry.unix_ms
+                state.native_telemetry_frame_seq = telemetry.frame_seq
+                state.native_camera_online = telemetry.camera_online
+                state.native_gimbal_online = telemetry.gimbal_online
+                state.native_gimbal_mode = telemetry.gimbal_mode_name
+                state.native_bullet_count = telemetry.bullet_count
+                state.native_bullet_speed = telemetry.bullet_speed
+                state.native_yaw_deg = telemetry.yaw
+                state.native_yaw_velocity = telemetry.yaw_vel
+                state.native_pitch_deg = telemetry.pitch
+                state.native_pitch_velocity = telemetry.pitch_vel
+                state.native_quaternion = telemetry.quaternion
+                state.native_status_text = telemetry.status_text
+                if localisation_reset:
+                    state.hero_lob_relocalization_valid = False
+                    state.hero_lob_armed = False
+                    state.hero_lob_status = "BLOCKED: relocalization invalidated by telemetry reset"
+                state.backend_stats["native_telemetry"] = {
+                    "version": telemetry.version,
+                    "frame_seq": telemetry.frame_seq,
+                    "camera_online": telemetry.camera_online,
+                    "gimbal_online": telemetry.gimbal_online,
+                    "gimbal_mode": telemetry.gimbal_mode_name,
+                    "bullet_speed": telemetry.bullet_speed,
+                    "status": telemetry.status_text,
+                }
+            else:
+                video_chunk = parse_video_0310_chunk(block)
+                if video_chunk is not None:
+                    # Recognition is explicit, but rendering still requires a
+                    # continuous H.264 decoder.  Do not pass a 297-byte chunk
+                    # to the frame-based UDP decoder and pretend it is a frame.
+                    state.backend_stats["native_video_0310"] = {
+                        "sequence": video_chunk.sequence,
+                        "reset": video_chunk.reset,
+                        "payload_len": len(video_chunk.payload),
+                        "decoder_ready": False,
+                    }
         elif name == "RobotInjuryStat":
             state.injury_stats[int(data.get("killer_id", 0))] = self._clean(data)
         elif name == "RobotRespawnStatus":

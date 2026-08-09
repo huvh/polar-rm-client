@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "gui_mode": "PolarUnified",
+  "gui_mode": "JelloSigma",
   "selected_category": "System",
   "selected_module": "RobotOverlay",
   "module_expanded": [],
@@ -392,10 +392,10 @@
       "enabled": true,
       "keybind": "None",
       "settings": {
-        "Style": "PolarMechanicalWire",
+        "Style": "JelloShadow",
         "Renderer": "GPU Auto",
-        "Show Prediction": true,
-        "Show Labels": true,
+        "Show Prediction": false,
+        "Show Labels": false,
         "Prediction Labels": false,
         "Show Depth": true,
         "Line Width": 2.0,
@@ -620,13 +620,17 @@
         "Visual Tone": "LiquidClean",
         "Target Style": "BarOnly",
         "Right Display": "ModuleListHud",
-        "ModuleList Style": "PolarTextList",
+        "ModuleList Style": "JelloActiveMods",
         "ModuleList Surface": "LiquidGlass",
         "ModuleList Alignment": "Right",
         "ModuleList Order": "Descending",
         "Module Tags": "Category",
         "Module Animation": "Slide",
-        "Restore Compact HUD": "Restore Compact HUD"
+        "Restore Compact HUD": "Restore Compact HUD",
+        "Combat Preset": "Polar",
+        "Jello List Size": "Normal",
+        "Jello List Animations": true,
+        "Jello List Sound": true
       }
     },
     "UIScale": {
@@ -674,9 +678,8 @@
     },
     "ClickGui": {
       "enabled": true,
-      "keybind": "None",
+      "keybind": "RightShift",
       "settings": {
-        "Mode": "PolarUnified",
         "Scale": 1.0,
         "Render Backend": "Unified GPU",
         "Save Layout": true
@@ -762,6 +765,53 @@
         "PTE": true,
         "WHE": true,
         "LES": true
+      }
+    },
+    "MinecraftCombatHUD": {
+      "enabled": true,
+      "keybind": "None",
+      "settings": {
+        "GUI Scale": "Auto",
+        "Slot 1": "ArmorAutoAim",
+        "Slot 2": "ArmorLock",
+        "Slot 3": "FrictionWheel",
+        "Slot 4": "SpinMode",
+        "Slot 5": "EconomyPanel",
+        "Slot 6": "ProjectileShop",
+        "Slot 7": "TacticalMap",
+        "Slot 8": "MatchChat",
+        "Slot 9": "ClickGui"
+      }
+    },
+    "HeroLob": {
+      "enabled": false,
+      "keybind": "None",
+      "settings": {
+        "Mode": "Radar Assisted",
+        "Target": "Enemy Base",
+        "Distance": 18.0,
+        "Height Delta": 0.0,
+        "Bearing": 0.0,
+        "Arc": "High",
+        "Muzzle Speed": 16.0,
+        "Gravity": 9.80665,
+        "Yaw Offset": 0.0,
+        "Pitch Offset": 0.0,
+        "Muzzle Length": 0.35,
+        "Yaw Calibration Tolerance": 1.0,
+        "Pitch Calibration Tolerance": 1.5,
+        "Max Roll": 8.0,
+        "Require Fresh Telemetry": true,
+        "Telemetry Timeout": 0.5,
+        "Heat Guard": 0.88,
+        "Mock Output": true,
+        "Calibrate Lob Yaw": "Calibrate Lob Yaw",
+        "Calibrate Lob Pitch": "Calibrate Lob Pitch",
+        "Confirm Relocalization": "Confirm Relocalization",
+        "Invalidate Relocalization": "Invalidate Relocalization",
+        "Preview Lob": "Preview Lob",
+        "Arm Assisted Lob": "Arm Assisted Lob",
+        "Disarm Assisted Lob": "Disarm Assisted Lob"
       }
     }
   },

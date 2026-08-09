@@ -49,15 +49,19 @@ from ..economy import (
     EconomyRequest,
     available_actions,
 )
+from ..hero_lob import HeroLobPlanner
 from ..model import (
     CATEGORIES,
     GUI_MODES,
+    LEGACY_GUI_MODES,
+    PRIMARY_GUI_MODE,
     HUD_MODES,
     MODULE_LIST_STYLES,
     GuiModeManager,
     Module,
     RobotState,
     normalize_gui_mode,
+    normalize_legacy_gui_mode,
     Setting,
     build_default_registry,
     normalize_angle_deg,
@@ -90,10 +94,12 @@ from ..vision import (
     snapshot_from_local_result,
     snapshot_from_tongji_packet,
 )
-from .animation import AnimationBank, Easings, GuiMotionController, GuiTransitionTimeline, IslandContainerState, MapIslandState, MorphState
+from .animation import AnimationBank, Easings, GuiMotionController, IslandContainerState, MapIslandState, MorphState
 from .fonts import FontBook
 from .gui_cache import ClickGuiLayerCache
 from .clickgui_gpu import ClickGuiDrawList, ClickGuiGpuRenderer
+from .jello_clickgui import JelloClickGuiRenderer, JelloClickGuiState, JelloMainTimeline
+from .minecraft_hud import MinecraftCombatHudRenderer
 from .gpu_frame_compositor import GlassOwner, GpuFrameCompositor, LensMaterial
 from .island_icon_gpu import IslandIconCommand, IslandIconGpuRenderer
 from .economy_glass import draw_economy_glass, draw_economy_glass_capsule, draw_economy_glass_well
@@ -305,7 +311,7 @@ class PolarRMWindow(QOpenGLWidget):
         self._combat_hud_last_time = time.perf_counter()
         self.scenario_manager = ScenarioManager("LabDebug")
         self.match_mode_manager = MatchModeManager("RMUC7v7")
-        self.mode_manager = GuiModeManager("PolarPanel")
+        self.mode_manager = GuiModeManager(PRIMARY_GUI_MODE)
         self.vision = MockVisionPipeline()
         self.camera_worker = CameraCaptureWorker()
         self.camera_started = False
@@ -369,6 +375,12 @@ class PolarRMWindow(QOpenGLWidget):
         self.gui_motion = GuiMotionController(self.anim)
         self.gui_cache = ClickGuiLayerCache()
         self.clickgui_gpu = ClickGuiGpuRenderer()
+        self.jello_clickgui = JelloClickGuiRenderer(
+            self.workspace / "rm_custom_client" / "assets" / "jello"
+        )
+        self.minecraft_hud = MinecraftCombatHudRenderer(
+            self.workspace / "rm_custom_client" / "assets" / "minecraft_hud"
+        )
         self.vision_wire_gpu = VisionWireGpuRenderer()
         self.island_icon_gpu = IslandIconGpuRenderer()
         self._gpu_island_icon_commands: list[IslandIconCommand] = []
@@ -428,7 +440,8 @@ class PolarRMWindow(QOpenGLWidget):
         self._startup_static_ready_at = self.startup_transition_started + self.anim_duration(0.42)
         self._startup_last_hover_action = ""
         self.gui_visible = False
-        self.gui_timeline = GuiTransitionTimeline()
+        self.gui_timeline = JelloMainTimeline()
+        self.jello_state = JelloClickGuiState()
         self.startup_page_morph = MorphState(progress=1.0, target=1.0, duration=0.42)
         self.dynamic_island_state = IslandContainerState(response_per_60hz_frame=0.20)
         self._bottom_left_diagnostics: list[tuple[str, QColor, int]] = []
@@ -540,7 +553,7 @@ class PolarRMWindow(QOpenGLWidget):
             # 自动启动/跳过启动页时按当前场景启动后端（MQTT/UDP/串口）
             self.backend.apply_scenario(self.scenario_manager.current.key)
             self.refresh_vision_runtime()
-        self.toast("ClickGUI 已就绪：PolarPanel")
+        self.toast("ClickGUI 已就绪：Jello Sigma")
 
         self.timer = QTimer(self)
         self.timer.setTimerType(Qt.TimerType.PreciseTimer)
@@ -569,7 +582,14 @@ class PolarRMWindow(QOpenGLWidget):
             motion.update(dt)
         self.gui_timeline.set_target(1.0 if self.gui_visible else 0.0)
         self.gui_timeline.update(dt)
-        gui_mode = self.setting_mode(self.registry.get("ClickGui"), "Mode", "PolarPanel")
+        self.jello_state.update(dt)
+        if (
+            self.jello_state.reset_pending
+            and not self.gui_visible
+            and self.gui_timeline.progress <= 0.001
+        ):
+            self.jello_state.finish_reset()
+        gui_mode = self.active_clickgui_mode()
         self.polar_unified_morph.set_target(
             1.0 if self.gui_visible and gui_mode == "PolarUnified" else 0.0,
             self.anim_duration(0.62 if self.gui_visible else 0.48),
@@ -626,6 +646,7 @@ class PolarRMWindow(QOpenGLWidget):
             # 后端：心跳/安全 tick + 全量协议解码写入 RobotState（UI 只读）
             self.backend.tick()
             self.backend.apply_updates(self.state)
+            self.update_hero_lob_guard()
             self.consume_official_messages()
             self.apply_official_state()
             self.sync_tongji_vision_state()
@@ -716,17 +737,24 @@ class PolarRMWindow(QOpenGLWidget):
             "SCENE SELECT", "MATCH MODE", "ROBOT PROFILE", "SESSION",
             "DJI Official", "Campus Sim", "Lab Debug", "RMUC 7v7", "RMUL 3v3",
             "Config", "Import", "Wallpaper", "ClickGUI", "Exit", "Back",
+            "Jello Sigma", "Old ClickGUIs", "Show all", "Hide", "ClickGui options",
+            "Polar Old", "Polar Panel", "Polar New", "Polar Dropdown", "Polar One", "Polar Multi",
             "CUSTOM CLIENT", "Choose runtime environment", "Press 1/2/3 to select. Enter continues.",
             # Chinese panel subtitle glyphs (配置 / 缩放) + common toast fragments.
             "配置", "缩放", "已就绪", "已保存", "已加载", "导入",
         }
+        jello_labels = set(labels)
         for module in self.registry.modules:
             labels.add(module.name)
             labels.add(module.category)
             labels.add(module.keybind)
+            jello_labels.update((module.name, module.category, module.keybind, module.description))
             for setting in module.settings:
                 labels.add(setting.name)
                 labels.add(setting.display_value())
+                jello_labels.update(
+                    (setting.name, setting.display_value(), setting.description)
+                )
         fonts = (
             self.font("poppins_regular", 8.0),
             self.font("poppins_medium", 8.0),
@@ -737,7 +765,43 @@ class PolarRMWindow(QOpenGLWidget):
             self.font("museo", 28.0, QFont.Weight.Bold),
             self.font("material", 12.0, QFont.Weight.Bold),
         )
+        jello_fonts = (
+            # Exact sizes used by Sigma 5.1.0's PanelGroup, ModListView and
+            # SettingGroup rather than approximations in the Polar type scale.
+            self.font("jello_light", 14.0 * 72.0 / 96.0),
+            self.font("jello_light", 18.0 * 72.0 / 96.0),
+            self.font("jello_light", 20.0 * 72.0 / 96.0),
+            self.font("jello_light", 25.0 * 72.0 / 96.0),
+            self.font("jello_medium", 40.0 * 72.0 / 96.0),
+        )
         self.clickgui_gpu.prewarm(fonts, labels, self.devicePixelRatioF())
+        click_gui = self.registry.get("ClickGui")
+        scale_setting = click_gui.get_setting("Scale") if click_gui is not None else None
+        requested_scale = float(scale_setting.value) if scale_setting is not None else 1.0
+        effective_scale = self.jello_clickgui.layout(
+            max(1, self.width()),
+            max(1, self.height()),
+            requested_scale,
+        ).scale
+        jello_raster_scale = self.jello_clickgui.raster_scale_for(effective_scale)
+        # Preserve Helvetica Neue Light's original weight and rasterise at the
+        # settled GUI scale. Entrance animation remains a transform, so it
+        # cannot generate a new atlas every frame.
+        for raster_scale in {1.0, jello_raster_scale}:
+            self.clickgui_gpu.prewarm(
+                jello_fonts,
+                jello_labels,
+                self.devicePixelRatioF(),
+                raster_scale=raster_scale,
+                preserve_weight=True,
+            )
+        self.clickgui_gpu.prewarm_images(self.jello_clickgui.image_assets)
+        self.clickgui_gpu.prewarm_images(
+            (
+                self.minecraft_hud.asset_root / "hotbar.png",
+                self.minecraft_hud.asset_root / "hotbar_selection.png",
+            )
+        )
 
         # The economy workspace uses responsive font sizes and substantially
         # more CJK glyphs than ClickGUI. Prewarm the exact pages for the
@@ -1049,13 +1113,36 @@ class PolarRMWindow(QOpenGLWidget):
                 if clickgui_active
                 else 0.0
             )
-            overlay_reveal = max(economy_reveal, clickgui_reveal)
+            # Sigma drives a 20 px blur with min(1, raw * 4).  Its black
+            # overlay is part of ClickGuiScreen itself, so the compositor must
+            # not add Polar's separate dim pass on top of it.
+            if economy_active:
+                backdrop_active = economy_reveal > 0.0
+                backdrop_progress = economy_reveal
+                backdrop_blur = 4.0 * economy_reveal
+                backdrop_dim = 0.40
+                backdrop_blur_kernel = "compact_gaussian"
+            elif clickgui_active and self.active_clickgui_mode() == PRIMARY_GUI_MODE:
+                backdrop_active = clickgui_reveal > 0.0
+                backdrop_progress = 1.0 if backdrop_active else 0.0
+                backdrop_blur = self.gui_timeline.blur_radius()
+                backdrop_dim = 0.0
+                backdrop_blur_kernel = "jello_box20"
+            else:
+                # Keep the historical compositor treatment when a legacy GUI
+                # is entered temporarily through Old ClickGUIs.
+                backdrop_active = clickgui_reveal > 0.0
+                backdrop_progress = clickgui_reveal
+                backdrop_blur = 3.0
+                backdrop_dim = 0.26
+                backdrop_blur_kernel = "compact_gaussian"
             treatment_changed = self.gpu_compositor.set_backdrop_treatment(
-                active=overlay_reveal > 0.0,
-                progress=overlay_reveal,
-                blur_radius_px=3.0,
-                dim_alpha=0.26,
-                include_overlay=True,
+                active=backdrop_active,
+                progress=backdrop_progress,
+                blur_radius_px=backdrop_blur,
+                dim_alpha=backdrop_dim,
+                include_overlay=not economy_active,
+                blur_kernel=backdrop_blur_kernel,
             )
             control_changed = self.paint_gpu_control_backdrop(
                 functions,
@@ -1065,9 +1152,9 @@ class PolarRMWindow(QOpenGLWidget):
                 startup_scene=startup_scene,
                 economy_active=economy_active,
             )
-            # The host HUD remains visible in the treated backdrop, while its
-            # high-frequency vision layer is suppressed so it cannot punch
-            # crisply through the Control Center surface.
+            # Modal vision must never punch crisply through the treated
+            # backdrop. Economy additionally clears the complete HUD layer;
+            # Jello keeps the cached HUD under Sigma's blur.
             if modal_backdrop_active:
                 self.gpu_compositor.clear_vision_layer(functions)
                 native_vision_owner = False
@@ -1122,11 +1209,23 @@ class PolarRMWindow(QOpenGLWidget):
                         return False
                 self._gpu_static_ui_key = static_key
             else:
-                # Control Center style: the battle HUD (tactical map,
-                # ModuleList, telemetry) stays visible beneath the economy
-                # glass panel.  The panel's own lens blurs it naturally —
-                # a real control center never hides the host application.
-                if rebuild_hud_static:
+                # The liquid-glass specification makes Economy an exclusive
+                # scene. Jello and retained GUIs use the normal HUD snapshot
+                # path whenever Economy is inactive.
+                if economy_active:
+                    # Economy is an exclusive scene: camera + economy control
+                    # backdrop only.  Clearing the cached host HUD here fixes
+                    # the map/ModuleList ghosting that contradicted the sole
+                    # liquid-glass specification, without changing any shared
+                    # HUD or glass renderer.
+                    device = self.gpu_compositor.paint_device("overlay")
+                    if device is None:
+                        return False
+                    device.setDevicePixelRatio(ratio)
+                    self.gpu_compositor.clear_current(functions, transparent=True)
+                    self.gpu_compositor.release_layer("overlay")
+                    self._gpu_static_ui_key = static_key
+                elif rebuild_hud_static:
                     device = self.gpu_compositor.paint_device("overlay")
                     if device is None:
                         return False
@@ -1181,7 +1280,7 @@ class PolarRMWindow(QOpenGLWidget):
                     click_gui = self.registry.get("ClickGui")
                     gui_alpha = self.gui_timeline.progress
                     if (
-                        gui_alpha > 0.01
+                        (self.gui_visible or gui_alpha > 0.01)
                         and self.setting_mode(click_gui, "Render Backend", "Unified GPU") == "Unified GPU"
                         and self.clickgui_gpu.available
                     ):
@@ -1818,29 +1917,29 @@ class PolarRMWindow(QOpenGLWidget):
         tongji_result = self.vision_result_for_display(raw_tongji_result)
         if not hud_background_ready:
             self.draw_video(p, width, height)
-        armor_target = self.tongji_target(width, height, tongji_result) if tongji_result is not None else None
-        if armor_target is None:
-            # 选择真实桥接后绝不拿 mock 框伪装成检测结果；断链状态只保留 HUD 提示。
-            armor_target = (
-                VisionTarget(-160.0, -160.0, 1.0, 1.0, 0.0, "BRIDGE OFFLINE")
-                if self._vision_source != "Mock"
-                else self.vision.process(width, height, self.state, "armor")
+        if not self.economy_stage_active():
+            armor_target = self.tongji_target(width, height, tongji_result) if tongji_result is not None else None
+            if armor_target is None:
+                # 选择真实桥接后绝不拿 mock 框伪装成检测结果；断链状态只保留 HUD 提示。
+                armor_target = (
+                    VisionTarget(-160.0, -160.0, 1.0, 1.0, 0.0, "BRIDGE OFFLINE")
+                    if self._vision_source != "Mock"
+                    else self.vision.process(width, height, self.state, "armor")
+                )
+            energy_target = self.vision.process(width, height, self.state, "energy")
+            self.draw_rm_hud(
+                p,
+                width,
+                height,
+                armor_target,
+                energy_target,
+                tongji_result,
+                draw_motion=not split_motion_layer,
+                # During normal play ModuleList belongs to the high-refresh
+                # motion layer. ClickGUI captures it once into the native HUD
+                # snapshot; Economy is exclusive and skips this branch.
+                draw_module_list=capture_module_list,
             )
-        energy_target = self.vision.process(width, height, self.state, "energy")
-        self.draw_rm_hud(
-            p,
-            width,
-            height,
-            armor_target,
-            energy_target,
-            tongji_result,
-            draw_motion=not split_motion_layer,
-            # During normal play ModuleList belongs to the high-refresh motion
-            # layer. A modal captures it once into the native HUD snapshot so
-            # the complete HUD can be softened without repainting beneath the
-            # workspace or changing the user's selected list style.
-            draw_module_list=capture_module_list,
-        )
         # EliminationFX is always drawn from paint_hud_motion_overlay so the
         # GPU static-layer cache cannot freeze kill-icon timelines.
         if self.hover_tooltip and not self.gui_visible:
@@ -1925,11 +2024,29 @@ class PolarRMWindow(QOpenGLWidget):
 
     def menu_overlay_active(self) -> bool:
         """True while ClickGUI or Economy workspace is open (or animating)."""
-        return bool(self.gui_timeline.progress > 0.01 or self.economy_visible or self.economy_island.progress > 0.01)
+        return bool(
+            self.gui_visible
+            or self.gui_timeline.progress > 0.01
+            or self.economy_visible
+            or self.economy_island.progress > 0.01
+        )
 
     def economy_stage_active(self) -> bool:
         """True while economy workspace is open/animating (same stage as menu overlay)."""
         return bool(self.economy_visible or self.economy_island.progress > 0.01)
+
+    def combat_hud_preset(self) -> str:
+        hud = self.registry.get("HUD")
+        return self.setting_mode(hud, "Combat Preset", "Polar")
+
+    def minecraft_hud_active(self) -> bool:
+        module = self.registry.get("MinecraftCombatHUD")
+        return bool(
+            module
+            and module.enabled
+            and self.combat_hud_preset() == "Minecraft 1.21.11"
+            and self.minecraft_hud.available
+        )
 
     def paint_hud_motion_overlay(
         self,
@@ -1993,6 +2110,25 @@ class PolarRMWindow(QOpenGLWidget):
                 "energy",
             )
             self.draw_target_overlay(p, mock_energy, energy_module)
+
+        if self.minecraft_hud_active():
+            p.restore()
+            self.minecraft_hud.draw(
+                p,
+                width,
+                height,
+                self.state,
+                self.registry,
+                self.registry.get("MinecraftCombatHUD"),
+            )
+            if include_chat:
+                self.draw_match_chat(p, width, height, now=now)
+            if include_radial:
+                self.draw_quick_action_wheel(p, width, height)
+            if not self.menu_overlay_active():
+                self.draw_elimination_fx(p, width, height)
+            self.dynamic_hud_ms = (time.perf_counter() - started_at) * 1000.0
+            return
 
         if include_target_hud:
             self.paint_combat_target_overlay(
@@ -2468,10 +2604,11 @@ class PolarRMWindow(QOpenGLWidget):
                 self.draw_economy_overlay_compat(p, width, height, economy_alpha)
 
         gui_alpha = self.gui_timeline.progress
-        if gui_alpha > 0.01:
+        if self.gui_visible or gui_alpha > 0.01:
             # Drop HUD/map hit targets while ClickGUI owns the pointer.
             self.hotspots.clear()
-            p.fillRect(QRectF(0, 0, width, height), with_alpha(THEME.dim, gui_alpha))
+            if self.active_clickgui_mode() != PRIMARY_GUI_MODE:
+                p.fillRect(QRectF(0, 0, width, height), with_alpha(THEME.dim, gui_alpha))
             click_gui = self.registry.get("ClickGui")
             direct_gpu = self.setting_mode(click_gui, "Render Backend", "Unified GPU") == "Unified GPU" and self.clickgui_gpu.available
             if direct_gpu:
@@ -2539,8 +2676,15 @@ class PolarRMWindow(QOpenGLWidget):
                         direct_gpu = False
             if not direct_gpu:
                 p.save()
-                p.setOpacity(gui_alpha)
-                mode = self.mode_manager.mode
+                mode = self.active_clickgui_mode()
+                if mode == PRIMARY_GUI_MODE:
+                    p.setOpacity(1.0)
+                    self.gui_scroll_viewports = []
+                    self.jello_clickgui.paint_compat(
+                        self, self.jello_state, p, width, height, gui_alpha
+                    )
+                else:
+                    p.setOpacity(gui_alpha)
                 if mode == "PolarOld":
                     self.draw_old_gui(p, width, height, gui_alpha)
                 elif mode == "PolarPanel":
@@ -2553,15 +2697,20 @@ class PolarRMWindow(QOpenGLWidget):
                     # Compatibility fallback keeps the same one-window
                     # interaction model when OpenGL is unavailable.
                     self.draw_panel_gui(p, width, height, gui_alpha)
-                else:
+                elif mode == "PolarMulti":
                     self.draw_old_gui(p, width, height, gui_alpha)
-                self.draw_mode_switcher(p, width, height)
-                self.draw_toasts(p, width, height)
-                if self.hover_tooltip:
-                    self.draw_tooltip(p, self.hover_point, self.hover_tooltip)
+                if mode in LEGACY_GUI_MODES:
+                    self.draw_legacy_return(p, width, height, gui_alpha)
+                    self.draw_toasts(p, width, height)
+                    if self.hover_tooltip:
+                        self.draw_tooltip(p, self.hover_point, self.hover_tooltip)
                 p.restore()
 
-        if self.binding_module is not None and not (gui_alpha > 0.01 and self.setting_mode(self.registry.get("ClickGui"), "Render Backend", "Unified GPU") == "Unified GPU" and self.clickgui_gpu.available):
+        if (
+            self.binding_module is not None
+            and self.active_clickgui_mode() in LEGACY_GUI_MODES
+            and not (gui_alpha > 0.01 and self.setting_mode(self.registry.get("ClickGui"), "Render Backend", "Unified GPU") == "Unified GPU" and self.clickgui_gpu.available)
+        ):
             self.draw_keybind_overlay(p, width, height)
 
     def draw_economy_overlay_legacy(self, p: QPainter, width: int, height: int, alpha: float) -> None:
@@ -2687,6 +2836,147 @@ class PolarRMWindow(QOpenGLWidget):
         self.economy_selected = 0
         return offers[0]
 
+    def open_legacy_clickgui(self, mode: str) -> bool:
+        legacy = normalize_legacy_gui_mode(mode)
+        if legacy is None:
+            if str(mode) == PRIMARY_GUI_MODE:
+                self.return_to_jello_clickgui()
+                return True
+            return False
+        if not self.jello_state.open_legacy(legacy):
+            return False
+        self.module_expanded.clear()
+        self.invalidate_gui_cache()
+        self.toast(f"Old ClickGUI：{self.gui_mode_label(legacy)}")
+        self.frame_scheduler.force()
+        self.update()
+        return True
+
+    def return_to_jello_clickgui(self) -> None:
+        self.jello_state.return_to_jello()
+        self.mode_manager.set_mode(PRIMARY_GUI_MODE)
+        self.invalidate_gui_cache()
+        self.toast("Back to Jello Sigma")
+        self.frame_scheduler.force()
+        self.update()
+
+    def append_minecraft_drop_overlay(self, commands: ClickGuiDrawList) -> None:
+        drag = self.drag
+        if not drag or drag.get("type") != "jello_module" or not drag.get("moved"):
+            return
+        module = self.registry.get("MinecraftCombatHUD")
+        if module is None or not self.minecraft_hud.available:
+            return
+        point = drag.get("point")
+        if not isinstance(point, QPointF):
+            return
+        override = self.setting_mode(module, "GUI Scale", "Auto")
+        scale = self.minecraft_hud.layout(self.width(), self.height(), override).scale
+        self.minecraft_hud.append_drop_overlay(
+            commands,
+            self.width(),
+            self.height(),
+            str(drag.get("module", "")),
+            point,
+            self.minecraft_hud.assignments(module),
+            self.font("jello_medium", max(6.0, 4.5 * scale)),
+            override,
+        )
+
+    def assign_minecraft_function_slot(self, index: int, module_name: str) -> bool:
+        function_bar = self.registry.get("MinecraftCombatHUD")
+        target = self.registry.get(str(module_name))
+        if function_bar is None or target is None or target is function_bar:
+            return False
+        if not 0 <= int(index) < 9:
+            return False
+        setting = function_bar.get_setting(f"Slot {int(index) + 1}")
+        if setting is None:
+            return False
+        if module_name not in setting.options:
+            setting.options.append(module_name)
+        setting.value = module_name
+        self.minecraft_hud.selected_slot = int(index)
+        self.toast(f"MC slot {int(index) + 1}: {module_name}")
+        self.auto_save_config()
+        self.invalidate_gui_cache()
+        return True
+
+    def activate_minecraft_function_slot(self, index: int) -> bool:
+        function_bar = self.registry.get("MinecraftCombatHUD")
+        if function_bar is None or not 0 <= int(index) < 9:
+            return False
+        assignments = self.minecraft_hud.assignments(function_bar)
+        name = assignments[int(index)]
+        self.minecraft_hud.selected_slot = int(index)
+        if name == "Empty":
+            self.toast(f"MC slot {int(index) + 1} is empty")
+            return True
+        if name == "ClickGui":
+            self.set_clickgui_visible(True)
+            return True
+        if name == "EconomyPanel":
+            self.open_economy_workspace()
+            return True
+        if name == "ProjectileShop":
+            self.open_economy_workspace("ammo")
+            return True
+        if name == "MatchChat":
+            self.open_match_chat()
+            return True
+        target = self.registry.get(name)
+        if target is None:
+            self.toast(f"MC slot target missing: {name}")
+            return True
+        self.registry.toggle_module(target, source="keybind")
+        self.selected_module = target
+        self.toast(f"{target.name} {'enabled' if target.enabled else 'disabled'}")
+        self.auto_save_config()
+        return True
+
+    def hero_range_profile_selected(self) -> bool:
+        profile = self.registry.get("RobotProfile")
+        return bool(
+            self.state.robot_profile == "Hero"
+            and self.setting_mode(profile, "Hero Type", "Melee") == "Range"
+        )
+
+    def hero_lob_preview(self, *, announce: bool = True) -> tuple[Any, Any]:
+        module = self.registry.get("HeroLob")
+        solution, readiness = HeroLobPlanner.preview_from_state(
+            self.state,
+            module,
+            hero_range_profile=self.hero_range_profile_selected(),
+        )
+        if solution.reachable:
+            self.state.hero_lob_preview_yaw_deg = solution.yaw_deg
+            self.state.hero_lob_preview_pitch_deg = solution.pitch_deg
+            self.state.hero_lob_flight_time_s = solution.flight_time_s
+            self.state.hero_lob_status = (
+                f"PREVIEW Y{solution.yaw_deg:+.1f} P{solution.pitch_deg:+.1f} T{solution.flight_time_s:.2f}"
+                if readiness.ready
+                else readiness.summary
+            )
+        else:
+            self.state.hero_lob_status = f"BLOCKED: {solution.reason}"
+        if announce:
+            self.toast(self.state.hero_lob_status)
+        return solution, readiness
+
+    def update_hero_lob_guard(self) -> None:
+        module = self.registry.get("HeroLob")
+        if module is None or not module.enabled:
+            self.state.hero_lob_armed = False
+            if module is None or self.state.hero_lob_status.startswith("ARMED"):
+                self.state.hero_lob_status = "OFF"
+            return
+        if not self.state.hero_lob_armed:
+            return
+        _solution, readiness = self.hero_lob_preview(announce=False)
+        if not readiness.ready:
+            self.state.hero_lob_armed = False
+            self.state.hero_lob_status = readiness.summary
+
     def set_clickgui_visible(
         self,
         visible: bool,
@@ -2695,6 +2985,16 @@ class PolarRMWindow(QOpenGLWidget):
         play_sound: bool = True,
     ) -> None:
         visible = bool(visible)
+        returned_to_primary = bool(
+            visible and self.gui_visible and self.jello_state.legacy_mode is not None
+        )
+        if visible and (not self.gui_visible or returned_to_primary):
+            # Any public/open command is a Jello command, even if a retained
+            # legacy preview happened to be visible already.
+            self.jello_state.begin_session()
+            self.mode_manager.set_mode(PRIMARY_GUI_MODE)
+        elif not visible:
+            self.jello_state.request_reset()
         if visible:
             if self.economy_visible:
                 self.close_economy_workspace(play_sound=False)
@@ -2704,13 +3004,19 @@ class PolarRMWindow(QOpenGLWidget):
         else:
             self.overlay_coordinator.close_modal(OverlayKind.CLICKGUI)
         if self.gui_visible == visible:
+            if returned_to_primary:
+                self.invalidate_gui_cache()
+                self.frame_scheduler.force()
+                self.update()
             return
         self.gui_visible = visible
         self.gui_timeline.set_target(1.0 if visible else 0.0)
         self._gpu_static_ui_key = None
         self._gpu_control_backdrop_key = None
         self.gpu_compositor.clear_frame_glass()
-        if play_sound:
+        # Sigma's ClickGuiScreen itself has no open/close cue.  Preserve the
+        # historical Polar transition only when a legacy renderer is active.
+        if play_sound and self.active_clickgui_mode() != PRIMARY_GUI_MODE:
             self.play_gui_transition_sound("expand" if visible else "collapse")
         if announce:
             self.toast("ClickGUI opened" if visible else "ClickGUI closed")
@@ -5300,12 +5606,20 @@ class PolarRMWindow(QOpenGLWidget):
         # 真实装甲视觉接入后不允许旧 Mock 能量框叠到图传上。
         draw_energy = energy_enabled and self._vision_source == "Mock"
         primary_target = energy_target if draw_energy else armor_target
+        if self.minecraft_hud_active():
+            # The Minecraft preset is a complete combat chrome.  Keep POLAR's
+            # liquid-glass renderers intact by bypassing them rather than
+            # changing their shared materials or geometry.
+            if draw_motion:
+                self.paint_hud_motion_overlay(p, width, height)
+            return
         hud_scale = self.get_hud_scale(width, height)
         scaled_width = max(1, int(width / hud_scale))
         scaled_height = max(1, int(height / hud_scale))
         p.save()
         p.scale(hud_scale, hud_scale)
-        # Keep battle chrome under both ClickGUI and Economy (live visual tuning).
+        # ClickGUI keeps battle chrome beneath Sigma's blur. Economy is
+        # filtered before this method and remains an exclusive scene.
         if self.setting_bool(hud, "Watermark", True):
             self.draw_watermark(p)
         if self.registry.get("MatchTimer") and self.registry.get("MatchTimer").enabled:
@@ -6239,6 +6553,50 @@ class PolarRMWindow(QOpenGLWidget):
         observed = [armor for armor in result.detections if len(armor.points) == 4]
         predicted = [armor for armor in result.predicted_armors if len(armor.points) == 4]
         aim = result.aim_armor if result.aim_armor and len(result.aim_armor.points) == 4 else None
+
+        if style == "JelloShadow":
+            # Sigma ShadowESP: LIGHT_GREYISH_BLUE (#fefefe), literal 2 px
+            # outline and the original alt/shadow.png billboard.  The host
+            # bridge exposes projected armor quads rather than a Minecraft
+            # entity mesh, so each quad is the available silhouette source;
+            # labels, prediction racks and POLAR mechanical decorations are
+            # intentionally omitted.
+            shadow = getattr(self, "_jello_esp_shadow", None)
+            if shadow is None:
+                shadow = QImage(
+                    str(self._client_asset_path("assets", "jello", "hud_shadow.png"))
+                ).convertToFormat(QImage.Format.Format_ARGB32_Premultiplied)
+                self._jello_esp_shadow = shadow
+            p.save()
+            p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+            p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+            for armor in observed[:max_targets]:
+                points = self.armor_esp_points(armor.points, result, width, height)
+                if len(points) != 4:
+                    continue
+                polygon = QPolygonF(points)
+                box = polygon.boundingRect()
+                billboard_w = max(42.0, box.width() * 2.8)
+                billboard_h = billboard_w * (411.0 / 330.0)
+                billboard = QRectF(
+                    box.center().x() - billboard_w * 0.5,
+                    box.center().y() - billboard_h * 0.42,
+                    billboard_w,
+                    billboard_h,
+                )
+                if shadow is not None and not shadow.isNull():
+                    p.save()
+                    p.setOpacity(max(0.0, min(1.0, 0.80 * opacity)))
+                    p.drawImage(billboard, shadow)
+                    p.restore()
+                pen = QPen(QColor(254, 254, 254, max(0, min(255, int(255 * opacity)))), line_width)
+                pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+                pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+                p.setPen(pen)
+                p.setBrush(Qt.BrushStyle.NoBrush)
+                p.drawPolygon(polygon)
+            p.restore()
+            return
 
         def prediction_alpha(armor) -> float:
             """按桥接器回传的真实深度衰减预测线框；旧桥接器无深度时保持默认透明度。"""
@@ -8768,6 +9126,11 @@ class PolarRMWindow(QOpenGLWidget):
         style = str(setting.value) if setting else MODULE_LIST_STYLES[0]
         if style not in MODULE_LIST_STYLES:
             style = MODULE_LIST_STYLES[0]
+        if style in ("JelloActiveMods", "DebugWhiteList"):
+            # Sigma's ActiveMods owns the absolute top-right 10/6 px anchor;
+            # do not feed it POLAR's 18 px safe-area clip.
+            self.draw_module_list_debug_white(p, width, 6.0, float(height) - 6.0)
+            return
         p.save()
         clip_rect = QRectF(layout.clip_rect)
         if style == "PolarTextList":
@@ -8806,8 +9169,6 @@ class PolarRMWindow(QOpenGLWidget):
             self.draw_module_list_robot_cards(p, width, layout.anchor_y)
         elif style in ("LiquidArrayList", "LiquidArrayTags", "LiquidArrayCompact", "LiquidArrayDock"):
             self.draw_module_list_liquid_array(p, width, style, layout.anchor_y, layout.available_height)
-        elif style == "DebugWhiteList":
-            self.draw_module_list_debug_white(p, width, layout.anchor_y, layout.available_height)
         elif style != "PolarTextList":
             self.draw_module_list_polar_text(p, max(layout.anchor_y, 64.0))
         p.restore()
@@ -9069,80 +9430,125 @@ class PolarRMWindow(QOpenGLWidget):
         start_y: float | None = None,
         available_height: float | None = None,
     ) -> None:
-        """Debug fluorescent-white ArrayList (MODLIST_WHITE / jar ArrayList).
+        """Exact Sigma 5.1.0 ``ActiveMods`` geometry and 150 ms motion.
 
-        Right-aligned, width-desc sorted, tahoma16 + MC shadow + soft plate.
-        Drawn in logical coords under the hud_scale transform (motion layer) so
-        the list no longer double-scales through an offscreen device buffer.
+        The retained method name is a migration alias for old profiles; the
+        former Tahoma/solid-plate implementation is intentionally gone.
         """
-        row_h = 16.0
-        pad_right = 3.0
-        pad_top = 2.0 if start_y is None else float(start_y)
-        pad_x = 7.0
-        pad_y = 2.0
-        # Logical 16px tahoma under p.scale(hud_scale) → crisp jar-size glyphs.
-        font = self.debug_tahoma_font(16)
+
+        del start_y
+        hud = self.registry.get("HUD")
+        size = self.setting_mode(hud, "Jello List Size", "Normal")
+        pixel_size = {"Normal": 20.0, "Small": 18.0, "Tiny": 14.0}.get(size, 20.0)
+        font = self.font("jello_light", pixel_size * 72.0 / 96.0)
         metrics = QFontMetricsF(font)
+        # ActiveMods' comparator is hard-wired to JelloLightFont20 even when
+        # Small/Tiny is selected.  Python's stable sort preserves the source
+        # order when that comparator returns zero.
+        sort_font = self.font("jello_light", 20.0 * 72.0 / 96.0)
+        sort_metrics = QFontMetricsF(sort_font)
+        font_height = float(math.ceil(metrics.height()))
+        animations = self.setting_bool(hud, "Jello List Animations", True)
+        now = time.perf_counter()
+        last = float(getattr(self, "_jello_active_mods_last", now))
+        dt = max(0.0, min(0.05, now - last))
+        self._jello_active_mods_last = now
+        rows: dict[str, dict[str, Any]] = getattr(self, "_jello_active_mods_rows", {})
+        self._jello_active_mods_rows = rows
 
-        visible = [m for m in self.registry.enabled_modules() if m.name not in ("HUD", "ClickGui")]
-        rows: list[tuple[str, float]] = [
-            (module.name, float(metrics.horizontalAdvance(module.name))) for module in visible
-        ]
-        rows.sort(key=lambda item: (-item[1], item[0].lower()))
+        # Sigma omits every module in its GUI category.  Render is the host
+        # client's equivalent category, so ClickGui/HUD visual modules never
+        # contaminate the list.
+        visible = [module for module in self.registry.enabled_modules() if module.category != "Render"]
+        visible_names = {module.name for module in visible}
+        for module in visible:
+            row = rows.setdefault(module.name, {"module": module, "progress": 0.0})
+            row["module"] = module
+            row["target"] = 1.0
+        for name, row in tuple(rows.items()):
+            if name not in visible_names:
+                row["target"] = 0.0
 
-        y0 = pad_top
-        height_limit = float(self.height()) if available_height is None else y0 + float(available_height)
-        max_rows = max(1, int((height_limit - y0 - 4.0) // row_h))
-        rows = rows[:max_rows]
-        if not rows:
+        speed = 1.0 / 0.150
+        for name, row in tuple(rows.items()):
+            target = float(row.get("target", 0.0))
+            progress = float(row.get("progress", target))
+            if animations:
+                step = dt * speed
+                progress = min(target, progress + step) if target > progress else max(target, progress - step)
+            else:
+                progress = target
+            row["progress"] = progress
+            if target <= 0.0 and progress <= 0.0001:
+                rows.pop(name, None)
+
+        render_rows: list[tuple[Module, float, float]] = []
+        for row in rows.values():
+            module = row["module"]
+            text_w = float(metrics.horizontalAdvance(module.name))
+            sort_w = float(sort_metrics.horizontalAdvance(module.name))
+            render_rows.append(
+                (module, text_w, sort_w, max(0.0, min(1.0, float(row["progress"]))))
+            )
+        render_rows.sort(key=lambda item: -item[2])
+        if not render_rows:
             return
 
-        shadow = self.arraylist_shadow_image()
+        shadow_path = self._client_asset_path("assets", "jello", "hud_shadow.png")
+        shadow = getattr(self, "_jello_hud_shadow", None)
+        if shadow is None:
+            shadow = QImage(str(shadow_path)).convertToFormat(QImage.Format.Format_ARGB32_Premultiplied)
+            self._jello_hud_shadow = shadow
+
+        y = 6.0
+        margin = 7.0 if size == "Tiny" else 10.0
+        height_limit = float(self.height()) if available_height is None else 6.0 + float(available_height)
         p.save()
         p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
-        p.setRenderHint(QPainter.RenderHint.TextAntialiasing, False)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing, False)
-        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, False)
-
-        for index, (name, text_w) in enumerate(rows):
-            x = float(width) - text_w - pad_right
-            y = y0 + index * row_h
-            ix = float(int(round(x)))
-            iy = float(int(round(y)))
-            tw = float(int(round(text_w)))
-            rh = float(max(int(round(row_h)), int(math.ceil(metrics.height()))))
-            dest = QRectF(
-                ix - pad_x,
-                iy - pad_y,
-                tw + pad_x * 2.0,
-                rh + pad_y * 2.0,
+        p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        p.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+        for module, text_w, _sort_w, progress in render_rows:
+            if y > height_limit:
+                break
+            scale = 0.86 + 0.14 * progress
+            x = float(width) - margin - text_w
+            shadow_alpha = 0.36 * progress * math.sqrt(min(1.2, text_w / 63.0))
+            if shadow is not None and not shadow.isNull() and shadow_alpha > 0.001:
+                p.save()
+                p.setOpacity(shadow_alpha)
+                p.drawImage(
+                    QRectF(
+                        float(width) - 1.5 * text_w - margin - 20.0,
+                        y - 20.0,
+                        3.0 * text_w,
+                        font_height + 41.0,
+                    ),
+                    shadow,
+                )
+                p.restore()
+            pivot = QPointF(float(width) - margin - text_w * 0.5, y + 12.0)
+            p.save()
+            p.setOpacity(0.95 * progress)
+            p.translate(pivot)
+            p.scale(scale, scale)
+            p.translate(-pivot)
+            p.setFont(font)
+            p.setPen(QColor(254, 254, 254, 255))
+            p.drawText(
+                QRectF(x, y, text_w + 4.0, font_height + 2.0),
+                int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop),
+                module.name,
             )
-            if shadow is not None and not shadow.isNull():
-                p.drawImage(dest.toRect(), shadow)
-            else:
-                # Soft dark cushion so pure white still "pops" on bright frames.
-                p.fillRect(dest.toRect(), QColor(0, 0, 0, 120))
-            # Extra soft plate under the jar shadow PNG (source peak is low after
-            # stretch) so fluorescent white stays readable on light game frames.
-            p.fillRect(
-                int(ix - 2),
-                int(iy - 1),
-                int(tw + 6),
-                int(rh + 3),
-                QColor(0, 0, 0, 55),
+            p.restore()
+            ease_height = (
+                2.0 * progress * progress
+                if progress < 0.5
+                else 1.0 - math.pow(-2.0 * progress + 2.0, 2.0) * 0.5
             )
-
-            self.draw_string_with_shadow_mc(
-                p,
-                name,
-                ix,
-                iy,
-                font=font,
-                main=QColor(255, 255, 255, 255),
-                text_w=tw,
-                row_h=rh,
-                shadow_px=1.0,
-            )
+            # The Java field is an int; compound assignment performs JVM f2i
+            # truncation after every row rather than accumulating fractions.
+            y = float(int(y + (font_height + 1.0) * ease_height))
         p.restore()
 
     def draw_module_list_liquid_array(
@@ -9946,30 +10352,40 @@ class PolarRMWindow(QOpenGLWidget):
                 clip=layout.body_clip,
             )
         tab_bar = layout.tab_bar
-        tab_count = max(1, len(categories))
         tab_gap = 8.0
-        tab_width = min(
-            152.0,
-            max(1.0, (tab_bar.width() - tab_gap * (tab_count - 1)) / tab_count),
-        )
-        tabs_total = tab_width * tab_count + tab_gap * (tab_count - 1)
-        tabs_left = tab_bar.center().x() - tabs_total * 0.5
-        tab_rects = tuple(
-            QRectF(
-                tabs_left + index * (tab_width + tab_gap),
-                tab_bar.top(),
-                tab_width,
-                tab_bar.height(),
-            )
-            for index in range(tab_count)
-        )
-        for tab_rect in tab_rects:
+        tab_width = 0.0
+        tab_rects: tuple[QRectF, ...] = ()
+        if layout.three_column:
             add_control_center_tile(
-                tab_rect,
-                layout.tab_alpha,
+                layout.category_pane,
+                category_alpha,
                 material=LensMaterial.STRONG,
                 clip=layout.body_clip,
             )
+        else:
+            tab_count = max(1, len(categories))
+            tab_width = min(
+                152.0,
+                max(1.0, (tab_bar.width() - tab_gap * (tab_count - 1)) / tab_count),
+            )
+            tabs_total = tab_width * tab_count + tab_gap * (tab_count - 1)
+            tabs_left = tab_bar.center().x() - tabs_total * 0.5
+            tab_rects = tuple(
+                QRectF(
+                    tabs_left + index * (tab_width + tab_gap),
+                    tab_bar.top(),
+                    tab_width,
+                    tab_bar.height(),
+                )
+                for index in range(tab_count)
+            )
+            for tab_rect in tab_rects:
+                add_control_center_tile(
+                    tab_rect,
+                    layout.tab_alpha,
+                    material=LensMaterial.STRONG,
+                    clip=layout.body_clip,
+                )
 
         # --- Status strip (compact gold/HP/ammo info) ---
         strip_clip = body_clip(strip)
@@ -10009,11 +10425,43 @@ class PolarRMWindow(QOpenGLWidget):
                 commands.rect(bar, 2.0, color("#ffffff", 0.08 * category_alpha), clip=strip_clip)
                 commands.rect(QRectF(bar.left(), bar.top(), bar.width() * max(0.0, min(1.0, ratio)), bar.height()), 2.0, color(accent_hex, category_alpha), clip=strip_clip)
 
-        # --- Bottom tab bar (LiquidBottomTabs style) ---
+        # --- Category navigation: bottom tabs at 720/900p; a true third
+        # column at 1080p+ as required by the economy interaction document. ---
         tab_bar = layout.tab_bar
         tab_clip = body_clip(tab_bar)
         tab_alpha = layout.tab_alpha
-        if not tab_clip.isEmpty() and tab_alpha > 0.01:
+        if layout.three_column:
+            category_clip = body_clip(layout.category_pane)
+            row_h = 48.0
+            row_gap = 8.0
+            commands.text(
+                QRectF(layout.category_pane.left() + 16.0, layout.category_pane.top() + 12.0, layout.category_pane.width() - 32.0, 24.0),
+                "操作分类",
+                self.font("poppins_bold", 10.0 * scale),
+                color("#ffffff", category_alpha),
+                clip=category_clip,
+            )
+            for index, key in enumerate(categories):
+                rect = QRectF(
+                    layout.category_pane.left() + 10.0,
+                    layout.category_pane.top() + 46.0 + index * (row_h + row_gap),
+                    layout.category_pane.width() - 20.0,
+                    row_h,
+                )
+                active = key == self.economy_category
+                if active:
+                    commands.rect(rect, 18.0, color("#0088ff", 0.84 * category_alpha), clip=category_clip)
+                commands.text(
+                    rect.adjusted(14.0, 0.0, -12.0, 0.0),
+                    CATEGORY_TITLES.get(key, key),
+                    self.font("poppins_bold", 9.0 * scale),
+                    color("#ffffff", category_alpha) if active else color("#d6e2ec", 0.80 * category_alpha),
+                    Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                    category_clip,
+                )
+                if self.economy_visible and layout.interactive:
+                    self.add_hotspot(rect.intersected(category_clip), "economy_category", key)
+        elif not tab_clip.isEmpty() and tab_alpha > 0.01:
             selected_category_index = float(categories.index(self.economy_category))
             animated_category_index = self.anim.value(
                 "economy.category.selection",
@@ -10329,9 +10777,14 @@ class PolarRMWindow(QOpenGLWidget):
 
     def build_gpu_clickgui(self, width: int, height: int, alpha: float) -> ClickGuiDrawList:
         started = time.perf_counter()
-        commands = ClickGuiDrawList()
         self.gui_scroll_viewports = []
-        mode = self.mode_manager.mode
+        mode = self.active_clickgui_mode()
+        if mode == PRIMARY_GUI_MODE:
+            commands = self.jello_clickgui.build(
+                self, self.jello_state, width, height, alpha
+            )
+        else:
+            commands = ClickGuiDrawList()
         if mode == "PolarPanel":
             self.build_gpu_panel_gui(commands, width, height, alpha)
         elif mode == "PolarOld":
@@ -10342,14 +10795,15 @@ class PolarRMWindow(QOpenGLWidget):
             self.build_gpu_dropdown_gui(commands, width, height, alpha)
         elif mode == "PolarUnified":
             self.build_gpu_polar_unified(commands, width, height, alpha)
-        else:
+        elif mode == "PolarMulti":
             self.build_gpu_polar_multi(commands, width, height, alpha)
-        self.build_gpu_mode_switcher(commands, width, height)
-        self.build_gpu_toasts(commands, width, height)
-        if self.hover_tooltip:
-            self.build_gpu_tooltip(commands, self.hover_point, self.hover_tooltip)
-        if self.binding_module is not None:
-            self.build_gpu_keybind_overlay(commands, width, height)
+        if mode in LEGACY_GUI_MODES:
+            self.build_gpu_legacy_return(commands, width, height, alpha)
+            self.build_gpu_toasts(commands, width, height)
+            if self.hover_tooltip:
+                self.build_gpu_tooltip(commands, self.hover_point, self.hover_tooltip)
+            if self.binding_module is not None:
+                self.build_gpu_keybind_overlay(commands, width, height)
         self.clickgui_gpu_layout_ms = (time.perf_counter() - started) * 1000.0
         return commands
 
@@ -11362,6 +11816,36 @@ class PolarRMWindow(QOpenGLWidget):
             commands.text(rect, self.gui_mode_label(mode), self.font("poppins_medium", 7.1), color("#08080a") if active else THEME.text, Qt.AlignmentFlag.AlignCenter)
             self.add_hotspot(rect, "gui_mode", mode)
 
+    def build_gpu_legacy_return(
+        self,
+        commands: ClickGuiDrawList,
+        width: int,
+        height: int,
+        alpha: float,
+    ) -> None:
+        del width, height
+        rect = QRectF(18.0, 18.0, 184.0, 34.0)
+        commands.rect(
+            rect.adjusted(-4.0, 3.0, 4.0, 7.0),
+            12.0,
+            color("#000000", 0.24 * alpha),
+        )
+        commands.rect(
+            rect,
+            10.0,
+            color("#fefefe", 0.96 * alpha),
+            color("#d7d7d7", 0.72 * alpha),
+            0.8,
+        )
+        commands.text(
+            rect.adjusted(12.0, 0.0, -12.0, 0.0),
+            "←  Back to Jello Sigma",
+            self.font("jello_medium", 9.5),
+            color("#010101", 0.72 * alpha),
+            Qt.AlignmentFlag.AlignCenter,
+        )
+        self.add_hotspot(rect, "jello_return", tooltip="Return to the main ClickGUI")
+
     def build_gpu_toasts(self, commands: ClickGuiDrawList, width: int, height: int) -> None:
         now = time.perf_counter()
         self.toasts = [toast for toast in self.toasts if now - toast["created"] < 3.0]
@@ -11925,6 +12409,33 @@ class PolarRMWindow(QOpenGLWidget):
             self.draw_text(p, rect.adjusted(5, 0, -5, 0), text, self.font("poppins_medium", 7.1), color("#08080a") if active else THEME.text, Qt.AlignmentFlag.AlignCenter)
             self.add_hotspot(rect, "gui_mode", mode)
 
+    def draw_legacy_return(self, p: QPainter, width: int, height: int, alpha: float) -> None:
+        del width, height
+        rect = QRectF(18.0, 18.0, 184.0, 34.0)
+        rounded_rect(
+            p,
+            rect.adjusted(-4.0, 3.0, 4.0, 7.0),
+            12.0,
+            color("#000000", 0.24 * alpha),
+        )
+        rounded_rect(
+            p,
+            rect,
+            10.0,
+            color("#fefefe", 0.96 * alpha),
+            color("#d7d7d7", 0.72 * alpha),
+            0.8,
+        )
+        self.draw_text(
+            p,
+            rect.adjusted(12.0, 0.0, -12.0, 0.0),
+            "←  Back to Jello Sigma",
+            self.font("jello_medium", 9.5),
+            color("#010101", 0.72 * alpha),
+            Qt.AlignmentFlag.AlignCenter,
+        )
+        self.add_hotspot(rect, "jello_return", tooltip="Return to the main ClickGUI")
+
     def draw_toasts(self, p: QPainter, width: int, _height: int) -> None:
         now = time.perf_counter()
         self.toasts = [toast for toast in self.toasts if now - toast["created"] < 3.0]
@@ -12090,6 +12601,13 @@ class PolarRMWindow(QOpenGLWidget):
             rect: QRectF = self.drag["rect"]
             setting.set_from_ratio((point.x() - rect.left()) / max(1.0, rect.width()))
             self.after_setting_changed(setting)
+        elif self.drag["type"] == "jello_module":
+            start = self.drag.get("start", point)
+            self.drag["point"] = QPointF(point)
+            if isinstance(start, QPointF) and math.dist((start.x(), start.y()), (point.x(), point.y())) >= 6.0:
+                self.drag["moved"] = True
+            self.invalidate_gui_cache()
+            self.frame_scheduler.force()
         elif self.drag["type"] == "old_panel":
             panel = self.old_panels[self.drag["category"]]
             panel["dragged"] = True
@@ -12107,6 +12625,27 @@ class PolarRMWindow(QOpenGLWidget):
             return
         if self.economy_hold_key:
             self.finish_economy_hold(event.position())
+        if self.drag and self.drag.get("type") == "jello_module":
+            drag = self.drag
+            name = str(drag.get("module", ""))
+            if drag.get("moved"):
+                function_bar = self.registry.get("MinecraftCombatHUD")
+                override = self.setting_mode(function_bar, "GUI Scale", "Auto")
+                layout = self.minecraft_hud.layout(self.width(), self.height(), override)
+                slot = layout.slot_at(event.position())
+                if slot is None:
+                    self.toast("Drop a module onto a Minecraft hotbar slot")
+                else:
+                    self.assign_minecraft_function_slot(slot, name)
+            else:
+                module = self.registry.get(name)
+                if module is not None:
+                    self.registry.toggle_module(module, source="clickgui")
+                    self.selected_module = module
+                    self.toast(f"{module.name} {'enabled' if module.enabled else 'disabled'}")
+                    self.auto_save_config()
+            self.invalidate_gui_cache()
+            self.frame_scheduler.force()
         if self.drag and self.drag.get("type") in {"old_panel", "polar_window"}:
             self.auto_save_config()
         self.drag = None
@@ -12129,7 +12668,8 @@ class PolarRMWindow(QOpenGLWidget):
             self.frame_scheduler.force()
             event.accept()
             return
-        if self.mode_manager.mode == "PolarPanel" and self.panel_modules_rect.contains(point):
+        active_gui_mode = self.active_clickgui_mode()
+        if active_gui_mode == "PolarPanel" and self.panel_modules_rect.contains(point):
             modules = self.panel_modules()
             scale = self.get_gui_scale_for_bounds(self.width(), self.height(), 600.0, 440.0, 76.0, 82.0)
             row_h = 22.0 * scale
@@ -12141,7 +12681,7 @@ class PolarRMWindow(QOpenGLWidget):
             self.frame_scheduler.force()
             event.accept()
             return
-        if self.mode_manager.mode == "PolarPanel" and self.panel_settings_rect.contains(point):
+        if active_gui_mode == "PolarPanel" and self.panel_settings_rect.contains(point):
             key = self.selected_module.name
             self.settings_scroll[key] = max(0.0, self.settings_scroll.get(key, 0.0) + delta)
             self.frame_scheduler.force()
@@ -12151,7 +12691,25 @@ class PolarRMWindow(QOpenGLWidget):
             if not viewport["rect"].contains(point):
                 continue
             mode, key, maximum = viewport["mode"], viewport["key"], float(viewport["maximum"])
-            if mode == "old":
+            if mode == "jello_panel":
+                # ScrollableContentPanel.scrollStep is the literal 35 in
+                # Sigma 5.1.0; retained Polar interfaces continue using 28.
+                jello_delta = -event.angleDelta().y() / 120.0 * 35.0
+                current = float(self.jello_state.panel_scroll.get(key, 0.0))
+                self.jello_state.panel_scroll[key] = max(0.0, min(maximum, current + jello_delta))
+                self.jello_state.mark_scroll(f"panel:{key}")
+                self.frame_scheduler.force()
+                event.accept()
+                return
+            elif mode == "jello_settings":
+                jello_delta = -event.angleDelta().y() / 120.0 * 35.0
+                current = float(self.jello_state.settings_scroll.get(key, 0.0))
+                self.jello_state.settings_scroll[key] = max(0.0, min(maximum, current + jello_delta))
+                self.jello_state.mark_scroll(f"settings:{key}")
+                self.frame_scheduler.force()
+                event.accept()
+                return
+            elif mode == "old":
                 target = self.old_panels[key]
             elif mode == "new":
                 target = self.new_panels[key]
@@ -12304,19 +12862,42 @@ class PolarRMWindow(QOpenGLWidget):
             self.set_clickgui_visible(not self.gui_visible)
             return
         if event.key() == Qt.Key.Key_F9:
-            mode = self.mode_manager.next_mode()
-            self.module_expanded.clear()
-            self.play_gui_transition_sound("expand")
-            self.sync_mode_setting()
-            self.toast(f"GUI 模式：{mode}")
+            # Jello Sigma is the only public ClickGUI. Legacy renderers are
+            # deliberately reachable only from ClickGui -> Old ClickGUIs.
+            event.accept()
             return
         if event.key() == Qt.Key.Key_Escape and self.gui_visible:
+            if self.jello_state.settings_module is not None:
+                self.jello_state.close_settings()
+                self.frame_scheduler.force()
+                event.accept()
+                return
+            if self.jello_state.legacy_mode is not None:
+                self.return_to_jello_clickgui()
+                event.accept()
+                return
             self.set_clickgui_visible(False)
             event.accept()
             return
         if self.overlay_coordinator.blocks_combat_input:
             event.accept()
             return
+        if self.minecraft_hud_active() and not event.isAutoRepeat():
+            number_keys = {
+                Qt.Key.Key_1: 0,
+                Qt.Key.Key_2: 1,
+                Qt.Key.Key_3: 2,
+                Qt.Key.Key_4: 3,
+                Qt.Key.Key_5: 4,
+                Qt.Key.Key_6: 5,
+                Qt.Key.Key_7: 6,
+                Qt.Key.Key_8: 7,
+                Qt.Key.Key_9: 8,
+            }
+            slot = number_keys.get(event.key())
+            if slot is not None and self.activate_minecraft_function_slot(slot):
+                event.accept()
+                return
         if self.handle_tactical_map_hold_event(event, True):
             return
         if self.handle_control_key_event(event, True):
@@ -12409,9 +12990,22 @@ class PolarRMWindow(QOpenGLWidget):
         if action in {
             "module_toggle", "module_select", "module_expand", "setting_toggle", "setting_slider",
             "setting_mode_next", "select_category", "gui_mode", "old_expand", "dropdown_expand", "polar_drag",
+            "jello_open_settings", "jello_close_settings", "jello_toggle_old_group",
+            "jello_mode_dropdown", "jello_mode_select", "jello_open_legacy", "jello_return", "jello_module_press",
         }:
             self.invalidate_gui_cache()
-        if action == "module_toggle":
+        if action == "jello_module_press" and button == 1:
+            module = self.registry.get(str(payload))
+            if module is not None:
+                self.drag = {
+                    "type": "jello_module",
+                    "module": module.name,
+                    "start": QPointF(point),
+                    "point": QPointF(point),
+                    "moved": False,
+                }
+                self.selected_module = module
+        elif action == "module_toggle":
             module = self.registry.get(str(payload))
             if module:
                 self.registry.toggle_module(module, source="clickgui")
@@ -12452,12 +13046,38 @@ class PolarRMWindow(QOpenGLWidget):
         elif action == "search_focus":
             self.search_focus = True
         elif action == "gui_mode":
-            self.mode_manager.set_mode(str(payload))
-            self.module_expanded.clear()
-            self.sync_mode_setting()
-            self.play_gui_transition_sound("expand")
-            self.toast(f"GUI 模式：{payload}")
-            self.auto_save_config()
+            # Compatibility for stale hotspots/tests: a historical mode is a
+            # transient legacy launch, never a persisted primary mode.
+            self.open_legacy_clickgui(str(payload))
+        elif action == "jello_open_settings":
+            module = self.registry.get(str(payload))
+            if module is not None:
+                self.selected_module = module
+                self.jello_state.open_settings(module.name)
+                self.frame_scheduler.force()
+        elif action == "jello_close_settings":
+            self.jello_state.close_settings()
+            self.frame_scheduler.force()
+        elif action == "jello_toggle_old_group":
+            self.jello_state.toggle_old_group()
+            self.frame_scheduler.force()
+        elif action == "jello_mode_dropdown":
+            key, _setting = payload
+            self.jello_state.toggle_dropdown(str(key))
+            self.frame_scheduler.force()
+        elif action == "jello_mode_select":
+            setting, value = payload
+            if value in setting.options:
+                setting.value = value
+                self.after_setting_changed(setting)
+            self.jello_state.close_dropdown()
+            self.frame_scheduler.force()
+        elif action == "jello_open_legacy":
+            self.open_legacy_clickgui(str(payload))
+        elif action == "jello_return":
+            self.return_to_jello_clickgui()
+        elif action == "jello_noop":
+            return
         elif action == "old_expand":
             self.old_panels[str(payload)]["expanded"] = not bool(self.old_panels[str(payload)]["expanded"])
             self.auto_save_config()
@@ -12515,6 +13135,8 @@ class PolarRMWindow(QOpenGLWidget):
             self.home_visible = False
             self.startup_step = "done"
             self.set_clickgui_visible(True, announce=False)
+            if config_module:
+                self.jello_state.open_settings(config_module.name)
             self.toast("ConfigManager opened from launcher")
         elif action == "startup_open_wallpaper":
             profiles = self.startup_wallpaper.profile_names()
@@ -12650,6 +13272,129 @@ class PolarRMWindow(QOpenGLWidget):
             self.handle_calibration_action(action_name)
         elif action_name in ("Preview FX", "Test Elimination"):
             self.preview_elimination_fx(single=action_name == "Test Elimination")
+        elif action_name in (
+            "Calibrate Lob Yaw",
+            "Calibrate Lob Pitch",
+            "Confirm Relocalization",
+            "Invalidate Relocalization",
+            "Preview Lob",
+            "Arm Assisted Lob",
+            "Disarm Assisted Lob",
+        ):
+            module = self.registry.get("HeroLob")
+            timeout = self.get_setting_number(module, "Telemetry Timeout", 0.50)
+            telemetry_fresh = bool(
+                self.state.native_gimbal_online
+                and self.state.native_telemetry_at > 0.0
+                and time.perf_counter() - self.state.native_telemetry_at <= timeout
+            )
+            if action_name == "Calibrate Lob Yaw":
+                if telemetry_fresh:
+                    bearing = self.get_setting_number(module, "Bearing", 0.0)
+                    offset = module.get_setting("Yaw Offset") if module else None
+                    current_offset = float(offset.value) if offset is not None else 0.0
+                    correction = HeroLobPlanner.normalize_degrees(
+                        self.state.native_yaw_deg - (bearing + current_offset)
+                    )
+                    candidate = current_offset + correction
+                    if (
+                        offset is not None
+                        and offset.min_value is not None
+                        and offset.max_value is not None
+                        and float(offset.min_value) <= candidate <= float(offset.max_value)
+                    ):
+                        offset.value = candidate
+                        tolerance = self.get_setting_number(
+                            module, "Yaw Calibration Tolerance", 1.0
+                        )
+                        residual = abs(
+                            HeroLobPlanner.normalize_degrees(
+                                bearing + float(offset.value) - self.state.native_yaw_deg
+                            )
+                        )
+                        self.state.hero_lob_yaw_calibrated = residual <= tolerance
+                        self.toast(
+                            f"Hero lob yaw calibrated {float(offset.value):+.2f} deg"
+                            if self.state.hero_lob_yaw_calibrated
+                            else f"Yaw calibration residual {residual:.2f} deg"
+                        )
+                    else:
+                        self.state.hero_lob_yaw_calibrated = False
+                        self.toast("Yaw calibration blocked: correction exceeds offset range")
+                else:
+                    self.toast("Yaw calibration blocked: fresh gimbal telemetry required")
+            elif action_name == "Calibrate Lob Pitch":
+                if telemetry_fresh:
+                    solution, _readiness = HeroLobPlanner.preview_from_state(
+                        self.state,
+                        module,
+                        hero_range_profile=self.hero_range_profile_selected(),
+                    )
+                    offset = module.get_setting("Pitch Offset") if module else None
+                    current_offset = float(offset.value) if offset is not None else 0.0
+                    candidate = current_offset + (
+                        self.state.native_pitch_deg - solution.pitch_deg
+                    )
+                    if (
+                        solution.reachable
+                        and offset is not None
+                        and offset.min_value is not None
+                        and offset.max_value is not None
+                        and float(offset.min_value) <= candidate <= float(offset.max_value)
+                    ):
+                        offset.value = candidate
+                        tolerance = self.get_setting_number(
+                            module, "Pitch Calibration Tolerance", 1.5
+                        )
+                        corrected, _ = HeroLobPlanner.preview_from_state(
+                            self.state,
+                            module,
+                            hero_range_profile=self.hero_range_profile_selected(),
+                        )
+                        residual = abs(self.state.native_pitch_deg - corrected.pitch_deg)
+                        self.state.hero_lob_pitch_calibrated = residual <= tolerance
+                        self.toast(
+                            f"Hero lob pitch calibrated {float(offset.value):+.2f} deg"
+                            if self.state.hero_lob_pitch_calibrated
+                            else f"Pitch calibration residual {residual:.2f} deg"
+                        )
+                    else:
+                        self.state.hero_lob_pitch_calibrated = False
+                        self.toast("Pitch calibration blocked: unreachable or offset out of range")
+                else:
+                    self.toast("Pitch calibration blocked: fresh gimbal telemetry required")
+            elif action_name == "Confirm Relocalization":
+                if (
+                    telemetry_fresh
+                    and self.state.hero_lob_yaw_calibrated
+                    and self.state.hero_lob_pitch_calibrated
+                ):
+                    self.state.hero_lob_relocalization_valid = True
+                    self.toast("Hero lob relocalization confirmed")
+                else:
+                    self.toast("Relocalization blocked: fresh telemetry and both calibrations required")
+            elif action_name == "Invalidate Relocalization":
+                self.state.hero_lob_relocalization_valid = False
+                self.state.hero_lob_armed = False
+                self.state.hero_lob_status = "BLOCKED: relocalization invalid"
+                self.toast(self.state.hero_lob_status)
+            elif action_name == "Preview Lob":
+                self.hero_lob_preview()
+            elif action_name == "Arm Assisted Lob":
+                solution, readiness = self.hero_lob_preview(announce=False)
+                if module is not None and module.enabled and solution.reachable and readiness.ready:
+                    self.state.hero_lob_armed = True
+                    self.state.hero_lob_status = "ARMED PREVIEW ONLY"
+                    self.toast("Hero lob armed (decision support only; no automatic fire)")
+                else:
+                    self.state.hero_lob_armed = False
+                    self.state.hero_lob_status = readiness.summary
+                    self.toast(self.state.hero_lob_status)
+            else:
+                self.state.hero_lob_armed = False
+                self.state.hero_lob_status = "DISARMED"
+                self.toast("Hero lob disarmed")
+            self.frame_scheduler.force()
         elif action_name in ("Import Enable Sound", "Import Disable Sound", "Import Invalid Sound"):
             slot = action_name.removeprefix("Import ").removesuffix(" Sound").lower()
             self.import_custom_ui_sound(slot)
@@ -12695,6 +13440,21 @@ class PolarRMWindow(QOpenGLWidget):
             and self.setting_bool(audio, "Enabled", True)
             and self.setting_bool(audio, "Module Toggle Sounds", True)
         )
+        if (
+            source == "clickgui"
+            and self.gui_visible
+            and self.active_clickgui_mode() == PRIMARY_GUI_MODE
+        ):
+            hud = self.registry.get("HUD")
+            self.ui_audio.jello_module_toggled(
+                enabled,
+                # Sigma routes module toggles through ActiveMods -> Sound.
+                # Keep that independent switch while still respecting the
+                # application's global audio/master-toggle controls.
+                active=active and self.setting_bool(hud, "Jello List Sound", True),
+                volume=self.get_setting_number(audio, "UI Volume", 45.0),
+            )
+            return
         self.ui_audio.module_toggled(
             enabled,
             source,
@@ -13024,7 +13784,7 @@ class PolarRMWindow(QOpenGLWidget):
     def current_config_data(self) -> dict[str, Any]:
         return export_client_config(
             self.registry,
-            gui_mode=self.mode_manager.mode,
+            gui_mode=PRIMARY_GUI_MODE,
             selected_category=self.selected_category,
             selected_module=self.selected_module.name if self.selected_module else "",
             module_expanded=self.module_expanded,
@@ -13344,9 +14104,14 @@ class PolarRMWindow(QOpenGLWidget):
             "Render": "E",
         }.get(category, "?")
 
+    def active_clickgui_mode(self) -> str:
+        legacy = normalize_legacy_gui_mode(self.jello_state.legacy_mode or "")
+        return legacy or PRIMARY_GUI_MODE
+
     @staticmethod
     def gui_mode_label(mode: str) -> str:
         return {
+            "JelloSigma": "Jello Sigma",
             "PolarOld": "P Old",
             "PolarPanel": "P Panel",
             "PolarNew": "P New",
