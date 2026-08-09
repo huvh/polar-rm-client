@@ -284,16 +284,6 @@ def draw_economy_glass_capsule(
     p.drawRoundedRect(rect.adjusted(0.4, 0.4, -0.4, -0.4), radius, radius)
     p.restore()
 
-    # Active indicator bar
-    if active:
-        bar = QRectF(rect.left() + 10.0, rect.center().y() - 7.0, 3.0, 14.0)
-        p.save()
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QColor(92, 231, 216, int(255 * 0.95)))
-        p.drawRoundedRect(bar, 1.5, 1.5)
-        p.restore()
-
-
 def draw_economy_glass_well(
     p: QPainter,
     rect: QRectF,

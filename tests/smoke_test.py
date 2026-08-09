@@ -24,6 +24,7 @@ from rm_client.combat_hud import (
     ring_end,
 )
 from rm_client.kill_fx import KillFxLayout, KillFxRenderer, PRESET_ELEMENTS, VALORANT_STYLES
+from rm_client.match_chat import ChatEventAdapter, MatchChatController
 from rm_client.match_modes import MATCH_MODES, MatchModeManager
 from rm_client.model import GUI_MODES, HUD_MODES, MODULE_LIST_RENDERER_KEYS, MODULE_LIST_STYLES, TACTICAL_MAP_STATUS_DISPLAYS, RobotState, build_default_registry
 from rm_client.economy import (
@@ -53,6 +54,8 @@ from rm_client.ui.gpu_frame_compositor import compose_combined_backdrop_pixel
 from rm_client.ui.clickgui_gpu import SmallTextPolicy
 from rm_client.ui.island_icon_gpu import island_icon_coverage
 from rm_client.ui.layout import HudAnchorStack
+from rm_client.ui.overlay_coordinator import OverlayCoordinator, OverlayKind
+from rm_client.ui.quick_action_wheel import DEFAULT_ACTIONS, QuickActionWheelState
 from rm_client.ui.economy_workspace import EconomyIslandState, EconomyWorkspaceLayer, adaptive_backdrop_dim
 from rm_client.ui.startup_gl import TextureOrigin, normalize_image_for_texture
 from rm_client.ui.vision_motion import (
@@ -762,12 +765,22 @@ def test_config_store_roundtrip() -> None:
             new_panels={},
             dropdown_panels={},
             polar_windows={"Combat": {"x": 80, "y": 100, "scroll": 0}},
+            quick_action_wheel={
+                "sectors": 6,
+                "radius": 132.0,
+                "dead_zone": 42.0,
+                "actions": list(DEFAULT_ACTIONS),
+                "labels": ["Economy", "", "", "", "", "", "", ""],
+                "icons": ["EC", "", "", "", "", "", "", ""],
+            },
         )
         store.save("practice", data)
         assert "practice" in store.profile_names()
         loaded = store.load("practice")
         assert loaded is not None
         assert loaded["polar_windows"]["Combat"]["x"] == 80
+        assert loaded["quick_action_wheel"]["sectors"] == 6
+        assert loaded["quick_action_wheel"]["labels"][0] == "Economy"
         fresh = build_default_registry()
         apply_registry_config(fresh, loaded)
         assert fresh.get("ArmorAutoAim").keybind == "J"
@@ -2045,6 +2058,100 @@ def test_ordered_gpu_commands_and_line_only_vision_batch() -> None:
         assert line.color.alpha() > 0
 
 
+def test_overlay_coordinator_wheel_and_match_chat() -> None:
+    registry = build_default_registry()
+    chat_module = registry.get("MatchChat")
+    wheel_module = registry.get("QuickActionWheel")
+    assert chat_module is not None and chat_module.enabled and chat_module.keybind == "T"
+    assert wheel_module is not None and wheel_module.enabled and wheel_module.keybind == "Q"
+
+    coordinator = OverlayCoordinator()
+    assert coordinator.begin_radial()
+    assert coordinator.blocks_combat_input
+    coordinator.end_radial()
+    assert coordinator.request_modal(OverlayKind.ECONOMY) is None
+    assert not coordinator.begin_radial()
+    assert coordinator.request_modal(OverlayKind.CLICKGUI) == OverlayKind.ECONOMY
+    assert coordinator.begin_chat() == OverlayKind.CLICKGUI
+    assert coordinator.chat_input and coordinator.modal is None
+    assert not coordinator.begin_radial()
+    coordinator.end_chat()
+    assert not coordinator.blocks_combat_input
+
+    wheel = QuickActionWheelState()
+    wheel.open(4.0, 4.0, 800.0, 600.0, now=1.0)
+    assert wheel.center_x >= wheel.radius + 18.0
+    assert wheel.center_y >= wheel.radius + 18.0
+    assert wheel.update_pointer(wheel.center_x, wheel.center_y) == -1
+    assert wheel.update_pointer(wheel.center_x, wheel.center_y - wheel.radius) == 0
+    assert wheel.release() == "economy"
+    wheel.configure(
+        sector_count=4,
+        custom_labels=["Top action", "", "Right action", "", "Bottom action", "", "Left action", ""],
+        custom_icons=["UP", "", "RT", "", "DN", "", "LT", ""],
+    )
+    assert [sector.action for sector in wheel.sectors()] == [
+        DEFAULT_ACTIONS[0],
+        DEFAULT_ACTIONS[2],
+        DEFAULT_ACTIONS[4],
+        DEFAULT_ACTIONS[6],
+    ]
+    exported = wheel.export_config()
+    restored = QuickActionWheelState()
+    restored.load_config(exported)
+    assert restored.export_config() == exported
+
+    chat = MatchChatController()
+    chat.open_input()
+    chat.insert("x" * 300)
+    assert len(chat.input_text) == 256
+    assert chat.send_input(now=2.0)
+    assert chat.messages[-1].source == "you"
+    chat.history_older()
+    assert chat.input_text == "x" * 256
+    chat.history_newer()
+    assert chat.input_text == ""
+    assert chat.add("Radar online", dedupe_key="radar", now=3.0)
+    assert not chat.add("Radar online", dedupe_key="radar", now=3.5)
+    chat.close_input()
+    assert chat.visible_messages(now=12.0)
+    assert not chat.visible_messages(now=14.1)
+    for index in range(205):
+        chat.add(f"line {index}", now=20.0 + index)
+    assert len(chat.messages) == 200
+
+    event_chat = MatchChatController()
+    adapter = ChatEventAdapter(event_chat)
+    state = RobotState()
+    state.stage_countdown_sec = 61
+    adapter.poll(state, now=100.0)
+    state.stage_countdown_sec = 59
+    adapter.poll(state, now=101.0)
+    assert [message.text for message in event_chat.messages] == [
+        "Match ends in 60 seconds"
+    ]
+    state.stage_countdown_sec = 60
+    adapter.poll(state, now=102.0)
+    state.stage_countdown_sec = 59
+    adapter.poll(state, now=103.0)
+    assert [message.text for message in event_chat.messages].count(
+        "Match ends in 60 seconds"
+    ) == 1
+    state.stage_countdown_sec = 300
+    adapter.poll(state, now=104.0)
+    state.stage_countdown_sec = 59
+    adapter.poll(state, now=105.0)
+    assert [message.text for message in event_chat.messages].count(
+        "Match ends in 60 seconds"
+    ) == 2
+    state.air_support_active = True
+    adapter.poll(state, now=106.0)
+    state.air_support_active = False
+    adapter.poll(state, now=107.0)
+    assert event_chat.messages[-2].text == "Air support activated"
+    assert event_chat.messages[-1].text == "Air support ended"
+
+
 if __name__ == "__main__":
     test_registry()
     test_audio_feedback_and_kill_sound_mapping()
@@ -2089,6 +2196,7 @@ if __name__ == "__main__":
     test_island_animation_reversal_and_hud_stack()
     test_combat_target_hud_math_and_rendering()
     test_ordered_gpu_commands_and_line_only_vision_batch()
+    test_overlay_coordinator_wheel_and_match_chat()
     test_liquid_glass_snapshot_stability()
     test_gpu_glass_commands_do_not_accumulate_between_frames()
     test_hud_liquid_glass_snapshot_stability()

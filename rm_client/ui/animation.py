@@ -239,14 +239,14 @@ class GuiTransitionTimeline:
 
     def reverse_from_current(self) -> None:
         self.target = 0.0 if self.target > 0.5 else 1.0
-        # 反向时保留当前位置，但清掉旧方向惯性，避免关窗第一帧继续向前冲。
-        self.velocity = 0.0
+        # Preserve momentum. The new target immediately bends the spring in
+        # the opposite direction, so rapid open/close gestures stay continuous.
 
     def update(self, dt: float) -> float:
         dt = max(0.0, min(0.033, float(dt)))
-        # 临界阻尼弹簧：有柔性，但不会像 overshoot 动画一样来回抖动。
-        stiffness = 82.0
-        damping = 18.0
+        stiffness = 300.0
+        damping_ratio = 0.5 if self.target > self.progress else 1.0
+        damping = 2.0 * damping_ratio * math.sqrt(stiffness)
         acceleration = (self.target - self.progress) * stiffness - self.velocity * damping
         self.velocity += acceleration * dt
         self.progress = clamp01(self.progress + self.velocity * dt)

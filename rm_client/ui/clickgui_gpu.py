@@ -403,7 +403,6 @@ class ClickGuiGpuRenderer:
             functions.glActiveTexture(_GL_TEXTURE0)
             functions.glBindTexture(_GL_TEXTURE_2D, 0)
             self.vertex_array.release()
-            functions.glFlush()
             self.last_submit_ms = (time.perf_counter() - started) * 1000.0
             return True
         except Exception as exc:

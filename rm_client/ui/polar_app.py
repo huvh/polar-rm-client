@@ -13,6 +13,7 @@ from PySide6.QtGui import (
     QColor,
     QBrush,
     QCloseEvent,
+    QCursor,
     QFont,
     QFontMetricsF,
     QImage,
@@ -69,6 +70,7 @@ from ..robot_profiles import (
     resolve_performance,
 )
 from ..kill_fx import KillFxRenderer
+from ..match_chat import ChatEventAdapter, MatchChatController
 from ..scenarios import SCENARIOS, ScenarioManager
 from ..startup_wallpaper import StartupWallpaperManager
 from ..tongji_bridge import GimbalCommandBridge, TongjiVisionReceiver
@@ -91,12 +93,15 @@ from .animation import AnimationBank, Easings, GuiMotionController, GuiTransitio
 from .fonts import FontBook
 from .gui_cache import ClickGuiLayerCache
 from .clickgui_gpu import ClickGuiDrawList, ClickGuiGpuRenderer
-from .gpu_frame_compositor import GpuFrameCompositor, LensMaterial
+from .gpu_frame_compositor import GlassOwner, GpuFrameCompositor, LensMaterial
 from .island_icon_gpu import IslandIconCommand, IslandIconGpuRenderer
 from .economy_glass import draw_economy_glass, draw_economy_glass_capsule, draw_economy_glass_well
 from .economy_workspace import EconomyIslandState, EconomyWorkspaceLayer
 from .liquid_glass import LiquidGlassRenderer
 from .layout import HudAnchorStack
+from .overlay_coordinator import OverlayCoordinator, OverlayKind
+from .quick_action_wheel import ACTION_LABELS, DEFAULT_ACTIONS, QuickActionWheelState
+from .quick_action_wheel_gpu import QuickActionWheelCommand, QuickActionWheelGpuRenderer
 from .startup_gl import StartupGpuCompositor, TextureOrigin
 from .vision_wire_gpu import VisionWireBatch, VisionWireGpuRenderer
 from .paint import (
@@ -357,6 +362,10 @@ class PolarRMWindow(QOpenGLWidget):
         self.island_icon_gpu = IslandIconGpuRenderer()
         self._gpu_island_icon_commands: list[IslandIconCommand] = []
         self._collect_gpu_island_icons = False
+        self.quick_action_wheel_gpu = QuickActionWheelGpuRenderer()
+        self._gpu_quick_action_wheel_command: QuickActionWheelCommand | None = None
+        self._gpu_quick_action_wheel_labels = ClickGuiDrawList()
+        self._collect_gpu_quick_action_wheel = False
         self.gpu_compositor = GpuFrameCompositor()
         self._gpu_frame_recording = False
         self._gpu_background_key: tuple[object, ...] | None = None
@@ -367,6 +376,12 @@ class PolarRMWindow(QOpenGLWidget):
         self._startup_static_page_key: tuple[object, ...] | None = None
         self._economy_scene_epoch = 0
         self._gpu_background_changed = True
+        # The full motion HUD is expensive to repaint with QPainter.  While a
+        # high-rate interaction overlay is active, keep the latest complete
+        # motion frame and draw only the wheel/chat into the isolated target
+        # layer.  Camera uploads and the final present continue independently.
+        self._gpu_motion_layer_ready = False
+        self._gpu_motion_layer_updated_at = 0.0
         self.clickgui_gpu_layout_ms = 0.0
         self.startup_cache = StartupLayerCache()
         self.frame_scheduler = FrameScheduler()
@@ -488,8 +503,13 @@ class PolarRMWindow(QOpenGLWidget):
         self.economy_hold_started = 0.0
         self.economy_hold_rect = QRectF()
         self.economy_last_status_sequence = 0
+        self.overlay_coordinator = OverlayCoordinator()
+        self.quick_action_wheel = QuickActionWheelState()
+        self.match_chat = MatchChatController()
+        self.chat_event_adapter = ChatEventAdapter(self.match_chat)
         self._gpu_warm_pending = True
 
+        self.sync_quick_action_wheel_settings()
         self.apply_match_mode(self.match_mode_manager.current.key, close_home=False, announce=False)
         self.apply_robot_profile(self.current_robot_profile_key(), close_home=False, announce=False)
         self.refresh_config_profiles()
@@ -531,6 +551,7 @@ class PolarRMWindow(QOpenGLWidget):
         self.economy_category_scroll.update(dt)
         self.economy_offers_scroll.update(dt)
         self.economy_detail_scroll.update(dt)
+        self.quick_action_wheel.update(dt)
         for motion in self.polar_settings_scroll_motion.values():
             motion.update(dt)
         self.gui_timeline.set_target(1.0 if self.gui_visible else 0.0)
@@ -557,6 +578,13 @@ class PolarRMWindow(QOpenGLWidget):
         ):
             self.economy_last_status_sequence = economy_transaction.sequence
             self.toast(economy_transaction.message)
+            match_chat = self.registry.get("MatchChat")
+            if (
+                match_chat is not None
+                and match_chat.enabled
+                and self.setting_bool(match_chat, "Referee Notices", True)
+            ):
+                self.chat_event_adapter.economy(economy_transaction, now)
         self.tactical_map_state.update(dt)
         dynamic_payload = self.dynamic_island_payload()
         content_duration = 0.30 if dynamic_payload["kind"] == "module" else 0.80
@@ -587,6 +615,13 @@ class PolarRMWindow(QOpenGLWidget):
             self.sync_tongji_vision_state()
             self.process_vision_kill_events()
             self.registry.tick(self.state, logic_dt)
+            match_chat = self.registry.get("MatchChat")
+            if (
+                match_chat is not None
+                and match_chat.enabled
+                and self.setting_bool(match_chat, "Referee Notices", True)
+            ):
+                self.chat_event_adapter.poll(self.state, now)
         high_rate = (
             not self.home_visible
             or self.startup_needs_high_rate()
@@ -595,6 +630,8 @@ class PolarRMWindow(QOpenGLWidget):
             or self.dynamic_island_state.active()
             or self.economy_island.active
             or self.economy_island.progress > 0.01
+            or self.quick_action_wheel.visible
+            or self.match_chat.input_open
         )
         if self.frame_scheduler.should_request(now, high_rate, self.render_fps_target):
             self.update()
@@ -606,11 +643,18 @@ class PolarRMWindow(QOpenGLWidget):
         self._gpu_background_key = None
         self._gpu_background_transform_key = None
         self._gpu_static_ui_key = None
+        self._gpu_motion_layer_ready = False
+        self._gpu_motion_layer_updated_at = 0.0
+        # Economy text scales with the viewport. Prepare the new font pages on
+        # the first idle frame after a resize instead of during the first B
+        # press at that resolution.
+        self._gpu_warm_pending = True
 
     def initializeGL(self) -> None:
         self.gpu_compositor.initialize()
         self.vision_wire_gpu.initialize()
         self.island_icon_gpu.initialize()
+        self.quick_action_wheel_gpu.initialize()
         if not self.clickgui_gpu.initialize():
             click_gui = self.registry.get("ClickGui")
             backend = click_gui.get_setting("Render Backend") if click_gui else None
@@ -678,6 +722,68 @@ class PolarRMWindow(QOpenGLWidget):
             self.font("material", 12.0, QFont.Weight.Bold),
         )
         self.clickgui_gpu.prewarm(fonts, labels, self.devicePixelRatioF())
+
+        # The economy workspace uses responsive font sizes and substantially
+        # more CJK glyphs than ClickGUI. Prewarm the exact pages for the
+        # current viewport so opening it never mutates a glyph atlas.
+        economy_labels = {
+            "战斗经济", "模拟", "裁判", "累计", "待扣", "可选操作",
+            "弹丸", "恢复", "复活", "支援", "仅状态", "预计价格",
+            "模拟请求", "裁判系统", "可以购买", "最近交易", "暂无记录",
+            "请先选择商品", "请求处理中", "当前不可用", "按住 0.6 秒确认",
+            "确认中", "再点一次确认", "确认购买", "关闭经济工作区",
+            "等待确认", "等待裁判系统", "操作成功", "请求被拒绝",
+            "确认超时", "金币", "远程", "补给区", "二次确认后发送",
+            "HP", "AMMO", "MOCK", "G", "0 1 2 3 4 5 6 7 8 9",
+            "× / · % . - [ ]",
+            self.match_mode_manager.current.title,
+            profile_by_key(self.state.match_mode, self.state.robot_profile).title,
+        }
+        for title in CATEGORY_TITLES.values():
+            economy_labels.add(title)
+        for label in TRANSACTION_LABELS.values():
+            economy_labels.add(label)
+        for offer in self.economy_offers():
+            economy_labels.update(
+                (
+                    offer.title,
+                    offer.short_title,
+                    offer.description,
+                    offer.unit,
+                    offer.reason,
+                )
+            )
+        economy_font_specs = (
+            ("poppins_bold", 17.0),
+            ("poppins_bold", 15.0),
+            ("poppins_bold", 13.5),
+            ("poppins_bold", 12.0),
+            ("poppins_bold", 10.5),
+            ("poppins_bold", 10.0),
+            ("poppins_bold", 9.5),
+            ("poppins_bold", 9.0),
+            ("poppins_bold", 8.6),
+            ("poppins_bold", 8.2),
+            ("poppins_bold", 6.6),
+            ("poppins_medium", 9.0),
+            ("poppins_medium", 8.4),
+            ("poppins_medium", 8.2),
+            ("poppins_medium", 8.0),
+            ("poppins_medium", 7.8),
+            ("poppins_medium", 7.4),
+            ("poppins_medium", 7.2),
+            ("poppins_medium", 7.0),
+        )
+        for economy_scale in self.economy_scale_steps():
+            economy_fonts = tuple(
+                self.font(family, size * economy_scale)
+                for family, size in economy_font_specs
+            )
+            self.clickgui_gpu.prewarm(
+                economy_fonts,
+                economy_labels,
+                self.devicePixelRatioF(),
+            )
 
     def paint_gpu_startup(self) -> bool:
         """GPU-only launcher path. No QPainter touches the window framebuffer."""
@@ -913,18 +1019,26 @@ class PolarRMWindow(QOpenGLWidget):
             economy_active = not startup_scene and (
                 self.economy_island.progress > 0.01 or self.economy_visible
             )
+            clickgui_active = not startup_scene and (
+                self.gui_timeline.progress > 0.01 or self.gui_visible
+            )
+            modal_backdrop_active = economy_active or clickgui_active
             economy_reveal = (
                 max(0.0, min(1.0, self.economy_island.progress))
                 if economy_active
                 else 0.0
             )
+            clickgui_reveal = (
+                max(0.0, min(1.0, self.gui_timeline.progress))
+                if clickgui_active
+                else 0.0
+            )
+            overlay_reveal = max(economy_reveal, clickgui_reveal)
             treatment_changed = self.gpu_compositor.set_backdrop_treatment(
-                active=economy_active,
-                progress=economy_reveal,
-                # ControlCenterContent uses a fixed 4dp render blur. DPR
-                # conversion happens in the compositor.
-                blur_radius_px=4.0,
-                dim_alpha=0.40,
+                active=overlay_reveal > 0.0,
+                progress=overlay_reveal,
+                blur_radius_px=3.0,
+                dim_alpha=0.26,
                 include_overlay=True,
             )
             control_changed = self.paint_gpu_control_backdrop(
@@ -938,7 +1052,7 @@ class PolarRMWindow(QOpenGLWidget):
             # The host HUD remains visible in the treated backdrop, while its
             # high-frequency vision layer is suppressed so it cannot punch
             # crisply through the Control Center surface.
-            if economy_active:
+            if modal_backdrop_active:
                 self.gpu_compositor.clear_vision_layer(functions)
                 native_vision_owner = False
             else:
@@ -1002,6 +1116,7 @@ class PolarRMWindow(QOpenGLWidget):
                         return False
                     device.setDevicePixelRatio(ratio)
                     self.gpu_compositor.clear_current(functions, transparent=True)
+                    self.gpu_compositor.push_glass_owner(GlassOwner.HUD)
                     self.gpu_compositor.begin_static_glass()
                     painter = QPainter(device)
                     self.paint_overlay(
@@ -1011,10 +1126,12 @@ class PolarRMWindow(QOpenGLWidget):
                         painter=painter,
                         logical_size=(width, height),
                         include_interactive=False,
-                        split_motion_layer=True,
+                        split_motion_layer=not modal_backdrop_active,
+                        capture_module_list=modal_backdrop_active,
                     )
                     painter.end()
                     self.gpu_compositor.end_static_glass()
+                    self.gpu_compositor.pop_glass_owner()
                     self.gpu_compositor.release_layer("overlay")
                     self._gpu_static_ui_key = static_key
 
@@ -1022,7 +1139,11 @@ class PolarRMWindow(QOpenGLWidget):
                     # Economy panel is the complete dynamic scene.  Do not draw HUD
                     # motion here: its only backdrop is the live camera texture plus
                     # economy-owned control rails.
-                    commands = self.build_gpu_economy_workspace(width, height)
+                    self.gpu_compositor.push_glass_owner(GlassOwner.ECONOMY)
+                    try:
+                        commands = self.build_gpu_economy_workspace(width, height)
+                    finally:
+                        self.gpu_compositor.pop_glass_owner()
                     self.clickgui_gpu.prepare_frame(commands, ratio)
 
                     device = self.gpu_compositor.paint_device("dynamic")
@@ -1048,58 +1169,142 @@ class PolarRMWindow(QOpenGLWidget):
                         and self.setting_mode(click_gui, "Render Backend", "Unified GPU") == "Unified GPU"
                         and self.clickgui_gpu.available
                     ):
-                        prepared_clickgui_commands = self.build_gpu_clickgui(width, height, gui_alpha)
+                        self.gpu_compositor.push_glass_owner(GlassOwner.CLICKGUI)
+                        try:
+                            prepared_clickgui_commands = self.build_gpu_clickgui(width, height, gui_alpha)
+                        finally:
+                            self.gpu_compositor.pop_glass_owner()
                         # Snapshot hit targets before motion overlay / overlay clear
                         # wipes them.  Layout runs once; present reuses this list.
                         prepared_clickgui_hotspots = list(self.hotspots)
                         self.clickgui_gpu.prepare_frame(prepared_clickgui_commands, ratio)
                         prepared_clickgui_atlas = True
 
-                    device = self.gpu_compositor.paint_device("dynamic")
-                    if device is None:
-                        return False
-                    device.setDevicePixelRatio(ratio)
-                    self.gpu_compositor.clear_current(functions, transparent=True)
-                    self.begin_gpu_island_icon_collection()
-                    painter = QPainter(device)
-                    if not self.home_visible:
-                        # When the menu is open, draw CombatTargetHUD into this
-                        # layer (under dim+panels). Closed: isolated target_fbo
-                        # owns the ring so it stays crisp over the scene only.
-                        self.paint_hud_motion_overlay(
-                            painter,
+                    priority_overlay_active = bool(
+                        self.quick_action_wheel.visible
+                        or self.match_chat.input_open
+                    )
+                    now = time.perf_counter()
+                    # The wheel is normally held for less than a second, so a
+                    # frozen base HUD is the cleanest result.  Chat can stay
+                    # open longer; refresh the base at 4 Hz while its input and
+                    # caret continue at the display refresh rate.
+                    base_refresh_interval = (
+                        0.25
+                        if self.match_chat.input_open
+                        and not self.quick_action_wheel.visible
+                        else float("inf")
+                    )
+                    refresh_motion_layer = bool(
+                        not priority_overlay_active
+                        or not self._gpu_motion_layer_ready
+                        or now - self._gpu_motion_layer_updated_at
+                        >= base_refresh_interval
+                    )
+
+                    if refresh_motion_layer:
+                        dynamic_started = time.perf_counter()
+                        device = self.gpu_compositor.paint_device("dynamic")
+                        if device is None:
+                            return False
+                        device.setDevicePixelRatio(ratio)
+                        self.gpu_compositor.clear_current(functions, transparent=True)
+                        self.begin_gpu_island_icon_collection()
+                        self.begin_gpu_quick_action_wheel_collection()
+                        painter = QPainter(device)
+                        if not self.home_visible and not clickgui_active:
+                            # Priority overlays own target_fbo and must not be
+                            # baked into this reusable base frame.
+                            self.paint_hud_motion_overlay(
+                                painter,
+                                width,
+                                height,
+                                include_vision=not native_vision_owner,
+                                include_target_hud=(
+                                    self.menu_overlay_active()
+                                    and not priority_overlay_active
+                                ),
+                                include_chat=not self.match_chat.input_open,
+                                include_radial=not self.quick_action_wheel.visible,
+                            )
+                        if not self.home_visible:
+                            self.paint_clickgui_overlay(
+                                painter,
+                                width,
+                                height,
+                                gpu_commands=prepared_clickgui_commands,
+                                gpu_hotspots=prepared_clickgui_hotspots,
+                                gpu_atlas_prepared=prepared_clickgui_atlas,
+                            )
+                        painter.end()
+                        self.flush_gpu_island_icons(functions, width, height, ratio)
+                        self.flush_gpu_quick_action_wheel(functions, width, height, ratio)
+                        self.gpu_compositor.release_layer("dynamic")
+                        self._gpu_motion_layer_ready = True
+                        self._gpu_motion_layer_updated_at = now
+                        self.gpu_compositor.last_dynamic_ms = (
+                            time.perf_counter() - dynamic_started
+                        ) * 1000.0
+
+                    if priority_overlay_active:
+                        if not self.paint_priority_interaction_layer(
+                            functions,
                             width,
                             height,
-                            include_vision=not native_vision_owner,
-                            include_target_hud=self.menu_overlay_active(),
-                        )
-                        self.paint_clickgui_overlay(
-                            painter,
-                            width,
-                            height,
-                            gpu_commands=prepared_clickgui_commands,
-                            gpu_hotspots=prepared_clickgui_hotspots,
-                            gpu_atlas_prepared=prepared_clickgui_atlas,
-                        )
-                    painter.end()
-                    self.flush_gpu_island_icons(functions, width, height, ratio)
-                    self.gpu_compositor.release_layer("dynamic")
-                    if not self.paint_gpu_target_hud_layer(functions, width, height, ratio):
+                            ratio,
+                        ):
+                            return False
+                    elif modal_backdrop_active:
+                        self.gpu_compositor.clear_target_layer(functions)
+                    elif not self.paint_gpu_target_hud_layer(
+                        functions,
+                        width,
+                        height,
+                        ratio,
+                    ):
                         return False
 
+            base_blur_dirty = self._gpu_background_changed or control_changed
             if not self.gpu_compositor.prepare_blur(
                 functions,
+                background_changed=base_blur_dirty,
+            ):
+                return False
+            # Native HUD lenses sample only the scene/control blur. They never
+            # read the modal treatment texture, so opening a workspace cannot
+            # alter their material or feed a previous HUD frame back into them.
+            if not self.gpu_compositor.render_glass(
+                functions,
+                include_static=True,
+                owners={GlassOwner.HUD},
+                destination="hud",
+                apply_backdrop_treatment=False,
+            ):
+                return False
+            # Capture the complete native HUD once, then soften that stable
+            # result for ClickGUI/economy. Overlay lenses stay crisp and sample
+            # this treated backdrop rather than a cheaper replacement surface.
+            if not self.gpu_compositor.prepare_treated_backdrop(
+                functions,
                 background_changed=(
-                    self._gpu_background_changed
-                    or control_changed
+                    base_blur_dirty
                     or treatment_changed
                     or rebuild_hud_static
                 ),
             ):
                 return False
+            glass_owners: set[GlassOwner] = set()
+            if economy_active:
+                glass_owners.add(GlassOwner.ECONOMY)
+            if clickgui_active:
+                glass_owners.add(GlassOwner.CLICKGUI)
+            if self.quick_action_wheel.visible:
+                glass_owners.add(GlassOwner.RADIAL)
             if not self.gpu_compositor.render_glass(
                 functions,
-                include_static=not economy_active,
+                include_static=True,
+                owners=glass_owners,
+                destination="overlay",
             ):
                 return False
             return self.gpu_compositor.present(functions, self.defaultFramebufferObject())
@@ -1363,11 +1568,11 @@ class PolarRMWindow(QOpenGLWidget):
             self.state.stage_countdown_sec,
             self.state.last_event,
             enabled_state,
-            # Rebuild static FBO when economy owns the stage so map/modlist
-            # cannot linger under the glass workspace.
+            # Rebuild when a modal takes ownership so the complete native HUD
+            # is captured once, then softened as a stable backdrop.
             bool(self.economy_visible or self.economy_island.progress > 0.01),
             self._economy_scene_epoch,
-            bool(self.gui_timeline.progress > 0.01),
+            bool(self.gui_visible or self.gui_timeline.progress > 0.01),
         )
 
     def paint_gpu_background(self, functions, width: int, height: int, ratio: float) -> bool:
@@ -1563,6 +1768,7 @@ class PolarRMWindow(QOpenGLWidget):
         logical_size: tuple[int, int] | None = None,
         include_interactive: bool = True,
         split_motion_layer: bool = False,
+        capture_module_list: bool = False,
     ) -> None:
         owns_painter = painter is None
         p = painter or QPainter(self)
@@ -1613,9 +1819,11 @@ class PolarRMWindow(QOpenGLWidget):
             energy_target,
             tongji_result,
             draw_motion=not split_motion_layer,
-            # Always leave ModuleList off the static FBO. The motion overlay
-            # owns RGB rainbow + style switches every display frame.
-            draw_module_list=False,
+            # During normal play ModuleList belongs to the high-refresh motion
+            # layer. A modal captures it once into the native HUD snapshot so
+            # the complete HUD can be softened without repainting beneath the
+            # workspace or changing the user's selected list style.
+            draw_module_list=capture_module_list,
         )
         # EliminationFX is always drawn from paint_hud_motion_overlay so the
         # GPU static-layer cache cannot freeze kill-icon timelines.
@@ -1716,6 +1924,8 @@ class PolarRMWindow(QOpenGLWidget):
         include_map: bool | None = None,
         include_vision: bool = True,
         include_target_hud: bool = True,
+        include_chat: bool = True,
+        include_radial: bool = True,
     ) -> None:
         """以 UI 高刷新率绘制与图传帧率无关的战斗 HUD 动效。
 
@@ -1799,11 +2009,319 @@ class PolarRMWindow(QOpenGLWidget):
         self.draw_chassis_gimbal_indicator(p, logical_width, logical_height)
         self.draw_telemetry_strip(p, logical_width, logical_height)
         p.restore()
+        if include_chat:
+            self.draw_match_chat(p, width, height, now=now)
+        if include_radial:
+            self.draw_quick_action_wheel(p, width, height)
         # Full-resolution kill icons/score popups; not under hud_scale transform.
         # While menu is open, skip elim FX so card bursts do not flash over panels.
         if not self.menu_overlay_active():
             self.draw_elimination_fx(p, width, height)
         self.dynamic_hud_ms = (time.perf_counter() - started_at) * 1000.0
+
+    def paint_priority_interaction_layer(
+        self,
+        functions,
+        width: int,
+        height: int,
+        ratio: float,
+    ) -> bool:
+        """Draw chat input and the radial wheel without repainting the HUD."""
+        started_at = time.perf_counter()
+        device = self.gpu_compositor.paint_device("target")
+        if device is None:
+            return False
+        device.setDevicePixelRatio(ratio)
+        try:
+            self.gpu_compositor.clear_current(functions, transparent=True)
+            self.begin_gpu_quick_action_wheel_collection()
+            painter = QPainter(device)
+            if self.match_chat.input_open:
+                self.draw_match_chat(painter, width, height, now=started_at)
+            if self.quick_action_wheel.visible:
+                self.draw_quick_action_wheel(painter, width, height)
+            painter.end()
+            self.flush_gpu_quick_action_wheel(functions, width, height, ratio)
+            self.gpu_compositor.last_dynamic_ms = (
+                time.perf_counter() - started_at
+            ) * 1000.0
+            return True
+        finally:
+            self.gpu_compositor.release_layer("target")
+
+    @staticmethod
+    def quick_action_sector_path(
+        center: QPointF,
+        inner_radius: float,
+        outer_radius: float,
+        start_angle: float,
+        span_angle: float,
+    ) -> QPainterPath:
+        path = QPainterPath()
+        steps = max(8, int(abs(span_angle) * 16.0))
+        outer_points = [
+            QPointF(
+                center.x() + math.cos(start_angle + span_angle * index / steps) * outer_radius,
+                center.y() + math.sin(start_angle + span_angle * index / steps) * outer_radius,
+            )
+            for index in range(steps + 1)
+        ]
+        inner_points = [
+            QPointF(
+                center.x() + math.cos(start_angle + span_angle * index / steps) * inner_radius,
+                center.y() + math.sin(start_angle + span_angle * index / steps) * inner_radius,
+            )
+            for index in range(steps, -1, -1)
+        ]
+        path.moveTo(outer_points[0])
+        for point in outer_points[1:]:
+            path.lineTo(point)
+        for point in inner_points:
+            path.lineTo(point)
+        path.closeSubpath()
+        return path
+
+    def draw_quick_action_wheel(self, p: QPainter, width: int, height: int) -> None:
+        state = self.quick_action_wheel
+        if not state.visible:
+            return
+        amount = max(0.0, min(1.0, state.progress))
+        eased = Easings.ease_out_expo(amount)
+        radius = state.radius * (0.84 + eased * 0.16)
+        inner_radius = max(24.0, state.dead_zone * (0.90 + eased * 0.10))
+        center = QPointF(state.center_x, state.center_y)
+        outer_rect = QRectF(
+            center.x() - radius,
+            center.y() - radius,
+            radius * 2.0,
+            radius * 2.0,
+        )
+        sectors = state.sectors()
+
+        if self._collect_gpu_quick_action_wheel and self.quick_action_wheel_gpu.available:
+            self._gpu_quick_action_wheel_command = QuickActionWheelCommand(
+                center.x(),
+                center.y(),
+                radius,
+                inner_radius,
+                len(sectors),
+                state.selected_index,
+                eased,
+            )
+            labels = ClickGuiDrawList()
+            for index, sector in enumerate(sectors):
+                selected = index == state.selected_index
+                angle = sector.start_angle + sector.span_angle * 0.5
+                content_radius = inner_radius + (radius - inner_radius) * 0.54
+                content = QPointF(
+                    center.x() + math.cos(angle) * content_radius,
+                    center.y() + math.sin(angle) * content_radius,
+                )
+                if state.icon_style != "Off" and sector.icon:
+                    labels.text(
+                        QRectF(content.x() - 19.0, content.y() - 17.0, 38.0, 16.0),
+                        sector.icon,
+                        self.font("poppins_semibold", 8.2),
+                        color("#ffffff", eased * (1.0 if selected else 0.88)),
+                        Qt.AlignmentFlag.AlignCenter,
+                    )
+                if state.show_labels and sector.label:
+                    labels.text(
+                        QRectF(content.x() - 44.0, content.y() + 1.0, 88.0, 28.0),
+                        sector.label.replace("\n", " "),
+                        self.font("poppins_medium", 7.0),
+                        color("#ffffff", eased * (0.98 if selected else 0.74)),
+                        Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop,
+                    )
+            labels.text(
+                QRectF(
+                    center.x() - inner_radius,
+                    center.y() - inner_radius,
+                    inner_radius * 2.0,
+                    inner_radius * 2.0,
+                ),
+                "CANCEL" if state.selected_index < 0 else "RELEASE",
+                self.font("poppins_medium", 6.4),
+                color("#ffffff", eased * 0.72),
+                Qt.AlignmentFlag.AlignCenter,
+            )
+            self._gpu_quick_action_wheel_labels = labels
+            return
+
+        # Compatibility path deliberately avoids the shared glass recorder.
+        # Complex painter clips are not transferred to GPU glass commands and
+        # previously exposed every sector's rectangular bounds.
+        p.save()
+        p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        p.setOpacity(eased)
+        circle = QPainterPath()
+        circle.addEllipse(outer_rect)
+        p.setClipPath(circle)
+        p.setPen(QPen(color("#ffffff", 0.24), 1.0))
+        p.setBrush(color("#071019", 0.72))
+        p.drawEllipse(outer_rect)
+
+        for index, sector in enumerate(sectors):
+            inset = min(0.025, sector.span_angle * 0.035)
+            path = self.quick_action_sector_path(
+                center,
+                inner_radius + 3.0,
+                radius - 3.0,
+                sector.start_angle + inset,
+                sector.span_angle - inset * 2.0,
+            )
+            selected = index == state.selected_index
+            p.fillPath(
+                path,
+                color("#4da3ff", 0.34 if selected else 0.075),
+            )
+            p.setPen(QPen(color("#ffffff", 0.40 if selected else 0.14), 1.0))
+            p.drawPath(path)
+
+            angle = sector.start_angle + sector.span_angle * 0.5
+            content_radius = inner_radius + (radius - inner_radius) * 0.53
+            content = QPointF(
+                center.x() + math.cos(angle) * content_radius,
+                center.y() + math.sin(angle) * content_radius,
+            )
+            icon_color = color("#ffffff", 1.0 if selected else 0.86)
+            if state.icon_style == "Dot":
+                p.setPen(Qt.PenStyle.NoPen)
+                p.setBrush(icon_color)
+                p.drawEllipse(content, 3.0 if selected else 2.4, 3.0 if selected else 2.4)
+            elif sector.icon:
+                icon_rect = QRectF(content.x() - 19.0, content.y() - 16.0, 38.0, 16.0)
+                self.draw_text(
+                    p,
+                    icon_rect,
+                    sector.icon,
+                    self.font("poppins_semibold", 8.2),
+                    icon_color,
+                    Qt.AlignmentFlag.AlignCenter,
+                )
+            if state.show_labels and sector.label:
+                label_rect = QRectF(content.x() - 43.0, content.y() + 1.0, 86.0, 30.0)
+                self.draw_text(
+                    p,
+                    label_rect,
+                    sector.label,
+                    self.font("poppins_medium", 7.1),
+                    color("#ffffff", 0.98 if selected else 0.76),
+                    Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop,
+                )
+
+        dead_rect = QRectF(
+            center.x() - inner_radius,
+            center.y() - inner_radius,
+            inner_radius * 2.0,
+            inner_radius * 2.0,
+        )
+        p.setPen(QPen(color("#ffffff", 0.20), 1.0))
+        p.setBrush(color("#071019", 0.22))
+        p.drawEllipse(dead_rect)
+        self.draw_text(
+            p,
+            dead_rect,
+            "CANCEL" if state.selected_index < 0 else "RELEASE",
+            self.font("poppins_medium", 6.5),
+            color("#ffffff", 0.70),
+            Qt.AlignmentFlag.AlignCenter,
+        )
+        p.restore()
+
+    def draw_match_chat(
+        self,
+        p: QPainter,
+        width: int,
+        height: int,
+        *,
+        now: float | None = None,
+    ) -> None:
+        module = self.registry.get("MatchChat")
+        if module is None or not module.enabled:
+            return
+        rows = self.match_chat.visible_messages(
+            now=now,
+            closed_lines=int(self.get_setting_number(module, "Closed Lines", 6)),
+            open_lines=int(self.get_setting_number(module, "Open Lines", 16)),
+            fade_seconds=self.get_setting_number(module, "Fade Seconds", 10.0),
+        )
+        if not rows and not self.match_chat.input_open:
+            return
+
+        margin = 12.0
+        chat_width = min(520.0, max(280.0, width * 0.46))
+        row_height = 18.0
+        input_height = 24.0
+        input_bottom = height - 50.0
+        rows_bottom = input_bottom - (input_height + 5.0 if self.match_chat.input_open else 0.0)
+        font = self.font("poppins_medium", 8.2)
+        level_colors = {
+            "success": color("#73f2a7"),
+            "warning": color("#ffd166"),
+            "danger": color("#ff6b6b"),
+            "chat": color("#ffffff"),
+            "info": color("#dce7f3"),
+        }
+
+        p.save()
+        p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        for row_index, (message, alpha) in enumerate(reversed(rows)):
+            y = rows_bottom - (row_index + 1) * row_height
+            text = f"<{message.source}> {message.text}" if message.source == "you" else message.text
+            text_width_px = min(
+                chat_width - 14.0,
+                QFontMetricsF(font).horizontalAdvance(text) + 13.0,
+            )
+            rect = QRectF(margin, y, max(80.0, text_width_px), row_height - 1.0)
+            rounded_rect(
+                p,
+                rect,
+                2.0,
+                color("#090b0f", (0.50 if self.match_chat.input_open else 0.38) * alpha),
+            )
+            self.draw_text(
+                p,
+                rect.adjusted(5.0, 0.0, -4.0, 0.0),
+                text,
+                font,
+                with_alpha(level_colors.get(message.level, level_colors["info"]), alpha),
+            )
+
+        if self.match_chat.input_open:
+            input_rect = QRectF(margin, input_bottom - input_height, chat_width, input_height)
+            rounded_rect(
+                p,
+                input_rect,
+                3.0,
+                color("#05070a", 0.72),
+                color("#ffffff", 0.24),
+            )
+            cursor = "_" if int((now or time.perf_counter()) * 2.0) % 2 == 0 else ""
+            self.draw_text(
+                p,
+                input_rect.adjusted(7.0, 0.0, -7.0, 0.0),
+                f"> {self.match_chat.input_text}{cursor}",
+                self.font("poppins_medium", 8.6),
+                color("#ffffff"),
+            )
+        p.restore()
+
+    def match_chat_reserved_height(self, *, now: float | None = None) -> float:
+        """Return the lower-left vertical space occupied by visible chat."""
+        module = self.registry.get("MatchChat")
+        if module is None or not module.enabled:
+            return 0.0
+        rows = self.match_chat.visible_messages(
+            now=now,
+            closed_lines=int(self.get_setting_number(module, "Closed Lines", 6)),
+            open_lines=int(self.get_setting_number(module, "Open Lines", 16)),
+            fade_seconds=self.get_setting_number(module, "Fade Seconds", 10.0),
+        )
+        if not rows and not self.match_chat.input_open:
+            return 0.0
+        input_space = 29.0 if self.match_chat.input_open else 0.0
+        return len(rows) * 18.0 + input_space + 10.0
 
     def paint_combat_target_overlay(
         self,
@@ -2092,6 +2610,29 @@ class PolarRMWindow(QOpenGLWidget):
         self.add_hotspot(submit, "economy_submit", self.economy_selected)
         p.restore()
 
+    @staticmethod
+    def economy_scale_steps() -> tuple[float, ...]:
+        """Stable font-page scales used by the responsive economy workspace."""
+
+        return (0.82, 0.90, 1.00, 1.05, 1.10)
+
+    def economy_ui_scale(self, width: int, height: int) -> float:
+        requested = max(
+            0.82,
+            min(
+                1.10,
+                self.get_auto_ui_scale(
+                    max(1, width),
+                    max(1, height),
+                    strength=0.20,
+                ),
+            ),
+        )
+        return min(
+            self.economy_scale_steps(),
+            key=lambda candidate: abs(candidate - requested),
+        )
+
     def economy_uses_mock_transport(self) -> bool:
         module = self.registry.get("EconomyPanel")
         force_mock = self.setting_bool(module, "Mock Requests", True) if module else True
@@ -2130,6 +2671,36 @@ class PolarRMWindow(QOpenGLWidget):
         self.economy_selected = 0
         return offers[0]
 
+    def set_clickgui_visible(
+        self,
+        visible: bool,
+        *,
+        announce: bool = True,
+        play_sound: bool = True,
+    ) -> None:
+        visible = bool(visible)
+        if visible:
+            if self.economy_visible:
+                self.close_economy_workspace(play_sound=False)
+            self.close_match_chat(clear=False)
+            self.cancel_quick_action_wheel()
+            self.overlay_coordinator.request_modal(OverlayKind.CLICKGUI)
+        else:
+            self.overlay_coordinator.close_modal(OverlayKind.CLICKGUI)
+        if self.gui_visible == visible:
+            return
+        self.gui_visible = visible
+        self.gui_timeline.set_target(1.0 if visible else 0.0)
+        self._gpu_static_ui_key = None
+        self._gpu_control_backdrop_key = None
+        self.gpu_compositor.clear_frame_glass()
+        if play_sound:
+            self.play_gui_transition_sound("expand" if visible else "collapse")
+        if announce:
+            self.toast("ClickGUI opened" if visible else "ClickGUI closed")
+        self.frame_scheduler.force()
+        self.update()
+
     def open_economy_workspace(self, category: str | None = None) -> None:
         now = time.perf_counter()
         offers = self.economy_offers()
@@ -2138,8 +2709,12 @@ class PolarRMWindow(QOpenGLWidget):
             self.economy_category = str(category)
         elif self.economy_category not in categories and categories:
             self.economy_category = categories[0]
+        if self.gui_visible:
+            self.set_clickgui_visible(False, announce=False, play_sound=False)
+        self.close_match_chat(clear=False)
+        self.cancel_quick_action_wheel()
+        self.overlay_coordinator.request_modal(OverlayKind.ECONOMY)
         self.economy_visible = True
-        self.gui_visible = False
         self.economy_opened_at = now
         self.economy_island.set_target(
             1.0,
@@ -2161,7 +2736,7 @@ class PolarRMWindow(QOpenGLWidget):
         selected = self.economy_selected_offer()
         if selected is not None:
             self.economy_selected_key = selected.key
-        # Drop static HUD chrome (map / modlist / watermark) under the glass.
+        # Capture a fresh, complete HUD snapshot for the backdrop treatment.
         self._gpu_static_ui_key = None
         self._gpu_control_backdrop_key = None
         self.gpu_compositor.clear_frame_glass()
@@ -2169,11 +2744,13 @@ class PolarRMWindow(QOpenGLWidget):
         self.frame_scheduler.force()
         self.update()
 
-    def close_economy_workspace(self) -> None:
+    def close_economy_workspace(self, *, play_sound: bool = True) -> None:
         if not self.economy_visible:
+            self.overlay_coordinator.close_modal(OverlayKind.ECONOMY)
             return
         now = time.perf_counter()
         self.economy_visible = False
+        self.overlay_coordinator.close_modal(OverlayKind.ECONOMY)
         self.economy_island.set_target(
             0.0,
             self.anim_duration(0.48),
@@ -2191,9 +2768,103 @@ class PolarRMWindow(QOpenGLWidget):
             for hotspot in self.hotspots
             if not str(hotspot.action).startswith("economy")
         ]
-        self.play_gui_transition_sound("collapse")
+        if play_sound:
+            self.play_gui_transition_sound("collapse")
         self.frame_scheduler.force()
         self.update()
+
+    def open_match_chat(self) -> None:
+        module = self.registry.get("MatchChat")
+        if module is None or not module.enabled or self.home_visible:
+            return
+        if self.economy_visible:
+            self.close_economy_workspace(play_sound=False)
+        if self.gui_visible:
+            self.set_clickgui_visible(False, announce=False, play_sound=False)
+        self.cancel_quick_action_wheel()
+        self.overlay_coordinator.begin_chat()
+        self.match_chat.open_input()
+        # Rebuild the cached base motion layer once without the closed-chat
+        # rows, then let the input surface animate independently above it.
+        self._gpu_motion_layer_ready = False
+        self.frame_scheduler.force()
+        self.update()
+
+    def close_match_chat(self, *, clear: bool = False) -> None:
+        if not self.match_chat.input_open and not self.overlay_coordinator.chat_input:
+            return
+        self.match_chat.close_input(clear=clear)
+        self.overlay_coordinator.end_chat()
+        # Restore the normal lower-left stack (including fading chat rows) on
+        # the first frame after the input layer closes.
+        self._gpu_motion_layer_ready = False
+        self.frame_scheduler.force()
+        self.update()
+
+    def begin_quick_action_wheel(self, point: QPointF) -> bool:
+        module = self.registry.get("QuickActionWheel")
+        if (
+            module is None
+            or not module.enabled
+            or self.home_visible
+            or not self.overlay_coordinator.begin_radial()
+        ):
+            return False
+        self.sync_quick_action_wheel_settings()
+        self.quick_action_wheel.open(
+            point.x(),
+            point.y(),
+            self.width(),
+            self.height(),
+        )
+        self.quick_action_wheel.update_pointer(point.x(), point.y())
+        self.frame_scheduler.force()
+        self.update()
+        return True
+
+    def cancel_quick_action_wheel(self) -> None:
+        if not self.quick_action_wheel.visible and not self.overlay_coordinator.radial_active:
+            return
+        self.quick_action_wheel.cancel()
+        self.overlay_coordinator.end_radial()
+        self.frame_scheduler.force()
+        self.update()
+
+    def finish_quick_action_wheel(self) -> None:
+        action = self.quick_action_wheel.release()
+        self.overlay_coordinator.end_radial()
+        if action:
+            self.execute_quick_action(action)
+        self.frame_scheduler.force()
+        self.update()
+
+    def execute_quick_action(self, action: str) -> None:
+        if action == "economy":
+            self.open_economy_workspace()
+            return
+        if action == "economy_ammo":
+            self.open_economy_workspace("ammo")
+            return
+        if action == "match_chat":
+            self.open_match_chat()
+            return
+        if action == "clickgui":
+            self.set_clickgui_visible(True)
+            return
+        module_name = {
+            "toggle_armor_autoaim": "ArmorAutoAim",
+            "toggle_armor_lock": "ArmorLock",
+            "toggle_spin": "SpinMode",
+            "toggle_friction": "FrictionWheel",
+        }.get(action)
+        module = self.registry.get(module_name) if module_name else None
+        if module is None:
+            self.toast("Quick action is unavailable")
+            return
+        self.registry.toggle_module(module, source="keybind")
+        self.selected_module = module
+        self.toast(f"{module.name} {'enabled' if module.enabled else 'disabled'}")
+        self.auto_save_config()
 
     def select_economy_offer(self, key: str) -> None:
         offers = self.economy_offers(self.economy_category)
@@ -2334,7 +3005,7 @@ class PolarRMWindow(QOpenGLWidget):
         offers = [offer for offer in all_offers if offer.category == self.economy_category]
         selected = self.economy_selected_offer()
         context = EconomyContext.from_state(self.state)
-        scale = max(0.82, min(1.10, self.get_auto_ui_scale(width, height, strength=0.20)))
+        scale = self.economy_ui_scale(width, height)
         morph = Easings.ease_out_expo(max(0.0, min(1.0, alpha)))
         content_alpha = Easings.ease_out_expo(max(0.0, min(1.0, (morph - 0.12) / 0.88)))
         compact = width < 1480 or height < 860
@@ -3201,6 +3872,13 @@ class PolarRMWindow(QOpenGLWidget):
         self.state.push_event("VISION CONFIRMED" if event.source == "vision" else "Referee elimination")
         self.dynamic_island_last_event = "VISION CONFIRMED" if event.source == "vision" else "Official combat event"
         self.dynamic_island_event_started = time.perf_counter()
+        match_chat = self.registry.get("MatchChat")
+        if (
+            match_chat is not None
+            and match_chat.enabled
+            and self.setting_bool(match_chat, "Referee Notices", True)
+        ):
+            self.chat_event_adapter.combat(event)
         if effect.enabled:
             self.kill_fx.trigger(
                 event,
@@ -3359,14 +4037,6 @@ class PolarRMWindow(QOpenGLWidget):
         surface: str = "MainGlass",
         hover: float = 0.0,
     ) -> None:
-        # While ClickGUI/economy is open, battle HUD still draws for preview but
-        # must not register extra glass lenses that steal blur samples / stack
-        # under panel glass. Use a cheap translucent plate instead.
-        if self.menu_overlay_active():
-            fill = color("#05080e", 0.42 + 0.10 * max(0.0, min(1.0, hover)))
-            edge = color("#ffffff", 0.08 + 0.06 * max(0.0, min(1.0, hover)))
-            rounded_rect(p, rect, radius, fill, edge, 0.8)
-            return
         if self._gpu_frame_recording and self.gpu_compositor.available:
             mapped = p.transform().mapRect(rect)
             self.gpu_compositor.add_glass(
@@ -4626,7 +5296,12 @@ class PolarRMWindow(QOpenGLWidget):
             self.draw_watermark(p)
         if self.registry.get("MatchTimer") and self.registry.get("MatchTimer").enabled:
             self.draw_match_header(p, scaled_width)
-        bottom_left = HudAnchorStack(22.0, scaled_height - 60.0, 8.0)
+        chat_reserve = self.match_chat_reserved_height(now=time.perf_counter()) / hud_scale
+        bottom_left = HudAnchorStack(
+            22.0,
+            scaled_height - 60.0 - chat_reserve,
+            8.0,
+        )
         if self.setting_bool(hud, "Target HUD", True):
             title = "EnergyTargetHUD" if primary_target.kind == "energy" else "RobotTargetHUD"
             self.draw_target_hud_by_style(p, primary_target, title, bottom_left)
@@ -6418,6 +7093,55 @@ class PolarRMWindow(QOpenGLWidget):
         )
         self._gpu_island_icon_commands.clear()
 
+    def begin_gpu_quick_action_wheel_collection(self) -> None:
+        self._gpu_quick_action_wheel_command = None
+        self._gpu_quick_action_wheel_labels = ClickGuiDrawList()
+        self._collect_gpu_quick_action_wheel = self.quick_action_wheel_gpu.available
+
+    def flush_gpu_quick_action_wheel(
+        self,
+        functions,
+        width: int,
+        height: int,
+        ratio: float,
+    ) -> None:
+        self._collect_gpu_quick_action_wheel = False
+        command = self._gpu_quick_action_wheel_command
+        labels = self._gpu_quick_action_wheel_labels
+        self._gpu_quick_action_wheel_command = None
+        self._gpu_quick_action_wheel_labels = ClickGuiDrawList()
+        if command is None or not self.quick_action_wheel_gpu.available:
+            return
+        background = self.gpu_compositor.background_fbo
+        blur = self.gpu_compositor.blur_fbo
+        if background is None:
+            return
+        blur_texture = (
+            blur.texture()
+            if blur is not None and getattr(self.gpu_compositor, "_blur_valid", False)
+            else background.texture()
+        )
+        if not self.quick_action_wheel_gpu.render(
+            functions,
+            command,
+            width,
+            height,
+            ratio,
+            background_texture=background.texture(),
+            blur_texture=blur_texture,
+        ):
+            return
+        if labels.commands and self.clickgui_gpu.available:
+            self.clickgui_gpu.prepare_frame(labels, ratio)
+            self.clickgui_gpu.render(
+                functions,
+                labels,
+                width,
+                height,
+                ratio,
+                atlas_prepared=True,
+            )
+
     def draw_dynamic_island_icon(self, p: QPainter, rect: QRectF, kind: str, main: QColor, amount: float) -> None:
         amount = max(0.0, min(1.0, amount))
         if self._collect_gpu_island_icons and self.island_icon_gpu.available:
@@ -8031,8 +8755,15 @@ class PolarRMWindow(QOpenGLWidget):
         if style not in MODULE_LIST_STYLES:
             style = MODULE_LIST_STYLES[0]
         p.save()
-        p.setClipRect(layout.clip_rect)
+        clip_rect = QRectF(layout.clip_rect)
         if style == "PolarTextList":
+            chat_height = self.match_chat_reserved_height(now=time.perf_counter())
+            if chat_height > 0.0:
+                chat_top = float(height) - 40.0 - chat_height
+                clip_rect.setBottom(
+                    max(clip_rect.top(), min(clip_rect.bottom(), chat_top))
+                )
+            p.setClipRect(clip_rect)
             # 裸文字列表位于左侧，必须避开水印和左上战术地图。
             # 其他右对齐样式继续使用统一的右侧安全栏。
             polar_start = max(layout.anchor_y, 64.0)
@@ -8043,7 +8774,9 @@ class PolarRMWindow(QOpenGLWidget):
                     self.tactical_map_rect(width, height).bottom() + 8.0,
                 )
             self.draw_module_list_polar_text(p, polar_start)
-        elif style == "PolarRainbowRight":
+        else:
+            p.setClipRect(clip_rect)
+        if style == "PolarRainbowRight":
             self.draw_module_list_rainbow_right(p, width, layout.anchor_y)
         elif style == "GlowRows":
             self.draw_module_list_glow_rows(p, width, layout.anchor_y)
@@ -8061,7 +8794,7 @@ class PolarRMWindow(QOpenGLWidget):
             self.draw_module_list_liquid_array(p, width, style, layout.anchor_y, layout.available_height)
         elif style == "DebugWhiteList":
             self.draw_module_list_debug_white(p, width, layout.anchor_y, layout.available_height)
-        else:
+        elif style != "PolarTextList":
             self.draw_module_list_polar_text(p, max(layout.anchor_y, 64.0))
         p.restore()
 
@@ -9119,7 +9852,7 @@ class PolarRMWindow(QOpenGLWidget):
         )
 
         # --- Island summary: visible before the body begins to reveal. ---
-        scale = max(0.82, min(1.10, self.get_auto_ui_scale(width, height, strength=0.20)))
+        scale = self.economy_ui_scale(width, height)
         # This handle belongs to the same root lens. It gives the expanded
         # sheet a clear pull-down affordance without adding another panel.
         handle_alpha = max(0.0, min(0.52, layout.body_progress * 0.52))
@@ -9340,15 +10073,9 @@ class PolarRMWindow(QOpenGLWidget):
             commands.rect(
                 selection_rect,
                 min(18.0, selection_rect.height() * 0.5),
-                color("#ffffff", 0.10 * offers_alpha),
-                color("#ffffff", 0.16 * offers_alpha),
-                0.8,
-                clip=viewport_clip,
-            )
-            commands.rect(
-                QRectF(selection_rect.left() + 5.0, selection_rect.top() + 12.0, 3.0, selection_rect.height() - 24.0),
-                1.5,
-                color("#64e0c1", 0.94 * offers_alpha),
+                color("#64e0c1", 0.10 * offers_alpha),
+                color("#64e0c1", 0.48 * offers_alpha),
+                1.0,
                 clip=viewport_clip,
             )
         for index, offer in enumerate(offers):
@@ -11292,6 +12019,14 @@ class PolarRMWindow(QOpenGLWidget):
             return
         button = self.qt_button(event)
         point = event.position()
+        if self.quick_action_wheel.active or self.overlay_coordinator.radial_active:
+            if button == 2:
+                self.cancel_quick_action_wheel()
+            else:
+                self.quick_action_wheel.update_pointer(point.x(), point.y())
+                self.frame_scheduler.force()
+            event.accept()
+            return
         if button == 1:
             self.liquid_press_point = QPointF(point)
             self.liquid_press_until = time.perf_counter() + 0.12
@@ -11305,6 +12040,14 @@ class PolarRMWindow(QOpenGLWidget):
             self.search_focus = False
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
+        if self.quick_action_wheel.active or self.overlay_coordinator.radial_active:
+            point = event.position()
+            previous = self.quick_action_wheel.selected_index
+            selected = self.quick_action_wheel.update_pointer(point.x(), point.y())
+            if selected != previous:
+                self.frame_scheduler.force()
+            event.accept()
+            return
         previous_tooltip = self.hover_tooltip
         previous_point = self.hover_point
         self.hover_point = event.position()
@@ -11344,6 +12087,10 @@ class PolarRMWindow(QOpenGLWidget):
             panel["y"] = point.y() - self.drag["offset_y"]
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+        if self.quick_action_wheel.active or self.overlay_coordinator.radial_active:
+            self.quick_action_wheel.update_pointer(event.position().x(), event.position().y())
+            event.accept()
+            return
         if self.economy_hold_key:
             self.finish_economy_hold(event.position())
         if self.drag and self.drag.get("type") in {"old_panel", "polar_window"}:
@@ -11353,6 +12100,11 @@ class PolarRMWindow(QOpenGLWidget):
     def wheelEvent(self, event: QWheelEvent) -> None:
         point = event.position()
         delta = -event.angleDelta().y() / 120.0 * 28.0
+        if self.match_chat.input_open:
+            self.match_chat.scroll(-1 if event.angleDelta().y() > 0 else 1)
+            self.frame_scheduler.force()
+            event.accept()
+            return
         if self.economy_visible:
             layout = self.economy_workspace_layer.layout(self.width(), self.height(), self.economy_island.progress)
             if layout.offers_viewport.contains(point):
@@ -11423,6 +12175,55 @@ class PolarRMWindow(QOpenGLWidget):
             if self.handle_startup_key(event):
                 return
         key_name = self.key_name(event)
+        chat_module = self.registry.get("MatchChat")
+        quick_wheel_module = self.registry.get("QuickActionWheel")
+        chat_key = bool(
+            chat_module
+            and chat_module.enabled
+            and chat_module.keybind != "None"
+            and self.keybind_matches(chat_module.keybind, key_name, event)
+        )
+        wheel_key = bool(
+            quick_wheel_module
+            and quick_wheel_module.enabled
+            and quick_wheel_module.keybind != "None"
+            and self.keybind_matches(quick_wheel_module.keybind, key_name, event)
+        )
+        if self.match_chat.input_open:
+            if event.key() == Qt.Key.Key_Escape:
+                self.close_match_chat(clear=False)
+            elif event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+                self.match_chat.send_input()
+                self.close_match_chat(clear=False)
+            elif event.key() == Qt.Key.Key_Backspace:
+                self.match_chat.backspace()
+            elif event.key() == Qt.Key.Key_Up:
+                self.match_chat.history_older()
+            elif event.key() == Qt.Key.Key_Down:
+                self.match_chat.history_newer()
+            elif event.key() == Qt.Key.Key_PageUp:
+                self.match_chat.scroll(5)
+            elif event.key() == Qt.Key.Key_PageDown:
+                self.match_chat.scroll(-5)
+            elif event.text() and event.text().isprintable():
+                self.match_chat.insert(event.text())
+            self.frame_scheduler.force()
+            event.accept()
+            return
+        if self.quick_action_wheel.active or self.overlay_coordinator.radial_active:
+            if event.key() == Qt.Key.Key_Escape:
+                self.cancel_quick_action_wheel()
+            event.accept()
+            return
+        if chat_key and not event.isAutoRepeat() and not self.home_visible:
+            self.open_match_chat()
+            event.accept()
+            return
+        if wheel_key and not event.isAutoRepeat() and not self.home_visible:
+            local_point = self.mapFromGlobal(QCursor.pos())
+            self.begin_quick_action_wheel(QPointF(local_point))
+            event.accept()
+            return
         economy_module = self.registry.get("EconomyPanel")
         projectile_module = self.registry.get("ProjectileShop")
         economy_key = bool(
@@ -11486,9 +12287,7 @@ class PolarRMWindow(QOpenGLWidget):
                 self.search_query += event.text()
             return
         if event.key() == Qt.Key.Key_F8 or self.is_right_shift_event(event):
-            self.gui_visible = not self.gui_visible
-            self.play_gui_transition_sound("expand" if self.gui_visible else "collapse")
-            self.toast("ClickGUI 已打开" if self.gui_visible else "ClickGUI 已关闭")
+            self.set_clickgui_visible(not self.gui_visible)
             return
         if event.key() == Qt.Key.Key_F9:
             mode = self.mode_manager.next_mode()
@@ -11498,7 +12297,11 @@ class PolarRMWindow(QOpenGLWidget):
             self.toast(f"GUI 模式：{mode}")
             return
         if event.key() == Qt.Key.Key_Escape and self.gui_visible:
-            self.gui_visible = False
+            self.set_clickgui_visible(False)
+            event.accept()
+            return
+        if self.overlay_coordinator.blocks_combat_input:
+            event.accept()
             return
         if self.handle_tactical_map_hold_event(event, True):
             return
@@ -11515,8 +12318,27 @@ class PolarRMWindow(QOpenGLWidget):
     def keyReleaseEvent(self, event: QKeyEvent) -> None:
         if self.binding_module is not None or self.search_focus:
             return
+        quick_wheel_module = self.registry.get("QuickActionWheel")
+        key_name = self.key_name(event)
+        wheel_key = bool(
+            quick_wheel_module
+            and quick_wheel_module.enabled
+            and quick_wheel_module.keybind != "None"
+            and self.keybind_matches(quick_wheel_module.keybind, key_name, event)
+        )
+        if self.quick_action_wheel.active or self.overlay_coordinator.radial_active:
+            if wheel_key and not event.isAutoRepeat():
+                self.finish_quick_action_wheel()
+            event.accept()
+            return
+        if self.match_chat.input_open:
+            event.accept()
+            return
         if self.economy_visible and event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
             self.finish_economy_hold()
+            return
+        if self.overlay_coordinator.blocks_combat_input:
+            event.accept()
             return
         if self.handle_tactical_map_hold_event(event, False):
             return
@@ -11669,7 +12491,7 @@ class PolarRMWindow(QOpenGLWidget):
         elif action == "startup_open_gui":
             self.home_visible = False
             self.startup_step = "done"
-            self.gui_visible = True
+            self.set_clickgui_visible(True, announce=False)
             self.toast("ClickGUI opened from launcher")
         elif action == "startup_open_config":
             config_module = self.registry.get("ConfigManager")
@@ -11678,7 +12500,7 @@ class PolarRMWindow(QOpenGLWidget):
                 self.selected_module = config_module
             self.home_visible = False
             self.startup_step = "done"
-            self.gui_visible = True
+            self.set_clickgui_visible(True, announce=False)
             self.toast("ConfigManager opened from launcher")
         elif action == "startup_open_wallpaper":
             profiles = self.startup_wallpaper.profile_names()
@@ -11792,6 +12614,9 @@ class PolarRMWindow(QOpenGLWidget):
         elimination_fx = self.registry.get("EliminationFX")
         if elimination_fx and setting is elimination_fx.get_setting("Preset"):
             self.kill_fx.preload_preset_sounds(str(setting.value))
+        quick_wheel = self.registry.get("QuickActionWheel")
+        if quick_wheel and setting in quick_wheel.settings:
+            self.sync_quick_action_wheel_settings()
         self.auto_save_config()
 
     def handle_config_action(self, action_name: str) -> None:
@@ -12189,6 +13014,7 @@ class PolarRMWindow(QOpenGLWidget):
             new_panels=self.new_panels,
             dropdown_panels=self.dropdown_panels,
             polar_windows=self.polar_windows,
+            quick_action_wheel=self.quick_action_wheel.export_config(),
         )
 
     def load_startup_config(self) -> None:
@@ -12226,6 +13052,12 @@ class PolarRMWindow(QOpenGLWidget):
                 for name, panel_data in polar_data.items():
                     if name in self.polar_windows and isinstance(panel_data, dict):
                         self.polar_windows[name].update(panel_data)
+            wheel_data = data.get("quick_action_wheel")
+            if isinstance(wheel_data, dict) and wheel_data:
+                self.quick_action_wheel.load_config(wheel_data)
+                self.apply_quick_action_wheel_to_settings()
+            else:
+                self.sync_quick_action_wheel_settings()
             self.sync_runtime_from_registry()
             self.sync_mode_setting()
             self.refresh_config_profiles()
@@ -12291,6 +13123,68 @@ class PolarRMWindow(QOpenGLWidget):
             mode = click_gui.get_setting("Mode")
             if mode:
                 mode.value = self.mode_manager.mode
+
+    def sync_quick_action_wheel_settings(self) -> None:
+        module = self.registry.get("QuickActionWheel")
+        if module is None:
+            return
+        slot_names = (
+            "Up",
+            "Upper Right",
+            "Right",
+            "Lower Right",
+            "Down",
+            "Lower Left",
+            "Left",
+            "Upper Left",
+        )
+        action_by_label = {label: action for action, label in ACTION_LABELS.items()}
+        actions: list[str] = []
+        for index, name in enumerate(slot_names):
+            setting = module.get_setting(name)
+            label = str(setting.value) if setting is not None else ACTION_LABELS[DEFAULT_ACTIONS[index]]
+            actions.append(action_by_label.get(label, DEFAULT_ACTIONS[index]))
+        self.quick_action_wheel.configure(
+            sector_count=int(self.setting_mode(module, "Sectors", "8")),
+            radius=self.get_setting_number(module, "Radius", 118.0),
+            dead_zone=self.get_setting_number(module, "Dead Zone", 38.0),
+            show_labels=self.setting_bool(module, "Show Labels", True),
+            label_style=self.setting_mode(module, "Label Style", "Action"),
+            icon_style=self.setting_mode(module, "Icon Style", "Initials"),
+            actions=actions,
+        )
+
+    def apply_quick_action_wheel_to_settings(self) -> None:
+        module = self.registry.get("QuickActionWheel")
+        if module is None:
+            return
+        values: dict[str, Any] = {
+            "Sectors": str(self.quick_action_wheel.sector_count),
+            "Radius": self.quick_action_wheel.radius,
+            "Dead Zone": self.quick_action_wheel.dead_zone,
+            "Show Labels": self.quick_action_wheel.show_labels,
+            "Label Style": self.quick_action_wheel.label_style,
+            "Icon Style": self.quick_action_wheel.icon_style,
+        }
+        slot_names = (
+            "Up",
+            "Upper Right",
+            "Right",
+            "Lower Right",
+            "Down",
+            "Lower Left",
+            "Left",
+            "Upper Left",
+        )
+        for index, name in enumerate(slot_names):
+            values[name] = ACTION_LABELS.get(
+                self.quick_action_wheel.actions[index],
+                ACTION_LABELS[DEFAULT_ACTIONS[index]],
+            )
+        for name, value in values.items():
+            setting = module.get_setting(name)
+            if setting is not None:
+                setting.value = value
 
     def panel_modules(self) -> list[Module]:
         if self.search_query:

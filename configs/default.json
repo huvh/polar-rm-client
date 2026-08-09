@@ -1,8 +1,8 @@
 {
   "version": 1,
   "gui_mode": "PolarUnified",
-  "selected_category": "Render",
-  "selected_module": "EliminationFX",
+  "selected_category": "System",
+  "selected_module": "RobotOverlay",
   "module_expanded": [],
   "old_panels": {
     "Combat": {
@@ -111,7 +111,7 @@
       "scroll": 0.0
     },
     "Strategy": {
-      "x": 1250.0,
+      "x": 1064.0,
       "y": 182.0,
       "scroll": 0.0
     },
@@ -131,16 +131,54 @@
       "scroll": 0.0
     }
   },
+  "quick_action_wheel": {
+    "sectors": 8,
+    "radius": 118.0,
+    "dead_zone": 38.0,
+    "show_labels": true,
+    "label_style": "Action",
+    "icon_style": "Initials",
+    "actions": [
+      "economy",
+      "economy_ammo",
+      "toggle_armor_autoaim",
+      "toggle_armor_lock",
+      "match_chat",
+      "toggle_spin",
+      "toggle_friction",
+      "clickgui"
+    ],
+    "labels": [
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
+    "icons": [
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ]
+  },
   "modules": {
     "Scenario": {
       "enabled": true,
       "keybind": "None",
       "settings": {
-        "Mode": "LabDebug",
+        "Mode": "CampusSimulation",
         "Show Startup": true,
         "Startup Style": "LiquidMenu",
         "Mock Writes": true,
-        "Official Limits": false
+        "Official Limits": true
       }
     },
     "StartupVisual": {
@@ -208,12 +246,13 @@
         "Fov": 85.0,
         "Smooth": 0.28,
         "Priority": "Armor",
-        "Lock Style": "White Outline",
-        "Draw Fov": true
+        "Lock Style": "Polar Corner",
+        "Draw Fov": true,
+        "Circle Size": 370.0
       }
     },
     "EliminationFX": {
-      "enabled": false,
+      "enabled": true,
       "keybind": "Shift",
       "settings": {
         "Preset": "Card",
@@ -266,8 +305,8 @@
       }
     },
     "ArmorLock": {
-      "enabled": false,
-      "keybind": "B",
+      "enabled": true,
+      "keybind": "L",
       "settings": {
         "Lock Point": "Center",
         "Predict": 0.12,
@@ -314,7 +353,7 @@
       "enabled": true,
       "keybind": "None",
       "settings": {
-        "Source": "Webcam",
+        "Source": "Shark UDP",
         "Camera ID": 0,
         "Capture Width": 960.0,
         "Capture Height": 540.0,
@@ -332,7 +371,7 @@
         "Local Device": "AUTO",
         "External Device": "AUTO",
         "Local Model": "Tongji YOLOv5",
-        "Vision Kill Sensitivity": "Lab Responsive",
+        "Vision Kill Sensitivity": "Balanced",
         "Desktop Safe": true
       }
     },
@@ -439,7 +478,7 @@
       "keybind": "None",
       "settings": {
         "Command": "Free",
-        "Require Confirm": true
+        "Require Confirm": false
       }
     },
     "MatchTimer": {
@@ -472,7 +511,7 @@
     },
     "EconomyPanel": {
       "enabled": true,
-      "keybind": "None",
+      "keybind": "P",
       "settings": {
         "Gold": true,
         "Tech Level": true,
@@ -483,11 +522,41 @@
     },
     "ProjectileShop": {
       "enabled": true,
-      "keybind": "None",
+      "keybind": "K",
       "settings": {
         "Ammo Type": "17mm",
         "Mock Request": true,
         "Show Cost": true
+      }
+    },
+    "MatchChat": {
+      "enabled": true,
+      "keybind": "T",
+      "settings": {
+        "Referee Notices": true,
+        "Fade Seconds": 10.0,
+        "Closed Lines": 6.0,
+        "Open Lines": 16.0
+      }
+    },
+    "QuickActionWheel": {
+      "enabled": true,
+      "keybind": "Q",
+      "settings": {
+        "Sectors": "8",
+        "Radius": 118.0,
+        "Dead Zone": 38.0,
+        "Show Labels": true,
+        "Label Style": "Action",
+        "Icon Style": "Initials",
+        "Up": "Economy",
+        "Upper Right": "Ammo",
+        "Right": "Auto Aim",
+        "Lower Right": "Armor Lock",
+        "Down": "Match Chat",
+        "Lower Left": "Spin Mode",
+        "Left": "Friction Wheel",
+        "Upper Left": "ClickGUI"
       }
     },
     "ThermalPowerPanel": {
@@ -549,7 +618,7 @@
         "RM Indicators": true,
         "Density": "Balanced",
         "Visual Tone": "LiquidClean",
-        "Target Style": "RoundCompact",
+        "Target Style": "BarOnly",
         "Right Display": "ModuleListHud",
         "ModuleList Style": "PolarTextList",
         "ModuleList Surface": "LiquidGlass",

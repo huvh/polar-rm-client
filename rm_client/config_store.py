@@ -77,6 +77,7 @@ def export_client_config(
     new_panels: dict[str, Any],
     dropdown_panels: dict[str, Any],
     polar_windows: dict[str, Any] | None = None,
+    quick_action_wheel: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     return {
         "version": CONFIG_VERSION,
@@ -88,6 +89,7 @@ def export_client_config(
         "new_panels": new_panels,
         "dropdown_panels": dropdown_panels,
         "polar_windows": polar_windows or {},
+        "quick_action_wheel": quick_action_wheel or {},
         "modules": {
             module.name: {
                 "enabled": module.enabled,

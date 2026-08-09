@@ -50,6 +50,15 @@ class LensMaterial(str, Enum):
     ISLAND = "LensIsland"
 
 
+class GlassOwner(str, Enum):
+    """Identifies which scene owns a glass command."""
+
+    HUD = "HUD"
+    CLICKGUI = "ClickGUI"
+    ECONOMY = "Economy"
+    RADIAL = "Radial"
+
+
 def compose_combined_backdrop_pixel(
     scene: tuple[float, float, float],
     control: tuple[float, float, float, float],
@@ -122,6 +131,7 @@ class GlassCommand:
     frost_amount: float = 0.0
     vibrancy_amount: float = 0.0
     clip_rect: QRectF | None = None
+    owner: GlassOwner = GlassOwner.HUD
 
 
 @dataclass(frozen=True)
@@ -172,6 +182,9 @@ class GpuFrameCompositor:
         self.control_fbo: QOpenGLFramebufferObject | None = None
         self.blur_temp_fbo: QOpenGLFramebufferObject | None = None
         self.blur_fbo: QOpenGLFramebufferObject | None = None
+        self.treated_blur_temp_fbo: QOpenGLFramebufferObject | None = None
+        self.treated_blur_fbo: QOpenGLFramebufferObject | None = None
+        self.hud_glass_fbo: QOpenGLFramebufferObject | None = None
         self.glass_fbo: QOpenGLFramebufferObject | None = None
         self.overlay_fbo: QOpenGLFramebufferObject | None = None
         self.vision_fbo: QOpenGLFramebufferObject | None = None
@@ -189,7 +202,9 @@ class GpuFrameCompositor:
         self._static_glass_commands: list[GlassCommand] = []
         self._frame_glass_commands: list[GlassCommand] = []
         self._recording_static_glass = False
+        self._glass_owner_stack: list[GlassOwner] = [GlassOwner.HUD]
         self._blur_valid = False
+        self._treated_blur_valid = False
         # The media texture stays immutable between decoded frames. Mouse
         # parallax is applied at sampling time so it never invalidates the
         # scene FBO or shared blur texture.
@@ -245,6 +260,8 @@ class GpuFrameCompositor:
                 self.background_fbo,
                 self.control_fbo,
                 self.blur_fbo,
+                self.treated_blur_fbo,
+                self.hud_glass_fbo,
                 self.glass_fbo,
                 self.overlay_fbo,
                 self.vision_fbo,
@@ -263,6 +280,9 @@ class GpuFrameCompositor:
             self.control_fbo = QOpenGLFramebufferObject(size, fmt)
             self.blur_temp_fbo = QOpenGLFramebufferObject(size, fmt)
             self.blur_fbo = QOpenGLFramebufferObject(size, fmt)
+            self.treated_blur_temp_fbo = QOpenGLFramebufferObject(size, fmt)
+            self.treated_blur_fbo = QOpenGLFramebufferObject(size, fmt)
+            self.hud_glass_fbo = QOpenGLFramebufferObject(size, fmt)
             self.glass_fbo = QOpenGLFramebufferObject(size, fmt)
             self.overlay_fbo = QOpenGLFramebufferObject(size, fmt)
             self.vision_fbo = QOpenGLFramebufferObject(size, fmt)
@@ -275,6 +295,9 @@ class GpuFrameCompositor:
                     self.control_fbo,
                     self.blur_temp_fbo,
                     self.blur_fbo,
+                    self.treated_blur_temp_fbo,
+                    self.treated_blur_fbo,
+                    self.hud_glass_fbo,
                     self.glass_fbo,
                     self.overlay_fbo,
                     self.vision_fbo,
@@ -286,6 +309,7 @@ class GpuFrameCompositor:
             self._size = size
             self._device_pixel_ratio = ratio
             self._blur_valid = False
+            self._treated_blur_valid = False
             return True
         except Exception as exc:
             self.last_error = str(exc)
@@ -483,6 +507,7 @@ class GpuFrameCompositor:
     def begin_frame(self, *, rebuild_static_ui: bool = True) -> None:
         self._frame_glass_commands.clear()
         self._recording_static_glass = False
+        self._glass_owner_stack[:] = [GlassOwner.HUD]
         if rebuild_static_ui:
             self._static_glass_commands.clear()
 
@@ -501,6 +526,19 @@ class GpuFrameCompositor:
     def end_static_glass(self) -> None:
         self._recording_static_glass = False
 
+    @property
+    def glass_owner(self) -> GlassOwner:
+        return self._glass_owner_stack[-1]
+
+    def push_glass_owner(self, owner: GlassOwner | str) -> None:
+        if not isinstance(owner, GlassOwner):
+            owner = GlassOwner(str(owner))
+        self._glass_owner_stack.append(owner)
+
+    def pop_glass_owner(self) -> None:
+        if len(self._glass_owner_stack) > 1:
+            self._glass_owner_stack.pop()
+
     def add_glass(
         self,
         rect: QRectF,
@@ -518,6 +556,7 @@ class GpuFrameCompositor:
         frost_amount: float = 0.0,
         vibrancy_amount: float = 0.0,
         clip_rect: QRectF | None = None,
+        owner: GlassOwner | str | None = None,
     ) -> None:
         if rect.isEmpty():
             return
@@ -536,6 +575,10 @@ class GpuFrameCompositor:
             LensMaterial.ISLAND: (12.0, -16.0, 0.72, 0.12),
         }
         default_height, default_amount, default_chromatic, default_depth = defaults[material]
+        if owner is None:
+            owner = self.glass_owner
+        elif not isinstance(owner, GlassOwner):
+            owner = GlassOwner(str(owner))
         command = GlassCommand(
             QRectF(rect),
             max(0.0, float(radius)),
@@ -551,6 +594,7 @@ class GpuFrameCompositor:
             max(0.0, min(1.0, float(frost_amount))),
             max(0.0, min(1.0, float(vibrancy_amount))),
             QRectF(clip_rect) if clip_rect is not None else None,
+            owner,
         )
         target = self._static_glass_commands if self._recording_static_glass else self._frame_glass_commands
         target.append(command)
@@ -586,16 +630,84 @@ class GpuFrameCompositor:
             or previous.include_overlay != treatment.include_overlay
         )
         if blur_changed:
-            self._blur_valid = False
+            self._treated_blur_valid = False
         return blur_changed
 
+    def blur_needs_refresh(self, *, background_changed: bool) -> bool:
+        return bool(background_changed or not self._blur_valid)
+
+    def _render_blur_pair(
+        self,
+        functions,
+        *,
+        temp_fbo: QOpenGLFramebufferObject,
+        output_fbo: QOpenGLFramebufferObject,
+        radius_px: float,
+        include_overlay: bool,
+    ) -> bool:
+        assert self.background_fbo is not None
+        assert self.control_fbo is not None
+        assert self.overlay_fbo is not None
+        assert self.hud_glass_fbo is not None
+        assert self.blur_program is not None
+
+        if not temp_fbo.bind():
+            return False
+        functions.glViewport(0, 0, self._size.width(), self._size.height())
+        functions.glDisable(_GL_BLEND)
+        functions.glDisable(_GL_DEPTH_TEST)
+        functions.glDisable(_GL_SCISSOR_TEST)
+        functions.glDisable(_GL_FRAMEBUFFER_SRGB)
+        self.blur_program.bind()
+        functions.glActiveTexture(_GL_TEXTURE0)
+        functions.glBindTexture(_GL_TEXTURE_2D, self.background_fbo.texture())
+        functions.glUniform1i(self.blur_program.uniformLocation("sourceTex"), 0)
+        functions.glActiveTexture(_GL_TEXTURE0 + 1)
+        functions.glBindTexture(_GL_TEXTURE_2D, self.control_fbo.texture())
+        functions.glUniform1i(self.blur_program.uniformLocation("controlTex"), 1)
+        functions.glActiveTexture(_GL_TEXTURE0 + 2)
+        functions.glBindTexture(_GL_TEXTURE_2D, self.overlay_fbo.texture())
+        functions.glUniform1i(self.blur_program.uniformLocation("overlayTex"), 2)
+        functions.glActiveTexture(_GL_TEXTURE0 + 3)
+        functions.glBindTexture(_GL_TEXTURE_2D, self.hud_glass_fbo.texture())
+        functions.glUniform1i(self.blur_program.uniformLocation("hudGlassTex"), 3)
+        functions.glUniform1i(self.blur_program.uniformLocation("sourceMode"), 0)
+        functions.glUniform2f(self.blur_program.uniformLocation("direction"), 1.0, 0.0)
+        functions.glUniform2f(
+            self.blur_program.uniformLocation("texel"),
+            1.0 / max(1.0, float(self._size.width())),
+            1.0 / max(1.0, float(self._size.height())),
+        )
+        functions.glUniform1f(self.blur_program.uniformLocation("blurRadiusPx"), float(radius_px))
+        functions.glUniform1i(
+            self.blur_program.uniformLocation("includeOverlay"),
+            1 if include_overlay else 0,
+        )
+        self._draw_quad(functions, self.blur_program)
+        temp_fbo.release()
+
+        if not output_fbo.bind():
+            self.blur_program.release()
+            return False
+        functions.glActiveTexture(_GL_TEXTURE0)
+        functions.glBindTexture(_GL_TEXTURE_2D, temp_fbo.texture())
+        functions.glUniform1i(self.blur_program.uniformLocation("sourceTex"), 0)
+        functions.glUniform1i(self.blur_program.uniformLocation("sourceMode"), 1)
+        functions.glUniform2f(self.blur_program.uniformLocation("direction"), 0.0, 1.0)
+        self._draw_quad(functions, self.blur_program)
+        self.blur_program.release()
+        output_fbo.release()
+        return True
+
     def prepare_blur(self, functions, *, background_changed: bool) -> bool:
+        """Build the scene/control blur sampled by native HUD lenses."""
         if not background_changed and self._blur_valid:
             return True
         if (
             self.background_fbo is None
             or self.control_fbo is None
             or self.overlay_fbo is None
+            or self.hud_glass_fbo is None
             or self.blur_temp_fbo is None
             or self.blur_fbo is None
             or self.blur_program is None
@@ -603,63 +715,15 @@ class GpuFrameCompositor:
             return False
         started = time.perf_counter()
         try:
-            treatment = self._backdrop_treatment
-            radius_px = (
-                max(0.0, treatment.blur_radius_px * self._device_pixel_ratio)
-                if treatment.active
-                else 2.0 * self._device_pixel_ratio
+            self._blur_valid = self._render_blur_pair(
+                functions,
+                temp_fbo=self.blur_temp_fbo,
+                output_fbo=self.blur_fbo,
+                radius_px=2.0 * self._device_pixel_ratio,
+                include_overlay=False,
             )
-            include_overlay = 1 if treatment.active and treatment.include_overlay else 0
-
-            if not self.blur_temp_fbo.bind():
-                return False
-            functions.glViewport(0, 0, self._size.width(), self._size.height())
-            functions.glDisable(_GL_BLEND)
-            functions.glDisable(_GL_DEPTH_TEST)
-            functions.glDisable(_GL_SCISSOR_TEST)
-            functions.glDisable(_GL_FRAMEBUFFER_SRGB)
-            self.blur_program.bind()
-            functions.glActiveTexture(_GL_TEXTURE0)
-            functions.glBindTexture(_GL_TEXTURE_2D, self.background_fbo.texture())
-            functions.glUniform1i(self.blur_program.uniformLocation("sourceTex"), 0)
-            functions.glActiveTexture(_GL_TEXTURE0 + 1)
-            functions.glBindTexture(_GL_TEXTURE_2D, self.control_fbo.texture())
-            functions.glUniform1i(self.blur_program.uniformLocation("controlTex"), 1)
-            functions.glActiveTexture(_GL_TEXTURE0 + 2)
-            functions.glBindTexture(_GL_TEXTURE_2D, self.overlay_fbo.texture())
-            functions.glUniform1i(self.blur_program.uniformLocation("overlayTex"), 2)
-            functions.glUniform1i(self.blur_program.uniformLocation("sourceMode"), 0)
-            functions.glUniform2f(self.blur_program.uniformLocation("direction"), 1.0, 0.0)
-            functions.glUniform2f(
-                self.blur_program.uniformLocation("texel"),
-                1.0 / max(1.0, float(self._size.width())),
-                1.0 / max(1.0, float(self._size.height())),
-            )
-            functions.glUniform1f(
-                self.blur_program.uniformLocation("blurRadiusPx"),
-                float(radius_px),
-            )
-            functions.glUniform1i(
-                self.blur_program.uniformLocation("includeOverlay"),
-                include_overlay,
-            )
-            self._draw_quad(functions, self.blur_program)
-            self.blur_temp_fbo.release()
-
-            if not self.blur_fbo.bind():
-                self.blur_program.release()
-                return False
-            functions.glActiveTexture(_GL_TEXTURE0)
-            functions.glBindTexture(_GL_TEXTURE_2D, self.blur_temp_fbo.texture())
-            functions.glUniform1i(self.blur_program.uniformLocation("sourceTex"), 0)
-            functions.glUniform1i(self.blur_program.uniformLocation("sourceMode"), 1)
-            functions.glUniform2f(self.blur_program.uniformLocation("direction"), 0.0, 1.0)
-            self._draw_quad(functions, self.blur_program)
-            self.blur_program.release()
-            self.blur_fbo.release()
-            self._blur_valid = True
             self.last_blur_ms = (time.perf_counter() - started) * 1000.0
-            return True
+            return self._blur_valid
         except Exception as exc:
             self.last_error = str(exc)
             self._blur_valid = False
@@ -667,19 +731,66 @@ class GpuFrameCompositor:
         finally:
             self._restore_qt_texture_state(functions)
 
-    def render_glass(self, functions, *, include_static: bool = True) -> bool:
+    def prepare_treated_backdrop(self, functions, *, background_changed: bool) -> bool:
+        """Blur the already-composited native HUD for modal overlay backdrops."""
+        treatment = self._backdrop_treatment
+        if not treatment.active:
+            self._treated_blur_valid = False
+            return True
+        if not background_changed and self._treated_blur_valid:
+            return True
         if (
-            self.glass_fbo is None
+            self.treated_blur_temp_fbo is None
+            or self.treated_blur_fbo is None
+            or self.background_fbo is None
+            or self.control_fbo is None
+            or self.overlay_fbo is None
+            or self.hud_glass_fbo is None
+            or self.blur_program is None
+        ):
+            return False
+        started = time.perf_counter()
+        try:
+            self._treated_blur_valid = self._render_blur_pair(
+                functions,
+                temp_fbo=self.treated_blur_temp_fbo,
+                output_fbo=self.treated_blur_fbo,
+                radius_px=max(0.0, treatment.blur_radius_px * self._device_pixel_ratio),
+                include_overlay=treatment.include_overlay,
+            )
+            self.last_blur_ms += (time.perf_counter() - started) * 1000.0
+            return self._treated_blur_valid
+        except Exception as exc:
+            self.last_error = str(exc)
+            self._treated_blur_valid = False
+            return False
+        finally:
+            self._restore_qt_texture_state(functions)
+
+    def render_glass(
+        self,
+        functions,
+        *,
+        include_static: bool = True,
+        owners: set[GlassOwner] | frozenset[GlassOwner] | None = None,
+        destination: str = "overlay",
+        apply_backdrop_treatment: bool = True,
+    ) -> bool:
+        destination_fbo = self.hud_glass_fbo if destination == "hud" else self.glass_fbo
+        if (
+            destination_fbo is None
             or self.background_fbo is None
             or self.control_fbo is None
             or self.blur_fbo is None
+            or self.treated_blur_fbo is None
+            or self.hud_glass_fbo is None
             or self.overlay_fbo is None
             or self.glass_program is None
         ):
             return False
         started = time.perf_counter()
         try:
-            if not self.glass_fbo.bind():
+            if not destination_fbo.bind():
                 return False
             self.clear_current(functions, transparent=True)
             glass_commands = (
@@ -687,8 +798,10 @@ class GpuFrameCompositor:
                 if include_static
                 else tuple(self._frame_glass_commands)
             )
+            if owners is not None:
+                glass_commands = tuple(command for command in glass_commands if command.owner in owners)
             if not glass_commands:
-                self.glass_fbo.release()
+                destination_fbo.release()
                 self.last_glass_ms = (time.perf_counter() - started) * 1000.0
                 return True
 
@@ -704,11 +817,21 @@ class GpuFrameCompositor:
             functions.glBindTexture(_GL_TEXTURE_2D, self.control_fbo.texture())
             functions.glUniform1i(self.glass_program.uniformLocation("controlTex"), 1)
             functions.glActiveTexture(_GL_TEXTURE0 + 2)
-            functions.glBindTexture(_GL_TEXTURE_2D, self.blur_fbo.texture())
+            blur_texture = (
+                self.treated_blur_fbo.texture()
+                if apply_backdrop_treatment
+                and self._backdrop_treatment.active
+                and self._treated_blur_valid
+                else self.blur_fbo.texture()
+            )
+            functions.glBindTexture(_GL_TEXTURE_2D, blur_texture)
             functions.glUniform1i(self.glass_program.uniformLocation("blurTex"), 2)
             functions.glActiveTexture(_GL_TEXTURE0 + 3)
             functions.glBindTexture(_GL_TEXTURE_2D, self.overlay_fbo.texture())
             functions.glUniform1i(self.glass_program.uniformLocation("overlayTex"), 3)
+            functions.glActiveTexture(_GL_TEXTURE0 + 4)
+            functions.glBindTexture(_GL_TEXTURE_2D, self.hud_glass_fbo.texture())
+            functions.glUniform1i(self.glass_program.uniformLocation("hudGlassTex"), 4)
             functions.glUniform2f(
                 self.glass_program.uniformLocation("viewport"),
                 float(self._size.width()),
@@ -720,11 +843,19 @@ class GpuFrameCompositor:
             )
             functions.glUniform1f(
                 self.glass_program.uniformLocation("backdropTreatment"),
-                float(self._backdrop_treatment.progress if self._backdrop_treatment.active else 0.0),
+                float(
+                    self._backdrop_treatment.progress
+                    if apply_backdrop_treatment and self._backdrop_treatment.active
+                    else 0.0
+                ),
             )
             functions.glUniform1f(
                 self.glass_program.uniformLocation("backdropDimAlpha"),
-                float(self._backdrop_treatment.dim_alpha if self._backdrop_treatment.active else 0.0),
+                float(
+                    self._backdrop_treatment.dim_alpha
+                    if apply_backdrop_treatment and self._backdrop_treatment.active
+                    else 0.0
+                ),
             )
 
             ratio = self._device_pixel_ratio
@@ -785,7 +916,7 @@ class GpuFrameCompositor:
             self.glass_program.release()
             functions.glDisable(_GL_SCISSOR_TEST)
             functions.glDisable(_GL_BLEND)
-            self.glass_fbo.release()
+            destination_fbo.release()
             self.last_glass_ms = (time.perf_counter() - started) * 1000.0
             return True
         except Exception as exc:
@@ -793,7 +924,7 @@ class GpuFrameCompositor:
             try:
                 functions.glDisable(_GL_SCISSOR_TEST)
                 functions.glDisable(_GL_BLEND)
-                self.glass_fbo.release()
+                destination_fbo.release()
             except Exception:
                 pass
             return False
@@ -808,6 +939,9 @@ class GpuFrameCompositor:
                 self.control_fbo,
                 self.blur_temp_fbo,
                 self.blur_fbo,
+                self.treated_blur_temp_fbo,
+                self.treated_blur_fbo,
+                self.hud_glass_fbo,
                 self.glass_fbo,
                 self.overlay_fbo,
                 self.vision_fbo,
@@ -819,6 +953,8 @@ class GpuFrameCompositor:
         assert self.background_fbo is not None
         assert self.control_fbo is not None
         assert self.blur_fbo is not None
+        assert self.treated_blur_fbo is not None
+        assert self.hud_glass_fbo is not None
         assert self.glass_fbo is not None
         assert self.overlay_fbo is not None
         assert self.vision_fbo is not None
@@ -838,12 +974,19 @@ class GpuFrameCompositor:
             for unit, name, texture_id in (
                 (0, "backgroundTex", self.background_fbo.texture()),
                 (1, "controlTex", self.control_fbo.texture()),
-                (2, "glassTex", self.glass_fbo.texture()),
-                (3, "uiTex", self.overlay_fbo.texture()),
-                (4, "visionTex", self.vision_fbo.texture()),
-                (5, "dynamicTex", self.dynamic_fbo.texture()),
-                (6, "targetTex", self.target_fbo.texture()),
-                (7, "treatedBackdropTex", self.blur_fbo.texture()),
+                (2, "hudGlassTex", self.hud_glass_fbo.texture()),
+                (3, "glassTex", self.glass_fbo.texture()),
+                (4, "uiTex", self.overlay_fbo.texture()),
+                (5, "visionTex", self.vision_fbo.texture()),
+                (6, "dynamicTex", self.dynamic_fbo.texture()),
+                (7, "targetTex", self.target_fbo.texture()),
+                (
+                    8,
+                    "treatedBackdropTex",
+                    self.treated_blur_fbo.texture()
+                    if self._treated_blur_valid
+                    else self.blur_fbo.texture(),
+                ),
             ):
                 functions.glActiveTexture(_GL_TEXTURE0 + unit)
                 functions.glBindTexture(_GL_TEXTURE_2D, texture_id)
@@ -912,6 +1055,7 @@ class GpuFrameCompositor:
             in vec2 uv;
             uniform sampler2D backgroundTex;
             uniform sampler2D controlTex;
+            uniform sampler2D hudGlassTex;
             uniform sampler2D glassTex;
             uniform sampler2D uiTex;
             uniform sampler2D visionTex;
@@ -934,10 +1078,12 @@ class GpuFrameCompositor:
                 ).rgb;
                 vec4 control = validPremultiplied(texture(controlTex, uv));
                 background = control.rgb + background * (1.0 - control.a);
+                vec4 hudGlass = validPremultiplied(texture(hudGlassTex, uv));
+                vec3 hudScene = hudGlass.rgb + background * (1.0 - hudGlass.a);
                 vec4 glass = validPremultiplied(texture(glassTex, uv));
                 vec4 ui = validPremultiplied(texture(uiTex, uv));
                 if (backdropTreatment > 0.0001) {
-                    vec3 rawBackdrop = ui.rgb + background * (1.0 - ui.a);
+                    vec3 rawBackdrop = ui.rgb + hudScene * (1.0 - ui.a);
                     vec3 treatedBackdrop = texture(treatedBackdropTex, uv).rgb
                         * (1.0 - clamp(backdropDimAlpha, 0.0, 1.0));
                     background = mix(
@@ -946,12 +1092,13 @@ class GpuFrameCompositor:
                         clamp(backdropTreatment, 0.0, 1.0)
                     );
                     ui = vec4(0.0);
+                    hudScene = background;
                 }
                 vec4 visionUi = validPremultiplied(texture(visionTex, uv));
                 vec4 dynamicUi = validPremultiplied(texture(dynamicTex, uv));
                 vec4 targetUi = validPremultiplied(texture(targetTex, uv));
-                vec3 scene = glass.rgb + background * (1.0 - glass.a);
-                vec3 baseUi = ui.rgb + scene * (1.0 - ui.a);
+                vec3 baseHud = ui.rgb + hudScene * (1.0 - ui.a);
+                vec3 baseUi = glass.rgb + baseHud * (1.0 - glass.a);
                 vec3 visionScene = visionUi.rgb + baseUi * (1.0 - visionUi.a);
                 vec3 motionUi = dynamicUi.rgb + visionScene * (1.0 - dynamicUi.a);
                 vec3 color = targetUi.rgb + motionUi * (1.0 - targetUi.a);
@@ -967,6 +1114,7 @@ class GpuFrameCompositor:
             uniform sampler2D sourceTex;
             uniform sampler2D controlTex;
             uniform sampler2D overlayTex;
+            uniform sampler2D hudGlassTex;
             uniform vec2 texel;
             uniform vec2 direction;
             uniform float blurRadiusPx;
@@ -982,7 +1130,9 @@ class GpuFrameCompositor:
                 vec4 control = texture(controlTex, sampleUv);
                 vec3 combined = control.rgb + scene * (1.0 - control.a);
                 if (includeOverlay != 0) {
+                    vec4 hudGlass = texture(hudGlassTex, sampleUv);
                     vec4 overlay = texture(overlayTex, sampleUv);
+                    combined = hudGlass.rgb + combined * (1.0 - hudGlass.a);
                     combined = overlay.rgb + combined * (1.0 - overlay.a);
                 }
                 return combined;
@@ -1009,6 +1159,7 @@ class GpuFrameCompositor:
             uniform sampler2D controlTex;
             uniform sampler2D blurTex;
             uniform sampler2D overlayTex;
+            uniform sampler2D hudGlassTex;
             uniform vec2 viewport;
             uniform vec2 sceneUvOffset;
             uniform vec4 glassRect;
@@ -1053,8 +1204,10 @@ class GpuFrameCompositor:
                 vec4 control = texture(controlTex, sampleUv);
                 vec4 combined = control + scene * (1.0 - control.a);
                 if (backdropTreatment > 0.0001) {
+                    vec4 hudGlass = texture(hudGlassTex, sampleUv);
                     vec4 overlay = texture(overlayTex, sampleUv);
-                    vec4 rawBackdrop = overlay + combined * (1.0 - overlay.a);
+                    vec4 rawBackdrop = hudGlass + combined * (1.0 - hudGlass.a);
+                    rawBackdrop = overlay + rawBackdrop * (1.0 - overlay.a);
                     vec4 treated = texture(blurTex, sampleUv);
                     treated.rgb *= 1.0 - clamp(backdropDimAlpha, 0.0, 1.0);
                     combined = mix(
@@ -1252,6 +1405,9 @@ class GpuFrameCompositor:
         self.control_fbo = None
         self.blur_temp_fbo = None
         self.blur_fbo = None
+        self.treated_blur_temp_fbo = None
+        self.treated_blur_fbo = None
+        self.hud_glass_fbo = None
         self.glass_fbo = None
         self.overlay_fbo = None
         self.vision_fbo = None
@@ -1259,6 +1415,7 @@ class GpuFrameCompositor:
         self.target_fbo = None
         self._size = QSize()
         self._blur_valid = False
+        self._treated_blur_valid = False
 
     def release(self) -> None:
         self._destroy_fbos()
