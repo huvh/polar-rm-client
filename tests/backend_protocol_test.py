@@ -415,6 +415,112 @@ def test_backend_frontend_sync() -> None:
     manager.shutdown()
 
 
+
+
+def test_native_0310_video_pipeline() -> None:
+    print("[native] 0x0310 H.264 reassembly -> persistent decoder")
+    import shutil, subprocess
+    if not shutil.which("ffmpeg"):
+        print("  skip (no ffmpeg)")
+        return
+    proc = subprocess.run(
+        [
+            "ffmpeg", "-v", "error", "-f", "lavfi",
+            "-i", "testsrc2=size=160x120:rate=10:duration=0.6",
+            "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
+            "-f", "h264", "pipe:1",
+        ],
+        capture_output=True, timeout=30,
+    )
+    data = proc.stdout
+    check("h264 bytes generated", len(data) > 100)
+    from rm_client.backend.manager import BackendManager
+    from rm_client.model import RobotState
+    state = RobotState()
+    manager = BackendManager(state=state, client_id="3", scenario_key="OfficialEvent")
+    chunks = [data[i:i + 297] for i in range(0, len(data), 297)]
+    for idx, chunk in enumerate(chunks):
+        length = len(chunk)
+        header = 0
+        if length > 255:
+            header |= 0x02
+        if idx == 0:
+            header |= 0x01  # reset
+        packet = bytes([header, idx & 0xFF, length & 0xFF]) + chunk
+        packet = packet + b"\x00" * (300 - len(packet))  # 固定 300 字节
+        manager.mqtt._decoded.append((
+            "CustomByteBlock", "CustomByteBlock",
+            {"data": packet, "__present__": frozenset({1})},
+            time.perf_counter(),
+        ))
+    manager.apply_updates(state)
+    deadline = time.time() + 8.0
+    frames = 0
+    while time.time() < deadline and frames <= 0:
+        time.sleep(0.3)
+        info = state.backend_stats.get("native_video_0310", {})
+        frames = int(info.get("decoded_frames", 0) or 0)
+    check("native decoder ready", bool(state.backend_stats.get("native_video_0310", {}).get("decoder_ready", False)))
+    check("native decoded frames", frames > 0)
+    check("native latest frame", manager.native_decoder.latest(1.0) is not None)
+    manager.shutdown()
+
+
+def test_persistent_h264_decoder() -> None:
+    print("[decoder] ContinuousMjpegDecoder h264 end-to-end")
+    import shutil, subprocess
+    if not shutil.which("ffmpeg"):
+        print("  skip (no ffmpeg)")
+        return
+    from rm_client.backend.video_backend import ContinuousMjpegDecoder
+    proc = subprocess.run(
+        [
+            "ffmpeg", "-v", "error", "-f", "lavfi",
+            "-i", "testsrc2=size=160x120:rate=10:duration=0.4",
+            "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
+            "-f", "h264", "pipe:1",
+        ],
+        capture_output=True, timeout=30,
+    )
+    data = proc.stdout
+    dec = ContinuousMjpegDecoder("h264")
+    check("decoder start", dec.start() is True)
+    for i in range(0, len(data), 8192):
+        dec.write(data[i:i + 8192])
+    deadline = time.time() + 6.0
+    frame = None
+    while time.time() < deadline and frame is None:
+        time.sleep(0.25)
+        frame = dec.latest(1.0)
+    dec.stop()
+    check("h264 frame decoded", frame is not None and getattr(frame, "ndim", 0) == 3)
+
+
+
+
+def test_mjpeg_stream_splitter() -> None:
+    print("[decoder] MJPEG stream splitter (no ffmpeg needed)")
+    import cv2  # type: ignore
+    import numpy as np  # type: ignore
+    from rm_client.backend.video_backend import consume_mjpeg_stream
+    img1 = np.zeros((40, 60, 3), dtype=np.uint8)
+    img1[:] = (0, 0, 255)
+    img2 = np.zeros((40, 60, 3), dtype=np.uint8)
+    img2[:] = (0, 255, 0)
+    ok1, j1 = cv2.imencode(".jpg", img1)
+    ok2, j2 = cv2.imencode(".jpg", img2)
+    check("jpeg encode ok", bool(ok1) and bool(ok2))
+    stream = j1.tobytes() + j2.tobytes()
+    buf = bytearray()
+    frames: list[bytes] = []
+    # 逐字节喂入，模拟网络分块 + 跨块标志
+    for byte in stream:
+        buf.append(byte)
+        consume_mjpeg_stream(buf, frames.append)
+    check("two frames split", len(frames) == 2)
+    check("splitter drained", len(buf) == 0)
+
+
 def main() -> None:
     test_uplink_roundtrip()
     test_downlink_decode()
@@ -427,6 +533,9 @@ def main() -> None:
     test_codec_regressions()
     test_mqtt_publish_rc()
     test_backend_frontend_sync()
+    test_native_0310_video_pipeline()
+    test_persistent_h264_decoder()
+    test_mjpeg_stream_splitter()
     print(f"\\nALL PASSED ({PASS} checks)")
 
 

@@ -4214,18 +4214,20 @@ class PolarRMWindow(QOpenGLWidget):
     def consume_backend_video_frame(self) -> None:
         """Publish a newly decoded backend MJPEG frame to the normal HUD path."""
 
-        frame_at = float(getattr(self.backend.udp, "last_frame_at", 0.0) or 0.0)
+        camera_module = self.registry.get("CameraFeed")
+        source_mode = self.setting_mode(camera_module, "Source", "Webcam")
+        if source_mode == "Native 0x0310":
+            if not self.backend.native_decoder.available:
+                return
+            bgr = self.backend.native_decoder.latest(0.5)
+            frame_at = float(getattr(self.backend.native_decoder, "_latest_at", 0.0) or 0.0)
+        else:
+            bgr, frame_at = self.backend.udp.latest_video_frame(0.5)
         if frame_at <= self._last_backend_video_at:
             return
-        lock = getattr(self.backend.udp, "_lock", None)
         try:
-            if lock is not None:
-                with lock:
-                    source = getattr(self.backend.udp, "latest_bgr", None)
-                    bgr = source.copy() if source is not None else None
-            else:
-                source = getattr(self.backend.udp, "latest_bgr", None)
-                bgr = source.copy() if source is not None else None
+            source = bgr
+            bgr = source.copy() if source is not None else None
         except Exception:
             bgr = None
         if bgr is None or getattr(bgr, "ndim", 0) != 3 or int(bgr.shape[2]) < 3:

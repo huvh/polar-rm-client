@@ -22,7 +22,7 @@ from . import protocol as proto
 from .mqtt_backend import RmMqttBackend
 from .safety import OfficialSafety
 from .serial_backend import RmSerialBackend
-from .video_backend import RmVideoBackend
+from .video_backend import ContinuousMjpegDecoder, RmVideoBackend
 
 # 官方性能体系取值（对齐 messages.proto 与 Shark RoboModeSettings）
 HERO_MELEE = 3
@@ -65,6 +65,8 @@ class BackendManager:
         )
         self.udp = RmVideoBackend(host="127.0.0.1", port=3334)
         self.serial = RmSerialBackend(port="Stub", baud=115200, mock_writes=True, safety=self.safety)
+        self.native_decoder = ContinuousMjpegDecoder("h264")
+        self._native_0310_buffer = bytearray()
         self.config = SCENARIOS.get(scenario_key, SCENARIOS["LabDebug"])
         self._apply_config(self.config)
 
@@ -203,6 +205,7 @@ class BackendManager:
         self.mqtt.stop()
         self.udp.stop()
         self.serial.stop()
+        self.native_decoder.stop()
 
     # ------------------------------------------------------------------
     # 下行消息 → RobotState
@@ -402,14 +405,21 @@ class BackendManager:
             else:
                 video_chunk = parse_video_0310_chunk(block)
                 if video_chunk is not None:
-                    # Recognition is explicit, but rendering still requires a
-                    # continuous H.264 decoder.  Do not pass a 297-byte chunk
-                    # to the frame-based UDP decoder and pretend it is a frame.
+                    # 0x0310 原生 H.264 流：reset 清缓冲，载荷连续喂给常驻 ffmpeg 解码器
+                    if video_chunk.reset:
+                        self._native_0310_buffer.clear()
+                    self._native_0310_buffer.extend(video_chunk.payload)
+                    if not self.native_decoder.available:
+                        self.native_decoder.start()
+                    if self.native_decoder.available:
+                        self.native_decoder.write(video_chunk.payload)
                     state.backend_stats["native_video_0310"] = {
                         "sequence": video_chunk.sequence,
                         "reset": video_chunk.reset,
                         "payload_len": len(video_chunk.payload),
-                        "decoder_ready": False,
+                        "buffer_len": len(self._native_0310_buffer),
+                        "decoder_ready": self.native_decoder.available,
+                        "decoded_frames": self.native_decoder.frames_decoded,
                     }
         elif name == "RobotInjuryStat":
             clean = self._clean(data)

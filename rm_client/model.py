@@ -939,7 +939,7 @@ def build_default_registry() -> ModuleRegistry:
             "Vision",
             "None",
             [
-                mode_setting("Source", "Webcam", ["Webcam", "Shark UDP", "UDP HEVC", "Synthetic"]),
+                mode_setting("Source", "Webcam", ["Webcam", "Shark UDP", "UDP HEVC", "Native 0x0310", "Synthetic"]),
                 number_setting("Camera ID", 0, 0, 5, 1),
                 number_setting("Capture Width", 960, 320, 1920, 16, "px"),
                 number_setting("Capture Height", 540, 240, 1080, 16, "px"),

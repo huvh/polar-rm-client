@@ -73,8 +73,11 @@ class RmVideoBackend(UDPVideoReceiver):
         self.latest_h265: bytes = b""
         self.last_frame_at = 0.0
         self.external_on_frame: Callable[[bytes], None] | None = None
-        self.decode_h265 = False  # 默认不自动 ffmpeg 解码（避免性能风险）
+        self.decode_h265 = True  # 有 ffmpeg 时自动开持久解码器
         self.ffmpeg_available: bool = shutil.which("ffmpeg") is not None
+        self.h265_decoder: ContinuousMjpegDecoder | None = (
+            ContinuousMjpegDecoder("h265") if self.ffmpeg_available else None
+        )
         self._started_at = 0.0
         self._frame_times: list[float] = []
         self._bytes_this_second = 0
@@ -96,6 +99,8 @@ class RmVideoBackend(UDPVideoReceiver):
             self.latest_h265 = b""
             self.last_frame_at = 0.0
             self._assembler.frames.clear()
+        if self.h265_decoder is not None and self.decode_h265:
+            self.h265_decoder.start()
         super().start()
 
     def _on_assembled_frame(self, frame: bytes) -> None:
@@ -126,14 +131,10 @@ class RmVideoBackend(UDPVideoReceiver):
         elif codec == "h265":
             with self._lock:
                 self.latest_h265 = frame
-            if self.decode_h265 and self.ffmpeg_available:
-                bgr = self._ffmpeg_decode_hevc(frame)
-                if bgr is not None:
-                    with self._lock:
-                        self.latest_bgr = bgr
-                        self.decoder_backend = "ffmpeg"
-                        h, w = bgr.shape[:2]
-                        self.output_width, self.output_height = w, h
+            if self.decode_h265 and self.h265_decoder is not None and self.h265_decoder.available:
+                self.h265_decoder.write(frame)
+                with self._lock:
+                    self.decoder_backend = "ffmpeg-mjpeg"
         if self.external_on_frame is not None:
             try:
                 self.external_on_frame(frame)
@@ -179,6 +180,22 @@ class RmVideoBackend(UDPVideoReceiver):
         except Exception:
             return None
 
+    def latest_video_frame(self, timeout_s: float = 0.5) -> tuple[Any, float]:
+        """???????????? H.265 ??????? MJPEG ???"""
+        if self.decode_h265 and self.h265_decoder is not None and self.h265_decoder.available:
+            bgr = self.h265_decoder.latest(timeout_s)
+            if bgr is not None:
+                return bgr, self.h265_decoder._latest_at
+        with self._lock:
+            if self.latest_bgr is not None and self.last_frame_at > 0 and time.perf_counter() - self.last_frame_at <= float(timeout_s):
+                return self.latest_bgr, self.last_frame_at
+        return None, 0.0
+
+    def stop(self) -> None:
+        if self.h265_decoder is not None:
+            self.h265_decoder.stop()
+        super().stop()
+
     def stats(self) -> dict[str, Any]:
         with self._lock:
             connected = (
@@ -199,5 +216,156 @@ class RmVideoBackend(UDPVideoReceiver):
                 "decoder_backend": self.decoder_backend,
                 "output_width": self.output_width,
                 "output_height": self.output_height,
+                "h265_decoder_ready": bool(self.h265_decoder and self.h265_decoder.available),
+                "h265_decoded_frames": self.h265_decoder.frames_decoded if self.h265_decoder else 0,
                 "last_error": self.last_error,
             }
+
+
+def consume_mjpeg_stream(buf: bytearray, on_frame: Callable[[bytes], None]) -> None:
+    """从字节流中切出完整 MJPEG 帧（SOI/EOI）并回调；保留可能跨块的尾部。"""
+    while True:
+        start = buf.find(b"\xff\xd8")
+        if start < 0:
+            # 保留末尾 3 字节，防止 SOI 标志跨块
+            if len(buf) > 3:
+                del buf[:-3]
+            return
+        end = buf.find(b"\xff\xd9", start + 2)
+        if end < 0:
+            del buf[:start]
+            return
+        frame = bytes(buf[start:end + 2])
+        del buf[:end + 2]
+        on_frame(frame)
+
+
+class ContinuousMjpegDecoder:
+    """常驻 ffmpeg → MJPEG 管道的持续 H.264/H.265 解码器。
+
+    与 SharkClient "H.265: 后端解码后以 MJPEG 本机流显示" 同思路：
+    ffmpeg 把连续码流解码成自包含 MJPEG 帧（带 SOI/EOI，自带宽高），
+    前端按 FFD8/FFD9 切帧后用 cv2.imdecode 得到 BGR 帧，避免 rawvideo
+    需要预先知道宽高，也避免每帧 spawn 一个 ffmpeg 进程。
+    """
+
+    def __init__(self, codec: str = "h265", quality: int = 3) -> None:
+        self.codec = codec  # "h264" | "h265"
+        self.quality = int(quality)
+        self.available = False
+        self.last_error = ""
+        self.frames_decoded = 0
+        self._proc: Any = None
+        self._reader: threading.Thread | None = None
+        self._running = False
+        self._lock = threading.Lock()
+        self._latest: Any = None
+        self._latest_at = 0.0
+        self._frame_w = 0
+        self._frame_h = 0
+
+    def start(self) -> bool:
+        if self._running:
+            return True
+        ffmpeg = shutil.which("ffmpeg")
+        if not ffmpeg:
+            self.last_error = "ffmpeg 不可用"
+            return False
+        try:
+            self._proc = subprocess.Popen(
+                [
+                    ffmpeg, "-v", "error",
+                    "-f", self.codec, "-i", "pipe:0",
+                    "-f", "mjpeg", "-q:v", str(self.quality), "pipe:1",
+                ],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            self._running = True
+            self._reader = threading.Thread(
+                target=self._read_loop, name=f"mjpeg-dec-{self.codec}", daemon=True
+            )
+            self._reader.start()
+            self.available = True
+            self.last_error = ""
+            return True
+        except Exception as exc:  # pragma: no cover - depends on ffmpeg
+            self.last_error = str(exc)
+            self.available = False
+            return False
+
+    def write(self, data: bytes) -> bool:
+        """把码流字节喂给 ffmpeg stdin。"""
+        if self._proc is None or self._proc.stdin is None or not self._running:
+            return False
+        try:
+            self._proc.stdin.write(bytes(data))
+            self._proc.stdin.flush()
+            return True
+        except Exception:
+            return False
+
+    def _read_loop(self) -> None:
+        buf = bytearray()
+        while self._running and self._proc is not None and self._proc.stdout is not None:
+            try:
+                chunk = self._proc.stdout.read(65536)
+                if not chunk:
+                    break
+                buf.extend(chunk)
+                consume_mjpeg_stream(buf, self._decode)
+            except Exception:
+                break
+        self._running = False
+
+    def _decode(self, frame: bytes) -> None:
+        try:
+            import cv2  # type: ignore
+            bgr = cv2.imdecode(frame, cv2.IMREAD_COLOR)  # type: ignore[attr-defined]
+            if bgr is None:
+                return
+            with self._lock:
+                self._latest = bgr
+                self._latest_at = time.time()
+                h, w = bgr.shape[:2]
+                self._frame_w, self._frame_h = w, h
+                self.frames_decoded += 1
+        except Exception:
+            pass
+
+    def latest(self, timeout_s: float = 0.5) -> Any:
+        with self._lock:
+            if self._latest is None or time.time() - self._latest_at > float(timeout_s):
+                return None
+            return self._latest
+
+    def frame_size(self) -> tuple[int, int]:
+        with self._lock:
+            return self._frame_w, self._frame_h
+
+    def stop(self) -> None:
+        self._running = False
+        proc = self._proc
+        self._proc = None
+        if proc is not None:
+            try:
+                if proc.stdin is not None:
+                    proc.stdin.close()
+            except Exception:
+                pass
+            try:
+                proc.terminate()
+            except Exception:
+                pass
+            try:
+                proc.wait(timeout=1.0)
+            except Exception:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+        if self._reader is not None and self._reader.is_alive():
+            self._reader.join(timeout=0.6)
+        self._reader = None
+        self.available = False
