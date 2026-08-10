@@ -370,6 +370,51 @@ def test_mqtt_publish_rc() -> None:
     m.shutdown()
 
 
+
+
+def test_backend_frontend_sync() -> None:
+    print("[frontend] backend -> HUD data sync")
+    from rm_client.backend.manager import BackendManager
+    from rm_client.model import RobotState
+    state = RobotState()
+    manager = BackendManager(state=state, client_id="3", scenario_key="OfficialEvent")
+    manager.mqtt._decoded.append(("GlobalUnitStatus", "GlobalUnitStatus", {
+        "robot_health": [600, 520, 400, 300, 200, 100, 50, 580, 480, 380, 280, 180, 80, 0],
+        "robot_bullets": [],
+    }, time.perf_counter()))
+    manager.mqtt._decoded.append(("RobotPosition", "RobotPosition", {
+        "robot_id": 3, "x": 8.2, "y": 7.6, "yaw": 90.0, "__present__": frozenset({1, 2, 4, 5}),
+    }, time.perf_counter()))
+    manager.mqtt._decoded.append(("RobotStaticStatus", "RobotStaticStatus", {
+        "robot_id": 3, "alive_state": 1, "max_health": 600, "level": 2,
+        "__present__": frozenset({3, 4, 8, 9}),
+    }, time.perf_counter()))
+    manager.mqtt._decoded.append(("RobotDynamicStatus", "RobotDynamicStatus", {
+        "current_health": 520, "remaining_ammo": 180,
+    }, time.perf_counter()))
+    manager.mqtt._decoded.append(("RobotModuleStatus", "RobotModuleStatus", {
+        "power_manager": 1, "capacitor": 1,
+    }, time.perf_counter()))
+    manager.mqtt._decoded.append(("Buff", "Buff", {
+        "robot_id": 3, "buff_type": 1, "buff_level": 1, "buff_max_time": 30, "buff_left_time": 12,
+    }, time.perf_counter()))
+    count = manager.apply_updates(state)
+    check("applied 6", count == 6)
+    check("frontend synced flag", state.backend_frontend_synced is True)
+    check("robot_rows real hp", state.robot_rows[0]["id"] == 1 and state.robot_rows[0]["hp"] == 600)
+    local_row = next(r for r in state.robot_rows if r["id"] == 3)
+    check("local row hp", local_row["hp"] == 520)
+    check("local row pos", local_row["x"] == 8.2 and local_row["y"] == 7.6)
+    check("local row modules", local_row["modules"].get("power_manager") == 1)
+    enemy = next(r for r in state.robot_rows if r["id"] == 101)
+    check("enemy row hp", enemy["hp"] == 580 and enemy["state"] == "ALIVE")
+    dead = next(r for r in state.robot_rows if r["id"] == 107)
+    check("dead row", dead["hp"] == 0 and dead["state"] == "DEAD")
+    check("map_robots real", any(m["id"] == 3 and m["x"] == 8.2 for m in state.map_robots))
+    check("buff_rows real", any(b["name"] == "Attack Boost" and b["remaining"] == 12 for b in state.buff_rows))
+    manager.shutdown()
+
+
 def main() -> None:
     test_uplink_roundtrip()
     test_downlink_decode()
@@ -381,6 +426,7 @@ def main() -> None:
     test_serial_partial_frame()
     test_codec_regressions()
     test_mqtt_publish_rc()
+    test_backend_frontend_sync()
     print(f"\\nALL PASSED ({PASS} checks)")
 
 

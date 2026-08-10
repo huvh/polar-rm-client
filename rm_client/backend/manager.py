@@ -35,6 +35,13 @@ SENTRY_AUTOMATIC = 1
 SENTRY_SEMI_AUTO = 2
 
 _RUNE_PHASE = {1: "INACTIVE", 2: "ACTIVATING", 3: "ACTIVE"}
+# ??? ID ? ?????? 1-9 / ?? 101-109??? = ?? + 100?
+ROBOT_ID_NAMES = {1: "Hero", 2: "Engineer", 3: "Infantry", 4: "Infantry", 5: "Infantry",
+                  6: "Aerial", 7: "Sentry", 8: "Dart", 9: "Radar"}
+# ?? BuffType??? Shark mqtt_protocol.ts?
+BUFF_TYPE_NAMES = {1: "Attack Boost", 2: "Defense Boost", 3: "Heat Cooling",
+                   4: "Chassis Power", 5: "Health Regen", 6: "Exchange Ammo", 7: "Terrain"}
+DEFAULT_MAX_HEALTH = 600
 _STAGE_STR = {0: "NOT_STARTED", 1: "PREPARE", 2: "SELF_CHECK", 3: "COUNTDOWN", 4: "MATCH", 5: "SETTLEMENT"}
 
 
@@ -94,6 +101,93 @@ class BackendManager:
             self.safety.update_stage(self.state.current_stage)
         self.serial.tick()
 
+    def sync_frontend_state(self, state: RobotState) -> None:
+        """????????????????? HUD ????
+
+        - robot_rows  ? official_robot_health + robot_statics/dynamics/modules
+        - map_robots ? robot_positions?????/???????????
+        - buff_rows  ? Buff ??
+        ???????? mock????????? mock???????
+        """
+        has_real = bool(state.official_robot_health) or bool(state.robot_positions) or bool(state.robot_statics)
+        if not has_real:
+            state.backend_frontend_synced = False
+            return
+        state.backend_frontend_synced = True
+
+        health = [int(v) for v in state.official_robot_health]
+        rows: list[dict[str, Any]] = []
+        for robot_id in list(range(1, 8)) + list(range(101, 108)):
+            base = robot_id if robot_id < 100 else robot_id - 100
+            statics = state.robot_statics.get(robot_id, {})
+            dynamics = state.robot_dynamics.get(robot_id, {})
+            index = robot_id - 1 if robot_id < 100 else robot_id - 94  # ????? index 7 ??
+            global_hp = int(health[index]) if index < len(health) and health[index] > 0 else 0
+            dynamic_hp = int(dynamics.get("current_health", 0))
+            # ??? 10Hz RobotDynamicStatus??????????? 1Hz ??????
+            hp = dynamic_hp if robot_id == int(state.robot_id) and dynamic_hp > 0 else global_hp or dynamic_hp
+            hp_max = int(statics.get("max_health", 0)) or DEFAULT_MAX_HEALTH
+            alive_state = int(statics.get("alive_state", 1))
+            if alive_state == 2 or hp <= 0:
+                row_state = "DEAD"
+            elif robot_id == int(state.robot_id):
+                row_state = "LOCAL"
+            else:
+                row_state = "ALIVE"
+            rows.append({
+                "id": robot_id,
+                "name": ROBOT_ID_NAMES.get(base, "Robot"),
+                "hp": max(0, hp),
+                "max": max(1, hp_max),
+                "state": row_state,
+                "x": None,
+                "y": None,
+                "modules": state.robot_modules.get(robot_id, {}),
+            })
+        positions = {int(p.get("robot_id", -1)): p for p in state.robot_positions}
+        for row in rows:
+            pos = positions.get(int(row["id"]))
+            if pos:
+                row["x"] = float(pos.get("x", 0.0))
+                row["y"] = float(pos.get("y", 0.0))
+                row["yaw"] = float(pos.get("yaw", 0.0))
+        state.robot_rows = rows
+
+        if positions:
+            map_robots: list[dict[str, Any]] = []
+            for robot_id, pos in positions.items():
+                base = robot_id if robot_id < 100 else robot_id - 100
+                index = robot_id - 1 if robot_id < 100 else robot_id - 94  # ????? index 7 ??
+                global_hp = int(health[index]) if index < len(health) and health[index] > 0 else 0
+                dynamic_hp = int(state.robot_dynamics.get(robot_id, {}).get("current_health", 0))
+                hp = dynamic_hp if robot_id == int(state.robot_id) and dynamic_hp > 0 else global_hp or dynamic_hp
+                hp_max = int(state.robot_statics.get(robot_id, {}).get("max_health", 0)) or DEFAULT_MAX_HEALTH
+                map_robots.append({
+                    "id": robot_id,
+                    "team": "ally" if robot_id < 100 else "enemy",
+                    "name": ROBOT_ID_NAMES.get(base, "Robot"),
+                    "x": float(pos.get("x", 0.0)),
+                    "y": float(pos.get("y", 0.0)),
+                    "hp": max(0, hp),
+                    "max": max(1, hp_max),
+                    "highlight": False,
+                })
+            state.map_robots = map_robots
+
+        if state.buffs:
+            buff_rows: list[dict[str, Any]] = []
+            for buff in state.buffs:
+                buff_type = int(buff.get("buff_type", 0))
+                remaining = max(0, int(buff.get("buff_left_time", 0)))
+                buff_rows.append({
+                    "name": BUFF_TYPE_NAMES.get(buff_type, f"Buff {buff_type}"),
+                    "active": remaining > 0,
+                    "remaining": remaining,
+                    "buff_type": buff_type,
+                    "robot_id": int(buff.get("robot_id", 0)),
+                })
+            state.buff_rows = buff_rows
+
     def set_client_id(self, robot_id: int) -> None:
         """机器人档案变更后同步 MQTT client_id 并重建连接。"""
         new_id = str(int(robot_id))
@@ -126,6 +220,7 @@ class BackendManager:
                 if key not in runtime_stats:
                     runtime_stats[key] = value
             state.backend_stats = runtime_stats
+            self.sync_frontend_state(state)
         return count
 
     @staticmethod
@@ -142,6 +237,7 @@ class BackendManager:
             state.blue_score = int(data.get("blue_score", state.blue_score))
             stage = int(data.get("current_stage", 0))
             state.current_stage = _STAGE_STR.get(stage, str(stage))
+            self.safety.update_stage(stage)
             state.stage_countdown_sec = max(0, int(data.get("stage_countdown_sec", state.stage_countdown_sec)))
             state.stage_elapsed_sec = max(0, int(data.get("stage_elapsed_sec", state.stage_elapsed_sec)))
         elif name == "GlobalUnitStatus":
@@ -169,6 +265,7 @@ class BackendManager:
         elif name == "RobotStaticStatus":
             if 4 in present and data["robot_id"]:
                 state.robot_id = int(data["robot_id"])
+                state.robot_statics[state.robot_id] = self._clean(data)
             if 8 in present and data["level"]:
                 state.level = int(data["level"])
             if 9 in present and data["max_health"]:
@@ -185,6 +282,7 @@ class BackendManager:
             if 7 in present:
                 state.performance_sync["chassis"] = int(data["performance_system_chassis"])
         elif name == "RobotDynamicStatus":
+            state.robot_dynamics[state.robot_id] = self._clean(data)
             state.current_health = int(data.get("current_health", state.current_health))
             state.current_heat = float(data.get("current_heat", state.current_heat))
             state.current_chassis_energy = int(data.get("current_chassis_energy", state.current_chassis_energy))
@@ -196,6 +294,7 @@ class BackendManager:
             state.can_remote_ammo = bool(data.get("can_remote_ammo", state.can_remote_ammo))
         elif name == "RobotModuleStatus":
             state.robot_module_status = {k: int(v) for k, v in data.items()}
+            state.robot_modules[state.robot_id] = self._clean(data)
         elif name == "RobotPosition":
             self._upsert_positions(state, data)
         elif name == "Buff":
@@ -211,7 +310,11 @@ class BackendManager:
         elif name == "RobotPerformanceSelectionSync":
             state.performance_sync = {k: int(v) for k, v in data.items()}
         elif name == "DeployModeStatusSync":
-            state.deploy_mode = int(data.get("status", 0))
+            next_status = 1 if int(data.get("status", 0)) else 0
+            if next_status != int(state.deploy_mode):
+                state.deploy_status_revision += 1
+            state.deploy_mode = next_status
+            state.deploy_status_at = time.perf_counter()
         elif name == "RuneStatusSync":
             state.rune_status = self._clean(data)
             state.energy_rune_phase = _RUNE_PHASE.get(int(data.get("rune_status", 1)), "INACTIVE")
@@ -309,7 +412,39 @@ class BackendManager:
                         "decoder_ready": False,
                     }
         elif name == "RobotInjuryStat":
-            state.injury_stats[int(data.get("killer_id", 0))] = self._clean(data)
+            clean = self._clean(data)
+            killer_id = int(data.get("killer_id", 0))
+            state.injury_stats[killer_id] = clean
+            small_total = max(0, int(data.get("small_projectile_damage", 0)))
+            large_total = max(0, int(data.get("large_projectile_damage", 0)))
+            if state.injury_stats_initialized:
+                # Cumulative counters can reset after respawn/reconnect.  A
+                # backwards jump establishes a new baseline and must never be
+                # interpreted as an enormous fresh hit.
+                counters_monotonic = bool(
+                    small_total >= state.projectile_damage_small_total
+                    and large_total >= state.projectile_damage_large_total
+                )
+                if counters_monotonic:
+                    small_delta = small_total - state.projectile_damage_small_total
+                    large_delta = large_total - state.projectile_damage_large_total
+                    damage_delta = small_delta + large_delta
+                    if damage_delta > 0:
+                        state.projectile_hit_revision += 1
+                        state.last_projectile_hit_at = time.perf_counter()
+                        state.last_projectile_damage_delta = damage_delta
+                        state.last_projectile_kind = (
+                            "17mm+42mm"
+                            if small_delta > 0 and large_delta > 0
+                            else ("42mm" if large_delta > 0 else "17mm")
+                        )
+                        state.last_projectile_killer_id = killer_id
+            else:
+                # RobotInjuryStat is a cumulative 1 Hz report.  Never trigger
+                # an automatic action from the first sample after startup.
+                state.injury_stats_initialized = True
+            state.projectile_damage_small_total = small_total
+            state.projectile_damage_large_total = large_total
         elif name == "RobotRespawnStatus":
             state.respawn_pending = bool(data.get("is_pending_respawn", state.respawn_pending))
             total = max(1, int(data.get("total_respawn_progress", 1)))

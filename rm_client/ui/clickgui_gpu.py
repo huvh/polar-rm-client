@@ -130,7 +130,13 @@ class ClickGuiDrawList:
             self._append(payload)
 
     def image(self, rect: QRectF, source: str | Path, tint: QColor | None = None, clip: QRectF | None = None) -> None:
-        source_path = str(Path(source).expanduser().resolve())
+        path = Path(source)
+        # Jello submits the same absolute shadow/options assets dozens of
+        # times per frame.  ``Path.resolve()`` calls GetFinalPathNameByHandle
+        # on Windows, which alone cost ~20 ms at 2K/2x even though the files
+        # never move.  Preserve canonicalisation for relative/user paths, but
+        # keep already-absolute application assets as the stable cache key.
+        source_path = str(path if path.is_absolute() else path.expanduser().resolve())
         payload = GpuImage(
             QRectF(rect),
             source_path,
@@ -169,7 +175,20 @@ class SmallTextPolicy:
     oversample_scale: float = 2.0
     medium_limit_px: float = 16.0
 
-    def sample_scale_for(self, physical_pixel_size: float) -> float:
+    def sample_scale_for(
+        self,
+        physical_pixel_size: float,
+        *,
+        preserve_weight: bool = False,
+    ) -> float:
+        physical_pixel_size = max(1.0, float(physical_pixel_size))
+        if preserve_weight:
+            # Helvetica Neue Light in Sigma is a texture font.  Rasterising it
+            # only at its final 20--50 device pixels makes thin diagonals and
+            # CJK fallback glyphs lose coverage at 150/200% Windows scaling.
+            # Target a 96 px source page, bounded to 2x so the settled glyph is
+            # downsampled once rather than being enlarged by the compositor.
+            return max(1.0, min(2.0, 96.0 / physical_pixel_size))
         return self.oversample_scale if physical_pixel_size <= self.oversample_limit_px else 1.0
 
     def prepare_font(
@@ -905,7 +924,10 @@ class ClickGuiGpuRenderer:
         else:
             logical_px = 12.0
         physical_px = max(1.0, logical_px * self._pixel_ratio * raster_scale)
-        sample_scale = self.small_text_policy.sample_scale_for(physical_px)
+        sample_scale = self.small_text_policy.sample_scale_for(
+            physical_px,
+            preserve_weight=preserve_weight,
+        )
         raster_font = self.small_text_policy.prepare_font(
             font,
             physical_px,
@@ -972,14 +994,11 @@ class ClickGuiGpuRenderer:
                 # Integer baseline position for stable stems at 1K.
                 pen_x = round(atlas_x - bounds.left())
                 pen_y = round(atlas_y - bounds.top())
-                if sample_scale > 1.0:
-                    painter.setPen(QColor(255, 255, 255, 72))
-                    for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
-                        painter.drawText(QPointF(pen_x + dx, pen_y + dy), char)
-                    painter.setPen(QColor(255, 255, 255, 255))
                 painter.drawText(QPointF(pen_x, pen_y), char)
-            # Tight UV (no 0.5 inset) so Nearest sampling does not thin strokes.
-            inset = 0.5 if glyph_width > 1.0 and glyph_height > 1.0 else 0.0
+            # The atlas has transparent padding on every side.  Cropping half
+            # a texel from the glyph bounds removed coverage from Helvetica's
+            # one-pixel stems and made the settings page look washed out.
+            inset = 0.0
             normalization_scale = sample_scale * raster_scale
             glyphs[char] = _Glyph(
                 (atlas_x + inset) / atlas_width,
@@ -1118,7 +1137,14 @@ class ClickGuiGpuRenderer:
                 y = rect.bottom() - line_height
             else:
                 y = rect.top()
-            snap = self.small_text_policy.should_snap(command.rect)
+            # Snap against *device* pixels.  A logical half-pixel is perfectly
+            # aligned at DPR=2 and must not be treated as an animated/fuzzy
+            # coordinate.  Rotated arrows retain sub-pixel movement.
+            snap = bool(
+                abs(command.rotation_degrees) < 0.001
+                and abs(command.rect.left() * ratio - round(command.rect.left() * ratio)) < 0.001
+                and abs(command.rect.top() * ratio - round(command.rect.top() * ratio)) < 0.001
+            )
             if snap:
                 x = float(round(x))
                 y = float(round(y))

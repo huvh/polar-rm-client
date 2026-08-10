@@ -147,10 +147,11 @@ class RmVideoBackend(UDPVideoReceiver):
                 frame, cv2.IMREAD_COLOR
             )  # type: ignore[attr-defined]
             if bgr is not None:
-                self.latest_bgr = bgr
-                self.decoder_backend = "cv2"
                 h, w = bgr.shape[:2]
-                self.output_width, self.output_height = w, h
+                with self._lock:
+                    self.latest_bgr = bgr
+                    self.decoder_backend = "cv2"
+                    self.output_width, self.output_height = w, h
         except Exception:
             self.decoder_backend = "none"
 

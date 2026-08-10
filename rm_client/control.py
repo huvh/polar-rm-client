@@ -57,6 +57,10 @@ class KeyboardControlBridge:
         self.last_command: ChassisCommand | None = None
         self.last_payload: bytes = b""
         self.last_error = ""
+        self.last_send_at = 0.0
+        # Below the official 10 Hz ceiling while still beating the lower
+        # controller's 250 ms watchdog by a comfortable margin.
+        self.heartbeat_hz = 8.0
 
     def set_key(self, key: str, pressed: bool, state: RobotState, registry: ModuleRegistry) -> ChassisCommand | None:
         key = key.upper()
@@ -71,6 +75,21 @@ class KeyboardControlBridge:
         command = self.build_command(state, registry)
         self.send_command(command)
         return command
+
+    def tick(
+        self,
+        state: RobotState,
+        registry: ModuleRegistry,
+        now: float | None = None,
+    ) -> ChassisCommand | None:
+        """Refresh an active movement/spin command at a stable safe cadence."""
+
+        now = time.perf_counter() if now is None else float(now)
+        spin = registry.get("SpinMode")
+        active = any(self.key_state.values()) or bool(spin and spin.enabled)
+        if not active or now - self.last_send_at < 1.0 / max(1.0, self.heartbeat_hz):
+            return None
+        return self.send_from_state(state, registry)
 
     def build_command(self, state: RobotState, registry: ModuleRegistry) -> ChassisCommand:
         forward = float(self.key_state["W"]) - float(self.key_state["S"])
@@ -106,6 +125,7 @@ class KeyboardControlBridge:
         self.last_command = command
         self.last_payload = payload
         self.last_error = ""
+        self.last_send_at = time.perf_counter()
         if self.mock_output:
             return
         if self.serial_bridge is None:
@@ -114,10 +134,18 @@ class KeyboardControlBridge:
         try:
             bridge = self.serial_bridge
             if hasattr(bridge, "write_frame"):
+                safety = getattr(bridge, "safety", None)
+                if safety is not None:
+                    allowed, reason = safety.can_publish("CustomControl", self.last_send_at)
+                    if not allowed:
+                        self.last_error = reason
+                        return
                 # 真实串口走官方 0x0311 CustomControl 帧，而不是裸 JSON
                 ok, reason = bridge.write_frame(0x0311, command.to_custom_control())
                 if not ok:
                     self.last_error = reason
+                elif safety is not None:
+                    safety.mark_published("CustomControl", self.last_send_at)
             else:
                 bridge.write(payload)
         except Exception as exc:

@@ -421,13 +421,31 @@ class RobotState:
     tech_core: dict[str, Any] = field(default_factory=dict)
     performance_sync: dict[str, int] = field(default_factory=dict)
     deploy_mode: int = 0
+    deploy_status_revision: int = 0
+    deploy_status_at: float = 0.0
     rune_status: dict[str, Any] = field(default_factory=dict)
     sentry_status: dict[str, Any] = field(default_factory=dict)
     dart_status: dict[str, Any] = field(default_factory=dict)
     sentry_ctrl_result: dict[str, Any] = field(default_factory=dict)
     special_mechanisms: list[dict[str, Any]] = field(default_factory=list)
     injury_stats: dict[int, dict[str, Any]] = field(default_factory=dict)
+    # RobotInjuryStat is cumulative.  The backend baselines the first sample
+    # and publishes only positive 17/42 mm deltas through these fields so a
+    # reconnect cannot be mistaken for a fresh hit.
+    injury_stats_initialized: bool = False
+    projectile_damage_small_total: int = 0
+    projectile_damage_large_total: int = 0
+    projectile_hit_revision: int = 0
+    last_projectile_hit_at: float = 0.0
+    last_projectile_damage_delta: int = 0
+    last_projectile_kind: str = ""
+    last_projectile_killer_id: int = 0
     backend_stats: dict[str, Any] = field(default_factory=dict)
+    # --- ???????????? ID ??????????backend/manager ???UI ??? ---
+    robot_statics: dict[int, dict[str, Any]] = field(default_factory=dict)
+    robot_dynamics: dict[int, dict[str, Any]] = field(default_factory=dict)
+    robot_modules: dict[int, dict[str, Any]] = field(default_factory=dict)
+    backend_frontend_synced: bool = False
 
     def tick(self, dt: float) -> None:
         elapsed = time.perf_counter() - self.start_time
@@ -821,7 +839,7 @@ def build_default_registry() -> ModuleRegistry:
         Module(
             "HeroLob",
             "Combat",
-            "None",
+            "K",
             [
                 mode_setting("Mode", "Radar Assisted", ["Radar Assisted", "Manual"]),
                 mode_setting("Target", "Enemy Base", ["Enemy Base", "Enemy Outpost", "Manual"]),
@@ -845,6 +863,7 @@ def build_default_registry() -> ModuleRegistry:
                 action_setting("Calibrate Lob Pitch", "Store the operator-confirmed iterative pitch calibration."),
                 action_setting("Confirm Relocalization", "Confirm radar/map relocalization after every reset."),
                 action_setting("Invalidate Relocalization", "Fail closed after a localisation discontinuity."),
+                action_setting("Open Deploy Interface", "Open the dedicated deployment/lob operator console."),
                 action_setting("Preview Lob", "Calculate yaw, pitch and flight time without sending a command."),
                 action_setting("Arm Assisted Lob", "Arm decision support only; no fire command is emitted."),
                 action_setting("Disarm Assisted Lob"),
@@ -873,6 +892,25 @@ def build_default_registry() -> ModuleRegistry:
             ],
             enabled=True,
             description="RM 底盘小陀螺模式，并预留后续控制输出钩子。",
+        ),
+        Module(
+            "AutoSpinOnHit",
+            "Movement",
+            "None",
+            [
+                number_setting("Minimum Damage", 1, 1, 500, 1, "HP"),
+                number_setting("Duration", 2.5, 0.2, 8.0, 0.1, "s"),
+                number_setting("Cooldown", 1.0, 0.0, 10.0, 0.1, "s"),
+                bool_setting("Only During Match", True),
+                bool_setting("Require Referee Link", True),
+                bool_setting("Power Guard", True),
+                number_setting("Minimum Buffer", 10, 0, 100, 1, "%"),
+                bool_setting("Auto Disable", True),
+            ],
+            description=(
+                "A new RobotInjuryStat 17/42 mm damage delta temporarily "
+                "enables SpinMode; cumulative baselines and other damage do not trigger it."
+            ),
         ),
         Module(
             "ChassisAssist",
@@ -1340,7 +1378,7 @@ def build_default_registry() -> ModuleRegistry:
                     )
                 ],
             ],
-            enabled=True,
+            enabled=False,
             description="Minecraft 1.21.11 战斗 HUD 与九格自定义功能栏；可从 Jello ClickGUI 拖放模块。",
         ),
         Module(

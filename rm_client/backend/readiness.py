@@ -108,6 +108,27 @@ def audit_backend(
         ReadinessGate("camera_calibration", bool(getattr(state, "vision_calibrated", False)), "camera calibration loaded and accepted", True),
         ReadinessGate("estop_robot_test", bool(evidence.get("estop_robot_test", False)), "physical E-stop zero-frame and latch test", True),
         ReadinessGate("command_ack_test", bool(evidence.get("command_ack_test", False)), "lower-controller command/ACK semantics validated", True),
+        ReadinessGate(
+            "control_heartbeat_test",
+            bool(evidence.get("control_heartbeat_test", False)),
+            "8 Hz active-command heartbeat and 250 ms watchdog validated on the lower controller",
+            True,
+        ),
+        ReadinessGate(
+            "projectile_hit_spin_test",
+            bool(evidence.get("projectile_hit_spin_test", False))
+            and bool(getattr(state, "injury_stats_initialized", False))
+            and int(getattr(state, "projectile_hit_revision", 0)) > 0,
+            "live RobotInjuryStat 17/42 mm delta triggers bounded SpinMode without false first-sample activation",
+            True,
+        ),
+        ReadinessGate(
+            "hero_deploy_status_test",
+            bool(evidence.get("hero_deploy_status_test", False))
+            and float(getattr(state, "deploy_status_at", 0.0) or 0.0) > 0.0,
+            "Hero enter/exit command and DeployModeStatusSync/video-cut lifecycle validated on field hardware",
+            True,
+        ),
         ReadinessGate("loss_recovery_test", bool(evidence.get("loss_recovery_test", False)), "MQTT/video/serial loss and reconnect drill", True),
         ReadinessGate("latency_soak_test", bool(evidence.get("latency_soak_test", False)), "full-duration match latency/thermal soak", True),
         ReadinessGate(

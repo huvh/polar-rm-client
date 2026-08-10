@@ -7,6 +7,7 @@ from enum import Enum
 class OverlayKind(str, Enum):
     CLICKGUI = "clickgui"
     ECONOMY = "economy"
+    HERO_DEPLOY = "hero_deploy"
     CHAT = "chat"
     RADIAL = "radial"
 
@@ -54,4 +55,3 @@ class OverlayCoordinator:
     @property
     def blocks_combat_input(self) -> bool:
         return self.chat_input or self.modal is not None or self.radial_active
-

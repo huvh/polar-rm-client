@@ -527,6 +527,22 @@ class GpuFrameCompositor:
         """立即丢弃本帧临时镜片，防止页面切换后旧命令再参与一次合成。"""
         self._frame_glass_commands.clear()
 
+    def invalidate_transient_layers(self) -> None:
+        """Forget every cache whose source changes across a modal scene.
+
+        This method intentionally performs no OpenGL calls, so overlay close
+        handlers can use it outside ``paintGL``.  The next frame repaints the
+        static/dynamic FBOs and rebuilds both blur chains from the live HUD.
+        """
+
+        self._static_glass_commands.clear()
+        self._frame_glass_commands.clear()
+        self._recording_static_glass = False
+        self._glass_owner_stack[:] = [GlassOwner.HUD]
+        self._blur_valid = False
+        self._treated_blur_valid = False
+        self._backdrop_treatment = BackdropTreatment()
+
     def begin_static_glass(self) -> None:
         """将后续镜片记录到可缓存的静态 UI 层。"""
         self._recording_static_glass = True

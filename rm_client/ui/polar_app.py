@@ -35,6 +35,7 @@ from PySide6.QtOpenGLWidgets import QOpenGLWidget
 from PySide6.QtWidgets import QApplication, QFileDialog, QWidget
 
 from ..calibration import CameraCalibrationManager
+from ..auto_spin import ProjectileHitSpinController
 from ..combat_hud import CombatHudAnimator, VALID_COMBAT_HUD_VISUALS, ring_end
 from ..combat_events import CombatEvent, OfficialMatchFeed, VisionKillDetector
 from ..config_store import ClientConfigStore, apply_registry_config, export_client_config
@@ -99,6 +100,7 @@ from .fonts import FontBook
 from .gui_cache import ClickGuiLayerCache
 from .clickgui_gpu import ClickGuiDrawList, ClickGuiGpuRenderer
 from .jello_clickgui import JelloClickGuiRenderer, JelloClickGuiState, JelloMainTimeline
+from .hero_deploy import HeroDeployInterfaceState, HeroDeployRenderer
 from .minecraft_hud import MinecraftCombatHudRenderer
 from .gpu_frame_compositor import GlassOwner, GpuFrameCompositor, LensMaterial
 from .island_icon_gpu import IslandIconCommand, IslandIconGpuRenderer
@@ -184,16 +186,30 @@ class StartupLayerCache:
 class FrameScheduler:
     def __init__(self) -> None:
         self.last_request = 0.0
+        self.next_request = 0.0
 
     def should_request(self, now: float, high_rate: bool, target_fps: float = 60.0) -> bool:
         interval = 1.0 / (max(30.0, target_fps) if high_rate else 15.0)
-        if now - self.last_request < interval * 0.86:
+        # Keep an absolute deadline instead of measuring from the last timer
+        # callback.  The old 0.86 threshold combined with a 5 ms QTimer made a
+        # nominal 144 Hz render request miss every other tick (roughly 100 Hz
+        # with an uneven 5/10 ms cadence).  A small early allowance absorbs
+        # Windows timer quantisation without accumulating phase drift.
+        if self.next_request <= 0.0:
+            self.last_request = now
+            self.next_request = now + interval
+            return True
+        early_allowance = min(0.0015, interval * 0.12)
+        if now + early_allowance < self.next_request:
             return False
         self.last_request = now
+        while self.next_request <= now + early_allowance:
+            self.next_request += interval
         return True
 
     def force(self) -> None:
         self.last_request = 0.0
+        self.next_request = 0.0
 
 
 class InertialScroll:
@@ -338,8 +354,13 @@ class PolarRMWindow(QOpenGLWidget):
         self.video_pipeline = VideoPipeline()
         self.serial = self.backend.serial
         # UDP 组装帧接入 VideoPipeline（转发/后续解码入口）
-        self.backend.udp.external_on_frame = self.video_pipeline.push_udp_packet
+        # Backend UDP has already reassembled a complete frame. Feeding that
+        # frame back into VideoPipeline.push_udp_packet treated image bytes as
+        # a second Shark fragment header. Keep the compatibility pipeline for
+        # explicit tools, but do not double-assemble the production stream.
+        self.backend.udp.external_on_frame = None
         self.control = KeyboardControlBridge(self.serial, mock_output=True)
+        self.auto_spin = ProjectileHitSpinController()
         self.economy_bridge = EconomyCommandBridge()
         self.economy_bridge.sender = self.send_economy_request
         self.config_store = ClientConfigStore(self.workspace / "rm_custom_client" / "configs")
@@ -356,6 +377,7 @@ class PolarRMWindow(QOpenGLWidget):
         self._tongji_enabled = False
         self._vision_snapshot: VisionSnapshot | None = None
         self._last_capture_sequence = 0
+        self._last_backend_video_at = 0.0
         self._last_vision_result: VisionResult | None = None
         self.vision_render_interpolator = VisionRenderInterpolator()
         self.target_hud_presence = TargetHudPresenceState()
@@ -381,6 +403,9 @@ class PolarRMWindow(QOpenGLWidget):
         self.minecraft_hud = MinecraftCombatHudRenderer(
             self.workspace / "rm_custom_client" / "assets" / "minecraft_hud"
         )
+        self.hero_deploy_ui = HeroDeployInterfaceState()
+        self.hero_deploy_renderer = HeroDeployRenderer()
+        self._last_deploy_status_revision = 0
         self.vision_wire_gpu = VisionWireGpuRenderer()
         self.island_icon_gpu = IslandIconGpuRenderer()
         self._gpu_island_icon_commands: list[IslandIconCommand] = []
@@ -423,6 +448,7 @@ class PolarRMWindow(QOpenGLWidget):
         # 地图、灵动岛和交互动画继续使用独立的高刷新率 UI 时钟。
         self.render_fps_cap = 240.0
         self.render_fps_target = 144.0
+        self._render_timer_interval_ms = max(4, int(round(1000.0 / self.render_fps_target)))
         self.render_frame_ms_ema = 0.0
         self._last_render_tune = time.perf_counter()
         self._last_logic_time = time.perf_counter()
@@ -517,6 +543,7 @@ class PolarRMWindow(QOpenGLWidget):
         self.economy_category = "ammo"
         self.economy_opened_at = 0.0
         self.economy_island = EconomyIslandState()
+        self._economy_close_finalized = True
         self.economy_workspace_layer = EconomyWorkspaceLayer()
         self.economy_category_scroll = InertialScroll()
         self.economy_offers_scroll = InertialScroll()
@@ -558,7 +585,9 @@ class PolarRMWindow(QOpenGLWidget):
         self.timer = QTimer(self)
         self.timer.setTimerType(Qt.TimerType.PreciseTimer)
         self.timer.timeout.connect(self.on_tick)
-        self.timer.start(max(5, int(1000.0 / self.render_fps_cap)))
+        # Drive the UI at the selected display cadence.  Polling at 5 ms and
+        # throwing callbacks away produced visibly irregular Sigma timelines.
+        self.timer.start(self._render_timer_interval_ms)
 
     def on_tick(self) -> None:
         now = time.perf_counter()
@@ -573,6 +602,11 @@ class PolarRMWindow(QOpenGLWidget):
         except (TypeError, ValueError):
             requested_hz = 144.0
         self.render_fps_target = max(120.0, min(self.render_fps_cap, requested_hz))
+        requested_interval = max(4, int(round(1000.0 / self.render_fps_target)))
+        if requested_interval != self._render_timer_interval_ms:
+            self._render_timer_interval_ms = requested_interval
+            self.timer.setInterval(requested_interval)
+            self.frame_scheduler.force()
         self.polar_unified_scroll = self.polar_unified_scroll_motion.update(dt)
         self.economy_category_scroll.update(dt)
         self.economy_offers_scroll.update(dt)
@@ -602,6 +636,13 @@ class PolarRMWindow(QOpenGLWidget):
             now=now,
         )
         self.economy_island.update(now=now)
+        if (
+            not self.economy_visible
+            and not self._economy_close_finalized
+            and self.economy_island.progress <= 0.001
+        ):
+            self._economy_close_finalized = True
+            self.invalidate_transient_overlay_scene()
         self.state.economy_mock_mode = self.economy_uses_mock_transport()
         economy_transaction = self.economy_bridge.update(self.state, now)
         if (
@@ -646,7 +687,10 @@ class PolarRMWindow(QOpenGLWidget):
             # 后端：心跳/安全 tick + 全量协议解码写入 RobotState（UI 只读）
             self.backend.tick()
             self.backend.apply_updates(self.state)
+            self.update_hero_deploy_state(now)
             self.update_hero_lob_guard()
+            self.update_auto_spin_guard(now)
+            self.control.tick(self.state, self.registry, now)
             self.consume_official_messages()
             self.apply_official_state()
             self.sync_tongji_vision_state()
@@ -669,6 +713,8 @@ class PolarRMWindow(QOpenGLWidget):
             or self.economy_island.progress > 0.01
             or self.quick_action_wheel.visible
             or self.match_chat.input_open
+            or self.hero_deploy_ui.visible
+            or self.hero_deploy_ui.pending_mode is not None
         )
         if self.frame_scheduler.should_request(now, high_rate, self.render_fps_target):
             self.update()
@@ -1688,6 +1734,8 @@ class PolarRMWindow(QOpenGLWidget):
             bool(self.economy_visible or self.economy_island.progress > 0.01),
             self._economy_scene_epoch,
             bool(self.gui_visible or self.gui_timeline.progress > 0.01),
+            int(self.state.deploy_mode),
+            int(self.state.deploy_status_revision),
         )
 
     def paint_gpu_background(self, functions, width: int, height: int, ratio: float) -> bool:
@@ -1738,6 +1786,23 @@ class PolarRMWindow(QOpenGLWidget):
                 float(self.startup_wallpaper.parallax_y) / max(1.0, float(height)),
             )
             blur_source_key = ("startup-blur", mode, profile, content_sequence, width, height, round(ratio, 3))
+        elif self.hero_deploy_video_cut_active():
+            background_key = (
+                "hero-deploy-video-cut",
+                int(self.state.deploy_status_revision),
+                width,
+                height,
+                round(ratio, 3),
+            )
+            transform_key = ("hero-deploy-video-cut-transform", width, height)
+            self.gpu_compositor.set_scene_uv_offset(0.0, 0.0)
+            blur_source_key = (
+                "hero-deploy-video-cut-blur",
+                int(self.state.deploy_status_revision),
+                width,
+                height,
+                round(ratio, 3),
+            )
         elif self.frame_pixmap is not None and not self.frame_pixmap.isNull():
             background_key = (
                 "camera",
@@ -1821,6 +1886,14 @@ class PolarRMWindow(QOpenGLWidget):
             painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, not self.high_res_optimize(width, height))
             if self.home_visible:
                 self.draw_startup_background(painter, width, height)
+            elif self.hero_deploy_video_cut_active():
+                painter.fillRect(canvas, QColor("#02070b"))
+                painter.setPen(QPen(QColor(80, 168, 205, 28), 1.0))
+                grid = max(28, int(min(width, height) / 18))
+                for x in range(0, width + grid, grid):
+                    painter.drawLine(x, 0, x, height)
+                for y in range(0, height + grid, grid):
+                    painter.drawLine(0, y, width, y)
             elif self.frame_image is not None and not self.frame_image.isNull():
                 painter.drawImage(canvas, self.frame_image, QRectF(self.frame_image.rect()))
             else:
@@ -2043,8 +2116,7 @@ class PolarRMWindow(QOpenGLWidget):
         module = self.registry.get("MinecraftCombatHUD")
         return bool(
             module
-            and module.enabled
-            and self.combat_hud_preset() == "Minecraft 1.21.11"
+            and (module.enabled or self.combat_hud_preset() == "Minecraft 1.21.11")
             and self.minecraft_hud.available
         )
 
@@ -2127,6 +2199,7 @@ class PolarRMWindow(QOpenGLWidget):
                 self.draw_quick_action_wheel(p, width, height)
             if not self.menu_overlay_active():
                 self.draw_elimination_fx(p, width, height)
+            self.draw_hero_deploy_interface(p, width, height, now)
             self.dynamic_hud_ms = (time.perf_counter() - started_at) * 1000.0
             return
 
@@ -2169,6 +2242,7 @@ class PolarRMWindow(QOpenGLWidget):
         # While menu is open, skip elim FX so card bursts do not flash over panels.
         if not self.menu_overlay_active():
             self.draw_elimination_fx(p, width, height)
+        self.draw_hero_deploy_interface(p, width, height, now)
         self.dynamic_hud_ms = (time.perf_counter() - started_at) * 1000.0
 
     def paint_priority_interaction_layer(
@@ -2941,6 +3015,177 @@ class PolarRMWindow(QOpenGLWidget):
             and self.setting_mode(profile, "Hero Type", "Melee") == "Range"
         )
 
+    def hero_deploy_video_cut_active(self) -> bool:
+        """Only acknowledged deploy status cuts video; a pending request does not."""
+
+        return int(self.state.deploy_mode) == 1
+
+    def hero_deploy_uses_mock_transport(self) -> bool:
+        module = self.registry.get("HeroLob")
+        return bool(
+            self.scenario_manager.current.key != "OfficialEvent"
+            or self.setting_bool(module, "Mock Output", True)
+        )
+
+    def open_hero_deploy_interface(self) -> bool:
+        if self.home_visible:
+            return False
+        module = self.registry.get("HeroLob")
+        if module is None:
+            return False
+        if not module.enabled and int(self.state.deploy_mode) != 1:
+            self.toast("Enable HeroLob before opening the deploy console")
+            return False
+        if self.gui_visible:
+            self.set_clickgui_visible(False, announce=False, play_sound=False)
+        if self.economy_visible:
+            self.close_economy_workspace(play_sound=False)
+        self.close_match_chat(clear=False)
+        self.cancel_quick_action_wheel()
+        self.overlay_coordinator.request_modal(OverlayKind.HERO_DEPLOY)
+        self.hero_deploy_ui.open(time.perf_counter())
+        self.invalidate_transient_overlay_scene()
+        self.frame_scheduler.force()
+        self.update()
+        return True
+
+    def close_hero_deploy_interface(self, *, force: bool = False) -> bool:
+        if not self.hero_deploy_ui.visible:
+            self.overlay_coordinator.close_modal(OverlayKind.HERO_DEPLOY)
+            return True
+        if self.hero_deploy_ui.pending_mode is not None and not force:
+            self.toast("Wait for DeployModeStatusSync before closing the console")
+            return False
+        self.hero_deploy_ui.close()
+        self.overlay_coordinator.close_modal(OverlayKind.HERO_DEPLOY)
+        self.invalidate_transient_overlay_scene()
+        self.frame_scheduler.force()
+        self.update()
+        return True
+
+    def send_hero_deploy_request(self, mode: int) -> bool:
+        mode = 1 if int(mode) else 0
+        module = self.registry.get("HeroLob")
+        if self.hero_deploy_ui.pending_mode is not None:
+            self.toast("A deploy-mode request is already pending")
+            return False
+        if mode == int(self.state.deploy_mode):
+            self.toast("Deploy mode is already in the requested state")
+            return False
+        if mode == 1:
+            if module is None or not module.enabled:
+                self.toast("HeroLob is disabled")
+                return False
+            if not self.hero_range_profile_selected():
+                self.toast("Deploy mode requires the Hero / Range profile")
+                return False
+            if str(self.state.current_stage).upper() not in {"4", "MATCH"}:
+                self.toast("Deploy mode entry is available only during the match stage")
+                return False
+
+        now = time.perf_counter()
+        mock = self.hero_deploy_uses_mock_transport()
+        if not mock:
+            accepted, reason = self.backend.publish_hero_deploy(mode)
+            if not accepted:
+                self.hero_deploy_ui.last_error = str(reason)
+                self.toast(f"Deploy command blocked: {reason}")
+                return False
+        self.hero_deploy_ui.begin_request(mode, now, mock=mock)
+        verb = "ENTER" if mode else "EXIT"
+        self.state.hero_lob_status = f"DEPLOY {verb} PENDING"
+        self.toast(f"{verb} deploy mode requested ({'mock' if mock else 'official'})")
+        self.frame_scheduler.force()
+        return True
+
+    def update_hero_deploy_state(self, now: float | None = None) -> None:
+        now = time.perf_counter() if now is None else float(now)
+        mock_status = self.hero_deploy_ui.sync(self.state.deploy_mode, now)
+        if mock_status is not None:
+            if int(mock_status) != int(self.state.deploy_mode):
+                self.state.deploy_status_revision += 1
+            self.state.deploy_mode = int(mock_status)
+            self.state.deploy_status_at = now
+        revision = int(self.state.deploy_status_revision)
+        if revision != self._last_deploy_status_revision:
+            self._last_deploy_status_revision = revision
+            self.invalidate_transient_overlay_scene()
+        if self.hero_deploy_ui.pending_mode is None:
+            if self.hero_deploy_video_cut_active():
+                self.state.hero_lob_status = "DEPLOYED / VIDEO CUT"
+            elif self.state.hero_lob_status.startswith("DEPLOY "):
+                self.state.hero_lob_status = "DEPLOY MODE EXITED"
+        elif self.hero_deploy_ui.last_error:
+            self.state.hero_lob_status = f"BLOCKED: {self.hero_deploy_ui.last_error}"
+
+    def update_auto_spin_guard(self, now: float | None = None) -> None:
+        now = time.perf_counter() if now is None else float(now)
+        feature = self.registry.get("AutoSpinOnHit")
+        spin = self.registry.get("SpinMode")
+        directive = self.auto_spin.update(
+            self.state,
+            feature,
+            spin_enabled=bool(spin and spin.enabled),
+            referee_link=bool(self.state.mqtt_connected or self.state.official_events_online),
+            now=now,
+        )
+        if not directive.changed or spin is None:
+            return
+        requested = directive.action == "enable"
+        if spin.enabled != requested:
+            self.registry.toggle_module(
+                spin,
+                source="auto_hit" if requested else "auto_hit_release",
+            )
+        serial_module = self.registry.get("SerialBridge")
+        mock_setting = serial_module.get_setting("Mock Writes") if serial_module else None
+        self.control.mock_output = bool(mock_setting.value) if mock_setting else True
+        self.control.send_from_state(self.state, self.registry)
+        message = (
+            f"AutoSpin ON: {directive.reason}"
+            if requested
+            else "AutoSpin OFF: hit window complete"
+        )
+        self.state.events.appendleft(message)
+        self.toast(message)
+
+    def draw_hero_deploy_interface(self, p: QPainter, width: int, height: int, now: float) -> None:
+        if not self.hero_deploy_ui.visible:
+            if self.hero_deploy_video_cut_active():
+                banner = QRectF(width * 0.5 - 150.0, 12.0, 300.0, 32.0)
+                rounded_rect(p, banner, 16.0, QColor(3, 14, 21, 225), QColor(92, 211, 255, 165), 1.0)
+                self.draw_text(
+                    p,
+                    banner,
+                    "DEPLOY MODE / VIDEO CUT  -  K TO OPEN CONSOLE",
+                    self.font("poppins_bold", 7.5),
+                    QColor("#8ee4ff"),
+                    Qt.AlignmentFlag.AlignCenter,
+                )
+                self.add_hotspot(banner, "hero_deploy_open", tooltip="Open Hero deploy console")
+            return
+        module = self.registry.get("HeroLob")
+        solution, readiness = HeroLobPlanner.preview_from_state(
+            self.state,
+            module,
+            hero_range_profile=self.hero_range_profile_selected(),
+        )
+        targets = self.hero_deploy_renderer.draw(
+            p,
+            width,
+            height,
+            state=self.state,
+            module=module,
+            interface=self.hero_deploy_ui,
+            solution=solution,
+            readiness=readiness,
+            now=now,
+            font_factory=self.font,
+        )
+        for target in targets:
+            if target.enabled:
+                self.add_hotspot(target.rect, target.action, tooltip=target.tooltip)
+
     def hero_lob_preview(self, *, announce: bool = True) -> tuple[Any, Any]:
         module = self.registry.get("HeroLob")
         solution, readiness = HeroLobPlanner.preview_from_state(
@@ -2977,6 +3222,19 @@ class PolarRMWindow(QOpenGLWidget):
             self.state.hero_lob_armed = False
             self.state.hero_lob_status = readiness.summary
 
+    def invalidate_transient_overlay_scene(self) -> None:
+        """Force one complete HUD/compositor rebuild after a modal transition."""
+
+        self._gpu_background_key = None
+        self._gpu_background_transform_key = None
+        self._gpu_control_backdrop_key = None
+        self._gpu_blur_source_key = None
+        self._gpu_static_ui_key = None
+        self._gpu_motion_layer_ready = False
+        self._gpu_motion_layer_updated_at = 0.0
+        self._gpu_background_changed = True
+        self.gpu_compositor.invalidate_transient_layers()
+
     def set_clickgui_visible(
         self,
         visible: bool,
@@ -2996,6 +3254,8 @@ class PolarRMWindow(QOpenGLWidget):
         elif not visible:
             self.jello_state.request_reset()
         if visible:
+            if self.hero_deploy_ui.visible:
+                self.close_hero_deploy_interface(force=True)
             if self.economy_visible:
                 self.close_economy_workspace(play_sound=False)
             self.close_match_chat(clear=False)
@@ -3011,9 +3271,7 @@ class PolarRMWindow(QOpenGLWidget):
             return
         self.gui_visible = visible
         self.gui_timeline.set_target(1.0 if visible else 0.0)
-        self._gpu_static_ui_key = None
-        self._gpu_control_backdrop_key = None
-        self.gpu_compositor.clear_frame_glass()
+        self.invalidate_transient_overlay_scene()
         # Sigma's ClickGuiScreen itself has no open/close cue.  Preserve the
         # historical Polar transition only when a legacy renderer is active.
         if play_sound and self.active_clickgui_mode() != PRIMARY_GUI_MODE:
@@ -3025,6 +3283,8 @@ class PolarRMWindow(QOpenGLWidget):
 
     def open_economy_workspace(self, category: str | None = None) -> None:
         now = time.perf_counter()
+        if self.hero_deploy_ui.visible:
+            self.close_hero_deploy_interface(force=True)
         offers = self.economy_offers()
         categories = self.economy_categories(offers)
         if category in categories:
@@ -3037,6 +3297,7 @@ class PolarRMWindow(QOpenGLWidget):
         self.cancel_quick_action_wheel()
         self.overlay_coordinator.request_modal(OverlayKind.ECONOMY)
         self.economy_visible = True
+        self._economy_close_finalized = False
         self.economy_opened_at = now
         self.economy_island.set_target(
             1.0,
@@ -3059,9 +3320,7 @@ class PolarRMWindow(QOpenGLWidget):
         if selected is not None:
             self.economy_selected_key = selected.key
         # Capture a fresh, complete HUD snapshot for the backdrop treatment.
-        self._gpu_static_ui_key = None
-        self._gpu_control_backdrop_key = None
-        self.gpu_compositor.clear_frame_glass()
+        self.invalidate_transient_overlay_scene()
         self.play_gui_transition_sound("expand")
         self.frame_scheduler.force()
         self.update()
@@ -3072,6 +3331,7 @@ class PolarRMWindow(QOpenGLWidget):
             return
         now = time.perf_counter()
         self.economy_visible = False
+        self._economy_close_finalized = False
         self.overlay_coordinator.close_modal(OverlayKind.ECONOMY)
         self.economy_island.set_target(
             0.0,
@@ -3082,9 +3342,7 @@ class PolarRMWindow(QOpenGLWidget):
         self.economy_armed_key = ""
         self.economy_hold_key = ""
         self.economy_hold_rect = QRectF()
-        self._gpu_static_ui_key = None
-        self._gpu_control_backdrop_key = None
-        self.gpu_compositor.clear_frame_glass()
+        self.invalidate_transient_overlay_scene()
         self.hotspots = [
             hotspot
             for hotspot in self.hotspots
@@ -3099,6 +3357,8 @@ class PolarRMWindow(QOpenGLWidget):
         module = self.registry.get("MatchChat")
         if module is None or not module.enabled or self.home_visible:
             return
+        if self.hero_deploy_ui.visible:
+            self.close_hero_deploy_interface(force=True)
         if self.economy_visible:
             self.close_economy_workspace(play_sound=False)
         if self.gui_visible:
@@ -3877,14 +4137,18 @@ class PolarRMWindow(QOpenGLWidget):
             self._camera_config = requested_config
 
     def draw_video(self, p: QPainter, width: int, height: int) -> None:
+        if self.hero_deploy_video_cut_active():
+            p.fillRect(QRectF(0, 0, width, height), QColor("#02070b"))
+            return
         source = self.registry.get("CameraFeed")
         source_setting = source.get_setting("Source") if source else None
         use_camera = source_setting is None or source_setting.value == "Webcam"
         if use_camera:
             self.ensure_camera_started()
-            if self.frame_pixmap is not None and not self.frame_pixmap.isNull():
-                p.drawPixmap(QRectF(0, 0, width, height), self.frame_pixmap, QRectF(self.frame_pixmap.rect()))
-                return
+        # ?? UDP MJPEG / ??????? frame_pixmap?QPainter ?????????
+        if self.frame_pixmap is not None and not self.frame_pixmap.isNull():
+            p.drawPixmap(QRectF(0, 0, width, height), self.frame_pixmap, QRectF(self.frame_pixmap.rect()))
+            return
         self.draw_synthetic_video(p, width, height)
 
     def refresh_vision_runtime(self) -> None:
@@ -3925,6 +4189,10 @@ class PolarRMWindow(QOpenGLWidget):
             self.local_vision.submit(frame.sequence, frame.width, frame.height, frame.bgr)
 
     def consume_capture_frame(self) -> None:
+        camera_module = self.registry.get("CameraFeed")
+        if self.setting_mode(camera_module, "Source", "Webcam") != "Webcam":
+            self.consume_backend_video_frame()
+            return
         frame = self.camera_worker.latest_frame()
         if frame is None or frame.sequence <= self._last_capture_sequence:
             return
@@ -3935,13 +4203,55 @@ class PolarRMWindow(QOpenGLWidget):
         except Exception:
             pass
         image = QImage(frame.rgb.data, frame.width, frame.height, frame.width * 3, QImage.Format.Format_RGB888).copy()
-        camera_module = self.registry.get("CameraFeed")
         if self.setting_bool(camera_module, "Mirror", False):
             image = image.mirrored(True, False)
         self.frame_image = image
         # QPixmap 会由 Qt OpenGL Paint Engine 缓存为纹理；同一摄像头帧在
         # 120/144Hz HUD 重绘期间不再反复上传 QImage。
         self.frame_pixmap = QPixmap.fromImage(image)
+        self.update_hud_liquid_source(image)
+
+    def consume_backend_video_frame(self) -> None:
+        """Publish a newly decoded backend MJPEG frame to the normal HUD path."""
+
+        frame_at = float(getattr(self.backend.udp, "last_frame_at", 0.0) or 0.0)
+        if frame_at <= self._last_backend_video_at:
+            return
+        lock = getattr(self.backend.udp, "_lock", None)
+        try:
+            if lock is not None:
+                with lock:
+                    source = getattr(self.backend.udp, "latest_bgr", None)
+                    bgr = source.copy() if source is not None else None
+            else:
+                source = getattr(self.backend.udp, "latest_bgr", None)
+                bgr = source.copy() if source is not None else None
+        except Exception:
+            bgr = None
+        if bgr is None or getattr(bgr, "ndim", 0) != 3 or int(bgr.shape[2]) < 3:
+            return
+        height, width = int(bgr.shape[0]), int(bgr.shape[1])
+        if width <= 0 or height <= 0:
+            return
+        image = QImage(
+            bgr.data,
+            width,
+            height,
+            int(bgr.strides[0]),
+            QImage.Format.Format_BGR888,
+        ).copy()
+        camera_module = self.registry.get("CameraFeed")
+        if self.setting_bool(camera_module, "Mirror", False):
+            image = image.mirrored(True, False)
+        self._last_backend_video_at = frame_at
+        self._last_capture_sequence += 1
+        self.frame_image = image
+        self.frame_pixmap = QPixmap.fromImage(image)
+        try:
+            self._vision_scene_luminance = float(bgr[::32, ::32].mean()) / 255.0
+            self.state.vision_scene_luminance = self._vision_scene_luminance
+        except Exception:
+            pass
         self.update_hud_liquid_source(image)
 
     def active_tongji_result(self) -> VisionResult | None:
@@ -7038,7 +7348,13 @@ class PolarRMWindow(QOpenGLWidget):
             img_w = int(math.ceil(size * 1.55 + pad * 2))
             img_h = int(math.ceil(size * 1.65 + pad * 2))
             origin = QPointF(center.x() - img_w * 0.5, center.y() - img_h * 0.5)
-            image = QImage(img_w, img_h, QImage.Format.Format_ARGB32_Premultiplied)
+            image_dpr = max(1.0, float(self.devicePixelRatioF()))
+            image = QImage(
+                max(1, int(math.ceil(img_w * image_dpr))),
+                max(1, int(math.ceil(img_h * image_dpr))),
+                QImage.Format.Format_ARGB32_Premultiplied,
+            )
+            image.setDevicePixelRatio(image_dpr)
             image.fill(0)
             ip = QPainter(image)
             ip.setRenderHint(QPainter.RenderHint.Antialiasing, True)
@@ -7086,7 +7402,13 @@ class PolarRMWindow(QOpenGLWidget):
         img_w = int(math.ceil(panel_w)) + 6
         img_h = int(math.ceil(panel_h)) + 6
         origin = QPointF(x - 3.0, y - 3.0)
-        image = QImage(img_w, img_h, QImage.Format.Format_ARGB32_Premultiplied)
+        image_dpr = max(1.0, float(self.devicePixelRatioF()))
+        image = QImage(
+            max(1, int(math.ceil(img_w * image_dpr))),
+            max(1, int(math.ceil(img_h * image_dpr))),
+            QImage.Format.Format_ARGB32_Premultiplied,
+        )
+        image.setDevicePixelRatio(image_dpr)
         image.fill(0)
         ip = QPainter(image)
         ip.setRenderHint(QPainter.RenderHint.Antialiasing, True)
@@ -12640,10 +12962,13 @@ class PolarRMWindow(QOpenGLWidget):
             else:
                 module = self.registry.get(name)
                 if module is not None:
-                    self.registry.toggle_module(module, source="clickgui")
-                    self.selected_module = module
-                    self.toast(f"{module.name} {'enabled' if module.enabled else 'disabled'}")
-                    self.auto_save_config()
+                    if module.name == "HeroLob" and module.enabled:
+                        self.open_hero_deploy_interface()
+                    else:
+                        self.registry.toggle_module(module, source="clickgui")
+                        self.selected_module = module
+                        self.toast(f"{module.name} {'enabled' if module.enabled else 'disabled'}")
+                        self.auto_save_config()
             self.invalidate_gui_cache()
             self.frame_scheduler.force()
         if self.drag and self.drag.get("type") in {"old_panel", "polar_window"}:
@@ -12747,6 +13072,30 @@ class PolarRMWindow(QOpenGLWidget):
             if self.handle_startup_key(event):
                 return
         key_name = self.key_name(event)
+        hero_module = self.registry.get("HeroLob")
+        hero_key = bool(
+            hero_module
+            and hero_module.keybind != "None"
+            and self.keybind_matches(hero_module.keybind, key_name, event)
+        )
+        if self.hero_deploy_ui.visible:
+            if event.key() == Qt.Key.Key_F8 or self.is_right_shift_event(event):
+                self.close_hero_deploy_interface(force=True)
+                self.set_clickgui_visible(True)
+            elif event.key() == Qt.Key.Key_Escape or (hero_key and not event.isAutoRepeat()):
+                self.close_hero_deploy_interface()
+            event.accept()
+            return
+        if hero_key and not event.isAutoRepeat() and not self.home_visible:
+            if int(self.state.deploy_mode) == 1:
+                self.open_hero_deploy_interface()
+            elif hero_module is not None and not hero_module.enabled:
+                self.registry.toggle_module(hero_module, source="keybind")
+                self.auto_save_config()
+            else:
+                self.open_hero_deploy_interface()
+            event.accept()
+            return
         chat_module = self.registry.get("MatchChat")
         quick_wheel_module = self.registry.get("QuickActionWheel")
         chat_key = bool(
@@ -13078,6 +13427,30 @@ class PolarRMWindow(QOpenGLWidget):
             self.return_to_jello_clickgui()
         elif action == "jello_noop":
             return
+        elif action == "hero_deploy_open":
+            self.open_hero_deploy_interface()
+        elif action == "hero_deploy_enter":
+            now = time.perf_counter()
+            if self.hero_deploy_ui.arm_confirmation(1, now):
+                self.send_hero_deploy_request(1)
+            else:
+                self.toast("Confirm ENTER deploy mode within 3 seconds")
+            self.frame_scheduler.force()
+        elif action == "hero_deploy_exit":
+            now = time.perf_counter()
+            if self.hero_deploy_ui.arm_confirmation(0, now):
+                self.send_hero_deploy_request(0)
+            else:
+                self.toast("Confirm EXIT deploy mode within 3 seconds")
+            self.frame_scheduler.force()
+        elif action == "hero_deploy_close":
+            self.close_hero_deploy_interface()
+        elif action == "hero_lob_preview":
+            self.handle_config_action("Preview Lob")
+        elif action == "hero_lob_arm":
+            self.handle_config_action("Arm Assisted Lob")
+        elif action == "hero_lob_disarm":
+            self.handle_config_action("Disarm Assisted Lob")
         elif action == "old_expand":
             self.old_panels[str(payload)]["expanded"] = not bool(self.old_panels[str(payload)]["expanded"])
             self.auto_save_config()
@@ -13241,6 +13614,12 @@ class PolarRMWindow(QOpenGLWidget):
             self.play_gui_transition_sound("expand")
             self.toast(f"GUI 模式：{setting.value}")
         hud = self.registry.get("HUD")
+        if hud and setting is hud.get_setting("Combat Preset"):
+            minecraft = self.registry.get("MinecraftCombatHUD")
+            selected = str(setting.value) == "Minecraft 1.21.11"
+            if minecraft is not None and minecraft.enabled != selected:
+                self.registry.toggle_module(minecraft, source="preset")
+            self.invalidate_transient_overlay_scene()
         if hud and setting is hud.get_setting("Right Display"):
             self.toast(f"右侧 HUD：{setting.value}")
         config_manager = self.registry.get("ConfigManager")
@@ -13272,6 +13651,8 @@ class PolarRMWindow(QOpenGLWidget):
             self.handle_calibration_action(action_name)
         elif action_name in ("Preview FX", "Test Elimination"):
             self.preview_elimination_fx(single=action_name == "Test Elimination")
+        elif action_name == "Open Deploy Interface":
+            self.open_hero_deploy_interface()
         elif action_name in (
             "Calibrate Lob Yaw",
             "Calibrate Lob Pitch",
@@ -13432,7 +13813,37 @@ class PolarRMWindow(QOpenGLWidget):
         self.auto_save_config()
 
     def on_module_toggled(self, module: Module, enabled: bool, source: str) -> None:
+        jello_click = bool(
+            source == "clickgui"
+            and self.gui_visible
+            and self.active_clickgui_mode() == PRIMARY_GUI_MODE
+        )
         self.invalidate_gui_cache()
+        if module.name == "MinecraftCombatHUD":
+            hud = self.registry.get("HUD")
+            preset = hud.get_setting("Combat Preset") if hud else None
+            if preset is not None:
+                if enabled:
+                    preset.value = "Minecraft 1.21.11"
+                elif str(preset.value) == "Minecraft 1.21.11":
+                    preset.value = "Polar"
+            self.invalidate_transient_overlay_scene()
+        elif module.name == "HeroLob":
+            if enabled and not self.home_visible:
+                self.open_hero_deploy_interface()
+            elif not enabled:
+                self.state.hero_lob_armed = False
+                if int(self.state.deploy_mode) == 1:
+                    # Deployment is an acknowledged referee state. Never hide
+                    # its explicit EXIT control merely because the helper
+                    # module was switched off.
+                    self.hero_deploy_ui.open(time.perf_counter())
+                    self.overlay_coordinator.request_modal(OverlayKind.HERO_DEPLOY)
+                    self.toast("HeroLob disabled; explicitly EXIT deploy mode")
+                else:
+                    self.close_hero_deploy_interface(force=True)
+        elif module.name == "SpinMode" and not str(source).startswith("auto_hit"):
+            self.auto_spin.operator_override()
         audio = self.registry.get("AudioFeedback")
         active = bool(
             audio
@@ -13440,11 +13851,7 @@ class PolarRMWindow(QOpenGLWidget):
             and self.setting_bool(audio, "Enabled", True)
             and self.setting_bool(audio, "Module Toggle Sounds", True)
         )
-        if (
-            source == "clickgui"
-            and self.gui_visible
-            and self.active_clickgui_mode() == PRIMARY_GUI_MODE
-        ):
+        if jello_click:
             hud = self.registry.get("HUD")
             self.ui_audio.jello_module_toggled(
                 enabled,

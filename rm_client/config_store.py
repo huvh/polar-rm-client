@@ -173,7 +173,13 @@ def apply_registry_config(registry: Any, data: dict[str, Any]) -> None:
             module.set_enabled(bool(module_data["enabled"]))
         keybind = module_data.get("keybind")
         if isinstance(keybind, str):
-            module.keybind = keybind or "None"
+            # HeroLob previously had no entry key and could remain enabled in
+            # a profile without any way to reopen its new dedicated console.
+            module.keybind = (
+                "K"
+                if module.name == "HeroLob" and keybind in {"", "None"}
+                else (keybind or "None")
+            )
         settings = module_data.get("settings")
         if not isinstance(settings, dict):
             continue

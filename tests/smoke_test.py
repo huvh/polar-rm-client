@@ -50,6 +50,7 @@ from rm_client.economy import (
 from rm_client.robot_profiles import apply_profile_to_state, profile_by_key, profiles_for_match, resolve_performance
 from rm_client.protocol import RefereeFrameCodec
 from rm_client.hero_lob import HeroLobPlanner
+from rm_client.auto_spin import ProjectileHitSpinController
 from rm_client.native_viewer_telemetry import parse_vehicle_telemetry, parse_video_0310_chunk
 from rm_client.backend.manager import BackendManager
 from rm_client.backend.readiness import audit_backend
@@ -77,6 +78,7 @@ from rm_client.ui.overlay_coordinator import OverlayCoordinator, OverlayKind
 from rm_client.ui.quick_action_wheel import DEFAULT_ACTIONS, QuickActionWheelState
 from rm_client.ui.economy_workspace import EconomyIslandState, EconomyWorkspaceLayer, adaptive_backdrop_dim
 from rm_client.ui.minecraft_hud import MinecraftCombatHudRenderer, vanilla_gui_scale
+from rm_client.ui.hero_deploy import HeroDeployInterfaceState, HeroDeployRenderer
 from rm_client.ui.startup_gl import TextureOrigin, normalize_image_for_texture
 from rm_client.ui.vision_motion import (
     AngleRenderTrack,
@@ -118,10 +120,16 @@ def test_registry() -> None:
     assert registry.get("SpinMode") is not None
     hero_lob = registry.get("HeroLob")
     assert hero_lob is not None and hero_lob.enabled is False
+    assert hero_lob.keybind == "K"
     assert hero_lob.get_setting("Arc").options == ["High", "Low"]
     assert hero_lob.get_setting("Arm Assisted Lob").kind == "action"
+    assert hero_lob.get_setting("Open Deploy Interface").kind == "action"
+    auto_spin = registry.get("AutoSpinOnHit")
+    assert auto_spin is not None and auto_spin.enabled is False
+    assert auto_spin.get_setting("Require Referee Link").value is True
+    assert auto_spin.get_setting("Duration").value == 2.5
     mc_hud = registry.get("MinecraftCombatHUD")
-    assert mc_hud is not None and mc_hud.enabled is True
+    assert mc_hud is not None and mc_hud.enabled is False
     assert mc_hud.get_setting("GUI Scale").value == "Auto"
     assert mc_hud.get_setting("Slot 9").value == "ClickGui"
     assert "HeroLob" in mc_hud.get_setting("Slot 1").options
@@ -881,6 +889,8 @@ def test_config_store_roundtrip() -> None:
         assert fresh.get("Armor3DESP").get_setting("Style").value == "Wireframe3D"
         apply_registry_config(fresh, {"modules": {"MatchMode": {"settings": {"Alliance": "Blue"}}}})
         assert fresh.get("AllianceProfile").get_setting("Side").value == "Blue"
+        apply_registry_config(fresh, {"modules": {"HeroLob": {"keybind": "None"}}})
+        assert fresh.get("HeroLob").keybind == "K"
 
 
 def test_jello_mode_migration() -> None:
@@ -2065,6 +2075,72 @@ def test_control_center_backdrop_treatment_only_invalidates_blur_when_needed() -
         blur_kernel="jello_box20",
     )
     assert compositor._backdrop_treatment.blur_kernel == "jello_box20"
+    compositor._blur_valid = True
+    compositor._treated_blur_valid = True
+    compositor.invalidate_transient_layers()
+    assert not compositor._blur_valid
+    assert not compositor._treated_blur_valid
+    assert not compositor._frame_glass_commands
+    assert not compositor._static_glass_commands
+    assert not compositor._backdrop_treatment.active
+
+
+def test_economy_respawn_close_and_reopen_restores_hud_scene() -> None:
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtGui import QImage
+    from PySide6.QtWidgets import QApplication
+    from rm_client.ui.polar_app import PolarRMWindow
+
+    app = QApplication.instance() or QApplication([])
+    window = PolarRMWindow()
+    window.timer.stop()
+    try:
+        window.home_visible = False
+        window.state.match_mode = "RMUC7v7"
+        window.state.robot_profile = "Infantry1"
+        window.state.current_health = 0
+        window.state.respawn_pending = True
+        window.state.respawn_can_free = True
+        window.state.economy_mock_mode = True
+        window.open_economy_workspace("revive")
+        offer = next(
+            item
+            for item in window.economy_offers("revive")
+            if item.key == "rmuc_confirm_respawn"
+        )
+        transaction = window.economy_bridge.submit(
+            window.state,
+            offer,
+            mock=True,
+            now=10.0,
+        )
+        assert transaction.status == "pending"
+        assert window.economy_bridge.update(window.state, now=10.5).status == "succeeded"
+        assert window.state.current_health > 0
+
+        window._gpu_static_ui_key = ("stale-economy",)
+        window._gpu_control_backdrop_key = ("stale-control",)
+        window._gpu_blur_source_key = ("stale-blur",)
+        window._gpu_motion_layer_ready = True
+        window.close_economy_workspace(play_sound=False)
+        assert window._gpu_static_ui_key is None
+        assert window._gpu_control_backdrop_key is None
+        assert window._gpu_blur_source_key is None
+        assert not window._gpu_motion_layer_ready
+
+        # The normal HUD is drawable immediately after close, and a second
+        # open at the same viewport creates a fresh economy session.
+        image = QImage(1280, 720, QImage.Format.Format_ARGB32_Premultiplied)
+        image.fill(0)
+        window.resize(1280, 720)
+        window.render(image)
+        assert any(bytes(image.constBits()))
+        window.open_economy_workspace("ammo")
+        assert window.economy_visible
+        assert window.overlay_coordinator.modal == OverlayKind.ECONOMY
+    finally:
+        window.close()
+    app.processEvents()
 
 
 def test_official_economy_status_decode() -> None:
@@ -2189,6 +2265,9 @@ def test_small_text_policy_and_island_icon_alpha() -> None:
     assert policy.sample_scale_for(12.0) == 2.0
     assert policy.sample_scale_for(18.0) == 2.0
     assert policy.sample_scale_for(19.0) == 1.0
+    assert policy.sample_scale_for(40.0, preserve_weight=True) == 2.0
+    assert abs(policy.sample_scale_for(80.0, preserve_weight=True) - 1.2) < 1e-6
+    assert policy.sample_scale_for(120.0, preserve_weight=True) == 1.0
     light = QFont("Sans Serif")
     light.setWeight(QFont.Weight.Light)
     preserved = policy.prepare_font(
@@ -2205,6 +2284,18 @@ def test_small_text_policy_and_island_icon_alpha() -> None:
     assert island_icon_coverage(1.0, 0.0) == 0.0
     assert island_icon_coverage(0.0, 1.0) == 0.0
     assert island_icon_coverage(1.0, 1.0) == 0.0
+
+    from rm_client.ui.polar_app import FrameScheduler
+
+    scheduler = FrameScheduler()
+    requested = [
+        tick
+        for tick in range(0, 71, 7)
+        if scheduler.should_request(tick / 1000.0, True, 144.0)
+    ]
+    # A 7 ms Windows timer should request every callback at 144 Hz rather
+    # than alternating 7/14 ms like the old relative-threshold scheduler.
+    assert requested == list(range(0, 71, 7))
 
 
 def test_texture_origin_and_combined_backdrop() -> None:
@@ -2437,7 +2528,9 @@ def test_overlay_coordinator_wheel_and_match_chat() -> None:
     assert coordinator.request_modal(OverlayKind.ECONOMY) is None
     assert not coordinator.begin_radial()
     assert coordinator.request_modal(OverlayKind.CLICKGUI) == OverlayKind.ECONOMY
-    assert coordinator.begin_chat() == OverlayKind.CLICKGUI
+    assert coordinator.request_modal(OverlayKind.HERO_DEPLOY) == OverlayKind.CLICKGUI
+    assert coordinator.modal == OverlayKind.HERO_DEPLOY
+    assert coordinator.begin_chat() == OverlayKind.HERO_DEPLOY
     assert coordinator.chat_input and coordinator.modal is None
     assert not coordinator.begin_radial()
     coordinator.end_chat()
@@ -2626,6 +2719,144 @@ def test_hero_lob_solver_and_fail_closed_readiness() -> None:
     assert not stale.ready and "telemetry stale" in stale.reasons
 
 
+def test_projectile_hit_auto_spin_uses_cumulative_deltas() -> None:
+    state = RobotState(current_stage="MATCH", current_health=500, current_buffer_energy=50)
+    manager = BackendManager(state=state)
+    baseline = {
+        "total_damage": 30,
+        "small_projectile_damage": 20,
+        "large_projectile_damage": 10,
+        "collision_damage": 0,
+        "killer_id": 103,
+    }
+    manager._apply_one(state, "RobotInjuryStat", baseline)
+    assert state.injury_stats_initialized
+    assert state.projectile_hit_revision == 0
+
+    second = dict(baseline, total_damage=42, small_projectile_damage=25, large_projectile_damage=17)
+    manager._apply_one(state, "RobotInjuryStat", second)
+    assert state.projectile_hit_revision == 1
+    assert state.last_projectile_damage_delta == 12
+    assert state.last_projectile_kind == "17mm+42mm"
+    assert state.last_projectile_killer_id == 103
+
+    # Non-projectile damage and a cumulative reset are both ignored.
+    manager._apply_one(state, "RobotInjuryStat", dict(second, total_damage=60, collision_damage=18))
+    assert state.projectile_hit_revision == 1
+    manager._apply_one(
+        state,
+        "RobotInjuryStat",
+        dict(second, total_damage=0, small_projectile_damage=0, large_projectile_damage=0),
+    )
+    assert state.projectile_hit_revision == 1
+    manager._apply_one(
+        state,
+        "RobotInjuryStat",
+        dict(second, total_damage=4, small_projectile_damage=4, large_projectile_damage=0),
+    )
+    assert state.projectile_hit_revision == 2
+    assert state.last_projectile_damage_delta == 4
+
+    registry = build_default_registry()
+    feature = registry.get("AutoSpinOnHit")
+    feature.set_enabled(True)
+    controller = ProjectileHitSpinController()
+    controller.seen_revision = state.projectile_hit_revision
+    state.projectile_hit_revision += 1
+    state.last_projectile_damage_delta = 16
+    directive = controller.update(
+        state,
+        feature,
+        spin_enabled=False,
+        referee_link=True,
+        now=10.0,
+    )
+    assert directive.action == "enable" and controller.owns_spin
+    assert controller.update(
+        state,
+        feature,
+        spin_enabled=True,
+        referee_link=True,
+        now=12.4,
+    ).action == "none"
+    expiry = controller.update(
+        state,
+        feature,
+        spin_enabled=True,
+        referee_link=True,
+        now=12.6,
+    )
+    assert expiry.action == "disable" and not controller.owns_spin
+
+    # Existing operator spin is observed but never claimed or auto-disabled.
+    state.projectile_hit_revision += 1
+    operator = controller.update(
+        state,
+        feature,
+        spin_enabled=True,
+        referee_link=True,
+        now=14.0,
+    )
+    assert operator.action == "none" and not controller.owns_spin
+    manager.shutdown()
+
+
+def test_hero_deploy_console_state_and_responsive_render() -> None:
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtGui import QImage, QPainter
+    from PySide6.QtWidgets import QApplication
+
+    app = QApplication.instance() or QApplication([])
+    interface = HeroDeployInterfaceState()
+    interface.open(1.0)
+    assert not interface.arm_confirmation(1, 1.1)
+    assert interface.arm_confirmation(1, 2.0)
+    interface.begin_request(1, 2.0, mock=True)
+    assert interface.sync(0, 3.99) is None
+    assert interface.sync(0, 4.0) == 1
+    interface.begin_request(0, 5.0, mock=False)
+    assert interface.sync(0, 5.1) is None
+    assert interface.pending_mode is None
+
+    registry = build_default_registry()
+    module = registry.get("HeroLob")
+    module.set_enabled(True)
+    state = RobotState(robot_profile="Hero", deploy_mode=0)
+    state.native_telemetry_at = time.perf_counter()
+    state.native_gimbal_online = True
+    state.native_bullet_count = 12
+    state.native_bullet_speed = 16.0
+    state.hero_lob_yaw_calibrated = True
+    state.hero_lob_pitch_calibrated = True
+    state.hero_lob_relocalization_valid = True
+    solution, readiness = HeroLobPlanner.preview_from_state(state, module, hero_range_profile=True)
+    renderer = HeroDeployRenderer()
+    for width, height in ((1000, 620), (1280, 720), (1600, 900), (1920, 1080), (2560, 1440)):
+        layout = renderer.layout(width, height)
+        assert layout.panel.left() >= 0 and layout.panel.top() >= 0
+        assert layout.panel.right() <= width and layout.panel.bottom() <= height
+        assert all(layout.panel.contains(button) for button in layout.buttons)
+        image = QImage(width, height, QImage.Format.Format_ARGB32_Premultiplied)
+        image.fill(0)
+        painter = QPainter(image)
+        targets = renderer.draw(
+            painter,
+            width,
+            height,
+            state=state,
+            module=module,
+            interface=interface,
+            solution=solution,
+            readiness=readiness,
+            now=6.0,
+        )
+        painter.end()
+        assert len(targets) == 6
+        assert all(layout.panel.contains(target.rect) for target in targets)
+        assert image.pixelColor(int(layout.panel.center().x()), int(layout.panel.center().y())).alpha() > 0
+    app.processEvents()
+
+
 def test_minecraft_hud_assets_layout_and_render() -> None:
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     from PySide6.QtCore import QPointF
@@ -2736,6 +2967,8 @@ if __name__ == "__main__":
     test_prediction_geometry_is_bounded()
     test_robot_profiles_and_economy_rules()
     test_economy_workspace_top_anchor_and_reversal()
+    test_control_center_backdrop_treatment_only_invalidates_blur_when_needed()
+    test_economy_respawn_close_and_reopen_restores_hud_scene()
     test_official_economy_status_decode()
     test_robot_launcher_and_polar_inertial_scroll()
     test_small_text_policy_and_island_icon_alpha()
@@ -2746,6 +2979,8 @@ if __name__ == "__main__":
     test_overlay_coordinator_wheel_and_match_chat()
     test_native_viewer_telemetry_and_video_0310()
     test_hero_lob_solver_and_fail_closed_readiness()
+    test_projectile_hit_auto_spin_uses_cumulative_deltas()
+    test_hero_deploy_console_state_and_responsive_render()
     test_minecraft_hud_assets_layout_and_render()
     test_estop_zero_frame_bypass_and_backend_readiness()
     test_liquid_glass_snapshot_stability()
