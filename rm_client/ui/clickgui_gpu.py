@@ -9,7 +9,17 @@ import struct
 import time
 
 from PySide6.QtCore import QPointF, QRectF, Qt
-from PySide6.QtGui import QColor, QFont, QFontMetricsF, QImage, QPainter
+from PySide6.QtGui import (
+    QColor,
+    QFont,
+    QFontDatabase,
+    QFontMetricsF,
+    QImage,
+    QPainter,
+    QTextCharFormat,
+    QTextLayout,
+    QTextOption,
+)
 from PySide6.QtOpenGL import (
     QOpenGLBuffer,
     QOpenGLShader,
@@ -66,6 +76,12 @@ class GpuText:
     rotation_origin: QPointF | None = None
     raster_scale: float = 1.0
     preserve_weight: bool = False
+    # Jello text is shaped and rasterised as a complete QTextLayout line.
+    # Keeping this opt-in leaves every legacy ClickGUI atlas untouched.
+    text_profile: str = ""
+    # Animated Jello children move as one textured line.  Once settled only
+    # the line origin/baseline is snapped; individual glyphs are never rounded.
+    device_pixel_snap: bool = True
 
 
 @dataclass(frozen=True)
@@ -74,6 +90,7 @@ class GpuImage:
     source: str
     tint: QColor = field(default_factory=lambda: QColor(255, 255, 255, 255))
     clip: QRectF | None = None
+    nearest: bool = False
 
 
 @dataclass(frozen=True)
@@ -99,6 +116,8 @@ class ClickGuiDrawList:
     default_text_shadow: bool = True
     default_text_raster_scale: float = 1.0
     default_text_preserve_weight: bool = False
+    default_text_profile: str = ""
+    default_text_device_snap: bool = True
     # High-frequency builders such as Jello create fresh Qt value objects and
     # never mutate them after submission.  They may opt out of a second round
     # of implicit-shared QRect/QColor/QFont copies for substantially lower
@@ -125,7 +144,7 @@ class ClickGuiDrawList:
         self.rects.append(payload)
         self._append(payload)
 
-    def text(self, rect: QRectF, text: str, font: QFont, color: QColor, alignment: Qt.AlignmentFlag = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, clip: QRectF | None = None, *, shadow: bool | None = None, rotation_degrees: float = 0.0, render_scale: float = 1.0, rotation_origin: QPointF | None = None, raster_scale: float | None = None, preserve_weight: bool | None = None) -> None:
+    def text(self, rect: QRectF, text: str, font: QFont, color: QColor, alignment: Qt.AlignmentFlag = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, clip: QRectF | None = None, *, shadow: bool | None = None, rotation_degrees: float = 0.0, render_scale: float = 1.0, rotation_origin: QPointF | None = None, raster_scale: float | None = None, preserve_weight: bool | None = None, text_profile: str | None = None, device_pixel_snap: bool | None = None) -> None:
         if text:
             draw_shadow = self.default_text_shadow if shadow is None else bool(shadow)
             payload = GpuText(
@@ -156,11 +175,17 @@ class ClickGuiDrawList:
                     if preserve_weight is None
                     else bool(preserve_weight)
                 ),
+                str(self.default_text_profile if text_profile is None else text_profile),
+                (
+                    self.default_text_device_snap
+                    if device_pixel_snap is None
+                    else bool(device_pixel_snap)
+                ),
             )
             self.texts.append(payload)
             self._append(payload)
 
-    def image(self, rect: QRectF, source: str | Path, tint: QColor | None = None, clip: QRectF | None = None) -> None:
+    def image(self, rect: QRectF, source: str | Path, tint: QColor | None = None, clip: QRectF | None = None, *, nearest: bool = False) -> None:
         # Jello submits the same absolute shadow/options assets dozens of
         # times per frame.  ``Path.resolve()`` calls GetFinalPathNameByHandle
         # on Windows, which alone cost ~20 ms at 2K/2x even though the files
@@ -176,6 +201,7 @@ class ClickGuiDrawList:
                 else (tint if tint is not None else QColor(255, 255, 255, 255))
             ),
             QRectF(clip) if clip is not None and self.copy_payloads else clip,
+            bool(nearest),
         )
         self.images.append(payload)
         self._append(payload)
@@ -195,6 +221,31 @@ class ClickGuiDrawList:
 class _GlyphAtlas:
     texture: QOpenGLTexture
     glyphs: dict[str, "_Glyph"]
+    raster_font: QFont
+    ratio: float
+    sample_scale: float
+    raster_scale: float
+
+
+@dataclass(frozen=True)
+class _ShapedLine:
+    u0: float
+    v0: float
+    u1: float
+    v1: float
+    advance: float
+    offset_x: float
+    offset_y: float
+    width: float
+    height: float
+    line_height: float
+    ascent: float
+
+
+@dataclass
+class _ShapedTextAtlas:
+    texture: QOpenGLTexture
+    lines: dict[str, _ShapedLine]
     raster_font: QFont
     ratio: float
     sample_scale: float
@@ -289,8 +340,20 @@ class ClickGuiGpuRenderer:
         self.text_uniforms: dict[str, int] = {}
         self.image_uniforms: dict[str, int] = {}
         self.atlases: dict[tuple[str, float, int, float, float, bool], _GlyphAtlas] = {}
+        self.shaped_atlases: dict[
+            tuple[str, float, int, float, float, bool], _ShapedTextAtlas
+        ] = {}
         self.image_textures: dict[str, QOpenGLTexture] = {}
+        self._image_nearest: dict[str, bool] = {}
         self._atlas_chars: dict[tuple[str, float, int, float, float, bool], set[str]] = {}
+        self._shaped_texts: dict[
+            tuple[str, float, int, float, float, bool], set[str]
+        ] = {}
+        self._shaped_layouts: dict[
+            tuple[tuple[str, float, int, float, float, bool], str],
+            tuple[QTextLayout, float, float, float],
+        ] = {}
+        self._jello_cjk_family_cache = ""
         self.draw_calls = 0
         self._pixel_ratio = 1.0
         self.last_submit_ms = 0.0
@@ -341,21 +404,30 @@ class ClickGuiGpuRenderer:
         *,
         raster_scale: float = 1.0,
         preserve_weight: bool = False,
+        text_profile: str = "",
     ) -> None:
         """Populate stable glyph atlases before an interactive GUI open."""
         if not self.available:
             return
         self._pixel_ratio = max(1.0, float(device_pixel_ratio))
-        characters = set("".join(str(label) for label in labels))
-        if not characters:
+        strings = {str(label) for label in labels if str(label)}
+        if not strings:
             return
         for font in fonts:
-            self._ensure_atlas(
-                font,
-                "".join(characters),
-                raster_scale=raster_scale,
-                preserve_weight=preserve_weight,
-            )
+            if str(text_profile) == "jello":
+                self._ensure_shaped_atlas(
+                    font,
+                    strings,
+                    raster_scale=raster_scale,
+                    preserve_weight=preserve_weight,
+                )
+            else:
+                self._ensure_atlas(
+                    font,
+                    "".join(sorted(set("".join(strings)))),
+                    raster_scale=raster_scale,
+                    preserve_weight=preserve_weight,
+                )
 
     def prewarm_images(self, sources) -> None:
         """Upload stable UI sprites while an OpenGL context is current."""
@@ -623,15 +695,19 @@ class ClickGuiGpuRenderer:
             else list(draw_list.texts)
         )
         for command in source:
-            atlas = self.atlases.get(
-                self._font_key(
-                    command.font,
-                    command.raster_scale,
-                    command.preserve_weight,
-                )
+            key = self._font_key(
+                command.font,
+                command.raster_scale,
+                command.preserve_weight,
             )
-            if atlas is None or any(character not in atlas.glyphs for character in command.text):
-                return False
+            if command.text_profile == "jello":
+                shaped = self.shaped_atlases.get(key)
+                if shaped is None or command.text not in shaped.lines:
+                    return False
+            else:
+                atlas = self.atlases.get(key)
+                if atlas is None or any(character not in atlas.glyphs for character in command.text):
+                    return False
         image_source = (
             [command.payload for command in draw_list.commands if isinstance(command.payload, GpuImage)]
             if draw_list.commands
@@ -647,6 +723,10 @@ class ClickGuiGpuRenderer:
             tuple[str, float, int, float, float, bool],
             tuple[QFont, set[str], float, bool],
         ] = {}
+        shaped_grouped: dict[
+            tuple[str, float, int, float, float, bool],
+            tuple[QFont, set[str], float, bool],
+        ] = {}
         source = (
             [command.payload for command in draw_list.commands if isinstance(command.payload, GpuText)]
             if draw_list.commands
@@ -658,14 +738,18 @@ class ClickGuiGpuRenderer:
                 command.raster_scale,
                 command.preserve_weight,
             )
-            if key not in grouped:
-                grouped[key] = (
+            destination = shaped_grouped if command.text_profile == "jello" else grouped
+            if key not in destination:
+                destination[key] = (
                     QFont(command.font),
                     set(),
                     command.raster_scale,
                     command.preserve_weight,
                 )
-            grouped[key][1].update(command.text)
+            if command.text_profile == "jello":
+                destination[key][1].add(command.text)
+            else:
+                destination[key][1].update(command.text)
         for font, characters, raster_scale, preserve_weight in grouped.values():
             if characters:
                 self._ensure_atlas(
@@ -674,9 +758,17 @@ class ClickGuiGpuRenderer:
                     raster_scale=raster_scale,
                     preserve_weight=preserve_weight,
                 )
+        for font, strings, raster_scale, preserve_weight in shaped_grouped.values():
+            if strings:
+                self._ensure_shaped_atlas(
+                    font,
+                    strings,
+                    raster_scale=raster_scale,
+                    preserve_weight=preserve_weight,
+                )
         self.atlas_snapshot = GlyphAtlasSnapshot(
             self.atlas_generation,
-            tuple(sorted(self.atlases)),
+            tuple(sorted(set(self.atlases) | set(self.shaped_atlases))),
         )
 
     def _prepare_images(self, draw_list: ClickGuiDrawList) -> None:
@@ -718,6 +810,7 @@ class ClickGuiGpuRenderer:
                 payload.source,
                 faded(payload.tint),
                 QRectF(payload.clip) if payload.clip is not None else None,
+                payload.nearest,
             )
         return GpuText(
             QRectF(payload.rect),
@@ -732,6 +825,8 @@ class ClickGuiGpuRenderer:
             QPointF(payload.rotation_origin) if payload.rotation_origin is not None else None,
             payload.raster_scale,
             payload.preserve_weight,
+            payload.text_profile,
+            payload.device_pixel_snap,
         )
 
     def _draw_ordered_commands(
@@ -859,6 +954,7 @@ class ClickGuiGpuRenderer:
         texture.setMagnificationFilter(QOpenGLTexture.Filter.Linear)
         texture.setWrapMode(QOpenGLTexture.WrapMode.ClampToEdge)
         self.image_textures[source] = texture
+        self._image_nearest[source] = False
         return texture
 
     def _draw_image_batches(
@@ -887,6 +983,15 @@ class ClickGuiGpuRenderer:
             texture = self.image_textures.get(command.source)
             if texture is None:
                 raise RuntimeError(f"ClickGUI image was not prepared: {command.source}")
+            if self._image_nearest.get(command.source, False) != command.nearest:
+                filtering = (
+                    QOpenGLTexture.Filter.Nearest
+                    if command.nearest
+                    else QOpenGLTexture.Filter.Linear
+                )
+                texture.setMinificationFilter(filtering)
+                texture.setMagnificationFilter(filtering)
+                self._image_nearest[command.source] = command.nearest
             program.setUniformValue(
                 uniforms["rect"],
                 float(command.rect.left() * ratio),
@@ -924,6 +1029,235 @@ class ClickGuiGpuRenderer:
         if clip is None:
             return None
         return (round(clip.x(), 2), round(clip.y(), 2), round(clip.width(), 2), round(clip.height(), 2))
+
+    @staticmethod
+    def _is_cjk_character(character: str) -> bool:
+        """Return whether Jello must use the explicit Chinese UI face.
+
+        Sigma's bundled Helvetica does not contain CJK.  Letting DirectWrite
+        choose a fallback made the same line alternate between SimSun and UI
+        sans faces at different DPRs.  Cover Han, CJK punctuation/full-width,
+        kana and Hangul here so fallback is deterministic.
+        """
+
+        if not character:
+            return False
+        codepoint = ord(character)
+        return any(
+            start <= codepoint <= end
+            for start, end in (
+                (0x2E80, 0x2FFF),
+                (0x3000, 0x30FF),
+                (0x3100, 0x312F),
+                (0x31A0, 0x31BF),
+                (0x31F0, 0x31FF),
+                (0x3400, 0x4DBF),
+                (0x4E00, 0x9FFF),
+                (0xAC00, 0xD7AF),
+                (0xF900, 0xFAFF),
+                (0xFF00, 0xFFEF),
+                (0x20000, 0x2FA1F),
+            )
+        )
+
+    def _jello_cjk_family(self) -> str:
+        if self._jello_cjk_family_cache:
+            return self._jello_cjk_family_cache
+        available = set(QFontDatabase.families())
+        for family in ("Microsoft YaHei UI", "Microsoft YaHei", "DengXian"):
+            if family in available:
+                self._jello_cjk_family_cache = family
+                return family
+        family = QFontDatabase.systemFont(QFontDatabase.SystemFont.GeneralFont).family()
+        self._jello_cjk_family_cache = family or "Sans Serif"
+        return self._jello_cjk_family_cache
+
+    def _jello_text_layout(self, text: str, raster_font: QFont) -> tuple[QTextLayout, float, float, float]:
+        """Shape one immutable Jello line with deterministic CJK ranges."""
+
+        layout = QTextLayout(str(text), raster_font)
+        option = QTextOption()
+        option.setWrapMode(QTextOption.WrapMode.NoWrap)
+        option.setUseDesignMetrics(False)
+        layout.setTextOption(option)
+
+        ranges: list[QTextLayout.FormatRange] = []
+        start = -1
+        for index, character in enumerate(str(text) + "\0"):
+            is_cjk = index < len(str(text)) and self._is_cjk_character(character)
+            if is_cjk and start < 0:
+                start = index
+            elif not is_cjk and start >= 0:
+                cjk_font = QFont(raster_font)
+                cjk_font.setFamily(self._jello_cjk_family())
+                cjk_font.setStyleName("Regular")
+                cjk_font.setWeight(QFont.Weight.Normal)
+                cjk_font.setKerning(True)
+                cjk_font.setHintingPreference(QFont.HintingPreference.PreferFullHinting)
+                text_format = QTextCharFormat()
+                text_format.setFont(cjk_font)
+                text_range = QTextLayout.FormatRange()
+                text_range.start = start
+                text_range.length = index - start
+                text_range.format = text_format
+                ranges.append(text_range)
+                start = -1
+        if ranges:
+            layout.setFormats(ranges)
+        layout.setCacheEnabled(True)
+        layout.beginLayout()
+        line = layout.createLine()
+        if line.isValid():
+            line.setLineWidth(1.0e7)
+            line.setPosition(QPointF(0.0, 0.0))
+        layout.endLayout()
+        if not line.isValid():
+            return layout, 0.0, 1.0, 1.0
+        return (
+            layout,
+            max(0.0, float(line.naturalTextWidth())),
+            max(1.0, float(line.height())),
+            max(0.0, float(line.ascent())),
+        )
+
+    def _ensure_shaped_atlas(
+        self,
+        font: QFont,
+        texts,
+        *,
+        raster_scale: float = 1.0,
+        preserve_weight: bool = False,
+    ) -> _ShapedTextAtlas:
+        """Publish a QTextLayout line atlas before native painting begins.
+
+        A line is a single textured quad.  Kerning, fallback metrics and glyph
+        advances are therefore frozen by Qt's shaping engine and cannot jitter
+        as Jello's parent transform moves through fractional device pixels.
+        """
+
+        raster_scale = max(0.25, float(raster_scale))
+        key = self._font_key(font, raster_scale, preserve_weight)
+        requested = {str(value) for value in texts if str(value)}
+        known = self._shaped_texts.setdefault(key, set())
+        before = set(known)
+        known.update(requested)
+        # A settings description can be supplied by a plugin.  Keep the cache
+        # bounded while always retaining strings needed by this frame.
+        if len(known) > 2048:
+            retained = set(sorted(known)[: max(0, 2048 - len(requested))])
+            known.intersection_update(retained | requested)
+        current = self.shaped_atlases.get(key)
+        if current is not None and known == before:
+            self.atlas_hits += 1
+            return current
+        if self._atlas_locked:
+            raise RuntimeError("shaped text atlas mutation attempted during a render pass")
+        self.atlas_misses += 1
+
+        if font.pointSizeF() > 0:
+            logical_px = font.pointSizeF() * (96.0 / 72.0)
+        elif font.pixelSize() > 0:
+            logical_px = float(font.pixelSize())
+        else:
+            logical_px = 12.0
+        physical_px = max(1.0, logical_px * self._pixel_ratio * raster_scale)
+        sample_scale = self.small_text_policy.sample_scale_for(
+            physical_px,
+            preserve_weight=preserve_weight,
+        )
+        raster_font = self.small_text_policy.prepare_font(
+            font,
+            physical_px,
+            sample_scale,
+            preserve_weight=preserve_weight,
+        )
+        raster_font.setKerning(True)
+
+        padding = max(3, int(math.ceil(sample_scale * self._pixel_ratio)))
+        prepared: list[tuple[str, QTextLayout, int, int, float, float, float]] = []
+        for value in sorted(known):
+            layout_key = (key, value)
+            shaped = self._shaped_layouts.get(layout_key)
+            if shaped is None:
+                shaped = self._jello_text_layout(value, raster_font)
+                self._shaped_layouts[layout_key] = shaped
+            layout, advance, line_height, ascent = shaped
+            cell_width = max(1, int(math.ceil(advance)) + padding * 2 + 2)
+            cell_height = max(1, int(math.ceil(line_height)) + padding * 2 + 2)
+            if cell_width > 4096 or cell_height > 4096:
+                raise RuntimeError(f"shaped Jello line exceeds 4096px: {value[:80]!r}")
+            prepared.append((value, layout, cell_width, cell_height, advance, line_height, ascent))
+
+        def pack(atlas_width: int):
+            placements: list[tuple[int, int]] = []
+            x = y = row_height = 0
+            for _value, _layout, cell_width, cell_height, *_rest in prepared:
+                if x and x + cell_width > atlas_width:
+                    x = 0
+                    y += row_height
+                    row_height = 0
+                placements.append((x, y))
+                x += cell_width
+                row_height = max(row_height, cell_height)
+            return placements, max(1, y + row_height)
+
+        maximum_width = max((item[2] for item in prepared), default=1)
+        total_area = sum(item[2] * item[3] for item in prepared)
+        target_width = max(maximum_width, int(math.ceil(math.sqrt(max(1, total_area)) / 64.0)) * 64)
+        target_width = max(64, min(4096, target_width))
+        placements, atlas_height = pack(target_width)
+        if atlas_height > 4096 and target_width < 4096:
+            target_width = 4096
+            placements, atlas_height = pack(target_width)
+        if atlas_height > 4096:
+            raise RuntimeError(f"shaped Jello atlas exceeds 4096px for {font.family()} {font.pointSizeF():g}pt")
+
+        atlas_width = max(1, target_width)
+        image = QImage(atlas_width, max(1, atlas_height), QImage.Format.Format_ARGB32_Premultiplied)
+        image.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(image)
+        painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
+        painter.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, False)
+        painter.setPen(QColor(255, 255, 255, 255))
+        normalization_scale = max(0.25, sample_scale * raster_scale)
+        lines: dict[str, _ShapedLine] = {}
+        for item, (atlas_x, atlas_y) in zip(prepared, placements):
+            value, layout, cell_width, cell_height, advance, line_height, ascent = item
+            layout.draw(painter, QPointF(atlas_x + padding + 1, atlas_y + padding + 1))
+            lines[value] = _ShapedLine(
+                atlas_x / atlas_width,
+                atlas_y / atlas_height,
+                (atlas_x + cell_width) / atlas_width,
+                (atlas_y + cell_height) / atlas_height,
+                advance / normalization_scale,
+                -(padding + 1) / normalization_scale,
+                -(padding + 1) / normalization_scale,
+                cell_width / normalization_scale,
+                cell_height / normalization_scale,
+                line_height / normalization_scale,
+                ascent / normalization_scale,
+            )
+        painter.end()
+
+        texture = QOpenGLTexture(image, QOpenGLTexture.MipMapGeneration.DontGenerateMipMaps)
+        texture.setMinificationFilter(QOpenGLTexture.Filter.Linear)
+        texture.setMagnificationFilter(QOpenGLTexture.Filter.Linear)
+        texture.setWrapMode(QOpenGLTexture.WrapMode.ClampToEdge)
+        published = _ShapedTextAtlas(
+            texture,
+            lines,
+            raster_font,
+            self._pixel_ratio,
+            sample_scale,
+            raster_scale,
+        )
+        old = self.shaped_atlases.get(key)
+        self.shaped_atlases[key] = published
+        self.atlas_generation += 1
+        if old is not None:
+            old.texture.destroy()
+        return published
 
     def _ensure_atlas(
         self,
@@ -1076,10 +1410,21 @@ class ClickGuiGpuRenderer:
         required = {
             self._font_key(command.font, command.raster_scale, command.preserve_weight)
             for command in commands
+            if command.text_profile != "jello"
         }
         missing = required - set(self.atlases)
         if missing:
             raise RuntimeError(f"glyph atlas was not prepared for {len(missing)} font page(s)")
+        shaped_required = {
+            self._font_key(command.font, command.raster_scale, command.preserve_weight)
+            for command in commands
+            if command.text_profile == "jello"
+        }
+        shaped_missing = shaped_required - set(self.shaped_atlases)
+        if shaped_missing:
+            raise RuntimeError(
+                f"shaped text atlas was not prepared for {len(shaped_missing)} font page(s)"
+            )
 
         # Preserve command order. Only adjacent text sharing a font page and
         # clip may be submitted together; global font grouping moved labels
@@ -1092,6 +1437,7 @@ class ClickGuiGpuRenderer:
                 commands[index].preserve_weight,
             )
             clip_key = self._clip_key(commands[index].clip)
+            profile = commands[index].text_profile
             end = index + 1
             while (
                 end < len(commands)
@@ -1101,6 +1447,7 @@ class ClickGuiGpuRenderer:
                     commands[end].preserve_weight,
                 ) == font_key
                 and self._clip_key(commands[end].clip) == clip_key
+                and commands[end].text_profile == profile
             ):
                 end += 1
             items = commands[index:end]
@@ -1131,13 +1478,125 @@ class ClickGuiGpuRenderer:
                         ),
                         item.raster_scale,
                         item.preserve_weight,
+                        item.text_profile,
+                        item.device_pixel_snap,
                     )
                 )
-            atlas = self.atlases[font_key]
-            if shadows:
-                self._draw_text_batch(functions, shadows, atlas, width, height)
-            self._draw_text_batch(functions, items, atlas, width, height)
+            if profile == "jello":
+                shaped_atlas = self.shaped_atlases[font_key]
+                if shadows:
+                    self._draw_shaped_text_batch(functions, shadows, shaped_atlas, width, height)
+                self._draw_shaped_text_batch(functions, items, shaped_atlas, width, height)
+            else:
+                atlas = self.atlases[font_key]
+                if shadows:
+                    self._draw_text_batch(functions, shadows, atlas, width, height)
+                self._draw_text_batch(functions, items, atlas, width, height)
             index = end
+
+    def _draw_shaped_text_batch(
+        self,
+        functions,
+        commands: list[GpuText],
+        atlas: _ShapedTextAtlas,
+        width: int,
+        height: int,
+    ) -> None:
+        """Draw every cached QTextLayout as one sub-pixel-translated quad."""
+
+        assert self.text_program is not None
+        ratio = self._pixel_ratio
+        packed = bytearray()
+        for command in commands:
+            line = atlas.lines.get(command.text)
+            if line is None:
+                continue
+            draw_scale = max(0.01, float(command.render_scale))
+            rect = QRectF(
+                command.rect.left() * ratio,
+                command.rect.top() * ratio,
+                command.rect.width() * ratio,
+                command.rect.height() * ratio,
+            )
+            text_width = line.advance * draw_scale
+            line_height = min(rect.height(), line.line_height * draw_scale)
+            if command.alignment & Qt.AlignmentFlag.AlignHCenter:
+                x = rect.center().x() - min(rect.width(), text_width) * 0.5
+            elif command.alignment & Qt.AlignmentFlag.AlignRight:
+                x = rect.right() - min(rect.width(), text_width)
+            else:
+                x = rect.left()
+            if command.alignment & Qt.AlignmentFlag.AlignVCenter:
+                y = rect.center().y() - line_height * 0.5
+            elif command.alignment & Qt.AlignmentFlag.AlignBottom:
+                y = rect.bottom() - line_height
+            else:
+                y = rect.top()
+
+            snap = bool(
+                command.device_pixel_snap
+                and abs(command.rotation_degrees) < 0.001
+            )
+            if snap:
+                # Snap only the complete line.  Kerning positions are baked
+                # into the texture and never independently rounded.
+                x = float(round(x))
+                baseline = float(round(y + line.ascent * draw_scale))
+                y = baseline - line.ascent * draw_scale
+            glyph_x = x + line.offset_x * draw_scale
+            glyph_y = y + line.offset_y * draw_scale
+            glyph_width = line.width * draw_scale
+            glyph_height = line.height * draw_scale
+            if glyph_width <= 0.0 or glyph_height <= 0.0:
+                continue
+            if command.rotation_origin is not None:
+                pivot_x = command.rotation_origin.x() * ratio
+                pivot_y = command.rotation_origin.y() * ratio
+            else:
+                pivot_x = glyph_x + glyph_width * 0.5
+                pivot_y = glyph_y + glyph_height * 0.5
+            packed.extend(
+                struct.pack(
+                    "15f",
+                    glyph_x,
+                    glyph_y,
+                    glyph_width,
+                    glyph_height,
+                    line.u0,
+                    line.v0,
+                    line.u1,
+                    line.v1,
+                    *self._rgba(command.color),
+                    math.radians(command.rotation_degrees),
+                    pivot_x,
+                    pivot_y,
+                )
+            )
+        if not packed:
+            return
+        program = self.text_program
+        program.bind()
+        program.setUniformValue(self.text_uniforms["viewport"], float(width), float(height))
+        atlas.texture.bind(0)
+        program.setUniformValue(self.text_uniforms["glyph"], 0)
+        self._bind_quad(program)
+        self.instance_buffer.bind()
+        self.instance_buffer.allocate(bytes(packed), len(packed))
+        offsets = ((1, 4, 0), (2, 4, 16), (3, 4, 32), (4, 1, 48), (5, 2, 52))
+        stride = 15 * 4
+        for location, size, offset in offsets:
+            program.enableAttributeArray(location)
+            program.setAttributeBuffer(location, _GL_FLOAT, offset, size, stride)
+            functions.glVertexAttribDivisor(location, 1)
+        functions.glDrawArraysInstanced(_GL_TRIANGLE_STRIP, 0, 4, len(packed) // stride)
+        for location, _size, _offset in offsets:
+            functions.glVertexAttribDivisor(location, 0)
+            program.disableAttributeArray(location)
+        self.instance_buffer.release()
+        self._unbind_quad(program)
+        atlas.texture.release()
+        program.release()
+        self.draw_calls += 1
 
     def _draw_text_batch(self, functions, commands: list[GpuText], atlas: _GlyphAtlas, width: int, height: int) -> None:
         assert self.text_program is not None
@@ -1175,7 +1634,8 @@ class ClickGuiGpuRenderer:
             # aligned at DPR=2 and must not be treated as an animated/fuzzy
             # coordinate.  Rotated arrows retain sub-pixel movement.
             snap = bool(
-                abs(command.rotation_degrees) < 0.001
+                command.device_pixel_snap
+                and abs(command.rotation_degrees) < 0.001
                 and abs(command.rect.left() * ratio - round(command.rect.left() * ratio)) < 0.001
                 and abs(command.rect.top() * ratio - round(command.rect.top() * ratio)) < 0.001
             )
@@ -1271,9 +1731,15 @@ class ClickGuiGpuRenderer:
             atlas.texture.destroy()
         self.atlases.clear()
         self._atlas_chars.clear()
+        for atlas in self.shaped_atlases.values():
+            atlas.texture.destroy()
+        self.shaped_atlases.clear()
+        self._shaped_texts.clear()
+        self._shaped_layouts.clear()
         for texture in self.image_textures.values():
             texture.destroy()
         self.image_textures.clear()
+        self._image_nearest.clear()
         if self.buffer.isCreated():
             self.buffer.destroy()
         if self.instance_buffer.isCreated():

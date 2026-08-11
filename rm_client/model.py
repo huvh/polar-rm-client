@@ -1367,6 +1367,14 @@ def build_default_registry() -> ModuleRegistry:
             "None",
             [
                 mode_setting("GUI Scale", "Auto", ["Auto", "1x", "2x", "3x", "4x", "5x", "6x", "7x", "8x"]),
+                number_setting(
+                    "Scale Multiplier",
+                    1.0,
+                    0.50,
+                    2.00,
+                    0.05,
+                    description="仅缩放原版 Minecraft HUD 像素层；外挂覆盖层保持独立缩放。",
+                ),
                 *[
                     mode_setting(f"Slot {index}", default, ["Empty", default])
                     for index, default in enumerate(

@@ -42,6 +42,8 @@ class GpuSmokeWidget(QOpenGLWidget):
             QFont("Microsoft YaHei UI", 28),
             QColor("#f7f9ff"),
             Qt.AlignmentFlag.AlignCenter,
+            text_profile="jello",
+            preserve_weight=True,
         )
         commands.text(
             QRectF(646, 54, 22, 28),
@@ -65,6 +67,22 @@ class GpuSmokeWidget(QOpenGLWidget):
             # Publish glyph pages before native painting. The render pass is
             # read-only and cannot replace atlas textures halfway through.
             self.renderer.prepare_frame(commands, self.devicePixelRatioF())
+            stable_generation = self.renderer.atlas_generation
+            stable_pages = (
+                len(self.renderer.atlases),
+                len(self.renderer.shaped_atlases),
+            )
+            for _ in range(100):
+                self.renderer.prepare_frame(commands, self.devicePixelRatioF())
+            self.result = bool(
+                self.result
+                and self.renderer.atlas_generation == stable_generation
+                and stable_pages
+                == (
+                    len(self.renderer.atlases),
+                    len(self.renderer.shaped_atlases),
+                )
+            )
         painter.beginNativePainting()
         self.result = bool(
             self.result

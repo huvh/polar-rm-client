@@ -76,7 +76,7 @@ from rm_client.ui.animation import (
 )
 from rm_client.ui.gui_cache import ClickGuiLayerCache
 from rm_client.ui.gpu_frame_compositor import compose_combined_backdrop_pixel
-from rm_client.ui.clickgui_gpu import SmallTextPolicy
+from rm_client.ui.clickgui_gpu import ClickGuiGpuRenderer, SmallTextPolicy
 from rm_client.ui.island_icon_gpu import island_icon_coverage
 from rm_client.ui.layout import HudAnchorStack
 from rm_client.ui.overlay_coordinator import OverlayCoordinator, OverlayKind
@@ -136,6 +136,10 @@ def test_registry() -> None:
     mc_hud = registry.get("MinecraftCombatHUD")
     assert mc_hud is not None and mc_hud.enabled is False
     assert mc_hud.get_setting("GUI Scale").value == "Auto"
+    assert mc_hud.get_setting("Scale Multiplier").value == 1.0
+    assert mc_hud.get_setting("Scale Multiplier").min_value == 0.5
+    assert mc_hud.get_setting("Scale Multiplier").max_value == 2.0
+    assert mc_hud.get_setting("Scale Multiplier").step == 0.05
     assert mc_hud.get_setting("Slot 9").value == "ClickGui"
     assert "HeroLob" in mc_hud.get_setting("Slot 1").options
     assert registry.get("RobotOverlay") is not None
@@ -1604,6 +1608,17 @@ def test_jello_clickgui_layout_and_old_group() -> None:
         assert raster_pages == {0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0}
         for asset in window.jello_clickgui.image_assets:
             assert asset.is_file() and asset.stat().st_size > 0
+        hud_module = window.registry.get("HUD")
+        hud_pages = window._jello_module_text_pages(
+            hud_module,
+            window._jello_gpu_fonts(),
+        )
+        assert hud_module.name in hud_pages[40.0]
+        assert hud_module.description in hud_pages[20.0]
+        for setting in hud_module.settings:
+            assert setting.name in hud_pages[25.0]
+            assert setting.name in hud_pages[14.0]
+            assert setting.description in hud_pages[14.0]
 
         window.resize(1280, 720)
         window.home_visible = False
@@ -1616,6 +1631,7 @@ def test_jello_clickgui_layout_and_old_group() -> None:
         main = window.build_gpu_clickgui(1280, 720, 1.0)
         assert main.rects and main.texts and main.images
         assert all(command.preserve_weight for command in main.texts)
+        assert {command.text_profile for command in main.texts} == {"jello"}
         assert {command.raster_scale for command in main.texts} == {1.0}
         assert {viewport["mode"] for viewport in window.gui_scroll_viewports} == {"jello_panel"}
         assert any(hotspot.action == "jello_open_settings" and hotspot.payload == "ClickGui" for hotspot in window.hotspots)
@@ -1701,6 +1717,56 @@ def test_jello_clickgui_layout_and_old_group() -> None:
             if hotspot.action == "jello_mode_select"
         } == {"Unified GPU", "Compatibility Painter"}
         window.jello_state.close_dropdown(immediate=True)
+
+        # HUD contains several mode rows.  The retained dropdown_key must own
+        # the only animated arrow/popup throughout both open and close legs;
+        # later rows may not steal it (the historical disappearing-triangle
+        # regression).
+        window.jello_state.open_settings("HUD")
+        window.jello_state.update(0.30)
+        window.hotspots.clear()
+        window.build_gpu_clickgui(1280, 720, 1.0)
+        hud_mode_rows = [
+            hotspot
+            for hotspot in window.hotspots
+            if hotspot.action == "jello_mode_dropdown"
+        ]
+        assert len(hud_mode_rows) >= 2
+        target_mode = hud_mode_rows[0]
+        target_key, target_setting = target_mode.payload
+        assert target_mode.tooltip == str(target_setting.value)
+        window.dispatch(
+            target_mode.action,
+            target_mode.payload,
+            QPointF(target_mode.rect.center()),
+            1,
+            target_mode.rect,
+        )
+        window.jello_state.update(0.12)
+        window.hotspots.clear()
+        hud_dropdown = window.build_gpu_clickgui(1280, 720, 1.0)
+        assert window.jello_state.dropdown_key == target_key
+        popup_settings = {
+            id(hotspot.payload[0])
+            for hotspot in window.hotspots
+            if hotspot.action == "jello_mode_select"
+        }
+        assert popup_settings == {id(target_setting)}
+        assert sum(
+            text.text == ">" and abs(text.rotation_degrees) > 0.01
+            for text in hud_dropdown.texts
+        ) == 1
+        window.jello_state.close_dropdown()
+        window.jello_state.update(0.05)
+        window.hotspots.clear()
+        closing_dropdown = window.build_gpu_clickgui(1280, 720, 1.0)
+        assert window.jello_state.dropdown_key == target_key
+        assert sum(
+            text.text == ">" and abs(text.rotation_degrees) > 0.01
+            for text in closing_dropdown.texts
+        ) == 1
+        window.jello_state.update(0.30)
+        assert window.jello_state.dropdown_key is None
 
         assert window.open_legacy_clickgui("VapeUnified")
         assert window.active_clickgui_mode() == "PolarUnified"
@@ -2107,7 +2173,7 @@ def test_economy_respawn_close_and_reopen_restores_hud_scene() -> None:
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     from PySide6.QtGui import QImage
     from PySide6.QtWidgets import QApplication
-    from rm_client.ui.polar_app import PolarRMWindow
+    from rm_client.ui.polar_app import EconomyScenePhase, PolarRMWindow
 
     app = QApplication.instance() or QApplication([])
     window = PolarRMWindow()
@@ -2141,6 +2207,10 @@ def test_economy_respawn_close_and_reopen_restores_hud_scene() -> None:
         window._gpu_blur_source_key = ("stale-blur",)
         window._gpu_motion_layer_ready = True
         window.close_economy_workspace(play_sound=False)
+        first_close_generation = window._economy_generation
+        assert window.economy_phase == EconomyScenePhase.CLOSING
+        assert window.economy_stage_active()
+        assert window.overlay_coordinator.modal == OverlayKind.ECONOMY
         assert window._gpu_static_ui_key is None
         assert window._gpu_control_backdrop_key is None
         assert window._gpu_blur_source_key is None
@@ -2155,7 +2225,49 @@ def test_economy_respawn_close_and_reopen_restores_hud_scene() -> None:
         assert any(bytes(image.constBits()))
         window.open_economy_workspace("ammo")
         assert window.economy_visible
+        assert window.economy_phase == EconomyScenePhase.OPENING
+        assert window._economy_generation > first_close_generation
+        assert window._economy_restore_pending_generation is None
         assert window.overlay_coordinator.modal == OverlayKind.ECONOMY
+        # A callback from the first close generation cannot finalize the
+        # reopened scene.
+        window._economy_restore_pending_generation = first_close_generation
+        window._finalize_economy_restore(first_close_generation)
+        assert window.economy_phase == EconomyScenePhase.OPENING
+        assert window.overlay_coordinator.modal == OverlayKind.ECONOMY
+        window._economy_restore_pending_generation = None
+
+        window.close_economy_workspace(play_sound=False)
+        second_close_generation = window._economy_generation
+        assert window.economy_phase == EconomyScenePhase.CLOSING
+        assert window.overlay_coordinator.modal == OverlayKind.ECONOMY
+        window.economy_island.progress = 0.0
+        window._economy_restore_pending_generation = second_close_generation
+        assert not window.economy_stage_active()
+        window._finalize_economy_restore(second_close_generation)
+        assert window.economy_phase == EconomyScenePhase.CLOSED
+        assert window._economy_close_finalized
+        assert window.overlay_coordinator.modal is None
+
+        # A single public ClickGUI request made while Economy owns the modal
+        # is queued behind the GL restore.  It must not steal input early and
+        # must not require a second RightShift after the restored HUD presents.
+        window.open_economy_workspace("ammo")
+        window.set_clickgui_visible(True, announce=False, play_sound=False)
+        queued_generation = window._economy_generation
+        assert window.economy_phase == EconomyScenePhase.CLOSING
+        assert window._economy_pending_overlay == OverlayKind.CLICKGUI
+        assert window.overlay_coordinator.modal == OverlayKind.ECONOMY
+        assert not window.gui_visible
+        window.economy_island.progress = 0.0
+        window._economy_restore_pending_generation = queued_generation
+        window._finalize_economy_restore(queued_generation)
+        app.processEvents()
+        assert window.economy_phase == EconomyScenePhase.CLOSED
+        assert window._economy_pending_overlay is None
+        assert window.gui_visible
+        assert window.overlay_coordinator.modal == OverlayKind.CLICKGUI
+        window.set_clickgui_visible(False, announce=False, play_sound=False)
     finally:
         window.close()
     app.processEvents()
@@ -2297,6 +2409,16 @@ def test_small_text_policy_and_island_icon_alpha() -> None:
     strengthened = policy.prepare_font(light, 14.0, policy.sample_scale_for(14.0))
     assert preserved.weight() == QFont.Weight.Light
     assert strengthened.weight() == QFont.Weight.Medium
+    shaped = ClickGuiGpuRenderer()
+    assert shaped._is_cjk_character("汉")
+    assert shaped._is_cjk_character("，")
+    assert not shaped._is_cjk_character("A")
+    layout, advance, line_height, ascent = shaped._jello_text_layout(
+        "Jello 字体 AV",
+        policy.prepare_font(light, 28.0, 1.0, preserve_weight=True),
+    )
+    assert layout.cacheEnabled()
+    assert advance > 0.0 and line_height > 0.0 and ascent >= 0.0
     assert island_icon_coverage(0.5, 0.5) == 1.0
     assert island_icon_coverage(0.0, 0.0) == 0.0
     assert island_icon_coverage(1.0, 0.0) == 0.0
@@ -2833,7 +2955,7 @@ def test_projectile_hit_auto_spin_uses_cumulative_deltas() -> None:
 
 def test_hero_deploy_console_state_and_responsive_render() -> None:
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-    from PySide6.QtGui import QImage, QPainter
+    from PySide6.QtGui import QFont, QImage, QPainter
     from PySide6.QtWidgets import QApplication
 
     app = QApplication.instance() or QApplication([])
@@ -2867,6 +2989,25 @@ def test_hero_deploy_console_state_and_responsive_render() -> None:
     state.hero_lob_relocalization_valid = True
     solution, readiness = HeroLobPlanner.preview_from_state(state, module, hero_range_profile=True)
     renderer = HeroDeployRenderer()
+    single_tick_interface = HeroDeployInterfaceState()
+    single_tick_interface.open(10.0)
+    initial_progress = single_tick_interface.progress
+    probe = QImage(640, 360, QImage.Format.Format_ARGB32_Premultiplied)
+    probe.fill(0)
+    probe_painter = QPainter(probe)
+    renderer.draw(
+        probe_painter,
+        640,
+        360,
+        state=state,
+        module=module,
+        interface=single_tick_interface,
+        solution=solution,
+        readiness=readiness,
+        now=20.0,
+    )
+    probe_painter.end()
+    assert single_tick_interface.progress == initial_progress
     for width, height in ((1000, 620), (1280, 720), (1600, 900), (1920, 1080), (2560, 1440)):
         layout = renderer.layout(width, height)
         assert layout.collapsed.top() == layout.target_panel.top()
@@ -2919,7 +3060,11 @@ def test_hero_deploy_console_state_and_responsive_render() -> None:
     surfaces = {surface for surface, _clipped in glass_calls}
     assert "ProminentGlass" in surfaces
     assert "MainGlass" in surfaces and "SubGlass" in surfaces
-    assert any(clipped for _surface, clipped in glass_calls)
+    assert sum(not clipped for _surface, clipped in glass_calls) == 1
+    assert all(
+        clipped or surface in {"ProminentGlass", "LensIsland"}
+        for surface, clipped in glass_calls
+    )
 
     interface.close(7.0)
     assert not interface.visible and interface.render_visible
@@ -2929,11 +3074,120 @@ def test_hero_deploy_console_state_and_responsive_render() -> None:
     app.processEvents()
 
 
+def test_hero_native_video_isolation_and_authoritative_lock() -> None:
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    import numpy as np
+    from PySide6.QtGui import QColor, QImage, QPainter, QPixmap
+    from PySide6.QtWidgets import QApplication
+    from rm_client.ui.polar_app import PolarRMWindow
+
+    app = QApplication.instance() or QApplication([])
+    window = PolarRMWindow()
+    window.timer.stop()
+    original_backend = window.backend
+    original_ensure_camera = window.ensure_camera_started
+    now = time.perf_counter()
+    native_bgr = np.zeros((100, 320, 3), dtype=np.uint8)
+    native_bgr[:, :, 1] = 255
+
+    class NativeOnlyBackend:
+        def __init__(self) -> None:
+            self.calls: list[str] = []
+
+        def latest_video_frame(self, _timeout: float, source_mode: str):
+            self.calls.append(str(source_mode))
+            assert source_mode == "Native 0x0310"
+            return native_bgr, now, "native-0x0310"
+
+    fake_backend = NativeOnlyBackend()
+    window.backend = fake_backend
+    resumed: list[bool] = []
+    window.ensure_camera_started = lambda: resumed.append(True)
+    try:
+        window.home_visible = False
+        normal = QImage(320, 180, QImage.Format.Format_RGB888)
+        normal.fill(QColor("#ff0000"))
+        window.frame_image = normal
+        window.frame_pixmap = QPixmap.fromImage(normal)
+        assert window.consume_hero_native_video_frame()
+        assert fake_backend.calls == ["Native 0x0310"]
+
+        pending = QImage(400, 400, QImage.Format.Format_ARGB32_Premultiplied)
+        pending.fill(0)
+        pending_painter = QPainter(pending)
+        window.state.deploy_mode = 0
+        window.draw_video(pending_painter, 400, 400)
+        pending_painter.end()
+        assert pending.pixelColor(200, 200).red() > 240
+
+        window.registry.get("HeroLob").enabled = True
+        window.state.deploy_mode = 1
+        window.state.deploy_status_revision += 1
+        window.update_hero_deploy_state(now + 0.01)
+        assert window.hero_deploy_ui.visible
+        assert window.overlay_coordinator.modal == OverlayKind.HERO_DEPLOY
+        assert not window.close_hero_deploy_interface()
+
+        deployed = QImage(400, 400, QImage.Format.Format_ARGB32_Premultiplied)
+        deployed.fill(0)
+        deployed_painter = QPainter(deployed)
+        assert window.draw_hero_native_background(
+            deployed_painter,
+            400,
+            400,
+            now=now + 0.1,
+        ) == "live"
+        deployed_painter.end()
+        # 320:100 is letterboxed into the square; center is Native green and
+        # the top bar is neutral, never the red normal camera.
+        assert deployed.pixelColor(10, 200).green() > 240
+        assert deployed.pixelColor(10, 20).green() < 30
+        assert deployed.pixelColor(10, 20).red() < 30
+
+        latest_calls = len(fake_backend.calls)
+        window.consume_capture_frame()
+        assert len(fake_backend.calls) == latest_calls + 1
+        assert fake_backend.calls[-1] == "Native 0x0310"
+
+        window._hero_native_video_at = now - 1.0
+        lost = QImage(400, 400, QImage.Format.Format_ARGB32_Premultiplied)
+        lost.fill(0)
+        lost_painter = QPainter(lost)
+        assert window.draw_hero_native_background(
+            lost_painter,
+            400,
+            400,
+            now=now + 0.1,
+        ) == "lost"
+        lost_painter.end()
+        assert lost.pixelColor(10, 200).green() < 40
+        assert lost.pixelColor(10, 200).red() < 40
+
+        window.state.deploy_mode = 0
+        window.state.deploy_status_revision += 1
+        window.update_hero_deploy_state(now + 0.2)
+        assert resumed
+        assert not window.hero_deploy_ui.visible
+        assert window.overlay_coordinator.modal is None
+        restored = QImage(400, 400, QImage.Format.Format_ARGB32_Premultiplied)
+        restored.fill(0)
+        restored_painter = QPainter(restored)
+        window.draw_video(restored_painter, 400, 400)
+        restored_painter.end()
+        assert restored.pixelColor(200, 200).red() > 240
+    finally:
+        window.backend = original_backend
+        window.ensure_camera_started = original_ensure_camera
+        window.close()
+    app.processEvents()
+
+
 def test_minecraft_hud_assets_layout_and_render() -> None:
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     from PySide6.QtCore import QPointF
-    from PySide6.QtGui import QImage, QPainter
+    from PySide6.QtGui import QFont, QImage, QPainter
     from PySide6.QtWidgets import QApplication
+    from rm_client.ui.clickgui_gpu import ClickGuiDrawList
 
     app = QApplication.instance() or QApplication([])
     renderer = MinecraftCombatHudRenderer(ROOT / "assets" / "minecraft_hud")
@@ -2984,8 +3238,130 @@ def test_minecraft_hud_assets_layout_and_render() -> None:
         renderer.draw(painter, width, height, state, registry, module)
         painter.end()
         assert image.pixelColor(int(layout.hotbar.center().x()), int(layout.hotbar.center().y())).alpha() > 0
+    previous_scale = 0.0
+    multiplier_setting = module.get_setting("Scale Multiplier")
+    for multiplier in (0.50, 1.00, 1.50, 2.00):
+        multiplier_setting.value = multiplier
+        lines = renderer.scoreboard_lines(state)
+        layout = renderer.layout(
+            1280,
+            720,
+            "Auto",
+            (text for text, _ in lines),
+            multiplier,
+        )
+        assert layout.base_scale == 3
+        assert layout.multiplier == multiplier
+        assert layout.scale >= previous_scale
+        previous_scale = layout.scale
+        assert layout.hotbar.left() >= 0.0 and layout.hotbar.right() <= 1280.0
+        assert layout.scoreboard.top() >= 0.0 and layout.scoreboard.bottom() <= 720.0
+        assert layout.slot_at(layout.slots[7].center()) == 7
+        image = QImage(1280, 720, QImage.Format.Format_ARGB32_Premultiplied)
+        image.fill(0)
+        painter = QPainter(image)
+        drawn_layout = renderer.draw(painter, 1280, 720, state, registry, module)
+        painter.end()
+        assert abs(drawn_layout.scale - layout.scale) < 1e-6
+        assert image.pixelColor(
+            int(drawn_layout.hotbar.center().x()),
+            int(drawn_layout.hotbar.center().y()),
+        ).alpha() > 0
+    multiplier_setting.value = 1.0
     assert renderer.assignments(module)[-1] == "ClickGui"
+    drop_commands = ClickGuiDrawList()
+    drop_layout = renderer.append_drop_overlay(
+        drop_commands,
+        1280,
+        720,
+        "ClickGui",
+        renderer.layout(1280, 720).slots[4].center(),
+        renderer.assignments(module),
+        QFont("Microsoft YaHei UI", 8),
+    )
+    assert drop_layout.slot_at(drop_layout.slots[4].center()) == 4
+    assert drop_commands.images and all(image.nearest for image in drop_commands.images)
     assert len(renderer.font._cache) <= renderer.font.cache_limit
+    app.processEvents()
+
+
+def test_minecraft_hud_keeps_client_overlay_stack() -> None:
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtGui import QImage, QPainter
+    from PySide6.QtWidgets import QApplication
+    from rm_client.ui.polar_app import PolarRMWindow
+
+    app = QApplication.instance() or QApplication([])
+    window = PolarRMWindow()
+    window.timer.stop()
+    calls: set[str] = set()
+    try:
+        window.home_visible = False
+        mc = window.registry.get("MinecraftCombatHUD")
+        mc.enabled = True
+        hud = window.registry.get("HUD")
+        hud.get_setting("Right Display").value = "ModuleListHud"
+        window.registry.get("TacticalMap").enabled = True
+        window.registry.get("EnergyAutoAim").enabled = False
+        window._vision_source = "Local"
+
+        window.minecraft_hud.draw = lambda *_args, **_kwargs: calls.add("minecraft")
+        window.draw_watermark = lambda *_args, **_kwargs: calls.add("watermark")
+        window.paint_combat_target_overlay = lambda *_args, **_kwargs: calls.add("target")
+        window.draw_dynamic_island = lambda *_args, **_kwargs: calls.add("island")
+        window.draw_tactical_map_hud = lambda *_args, **_kwargs: calls.add("map")
+        window.draw_module_list_hud = lambda *_args, **_kwargs: calls.add("modulelist")
+        window.draw_chassis_gimbal_indicator = lambda *_args, **_kwargs: calls.add("chassis")
+        window.draw_telemetry_strip = lambda *_args, **_kwargs: calls.add("telemetry")
+        window.draw_match_chat = lambda *_args, **_kwargs: calls.add("chat")
+        window.draw_quick_action_wheel = lambda *_args, **_kwargs: calls.add("radial")
+        window.draw_elimination_fx = lambda *_args, **_kwargs: calls.add("elimination")
+        window.draw_hero_deploy_interface = lambda *_args, **_kwargs: calls.add("hero")
+
+        image = QImage(1280, 720, QImage.Format.Format_ARGB32_Premultiplied)
+        image.fill(0)
+        painter = QPainter(image)
+        window.paint_hud_motion_overlay(
+            painter,
+            1280,
+            720,
+            include_vision=False,
+        )
+        cache_before = len(window._elide_cache)
+        elided_a = window.elide(
+            painter,
+            window.font("poppins_regular", 8.0),
+            "Stable repeated HUD label",
+            72.0,
+        )
+        cache_after_first = len(window._elide_cache)
+        elided_b = window.elide(
+            painter,
+            window.font("poppins_regular", 8.0),
+            "Stable repeated HUD label",
+            72.0,
+        )
+        painter.end()
+        assert elided_a == elided_b
+        assert cache_after_first >= cache_before
+        assert len(window._elide_cache) == cache_after_first
+        assert len(window._elide_cache) <= 4096
+        assert {
+            "minecraft",
+            "watermark",
+            "target",
+            "island",
+            "map",
+            "modulelist",
+            "chassis",
+            "telemetry",
+            "chat",
+            "radial",
+            "elimination",
+            "hero",
+        } <= calls
+    finally:
+        window.close()
     app.processEvents()
 
 
@@ -3115,7 +3491,9 @@ if __name__ == "__main__":
     test_hero_lob_solver_and_fail_closed_readiness()
     test_projectile_hit_auto_spin_uses_cumulative_deltas()
     test_hero_deploy_console_state_and_responsive_render()
+    test_hero_native_video_isolation_and_authoritative_lock()
     test_minecraft_hud_assets_layout_and_render()
+    test_minecraft_hud_keeps_client_overlay_stack()
     test_estop_zero_frame_bypass_and_backend_readiness()
     test_liquid_glass_snapshot_stability()
     test_gpu_glass_commands_do_not_accumulate_between_frames()

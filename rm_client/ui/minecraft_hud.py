@@ -14,7 +14,7 @@ import math
 from pathlib import Path
 from typing import Any, Iterable
 
-from PySide6.QtCore import QPointF, QRect, QRectF, Qt
+from PySide6.QtCore import QPointF, QRect, QRectF, QSize, Qt
 from PySide6.QtGui import QColor, QImage, QPainter
 
 
@@ -48,7 +48,7 @@ def vanilla_gui_scale(width: int, height: int, override: str = "Auto") -> int:
 
 @dataclass(frozen=True, slots=True)
 class MinecraftHudLayout:
-    scale: int
+    scale: float
     hotbar: QRectF
     slots: tuple[QRectF, ...]
     hearts: tuple[QRectF, ...]
@@ -57,6 +57,10 @@ class MinecraftHudLayout:
     boss_bars: tuple[QRectF, ...]
     scoreboard: QRectF
     effects_origin: QPointF
+    base_scale: int = 1
+    multiplier: float = 1.0
+    logical_size: tuple[int, int] = (1, 1)
+    origin: tuple[float, float] = (0.0, 0.0)
 
     def slot_at(self, point: QPointF) -> int | None:
         for index, rect in enumerate(self.slots):
@@ -182,13 +186,19 @@ class MinecraftCombatHudRenderer:
         }
         self.font = MinecraftBitmapFont(self.asset_root / "ascii.png")
         self.selected_slot = 0
+        self._layer_image = QImage()
 
     @property
     def available(self) -> bool:
         return self.font.available and all(not image.isNull() for image in self.images.values())
 
-    def layout(self, width: int, height: int, scale_override: str = "Auto", scoreboard_lines: Iterable[str] = ()) -> MinecraftHudLayout:
-        scale = vanilla_gui_scale(int(width), int(height), scale_override)
+    def _logical_layout(
+        self,
+        width: int,
+        height: int,
+        scoreboard_lines: Iterable[str] = (),
+    ) -> MinecraftHudLayout:
+        scale = 1.0
         hotbar = QRectF((width - 182 * scale) // 2, height - 22 * scale, 182 * scale, 22 * scale)
         slots = tuple(
             QRectF(hotbar.left() + (3 + index * 20) * scale, hotbar.top() + 3 * scale, 16 * scale, 16 * scale)
@@ -221,6 +231,74 @@ class MinecraftCombatHudRenderer:
             boss,
             scoreboard,
             QPointF(4 * scale, 58 * scale),
+        )
+
+    @staticmethod
+    def _map_rect(rect: QRectF, scale: float, origin_x: float, origin_y: float) -> QRectF:
+        return QRectF(
+            origin_x + rect.left() * scale,
+            origin_y + rect.top() * scale,
+            rect.width() * scale,
+            rect.height() * scale,
+        )
+
+    def layout(
+        self,
+        width: int,
+        height: int,
+        scale_override: str = "Auto",
+        scoreboard_lines: Iterable[str] = (),
+        scale_multiplier: float = 1.0,
+    ) -> MinecraftHudLayout:
+        """Return the exact screen transform used by draw and hit testing."""
+
+        width = max(1, int(width))
+        height = max(1, int(height))
+        lines = tuple(str(line) for line in scoreboard_lines)
+        base_scale = vanilla_gui_scale(width, height, scale_override)
+        multiplier = max(0.50, min(2.00, float(scale_multiplier)))
+        requested = max(0.25, base_scale * multiplier)
+
+        logical_score_width = max((self.font.logical_width(line) for line in lines), default=112)
+        score_width = max(120, logical_score_width + 8)
+        score_height = max(12, len(lines) * 9 + 5)
+        # Content-aware safety cap, not Minecraft's conservative 320x240 cap:
+        # user scaling remains useful while the actual hotbar/effects/score
+        # extents are guaranteed to stay inside the framebuffer.
+        widest = max(182.0, 154.0, float(score_width + 8))
+        tallest = max(82.0, float(score_height + 58))
+        safe_scale = min(
+            max(0.05, (width - 8.0) / widest),
+            max(0.05, (height - 8.0) / tallest),
+        )
+        # The user-facing multiplier never goes below 0.50, but an unusually
+        # small host window may require a lower emergency fit scale.  Hit
+        # testing still uses this exact transform, so safety never creates a
+        # mismatched interaction region.
+        effective = max(0.05, min(requested, safe_scale))
+        logical_width = max(1, int(math.ceil(width / effective)))
+        logical_height = max(1, int(math.ceil(height / effective)))
+        origin_x = (width - logical_width * effective) * 0.5
+        origin_y = (height - logical_height * effective) * 0.5
+        logical = self._logical_layout(logical_width, logical_height, lines)
+        map_rect = lambda value: self._map_rect(value, effective, origin_x, origin_y)
+        return MinecraftHudLayout(
+            effective,
+            map_rect(logical.hotbar),
+            tuple(map_rect(rect) for rect in logical.slots),
+            tuple(map_rect(rect) for rect in logical.hearts),
+            tuple(map_rect(rect) for rect in logical.armor),
+            tuple(map_rect(rect) for rect in logical.food),
+            tuple(map_rect(rect) for rect in logical.boss_bars),
+            map_rect(logical.scoreboard),
+            QPointF(
+                origin_x + logical.effects_origin.x() * effective,
+                origin_y + logical.effects_origin.y() * effective,
+            ),
+            base_scale,
+            multiplier,
+            (logical_width, logical_height),
+            (origin_x, origin_y),
         )
 
     @staticmethod
@@ -316,8 +394,27 @@ class MinecraftCombatHudRenderer:
         lines = self.scoreboard_lines(state)
         override_setting = module.get_setting("GUI Scale") if module is not None else None
         override = str(override_setting.value) if override_setting is not None else "Auto"
-        layout = self.layout(width, height, override, (text for text, _ in lines))
+        multiplier_setting = module.get_setting("Scale Multiplier") if module is not None else None
+        multiplier = float(multiplier_setting.value) if multiplier_setting is not None else 1.0
+        screen_layout = self.layout(
+            width,
+            height,
+            override,
+            (text for text, _ in lines),
+            multiplier,
+        )
+        logical_width, logical_height = screen_layout.logical_size
+        layout = self._logical_layout(logical_width, logical_height, (text for text, _ in lines))
         scale = layout.scale
+        if self._layer_image.size() != QSize(logical_width, logical_height):
+            self._layer_image = QImage(
+                logical_width,
+                logical_height,
+                QImage.Format.Format_ARGB32_Premultiplied,
+            )
+        self._layer_image.fill(Qt.GlobalColor.transparent)
+        destination_painter = painter
+        painter = QPainter(self._layer_image)
         painter.save()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, False)
         painter.setRenderHint(QPainter.RenderHint.TextAntialiasing, False)
@@ -380,7 +477,24 @@ class MinecraftCombatHudRenderer:
         )
         self._draw_effects(painter, layout.effects_origin, effects, scale)
         painter.restore()
-        return layout
+        painter.end()
+        destination_painter.save()
+        destination_painter.setRenderHint(QPainter.RenderHint.Antialiasing, False)
+        destination_painter.setRenderHint(QPainter.RenderHint.TextAntialiasing, False)
+        destination_painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, False)
+        origin_x, origin_y = screen_layout.origin
+        destination_painter.drawImage(
+            QRectF(
+                origin_x,
+                origin_y,
+                logical_width * screen_layout.scale,
+                logical_height * screen_layout.scale,
+            ),
+            self._layer_image,
+            QRectF(self._layer_image.rect()),
+        )
+        destination_painter.restore()
+        return screen_layout
 
     @staticmethod
     def _ratio(value: float, maximum: float) -> float:
@@ -441,16 +555,32 @@ class MinecraftCombatHudRenderer:
         assignments: tuple[str, ...],
         font: Any,
         scale_override: str = "Auto",
+        scale_multiplier: float = 1.0,
     ) -> MinecraftHudLayout:
         """Append an exact hotbar drop target to either GPU/compat draw list."""
 
-        layout = self.layout(width, height, scale_override)
+        layout = self.layout(
+            width,
+            height,
+            scale_override,
+            scale_multiplier=scale_multiplier,
+        )
         scale = layout.scale
-        commands.image(layout.hotbar, self.asset_root / "hotbar.png", QColor(255, 255, 255, 255))
+        commands.image(
+            layout.hotbar,
+            self.asset_root / "hotbar.png",
+            QColor(255, 255, 255, 255),
+            nearest=True,
+        )
         hovered = layout.slot_at(point)
         if hovered is not None:
             selection = QRectF(layout.hotbar.left() + (-1 + hovered * 20) * scale, layout.hotbar.top() - scale, 24 * scale, 23 * scale)
-            commands.image(selection, self.asset_root / "hotbar_selection.png", QColor(255, 255, 255, 255))
+            commands.image(
+                selection,
+                self.asset_root / "hotbar_selection.png",
+                QColor(255, 255, 255, 255),
+                nearest=True,
+            )
         for index, (slot, name) in enumerate(zip(layout.slots, assignments)):
             commands.text(slot, self.abbreviation(name), font, QColor("#ffffff"), Qt.AlignmentFlag.AlignCenter)
             commands.text(QRectF(slot.left(), slot.top(), 8 * scale, 8 * scale), str(index + 1), font, QColor("#ffff55"), Qt.AlignmentFlag.AlignCenter)

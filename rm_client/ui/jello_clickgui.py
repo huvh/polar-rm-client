@@ -352,6 +352,7 @@ class _DropdownRequest:
     clip: QRectF
     alpha: float
     scale: float
+    opens_up: bool = False
 
 
 class JelloClickGuiRenderer:
@@ -566,6 +567,7 @@ class JelloClickGuiRenderer:
             # renderer's compact-UI policy deliberately thickens other fonts,
             # which visibly changes Jello's original typography.
             default_text_preserve_weight=True,
+            default_text_profile="jello",
             copy_payloads=False,
         )
 
@@ -579,6 +581,23 @@ class JelloClickGuiRenderer:
                 main_visual = 0.5 + 0.5 * JelloMainTimeline.elastic(raw, 0.8)
             else:
                 main_visual = 2.0 * raw - raw * raw
+        main_settled = bool(
+            timeline is None
+            or (
+                abs(float(getattr(timeline, "progress", 1.0)) - float(getattr(timeline, "target", 1.0)))
+                <= 0.0001
+            )
+        )
+        auxiliary_animations = (
+            state.settings_panel_animation,
+            state.settings_background_animation,
+            state.old_group_animation,
+            state.dropdown_animation,
+        )
+        commands.default_text_device_snap = main_settled and all(
+            abs(animation.progress - animation.target) <= 0.0001
+            for animation in auxiliary_animations
+        )
 
         # ClickGuiScreen draws this before it changes the child transform for
         # an open SettingGroup.
@@ -1002,6 +1021,21 @@ class JelloClickGuiRenderer:
         total = 40.0 + sum(self._setting_height(setting, old_progress) for setting in module.settings)
         maximum = max(0.0, total * scale - content.height())
         scroll = max(0.0, min(maximum, float(state.settings_scroll.get(module.name, 0.0))))
+        # Sigma normally reveals mode options below their header.  Move the
+        # settings viewport first so a low row remains fully visible; only a
+        # physically too-short viewport is allowed to use the upward fallback.
+        if state.dropdown_key is not None and state.dropdown_animation.target >= 0.5:
+            active_y = 20.0
+            for candidate in module.settings:
+                candidate_key = f"{module.name}:{candidate.name}"
+                if candidate_key == state.dropdown_key and candidate.kind == "mode":
+                    popup_height = (27.0 * len(candidate.options) + 1.0) * scale
+                    header_bottom = (active_y + 32.0) * scale
+                    required_scroll = header_bottom + popup_height - content.height()
+                    if required_scroll > scroll:
+                        scroll = max(0.0, min(maximum, required_scroll))
+                    break
+                active_y += self._setting_height(candidate, old_progress)
         state.settings_scroll[module.name] = scroll
         host.gui_scroll_viewports.append(
             {"mode": "jello_settings", "key": module.name, "maximum": maximum, "rect": QRectF(content)}
@@ -1200,6 +1234,11 @@ class JelloClickGuiRenderer:
                     Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop,
                     clip,
                     render_scale=scale,
+                    # Slider values can change every pointer event.  They use
+                    # the prewarmed numeric glyph page so dragging never
+                    # rebuilds a whole-line atlas during the reveal animation.
+                    text_profile="",
+                    device_pixel_snap=False,
                 )
             drag_rect = QRectF(track_x, slider.top(), 111.0 * scale, slider.height()).intersected(clip)
             host.add_hotspot(drag_rect, "setting_slider", setting)
@@ -1210,11 +1249,13 @@ class JelloClickGuiRenderer:
             is_open = state.dropdown_key == key
             arrow_reveal = state.dropdown_animation.progress if is_open else 0.0
             text_font = self._font(host, "jello_light", 18.0)
-            animated = is_open or state.dropdown_animation.progress > 0.001
-            if not animated:
+            animated = is_open
+            value_text = str(setting.value)
+            display_value = self._elided_module_name(text_font, value_text, 82.0)
+            if not animated or state.dropdown_animation.progress <= 0.001:
                 commands.text(
                     dropdown.adjusted(10.0 * scale, 0.0, -27.0 * scale, 0.0),
-                    str(setting.value),
+                    display_value,
                     text_font,
                     self._argb(0xFF131313, 0.7 * alpha),
                     Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
@@ -1240,9 +1281,29 @@ class JelloClickGuiRenderer:
                         dropdown.top() + 15.0 * scale,
                     ),
                 )
-            host.add_hotspot(dropdown.intersected(clip), "jello_mode_dropdown", (key, setting))
-            if animated:
-                return _DropdownRequest(key, setting, dropdown, clip, alpha, scale)
+            host.add_hotspot(
+                dropdown.intersected(clip),
+                "jello_mode_dropdown",
+                (key, setting),
+                tooltip=value_text,
+            )
+            # The global reversible animation belongs exclusively to its
+            # retained dropdown_key.  Returning a request for every mode row
+            # made the final HUD setting steal the popup and its arrow.
+            if animated and state.dropdown_animation.progress > 0.001:
+                full_height = (27.0 * len(setting.options) + 1.0) * scale
+                down_space = max(0.0, clip.bottom() - dropdown.bottom())
+                up_space = max(0.0, dropdown.top() - clip.top())
+                opens_up = down_space + 0.5 < full_height and up_space > down_space
+                return _DropdownRequest(
+                    key,
+                    setting,
+                    dropdown,
+                    clip,
+                    alpha,
+                    scale,
+                    opens_up,
+                )
             return None
 
         if setting.kind == "action":
@@ -1352,22 +1413,41 @@ class JelloClickGuiRenderer:
         options = list(request.setting.options)
         height_factor = self._dropdown_height_factor(state.dropdown_animation)
         visible_h = (27.0 * len(options) + 1.0) * request.scale * height_factor
-        popup_clip = QRectF(
-            request.rect.left(),
-            request.rect.bottom(),
-            request.rect.width(),
-            visible_h,
-        ).intersected(request.clip)
+        full_h = (27.0 * len(options) + 1.0) * request.scale
+        if request.opens_up:
+            popup_clip = QRectF(
+                request.rect.left(),
+                request.rect.top() - visible_h,
+                request.rect.width(),
+                visible_h,
+            ).intersected(request.clip)
+            popup_top = request.rect.top() - full_h
+        else:
+            popup_clip = QRectF(
+                request.rect.left(),
+                request.rect.bottom(),
+                request.rect.width(),
+                visible_h,
+            ).intersected(request.clip)
+            popup_top = request.rect.bottom()
 
         # Dropdown.draw casts two exact Jello shadows around the header plus
         # currently revealed option height, then fades a white rounded header
         # with the raw 220 ms animation percentage.
-        container = QRectF(
-            request.rect.left(),
-            request.rect.top(),
-            request.rect.width(),
-            max(0.0, request.rect.height() + visible_h - request.scale),
-        )
+        if request.opens_up:
+            container = QRectF(
+                request.rect.left(),
+                request.rect.top() - visible_h + request.scale,
+                request.rect.width(),
+                max(0.0, request.rect.height() + visible_h - request.scale),
+            )
+        else:
+            container = QRectF(
+                request.rect.left(),
+                request.rect.top(),
+                request.rect.width(),
+                max(0.0, request.rect.height() + visible_h - request.scale),
+            )
         self._build_shadow(
             commands,
             container,
@@ -1389,9 +1469,10 @@ class JelloClickGuiRenderer:
             clip=request.clip,
         )
         option_font = self._font(host, "jello_light", 18.0)
+        current_value = str(request.setting.value)
         commands.text(
             request.rect.adjusted(10.0 * request.scale, 0.0, -27.0 * request.scale, 0.0),
-            str(request.setting.value),
+            self._elided_module_name(option_font, current_value, 82.0),
             option_font,
             self._argb(0xFF131313, 0.7 * request.alpha),
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
@@ -1427,7 +1508,7 @@ class JelloClickGuiRenderer:
         for index, value in enumerate(options):
             option = QRectF(
                 request.rect.left(),
-                request.rect.bottom() + index * 27.0 * request.scale,
+                popup_top + index * 27.0 * request.scale,
                 request.rect.width(),
                 27.0 * request.scale,
             )
@@ -1445,14 +1526,19 @@ class JelloClickGuiRenderer:
             commands.rect(option, 0.0, background, clip=popup_clip)
             commands.text(
                 option.adjusted(10.0 * request.scale, 0.0, -10.0 * request.scale, 0.0),
-                str(value),
+                self._elided_module_name(option_font, str(value), 103.0),
                 option_font,
                 self._argb(DEEP_TEAL, request.alpha),
                 Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
                 popup_clip,
                 render_scale=request.scale,
             )
-            host.add_hotspot(visible, "jello_mode_select", (request.setting, value))
+            host.add_hotspot(
+                visible,
+                "jello_mode_select",
+                (request.setting, value),
+                tooltip=str(value),
+            )
 
     def paint_compat(
         self,
@@ -1515,6 +1601,10 @@ class JelloClickGuiRenderer:
                     image = QImage(payload.source)
                     self._compat_images[payload.source] = image
                 if not image.isNull():
+                    painter.setRenderHint(
+                        QPainter.RenderHint.SmoothPixmapTransform,
+                        not payload.nearest,
+                    )
                     painter.setOpacity(command.opacity * payload.tint.alphaF())
                     painter.drawImage(payload.rect, image)
             painter.restore()

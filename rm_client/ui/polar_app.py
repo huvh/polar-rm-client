@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from enum import Enum
 import math
 import os
 from pathlib import Path
@@ -132,6 +133,13 @@ from .vision_motion import (
     TargetHudPresenceState,
     VisionRenderInterpolator,
 )
+
+
+class EconomyScenePhase(str, Enum):
+    CLOSED = "closed"
+    OPENING = "opening"
+    OPEN = "open"
+    CLOSING = "closing"
 
 
 @dataclass
@@ -406,6 +414,13 @@ class PolarRMWindow(QOpenGLWidget):
         self.hero_deploy_ui = HeroDeployInterfaceState()
         self.hero_deploy_renderer = HeroDeployRenderer()
         self._last_deploy_status_revision = 0
+        self._last_deploy_mode = int(self.state.deploy_mode)
+        self.hero_native_image: QImage | None = None
+        self.hero_native_pixmap: QPixmap | None = None
+        self._hero_native_video_at = 0.0
+        self._hero_native_sequence = 0
+        self._hero_native_source = "none"
+        self._hero_native_wait_started = time.perf_counter()
         self.vision_wire_gpu = VisionWireGpuRenderer()
         self.island_icon_gpu = IslandIconGpuRenderer()
         self._gpu_island_icon_commands: list[IslandIconCommand] = []
@@ -502,6 +517,13 @@ class PolarRMWindow(QOpenGLWidget):
         # versions around so the HUD does not resample a PDF-derived field map on
         # every paint while the camera is running.
         self.map_display_cache: dict[tuple[str, int, int], QImage] = {}
+        # Elision is queried by dozens of stable HUD labels every display
+        # frame.  Cache only the resulting string (never a painter/font
+        # texture) so the visual output and liquid-glass ownership stay
+        # unchanged while avoiding repeated DirectWrite metric work at 2K.
+        self._elide_cache: dict[tuple[str, str, int, int, int], str] = {}
+        self._module_list_sort_cache_key: tuple[object, ...] | None = None
+        self._module_list_sort_widths: dict[str, float] = {}
         self.synthetic_video_cache: QImage | None = None
         self.synthetic_video_cache_key: tuple[int, int] | None = None
         self.synthetic_video_cache_time = 0.0
@@ -544,6 +566,11 @@ class PolarRMWindow(QOpenGLWidget):
         self.economy_opened_at = 0.0
         self.economy_island = EconomyIslandState()
         self._economy_close_finalized = True
+        self.economy_phase = EconomyScenePhase.CLOSED
+        self._economy_generation = 0
+        self._economy_closing_generation: int | None = None
+        self._economy_restore_pending_generation: int | None = None
+        self._economy_pending_overlay: OverlayKind | None = None
         self.economy_workspace_layer = EconomyWorkspaceLayer()
         self.economy_category_scroll = InertialScroll()
         self.economy_offers_scroll = InertialScroll()
@@ -636,17 +663,28 @@ class PolarRMWindow(QOpenGLWidget):
             now=now,
         )
         self.economy_island.update(now=now)
+        if (
+            self.economy_phase == EconomyScenePhase.OPENING
+            and self.economy_island.progress >= 0.999
+        ):
+            self.economy_phase = EconomyScenePhase.OPEN
         # Hero deploy uses the same reversible Control Center spring as the
         # economy island.  Advance it at the render-timer rate (not the 60 Hz
         # logic gate) so the Dynamic-Island morph remains smooth at 120/144 Hz.
         self.hero_deploy_ui.update_presentation(now)
         if (
-            not self.economy_visible
-            and not self._economy_close_finalized
+            self.economy_phase == EconomyScenePhase.CLOSING
+            and self._economy_closing_generation == self._economy_generation
+            and self._economy_restore_pending_generation is None
             and self.economy_island.progress <= 0.001
         ):
-            self._economy_close_finalized = True
+            # The event thread cannot safely clear QOpenGLFramebufferObjects.
+            # Mark this generation for one atomic clear/rebuild/present pass;
+            # modal input ownership is intentionally retained until it wins.
+            self._economy_restore_pending_generation = self._economy_generation
             self.invalidate_transient_overlay_scene()
+            self.frame_scheduler.force()
+            self.update()
         self.state.economy_mock_mode = self.economy_uses_mock_transport()
         economy_transaction = self.economy_bridge.update(self.state, now)
         if (
@@ -677,7 +715,7 @@ class PolarRMWindow(QOpenGLWidget):
         if now - self._last_logic_time >= logic_interval * 0.92:
             logic_dt = max(0.001, min(0.05, now - self._last_logic_time))
             self._last_logic_time = now
-            if not self.home_visible:
+            if not self.home_visible and not self.hero_deploy_video_cut_active():
                 self.ensure_camera_started()
             self.startup_wallpaper.set_active(self.home_visible)
             if not self.home_visible:
@@ -755,8 +793,11 @@ class PolarRMWindow(QOpenGLWidget):
     def paintGL(self) -> None:
         started = time.perf_counter()
         if self._gpu_warm_pending and self.clickgui_gpu.available:
-            self.prewarm_gpu_clickgui_resources()
+            # Mark the request consumed before allocating resources. Texture
+            # uploads may dispatch native events on Windows; keeping the flag
+            # set allowed a re-entrant paint to execute the whole warmup twice.
             self._gpu_warm_pending = False
+            self.prewarm_gpu_clickgui_resources()
         if not self.paint_gpu_frame():
             self.paint_overlay(None)
         presented = time.perf_counter()
@@ -770,6 +811,93 @@ class PolarRMWindow(QOpenGLWidget):
         self.render_frame_ms_ema = elapsed_ms if self.render_frame_ms_ema <= 0.0 else self.render_frame_ms_ema * 0.90 + elapsed_ms * 0.10
         # 不再依据视频或偶发纹理上传耗时自动降档。摄像头保持源帧率，
         # HUD 呈现频率由 UIScale.HUD Refresh Rate 独立控制。
+
+    def _jello_gpu_fonts(self) -> dict[float, QFont]:
+        return {
+            # Exact sizes used by Sigma 5.1.0's PanelGroup, ModListView and
+            # SettingGroup rather than approximations in the Polar type scale.
+            14.0: self.font("jello_light", 14.0 * 72.0 / 96.0),
+            18.0: self.font("jello_light", 18.0 * 72.0 / 96.0),
+            20.0: self.font("jello_light", 20.0 * 72.0 / 96.0),
+            25.0: self.font("jello_light", 25.0 * 72.0 / 96.0),
+            40.0: self.font("jello_medium", 40.0 * 72.0 / 96.0),
+        }
+
+    def _jello_module_text_pages(
+        self,
+        module: Module,
+        fonts: dict[float, QFont],
+    ) -> dict[float, set[str]]:
+        """Return immutable shaped lines used by one settings panel."""
+
+        pages: dict[float, set[str]] = {
+            14.0: set(),
+            18.0: {">", "Run", "Show all", "Hide"},
+            20.0: {module.description},
+            25.0: set(),
+            40.0: {module.name},
+        }
+        legacy_labels = {
+            "PolarOld": "Polar Old",
+            "PolarPanel": "Polar Panel",
+            "PolarNew": "Polar New",
+            "PolarDropdown": "Polar Dropdown",
+            "PolarUnified": "Polar One",
+            "PolarMulti": "Polar Multi",
+        }
+        for setting in module.settings:
+            pages[14.0].update((setting.name, setting.description))
+            pages[25.0].add(setting.name)
+            if setting.kind == "action_group":
+                pages[14.0].update(
+                    legacy_labels.get(str(option), str(option))
+                    for option in setting.options
+                )
+            if setting.kind != "mode":
+                continue
+            values = {str(setting.value), *(str(option) for option in setting.options)}
+            for value in values:
+                pages[18.0].add(
+                    self.jello_clickgui._elided_module_name(
+                        fonts[18.0], value, 82.0
+                    )
+                )
+                pages[18.0].add(
+                    self.jello_clickgui._elided_module_name(
+                        fonts[18.0], value, 103.0
+                    )
+                )
+        return pages
+
+    def prewarm_jello_module_resources(self, module: Module) -> None:
+        """Warm one settings page before its 200/240 ms reveal starts."""
+
+        if not self.clickgui_gpu.available or self.context() is None:
+            return
+        fonts = self._jello_gpu_fonts()
+        pages = self._jello_module_text_pages(module, fonts)
+        click_gui = self.registry.get("ClickGui")
+        scale_setting = click_gui.get_setting("Scale") if click_gui is not None else None
+        requested_scale = float(scale_setting.value) if scale_setting is not None else 1.0
+        effective_scale = self.jello_clickgui.layout(
+            max(1, self.width()),
+            max(1, self.height()),
+            requested_scale,
+        ).scale
+        raster_scale = self.jello_clickgui.raster_scale_for(effective_scale)
+        self.makeCurrent()
+        try:
+            for size, font in fonts.items():
+                self.clickgui_gpu.prewarm(
+                    (font,),
+                    pages[size],
+                    self.devicePixelRatioF(),
+                    raster_scale=raster_scale,
+                    preserve_weight=True,
+                    text_profile="jello",
+                )
+        finally:
+            self.doneCurrent()
 
     def prewarm_gpu_clickgui_resources(self) -> None:
         """Allocate shaders and glyph atlases while the launcher is idle.
@@ -793,18 +921,22 @@ class PolarRMWindow(QOpenGLWidget):
             # Chinese panel subtitle glyphs (配置 / 缩放) + common toast fragments.
             "配置", "缩放", "已就绪", "已保存", "已加载", "导入",
         }
-        jello_labels = set(labels)
+        jello_labels_by_size: dict[float, set[str]] = {
+            14.0: set(),
+            18.0: {">", "Run", "Show all", "Hide"},
+            20.0: set(),
+            25.0: set(CATEGORIES),
+            40.0: set(),
+        }
+        numeric_characters = set("0123456789.-+%/abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ ")
         for module in self.registry.modules:
             labels.add(module.name)
             labels.add(module.category)
             labels.add(module.keybind)
-            jello_labels.update((module.name, module.category, module.keybind, module.description))
+            jello_labels_by_size[20.0].add(module.name)
             for setting in module.settings:
                 labels.add(setting.name)
                 labels.add(setting.display_value())
-                jello_labels.update(
-                    (setting.name, setting.display_value(), setting.description)
-                )
         fonts = (
             self.font("poppins_regular", 8.0),
             self.font("poppins_medium", 8.0),
@@ -815,17 +947,27 @@ class PolarRMWindow(QOpenGLWidget):
             self.font("museo", 28.0, QFont.Weight.Bold),
             self.font("material", 12.0, QFont.Weight.Bold),
         )
-        jello_fonts = (
-            # Exact sizes used by Sigma 5.1.0's PanelGroup, ModListView and
-            # SettingGroup rather than approximations in the Polar type scale.
-            self.font("jello_light", 14.0 * 72.0 / 96.0),
-            self.font("jello_light", 18.0 * 72.0 / 96.0),
-            self.font("jello_light", 20.0 * 72.0 / 96.0),
-            self.font("jello_light", 25.0 * 72.0 / 96.0),
-            self.font("jello_medium", 40.0 * 72.0 / 96.0),
-        )
+        jello_fonts = self._jello_gpu_fonts()
+        jello_labels_by_size[20.0].add(self.current_profile())
+        for module in self.registry.modules:
+            # Disabled/enabled rows reserve 168/160 logical pixels
+            # respectively.  Prewarm both terminal-ellipsis variants.
+            jello_labels_by_size[20.0].add(
+                self.jello_clickgui._elided_module_name(
+                    jello_fonts[20.0], module.name, 168.0
+                )
+            )
+            jello_labels_by_size[20.0].add(
+                self.jello_clickgui._elided_module_name(
+                    jello_fonts[20.0], module.name, 160.0
+                )
+            )
         self.clickgui_gpu.prewarm(fonts, labels, self.devicePixelRatioF())
         click_gui = self.registry.get("ClickGui")
+        if click_gui is not None:
+            click_gui_pages = self._jello_module_text_pages(click_gui, jello_fonts)
+            for size, values in click_gui_pages.items():
+                jello_labels_by_size[size].update(values)
         scale_setting = click_gui.get_setting("Scale") if click_gui is not None else None
         requested_scale = float(scale_setting.value) if scale_setting is not None else 1.0
         effective_scale = self.jello_clickgui.layout(
@@ -833,18 +975,30 @@ class PolarRMWindow(QOpenGLWidget):
             max(1, self.height()),
             requested_scale,
         ).scale
-        jello_raster_scale = self.jello_clickgui.raster_scale_for(effective_scale)
-        # Preserve Helvetica Neue Light's original weight and rasterise at the
-        # settled GUI scale. Entrance animation remains a transform, so it
-        # cannot generate a new atlas every frame.
-        for raster_scale in {1.0, jello_raster_scale}:
+        current_raster_scale = self.jello_clickgui.raster_scale_for(effective_scale)
+        # The ClickGui scale slider can select every quarter-density page while
+        # it is moving.  Warm those seven small main/Options pages up front;
+        # other module pages are warmed synchronously before their reveal
+        # target changes, never during an animation frame.
+        raster_scales = {0.50 + 0.25 * index for index in range(7)}
+        raster_scales.add(current_raster_scale)
+        for raster_scale in raster_scales:
             self.clickgui_gpu.prewarm(
-                jello_fonts,
-                jello_labels,
+                (jello_fonts[14.0],),
+                ("".join(sorted(numeric_characters)),),
                 self.devicePixelRatioF(),
                 raster_scale=raster_scale,
                 preserve_weight=True,
             )
+            for size, font in jello_fonts.items():
+                self.clickgui_gpu.prewarm(
+                    (font,),
+                    jello_labels_by_size[size],
+                    self.devicePixelRatioF(),
+                    raster_scale=raster_scale,
+                    preserve_weight=True,
+                    text_profile="jello",
+                )
         self.clickgui_gpu.prewarm_images(self.jello_clickgui.image_assets)
         self.clickgui_gpu.prewarm_images(
             (
@@ -904,16 +1058,20 @@ class PolarRMWindow(QOpenGLWidget):
             ("poppins_medium", 7.2),
             ("poppins_medium", 7.0),
         )
-        for economy_scale in self.economy_scale_steps():
-            economy_fonts = tuple(
-                self.font(family, size * economy_scale)
-                for family, size in economy_font_specs
-            )
-            self.clickgui_gpu.prewarm(
-                economy_fonts,
-                economy_labels,
-                self.devicePixelRatioF(),
-            )
+        # Only one of the quantised pages can be rendered at the current
+        # viewport.  A resize requests another warmup before the next frame,
+        # so building all five pages here only blocked startup and recreated
+        # four textures that could not be sampled.
+        economy_scale = self.economy_ui_scale(self.width(), self.height())
+        economy_fonts = tuple(
+            self.font(family, size * economy_scale)
+            for family, size in economy_font_specs
+        )
+        self.clickgui_gpu.prewarm(
+            economy_fonts,
+            economy_labels,
+            self.devicePixelRatioF(),
+        )
 
     def paint_gpu_startup(self) -> bool:
         """GPU-only launcher path. No QPainter touches the window framebuffer."""
@@ -1113,6 +1271,10 @@ class PolarRMWindow(QOpenGLWidget):
                 )
                 self.paint_overlay(None, startup_background_ready=True)
                 return True
+            if self.hero_deploy_video_cut_active():
+                # The cached compositor owns the aspect-fit/letterbox Hero
+                # path.  Never let this legacy fast path upload frame_image.
+                return False
             if self.frame_image is None or self.frame_image.isNull() or not self.hud_video_gpu.available:
                 return False
             self.hud_video_gpu.update_frame(self.frame_image, canvas, self._last_capture_sequence, 1.0 / 30.0, 0.0)
@@ -1137,6 +1299,22 @@ class PolarRMWindow(QOpenGLWidget):
             return False
         functions = context.extraFunctions()
         try:
+            restore_generation = self._economy_restore_pending_generation
+            restore_attempt = bool(
+                restore_generation is not None
+                and restore_generation == self._economy_generation
+                and self.economy_phase == EconomyScenePhase.CLOSING
+            )
+            if restore_attempt:
+                if not self.gpu_compositor.clear_scene_layers(
+                    functions,
+                    ("overlay", "dynamic", "target"),
+                ):
+                    return False
+                # Atomically invalidate every metadata key in the same GL
+                # frame as the physical FBO clear.  The normal branches below
+                # must now repopulate static and motion layers before present.
+                self.invalidate_transient_overlay_scene()
             startup_scene = self.home_visible and not self.wallpaper_picker_visible and self.clickgui_gpu.available
             static_key = self.gpu_static_ui_key(width, height, ratio)
             rebuild_hud_static = not startup_scene and static_key != self._gpu_static_ui_key
@@ -1465,6 +1643,8 @@ class PolarRMWindow(QOpenGLWidget):
                 glass_owners.add(GlassOwner.CLICKGUI)
             if self.quick_action_wheel.visible:
                 glass_owners.add(GlassOwner.RADIAL)
+            if self.hero_deploy_ui.render_visible:
+                glass_owners.add(GlassOwner.HERO_DEPLOY)
             if not self.gpu_compositor.render_glass(
                 functions,
                 include_static=True,
@@ -1472,7 +1652,13 @@ class PolarRMWindow(QOpenGLWidget):
                 destination="overlay",
             ):
                 return False
-            return self.gpu_compositor.present(functions, self.defaultFramebufferObject())
+            presented = self.gpu_compositor.present(
+                functions,
+                self.defaultFramebufferObject(),
+            )
+            if presented and restore_attempt and restore_generation is not None:
+                self._finalize_economy_restore(restore_generation)
+            return presented
         except Exception as exc:
             self.gpu_compositor.last_error = str(exc)
             try:
@@ -1791,9 +1977,12 @@ class PolarRMWindow(QOpenGLWidget):
             )
             blur_source_key = ("startup-blur", mode, profile, content_sequence, width, height, round(ratio, 3))
         elif self.hero_deploy_video_cut_active():
+            hero_frame_state = self.hero_native_frame_state()
             background_key = (
                 "hero-deploy-video-cut",
                 int(self.state.deploy_status_revision),
+                self._hero_native_sequence,
+                hero_frame_state,
                 width,
                 height,
                 round(ratio, 3),
@@ -1803,6 +1992,8 @@ class PolarRMWindow(QOpenGLWidget):
             blur_source_key = (
                 "hero-deploy-video-cut-blur",
                 int(self.state.deploy_status_revision),
+                self._hero_native_sequence,
+                hero_frame_state,
                 width,
                 height,
                 round(ratio, 3),
@@ -1891,13 +2082,7 @@ class PolarRMWindow(QOpenGLWidget):
             if self.home_visible:
                 self.draw_startup_background(painter, width, height)
             elif self.hero_deploy_video_cut_active():
-                painter.fillRect(canvas, QColor("#02070b"))
-                painter.setPen(QPen(QColor(80, 168, 205, 28), 1.0))
-                grid = max(28, int(min(width, height) / 18))
-                for x in range(0, width + grid, grid):
-                    painter.drawLine(x, 0, x, height)
-                for y in range(0, height + grid, grid):
-                    painter.drawLine(0, y, width, y)
+                self.draw_hero_native_background(painter, width, height)
             elif self.frame_image is not None and not self.frame_image.isNull():
                 painter.drawImage(canvas, self.frame_image, QRectF(self.frame_image.rect()))
             else:
@@ -2110,7 +2295,20 @@ class PolarRMWindow(QOpenGLWidget):
 
     def economy_stage_active(self) -> bool:
         """True while economy workspace is open/animating (same stage as menu overlay)."""
-        return bool(self.economy_visible or self.economy_island.progress > 0.01)
+        if self.economy_phase == EconomyScenePhase.CLOSED:
+            return False
+        # Once the close spring is fully settled, the pending GL transaction
+        # must render the *normal* HUD into freshly cleared static/dynamic
+        # layers before present.  Input ownership is still Economy until that
+        # present succeeds, but suppressing draw_rm_hud here would validate a
+        # blank static cache—the original "camera only" failure.
+        if (
+            self.economy_phase == EconomyScenePhase.CLOSING
+            and self._economy_restore_pending_generation == self._economy_generation
+            and self.economy_island.progress <= 0.001
+        ):
+            return False
+        return True
 
     def combat_hud_preset(self) -> str:
         hud = self.registry.get("HUD")
@@ -2147,8 +2345,27 @@ class PolarRMWindow(QOpenGLWidget):
         scale = self.get_hud_scale(width, height)
         logical_width = max(1, int(width / scale))
         logical_height = max(1, int(height / scale))
+        minecraft_active = self.minecraft_hud_active()
+        if minecraft_active:
+            # Original MC chrome is one low-resolution nearest-neighbour
+            # layer.  Every client/mod overlay below remains at its own HUD
+            # scale, matching Sigma's Minecraft composition model.
+            self.minecraft_hud.draw(
+                p,
+                width,
+                height,
+                self.state,
+                self.registry,
+                self.registry.get("MinecraftCombatHUD"),
+            )
         p.save()
         p.scale(scale, scale)
+
+        if minecraft_active:
+            if self.setting_bool(hud, "Watermark", True):
+                self.draw_watermark(p)
+            if self.registry.get("MatchTimer") and self.registry.get("MatchTimer").enabled:
+                self.draw_match_header(p, logical_width)
 
         display_result = self.interpolated_vision_result(now)
         armor_module = self.registry.get("ArmorAutoAim")
@@ -2186,26 +2403,6 @@ class PolarRMWindow(QOpenGLWidget):
                 "energy",
             )
             self.draw_target_overlay(p, mock_energy, energy_module)
-
-        if self.minecraft_hud_active():
-            p.restore()
-            self.minecraft_hud.draw(
-                p,
-                width,
-                height,
-                self.state,
-                self.registry,
-                self.registry.get("MinecraftCombatHUD"),
-            )
-            if include_chat:
-                self.draw_match_chat(p, width, height, now=now)
-            if include_radial:
-                self.draw_quick_action_wheel(p, width, height)
-            if not self.menu_overlay_active():
-                self.draw_elimination_fx(p, width, height)
-            self.draw_hero_deploy_interface(p, width, height, now)
-            self.dynamic_hud_ms = (time.perf_counter() - started_at) * 1000.0
-            return
 
         if include_target_hud:
             self.paint_combat_target_overlay(
@@ -2949,7 +3146,13 @@ class PolarRMWindow(QOpenGLWidget):
         if not isinstance(point, QPointF):
             return
         override = self.setting_mode(module, "GUI Scale", "Auto")
-        scale = self.minecraft_hud.layout(self.width(), self.height(), override).scale
+        multiplier = self.get_setting_number(module, "Scale Multiplier", 1.0)
+        scale = self.minecraft_hud.layout(
+            self.width(),
+            self.height(),
+            override,
+            scale_multiplier=multiplier,
+        ).scale
         self.minecraft_hud.append_drop_overlay(
             commands,
             self.width(),
@@ -2959,6 +3162,7 @@ class PolarRMWindow(QOpenGLWidget):
             self.minecraft_hud.assignments(module),
             self.font("jello_medium", max(6.0, 4.5 * scale)),
             override,
+            multiplier,
         )
 
     def assign_minecraft_function_slot(self, index: int, module_name: str) -> bool:
@@ -3040,6 +3244,11 @@ class PolarRMWindow(QOpenGLWidget):
         if not module.enabled and int(self.state.deploy_mode) != 1:
             self.toast("Enable HeroLob before opening the deploy console")
             return False
+        if self.economy_phase != EconomyScenePhase.CLOSED:
+            self._economy_pending_overlay = OverlayKind.HERO_DEPLOY
+            if self.economy_phase != EconomyScenePhase.CLOSING:
+                self.close_economy_workspace(play_sound=False)
+            return True
         if self.gui_visible:
             self.set_clickgui_visible(False, announce=False, play_sound=False)
         if self.economy_visible:
@@ -3055,6 +3264,9 @@ class PolarRMWindow(QOpenGLWidget):
         return True
 
     def close_hero_deploy_interface(self, *, force: bool = False) -> bool:
+        if self.hero_deploy_video_cut_active():
+            self.toast("Exit deploy mode and wait for DeployModeStatusSync before closing")
+            return False
         if not self.hero_deploy_ui.visible:
             if force and self.hero_deploy_ui.render_visible:
                 self.hero_deploy_ui.close(time.perf_counter(), immediate=True)
@@ -3109,6 +3321,7 @@ class PolarRMWindow(QOpenGLWidget):
 
     def update_hero_deploy_state(self, now: float | None = None) -> None:
         now = time.perf_counter() if now is None else float(now)
+        previous_mode = int(self._last_deploy_mode)
         mock_status = self.hero_deploy_ui.sync(self.state.deploy_mode, now)
         if mock_status is not None:
             if int(mock_status) != int(self.state.deploy_mode):
@@ -3116,9 +3329,48 @@ class PolarRMWindow(QOpenGLWidget):
             self.state.deploy_mode = int(mock_status)
             self.state.deploy_status_at = now
         revision = int(self.state.deploy_status_revision)
-        if revision != self._last_deploy_status_revision:
+        current_mode = int(self.state.deploy_mode)
+        status_changed = current_mode != previous_mode
+        if revision != self._last_deploy_status_revision or status_changed:
             self._last_deploy_status_revision = revision
             self.invalidate_transient_overlay_scene()
+        if status_changed and current_mode == 1:
+            # The judge-system acknowledgement is authoritative.  Stop the
+            # normal webcam sampler and make the Apple-island/
+            # AndroidLiquidGlass console the locked foreground workspace.
+            if self.camera_started:
+                self.camera_worker.stop()
+                self.camera_started = False
+            self._hero_native_wait_started = now
+            if self.economy_phase != EconomyScenePhase.CLOSED:
+                self._economy_generation += 1
+                self.economy_visible = False
+                self.economy_phase = EconomyScenePhase.CLOSED
+                self._economy_closing_generation = None
+                self._economy_restore_pending_generation = None
+                self._economy_close_finalized = True
+                self.economy_island.progress = 0.0
+                self.economy_island.target = 0.0
+                self.economy_island.velocity = 0.0
+                self._economy_pending_overlay = None
+            if self.gui_visible:
+                self.set_clickgui_visible(False, announce=False, play_sound=False)
+            self.close_match_chat(clear=False)
+            self.cancel_quick_action_wheel()
+            self.overlay_coordinator.request_modal(OverlayKind.HERO_DEPLOY)
+            self.hero_deploy_ui.open(now)
+            self.consume_hero_native_video_frame()
+            self.play_gui_transition_sound("expand")
+            self.frame_scheduler.force()
+        elif status_changed and current_mode == 0:
+            # Preserve the normal frame cache but resume its producer only
+            # after the authoritative 1->0 acknowledgement.
+            self.hero_deploy_ui.close(now)
+            self.overlay_coordinator.close_modal(OverlayKind.HERO_DEPLOY)
+            self.ensure_camera_started()
+            self.play_gui_transition_sound("collapse")
+            self.frame_scheduler.force()
+        self._last_deploy_mode = current_mode
         if self.hero_deploy_ui.pending_mode is None:
             if self.hero_deploy_video_cut_active():
                 self.state.hero_lob_status = "DEPLOYED / VIDEO CUT"
@@ -3182,27 +3434,36 @@ class PolarRMWindow(QOpenGLWidget):
             module,
             hero_range_profile=self.hero_range_profile_selected(),
         )
-        targets = self.hero_deploy_renderer.draw(
-            p,
-            width,
-            height,
-            state=self.state,
-            module=module,
-            interface=self.hero_deploy_ui,
-            solution=solution,
-            readiness=readiness,
-            now=now,
-            font_factory=self.font,
-            glass_drawer=self.draw_hud_liquid_glass,
-            text_drawer=self.draw_glass_text,
-            island_icon_drawer=self.draw_dynamic_island_icon,
-            pointer=self.hover_point,
-        )
+        self.gpu_compositor.push_glass_owner(GlassOwner.HERO_DEPLOY)
+        try:
+            targets = self.hero_deploy_renderer.draw(
+                p,
+                width,
+                height,
+                state=self.state,
+                module=module,
+                interface=self.hero_deploy_ui,
+                solution=solution,
+                readiness=readiness,
+                now=now,
+                font_factory=self.font,
+                glass_drawer=self.draw_hud_liquid_glass,
+                text_drawer=self.draw_glass_text,
+                island_icon_drawer=self.draw_dynamic_island_icon,
+                pointer=self.hover_point,
+            )
+        finally:
+            self.gpu_compositor.pop_glass_owner()
         for target in targets:
             if target.enabled:
                 self.add_hotspot(target.rect, target.action, tooltip=target.tooltip)
         layout = self.hero_deploy_renderer.layout(width, height, self.hero_deploy_ui.progress)
-        if self.hero_deploy_ui.visible and layout.interactive:
+        if (
+            self.hero_deploy_ui.visible
+            and layout.interactive
+            and not self.hero_deploy_video_cut_active()
+            and self.hero_deploy_ui.pending_mode is None
+        ):
             self.add_hotspot(
                 layout.close_button,
                 "hero_deploy_close",
@@ -3258,6 +3519,40 @@ class PolarRMWindow(QOpenGLWidget):
         self._gpu_background_changed = True
         self.gpu_compositor.invalidate_transient_layers()
 
+    def _finalize_economy_restore(self, generation: int) -> None:
+        """Commit a close only after the rebuilt normal HUD was presented."""
+
+        if (
+            self.economy_phase != EconomyScenePhase.CLOSING
+            or generation != self._economy_generation
+            or self._economy_restore_pending_generation != generation
+        ):
+            return
+        self._economy_restore_pending_generation = None
+        self._economy_closing_generation = None
+        self.economy_phase = EconomyScenePhase.CLOSED
+        self.economy_visible = False
+        self._economy_close_finalized = True
+        self.economy_island.progress = 0.0
+        self.economy_island.target = 0.0
+        self.economy_island.velocity = 0.0
+        self.overlay_coordinator.close_modal(OverlayKind.ECONOMY)
+        self.frame_scheduler.force()
+        pending_overlay = self._economy_pending_overlay
+        self._economy_pending_overlay = None
+        if pending_overlay is not None:
+            def open_pending_overlay() -> None:
+                if pending_overlay == OverlayKind.CLICKGUI:
+                    self.set_clickgui_visible(True)
+                elif pending_overlay == OverlayKind.CHAT:
+                    self.open_match_chat()
+                elif pending_overlay == OverlayKind.HERO_DEPLOY:
+                    self.open_hero_deploy_interface()
+
+            # Present/restore is still on the GL stack here. Defer the next
+            # modal request to the event queue so ownership never overlaps.
+            QTimer.singleShot(0, open_pending_overlay)
+
     def set_clickgui_visible(
         self,
         visible: bool,
@@ -3266,6 +3561,15 @@ class PolarRMWindow(QOpenGLWidget):
         play_sound: bool = True,
     ) -> None:
         visible = bool(visible)
+        if visible and self.hero_deploy_video_cut_active():
+            self.open_hero_deploy_interface()
+            self.toast("Hero deploy console is locked until exit sync")
+            return
+        if visible and self.economy_phase != EconomyScenePhase.CLOSED:
+            self._economy_pending_overlay = OverlayKind.CLICKGUI
+            if self.economy_phase != EconomyScenePhase.CLOSING:
+                self.close_economy_workspace(play_sound=False)
+            return
         returned_to_primary = bool(
             visible and self.gui_visible and self.jello_state.legacy_mode is not None
         )
@@ -3305,6 +3609,10 @@ class PolarRMWindow(QOpenGLWidget):
         self.update()
 
     def open_economy_workspace(self, category: str | None = None) -> None:
+        if self.hero_deploy_video_cut_active():
+            self.open_hero_deploy_interface()
+            self.toast("Exit Hero deploy mode before opening Economy")
+            return
         now = time.perf_counter()
         if self.hero_deploy_ui.visible:
             self.close_hero_deploy_interface(force=True)
@@ -3318,9 +3626,14 @@ class PolarRMWindow(QOpenGLWidget):
             self.set_clickgui_visible(False, announce=False, play_sound=False)
         self.close_match_chat(clear=False)
         self.cancel_quick_action_wheel()
+        self._economy_generation += 1
+        self._economy_closing_generation = None
+        self._economy_restore_pending_generation = None
+        self._economy_pending_overlay = None
         self.overlay_coordinator.request_modal(OverlayKind.ECONOMY)
         self.economy_visible = True
         self._economy_close_finalized = False
+        self.economy_phase = EconomyScenePhase.OPENING
         self.economy_opened_at = now
         self.economy_island.set_target(
             1.0,
@@ -3349,13 +3662,22 @@ class PolarRMWindow(QOpenGLWidget):
         self.update()
 
     def close_economy_workspace(self, *, play_sound: bool = True) -> None:
-        if not self.economy_visible:
+        if self.economy_phase == EconomyScenePhase.CLOSED:
             self.overlay_coordinator.close_modal(OverlayKind.ECONOMY)
             return
+        if self.economy_phase == EconomyScenePhase.CLOSING:
+            return
         now = time.perf_counter()
+        self._economy_generation += 1
+        self._economy_closing_generation = self._economy_generation
+        self._economy_restore_pending_generation = None
         self.economy_visible = False
         self._economy_close_finalized = False
-        self.overlay_coordinator.close_modal(OverlayKind.ECONOMY)
+        self.economy_phase = EconomyScenePhase.CLOSING
+        # Keep the Economy modal until a normal HUD frame has actually been
+        # rebuilt and presented.  Releasing it here caused click-through and
+        # let a stale transparent FBO become the new cache.
+        self.overlay_coordinator.request_modal(OverlayKind.ECONOMY)
         self.economy_island.set_target(
             0.0,
             self.anim_duration(0.48),
@@ -3379,6 +3701,15 @@ class PolarRMWindow(QOpenGLWidget):
     def open_match_chat(self) -> None:
         module = self.registry.get("MatchChat")
         if module is None or not module.enabled or self.home_visible:
+            return
+        if self.hero_deploy_video_cut_active():
+            self.open_hero_deploy_interface()
+            self.toast("Hero deploy console is locked until exit sync")
+            return
+        if self.economy_phase != EconomyScenePhase.CLOSED:
+            self._economy_pending_overlay = OverlayKind.CHAT
+            if self.economy_phase != EconomyScenePhase.CLOSING:
+                self.close_economy_workspace(play_sound=False)
             return
         if self.hero_deploy_ui.visible:
             self.close_hero_deploy_interface(force=True)
@@ -4092,6 +4423,8 @@ class PolarRMWindow(QOpenGLWidget):
             return False
 
     def draw_hud_gpu_background(self) -> bool:
+        if self.hero_deploy_video_cut_active():
+            return False
         if self.home_visible or not self.hud_video_gpu.available or self.frame_image is None or self.frame_image.isNull():
             return False
         try:
@@ -4161,7 +4494,7 @@ class PolarRMWindow(QOpenGLWidget):
 
     def draw_video(self, p: QPainter, width: int, height: int) -> None:
         if self.hero_deploy_video_cut_active():
-            p.fillRect(QRectF(0, 0, width, height), QColor("#02070b"))
+            self.draw_hero_native_background(p, width, height)
             return
         source = self.registry.get("CameraFeed")
         source_setting = source.get_setting("Source") if source else None
@@ -4208,10 +4541,112 @@ class PolarRMWindow(QOpenGLWidget):
             self.tongji_bridge.stop()
 
     def on_captured_camera_frame(self, frame: CapturedFrame) -> None:
+        if self.hero_deploy_video_cut_active():
+            return
         if self._vision_source in ("Local", "Auto"):
             self.local_vision.submit(frame.sequence, frame.width, frame.height, frame.bgr)
 
+    def consume_hero_native_video_frame(self) -> bool:
+        """Read only the judge-system CustomByteBlock/0x0310 decoder."""
+
+        bgr, frame_at, frame_source = self.backend.latest_video_frame(
+            0.65,
+            "Native 0x0310",
+        )
+        if frame_at <= self._hero_native_video_at:
+            return False
+        try:
+            source = bgr
+            bgr = source.copy() if source is not None else None
+        except Exception:
+            bgr = None
+        if bgr is None or getattr(bgr, "ndim", 0) != 3 or int(bgr.shape[2]) < 3:
+            return False
+        height, width = int(bgr.shape[0]), int(bgr.shape[1])
+        if width <= 0 or height <= 0:
+            return False
+        image = QImage(
+            bgr.data,
+            width,
+            height,
+            int(bgr.strides[0]),
+            QImage.Format.Format_BGR888,
+        ).copy()
+        self._hero_native_video_at = float(frame_at)
+        self._hero_native_sequence += 1
+        self._hero_native_source = str(frame_source)
+        self.hero_native_image = image
+        self.hero_native_pixmap = QPixmap.fromImage(image)
+        self._gpu_background_key = None
+        self._gpu_blur_source_key = None
+        self._gpu_background_changed = True
+        return True
+
+    def hero_native_frame_state(self, now: float | None = None) -> str:
+        now = time.perf_counter() if now is None else float(now)
+        if self.hero_native_image is None or self.hero_native_image.isNull():
+            return "waiting"
+        if self._hero_native_video_at <= 0.0 or now - self._hero_native_video_at > 0.65:
+            return "lost"
+        return "live"
+
+    @staticmethod
+    def _aspect_fit_image_rect(image: QImage, width: int, height: int) -> QRectF:
+        if image.isNull() or image.width() <= 0 or image.height() <= 0:
+            return QRectF()
+        scale = min(float(width) / image.width(), float(height) / image.height())
+        draw_width = image.width() * scale
+        draw_height = image.height() * scale
+        return QRectF(
+            (float(width) - draw_width) * 0.5,
+            (float(height) - draw_height) * 0.5,
+            draw_width,
+            draw_height,
+        )
+
+    def draw_hero_native_background(
+        self,
+        painter: QPainter,
+        width: int,
+        height: int,
+        *,
+        now: float | None = None,
+    ) -> str:
+        """Draw the sole deployed video source with explicit loss states."""
+
+        state = self.hero_native_frame_state(now)
+        canvas = QRectF(0.0, 0.0, float(width), float(height))
+        painter.fillRect(canvas, QColor("#02070b"))
+        image = self.hero_native_image
+        if state == "live" and image is not None and not image.isNull():
+            target = self._aspect_fit_image_rect(image, width, height)
+            painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+            painter.drawImage(target, image, QRectF(image.rect()))
+            if not self.gpu_compositor.available:
+                self.liquid_glass.update("hud", image, target)
+            return state
+
+        painter.setPen(QColor("#b9d7e5"))
+        status = (
+            "WAITING FOR NATIVE 0x0310 COMPRESSED VIDEO"
+            if state == "waiting"
+            else "NATIVE 0x0310 VIDEO LOST · NO CAMERA FALLBACK"
+        )
+        painter.setFont(self.font("poppins_bold", 10.0))
+        painter.drawText(canvas, Qt.AlignmentFlag.AlignCenter, status)
+        return state
+
     def consume_capture_frame(self) -> None:
+        if (
+            self.hero_deploy_video_cut_active()
+            or self.hero_deploy_ui.render_visible
+            or self.hero_deploy_ui.pending_mode is not None
+        ):
+            self.consume_hero_native_video_frame()
+        if self.hero_deploy_video_cut_active():
+            # Authoritative DeployModeStatusSync=1 owns the sole video path.
+            # Do not even query webcam/UDP/synthetic normal-feed sources.
+            return
         camera_module = self.registry.get("CameraFeed")
         if self.setting_mode(camera_module, "Source", "Webcam") != "Webcam":
             self.consume_backend_video_frame()
@@ -9578,8 +10013,25 @@ class PolarRMWindow(QOpenGLWidget):
             order_style, tag_style, animation_style = "Descending", "Off", "FlyFlip"
         assert right_aligned is not None
         visible = [m for m in self.registry.enabled_modules() if m.name not in ("HUD", "ClickGui")]
+        sort_labels = tuple(
+            (module.name, self.module_list_tag(module, tag_style))
+            for module in visible
+        )
+        device = p.device()
+        logical_dpi = int(device.logicalDpiX()) if device is not None else 96
+        sort_cache_key = (sort_labels, font.key(), logical_dpi)
+        if sort_cache_key != self._module_list_sort_cache_key:
+            self._module_list_sort_cache_key = sort_cache_key
+            self._module_list_sort_widths = {
+                module.name: text_width(
+                    p,
+                    font,
+                    f"{module.name}  {self.module_list_tag(module, tag_style)}",
+                )
+                for module in visible
+            }
         visible.sort(
-            key=lambda module: text_width(p, font, f"{module.name}  {self.module_list_tag(module, tag_style)}"),
+            key=lambda module: self._module_list_sort_widths.get(module.name, 0.0),
             reverse=order_style != "Ascending",
         )
         visible_names = {module.name for module in visible}
@@ -9599,18 +10051,20 @@ class PolarRMWindow(QOpenGLWidget):
                 row["order"] = row.get("order", len(self.module_list_rows))
 
         entries: list[dict[str, Any]] = []
+        row_duration = self.anim_duration(0.22)
+        order_duration = self.anim_duration(0.20)
         for name, row in list(self.module_list_rows.items()):
             target = float(row.get("target", 0.0))
             new = bool(row.pop("new", False))
             slide_distance = 34.0 if right_aligned else -34.0
             if animation_style == "Fade":
                 slide_distance = 0.0
-            alpha = self.anim.value(f"hud.modulelist.alpha.{name}", target, self.anim_duration(0.22), Easings.ease_out_pow3, initial=0.0 if new else target)
-            height = self.anim.value(f"hud.modulelist.height.{name}", target, self.anim_duration(0.22), Easings.ease_out_pow3, initial=0.0 if new else target)
+            alpha = self.anim.value(f"hud.modulelist.alpha.{name}", target, row_duration, Easings.ease_out_pow3, initial=0.0 if new else target)
+            height = self.anim.value(f"hud.modulelist.height.{name}", target, row_duration, Easings.ease_out_pow3, initial=0.0 if new else target)
             slide = self.anim.value(
                 f"hud.modulelist.slide.{name}",
                 0.0 if target > 0 else slide_distance,
-                self.anim_duration(0.22),
+                row_duration,
                 Easings.ease_out_pow3 if target > 0 else Easings.ease_in_pow3,
                 initial=slide_distance if new else 0.0,
             )
@@ -9618,7 +10072,7 @@ class PolarRMWindow(QOpenGLWidget):
             order_animated = self.anim.value(
                 f"hud.modulelist.order.{name}",
                 float(row.get("order", 0)),
-                self.anim_duration(0.20),
+                order_duration,
                 Easings.ease_out_cubic,
                 initial=order_initial,
             )
@@ -12975,7 +13429,13 @@ class PolarRMWindow(QOpenGLWidget):
             if drag.get("moved"):
                 function_bar = self.registry.get("MinecraftCombatHUD")
                 override = self.setting_mode(function_bar, "GUI Scale", "Auto")
-                layout = self.minecraft_hud.layout(self.width(), self.height(), override)
+                multiplier = self.get_setting_number(function_bar, "Scale Multiplier", 1.0)
+                layout = self.minecraft_hud.layout(
+                    self.width(),
+                    self.height(),
+                    override,
+                    scale_multiplier=multiplier,
+                )
                 slot = layout.slot_at(event.position())
                 if slot is None:
                     self.toast("Drop a module onto a Minecraft hotbar slot")
@@ -13424,6 +13884,7 @@ class PolarRMWindow(QOpenGLWidget):
             module = self.registry.get(str(payload))
             if module is not None:
                 self.selected_module = module
+                self.prewarm_jello_module_resources(module)
                 self.jello_state.open_settings(module.name)
                 self.frame_scheduler.force()
         elif action == "jello_close_settings":
@@ -14585,7 +15046,23 @@ class PolarRMWindow(QOpenGLWidget):
 
     def elide(self, p: QPainter, font: QFont, text: str, width: float) -> str:
         p.setFont(font)
-        return p.fontMetrics().elidedText(text, Qt.TextElideMode.ElideRight, max(1, int(width)))
+        width_px = max(1, int(width))
+        device = p.device()
+        logical_dpi = int(device.logicalDpiX()) if device is not None else 96
+        device_ratio = int(round((device.devicePixelRatioF() if device is not None else 1.0) * 100.0))
+        key = (font.key(), str(text), width_px, logical_dpi, device_ratio)
+        cached = self._elide_cache.get(key)
+        if cached is not None:
+            return cached
+        result = p.fontMetrics().elidedText(
+            str(text),
+            Qt.TextElideMode.ElideRight,
+            width_px,
+        )
+        if len(self._elide_cache) >= 4096:
+            self._elide_cache.pop(next(iter(self._elide_cache)), None)
+        self._elide_cache[key] = result
+        return result
 
     def rect_visible(self, rect: QRectF, clip: QRectF) -> bool:
         return rect.intersects(clip)

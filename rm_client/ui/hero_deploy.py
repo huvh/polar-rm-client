@@ -454,8 +454,8 @@ class HeroDeployRenderer:
         island_icon_drawer: IslandIconDrawer | None = None,
         pointer: QPointF | None = None,
     ) -> tuple[HeroDeployHitTarget, ...]:
-        # Direct renderer callers (tests/tools) may not own a render timer.
-        interface.update_presentation(now)
+        # Presentation is advanced exactly once by PolarClientWindow.on_tick.
+        # Direct tests/tools explicitly advance the state before drawing.
         layout = self.layout(width, height, interface.progress)
         progress = _clamp(interface.progress)
         if progress <= 0.001 and not interface.visible:
@@ -475,8 +475,8 @@ class HeroDeployRenderer:
         p.save()
         p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         p.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
-        # Same restrained dim amount as the Control Center.  The camera stays
-        # visible and is the source sampled by the glass lenses.
+        # Same restrained dim amount as the Control Center.  When deployed the
+        # backdrop is exclusively the Native 0x0310 compressed frame.
         p.fillRect(QRectF(0.0, 0.0, width, height), _alpha(QColor("#000000"), 0.38 * layout.body_progress))
 
         p.save()
@@ -569,6 +569,7 @@ class HeroDeployRenderer:
             glass_drawer,
             surface="SubGlass",
             hover=chip_hover * 0.25,
+            clip_rect=layout.panel,
         )
         self._rounded(
             p,
@@ -595,6 +596,7 @@ class HeroDeployRenderer:
             glass_drawer,
             surface="SubGlass",
             hover=close_hover,
+            clip_rect=layout.panel,
         )
         self._rounded(
             p,

@@ -57,6 +57,7 @@ class GlassOwner(str, Enum):
     CLICKGUI = "ClickGUI"
     ECONOMY = "Economy"
     RADIAL = "Radial"
+    HERO_DEPLOY = "HeroDeploy"
 
 
 def compose_combined_backdrop_pixel(
@@ -429,6 +430,37 @@ class GpuFrameCompositor:
             return True
         finally:
             self.target_fbo.release()
+
+    def clear_scene_layers(
+        self,
+        functions,
+        layers: tuple[str, ...] = ("overlay", "dynamic", "target"),
+    ) -> bool:
+        """Atomically clear modal-owned UI FBOs on the OpenGL thread.
+
+        Event handlers only invalidate metadata.  Economy restoration invokes
+        this method from ``paintGL`` before rebuilding the normal HUD, so a
+        stale transparent dynamic layer can never be presented as a valid
+        cache.  A failed bind leaves restoration pending for the next frame.
+        """
+
+        mapping = {
+            "overlay": self.overlay_fbo,
+            "dynamic": self.dynamic_fbo,
+            "target": self.target_fbo,
+        }
+        for name in layers:
+            fbo = mapping.get(str(name))
+            if fbo is None or not fbo.bind():
+                return False
+            try:
+                self.clear_current(functions, transparent=True)
+            finally:
+                fbo.release()
+        self._blur_valid = False
+        self._treated_blur_valid = False
+        self._frame_glass_commands.clear()
+        return True
 
     def begin_vision_layer(self, functions) -> bool:
         """Bind and clear the dedicated premultiplied vision wire layer."""
