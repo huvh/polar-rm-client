@@ -73,6 +73,7 @@ from rm_client.ui.animation import (
     IslandContainerState,
     MapIslandState,
     ReversibleExpoTimeline,
+    step_damped_spring,
 )
 from rm_client.ui.gui_cache import ClickGuiLayerCache
 from rm_client.ui.gpu_frame_compositor import compose_combined_backdrop_pixel
@@ -1468,6 +1469,70 @@ def test_hud_liquid_glass_snapshot_stability() -> None:
     app.processEvents()
 
 
+def test_android_liquid_spring_is_refresh_rate_invariant() -> None:
+    def sample(hz: int, *, ratio: float, reverse: bool = False) -> tuple[float, float]:
+        value = 0.0
+        velocity = 0.0
+        dt = 1.0 / float(hz)
+        for _ in range(hz // 2):
+            value, velocity = step_damped_spring(
+                value,
+                velocity,
+                1.0,
+                dt,
+                stiffness=300.0,
+                damping_ratio=ratio,
+            )
+        if reverse:
+            for _ in range(hz // 2):
+                value, velocity = step_damped_spring(
+                    value,
+                    velocity,
+                    0.0,
+                    dt,
+                    stiffness=300.0,
+                    damping_ratio=1.0,
+                )
+        return value, velocity
+
+    for ratio in (0.5, 0.62, 1.0):
+        reference = sample(240, ratio=ratio)
+        for hz in (60, 90, 120, 144):
+            actual = sample(hz, ratio=ratio)
+            assert abs(actual[0] - reference[0]) < 1.0e-9
+            assert abs(actual[1] - reference[1]) < 1.0e-8
+
+    reference_reverse = sample(240, ratio=0.5, reverse=True)
+    for hz in (60, 90, 120, 144):
+        actual = sample(hz, ratio=0.5, reverse=True)
+        assert abs(actual[0] - reference_reverse[0]) < 1.0e-9
+        assert abs(actual[1] - reference_reverse[1]) < 1.0e-8
+
+    # A missed presentation must advance by elapsed wall time rather than
+    # stretching the remainder of the animation into visible slow motion.
+    long_frame = step_damped_spring(
+        0.0,
+        0.0,
+        1.0,
+        0.18,
+        stiffness=300.0,
+        damping_ratio=0.5,
+    )
+    split_value = 0.0
+    split_velocity = 0.0
+    for _ in range(18):
+        split_value, split_velocity = step_damped_spring(
+            split_value,
+            split_velocity,
+            1.0,
+            0.01,
+            stiffness=300.0,
+            damping_ratio=0.5,
+        )
+    assert abs(long_frame[0] - split_value) < 1.0e-9
+    assert abs(long_frame[1] - split_velocity) < 1.0e-8
+
+
 def test_clickgui_offscreen_modes() -> None:
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     from PySide6.QtGui import QColor, QImage, QPainter
@@ -1765,6 +1830,40 @@ def test_jello_clickgui_layout_and_old_group() -> None:
             1,
             mode_hotspot.rect,
         )
+        # Opening the popup must not switch the complete ClickGUI from device
+        # pixel alignment to sub-pixel text. Only the rotating arrow moves.
+        window.jello_state.update(0.05)
+        window.hotspots.clear()
+        transition_dropdown = window.build_gpu_clickgui(1280, 720, 1.0)
+        rotating_arrows = [
+            text
+            for text in transition_dropdown.texts
+            if text.text == ">" and abs(text.rotation_degrees) > 0.01
+        ]
+        assert len(rotating_arrows) == 1
+        assert rotating_arrows[0].device_pixel_snap is False
+        outside_modal = [
+            text
+            for text in transition_dropdown.texts
+            if not QRectF(390.0, 128.0, 500.0, 504.0).contains(text.rect.center())
+            and text.text != ">"
+        ]
+        assert outside_modal and all(text.device_pixel_snap for text in outside_modal)
+
+        # One continuous white backplate sits behind the option rows. It seals
+        # the one-pixel AA seam that previously exposed Save Layout's blue UI.
+        popup_seals = [
+            rect
+            for rect in transition_dropdown.rects
+            if abs(rect.rect.width() - mode_hotspot.rect.width()) < 0.01
+            and rect.rect.height() > 54.0
+            and rect.clip is not None
+            and rect.fill.red() >= 250
+            and rect.fill.green() >= 250
+            and rect.fill.blue() >= 250
+            and rect.fill.alpha() >= 250
+        ]
+        assert popup_seals
         window.jello_state.update(0.30)
         window.hotspots.clear()
         window.build_gpu_clickgui(1280, 720, 1.0)
@@ -1799,9 +1898,22 @@ def test_jello_clickgui_layout_and_old_group() -> None:
             1,
             target_mode.rect,
         )
+        scroll_before = float(window.jello_state.settings_scroll.get("HUD", 0.0))
         window.jello_state.update(0.12)
         window.hotspots.clear()
         hud_dropdown = window.build_gpu_clickgui(1280, 720, 1.0)
+        # Layout only requests a spring target; it may not teleport every row
+        # in the settings viewport during this build.
+        scroll_after_layout = float(window.jello_state.settings_scroll.get("HUD", 0.0))
+        assert abs(scroll_after_layout - scroll_before) < 1.0e-6
+        assert window.jello_state.settings_scroll_target("HUD") >= scroll_after_layout
+        popup_direction = window.jello_state.dropdown_opens_up
+        window.jello_state.update(1.0 / 144.0)
+        window.hotspots.clear()
+        hud_dropdown = window.build_gpu_clickgui(1280, 720, 1.0)
+        scroll_after_frame = float(window.jello_state.settings_scroll.get("HUD", 0.0))
+        assert scroll_after_layout <= scroll_after_frame < scroll_after_layout + 8.0
+        assert window.jello_state.dropdown_opens_up == popup_direction
         assert window.jello_state.dropdown_key == target_key
         popup_settings = {
             id(hotspot.payload[0])
@@ -3746,6 +3858,7 @@ if __name__ == "__main__":
     test_official_mqtt_bridge_mock_publish()
     test_robot_state_tick()
     test_pyside_animation_import()
+    test_android_liquid_spring_is_refresh_rate_invariant()
     test_clickgui_offscreen_modes()
     test_jello_clickgui_layout_and_old_group()
     test_prediction_geometry_is_bounded()

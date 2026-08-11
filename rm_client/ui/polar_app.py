@@ -97,7 +97,15 @@ from ..vision import (
     snapshot_from_local_result,
     snapshot_from_tongji_packet,
 )
-from .animation import AnimationBank, Easings, GuiMotionController, IslandContainerState, MapIslandState, MorphState
+from .animation import (
+    AnimationBank,
+    Easings,
+    GuiMotionController,
+    IslandContainerState,
+    MapIslandState,
+    MorphState,
+    step_damped_spring,
+)
 from .fonts import FontBook
 from .gui_cache import ClickGuiLayerCache
 from .clickgui_gpu import ClickGuiDrawList, ClickGuiGpuRenderer
@@ -248,13 +256,16 @@ class InertialScroll:
         self.target = max(0.0, min(self.maximum, self.target + float(delta)))
 
     def update(self, dt: float) -> float:
-        dt = max(0.001, min(0.032, float(dt)))
         # DynamicIsland 风格的快速临界阻尼：滚轮停止后约 220 ms 收敛。
         stiffness = 235.0
-        damping = 2.0 * math.sqrt(stiffness)
-        acceleration = (self.target - self.position) * stiffness - self.velocity * damping
-        self.velocity += acceleration * dt
-        self.position += self.velocity * dt
+        self.position, self.velocity = step_damped_spring(
+            self.position,
+            self.velocity,
+            self.target,
+            dt,
+            stiffness=stiffness,
+            damping_ratio=1.0,
+        )
         if abs(self.target - self.position) < 0.03 and abs(self.velocity) < 0.1:
             self.position = self.target
             self.velocity = 0.0
@@ -343,6 +354,9 @@ class PolarRMWindow(QOpenGLWidget):
         # CPU fluorescent FOV ring cache: (radius_px, line_w, glow) → (image, half_extent).
         self._fluorescent_circle_cache: dict[tuple[int, int, int], tuple[QImage, float]] = {}
         self._combat_hud_last_time = time.perf_counter()
+        self._ui_frame_index = 0
+        self._combat_hud_frame_index = -1
+        self._jello_active_mods_frame_index = -1
         self.scenario_manager = ScenarioManager("LabDebug")
         self.match_mode_manager = MatchModeManager("RMUC7v7")
         self.mode_manager = GuiModeManager(PRIMARY_GUI_MODE)
@@ -636,9 +650,16 @@ class PolarRMWindow(QOpenGLWidget):
     def on_tick(self) -> None:
         now = time.perf_counter()
         self.gui_motion.begin_frame(now)
-        dt = max(0.001, min(0.05, now - self.last_frame_time))
+        self._ui_frame_index += 1
+        elapsed = max(0.0, now - self.last_frame_time)
+        # UI timelines follow the display clock.  A first-use glyph/FBO upload
+        # can block one frame for more than 50 ms; truncating that elapsed time
+        # made Jello's nominal 450 ms open take 700-900 ms and all HUD motion
+        # briefly enter slow motion.  Physics/backend ticks retain their own
+        # conservative 50 ms cap below.
+        ui_dt = max(0.001, min(1.0, elapsed))
         self.last_frame_time = now
-        self.frame_dt = dt
+        self.frame_dt = ui_dt
         ui_scale_module = self.registry.get("UIScale")
         refresh_setting = ui_scale_module.get_setting("HUD Refresh Rate") if ui_scale_module else None
         try:
@@ -651,16 +672,16 @@ class PolarRMWindow(QOpenGLWidget):
             self._render_timer_interval_ms = requested_interval
             self.timer.setInterval(requested_interval)
             self.frame_scheduler.force()
-        self.polar_unified_scroll = self.polar_unified_scroll_motion.update(dt)
-        self.economy_category_scroll.update(dt)
-        self.economy_offers_scroll.update(dt)
-        self.economy_detail_scroll.update(dt)
-        self.quick_action_wheel.update(dt)
+        self.polar_unified_scroll = self.polar_unified_scroll_motion.update(ui_dt)
+        self.economy_category_scroll.update(ui_dt)
+        self.economy_offers_scroll.update(ui_dt)
+        self.economy_detail_scroll.update(ui_dt)
+        self.quick_action_wheel.update(ui_dt)
         for motion in self.polar_settings_scroll_motion.values():
-            motion.update(dt)
+            motion.update(ui_dt)
         self.gui_timeline.set_target(1.0 if self.gui_visible else 0.0)
-        self.gui_timeline.update(dt)
-        self.jello_state.update(dt)
+        self.gui_timeline.update(ui_dt)
+        self.jello_state.update(ui_dt)
         if (
             self.jello_state.reset_pending
             and not self.gui_visible
@@ -718,7 +739,7 @@ class PolarRMWindow(QOpenGLWidget):
                 and self.setting_bool(match_chat, "Referee Notices", True)
             ):
                 self.chat_event_adapter.economy(economy_transaction, now)
-        self.tactical_map_state.update(dt)
+        self.tactical_map_state.update(ui_dt)
         dynamic_payload = self.dynamic_island_payload()
         content_duration = 0.30 if dynamic_payload["kind"] == "module" else 0.80
         if not dynamic_payload["active"]:
@@ -727,7 +748,7 @@ class PolarRMWindow(QOpenGLWidget):
             1.0 if dynamic_payload["active"] else 0.0,
             content_duration,
         )
-        self.dynamic_island_state.update(dt)
+        self.dynamic_island_state.update(ui_dt)
         logic_interval = 1.0 / 60.0
         if now - self._last_logic_time >= logic_interval * 0.92:
             logic_dt = max(0.001, min(0.05, now - self._last_logic_time))
@@ -2399,7 +2420,10 @@ class PolarRMWindow(QOpenGLWidget):
         便于边调边看；菜单层叠在 HUD 之上。
         """
         started_at = time.perf_counter()
-        now = started_at
+        # Every battle element consumes the same monotonic timestamp. Sampling
+        # perf_counter independently in each draw helper made one present look
+        # like several tiny animation frames when Qt rebuilt multiple FBOs.
+        now = float(self.gui_motion.now)
         hud = self.registry.get("HUD")
         scale = self.get_hud_scale(width, height)
         logical_width = max(1, int(width / scale))
@@ -7665,12 +7689,16 @@ class PolarRMWindow(QOpenGLWidget):
         # Prefer display frame_dt (stable 60–144 Hz) over paint-to-paint delta so
         # approachJar / heatGhost match visual-demo rAF pacing. Fall back only
         # when frame_dt is unavailable (offline raster tools).
-        now = time.perf_counter()
+        now = float(self.gui_motion.now)
         frame_dt = float(getattr(self, "frame_dt", 0.0) or 0.0)
-        if frame_dt > 1e-6:
+        frame_index = int(getattr(self, "_ui_frame_index", 0))
+        if frame_index == self._combat_hud_frame_index:
+            dt = 0.0
+        elif frame_dt > 1e-6:
             dt = max(0.0, min(0.05, frame_dt))
         else:
             dt = max(0.0, min(0.05, now - self._combat_hud_last_time))
+        self._combat_hud_frame_index = frame_index
         self._combat_hud_last_time = now
         aim_override = None
         if presence is not None and presence.phase in {"Grace10s", "Fading"}:
@@ -8130,11 +8158,11 @@ class PolarRMWindow(QOpenGLWidget):
     def animated_angle(self, key: str, target: float, smooth: float) -> float:
         track = self.hud_angle_tracks.setdefault(key, AngleRenderTrack())
         response = 8.0 + (1.0 - max(0.0, min(1.0, smooth))) * 18.0
-        return track.sample(time.perf_counter(), target, response=response)
+        return track.sample(float(self.gui_motion.now), target, response=response)
 
     def animated_scalar(self, key: str, target: float, response: float = 18.0) -> float:
         track = self.telemetry_render_tracks.setdefault(key, ScalarRenderTrack())
-        return track.sample(time.perf_counter(), target, response=response)
+        return track.sample(float(self.gui_motion.now), target, response=response)
 
     def chassis_follow_mode(self) -> str:
         chassis = self.registry.get("ChassisAssist")
@@ -8163,6 +8191,7 @@ class PolarRMWindow(QOpenGLWidget):
             target_w,
             target_h,
             target_h / 2.0,
+            opening=content_active,
         )
         state = self.dynamic_island_state
         content = state.content.progress
@@ -10511,9 +10540,19 @@ class PolarRMWindow(QOpenGLWidget):
         sort_metrics = QFontMetricsF(sort_font)
         font_height = float(math.ceil(metrics.height()))
         animations = self.setting_bool(hud, "Jello List Animations", True)
-        now = time.perf_counter()
+        now = float(self.gui_motion.now)
+        frame_index = int(getattr(self, "_ui_frame_index", 0))
         last = float(getattr(self, "_jello_active_mods_last", now))
-        dt = max(0.0, min(0.05, now - last))
+        if frame_index == self._jello_active_mods_frame_index:
+            dt = 0.0
+        else:
+            frame_dt = float(getattr(self, "frame_dt", 0.0) or 0.0)
+            dt = (
+                max(0.0, min(0.05, frame_dt))
+                if frame_dt > 1.0e-6
+                else max(0.0, min(0.05, now - last))
+            )
+        self._jello_active_mods_frame_index = frame_index
         self._jello_active_mods_last = now
         rows: dict[str, dict[str, Any]] = getattr(self, "_jello_active_mods_rows", {})
         self._jello_active_mods_rows = rows
@@ -13840,8 +13879,7 @@ class PolarRMWindow(QOpenGLWidget):
                 return
             elif mode == "jello_settings":
                 jello_delta = -event.angleDelta().y() / 120.0 * 35.0
-                current = float(self.jello_state.settings_scroll.get(key, 0.0))
-                self.jello_state.settings_scroll[key] = max(0.0, min(maximum, current + jello_delta))
+                self.jello_state.scroll_settings_by(key, jello_delta, maximum)
                 self.jello_state.mark_scroll(f"settings:{key}")
                 self.frame_scheduler.force()
                 event.accept()

@@ -185,6 +185,7 @@ BottomLeftFbo = OpenGL FBO
 - 动画使用单调时钟，与视频或摄像头帧率分离。
 - 页面过渡 420ms；POLAR One 与经济工作区展开 620ms、收拢 480ms。
 - 动画必须可从当前进度反向，不得重置起点。
+- Control Center/灵动岛几何沿用本地 AndroidLiquidGlass 的弹簧：展开 `dampingRatio=0.5, stiffness=300`，收拢/停靠 `dampingRatio=1.0, stiffness=300`；桌面端必须用帧率无关积分并在同一 present 内共享一个时间戳。
 - hover 使用低振幅位移，最大 1–3 逻辑像素。
 - 禁止持续呼吸、循环扫光和无意义振荡。
 - 静止界面停止高频动态提交；媒体纹理仍可按源帧更新。

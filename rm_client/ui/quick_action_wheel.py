@@ -5,6 +5,8 @@ import math
 import time
 from typing import Any
 
+from .animation import step_damped_spring
+
 
 ACTION_LABELS: dict[str, str] = {
     "economy": "Economy",
@@ -158,14 +160,17 @@ class QuickActionWheelState:
         return action
 
     def update(self, dt: float) -> float:
-        dt = max(0.001, min(0.032, float(dt)))
         target = 1.0 if self.active else 0.0
         stiffness = 300.0
         ratio = 0.62 if self.active else 1.0
-        damping = 2.0 * ratio * math.sqrt(stiffness)
-        acceleration = (target - self.progress) * stiffness - self.velocity * damping
-        self.velocity += acceleration * dt
-        self.progress += self.velocity * dt
+        self.progress, self.velocity = step_damped_spring(
+            self.progress,
+            self.velocity,
+            target,
+            dt,
+            stiffness=stiffness,
+            damping_ratio=ratio,
+        )
         self.progress = max(0.0, min(1.08, self.progress))
         if abs(target - self.progress) < 0.001 and abs(self.velocity) < 0.01:
             self.progress = target

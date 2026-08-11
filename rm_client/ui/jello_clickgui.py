@@ -19,7 +19,7 @@ from PySide6.QtGui import (
 )
 
 from ..model import CATEGORIES, LEGACY_GUI_MODES, Module, Setting
-from .animation import Easings
+from .animation import Easings, step_damped_spring
 from .clickgui_gpu import ClickGuiDrawList, GpuImage, GpuRect, GpuText
 from .jello_locale import (
     action_label,
@@ -152,6 +152,7 @@ class JelloClickGuiState:
         default_factory=lambda: JelloReversibleAnimation(0.220, 0.220)
     )
     dropdown_key: str | None = None
+    dropdown_opens_up: bool = False
     dropdown_animation: JelloReversibleAnimation = field(
         default_factory=lambda: JelloReversibleAnimation(0.220, 0.220)
     )
@@ -166,6 +167,10 @@ class JelloClickGuiState:
     _button_hover_progress: dict[str, float] = field(default_factory=dict)
     _scrollbar_fades: dict[str, float] = field(default_factory=dict)
     _scrollbar_last_activity: dict[str, float] = field(default_factory=dict)
+    _settings_scroll_targets: dict[str, float] = field(default_factory=dict)
+    _settings_scroll_velocities: dict[str, float] = field(default_factory=dict)
+    _settings_scroll_limits: dict[str, float] = field(default_factory=dict)
+    _frame_dt: float = 1.0 / 60.0
 
     @property
     def settings_active(self) -> bool:
@@ -177,6 +182,7 @@ class JelloClickGuiState:
         self.old_clickguis_expanded = False
         self.legacy_mode = None
         self.dropdown_key = None
+        self.dropdown_opens_up = False
         self.opened_at = time.perf_counter() if now is None else float(now)
         self.reset_pending = False
         self.settings_panel_animation.reset(0.0)
@@ -192,6 +198,9 @@ class JelloClickGuiState:
         self._button_hover_progress.clear()
         self._scrollbar_fades.clear()
         self._scrollbar_last_activity.clear()
+        self._settings_scroll_targets.clear()
+        self._settings_scroll_velocities.clear()
+        self._settings_scroll_limits.clear()
 
     def request_reset(self) -> None:
         self.reset_pending = True
@@ -223,6 +232,9 @@ class JelloClickGuiState:
         self.old_clickguis_expanded = False
         self.old_group_animation.set_target(0.0)
         self.close_dropdown(immediate=immediate)
+        self._settings_scroll_targets.clear()
+        self._settings_scroll_velocities.clear()
+        self._settings_scroll_limits.clear()
         if immediate:
             self.settings_panel_animation.reset(0.0)
             self.settings_background_animation.reset(0.0)
@@ -241,6 +253,7 @@ class JelloClickGuiState:
             return
         if self.dropdown_key != key:
             self.dropdown_key = key
+            self.dropdown_opens_up = False
             self.dropdown_animation.reset(0.0)
         self.dropdown_animation.set_target(1.0)
 
@@ -249,6 +262,51 @@ class JelloClickGuiState:
         if immediate:
             self.dropdown_animation.reset(0.0)
             self.dropdown_key = None
+            self.dropdown_opens_up = False
+
+    def settings_scroll_value(self, key: str, maximum: float) -> float:
+        key = str(key)
+        maximum = max(0.0, float(maximum))
+        self._settings_scroll_limits[key] = maximum
+        value = max(0.0, min(maximum, float(self.settings_scroll.get(key, 0.0))))
+        self.settings_scroll[key] = value
+        if key in self._settings_scroll_targets:
+            self._settings_scroll_targets[key] = max(
+                0.0,
+                min(maximum, self._settings_scroll_targets[key]),
+            )
+        return value
+
+    def ensure_settings_scroll(self, key: str, target: float, maximum: float) -> None:
+        """Move only as far as needed to reveal a dropdown, without a jump."""
+
+        key = str(key)
+        current = self.settings_scroll_value(key, maximum)
+        existing = self._settings_scroll_targets.get(key, current)
+        self._settings_scroll_targets[key] = max(
+            existing,
+            max(0.0, min(float(maximum), float(target))),
+        )
+        self._settings_scroll_velocities.setdefault(key, 0.0)
+
+    def scroll_settings_by(self, key: str, delta: float, maximum: float) -> None:
+        key = str(key)
+        current = self.settings_scroll_value(key, maximum)
+        base = self._settings_scroll_targets.get(key, current)
+        self._settings_scroll_targets[key] = max(
+            0.0,
+            min(float(maximum), base + float(delta)),
+        )
+        self._settings_scroll_velocities.setdefault(key, 0.0)
+
+    def settings_scroll_target(self, key: str) -> float:
+        key = str(key)
+        return float(self._settings_scroll_targets.get(key, self.settings_scroll.get(key, 0.0)))
+
+    def settings_scroll_active(self, key: str | None = None) -> bool:
+        if key is None:
+            return bool(self._settings_scroll_targets)
+        return str(key) in self._settings_scroll_targets
 
     def checkbox_progress(self, key: str, checked: bool) -> float:
         animation = self._checkbox_animations.get(key)
@@ -273,7 +331,9 @@ class JelloClickGuiState:
         """Advance Sigma Button.field20584 by its literal 0.1-per-frame step."""
 
         value = float(self._button_hover_progress.get(key, 0.0))
-        value += 0.1 if hovered else -0.1
+        # Sigma's literal 0.1/frame is a 150 ms ramp at its 60 Hz reference.
+        # Express it in seconds so 90/120/144 Hz all retain that exact timing.
+        value += (6.0 * self._frame_dt) if hovered else (-6.0 * self._frame_dt)
         value = _clamp01(value)
         self._button_hover_progress[key] = value
         return value
@@ -304,12 +364,13 @@ class JelloClickGuiState:
             recently_scrolled = (
                 current - float(self._scrollbar_last_activity.get(key, -1.0e9)) < 0.500
             )
-            value += 0.05 if (hovered or recently_scrolled) else -0.05
+            value += (3.0 * self._frame_dt) if (hovered or recently_scrolled) else (-3.0 * self._frame_dt)
             value = _clamp01(value)
         self._scrollbar_fades[key] = value
         return value
 
     def update(self, dt: float) -> None:
+        self._frame_dt = max(0.0, min(0.05, float(dt)))
         self.settings_panel_animation.update(dt)
         self.settings_background_animation.update(dt)
         self.old_group_animation.update(dt)
@@ -319,8 +380,31 @@ class JelloClickGuiState:
             animation.update(dt)
         for animation in self._hover_animations.values():
             animation.update(dt)
+        for key in tuple(self._settings_scroll_targets):
+            maximum = max(0.0, float(self._settings_scroll_limits.get(key, 0.0)))
+            target = max(0.0, min(maximum, self._settings_scroll_targets[key]))
+            current = max(0.0, min(maximum, float(self.settings_scroll.get(key, 0.0))))
+            current, velocity = step_damped_spring(
+                current,
+                self._settings_scroll_velocities.get(key, 0.0),
+                target,
+                dt,
+                stiffness=300.0,
+                damping_ratio=1.0,
+            )
+            current = max(0.0, min(maximum, current))
+            if abs(target - current) < 0.02 and abs(velocity) < 0.08:
+                current = target
+                velocity = 0.0
+                self._settings_scroll_targets.pop(key, None)
+                self._settings_scroll_velocities.pop(key, None)
+                self._settings_scroll_limits.pop(key, None)
+            else:
+                self._settings_scroll_velocities[key] = velocity
+            self.settings_scroll[key] = current
         if self.dropdown_key is not None and self.dropdown_animation.progress <= 0.0001 and self.dropdown_animation.target <= 0.0:
             self.dropdown_key = None
+            self.dropdown_opens_up = False
         if (
             self.settings_closing
             and self.settings_panel_animation.progress <= 0.0001
@@ -597,15 +681,13 @@ class JelloClickGuiRenderer:
                 <= 0.0001
             )
         )
-        auxiliary_animations = (
+        root_animations = (
             state.settings_panel_animation,
             state.settings_background_animation,
-            state.old_group_animation,
-            state.dropdown_animation,
         )
         commands.default_text_device_snap = main_settled and all(
             abs(animation.progress - animation.target) <= 0.0001
-            for animation in auxiliary_animations
+            for animation in root_animations
         )
 
         # ClickGuiScreen draws this before it changes the child transform for
@@ -676,7 +758,16 @@ class JelloClickGuiRenderer:
         if state.settings_active:
             module = host.registry.get(state.settings_module or "")
             if module is not None:
+                previous_snap = commands.default_text_device_snap
+                commands.default_text_device_snap = bool(
+                    main_settled
+                    and abs(state.settings_panel_animation.progress - state.settings_panel_animation.target) <= 0.0001
+                    and abs(state.settings_background_animation.progress - state.settings_background_animation.target) <= 0.0001
+                    and abs(state.old_group_animation.progress - state.old_group_animation.target) <= 0.0001
+                    and not state.settings_scroll_active(module.name)
+                )
                 self._build_settings_modal(host, state, commands, module, width, height, layout.scale)
+                commands.default_text_device_snap = previous_snap
         if hasattr(host, "append_minecraft_drop_overlay"):
             host.append_minecraft_drop_overlay(commands)
         return commands
@@ -1043,7 +1134,7 @@ class JelloClickGuiRenderer:
         # "extentionhack" spacer after the final control.
         total = 40.0 + sum(self._setting_height(setting, old_progress) for setting in module.settings)
         maximum = max(0.0, total * scale - content.height())
-        scroll = max(0.0, min(maximum, float(state.settings_scroll.get(module.name, 0.0))))
+        scroll = state.settings_scroll_value(module.name, maximum)
         # Sigma normally reveals mode options below their header.  Move the
         # settings viewport first so a low row remains fully visible; only a
         # physically too-short viewport is allowed to use the upward fallback.
@@ -1056,10 +1147,26 @@ class JelloClickGuiRenderer:
                     header_bottom = (active_y + 32.0) * scale
                     required_scroll = header_bottom + popup_height - content.height()
                     if required_scroll > scroll:
-                        scroll = max(0.0, min(maximum, required_scroll))
+                        state.ensure_settings_scroll(module.name, required_scroll, maximum)
+
+                    # Decide the direction from the eventual fully revealed
+                    # position. The current scroll may still be following its
+                    # critical spring; recomputing from that intermediate value
+                    # would flip down/up for one frame and make the panel twitch.
+                    full_required = header_bottom + popup_height - content.height()
+                    eventual_scroll = max(
+                        scroll,
+                        state.settings_scroll_target(module.name),
+                        max(0.0, min(maximum, full_required)),
+                    )
+                    down_space = max(0.0, content.height() - header_bottom + eventual_scroll)
+                    header_top = (active_y + 5.0) * scale
+                    up_space = max(0.0, header_top - eventual_scroll)
+                    state.dropdown_opens_up = bool(
+                        down_space + 0.5 < popup_height and up_space > down_space
+                    )
                     break
                 active_y += self._setting_height(candidate, old_progress)
-        state.settings_scroll[module.name] = scroll
         host.gui_scroll_viewports.append(
             {"mode": "jello_settings", "key": module.name, "maximum": maximum, "rect": QRectF(content)}
         )
@@ -1321,10 +1428,6 @@ class JelloClickGuiRenderer:
             # retained dropdown_key.  Returning a request for every mode row
             # made the final HUD setting steal the popup and its arrow.
             if animated and state.dropdown_animation.progress > 0.001:
-                full_height = (27.0 * len(setting.options) + 1.0) * scale
-                down_space = max(0.0, clip.bottom() - dropdown.bottom())
-                up_space = max(0.0, dropdown.top() - clip.top())
-                opens_up = down_space + 0.5 < full_height and up_space > down_space
                 return _DropdownRequest(
                     key,
                     setting,
@@ -1332,7 +1435,7 @@ class JelloClickGuiRenderer:
                     clip,
                     alpha,
                     scale,
-                    opens_up,
+                    state.dropdown_opens_up,
                 )
             return None
 
@@ -1495,6 +1598,35 @@ class JelloClickGuiRenderer:
             0.20 * request.alpha * raw,
             request.clip,
         )
+        # Seal the option stack with one continuous opaque surface before
+        # drawing individual hover rows. Adjacent zero-radius GPU rectangles
+        # each anti-alias their edge; without this backplate their shared
+        # one-device-pixel seam exposes the blue checkbox/slider row below.
+        seam = max(0.75, 1.0 * request.scale)
+        if request.opens_up:
+            seal_rect = QRectF(
+                request.rect.left(),
+                popup_top,
+                request.rect.width(),
+                full_h + seam,
+            )
+            seal_clip = QRectF(popup_clip)
+            seal_clip.setBottom(min(request.clip.bottom(), popup_clip.bottom() + seam))
+        else:
+            seal_rect = QRectF(
+                request.rect.left(),
+                popup_top - seam,
+                request.rect.width(),
+                full_h + seam,
+            )
+            seal_clip = QRectF(popup_clip)
+            seal_clip.setTop(max(request.clip.top(), popup_clip.top() - seam))
+        commands.rect(
+            seal_rect,
+            0.0,
+            self._argb(LIGHT_GREYISH_BLUE, request.alpha),
+            clip=seal_clip,
+        )
         commands.rect(
             request.rect,
             6.0 * request.scale,
@@ -1536,6 +1668,7 @@ class JelloClickGuiRenderer:
                 request.rect.left() + 109.0 * request.scale,
                 request.rect.top() + 15.0 * request.scale,
             ),
+            device_pixel_snap=False,
         )
         if popup_clip.isEmpty():
             return
