@@ -3337,6 +3337,30 @@ def test_minecraft_hud_assets_layout_and_render() -> None:
             int(drawn_layout.hotbar.center().y()),
         ).alpha() > 0
     multiplier_setting.value = 1.0
+    cache_image = QImage(1280, 720, QImage.Format.Format_ARGB32_Premultiplied)
+    cache_image.fill(0)
+    cache_painter = QPainter(cache_image)
+    renderer.draw(cache_painter, 1280, 720, state, registry, module)
+    cache_painter.end()
+    stable_rebuilds = renderer.layer_rebuilds
+
+    repeat_image = QImage(1280, 720, QImage.Format.Format_ARGB32_Premultiplied)
+    repeat_image.fill(0)
+    repeat_painter = QPainter(repeat_image)
+    renderer.draw(repeat_painter, 1280, 720, state, registry, module)
+    repeat_painter.end()
+    assert renderer.layer_rebuilds == stable_rebuilds
+
+    previous_heat = state.current_heat
+    state.current_heat += 20.0
+    time.sleep(0.04)
+    changed_image = QImage(1280, 720, QImage.Format.Format_ARGB32_Premultiplied)
+    changed_image.fill(0)
+    changed_painter = QPainter(changed_image)
+    renderer.draw(changed_painter, 1280, 720, state, registry, module)
+    changed_painter.end()
+    assert renderer.layer_rebuilds == stable_rebuilds + 1
+    state.current_heat = previous_heat
     assert renderer.assignments(module)[-1] == "ClickGui"
     drop_commands = ClickGuiDrawList()
     drop_layout = renderer.append_drop_overlay(
@@ -3359,6 +3383,7 @@ def test_minecraft_hud_keeps_client_overlay_stack() -> None:
     from PySide6.QtCore import QRectF
     from PySide6.QtGui import QColor, QImage, QPainter
     from PySide6.QtWidgets import QApplication
+    from rm_client.ui.clickgui_gpu import ClickGuiDrawList, GpuImage, GpuText
     from rm_client.ui.polar_app import PolarRMWindow
 
     app = QApplication.instance() or QApplication([])
@@ -3366,6 +3391,21 @@ def test_minecraft_hud_keeps_client_overlay_stack() -> None:
     window.timer.stop()
     calls: set[str] = set()
     try:
+        watermark_image = QImage(360, 80, QImage.Format.Format_ARGB32_Premultiplied)
+        watermark_image.fill(0)
+        watermark_painter = QPainter(watermark_image)
+        window.draw_watermark(watermark_painter)
+        watermark_painter.end()
+        watermark_cache_key = window._watermark_title_cache.cacheKey()
+        watermark_layout_key = window._watermark_title_cache_key
+        repeat_watermark_image = QImage(360, 80, QImage.Format.Format_ARGB32_Premultiplied)
+        repeat_watermark_image.fill(0)
+        repeat_watermark_painter = QPainter(repeat_watermark_image)
+        window.draw_watermark(repeat_watermark_painter)
+        repeat_watermark_painter.end()
+        assert window._watermark_title_cache.cacheKey() == watermark_cache_key
+        assert window._watermark_title_cache_key == watermark_layout_key
+
         window.home_visible = False
         mc = window.registry.get("MinecraftCombatHUD")
         mc.enabled = True
@@ -3441,6 +3481,41 @@ def test_minecraft_hud_keeps_client_overlay_stack() -> None:
         # MC uses a dedicated compact map and right-side Sigma list without
         # mutating the user's normal PolarTextList preference.
         window.draw_minecraft_module_list = PolarRMWindow.draw_minecraft_module_list.__get__(window)
+        prior_gpu_available = window.clickgui_gpu.available
+        window.clickgui_gpu.available = True
+        hud.get_setting("Jello List Animations").value = False
+        window.registry.get("ArmorAutoAim").enabled = True
+        window._collect_gpu_hud_commands = True
+        window._gpu_hud_commands = ClickGuiDrawList(copy_payloads=False)
+        list_probe = QImage(1280, 720, QImage.Format.Format_ARGB32_Premultiplied)
+        list_probe.fill(0)
+        list_painter = QPainter(list_probe)
+        window.draw_module_list_debug_white(
+            list_painter,
+            1280,
+            8.0,
+            460.0,
+            gameplay_only=True,
+            max_rows=14,
+        )
+        command_count_before_glass_text = len(window._gpu_hud_commands.commands)
+        window.draw_glass_text(
+            list_painter,
+            QRectF(620.0, 26.0, 180.0, 24.0),
+            "GPU glass text",
+            window.font("poppins_regular", 8.2),
+            QColor("#f7f9ff"),
+        )
+        list_painter.end()
+        assert len(window._gpu_hud_commands.commands) == command_count_before_glass_text + 2
+        assert any(isinstance(command.payload, GpuText) for command in window._gpu_hud_commands.commands)
+        assert any(
+            isinstance(command.payload, GpuImage)
+            and command.payload.source.endswith("hud_shadow.png")
+            for command in window._gpu_hud_commands.commands
+        )
+        window._collect_gpu_hud_commands = False
+        window.clickgui_gpu.available = prior_gpu_available
         captured_list: list[tuple[float | None, float | None, dict]] = []
         window.draw_module_list_debug_white = lambda _p, _w, start_y=None, available_height=None, **kwargs: captured_list.append((start_y, available_height, kwargs))
         window._last_minecraft_hud_layout = window.minecraft_hud.layout(

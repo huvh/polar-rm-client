@@ -30,6 +30,7 @@ from PySide6.QtGui import (
     QPolygonF,
     QRadialGradient,
     QSurfaceFormat,
+    QTransform,
     QWheelEvent,
 )
 from PySide6.QtOpenGLWidgets import QOpenGLWidget
@@ -435,6 +436,12 @@ class PolarRMWindow(QOpenGLWidget):
         self.island_icon_gpu = IslandIconGpuRenderer()
         self._gpu_island_icon_commands: list[IslandIconCommand] = []
         self._collect_gpu_island_icons = False
+        self._gpu_hud_commands = ClickGuiDrawList()
+        self._collect_gpu_hud_commands = False
+        self._watermark_title_cache = QImage()
+        self._watermark_title_cache_key: tuple[object, ...] | None = None
+        self._watermark_title_static_key: tuple[object, ...] | None = None
+        self._watermark_cache_next_refresh_at = 0.0
         self.quick_action_wheel_gpu = QuickActionWheelGpuRenderer()
         self._gpu_quick_action_wheel_command: QuickActionWheelCommand | None = None
         self._gpu_quick_action_wheel_labels = ClickGuiDrawList()
@@ -944,7 +951,11 @@ class PolarRMWindow(QOpenGLWidget):
             labels.add(module.name)
             labels.add(module.category)
             labels.add(module.keybind)
-            jello_labels_by_size[20.0].add(module.name)
+            # ActiveMods can switch Normal/Small/Tiny while the HUD remains
+            # visible.  Warm all three exact Sigma font pages so that the GPU
+            # path never allocates a glyph atlas in a combat frame.
+            for size in (14.0, 18.0, 20.0):
+                jello_labels_by_size[size].add(module.name)
             for setting in module.settings:
                 labels.add(setting.name)
                 labels.add(setting.display_value())
@@ -1027,6 +1038,7 @@ class PolarRMWindow(QOpenGLWidget):
             (
                 self.minecraft_hud.asset_root / "hotbar.png",
                 self.minecraft_hud.asset_root / "hotbar_selection.png",
+                self._client_asset_path("assets", "jello", "hud_shadow.png"),
             )
         )
 
@@ -1575,6 +1587,7 @@ class PolarRMWindow(QOpenGLWidget):
                             return False
                         device.setDevicePixelRatio(ratio)
                         self.gpu_compositor.clear_current(functions, transparent=True)
+                        self.begin_gpu_hud_command_collection()
                         self.begin_gpu_island_icon_collection()
                         self.begin_gpu_quick_action_wheel_collection()
                         painter = QPainter(device)
@@ -1603,6 +1616,7 @@ class PolarRMWindow(QOpenGLWidget):
                                 gpu_atlas_prepared=prepared_clickgui_atlas,
                             )
                         painter.end()
+                        self.flush_gpu_hud_commands(functions, width, height, ratio)
                         self.flush_gpu_island_icons(functions, width, height, ratio)
                         self.flush_gpu_quick_action_wheel(functions, width, height, ratio)
                         self.gpu_compositor.release_layer("dynamic")
@@ -1845,6 +1859,7 @@ class PolarRMWindow(QOpenGLWidget):
                 dynamic_device.setDevicePixelRatio(ratio)
                 self.gpu_compositor.clear_current(functions, transparent=True)
                 dynamic_started = time.perf_counter()
+                self.begin_gpu_hud_command_collection()
                 self.begin_gpu_island_icon_collection()
                 dynamic_painter = QPainter(dynamic_device)
                 if not self.home_visible:
@@ -1858,6 +1873,7 @@ class PolarRMWindow(QOpenGLWidget):
                     )
                     self.paint_clickgui_overlay(dynamic_painter, width, height)
                 dynamic_painter.end()
+                self.flush_gpu_hud_commands(functions, width, height, ratio)
                 self.flush_gpu_island_icons(functions, width, height, ratio)
                 self.gpu_compositor.last_dynamic_ms = (time.perf_counter() - dynamic_started) * 1000.0
                 self.gpu_compositor.release_layer("dynamic")
@@ -6542,15 +6558,85 @@ class PolarRMWindow(QOpenGLWidget):
     def draw_watermark(self, p: QPainter) -> None:
         z_font = self.font("museo", 18, QFont.Weight.Bold)
         body = self.font("poppins_medium", 10.5)
-        glow_text(p, "POLAR-RM", 12, 28, z_font, THEME.text, self.hud_accent(), 8 if not self.hud_clean() else 4)
-        title_w = text_width(p, z_font, "POLAR-RM")
-        self.draw_text(p, QRectF(22 + title_w, 12, 90, 24), f"{self.state.fps:.0f} FPS", body, THEME.text)
+        glow_radius = 8 if not self.hud_clean() else 4
+        # Six glow passes plus three text layouts cost several milliseconds on
+        # Qt's OpenGL paint engine.  The status changes far more slowly than the
+        # display, so rasterise the exact existing block at DPR density and let
+        # Qt retain it as one immutable GPU texture between 4 Hz status samples.
+        transform_scale = max(
+            0.25,
+            math.hypot(p.transform().m11(), p.transform().m12()),
+        )
+        raster_scale = max(
+            1.0,
+            min(4.0, transform_scale * max(1.0, float(self.devicePixelRatioF()))),
+        )
+        accent = self.hud_accent()
         status = "CAM" if self.state.camera_connected else "SYN"
         scene = self.scenario_manager.current.title
         match = self.match_mode_manager.current.title
         mqtt = "MQTT mock" if getattr(self.mqtt, "mock_output", True) else "MQTT live"
         serial = "SERIAL mock" if self.control.mock_output else "SERIAL live"
-        self.draw_text(p, QRectF(12, 34, 430, 16), f"{status} | {scene} | {match} | {mqtt} | {serial}", self.font("poppins_regular", 8), THEME.muted)
+        status_line = f"{status} | {scene} | {match} | {mqtt} | {serial}"
+        static_key = (
+            round(raster_scale, 3),
+            z_font.toString(),
+            body.toString(),
+            int(THEME.text.rgba()),
+            int(THEME.muted.rgba()),
+            int(accent.rgba()),
+            glow_radius,
+            status_line,
+        )
+        now = time.perf_counter()
+        needs_status_sample = now >= self._watermark_cache_next_refresh_at
+        static_changed = static_key != self._watermark_title_static_key
+        if self._watermark_title_cache.isNull() or static_changed or needs_status_sample:
+            cache_key = static_key + (round(float(self.state.fps)),)
+            self._watermark_title_static_key = static_key
+            self._watermark_cache_next_refresh_at = now + 0.250
+            if cache_key == self._watermark_title_cache_key and not self._watermark_title_cache.isNull():
+                p.drawImage(QPointF(0.0, 0.0), self._watermark_title_cache)
+                return
+            logical_w, logical_h = 456.0, 56.0
+            image = QImage(
+                max(1, int(math.ceil(logical_w * raster_scale))),
+                max(1, int(math.ceil(logical_h * raster_scale))),
+                QImage.Format.Format_ARGB32_Premultiplied,
+            )
+            image.setDevicePixelRatio(raster_scale)
+            image.fill(Qt.GlobalColor.transparent)
+            cache_painter = QPainter(image)
+            cache_painter.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
+            glow_text(
+                cache_painter,
+                "POLAR-RM",
+                12,
+                28,
+                z_font,
+                THEME.text,
+                accent,
+                glow_radius,
+            )
+            title_w = QFontMetricsF(z_font).horizontalAdvance("POLAR-RM")
+            self.draw_text(
+                cache_painter,
+                QRectF(22 + title_w, 12, 90, 24),
+                f"{self.state.fps:.0f} FPS",
+                body,
+                THEME.text,
+            )
+            self.draw_text(
+                cache_painter,
+                QRectF(12, 34, 430, 16),
+                status_line,
+                self.font("poppins_regular", 8),
+                THEME.muted,
+            )
+            cache_painter.end()
+            self._watermark_title_cache = image
+            self._watermark_title_cache_key = cache_key
+        p.drawImage(QPointF(0.0, 0.0), self._watermark_title_cache)
 
     def draw_target_overlay(self, p: QPainter, target: VisionTarget, module: Module | None = None) -> None:
         rect = QRectF(target.x, target.y, target.w, target.h)
@@ -8259,6 +8345,39 @@ class PolarRMWindow(QOpenGLWidget):
     def begin_gpu_island_icon_collection(self) -> None:
         self._gpu_island_icon_commands.clear()
         self._collect_gpu_island_icons = self.island_icon_gpu.available
+
+    def begin_gpu_hud_command_collection(self) -> None:
+        """Collect high-frequency HUD glyphs for the existing atlas renderer."""
+
+        self._gpu_hud_commands = ClickGuiDrawList(
+            default_text_shadow=False,
+            default_text_preserve_weight=True,
+            default_text_profile="jello",
+            copy_payloads=False,
+        )
+        self._collect_gpu_hud_commands = self.clickgui_gpu.available
+
+    def flush_gpu_hud_commands(
+        self,
+        functions,
+        width: int,
+        height: int,
+        ratio: float,
+    ) -> None:
+        self._collect_gpu_hud_commands = False
+        commands = self._gpu_hud_commands
+        self._gpu_hud_commands = ClickGuiDrawList()
+        if not commands.commands or not self.clickgui_gpu.available:
+            return
+        self.clickgui_gpu.prepare_frame(commands, ratio)
+        self.clickgui_gpu.render(
+            functions,
+            commands,
+            width,
+            height,
+            ratio,
+            atlas_prepared=True,
+        )
 
     def flush_gpu_island_icons(self, functions, width: int, height: int, ratio: float) -> None:
         self._collect_gpu_island_icons = False
@@ -10410,10 +10529,25 @@ class PolarRMWindow(QOpenGLWidget):
                 rows.pop(name, None)
 
         render_rows: list[tuple[Module, float, float]] = []
+        width_cache: dict[tuple[str, str, str], tuple[float, float]] = getattr(
+            self,
+            "_jello_active_mods_width_cache",
+            {},
+        )
+        self._jello_active_mods_width_cache = width_cache
+        font_key = font.key()
+        sort_font_key = sort_font.key()
         for row in rows.values():
             module = row["module"]
-            text_w = float(metrics.horizontalAdvance(module.name))
-            sort_w = float(sort_metrics.horizontalAdvance(module.name))
+            cache_key = (font_key, sort_font_key, module.name)
+            widths = width_cache.get(cache_key)
+            if widths is None:
+                widths = (
+                    float(metrics.horizontalAdvance(module.name)),
+                    float(sort_metrics.horizontalAdvance(module.name)),
+                )
+                width_cache[cache_key] = widths
+            text_w, sort_w = widths
             render_rows.append(
                 (module, text_w, sort_w, max(0.0, min(1.0, float(row["progress"]))))
             )
@@ -10424,52 +10558,89 @@ class PolarRMWindow(QOpenGLWidget):
             return
 
         shadow_path = self._client_asset_path("assets", "jello", "hud_shadow.png")
-        shadow = getattr(self, "_jello_hud_shadow", None)
-        if shadow is None:
-            shadow = QImage(str(shadow_path)).convertToFormat(QImage.Format.Format_ARGB32_Premultiplied)
-            self._jello_hud_shadow = shadow
+        gpu_commands = (
+            self._gpu_hud_commands
+            if self._collect_gpu_hud_commands and self.clickgui_gpu.available
+            else None
+        )
+        shadow = None
+        if gpu_commands is None:
+            shadow = getattr(self, "_jello_hud_shadow", None)
+            if shadow is None:
+                shadow = QImage(str(shadow_path)).convertToFormat(QImage.Format.Format_ARGB32_Premultiplied)
+                self._jello_hud_shadow = shadow
 
         y = 6.0 if start_y is None else max(6.0, float(start_y))
         margin = 7.0 if size == "Tiny" else 10.0
         height_limit = float(self.height()) if available_height is None else y + max(0.0, float(available_height))
+        base_transform = QTransform(p.transform())
+        base_scale = max(0.01, math.hypot(base_transform.m11(), base_transform.m12()))
+        base_opacity = max(0.0, min(1.0, float(p.opacity())))
         p.save()
-        p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        p.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
-        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+        if gpu_commands is None:
+            p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
+            p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+            p.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
+            p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
         for module, text_w, _sort_w, progress in render_rows:
             if y + font_height > height_limit:
                 break
             scale = 0.86 + 0.14 * progress
             x = float(width) - margin - text_w
             shadow_alpha = 0.36 * progress * math.sqrt(min(1.2, text_w / 63.0))
-            if shadow is not None and not shadow.isNull() and shadow_alpha > 0.001:
+            shadow_rect = QRectF(
+                float(width) - 1.5 * text_w - margin - 20.0,
+                y - 20.0,
+                3.0 * text_w,
+                font_height + 41.0,
+            )
+            if shadow_alpha > 0.001:
+                if gpu_commands is not None:
+                    tint = QColor(255, 255, 255, round(255.0 * shadow_alpha * base_opacity))
+                    gpu_commands.image(
+                        base_transform.mapRect(shadow_rect),
+                        shadow_path,
+                        tint,
+                    )
+                elif shadow is not None and not shadow.isNull():
+                    p.save()
+                    p.setOpacity(shadow_alpha)
+                    p.drawImage(shadow_rect, shadow)
+                    p.restore()
+            pivot = QPointF(float(width) - margin - text_w * 0.5, y + 12.0)
+            text_rect = QRectF(x, y, text_w + 4.0, font_height + 2.0)
+            if gpu_commands is not None:
+                row_transform = QTransform(base_transform)
+                row_transform.translate(pivot.x(), pivot.y())
+                row_transform.scale(scale, scale)
+                row_transform.translate(-pivot.x(), -pivot.y())
+                gpu_commands.text(
+                    row_transform.mapRect(text_rect),
+                    module.name,
+                    font,
+                    QColor(254, 254, 254, round(255.0 * 0.95 * progress * base_opacity)),
+                    Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop,
+                    shadow=False,
+                    render_scale=base_scale * scale,
+                    raster_scale=1.0,
+                    preserve_weight=True,
+                    text_profile="jello",
+                    device_pixel_snap=progress >= 0.999,
+                )
+            else:
                 p.save()
-                p.setOpacity(shadow_alpha)
-                p.drawImage(
-                    QRectF(
-                        float(width) - 1.5 * text_w - margin - 20.0,
-                        y - 20.0,
-                        3.0 * text_w,
-                        font_height + 41.0,
-                    ),
-                    shadow,
+                p.setOpacity(0.95 * progress)
+                p.translate(pivot)
+                p.scale(scale, scale)
+                p.translate(-pivot)
+                p.setFont(font)
+                p.setPen(QColor(254, 254, 254, 255))
+                p.drawText(
+                    text_rect,
+                    int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop),
+                    module.name,
                 )
                 p.restore()
-            pivot = QPointF(float(width) - margin - text_w * 0.5, y + 12.0)
-            p.save()
-            p.setOpacity(0.95 * progress)
-            p.translate(pivot)
-            p.scale(scale, scale)
-            p.translate(-pivot)
-            p.setFont(font)
-            p.setPen(QColor(254, 254, 254, 255))
-            p.drawText(
-                QRectF(x, y, text_w + 4.0, font_height + 2.0),
-                int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop),
-                module.name,
-            )
-            p.restore()
             ease_height = (
                 2.0 * progress * progress
                 if progress < 0.5
@@ -15189,6 +15360,56 @@ class PolarRMWindow(QOpenGLWidget):
         flags: Qt.AlignmentFlag = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
     ) -> None:
         """透明镜片上的最小文字保护，不引入额外暗色面板。"""
+        if (
+            self._collect_gpu_hud_commands
+            and self.clickgui_gpu.available
+            and self.minecraft_hud_active()
+            and not self.menu_overlay_active()
+        ):
+            clipped = self.elide(p, font, text, rect.width())
+            transform = QTransform(p.transform())
+            draw_scale = max(0.01, math.hypot(transform.m11(), transform.m12()))
+            opacity = max(0.0, min(1.0, float(p.opacity())))
+
+            def faded(source: QColor) -> QColor:
+                result = QColor(source)
+                result.setAlphaF(source.alphaF() * opacity)
+                return result
+
+            shadow_rect = rect.translated(0.80, 0.95)
+            mapped_shadow = transform.mapRect(shadow_rect)
+            mapped_main = transform.mapRect(rect)
+            # Keep the existing two-pass glass typography exactly ordered, but
+            # submit glyphs through the already-warmed GPU atlas instead of
+            # asking QPainter's OpenGL engine to shape/rasterise them every
+            # display frame.  The liquid-glass command itself is untouched.
+            self._gpu_hud_commands.text(
+                mapped_shadow,
+                clipped,
+                font,
+                faded(color("#071018", 0.68)),
+                flags,
+                mapped_shadow,
+                shadow=False,
+                render_scale=draw_scale,
+                raster_scale=1.0,
+                preserve_weight=True,
+                device_pixel_snap=True,
+            )
+            self._gpu_hud_commands.text(
+                mapped_main,
+                clipped,
+                font,
+                faded(c),
+                flags,
+                mapped_main,
+                shadow=False,
+                render_scale=draw_scale,
+                raster_scale=1.0,
+                preserve_weight=True,
+                device_pixel_snap=True,
+            )
+            return
         self.draw_text(p, rect.translated(0.80, 0.95), text, font, color("#071018", 0.68), flags)
         self.draw_text(p, rect, text, font, c, flags)
 

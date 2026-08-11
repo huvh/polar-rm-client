@@ -12,6 +12,7 @@ from collections import OrderedDict
 from dataclasses import dataclass
 import math
 from pathlib import Path
+import time
 from typing import Any, Iterable
 
 from PySide6.QtCore import QPointF, QRect, QRectF, QSize, Qt
@@ -187,6 +188,10 @@ class MinecraftCombatHudRenderer:
         self.font = MinecraftBitmapFont(self.asset_root / "ascii.png")
         self.selected_slot = 0
         self._layer_image = QImage()
+        self._layer_key: tuple[Any, ...] | None = None
+        self._layer_priority_key: tuple[Any, ...] | None = None
+        self._layer_next_refresh_at = 0.0
+        self.layer_rebuilds = 0
 
     @property
     def available(self) -> bool:
@@ -440,72 +445,34 @@ class MinecraftCombatHudRenderer:
         logical_width, logical_height = screen_layout.logical_size
         layout = self._logical_layout(logical_width, logical_height, (text for text, _ in lines))
         scale = layout.scale
-        if self._layer_image.size() != QSize(logical_width, logical_height):
-            self._layer_image = QImage(
-                logical_width,
-                logical_height,
-                QImage.Format.Format_ARGB32_Premultiplied,
-            )
-        self._layer_image.fill(Qt.GlobalColor.transparent)
-        destination_painter = painter
-        painter = QPainter(self._layer_image)
-        painter.save()
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing, False)
-        painter.setRenderHint(QPainter.RenderHint.TextAntialiasing, False)
-        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, False)
-
-        self._sprite(painter, "hotbar", layout.hotbar)
-        selection = QRectF(
-            layout.hotbar.left() + (-1 + self.selected_slot * 20) * scale,
-            layout.hotbar.top() - scale,
-            24 * scale,
-            23 * scale,
-        )
-        self._sprite(painter, "hotbar_selection", selection)
         assignments = self.assignments(module)
-        for index, (rect, name) in enumerate(zip(layout.slots, assignments)):
+        def assignment_state(name: str) -> tuple[str, bool]:
             target = registry.get(name) if registry is not None and name != "Empty" else None
-            enabled = bool(target and target.enabled)
-            label = self.abbreviation(name)
-            label_width = self.font.logical_width(label) * scale
-            self.font.draw(
-                painter,
-                rect.center().x() - label_width * 0.5,
-                rect.top() + 4 * scale,
-                label,
-                QColor("#55ff55") if enabled else QColor("#ffffff"),
-                scale,
-            )
-            self.font.draw(painter, rect.left(), rect.top(), str(index + 1), QColor("#ffff55") if index == self.selected_slot else QColor("#aaaaaa"), max(1, scale // 2), shadow=True)
+            return name, bool(target and target.enabled)
 
+        assignment_states = tuple(assignment_state(name) for name in assignments)
         hp_ratio = self._ratio(getattr(state, "current_health", 0), getattr(state, "max_health", 1))
         thermal_margin = 1.0 - self._ratio(getattr(state, "current_heat", 0.0), getattr(state, "max_heat", 1.0))
         chassis_ratio = self._ratio(
             getattr(state, "chassis_power_w", 0),
             getattr(state, "power_limit", 1),
         )
-        self._draw_meter(painter, layout.hearts, hp_ratio, "heart_container", "heart_half", "heart_full")
-        # Keep the vanilla pixel grammar without pretending heat is armour or
-        # chassis power is food.  Coolant cells and electric pips preserve the
-        # familiar two-row read while giving RM telemetry its own semantics.
-        self._draw_coolant_cells(painter, layout.armor, thermal_margin)
-        self._draw_power_pips(painter, layout.food, chassis_ratio)
         label_scale = max(1, scale // 2)
         thermal_text = f"COOL {int(round(thermal_margin * 100.0))}%  -{int(getattr(state, 'heat_cooldown_rate', 0))}/S"
-        self.font.draw(painter, layout.armor[0].left(), layout.armor[0].top() - 7 * label_scale, thermal_text, QColor("#55ffff"), label_scale)
         power_text = f"PWR {int(getattr(state, 'chassis_power_w', 0))}/{int(getattr(state, 'power_limit', 0))}W"
-        power_w = self.font.logical_width(power_text) * label_scale
-        self.font.draw(painter, layout.hotbar.right() - power_w, layout.food[-1].top() - 7 * label_scale, power_text, QColor("#55aaff") if chassis_ratio < 0.85 else QColor("#ffff55"), label_scale)
-
         hud_module = registry.get("HUD") if registry is not None else None
         dynamic_setting = hud_module.get_setting("Dynamic Island") if hud_module is not None else None
         dynamic_island_active = bool(dynamic_setting is None or dynamic_setting.value)
+        boss_key: tuple[int, ...] = ()
         if not dynamic_island_active:
-            self._draw_boss_bar(painter, layout.boss_bars[0], "blue", self._ratio(getattr(state, "base_health", 0), getattr(state, "base_max_health", 1)), f"ALLY BASE  SHIELD {int(getattr(state, 'base_shield', 0))}%")
-            self._draw_boss_bar(painter, layout.boss_bars[1], "red", self._ratio(getattr(state, "enemy_base_health", 0), getattr(state, "enemy_base_max_health", 1)), f"ENEMY BASE  SHIELD {int(getattr(state, 'enemy_base_shield', 0))}%")
-            self._draw_boss_bar(painter, layout.boss_bars[2], "yellow", self._ratio(getattr(state, "target_health", 0), getattr(state, "target_max_health", 1)), f"TARGET {int(getattr(state, 'target_id', 0))}")
-
-        self._draw_scoreboard(painter, layout.scoreboard, lines, scale)
+            boss_key = tuple(
+                int(getattr(state, name, 0))
+                for name in (
+                    "base_health", "base_max_health", "base_shield",
+                    "enemy_base_health", "enemy_base_max_health", "enemy_base_shield",
+                    "target_health", "target_max_health", "target_id",
+                )
+            )
         effects = (
             ("JUP", bool(getattr(state, "jump_ready", False))),
             ("PTE", bool(getattr(state, "pte_ready", False))),
@@ -515,10 +482,103 @@ class MinecraftCombatHudRenderer:
             ("LBF", bool(getattr(state, "large_buff", False))),
         )
         tactical_map = registry.get("TacticalMap") if registry is not None else None
-        if tactical_map is None or not tactical_map.enabled:
-            self._draw_effects(painter, layout.effects_origin, effects, scale)
-        painter.restore()
-        painter.end()
+        tactical_map_enabled = bool(tactical_map and tactical_map.enabled)
+        layer_key: tuple[Any, ...] = (
+            logical_width,
+            logical_height,
+            tuple((text, int(text_color.rgba())) for text, text_color in lines),
+            int(self.selected_slot),
+            assignment_states,
+            int(round(hp_ratio * 20.0)),
+            int(round(thermal_margin * 20.0)),
+            int(round(chassis_ratio * 20.0)),
+            thermal_text,
+            power_text,
+            chassis_ratio >= 0.85,
+            dynamic_island_active,
+            boss_key,
+            effects,
+            tactical_map_enabled,
+        )
+        # Minecraft normally updates gameplay state at its tick cadence while
+        # the display can present much faster.  Keep slot/config changes
+        # immediate, but do not repaint and re-upload the complete pixel layer
+        # 60-144 times per second for sub-pixel telemetry changes.  The cached
+        # image remains composited every display frame with nearest sampling.
+        priority_key: tuple[Any, ...] = (
+            logical_width,
+            logical_height,
+            int(self.selected_slot),
+            assignment_states,
+            dynamic_island_active,
+            tactical_map_enabled,
+        )
+        now = time.perf_counter()
+        image_size_changed = self._layer_image.size() != QSize(logical_width, logical_height)
+        priority_changed = priority_key != self._layer_priority_key
+        telemetry_due = now >= self._layer_next_refresh_at
+
+        if image_size_changed or priority_changed or (layer_key != self._layer_key and telemetry_due):
+            if image_size_changed:
+                self._layer_image = QImage(
+                    logical_width,
+                    logical_height,
+                    QImage.Format.Format_ARGB32_Premultiplied,
+                )
+            self._layer_image.fill(Qt.GlobalColor.transparent)
+            layer_painter = QPainter(self._layer_image)
+            layer_painter.save()
+            layer_painter.setRenderHint(QPainter.RenderHint.Antialiasing, False)
+            layer_painter.setRenderHint(QPainter.RenderHint.TextAntialiasing, False)
+            layer_painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, False)
+
+            self._sprite(layer_painter, "hotbar", layout.hotbar)
+            selection = QRectF(
+                layout.hotbar.left() + (-1 + self.selected_slot * 20) * scale,
+                layout.hotbar.top() - scale,
+                24 * scale,
+                23 * scale,
+            )
+            self._sprite(layer_painter, "hotbar_selection", selection)
+            for index, (rect, (name, enabled)) in enumerate(zip(layout.slots, assignment_states)):
+                label = self.abbreviation(name)
+                label_width = self.font.logical_width(label) * scale
+                self.font.draw(
+                    layer_painter,
+                    rect.center().x() - label_width * 0.5,
+                    rect.top() + 4 * scale,
+                    label,
+                    QColor("#55ff55") if enabled else QColor("#ffffff"),
+                    scale,
+                )
+                self.font.draw(layer_painter, rect.left(), rect.top(), str(index + 1), QColor("#ffff55") if index == self.selected_slot else QColor("#aaaaaa"), max(1, scale // 2), shadow=True)
+
+            self._draw_meter(layer_painter, layout.hearts, hp_ratio, "heart_container", "heart_half", "heart_full")
+            # Keep the vanilla pixel grammar without pretending heat is armour or
+            # chassis power is food.  Coolant cells and electric pips preserve the
+            # familiar two-row read while giving RM telemetry its own semantics.
+            self._draw_coolant_cells(layer_painter, layout.armor, thermal_margin)
+            self._draw_power_pips(layer_painter, layout.food, chassis_ratio)
+            self.font.draw(layer_painter, layout.armor[0].left(), layout.armor[0].top() - 7 * label_scale, thermal_text, QColor("#55ffff"), label_scale)
+            power_w = self.font.logical_width(power_text) * label_scale
+            self.font.draw(layer_painter, layout.hotbar.right() - power_w, layout.food[-1].top() - 7 * label_scale, power_text, QColor("#55aaff") if chassis_ratio < 0.85 else QColor("#ffff55"), label_scale)
+
+            if not dynamic_island_active:
+                self._draw_boss_bar(layer_painter, layout.boss_bars[0], "blue", self._ratio(getattr(state, "base_health", 0), getattr(state, "base_max_health", 1)), f"ALLY BASE  SHIELD {int(getattr(state, 'base_shield', 0))}%")
+                self._draw_boss_bar(layer_painter, layout.boss_bars[1], "red", self._ratio(getattr(state, "enemy_base_health", 0), getattr(state, "enemy_base_max_health", 1)), f"ENEMY BASE  SHIELD {int(getattr(state, 'enemy_base_shield', 0))}%")
+                self._draw_boss_bar(layer_painter, layout.boss_bars[2], "yellow", self._ratio(getattr(state, "target_health", 0), getattr(state, "target_max_health", 1)), f"TARGET {int(getattr(state, 'target_id', 0))}")
+
+            self._draw_scoreboard(layer_painter, layout.scoreboard, lines, scale)
+            if not tactical_map_enabled:
+                self._draw_effects(layer_painter, layout.effects_origin, effects, scale)
+            layer_painter.restore()
+            layer_painter.end()
+            self._layer_key = layer_key
+            self._layer_priority_key = priority_key
+            self._layer_next_refresh_at = now + (1.0 / 30.0)
+            self.layer_rebuilds += 1
+
+        destination_painter = painter
         destination_painter.save()
         destination_painter.setRenderHint(QPainter.RenderHint.Antialiasing, False)
         destination_painter.setRenderHint(QPainter.RenderHint.TextAntialiasing, False)
