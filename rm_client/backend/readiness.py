@@ -57,7 +57,7 @@ def audit_backend(
     manager: Any,
     state: Any,
     *,
-    live_evidence: Mapping[str, bool] | None = None,
+    live_evidence: Mapping[str, Any] | None = None,
 ) -> BackendReadinessReport:
     """Build a fail-closed report from runtime status plus explicit evidence."""
 
@@ -66,10 +66,38 @@ def audit_backend(
     mqtt = dict(stats.get("mqtt", {}))
     udp = dict(stats.get("udp", {}))
     serial = dict(stats.get("serial", {}))
-    native_video = dict(getattr(state, "backend_stats", {}).get("native_video_0310", {}))
+    native_video = dict(stats.get("native_0310", {}))
+    # Compatibility with a manager snapshot taken before native stats were
+    # promoted to the top level.
+    native_video.update(
+        dict(getattr(state, "backend_stats", {}).get("native_video_0310", {}))
+    )
     scenario = str(stats.get("scenario", getattr(manager, "scenario_key", "")))
-    video_frames = int(udp.get("frames_received", udp.get("frames", 0)) or 0)
-    video_packets = int(udp.get("packets_received", udp.get("packets", 0)) or 0)
+    selected_video_source = str(evidence.get("video_source", "")).strip().lower()
+    selected_video_source = {
+        "native": "native_0310",
+        "native 0x0310": "native_0310",
+        "0x0310": "native_0310",
+        "shark udp": "udp",
+        "udp hevc": "udp",
+        "h265": "udp",
+        "hevc": "udp",
+    }.get(selected_video_source, selected_video_source)
+    source_declared = selected_video_source in {"udp", "native_0310"}
+    udp_decoded = bool(
+        udp.get("connected", False)
+        and udp.get("decoded_connected", False)
+        and int(udp.get("decoded_frames", 0) or 0) > 0
+    )
+    native_decoded = bool(
+        native_video.get("decoder_ready", False)
+        and native_video.get("decoded_connected", False)
+        and int(native_video.get("decoded_frames", 0) or 0) > 0
+    )
+    configured_video_ready = bool(
+        (selected_video_source == "udp" and udp_decoded)
+        or (selected_video_source == "native_0310" and native_decoded)
+    )
     official_feed_at = float(getattr(state, "official_feed_at", 0.0) or 0.0)
     official_fresh = bool(
         getattr(state, "official_events_online", False)
@@ -86,16 +114,26 @@ def audit_backend(
             True,
         ),
         ReadinessGate(
+            "video_source_declared",
+            source_declared,
+            "live_evidence.video_source must explicitly be udp or native_0310",
+            True,
+        ),
+        ReadinessGate(
             "video_link",
-            bool(udp.get("connected", False)) and video_packets > 0 and video_frames > 0,
-            "live video packets and decoded frame observed",
+            configured_video_ready,
+            f"configured {selected_video_source or 'undeclared'} path has a fresh decoded frame",
             True,
         ),
         ReadinessGate("serial_link", bool(serial.get("connected", False)) and not bool(serial.get("mock_writes", True)), "real lower-controller serial link", True),
         ReadinessGate(
             "native_0310_decoder",
-            bool(native_video.get("decoder_ready", False)),
-            "rm-native-viewer 0x0310 continuous H.264 stream decoded end to end",
+            selected_video_source != "native_0310" or native_decoded,
+            (
+                "rm-native-viewer 0x0310 continuous H.264 stream decoded end to end"
+                if selected_video_source == "native_0310"
+                else "not selected; UDP field path must satisfy video_link"
+            ),
             True,
         ),
         ReadinessGate(

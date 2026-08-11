@@ -636,6 +636,10 @@ class PolarRMWindow(QOpenGLWidget):
             now=now,
         )
         self.economy_island.update(now=now)
+        # Hero deploy uses the same reversible Control Center spring as the
+        # economy island.  Advance it at the render-timer rate (not the 60 Hz
+        # logic gate) so the Dynamic-Island morph remains smooth at 120/144 Hz.
+        self.hero_deploy_ui.update_presentation(now)
         if (
             not self.economy_visible
             and not self._economy_close_finalized
@@ -713,7 +717,7 @@ class PolarRMWindow(QOpenGLWidget):
             or self.economy_island.progress > 0.01
             or self.quick_action_wheel.visible
             or self.match_chat.input_open
-            or self.hero_deploy_ui.visible
+            or self.hero_deploy_ui.active
             or self.hero_deploy_ui.pending_mode is not None
         )
         if self.frame_scheduler.should_request(now, high_rate, self.render_fps_target):
@@ -3045,20 +3049,25 @@ class PolarRMWindow(QOpenGLWidget):
         self.overlay_coordinator.request_modal(OverlayKind.HERO_DEPLOY)
         self.hero_deploy_ui.open(time.perf_counter())
         self.invalidate_transient_overlay_scene()
+        self.play_gui_transition_sound("expand")
         self.frame_scheduler.force()
         self.update()
         return True
 
     def close_hero_deploy_interface(self, *, force: bool = False) -> bool:
         if not self.hero_deploy_ui.visible:
+            if force and self.hero_deploy_ui.render_visible:
+                self.hero_deploy_ui.close(time.perf_counter(), immediate=True)
+                self.invalidate_transient_overlay_scene()
             self.overlay_coordinator.close_modal(OverlayKind.HERO_DEPLOY)
             return True
         if self.hero_deploy_ui.pending_mode is not None and not force:
             self.toast("Wait for DeployModeStatusSync before closing the console")
             return False
-        self.hero_deploy_ui.close()
+        self.hero_deploy_ui.close(time.perf_counter(), immediate=force)
         self.overlay_coordinator.close_modal(OverlayKind.HERO_DEPLOY)
         self.invalidate_transient_overlay_scene()
+        self.play_gui_transition_sound("collapse")
         self.frame_scheduler.force()
         self.update()
         return True
@@ -3150,16 +3159,19 @@ class PolarRMWindow(QOpenGLWidget):
         self.toast(message)
 
     def draw_hero_deploy_interface(self, p: QPainter, width: int, height: int, now: float) -> None:
-        if not self.hero_deploy_ui.visible:
+        if not self.hero_deploy_ui.render_visible:
             if self.hero_deploy_video_cut_active():
                 banner = QRectF(width * 0.5 - 150.0, 12.0, 300.0, 32.0)
-                rounded_rect(p, banner, 16.0, QColor(3, 14, 21, 225), QColor(92, 211, 255, 165), 1.0)
-                self.draw_text(
+                self.draw_hud_liquid_glass(p, banner, 16.0, surface="LensIsland")
+                rounded_rect(p, banner, 16.0, color("#000000", 0.08), color("#ffffff", 0.13), 0.8)
+                icon = QRectF(banner.left() + 5.0, banner.top() + 4.0, 24.0, 24.0)
+                self.draw_dynamic_island_icon(p, icon, "success", QColor("#62e6ad"), 1.0)
+                self.draw_glass_text(
                     p,
-                    banner,
-                    "DEPLOY MODE / VIDEO CUT  -  K TO OPEN CONSOLE",
+                    banner.adjusted(34.0, 0.0, -10.0, 0.0),
+                    "DEPLOYED · VIDEO CUT · K TO OPEN",
                     self.font("poppins_bold", 7.5),
-                    QColor("#8ee4ff"),
+                    QColor("#f4fbff"),
                     Qt.AlignmentFlag.AlignCenter,
                 )
                 self.add_hotspot(banner, "hero_deploy_open", tooltip="Open Hero deploy console")
@@ -3181,10 +3193,21 @@ class PolarRMWindow(QOpenGLWidget):
             readiness=readiness,
             now=now,
             font_factory=self.font,
+            glass_drawer=self.draw_hud_liquid_glass,
+            text_drawer=self.draw_glass_text,
+            island_icon_drawer=self.draw_dynamic_island_icon,
+            pointer=self.hover_point,
         )
         for target in targets:
             if target.enabled:
                 self.add_hotspot(target.rect, target.action, tooltip=target.tooltip)
+        layout = self.hero_deploy_renderer.layout(width, height, self.hero_deploy_ui.progress)
+        if self.hero_deploy_ui.visible and layout.interactive:
+            self.add_hotspot(
+                layout.close_button,
+                "hero_deploy_close",
+                tooltip="Close Hero deploy controls",
+            )
 
     def hero_lob_preview(self, *, announce: bool = True) -> tuple[Any, Any]:
         module = self.registry.get("HeroLob")
@@ -4212,17 +4235,11 @@ class PolarRMWindow(QOpenGLWidget):
         self.update_hud_liquid_source(image)
 
     def consume_backend_video_frame(self) -> None:
-        """Publish a newly decoded backend MJPEG frame to the normal HUD path."""
+        """Publish a newly decoded backend frame to the normal HUD path."""
 
         camera_module = self.registry.get("CameraFeed")
         source_mode = self.setting_mode(camera_module, "Source", "Webcam")
-        if source_mode == "Native 0x0310":
-            if not self.backend.native_decoder.available:
-                return
-            bgr = self.backend.native_decoder.latest(0.5)
-            frame_at = float(getattr(self.backend.native_decoder, "_latest_at", 0.0) or 0.0)
-        else:
-            bgr, frame_at = self.backend.udp.latest_video_frame(0.5)
+        bgr, frame_at, _frame_source = self.backend.latest_video_frame(0.5, source_mode)
         if frame_at <= self._last_backend_video_at:
             return
         try:
@@ -4668,9 +4685,11 @@ class PolarRMWindow(QOpenGLWidget):
         *,
         surface: str = "MainGlass",
         hover: float = 0.0,
+        clip_rect: QRectF | None = None,
     ) -> None:
         if self._gpu_frame_recording and self.gpu_compositor.available:
             mapped = p.transform().mapRect(rect)
+            mapped_clip = p.transform().mapRect(clip_rect) if clip_rect is not None else None
             self.gpu_compositor.add_glass(
                 mapped,
                 radius * max(abs(p.transform().m11()), abs(p.transform().m22()), 0.01),
@@ -4685,6 +4704,7 @@ class PolarRMWindow(QOpenGLWidget):
                     if surface in ("ProminentGlass", "PolarGlass")
                     else LensMaterial.REGULAR
                 ),
+                clip_rect=mapped_clip,
             )
             return
         mode = "polar" if surface == "PolarGlass" else "prominent" if surface in ("ProminentGlass", "LensIsland") else "standard"

@@ -15,10 +15,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from rm_client.backend import protocol as proto  # noqa: E402
 from rm_client.backend.manager import BackendManager  # noqa: E402
 from rm_client.backend.safety import OfficialSafety  # noqa: E402
-from rm_client.backend.video_backend import detect_frame_codec  # noqa: E402
+from rm_client.backend.video_backend import ContinuousMjpegDecoder, RmVideoBackend, detect_frame_codec  # noqa: E402
 from rm_client.backend.serial_backend import RmSerialBackend  # noqa: E402
 from rm_client.backend.mqtt_backend import RmMqttBackend  # noqa: E402
 from rm_client.model import RobotState, build_default_registry  # noqa: E402
+from rm_client.native_viewer_telemetry import find_h264_sps_offset  # noqa: E402
 from rm_client.scenarios import SCENARIOS  # noqa: E402
 
 PASS = 0
@@ -211,6 +212,163 @@ def test_video_codec_detect() -> None:
     nal = b"\x00\x00\x00\x01" + bytes([(32 << 1) | 1]) + b"\x01\x02"
     check("h265 detect", detect_frame_codec(nal) == "h265")
     check("unknown detect", detect_frame_codec(b"hello") == "unknown")
+
+
+def test_decoded_video_timestamp_and_source_selection() -> None:
+    print("[video] decoded timestamp + source selection")
+
+    class FakeDecoder:
+        def __init__(self, frame: object = None, timestamp: float = 0.0) -> None:
+            self.available = True
+            self.frame = frame
+            self.timestamp = timestamp
+            self.frames_decoded = 0
+            self.starts = 0
+            self.restarts = 0
+            self.writes: list[bytes] = []
+            self.input_chunks_dropped = 0
+
+        def latest_with_timestamp(self, _timeout_s: float = 0.5):
+            return self.frame, self.timestamp
+
+        def latest(self, _timeout_s: float = 0.5):
+            return self.frame
+
+        def start(self) -> bool:
+            self.available = True
+            self.starts += 1
+            return True
+
+        def restart(self, **_kwargs: object) -> bool:
+            self.available = True
+            self.restarts += 1
+            return True
+
+        def write(self, payload: bytes) -> bool:
+            self.writes.append(bytes(payload))
+            return True
+
+        def input_queue_depth(self) -> int:
+            return 0
+
+        def stop(self, **_kwargs: object) -> None:
+            self.available = False
+
+    now = time.perf_counter()
+    mjpeg = object()
+    h265 = object()
+    backend = RmVideoBackend()
+    backend.latest_bgr = mjpeg
+    backend.latest_bgr_at = now
+    backend.last_frame_at = now
+    backend.h265_decoder = FakeDecoder(h265, now + 0.001)  # type: ignore[assignment]
+    frame, timestamp = backend.latest_video_frame(1.0)
+    check("freshest UDP decode wins", frame is h265 and timestamp > now)
+
+    # Encoded traffic must not make an old decoded MJPEG image look fresh.
+    backend.h265_decoder.available = False
+    backend.latest_bgr_at = now - 5.0
+    backend.last_frame_at = time.perf_counter()
+    frame, timestamp = backend.latest_video_frame(0.1)
+    check("encoded timestamp cannot refresh stale image", frame is None and timestamp == 0.0)
+
+    backend.running = True
+    backend._h265_next_restart_at = 0.0
+    backend._request_h265_restart()
+    restart_thread = backend._h265_restart_thread
+    if restart_thread is not None:
+        restart_thread.join(timeout=1.0)
+    check(
+        "UDP decoder restart stays off receive thread",
+        backend.h265_decoder.available
+        and backend.h265_decoder.starts == 1
+        and backend.h265_decoder_restarts == 1,
+    )
+    backend.running = False
+
+    queued_decoder = ContinuousMjpegDecoder("h264")
+    queued_decoder._proc = object()
+    queued_decoder._running = True
+    accepted = all(
+        queued_decoder.write(b"x")
+        for _ in range(queued_decoder.INPUT_QUEUE_CHUNKS)
+    )
+    rejected = not queued_decoder.write(b"overflow")
+    check("decoder input queue is bounded and non-blocking", accepted and rejected)
+    check("decoder input drop is observable", queued_decoder.input_chunks_dropped == 1)
+    queued_decoder._running = False
+    queued_decoder._proc = None
+    queued_decoder._drain_input_queue()
+
+    state = RobotState()
+    manager = BackendManager(state=state)
+    native = object()
+    udp = object()
+    fake_native = FakeDecoder(native, now + 0.01)
+    manager.native_decoder.stop()
+    manager.native_decoder = fake_native  # type: ignore[assignment]
+    manager.udp.latest_video_frame = lambda _timeout=0.5: (udp, now + 0.02)  # type: ignore[method-assign]
+    frame, _timestamp, source = manager.latest_video_frame(1.0, "Auto")
+    check("manager auto picks freshest source", frame is udp and source == "udp")
+    frame, _timestamp, source = manager.latest_video_frame(1.0, "Native 0x0310")
+    check("manager honors native source", frame is native and source == "native-0x0310")
+
+    def packet(sequence: int, reset: bool, payload: bytes) -> bytes:
+        header = (0x01 if reset else 0x00) | (0x02 if len(payload) > 255 else 0x00)
+        block = bytes((header, sequence & 0xFF, len(payload) & 0xFF)) + payload
+        return block + bytes(300 - len(block))
+
+    sps_a = b"lead\x00\x00\x00\x01\x67sps-a"
+    sps_b = b"\x00\x00\x01\x67sps-b"
+    check("native SPS finder 4-byte", find_h264_sps_offset(sps_a) == 4)
+    check("native SPS finder 3-byte", find_h264_sps_offset(sps_b) == 0)
+    check("native SPS finder rejects non-SPS", find_h264_sps_offset(b"\x00\x00\x01\x65idr") is None)
+    manager._apply_one(state, "CustomByteBlock", {"data": packet(10, True, b"a" * 20)})
+    check(
+        "native reset blocks until SPS",
+        state.backend_stats["native_video_0310"]["blocked_until_sps"]
+        and not state.backend_stats["native_video_0310"]["payload_written"],
+    )
+    manager._apply_one(state, "CustomByteBlock", {"data": packet(11, False, sps_a)})
+    manager._apply_one(state, "CustomByteBlock", {"data": packet(13, False, b"b" * 20)})
+    check(
+        "native gap blocks corrupt continuation",
+        state.backend_stats["native_video_0310"]["blocked_until_sps"]
+        and not state.backend_stats["native_video_0310"]["payload_written"],
+    )
+    manager._apply_one(state, "CustomByteBlock", {"data": packet(14, False, sps_b)})
+    manager._apply_one(state, "CustomByteBlock", {"data": packet(14, False, sps_b)})
+    info = state.backend_stats["native_video_0310"]
+    check("native stream retains no unbounded bytearray", not hasattr(manager, "_native_0310_buffer"))
+    check("native sequence gap counted", info["dropped_chunks"] == 1)
+    check("native duplicate rejected", info["out_of_order_chunks"] == 1 and not info["payload_accepted"])
+    check(
+        "native resumes exactly at SPS",
+        fake_native.writes == [sps_a[4:], sps_b] and not info["blocked_until_sps"],
+    )
+    check(
+        "native payload writes bounded",
+        len(fake_native.writes) == 2
+        and info["bytes_since_reset"] == 40 + len(sps_a) + len(sps_b),
+    )
+    check("native gaps do not synchronously restart ffmpeg", fake_native.restarts == 0)
+    manager._native_0310_decoder_started_once = True
+    fake_native.available = False
+    manager._apply_one(state, "CustomByteBlock", {"data": packet(15, False, b"continuation")})
+    check(
+        "native decoder crash waits for SPS",
+        state.backend_stats["native_video_0310"]["blocked_until_sps"]
+        and len(fake_native.writes) == 2,
+    )
+    manager._apply_one(state, "CustomByteBlock", {"data": packet(16, False, sps_b)})
+    info = state.backend_stats["native_video_0310"]
+    check(
+        "native decoder restarts only at SPS",
+        fake_native.starts == 1
+        and info["decoder_restarts"] == 1
+        and fake_native.writes[-1] == sps_b,
+    )
+    manager.shutdown()
 
 
 def test_serial_backend() -> None:
@@ -526,6 +684,7 @@ def main() -> None:
     test_downlink_decode()
     test_safety_modes()
     test_video_codec_detect()
+    test_decoded_video_timestamp_and_source_selection()
     test_serial_backend()
     test_manager_updates_state()
     test_protocol_regressions()

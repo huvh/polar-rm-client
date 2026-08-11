@@ -196,3 +196,34 @@ def parse_video_0310_chunk(data: bytes | bytearray | memoryview) -> Video0310Chu
         stream_ms=0,
         payload=payload[VIDEO_0310_HEADER_BYTES:VIDEO_0310_HEADER_BYTES + length],
     )
+
+
+def find_h264_sps_offset(data: bytes | bytearray | memoryview) -> int | None:
+    """Return the Annex-B start-code offset of the first SPS NAL (type 7).
+
+    rm-native-viewer intentionally stops feeding ffmpeg after a 0x0310
+    sequence gap or stream-reset flag, then resumes at the next SPS.  Starting
+    in the middle of a NAL can poison ffmpeg's parser even when an IDR arrives
+    later, so this recovery gate is part of the transport contract rather than
+    merely a visual optimisation.
+    """
+
+    payload = bytes(data)
+    index = 0
+    while index + 3 < len(payload):
+        three_byte = payload[index:index + 3] == b"\x00\x00\x01"
+        four_byte = (
+            index + 4 < len(payload)
+            and payload[index:index + 4] == b"\x00\x00\x00\x01"
+        )
+        if three_byte:
+            if payload[index + 3] & 0x1F == 7:
+                return index
+            index += 3
+        elif four_byte:
+            if payload[index + 4] & 0x1F == 7:
+                return index
+            index += 4
+        else:
+            index += 1
+    return None

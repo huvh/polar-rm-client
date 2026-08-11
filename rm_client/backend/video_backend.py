@@ -14,6 +14,7 @@ import struct
 import subprocess
 import threading
 import time
+from queue import Empty, Full, Queue
 from typing import Any, Callable
 
 from ..transports import UDPVideoReceiver
@@ -69,7 +70,12 @@ class RmVideoBackend(UDPVideoReceiver):
         self.decoder_backend: str = "none"
         self.output_width: int = 0
         self.output_height: int = 0
+        self.mjpeg_decoded_frames: int = 0
         self.latest_bgr: Any = None  # MJPEG 解码后的 BGR ndarray
+        # Timestamp of the *decoded* MJPEG frame.  ``last_frame_at`` tracks
+        # encoded UDP traffic and therefore must not be used to refresh an old
+        # image when H.265/unknown packets arrive after the last MJPEG frame.
+        self.latest_bgr_at = 0.0
         self.latest_h265: bytes = b""
         self.last_frame_at = 0.0
         self.external_on_frame: Callable[[bytes], None] | None = None
@@ -83,6 +89,10 @@ class RmVideoBackend(UDPVideoReceiver):
         self._bytes_this_second = 0
         self._last_stats_at = 0.0
         self._lock = threading.Lock()
+        self._h265_restart_lock = threading.Lock()
+        self._h265_restart_thread: threading.Thread | None = None
+        self._h265_next_restart_at = 0.0
+        self.h265_decoder_restarts = 0
 
     # ------------------------------------------------------------------
     def start(self) -> None:
@@ -95,9 +105,13 @@ class RmVideoBackend(UDPVideoReceiver):
             self.fps = 0.0
             self.bitrate = 0.0
             self.codec = "unknown"
+            self.mjpeg_decoded_frames = 0
             self.latest_bgr = None
+            self.latest_bgr_at = 0.0
             self.latest_h265 = b""
             self.last_frame_at = 0.0
+            self.h265_decoder_restarts = 0
+            self._h265_next_restart_at = 0.0
             self._assembler.frames.clear()
         if self.h265_decoder is not None and self.decode_h265:
             self.h265_decoder.start()
@@ -131,10 +145,18 @@ class RmVideoBackend(UDPVideoReceiver):
         elif codec == "h265":
             with self._lock:
                 self.latest_h265 = frame
-            if self.decode_h265 and self.h265_decoder is not None and self.h265_decoder.available:
-                self.h265_decoder.write(frame)
-                with self._lock:
-                    self.decoder_backend = "ffmpeg-mjpeg"
+            if self.decode_h265 and self.h265_decoder is not None:
+                if self.h265_decoder.available:
+                    queued = self.h265_decoder.write(frame)
+                    with self._lock:
+                        self.decoder_backend = "ffmpeg-mjpeg"
+                        if not queued:
+                            self.dropped_frames += 1
+                else:
+                    # A dead ffmpeg must not be restarted synchronously from
+                    # the UDP receive loop.  Recover in a bounded side thread;
+                    # a future VPS/SPS/IDR will make the stream decodable.
+                    self._request_h265_restart()
         if self.external_on_frame is not None:
             try:
                 self.external_on_frame(frame)
@@ -151,6 +173,8 @@ class RmVideoBackend(UDPVideoReceiver):
                 h, w = bgr.shape[:2]
                 with self._lock:
                     self.latest_bgr = bgr
+                    self.latest_bgr_at = time.perf_counter()
+                    self.mjpeg_decoded_frames += 1
                     self.decoder_backend = "cv2"
                     self.output_width, self.output_height = w, h
         except Exception:
@@ -181,23 +205,73 @@ class RmVideoBackend(UDPVideoReceiver):
             return None
 
     def latest_video_frame(self, timeout_s: float = 0.5) -> tuple[Any, float]:
-        """???????????? H.265 ??????? MJPEG ???"""
+        """Return the freshest decoded UDP frame and its monotonic timestamp."""
+
+        deadline_age = max(0.0, float(timeout_s))
+        now = time.perf_counter()
+        h265_frame: Any = None
+        h265_at = 0.0
         if self.decode_h265 and self.h265_decoder is not None and self.h265_decoder.available:
-            bgr = self.h265_decoder.latest(timeout_s)
-            if bgr is not None:
-                return bgr, self.h265_decoder._latest_at
+            h265_frame, h265_at = self.h265_decoder.latest_with_timestamp(deadline_age)
+
         with self._lock:
-            if self.latest_bgr is not None and self.last_frame_at > 0 and time.perf_counter() - self.last_frame_at <= float(timeout_s):
-                return self.latest_bgr, self.last_frame_at
+            mjpeg_frame = self.latest_bgr
+            mjpeg_at = float(self.latest_bgr_at)
+        if mjpeg_frame is None or mjpeg_at <= 0.0 or now - mjpeg_at > deadline_age:
+            mjpeg_frame, mjpeg_at = None, 0.0
+
+        if h265_frame is not None and h265_at >= mjpeg_at:
+            return h265_frame, h265_at
+        if mjpeg_frame is not None:
+            return mjpeg_frame, mjpeg_at
         return None, 0.0
 
+    def _request_h265_restart(self) -> None:
+        decoder = self.h265_decoder
+        now = time.perf_counter()
+        if decoder is None or not self.running or now < self._h265_next_restart_at:
+            return
+        with self._h265_restart_lock:
+            if self._h265_restart_thread is not None and self._h265_restart_thread.is_alive():
+                return
+            self._h265_next_restart_at = now + 1.0
+
+            def restart_worker() -> None:
+                with self._h265_restart_lock:
+                    if not self.running:
+                        return
+                    restarted = decoder.start()
+                if restarted and self.running:
+                    with self._lock:
+                        self.h265_decoder_restarts += 1
+                        self.decoder_backend = "ffmpeg-mjpeg"
+
+            self._h265_restart_thread = threading.Thread(
+                target=restart_worker,
+                name="h265-decoder-restart",
+                daemon=True,
+            )
+            self._h265_restart_thread.start()
+
     def stop(self) -> None:
-        if self.h265_decoder is not None:
-            self.h265_decoder.stop()
+        # Stop packet production before touching decoder stdin.
         super().stop()
+        with self._h265_restart_lock:
+            if self.h265_decoder is not None:
+                self.h265_decoder.stop()
+        restart_thread = self._h265_restart_thread
+        if restart_thread is not None and restart_thread.is_alive():
+            restart_thread.join(timeout=1.0)
+        self._h265_restart_thread = None
 
     def stats(self) -> dict[str, Any]:
+        h265_at = self.h265_decoder.latest_timestamp() if self.h265_decoder else 0.0
+        h265_frames = self.h265_decoder.frames_decoded if self.h265_decoder else 0
         with self._lock:
+            decoded_at = max(float(self.latest_bgr_at), float(h265_at))
+            decoded_connected = bool(
+                decoded_at > 0.0 and time.perf_counter() - decoded_at <= 2.0
+            )
             connected = (
                 self.frames_received > 0
                 and self.last_frame_at > 0
@@ -216,8 +290,14 @@ class RmVideoBackend(UDPVideoReceiver):
                 "decoder_backend": self.decoder_backend,
                 "output_width": self.output_width,
                 "output_height": self.output_height,
+                "decoded_connected": decoded_connected,
+                "decoded_frames": self.mjpeg_decoded_frames + h265_frames,
+                "decoded_frame_at": decoded_at,
                 "h265_decoder_ready": bool(self.h265_decoder and self.h265_decoder.available),
-                "h265_decoded_frames": self.h265_decoder.frames_decoded if self.h265_decoder else 0,
+                "h265_decoded_frames": h265_frames,
+                "h265_input_queue": self.h265_decoder.input_queue_depth() if self.h265_decoder else 0,
+                "h265_input_dropped": self.h265_decoder.input_chunks_dropped if self.h265_decoder else 0,
+                "h265_decoder_restarts": self.h265_decoder_restarts,
                 "last_error": self.last_error,
             }
 
@@ -249,6 +329,8 @@ class ContinuousMjpegDecoder:
     需要预先知道宽高，也避免每帧 spawn 一个 ffmpeg 进程。
     """
 
+    INPUT_QUEUE_CHUNKS = 256
+
     def __init__(self, codec: str = "h265", quality: int = 3) -> None:
         self.codec = codec  # "h264" | "h265"
         self.quality = int(quality)
@@ -257,8 +339,16 @@ class ContinuousMjpegDecoder:
         self.frames_decoded = 0
         self._proc: Any = None
         self._reader: threading.Thread | None = None
+        self._writer: threading.Thread | None = None
         self._running = False
         self._lock = threading.Lock()
+        # Decoder stdin is serviced off the UDP/UI thread.  A bounded queue
+        # prevents a stalled ffmpeg process from freezing 144 Hz rendering or
+        # growing memory without limit.
+        self._input_queue: Queue[bytes] = Queue(maxsize=self.INPUT_QUEUE_CHUNKS)
+        self.input_chunks_dropped = 0
+        self.input_chunks_written = 0
+        self.input_bytes_written = 0
         self._latest: Any = None
         self._latest_at = 0.0
         self._frame_w = 0
@@ -267,11 +357,17 @@ class ContinuousMjpegDecoder:
     def start(self) -> bool:
         if self._running:
             return True
+        # A reader/writer failure marks the decoder unavailable but may leave
+        # a reaped process handle behind.  Dispose it before spawning the next
+        # instance so recovery never leaks ffmpeg children or stale queues.
+        if self._proc is not None:
+            self.stop(clear_latest=False)
         ffmpeg = shutil.which("ffmpeg")
         if not ffmpeg:
             self.last_error = "ffmpeg 不可用"
             return False
         try:
+            self._drain_input_queue()
             self._proc = subprocess.Popen(
                 [
                     ffmpeg, "-v", "error",
@@ -280,31 +376,66 @@ class ContinuousMjpegDecoder:
                 ],
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                # Corrupt field packets can produce a large volume of ffmpeg
+                # diagnostics.  An unread PIPE eventually deadlocks; DEVNULL
+                # keeps the persistent decoder non-blocking.
+                stderr=subprocess.DEVNULL,
             )
             self._running = True
+            self._writer = threading.Thread(
+                target=self._write_loop, name=f"mjpeg-in-{self.codec}", daemon=True
+            )
             self._reader = threading.Thread(
                 target=self._read_loop, name=f"mjpeg-dec-{self.codec}", daemon=True
             )
-            self._reader.start()
             self.available = True
             self.last_error = ""
+            self._writer.start()
+            self._reader.start()
             return True
         except Exception as exc:  # pragma: no cover - depends on ffmpeg
-            self.last_error = str(exc)
-            self.available = False
+            message = str(exc)
+            self.stop()
+            self.last_error = message
             return False
 
     def write(self, data: bytes) -> bool:
-        """把码流字节喂给 ffmpeg stdin。"""
-        if self._proc is None or self._proc.stdin is None or not self._running:
+        """Queue stream bytes without blocking the caller on ffmpeg stdin."""
+
+        if self._proc is None or not self._running:
             return False
-        try:
-            self._proc.stdin.write(bytes(data))
-            self._proc.stdin.flush()
+        payload = bytes(data)
+        if not payload:
             return True
-        except Exception:
+        try:
+            self._input_queue.put_nowait(payload)
+            return True
+        except Full:
+            with self._lock:
+                self.input_chunks_dropped += 1
             return False
+
+    def _write_loop(self) -> None:
+        while self._running:
+            try:
+                payload = self._input_queue.get(timeout=0.10)
+            except Empty:
+                continue
+            proc = self._proc
+            if proc is None or proc.stdin is None:
+                break
+            try:
+                proc.stdin.write(payload)
+                proc.stdin.flush()
+                with self._lock:
+                    self.input_chunks_written += 1
+                    self.input_bytes_written += len(payload)
+            except Exception as exc:
+                if self._running:
+                    self.last_error = str(exc)
+                self.available = False
+                self._running = False
+                break
 
     def _read_loop(self) -> None:
         buf = bytearray()
@@ -318,6 +449,7 @@ class ContinuousMjpegDecoder:
             except Exception:
                 break
         self._running = False
+        self.available = False
 
     def _decode(self, frame: bytes) -> None:
         try:
@@ -327,7 +459,9 @@ class ContinuousMjpegDecoder:
                 return
             with self._lock:
                 self._latest = bgr
-                self._latest_at = time.time()
+                # All video sources use the same monotonic clock so callers
+                # can safely compare native H.264, UDP H.265 and MJPEG frames.
+                self._latest_at = time.perf_counter()
                 h, w = bgr.shape[:2]
                 self._frame_w, self._frame_h = w, h
                 self.frames_decoded += 1
@@ -335,27 +469,64 @@ class ContinuousMjpegDecoder:
             pass
 
     def latest(self, timeout_s: float = 0.5) -> Any:
+        frame, _timestamp = self.latest_with_timestamp(timeout_s)
+        return frame
+
+    def latest_with_timestamp(self, timeout_s: float = 0.5) -> tuple[Any, float]:
+        """Return a fresh decoded frame and its monotonic decode timestamp."""
+
+        now = time.perf_counter()
         with self._lock:
-            if self._latest is None or time.time() - self._latest_at > float(timeout_s):
-                return None
-            return self._latest
+            if (
+                self._latest is None
+                or self._latest_at <= 0.0
+                or now - self._latest_at > max(0.0, float(timeout_s))
+            ):
+                return None, 0.0
+            return self._latest, float(self._latest_at)
+
+    def restart(self, *, clear_latest: bool = True) -> bool:
+        """Restart ffmpeg after a stream reset or sequence discontinuity."""
+
+        self.stop(clear_latest=clear_latest)
+        return self.start()
 
     def frame_size(self) -> tuple[int, int]:
         with self._lock:
             return self._frame_w, self._frame_h
 
-    def stop(self) -> None:
+    def latest_timestamp(self) -> float:
+        """Return the monotonic timestamp of the last decoded frame."""
+
+        with self._lock:
+            return float(self._latest_at)
+
+    def input_queue_depth(self) -> int:
+        return self._input_queue.qsize()
+
+    def _drain_input_queue(self) -> None:
+        while True:
+            try:
+                self._input_queue.get_nowait()
+            except Empty:
+                return
+
+    def stop(self, *, clear_latest: bool = True) -> None:
         self._running = False
         proc = self._proc
         self._proc = None
         if proc is not None:
             try:
-                if proc.stdin is not None:
-                    proc.stdin.close()
+                # Terminate first: closing a buffered stdin while the writer
+                # thread is blocked on a full OS pipe may itself try to flush
+                # and stall the caller.  Once ffmpeg exits, close becomes a
+                # bounded broken-pipe cleanup instead of a UI-thread wait.
+                proc.terminate()
             except Exception:
                 pass
             try:
-                proc.terminate()
+                if proc.stdin is not None:
+                    proc.stdin.close()
             except Exception:
                 pass
             try:
@@ -365,7 +536,17 @@ class ContinuousMjpegDecoder:
                     proc.kill()
                 except Exception:
                     pass
+        if self._writer is not None and self._writer.is_alive():
+            self._writer.join(timeout=0.6)
+        self._writer = None
         if self._reader is not None and self._reader.is_alive():
             self._reader.join(timeout=0.6)
         self._reader = None
+        self._drain_input_queue()
         self.available = False
+        if clear_latest:
+            with self._lock:
+                self._latest = None
+                self._latest_at = 0.0
+                self._frame_w = 0
+                self._frame_h = 0

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from functools import lru_cache
 import math
+import os
 from pathlib import Path
 import struct
 import time
@@ -29,6 +31,14 @@ _GL_STENCIL_TEST = 0x0B90
 _GL_FUNC_ADD = 0x8006
 _GL_TEXTURE0 = 0x84C0
 _GL_TEXTURE_2D = 0x0DE1
+
+
+@lru_cache(maxsize=512)
+def _image_source_key(source: str) -> str:
+    """Canonical texture-cache key without repeated Windows filesystem I/O."""
+
+    path = Path(source)
+    return str(path if path.is_absolute() else path.expanduser().resolve())
 
 
 @dataclass(frozen=True)
@@ -89,12 +99,29 @@ class ClickGuiDrawList:
     default_text_shadow: bool = True
     default_text_raster_scale: float = 1.0
     default_text_preserve_weight: bool = False
+    # High-frequency builders such as Jello create fresh Qt value objects and
+    # never mutate them after submission.  They may opt out of a second round
+    # of implicit-shared QRect/QColor/QFont copies for substantially lower
+    # Python/Qt bridge overhead.  The conservative public default stays True.
+    copy_payloads: bool = True
 
     def _append(self, payload: GpuRect | GpuText | GpuImage, *, layer: int = 0, opacity: float = 1.0) -> None:
         self.commands.append(GpuUiCommand(len(self.commands), payload, layer, opacity))
 
     def rect(self, rect: QRectF, radius: float, fill: QColor, outline: QColor | None = None, outline_width: float = 0.0, gradient: QColor | None = None, clip: QRectF | None = None) -> None:
-        payload = GpuRect(QRectF(rect), radius, QColor(fill), QColor(outline) if outline else QColor(0, 0, 0, 0), outline_width, QColor(gradient) if gradient else None, QRectF(clip) if clip else None)
+        payload = GpuRect(
+            QRectF(rect) if self.copy_payloads else rect,
+            radius,
+            QColor(fill) if self.copy_payloads else fill,
+            (
+                QColor(outline)
+                if outline is not None and self.copy_payloads
+                else (outline if outline is not None else QColor(0, 0, 0, 0))
+            ),
+            outline_width,
+            QColor(gradient) if gradient is not None and self.copy_payloads else gradient,
+            QRectF(clip) if clip is not None and self.copy_payloads else clip,
+        )
         self.rects.append(payload)
         self._append(payload)
 
@@ -102,16 +129,20 @@ class ClickGuiDrawList:
         if text:
             draw_shadow = self.default_text_shadow if shadow is None else bool(shadow)
             payload = GpuText(
-                QRectF(rect),
+                QRectF(rect) if self.copy_payloads else rect,
                 text,
-                QFont(font),
-                QColor(color),
+                QFont(font) if self.copy_payloads else font,
+                QColor(color) if self.copy_payloads else color,
                 alignment,
-                QRectF(clip) if clip else None,
+                QRectF(clip) if clip is not None and self.copy_payloads else clip,
                 draw_shadow,
                 float(rotation_degrees),
                 max(0.01, float(render_scale)),
-                QPointF(rotation_origin) if rotation_origin is not None else None,
+                (
+                    QPointF(rotation_origin)
+                    if rotation_origin is not None and self.copy_payloads
+                    else rotation_origin
+                ),
                 max(
                     0.25,
                     float(
@@ -130,18 +161,21 @@ class ClickGuiDrawList:
             self._append(payload)
 
     def image(self, rect: QRectF, source: str | Path, tint: QColor | None = None, clip: QRectF | None = None) -> None:
-        path = Path(source)
         # Jello submits the same absolute shadow/options assets dozens of
         # times per frame.  ``Path.resolve()`` calls GetFinalPathNameByHandle
         # on Windows, which alone cost ~20 ms at 2K/2x even though the files
         # never move.  Preserve canonicalisation for relative/user paths, but
         # keep already-absolute application assets as the stable cache key.
-        source_path = str(path if path.is_absolute() else path.expanduser().resolve())
+        source_path = _image_source_key(os.fspath(source))
         payload = GpuImage(
-            QRectF(rect),
+            QRectF(rect) if self.copy_payloads else rect,
             source_path,
-            QColor(tint) if tint is not None else QColor(255, 255, 255, 255),
-            QRectF(clip) if clip else None,
+            (
+                QColor(tint)
+                if tint is not None and self.copy_payloads
+                else (tint if tint is not None else QColor(255, 255, 255, 255))
+            ),
+            QRectF(clip) if clip is not None and self.copy_payloads else clip,
         )
         self.images.append(payload)
         self._append(payload)

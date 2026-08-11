@@ -44,7 +44,7 @@ python -m venv .venv
 
 第一级选择运行场景：
 
-- `OfficialEvent`：官方赛事网络预设，真实机器人输出默认仍保持 mock。
+- `OfficialEvent`：官方赛事网络预设；裁判系统 MQTT 上行按比赛阶段/10 Hz 门禁开放，真实串口、底盘和发射输出仍默认 mock/stub。
 - `CampusSimulation`：校内模拟或 SharkDataServer 本地仿真预设。
 - `LabDebug`：实验室本地调试，使用摄像头或合成图传。
 
@@ -62,6 +62,7 @@ python -m venv .venv
 - 长按 `Tab`：放大 `TacticalMap`；松开 `Tab` 后回到缩略小地图。修改 `TacticalMap` 模块绑定键后，新的绑定键也会作为长按查看键。
 - 启动页：`1/2/3` 选择运行场景，然后 `1/2` 选择 `RMUC7v7/RMUL3v3`；`Backspace` 返回场景选择。
 - `B`：打开/关闭独立经济工作区；`ProjectileShop` 绑定键直接进入弹丸页。
+- `K`：打开/关闭 Hero 专用部署/吊射控制台；进入或退出部署模式需要在确认窗口内再次确认。
 - 经济工作区：滚轮/方向键浏览，`Enter` 确认，远程弹丸、补血、复活和支援需长按 600ms，`Esc` 取消或关闭。
 - Jello 主界面中左键点击模块切换开关，右键打开居中设置面板。
 - `Esc` 先关闭设置面板；临时旧界面中第一次返回 Jello，再次关闭 ClickGUI。
@@ -72,21 +73,23 @@ python -m venv .venv
 - `JelloSigma` 是唯一默认主界面：固定六分类 4+2 卡片布局、Sigma 原始字体/图片/颜色、450 ms 入场、125 ms 退场、20 px 模糊和原始模块开关音效。
 - `PolarOld`、`PolarPanel`、`PolarNew`、`PolarDropdown`、`PolarUnified`、`PolarMulti` 保留为临时兼容界面，只能从 `Old ClickGUIs` 进入。
 - 旧配置中的 Polar/Vape 模式会迁移到 `JelloSigma`；临时进入旧界面不会改变下次打开结果。
-- `ClickGui -> Scale` 可在 `0.50x–2.00x` 调节；窗口布局会按可用宽高封顶，GPU 字形页按稳定的 0.25 档位缓存，入场动画不会逐帧创建纹理。
+- `ClickGui -> Scale` 可在 `0.50x–2.00x` 调节；窗口布局会按可用宽高封顶。Jello 字形按实际 DPR 高分辨率栅格化并保持 Helvetica Neue Light 原始字重，图片/字体页预加载，绝对时钟帧调度避免 2K 入场动画因定时器量化而顿挫。
 
 ## Jello HUD 与 Minecraft 战斗预设
 
 - `HUD -> ModuleList Style -> JelloActiveMods` 使用 Sigma 5.1.0 `ActiveMods` 的原始 Helvetica Neue Light 字体、右上角坐标、150 ms 显隐、宽度排序、缩放枢轴和 `hud_shadow.png`。
 - `Armor3DESP -> Style -> JelloShadow` 替换旧的荧光白机械样式：使用 `#fefefe`、2 px 轮廓和 Sigma 原始阴影图。由于视觉桥只提供投影装甲四边形而不是 Minecraft 实体网格，该模式严格以可用装甲轮廓作为 silhouette，不伪造实体深度。
 - `HUD -> Combat Preset -> Minecraft 1.21.11` 启用从用户本地 1.21.11 JAR 提取的原版 hotbar、心/护甲/饱食度、BossBar、状态图标和位图字体。
-- Minecraft 护甲值表示剩余热量/冷却裕量，饱食度表示实时底盘功率/功率上限；右侧 scoreboard 显示我方、敌方、基地、前哨站、目标、弹量和 Hero 吊射状态。
+- Minecraft 护甲值表示剩余热量/冷却裕量，饱食度表示实时底盘功率/功率上限；右侧 scoreboard 显示基地/敌方基地护盾、前哨站、最多四名我方与四名敌方的 ID/血量/状态、目标、弹量和 Hero 吊射状态。BossBar、状态图标和 scoreboard 在 1000×620 到 2560×1440 的 Auto GUI Scale 下分区避让。
 - Jello 模块行可拖到九格功能栏；`1–9` 执行对应功能。栏位保存在配置中，拖拽命中区域与当前 Minecraft 整数 GUI Scale 一致。
 
 ## Hero 吊射与后端就绪性
 
 - `HeroLob` 提供高/低弧预览、炮口随 pitch 位移的迭代补偿、yaw/pitch 校准、遥测时效、热量、横滚和重定位门禁。
+- `K` 或 `HeroLob -> Open Deploy Interface` 从顶部 Apple 风格灵动岛展开 Hero 吊射控制面；根面板、轨迹/遥测卡片和按钮直接复用现有 AndroidLiquidGlass GPU 镜片、文字保护、按压反馈与 Control Center 弹簧，不再使用独立科幻风全屏设计。部署进入/退出采用二次确认；mock 按官方 2 秒切换过程模拟，`OfficialEvent` 等待 `DeployModeStatusSync`，部署期间图传被切断时自定义 UI 和地图继续显示。
 - 它是 fail-closed 的决策支持功能，**不会发送自动发射或云台命令**；定位重置或遥测异常会自动撤销预备状态。
-- `rm-native-viewer` 的 `PDL1` 遥测和 `0x0310` 固定分块已可识别，但 `0x0310` 连续 H.264 解码尚未接入。
+- `AutoSpinOnHit` 只依据 `RobotInjuryStat` 的新增 17/42 mm 弹丸伤害触发，首个累计样本不触发；提供阈值、持续时间、冷却、比赛/裁判链路/功率门禁和人工 SpinMode 所有权保护。
+- `rm-native-viewer` 的 `PDL1` 遥测和 `0x0310` 固定分块已接入常驻 H.264 解码器；reset、缺包或解码器异常后会停止喂流并等待下一个 Annex-B SPS，再从 SPS 精确恢复，序号回绕/重复/迟到包均有统计，历史码流不会无限驻留内存。UDP H.265 解码异常在接收线程外恢复，并与原生 H.264 使用同一单调解码时间线后再发布到 HUD。
 - 当前实战审查结论为 **NOT READY FOR REAL MATCH**。阻塞项和真车验证清单见 `BACKEND_MATCH_READINESS.md`。
 
 ## HUD 模式
@@ -158,11 +161,12 @@ python -m venv .venv
 - `ArmorAutoAim`：打车/装甲板自瞄 UI，包含白色轮廓锁定框和预留云台输出接口。
 - `EnergyAutoAim`：7v7 能量机关自瞄 UI，包含符进度显示和预留能量机关预测/输出接口。
 - `SpinMode`：小陀螺底盘状态、参数和预留底盘输出接口。
+- `AutoSpinOnHit`：检测裁判弹丸伤害增量后，在门禁允许时临时请求小陀螺；默认关闭，不能用普通血量下降代替弹丸命中证据。
 - `RobotOverlay` / `RadarOverlay`：装甲板框、机器人 ID、距离、血量和雷达高亮覆盖层。
 - `RobotTargetHUD`：目标血量、热量、距离和锁定状态卡片。
 - `ModuleList`、`KeyBinds`、`Watermark`、`DynamicIsland`：可配置 RM HUD 覆盖层。
 - RMUI 语义模块：`GimbalPower`、`PowerLimit`、`SpeedLimit`、`Capacitor`、`FrictionWheel`、`LockState`、`BuffStatus`、`ProjectileAllowance`、`JumpPTEWheelLES`。
-- 比赛 HUD 语义模块：`MatchMode`、`TacticalMap`、`MatchTimer`、`BaseOutpostStatus`、`VictoryPointStatus`、`EconomyPanel`、`ProjectileShop`、`ThermalPowerPanel`、`BuffTimeline`。`EconomyPanel` 提供独立工作区，并按比赛制式、机器人、实时金币、弹量、脱战和复活状态过滤操作。
+- 比赛 HUD 语义模块：`MatchMode`、`TacticalMap`、`MatchTimer`、`BaseOutpostStatus`、`VictoryPointStatus`、`EconomyPanel`、`ProjectileShop`、`ThermalPowerPanel`、`BuffTimeline`。`EconomyPanel` 提供独立工作区，并按比赛制式、机器人、实时金币、弹量、脱战和复活状态过滤操作；复活结算后关闭会清理经济界面的瞬态玻璃/遮罩缓存，不会带走 HUD，随后可再次打开。
 
 当前没有实现真实发射和真实底盘控制。所有控制输出默认都是 mock/stub。
 
@@ -179,6 +183,11 @@ python -m venv .venv
 
 ```powershell
 .\.venv\Scripts\python.exe tests\smoke_test.py
+.\.venv\Scripts\python.exe tests\backend_protocol_test.py
+.\.venv\Scripts\python.exe tests\gpu_compositor_test.py
+.\.venv\Scripts\python.exe tests\gpu_renderer_runtime_smoke.py
+.\.venv\Scripts\python.exe tests\startup_gpu_runtime_smoke.py
+.\.venv\Scripts\python.exe tests\transition_visual_check.py
 ```
 
 ## 模块切换与击杀音效

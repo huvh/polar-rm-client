@@ -208,7 +208,20 @@ class MinecraftCombatHudRenderer:
         score_w = max(120, logical_score_w + 8) * scale
         score_h = max(12, len(lines) * 9 + 5) * scale
         scoreboard = QRectF(width - score_w - 4 * scale, max(58 * scale, (height - score_h) * 0.46), score_w, score_h)
-        return MinecraftHudLayout(scale, hotbar, slots, hearts, armor, food, boss, scoreboard, QPointF(4 * scale, 4 * scale))
+        # Keep effect tiles below the three boss bars.  At 2K/Auto scale 6 a
+        # vanilla 6-slot effect row is 936 px wide; placing it at y=4 clipped
+        # the ALLY BASE title even though every individual rect was on-screen.
+        return MinecraftHudLayout(
+            scale,
+            hotbar,
+            slots,
+            hearts,
+            armor,
+            food,
+            boss,
+            scoreboard,
+            QPointF(4 * scale, 58 * scale),
+        )
 
     @staticmethod
     def assignments(module: Any) -> tuple[str, ...]:
@@ -226,25 +239,78 @@ class MinecraftCombatHudRenderer:
         return (capitals or name[:3]).upper()[:3]
 
     @staticmethod
+    def _team_rows(state: Any) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        """Return bounded ally/enemy status rows in local-team order."""
+
+        local_id = int(getattr(state, "robot_id", 0) or 0)
+        local_red = local_id < 100
+        rows = [dict(row) for row in getattr(state, "robot_rows", ()) if int(row.get("id", 0) or 0) > 0]
+        # Official sync provides both teams in robot_rows.  The simulator's
+        # legacy robot_rows contains allies only, so supplement its opponent
+        # side from the tactical-map feed without duplicating robot IDs.
+        by_id = {int(row.get("id", 0)): row for row in rows}
+        for row in getattr(state, "map_robots", ()):
+            robot_id = int(row.get("id", 0) or 0)
+            if robot_id > 0 and robot_id not in by_id:
+                copy = dict(row)
+                copy.setdefault("state", "ALIVE" if int(copy.get("hp", 0)) > 0 else "DEAD")
+                by_id[robot_id] = copy
+        allies = [
+            row for robot_id, row in by_id.items()
+            if (robot_id < 100) == local_red
+        ]
+        enemies = [
+            row for robot_id, row in by_id.items()
+            if (robot_id < 100) != local_red
+        ]
+        allies.sort(key=lambda row: (int(row.get("id", 0)) != local_id, int(row.get("id", 0))))
+        enemies.sort(key=lambda row: (int(row.get("hp", 0)) <= 0, int(row.get("id", 0))))
+        return allies[:4], enemies[:4]
+
+    @classmethod
+    def _robot_status_line(cls, prefix: str, row: dict[str, Any]) -> str:
+        robot_id = int(row.get("id", 0) or 0)
+        hp = max(0, int(row.get("hp", 0) or 0))
+        # Tactical-map fallback rows may omit max HP.  Never display nonsense
+        # such as 580/1; the current sample is the safest bounded fallback.
+        maximum = max(1, hp, int(row.get("max", 1) or 1))
+        state = str(row.get("state", "ALIVE" if hp > 0 else "DEAD")).upper()
+        name = cls.abbreviation(str(row.get("name", "ROBOT")))
+        return f"{prefix}{robot_id:03d} {name} {hp}/{maximum} {state[:5]}"
+
+    @staticmethod
     def scoreboard_lines(state: Any) -> tuple[tuple[str, QColor], ...]:
         seconds = max(0, int(getattr(state, "stage_countdown_sec", 0)))
-        ally_alive = sum(1 for row in getattr(state, "robot_rows", ()) if str(row.get("state", "")).upper() not in {"DOWN", "DEAD"})
-        enemy_rows = [row for row in getattr(state, "map_robots", ()) if str(row.get("team", "")).lower() == "enemy"]
-        enemy_alive = sum(1 for row in enemy_rows if int(row.get("hp", 1)) > 0)
+        allies, enemies = MinecraftCombatHudRenderer._team_rows(state)
+        ally_alive = sum(1 for row in allies if int(row.get("hp", 0)) > 0 and str(row.get("state", "")).upper() not in {"DOWN", "DEAD"})
+        enemy_alive = sum(1 for row in enemies if int(row.get("hp", 0)) > 0 and str(row.get("state", "")).upper() not in {"DOWN", "DEAD"})
         target = f"TARGET {int(getattr(state, 'target_id', 0))} {int(getattr(state, 'target_health', 0))}HP"
         lob_status = str(getattr(state, "hero_lob_status", "OFF"))[:28].upper()
-        return (
+        lines: list[tuple[str, QColor]] = [
             (str(getattr(state, "match_title", "RM MATCH")).upper(), QColor("#55ffff")),
             (f"TIME {seconds // 60:02d}:{seconds % 60:02d}", QColor("#ffffff")),
             (f"ALLY {ally_alive}  ENEMY {enemy_alive}", QColor("#55ff55")),
-            (f"BASE {int(getattr(state, 'base_health', 0))} {str(getattr(state, 'base_status', ''))}", QColor("#55ffff")),
+            (f"BASE {int(getattr(state, 'base_health', 0))} SH{int(getattr(state, 'base_shield', 0))}% {str(getattr(state, 'base_status', ''))}", QColor("#55ffff")),
             (f"OUTPOST {int(getattr(state, 'outpost_health', 0))} {str(getattr(state, 'outpost_status', ''))}", QColor("#55ffff")),
-            (f"E BASE {int(getattr(state, 'enemy_base_health', 0))} {str(getattr(state, 'enemy_base_status', ''))}", QColor("#ff5555")),
+            (f"E BASE {int(getattr(state, 'enemy_base_health', 0))} SH{int(getattr(state, 'enemy_base_shield', 0))}% {str(getattr(state, 'enemy_base_status', ''))}", QColor("#ff5555")),
             (f"E OUTPOST {int(getattr(state, 'enemy_outpost_health', 0))} {str(getattr(state, 'enemy_outpost_status', ''))}", QColor("#ff5555")),
-            (target, QColor("#ffff55") if bool(getattr(state, "target_locked", False)) else QColor("#aaaaaa")),
-            (f"AMMO {int(getattr(state, 'remaining_ammo', 0))}", QColor("#ffaa00")),
-            (f"LOB {lob_status}", QColor("#ff55ff") if bool(getattr(state, "hero_lob_armed", False)) else QColor("#aaaaaa")),
+        ]
+        lines.extend(
+            (MinecraftCombatHudRenderer._robot_status_line("A", row), QColor("#55ff55"))
+            for row in allies
         )
+        lines.extend(
+            (MinecraftCombatHudRenderer._robot_status_line("E", row), QColor("#ff5555"))
+            for row in enemies
+        )
+        lines.extend(
+            (
+                (target, QColor("#ffff55") if bool(getattr(state, "target_locked", False)) else QColor("#aaaaaa")),
+                (f"AMMO {int(getattr(state, 'remaining_ammo', 0))}", QColor("#ffaa00")),
+                (f"LOB {lob_status}", QColor("#ff55ff") if bool(getattr(state, "hero_lob_armed", False)) else QColor("#aaaaaa")),
+            )
+        )
+        return tuple(lines)
 
     def draw(self, painter: QPainter, width: int, height: int, state: Any, registry: Any, module: Any) -> MinecraftHudLayout:
         lines = self.scoreboard_lines(state)

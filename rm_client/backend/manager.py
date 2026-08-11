@@ -16,7 +16,11 @@ import time
 from typing import Any
 
 from ..model import RobotState
-from ..native_viewer_telemetry import parse_vehicle_telemetry, parse_video_0310_chunk
+from ..native_viewer_telemetry import (
+    find_h264_sps_offset,
+    parse_vehicle_telemetry,
+    parse_video_0310_chunk,
+)
 from ..scenarios import SCENARIOS
 from . import protocol as proto
 from .mqtt_backend import RmMqttBackend
@@ -66,7 +70,18 @@ class BackendManager:
         self.udp = RmVideoBackend(host="127.0.0.1", port=3334)
         self.serial = RmSerialBackend(port="Stub", baud=115200, mock_writes=True, safety=self.safety)
         self.native_decoder = ContinuousMjpegDecoder("h264")
-        self._native_0310_buffer = bytearray()
+        # Native 0x0310 is a continuous stream.  Retaining every payload in a
+        # bytearray caused unbounded memory growth during a full match even
+        # though ffmpeg already consumes the bytes.  Keep counters and sequence
+        # recovery state only.
+        self._native_0310_bytes_since_reset = 0
+        self._native_0310_last_sequence: int | None = None
+        self._native_0310_dropped_chunks = 0
+        self._native_0310_out_of_order_chunks = 0
+        self._native_0310_recovery_dropped_chunks = 0
+        self._native_0310_blocked_until_sps = True
+        self._native_0310_decoder_restarts = 0
+        self._native_0310_decoder_started_once = False
         self.config = SCENARIOS.get(scenario_key, SCENARIOS["LabDebug"])
         self._apply_config(self.config)
 
@@ -206,6 +221,42 @@ class BackendManager:
         self.udp.stop()
         self.serial.stop()
         self.native_decoder.stop()
+
+    def latest_video_frame(
+        self,
+        timeout_s: float = 0.5,
+        source_mode: str = "Auto",
+    ) -> tuple[Any, float, str]:
+        """Return the requested/freshest backend frame on one monotonic clock.
+
+        Explicit ``Native 0x0310`` and UDP modes remain deterministic.  ``Auto``
+        compares the latest decoded native and UDP frames, which also gives
+        callers a safe fallback during source transitions.
+        """
+
+        mode = str(source_mode or "Auto").strip().lower()
+        want_native = mode in {"auto", "native", "native 0x0310", "0x0310"}
+        want_udp = mode in {
+            "auto",
+            "shark udp",
+            "udp",
+            "udp hevc",
+            "hevc",
+            "h265",
+            "synthetic",
+        }
+        candidates: list[tuple[Any, float, str]] = []
+        if want_native and self.native_decoder.available:
+            frame, frame_at = self.native_decoder.latest_with_timestamp(timeout_s)
+            if frame is not None:
+                candidates.append((frame, frame_at, "native-0x0310"))
+        if want_udp:
+            frame, frame_at = self.udp.latest_video_frame(timeout_s)
+            if frame is not None:
+                candidates.append((frame, frame_at, "udp"))
+        if not candidates:
+            return None, 0.0, "none"
+        return max(candidates, key=lambda item: item[1])
 
     # ------------------------------------------------------------------
     # 下行消息 → RobotState
@@ -405,19 +456,82 @@ class BackendManager:
             else:
                 video_chunk = parse_video_0310_chunk(block)
                 if video_chunk is not None:
-                    # 0x0310 原生 H.264 流：reset 清缓冲，载荷连续喂给常驻 ffmpeg 解码器
+                    # 0x0310 原生 H.264 流：不保留无限增长的历史码流。
+                    # reset 或向前序号缺口后停止喂流，直到下一个 Annex-B
+                    # SPS；这与 rm-native-viewer 的正式链路恢复策略一致，
+                    # 也避免在 UI tick 内同步 stop/restart ffmpeg。重复/迟到
+                    # 分块直接丢弃，防止同一 payload 破坏 NAL 边界。
+                    modulus = max(1, int(video_chunk.sequence_modulus))
+                    sequence = int(video_chunk.sequence) % modulus
+                    accept_payload = True
                     if video_chunk.reset:
-                        self._native_0310_buffer.clear()
-                    self._native_0310_buffer.extend(video_chunk.payload)
-                    if not self.native_decoder.available:
-                        self.native_decoder.start()
-                    if self.native_decoder.available:
-                        self.native_decoder.write(video_chunk.payload)
+                        self._native_0310_bytes_since_reset = 0
+                        self._native_0310_last_sequence = None
+                        self._native_0310_blocked_until_sps = True
+                    elif self._native_0310_last_sequence is not None:
+                        expected = (self._native_0310_last_sequence + 1) % modulus
+                        distance = (sequence - expected) % modulus
+                        if distance:
+                            if distance < modulus // 2:
+                                self._native_0310_dropped_chunks += distance
+                                self._native_0310_blocked_until_sps = True
+                            else:
+                                self._native_0310_out_of_order_chunks += 1
+                                accept_payload = False
+
+                    wrote = False
+                    payload_to_write = b""
+                    if accept_payload:
+                        self._native_0310_bytes_since_reset += len(video_chunk.payload)
+                        self._native_0310_last_sequence = sequence
+                        if (
+                            self._native_0310_decoder_started_once
+                            and not self.native_decoder.available
+                        ):
+                            # A crashed decoder has lost its SPS/PPS parser
+                            # state even if transport sequence is continuous.
+                            self._native_0310_blocked_until_sps = True
+                        if self._native_0310_blocked_until_sps:
+                            sps_offset = find_h264_sps_offset(video_chunk.payload)
+                            if sps_offset is None:
+                                self._native_0310_recovery_dropped_chunks += 1
+                            else:
+                                payload_to_write = video_chunk.payload[sps_offset:]
+                                self._native_0310_blocked_until_sps = False
+                        else:
+                            payload_to_write = video_chunk.payload
+
+                    if payload_to_write:
+                        if not self.native_decoder.available:
+                            if self._native_0310_decoder_started_once:
+                                self._native_0310_decoder_restarts += 1
+                            started = self.native_decoder.start()
+                            self._native_0310_decoder_started_once = bool(
+                                self._native_0310_decoder_started_once or started
+                            )
+                        if self.native_decoder.available:
+                            wrote = self.native_decoder.write(payload_to_write)
+                        if not wrote:
+                            # A full/non-running decoder queue is equivalent to
+                            # a transport gap.  Resume only from a future SPS.
+                            self._native_0310_blocked_until_sps = True
                     state.backend_stats["native_video_0310"] = {
-                        "sequence": video_chunk.sequence,
+                        "sequence": sequence,
                         "reset": video_chunk.reset,
                         "payload_len": len(video_chunk.payload),
-                        "buffer_len": len(self._native_0310_buffer),
+                        "bytes_since_reset": self._native_0310_bytes_since_reset,
+                        "dropped_chunks": self._native_0310_dropped_chunks,
+                        "out_of_order_chunks": self._native_0310_out_of_order_chunks,
+                        "recovery_dropped_chunks": self._native_0310_recovery_dropped_chunks,
+                        "blocked_until_sps": self._native_0310_blocked_until_sps,
+                        "decoder_restarts": self._native_0310_decoder_restarts,
+                        "payload_accepted": bool(payload_to_write),
+                        "payload_input_len": len(video_chunk.payload),
+                        "payload_decoder_len": len(payload_to_write),
+                        "payload_written": wrote,
+                        "payload_queued": wrote,
+                        "decoder_input_queue": self.native_decoder.input_queue_depth(),
+                        "decoder_input_dropped": self.native_decoder.input_chunks_dropped,
                         "decoder_ready": self.native_decoder.available,
                         "decoded_frames": self.native_decoder.frames_decoded,
                     }
@@ -589,10 +703,33 @@ class BackendManager:
 
     # ------------------------------------------------------------------
     def stats(self) -> dict[str, Any]:
+        native_at = self.native_decoder.latest_timestamp()
+        native_width, native_height = self.native_decoder.frame_size()
         return {
             "scenario": self.scenario_key,
             "safety": self.safety.stats(),
             "mqtt": self.mqtt.stats(),
             "udp": self.udp.stats(),
             "serial": self.serial.stats(),
+            "native_0310": {
+                "decoder_ready": self.native_decoder.available,
+                "decoded_connected": bool(
+                    native_at > 0.0 and time.perf_counter() - native_at <= 2.0
+                ),
+                "decoded_frames": self.native_decoder.frames_decoded,
+                "decoded_frame_at": native_at,
+                "output_width": native_width,
+                "output_height": native_height,
+                "bytes_since_reset": self._native_0310_bytes_since_reset,
+                "dropped_chunks": self._native_0310_dropped_chunks,
+                "out_of_order_chunks": self._native_0310_out_of_order_chunks,
+                "recovery_dropped_chunks": self._native_0310_recovery_dropped_chunks,
+                "blocked_until_sps": self._native_0310_blocked_until_sps,
+                "decoder_restarts": self._native_0310_decoder_restarts,
+                "input_queue": self.native_decoder.input_queue_depth(),
+                "input_dropped": self.native_decoder.input_chunks_dropped,
+                "input_chunks_written": self.native_decoder.input_chunks_written,
+                "input_bytes_written": self.native_decoder.input_bytes_written,
+                "last_error": self.native_decoder.last_error,
+            },
         }

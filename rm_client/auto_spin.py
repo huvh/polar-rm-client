@@ -146,9 +146,10 @@ class ProjectileHitSpinController:
         self.active_until = max(self.active_until, now + duration)
         self.last_reason = f"PROJECTILE HIT +{damage}"
         if spin_enabled:
-            # Existing operator state is never claimed by the automation.
-            self.owns_spin = False
+            # Preserve ownership when this is a repeated hit during the
+            # automation's own active window; otherwise the second hit would
+            # leave SpinMode stuck on after expiry.  An actual operator toggle
+            # calls ``operator_override`` from the module registry callback.
             return SpinDirective(reason=self.last_reason, damage_delta=damage)
         self.owns_spin = True
         return SpinDirective("enable", self.last_reason, damage)
-

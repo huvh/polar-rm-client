@@ -7,6 +7,7 @@ import threading
 import sys
 from tempfile import TemporaryDirectory
 import time
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -51,7 +52,11 @@ from rm_client.robot_profiles import apply_profile_to_state, profile_by_key, pro
 from rm_client.protocol import RefereeFrameCodec
 from rm_client.hero_lob import HeroLobPlanner
 from rm_client.auto_spin import ProjectileHitSpinController
-from rm_client.native_viewer_telemetry import parse_vehicle_telemetry, parse_video_0310_chunk
+from rm_client.native_viewer_telemetry import (
+    find_h264_sps_offset,
+    parse_vehicle_telemetry,
+    parse_video_0310_chunk,
+)
 from rm_client.backend.manager import BackendManager
 from rm_client.backend.readiness import audit_backend
 from rm_client.backend.serial_backend import RmSerialBackend
@@ -1714,6 +1719,19 @@ def test_jello_clickgui_layout_and_old_group() -> None:
         window.set_clickgui_visible(True, announce=False, play_sound=False)
         window.keyPressEvent(QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_F9, Qt.KeyboardModifier.NoModifier))
         assert window.active_clickgui_mode() == PRIMARY_GUI_MODE
+        hero_module = window.registry.get("HeroLob")
+        hero_module.enabled = True
+        hero_module.keybind = "K"
+        window.keyPressEvent(
+            QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_K, Qt.KeyboardModifier.NoModifier)
+        )
+        assert window.hero_deploy_ui.visible and not window.gui_visible
+        assert window.overlay_coordinator.modal == OverlayKind.HERO_DEPLOY
+        window.keyPressEvent(
+            QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_K, Qt.KeyboardModifier.NoModifier)
+        )
+        assert not window.hero_deploy_ui.visible
+        window.set_clickgui_visible(True, announce=False, play_sound=False)
         stress_font_pages: set[tuple[str, float, int]] = set()
         for index in range(100):
             window.jello_state.begin_session()
@@ -2654,6 +2672,8 @@ def test_native_viewer_telemetry_and_video_0310() -> None:
     assert chunk is not None and chunk.codec == "h264"
     assert chunk.reset and chunk.sequence == 23 and chunk.payload == payload
     assert parse_video_0310_chunk(bytes((0x80, 0, 0)) + bytes(297)) is None
+    assert find_h264_sps_offset(b"junk\x00\x00\x00\x01\x67sps") == 4
+    assert find_h264_sps_offset(b"\x00\x00\x01\x65idr") is None
 
     state = RobotState()
     manager = BackendManager(state=state)
@@ -2772,19 +2792,29 @@ def test_projectile_hit_auto_spin_uses_cumulative_deltas() -> None:
         now=10.0,
     )
     assert directive.action == "enable" and controller.owns_spin
+    state.projectile_hit_revision += 1
+    state.last_projectile_damage_delta = 7
+    repeated = controller.update(
+        state,
+        feature,
+        spin_enabled=True,
+        referee_link=True,
+        now=11.0,
+    )
+    assert repeated.action == "none" and controller.owns_spin
     assert controller.update(
         state,
         feature,
         spin_enabled=True,
         referee_link=True,
-        now=12.4,
+        now=13.4,
     ).action == "none"
     expiry = controller.update(
         state,
         feature,
         spin_enabled=True,
         referee_link=True,
-        now=12.6,
+        now=13.6,
     )
     assert expiry.action == "disable" and not controller.owns_spin
 
@@ -2795,7 +2825,7 @@ def test_projectile_hit_auto_spin_uses_cumulative_deltas() -> None:
         feature,
         spin_enabled=True,
         referee_link=True,
-        now=14.0,
+        now=15.0,
     )
     assert operator.action == "none" and not controller.owns_spin
     manager.shutdown()
@@ -2809,6 +2839,12 @@ def test_hero_deploy_console_state_and_responsive_render() -> None:
     app = QApplication.instance() or QApplication([])
     interface = HeroDeployInterfaceState()
     interface.open(1.0)
+    # The Hero surface reuses the same high-rate reversible spring as the
+    # existing Control Center rather than appearing as a new hard-cut modal.
+    assert interface.render_visible and interface.active
+    for frame in range(1, 151):
+        interface.update_presentation(1.0 + frame / 144.0)
+    assert interface.progress > 0.995
     assert not interface.arm_confirmation(1, 1.1)
     assert interface.arm_confirmation(1, 2.0)
     interface.begin_request(1, 2.0, mock=True)
@@ -2833,6 +2869,10 @@ def test_hero_deploy_console_state_and_responsive_render() -> None:
     renderer = HeroDeployRenderer()
     for width, height in ((1000, 620), (1280, 720), (1600, 900), (1920, 1080), (2560, 1440)):
         layout = renderer.layout(width, height)
+        assert layout.collapsed.top() == layout.target_panel.top()
+        assert layout.collapsed.center().x() == layout.target_panel.center().x()
+        assert layout.root_radius <= layout.panel.height() * 0.5
+        assert layout.interactive
         assert layout.panel.left() >= 0 and layout.panel.top() >= 0
         assert layout.panel.right() <= width and layout.panel.bottom() <= height
         assert all(layout.panel.contains(button) for button in layout.buttons)
@@ -2854,6 +2894,38 @@ def test_hero_deploy_console_state_and_responsive_render() -> None:
         assert len(targets) == 6
         assert all(layout.panel.contains(target.rect) for target in targets)
         assert image.pixelColor(int(layout.panel.center().x()), int(layout.panel.center().y())).alpha() > 0
+
+    glass_calls: list[tuple[str, bool]] = []
+
+    def record_glass(_painter, _rect, _radius, *, surface="MainGlass", clip_rect=None, **_kwargs):
+        glass_calls.append((str(surface), clip_rect is not None))
+
+    image = QImage(1280, 720, QImage.Format.Format_ARGB32_Premultiplied)
+    image.fill(0)
+    painter = QPainter(image)
+    renderer.draw(
+        painter,
+        1280,
+        720,
+        state=state,
+        module=module,
+        interface=interface,
+        solution=solution,
+        readiness=readiness,
+        now=6.0,
+        glass_drawer=record_glass,
+    )
+    painter.end()
+    surfaces = {surface for surface, _clipped in glass_calls}
+    assert "ProminentGlass" in surfaces
+    assert "MainGlass" in surfaces and "SubGlass" in surfaces
+    assert any(clipped for _surface, clipped in glass_calls)
+
+    interface.close(7.0)
+    assert not interface.visible and interface.render_visible
+    for frame in range(1, 151):
+        interface.update_presentation(7.0 + frame / 144.0)
+    assert interface.progress < 0.001 and not interface.render_visible
     app.processEvents()
 
 
@@ -2869,6 +2941,21 @@ def test_minecraft_hud_assets_layout_and_render() -> None:
     registry = build_default_registry()
     module = registry.get("MinecraftCombatHUD")
     state = RobotState()
+    state.robot_rows = [
+        {"id": 1, "name": "Hero", "hp": 720, "max": 800, "state": "ALIVE"},
+        {"id": 3, "name": "Infantry", "hp": 560, "max": 600, "state": "LOCAL"},
+        {"id": 4, "name": "Infantry", "hp": 0, "max": 600, "state": "DEAD"},
+        {"id": 7, "name": "Sentry", "hp": 500, "max": 600, "state": "PATROL"},
+        {"id": 101, "name": "Hero", "hp": 640, "max": 800, "state": "ALIVE"},
+        {"id": 103, "name": "Infantry", "hp": 420, "max": 600, "state": "ALIVE"},
+        {"id": 104, "name": "Infantry", "hp": 0, "max": 600, "state": "DEAD"},
+        {"id": 107, "name": "Sentry", "hp": 530, "max": 600, "state": "PATROL"},
+    ]
+    texts = tuple(text for text, _color in renderer.scoreboard_lines(state))
+    assert any(text.startswith("A003") and "LOCAL" in text for text in texts)
+    assert any(text.startswith("E103") and "420/600" in text for text in texts)
+    assert any(text.startswith("BASE ") and "SH100%" in text for text in texts)
+    assert any(text.startswith("E BASE ") and "SH100%" in text for text in texts)
     expected = {
         (1000, 620): 2,
         (1280, 720): 3,
@@ -2885,6 +2972,11 @@ def test_minecraft_hud_assets_layout_and_render() -> None:
         assert layout.hotbar.bottom() <= height
         assert layout.scoreboard.left() >= 0 and layout.scoreboard.right() <= width
         assert layout.scoreboard.bottom() <= height
+        effects_right = layout.effects_origin.x() + 154 * scale
+        effects_bottom = layout.effects_origin.y() + 24 * scale
+        assert effects_right < layout.scoreboard.left()
+        assert effects_bottom < layout.hotbar.top()
+        assert layout.effects_origin.y() > layout.boss_bars[-1].bottom()
         assert layout.slot_at(QPointF(layout.slots[4].center())) == 4
         image = QImage(width, height, QImage.Format.Format_ARGB32_Premultiplied)
         image.fill(0)
@@ -2925,6 +3017,48 @@ def test_estop_zero_frame_bypass_and_backend_readiness() -> None:
     assert not report.ready
     assert report.verdict == "NOT READY FOR REAL MATCH"
     assert any(gate.requires_live_validation for gate in report.blockers)
+    gates = {gate.key: gate for gate in report.gates}
+    assert not gates["video_source_declared"].passed
+
+    class FakeAuditManager:
+        scenario_key = "OfficialEvent"
+
+        @staticmethod
+        def stats() -> dict[str, Any]:
+            return {
+                "scenario": "OfficialEvent",
+                "mqtt": {"connected": True, "mock_output": False},
+                "serial": {"connected": True, "mock_writes": False},
+                "udp": {
+                    "connected": True,
+                    "decoded_connected": True,
+                    "decoded_frames": 30,
+                },
+                "native_0310": {
+                    "decoder_ready": False,
+                    "decoded_connected": False,
+                    "decoded_frames": 0,
+                },
+            }
+
+    selected_udp = audit_backend(
+        FakeAuditManager(),
+        RobotState(),
+        live_evidence={"video_source": "udp"},
+    )
+    selected_gates = {gate.key: gate for gate in selected_udp.gates}
+    assert selected_gates["video_source_declared"].passed
+    assert selected_gates["video_link"].passed
+    assert selected_gates["native_0310_decoder"].passed
+
+    selected_native = audit_backend(
+        FakeAuditManager(),
+        RobotState(),
+        live_evidence={"video_source": "native_0310"},
+    )
+    native_gates = {gate.key: gate for gate in selected_native.gates}
+    assert not native_gates["video_link"].passed
+    assert not native_gates["native_0310_decoder"].passed
     manager.shutdown()
 
 

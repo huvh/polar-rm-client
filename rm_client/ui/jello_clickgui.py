@@ -377,7 +377,17 @@ class JelloClickGuiRenderer:
         self.shadow_assets = {
             name.removesuffix(".png"): self.asset_root / name for name in self._SHADOW_NAMES
         }
+        # These bundled assets are immutable for the lifetime of the renderer.
+        # Re-statting 49 shadow/options paths on every Jello frame cost several
+        # milliseconds on Windows at 2K, so validate them once during preload.
+        self._available_images = frozenset(
+            path for path in self.image_assets if path.is_file()
+        )
         self._compat_images: dict[str, QImage] = {}
+        self._font_cache: dict[tuple[int, str, float], QFont] = {}
+        self._elided_name_cache: dict[tuple[str, float, int, str, float], str] = {}
+        self._module_cache_key: tuple[int, int] | None = None
+        self._modules_by_category: dict[str, tuple[Module, ...]] = {}
 
     @property
     def image_assets(self) -> tuple[Path, ...]:
@@ -388,6 +398,9 @@ class JelloClickGuiRenderer:
             self.scrollbar_bottom_image,
             *(self.shadow_assets[name.removesuffix(".png")] for name in self._SHADOW_NAMES),
         )
+
+    def _image_available(self, path: Path) -> bool:
+        return path in self._available_images
 
     @staticmethod
     def _argb(value: int, alpha: float = 1.0) -> QColor:
@@ -428,12 +441,45 @@ class JelloClickGuiRenderer:
         # QuadraticEasing.easeInQuad(raw, 0, 1, 1).
         return raw * raw
 
-    @staticmethod
-    def _font(host: Any, key: str, pixel_size: float) -> QFont:
+    def _font(self, host: Any, key: str, pixel_size: float) -> QFont:
         # Sigma's FontRenderer sizes are logical pixels. FontBook accepts Qt
         # points, so convert at the canonical 96-DPI ratio; devicePixelRatio
         # is applied later by the renderer and must not inflate layout metrics.
-        return host.font(key, max(1.0, float(pixel_size) * 72.0 / 96.0))
+        cache_key = (id(getattr(host, "fonts", host)), str(key), round(float(pixel_size), 3))
+        cached = self._font_cache.get(cache_key)
+        if cached is None:
+            cached = host.font(key, max(1.0, float(pixel_size) * 72.0 / 96.0))
+            self._font_cache[cache_key] = cached
+        return cached
+
+    def _modules_for(self, host: Any, category: str) -> tuple[Module, ...]:
+        registry = host.registry
+        cache_key = (id(registry), len(registry.modules))
+        if cache_key != self._module_cache_key:
+            self._module_cache_key = cache_key
+            self._modules_by_category = {
+                name: tuple(module for module in registry.modules if module.category == name)
+                for name in CATEGORIES
+            }
+        return self._modules_by_category.get(category, ())
+
+    def _elided_module_name(self, font: QFont, name: str, logical_width: float) -> str:
+        key = (
+            font.family(),
+            round(font.pointSizeF(), 3),
+            int(font.weight()),
+            str(name),
+            round(float(logical_width), 2),
+        )
+        cached = self._elided_name_cache.get(key)
+        if cached is None:
+            cached = QFontMetricsF(font).elidedText(
+                str(name),
+                Qt.TextElideMode.ElideRight,
+                float(logical_width),
+            )
+            self._elided_name_cache[key] = cached
+        return cached
 
     @staticmethod
     def _scale_about_screen(rect: QRectF, scale: float, width: int, height: int) -> QRectF:
@@ -520,6 +566,7 @@ class JelloClickGuiRenderer:
             # renderer's compact-UI policy deliberately thickens other fonts,
             # which visibly changes Jello's original typography.
             default_text_preserve_weight=True,
+            copy_payloads=False,
         )
 
         timeline = getattr(host, "gui_timeline", None)
@@ -581,7 +628,7 @@ class JelloClickGuiRenderer:
             )
 
         options, _ = self._child_rect(layout.options, child_visual, width, height)
-        if self.options_image.is_file():
+        if self._image_available(self.options_image):
             commands.image(
                 options,
                 self.options_image,
@@ -621,7 +668,7 @@ class JelloClickGuiRenderer:
         )
         for name, piece in pieces:
             asset = self.shadow_assets[name]
-            if asset.is_file():
+            if self._image_available(asset):
                 commands.image(piece, asset, tint, clip)
 
     def _build_panel(
@@ -673,7 +720,7 @@ class JelloClickGuiRenderer:
             panel.width(),
             panel.height() - JELLO_PANEL_HEADER * scale,
         )
-        modules = [module for module in host.registry.modules if module.category == category]
+        modules = self._modules_for(host, category)
         row_h = JELLO_MODULE_ROW * scale
         maximum = max(0.0, len(modules) * row_h - viewport.height())
         scroll = max(0.0, min(maximum, float(state.panel_scroll.get(category, 0.0))))
@@ -718,9 +765,9 @@ class JelloClickGuiRenderer:
                 1.0,
                 panel.width() / max(0.001, scale) - text_x - 10.0,
             )
-            display_name = QFontMetricsF(row_font).elidedText(
+            display_name = self._elided_module_name(
+                row_font,
                 module.name,
-                Qt.TextElideMode.ElideRight,
                 logical_text_width,
             )
             commands.rect(row, 0.0, fill, clip=viewport)
@@ -762,7 +809,7 @@ class JelloClickGuiRenderer:
 
         if scroll > 0.0:
             shadow_bottom = self.shadow_assets["shadow_bottom"]
-            if shadow_bottom.is_file():
+            if self._image_available(shadow_bottom):
                 commands.image(
                     QRectF(viewport.left(), viewport.top(), viewport.width(), 18.0 * scale),
                     shadow_bottom,
@@ -801,14 +848,14 @@ class JelloClickGuiRenderer:
         cap_h = 5.0 * scale
         track_alpha = _clamp01(alpha) * fade
         white = self._argb(LIGHT_GREYISH_BLUE, 0.45 * track_alpha)
-        if self.scrollbar_top_image.is_file():
+        if self._image_available(self.scrollbar_top_image):
             commands.image(
                 QRectF(bar.left(), bar.top(), bar.width(), cap_h),
                 self.scrollbar_top_image,
                 white,
                 viewport,
             )
-        if self.scrollbar_bottom_image.is_file():
+        if self._image_available(self.scrollbar_bottom_image):
             commands.image(
                 QRectF(bar.left(), bar.bottom() - cap_h, bar.width(), cap_h),
                 self.scrollbar_bottom_image,
@@ -830,14 +877,14 @@ class JelloClickGuiRenderer:
         thumb_factor = 0.7 if thumb.contains(host.hover_point) else 0.3
         thumb_alpha = track_alpha * thumb_factor
         thumb_tint = self._argb(LIGHT_GREYISH_BLUE, thumb_alpha)
-        if self.scrollbar_top_image.is_file():
+        if self._image_available(self.scrollbar_top_image):
             commands.image(
                 QRectF(thumb.left(), thumb.top(), thumb.width(), cap_h),
                 self.scrollbar_top_image,
                 thumb_tint,
                 viewport,
             )
-        if self.scrollbar_bottom_image.is_file():
+        if self._image_available(self.scrollbar_bottom_image):
             commands.image(
                 QRectF(thumb.left(), thumb.bottom() - cap_h, thumb.width(), cap_h),
                 self.scrollbar_bottom_image,
@@ -1097,7 +1144,7 @@ class JelloClickGuiRenderer:
                     checkbox.width() * check_scale,
                     checkbox.height() * check_scale,
                 )
-                if self.check_image.is_file():
+                if self._image_available(self.check_image):
                     commands.image(check_rect, self.check_image, self._argb(LIGHT_GREYISH_BLUE, active * alpha), clip)
             host.add_hotspot(checkbox.intersected(clip), "setting_toggle", setting)
             return None
