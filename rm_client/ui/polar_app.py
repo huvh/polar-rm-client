@@ -816,7 +816,13 @@ class PolarRMWindow(QOpenGLWidget):
             self._gpu_warm_pending = False
             self.prewarm_gpu_clickgui_resources()
         if not self.paint_gpu_frame():
-            self.paint_overlay(None)
+            # A modal renderer failure must never degrade into a camera-only
+            # frame.  In particular, an economy offer can change availability
+            # immediately after the referee/mock response.  If command-list
+            # construction fails during that state transition, draw the
+            # established compatibility workspace for this frame while the GPU
+            # caches are rebuilt on the next tick.
+            self.paint_overlay(None, force_economy_compat=True)
         presented = time.perf_counter()
         present_dt = max(0.001, min(0.25, presented - self._last_present_time))
         self._last_present_time = presented
@@ -1700,11 +1706,19 @@ class PolarRMWindow(QOpenGLWidget):
             self.gpu_compositor.last_error = str(exc)
             try:
                 self.gpu_compositor.release_layer("background")
+                self.gpu_compositor.release_layer("control")
                 self.gpu_compositor.release_layer("overlay")
                 self.gpu_compositor.end_vision_layer()
                 self.gpu_compositor.release_layer("dynamic")
+                self.gpu_compositor.release_layer("target")
             except Exception:
                 pass
+            # Never preserve metadata for a partially rendered modal frame.
+            # The compatibility fallback below remains visible for the current
+            # present; the next GL frame then performs a complete, deterministic
+            # rebuild.  Economy restore generations intentionally stay pending.
+            self.invalidate_transient_overlay_scene()
+            self.frame_scheduler.force()
             return False
         finally:
             self._gpu_frame_recording = False
@@ -2185,6 +2199,7 @@ class PolarRMWindow(QOpenGLWidget):
         include_interactive: bool = True,
         split_motion_layer: bool = False,
         capture_module_list: bool = False,
+        force_economy_compat: bool = False,
     ) -> None:
         owns_painter = painter is None
         p = painter or QPainter(self)
@@ -2251,7 +2266,12 @@ class PolarRMWindow(QOpenGLWidget):
                 p.end()
             return
 
-        self.paint_clickgui_overlay(p, width, height)
+        self.paint_clickgui_overlay(
+            p,
+            width,
+            height,
+            force_economy_compat=force_economy_compat,
+        )
         if owns_painter:
             p.end()
 
@@ -2910,6 +2930,7 @@ class PolarRMWindow(QOpenGLWidget):
         gpu_commands: ClickGuiDrawList | None = None,
         gpu_hotspots: list[Hotspot] | None = None,
         gpu_atlas_prepared: bool = False,
+        force_economy_compat: bool = False,
     ) -> None:
         """Draw only the high-frequency ClickGUI layer.
 
@@ -2920,8 +2941,11 @@ class PolarRMWindow(QOpenGLWidget):
         economy_alpha = self.economy_island.progress
         if economy_alpha > 0.01:
             self.hotspots.clear()
-            # Only fall back to QPainter compat path when GPU is unavailable
-            if not self.clickgui_gpu.available:
+            # The normal path stays bit-for-bit on the GPU.  If the outer
+            # compositor rejected this frame, however, rendering the compatible
+            # economy sheet is safer than exposing only the camera while the
+            # next frame retries a full cache rebuild.
+            if force_economy_compat or not self.clickgui_gpu.available:
                 self.draw_economy_overlay_compat(p, width, height, economy_alpha)
 
         gui_alpha = self.gui_timeline.progress
@@ -11793,6 +11817,10 @@ class PolarRMWindow(QOpenGLWidget):
         # --- Action button ---
         now = time.perf_counter()
         pending = self.economy_bridge.latest is not None and self.economy_bridge.latest.status == "pending"
+        # Availability can change in the same tick that a held respawn request
+        # succeeds.  Keep progress defined across every branch so the first
+        # post-response GPU frame cannot abort and expose only the camera.
+        hold_progress = 0.0
         if selected is None:
             button_text = "请先选择商品"
             button_enabled = False

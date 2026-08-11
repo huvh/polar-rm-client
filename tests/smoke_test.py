@@ -2228,7 +2228,7 @@ def test_control_center_backdrop_treatment_only_invalidates_blur_when_needed() -
 
 def test_economy_respawn_close_and_reopen_restores_hud_scene() -> None:
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-    from PySide6.QtGui import QImage
+    from PySide6.QtGui import QImage, QPainter
     from PySide6.QtWidgets import QApplication
     from rm_client.ui.polar_app import EconomyScenePhase, PolarRMWindow
 
@@ -2258,6 +2258,42 @@ def test_economy_respawn_close_and_reopen_restores_hud_scene() -> None:
         assert transaction.status == "pending"
         assert window.economy_bridge.update(window.state, now=10.5).status == "succeeded"
         assert window.state.current_health > 0
+
+        # Respawn completion immediately turns the selected hold-to-confirm
+        # offer into a disabled status row.  The first GPU command list after
+        # that transition must still be complete; historically hold_progress
+        # was undefined in this branch and paintGL fell back to camera-only.
+        window.economy_selected_key = offer.key
+        window.economy_island.progress = 1.0
+        post_respawn_commands = window.build_gpu_economy_workspace(1280, 720)
+        assert post_respawn_commands.commands
+        assert any(command.text for command in post_respawn_commands.texts)
+
+        # Even with a healthy GPU renderer, an outer compositor failure must
+        # explicitly select the compatibility economy workspace rather than
+        # return a frame containing only the camera.
+        compat_calls: list[tuple[int, int]] = []
+        original_compat = window.draw_economy_overlay_compat
+        original_gpu_available = window.clickgui_gpu.available
+        try:
+            window.clickgui_gpu.available = True
+            window.draw_economy_overlay_compat = (
+                lambda _p, w, h, _alpha: compat_calls.append((w, h))
+            )
+            fallback_image = QImage(1280, 720, QImage.Format.Format_ARGB32_Premultiplied)
+            fallback_image.fill(0)
+            fallback_painter = QPainter(fallback_image)
+            window.paint_clickgui_overlay(
+                fallback_painter,
+                1280,
+                720,
+                force_economy_compat=True,
+            )
+            fallback_painter.end()
+        finally:
+            window.draw_economy_overlay_compat = original_compat
+            window.clickgui_gpu.available = original_gpu_available
+        assert compat_calls == [(1280, 720)]
 
         window._gpu_static_ui_key = ("stale-economy",)
         window._gpu_control_backdrop_key = ("stale-control",)
