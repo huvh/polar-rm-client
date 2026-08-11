@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from PySide6.QtCore import QPointF, QRect, QRectF, QSize, Qt
-from PySide6.QtGui import QColor, QImage, QPainter
+from PySide6.QtGui import QColor, QImage, QPainter, QPolygonF
 
 
 FUNCTION_SLOT_NAMES = tuple(f"Slot {index}" for index in range(1, 10))
@@ -214,10 +214,14 @@ class MinecraftCombatHudRenderer:
         )
         boss = tuple(QRectF((width - 182 * scale) // 2, (15 + index * 15) * scale, 182 * scale, 5 * scale) for index in range(3))
         lines = tuple(str(line) for line in scoreboard_lines)
-        logical_score_w = max((self.font.logical_width(line) for line in lines), default=112)
-        score_w = max(120, logical_score_w + 8) * scale
+        logical_score_w = max((self.font.logical_width(line) for line in lines), default=104)
+        score_w = max(112, logical_score_w + 8) * scale
         score_h = max(12, len(lines) * 9 + 5) * scale
-        scoreboard = QRectF(width - score_w - 4 * scale, max(58 * scale, (height - score_h) * 0.46), score_w, score_h)
+        # Hypixel-style sidebars keep the upper-right clear for ArrayList/mod
+        # overlays.  Anchor match information above the status/hotbar band,
+        # rather than vertically centring a tall diagnostics dump.
+        score_y = max(58 * scale, height - score_h - 52 * scale)
+        scoreboard = QRectF(width - score_w - 4 * scale, score_y, score_w, score_h)
         # Keep effect tiles below the three boss bars.  At 2K/Auto scale 6 a
         # vanilla 6-slot effect row is 936 px wide; placing it at y=4 clipped
         # the ALLY BASE title even though every individual rect was on-screen.
@@ -260,7 +264,7 @@ class MinecraftCombatHudRenderer:
         requested = max(0.25, base_scale * multiplier)
 
         logical_score_width = max((self.font.logical_width(line) for line in lines), default=112)
-        score_width = max(120, logical_score_width + 8)
+        score_width = max(112, logical_score_width + 8)
         score_height = max(12, len(lines) * 9 + 5)
         # Content-aware safety cap, not Minecraft's conservative 320x240 cap:
         # user scaling remains useful while the actual hotbar/effects/score
@@ -318,7 +322,7 @@ class MinecraftCombatHudRenderer:
 
     @staticmethod
     def _team_rows(state: Any) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-        """Return bounded ally/enemy status rows in local-team order."""
+        """Return ally/enemy status rows in local-team order."""
 
         local_id = int(getattr(state, "robot_id", 0) or 0)
         local_red = local_id < 100
@@ -343,7 +347,7 @@ class MinecraftCombatHudRenderer:
         ]
         allies.sort(key=lambda row: (int(row.get("id", 0)) != local_id, int(row.get("id", 0))))
         enemies.sort(key=lambda row: (int(row.get("hp", 0)) <= 0, int(row.get("id", 0))))
-        return allies[:4], enemies[:4]
+        return allies, enemies
 
     @classmethod
     def _robot_status_line(cls, prefix: str, row: dict[str, Any]) -> str:
@@ -357,35 +361,65 @@ class MinecraftCombatHudRenderer:
         return f"{prefix}{robot_id:03d} {name} {hp}/{maximum} {state[:5]}"
 
     @staticmethod
+    def _compact_robot_status(prefix: str, row: dict[str, Any], local_id: int) -> str:
+        """Return one glanceable sidebar token, never a telemetry sentence."""
+
+        robot_id = int(row.get("id", 0) or 0)
+        hp = max(0, int(row.get("hp", 0) or 0))
+        state = str(row.get("state", "ALIVE" if hp > 0 else "DEAD")).upper()
+        if hp <= 0 or state in {"DOWN", "DEAD", "OFFLINE"}:
+            value = "DOWN"
+        else:
+            value = str(hp)
+        marker = ">" if robot_id == local_id else ""
+        # RM robot IDs encode team in the hundreds digit.  The team column is
+        # already explicit, so the two trailing digits scan much faster.
+        return f"{marker}{prefix}{robot_id % 100:02d} {value}"
+
+    @staticmethod
     def scoreboard_lines(state: Any) -> tuple[tuple[str, QColor], ...]:
         seconds = max(0, int(getattr(state, "stage_countdown_sec", 0)))
         allies, enemies = MinecraftCombatHudRenderer._team_rows(state)
         ally_alive = sum(1 for row in allies if int(row.get("hp", 0)) > 0 and str(row.get("state", "")).upper() not in {"DOWN", "DEAD"})
         enemy_alive = sum(1 for row in enemies if int(row.get("hp", 0)) > 0 and str(row.get("state", "")).upper() not in {"DOWN", "DEAD"})
-        target = f"TARGET {int(getattr(state, 'target_id', 0))} {int(getattr(state, 'target_health', 0))}HP"
-        lob_status = str(getattr(state, "hero_lob_status", "OFF"))[:28].upper()
+        local_id = int(getattr(state, "robot_id", 0) or 0)
+        lob_status = "ARM" if bool(getattr(state, "hero_lob_armed", False)) else "OFF"
         lines: list[tuple[str, QColor]] = [
             (str(getattr(state, "match_title", "RM MATCH")).upper(), QColor("#55ffff")),
-            (f"TIME {seconds // 60:02d}:{seconds % 60:02d}", QColor("#ffffff")),
-            (f"ALLY {ally_alive}  ENEMY {enemy_alive}", QColor("#55ff55")),
-            (f"BASE {int(getattr(state, 'base_health', 0))} SH{int(getattr(state, 'base_shield', 0))}% {str(getattr(state, 'base_status', ''))}", QColor("#55ffff")),
-            (f"OUTPOST {int(getattr(state, 'outpost_health', 0))} {str(getattr(state, 'outpost_status', ''))}", QColor("#55ffff")),
-            (f"E BASE {int(getattr(state, 'enemy_base_health', 0))} SH{int(getattr(state, 'enemy_base_shield', 0))}% {str(getattr(state, 'enemy_base_status', ''))}", QColor("#ff5555")),
-            (f"E OUTPOST {int(getattr(state, 'enemy_outpost_health', 0))} {str(getattr(state, 'enemy_outpost_status', ''))}", QColor("#ff5555")),
+            (f"{seconds // 60:02d}:{seconds % 60:02d}  A{ally_alive} E{enemy_alive}", QColor("#ffffff")),
+            (f"BASE A{int(getattr(state, 'base_health', 0))}|E{int(getattr(state, 'enemy_base_health', 0))}", QColor("#ffffff")),
+            (f"SHLD A{int(getattr(state, 'base_shield', 0))}|E{int(getattr(state, 'enemy_base_shield', 0))}", QColor("#ffffff")),
+            (f"POST A{int(getattr(state, 'outpost_health', 0))}|E{int(getattr(state, 'enemy_outpost_health', 0))}", QColor("#ffffff")),
         ]
-        lines.extend(
-            (MinecraftCombatHudRenderer._robot_status_line("A", row), QColor("#55ff55"))
-            for row in allies
-        )
-        lines.extend(
-            (MinecraftCombatHudRenderer._robot_status_line("E", row), QColor("#ff5555"))
-            for row in enemies
-        )
-        lines.extend(
+        # A 7v7 roster used to turn this sidebar into a full-height terminal.
+        # Keep three actionable rows (local robot first, then lowest-HP peers)
+        # and use the fourth row as an explicit overflow count.  The tactical
+        # map remains the detailed roster view.
+        def sidebar_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+            return sorted(
+                rows,
+                key=lambda row: (
+                    int(row.get("id", 0) or 0) != local_id,
+                    max(0, int(row.get("hp", 0) or 0)),
+                    int(row.get("id", 0) or 0),
+                ),
+            )
+
+        allies = sidebar_rows(allies)
+        enemies = sidebar_rows(enemies)
+        detailed_count = 3 if max(len(allies), len(enemies)) > 4 else 4
+        for index in range(min(detailed_count, max(len(allies), len(enemies)))):
+            ally = MinecraftCombatHudRenderer._compact_robot_status("A", allies[index], local_id) if index < len(allies) else "A-- --"
+            enemy = MinecraftCombatHudRenderer._compact_robot_status("E", enemies[index], local_id) if index < len(enemies) else "E-- --"
+            lines.append((f"{ally}|{enemy}", QColor("#ffffff")))
+        if max(len(allies), len(enemies)) > detailed_count:
+            ally_more = max(0, len(allies) - detailed_count)
+            enemy_more = max(0, len(enemies) - detailed_count)
+            lines.append((f"A+{ally_more} MORE|E+{enemy_more} MORE", QColor("#aaaaaa")))
+        lines.append(
             (
-                (target, QColor("#ffff55") if bool(getattr(state, "target_locked", False)) else QColor("#aaaaaa")),
-                (f"AMMO {int(getattr(state, 'remaining_ammo', 0))}", QColor("#ffaa00")),
-                (f"LOB {lob_status}", QColor("#ff55ff") if bool(getattr(state, "hero_lob_armed", False)) else QColor("#aaaaaa")),
+                f"AMMO {int(getattr(state, 'remaining_ammo', 0))}  LOB {lob_status}",
+                QColor("#ff55ff") if lob_status == "ARM" else QColor("#ffaa00"),
             )
         )
         return tuple(lines)
@@ -446,25 +480,30 @@ class MinecraftCombatHudRenderer:
 
         hp_ratio = self._ratio(getattr(state, "current_health", 0), getattr(state, "max_health", 1))
         thermal_margin = 1.0 - self._ratio(getattr(state, "current_heat", 0.0), getattr(state, "max_heat", 1.0))
-        # The requested Minecraft mapping is literal: hunger represents live
-        # chassis power, not the energy-buffer percentage used by POLAR's
-        # normal HUD.
         chassis_ratio = self._ratio(
             getattr(state, "chassis_power_w", 0),
             getattr(state, "power_limit", 1),
         )
         self._draw_meter(painter, layout.hearts, hp_ratio, "heart_container", "heart_half", "heart_full")
-        self._draw_meter(painter, layout.armor, thermal_margin, "armor_empty", "armor_half", "armor_full")
-        self._draw_meter(painter, layout.food, chassis_ratio, "food_empty", "food_half", "food_full")
+        # Keep the vanilla pixel grammar without pretending heat is armour or
+        # chassis power is food.  Coolant cells and electric pips preserve the
+        # familiar two-row read while giving RM telemetry its own semantics.
+        self._draw_coolant_cells(painter, layout.armor, thermal_margin)
+        self._draw_power_pips(painter, layout.food, chassis_ratio)
         label_scale = max(1, scale // 2)
-        self.font.draw(painter, layout.armor[0].left(), layout.armor[0].top() - 7 * label_scale, f"HEAT {int(getattr(state, 'current_heat', 0))}/{int(getattr(state, 'max_heat', 0))} COOL {int(getattr(state, 'heat_cooldown_rate', 0))}/S", QColor("#55ffff"), label_scale)
-        power_text = f"POWER {int(getattr(state, 'chassis_power_w', 0))}/{int(getattr(state, 'power_limit', 0))}W"
+        thermal_text = f"COOL {int(round(thermal_margin * 100.0))}%  -{int(getattr(state, 'heat_cooldown_rate', 0))}/S"
+        self.font.draw(painter, layout.armor[0].left(), layout.armor[0].top() - 7 * label_scale, thermal_text, QColor("#55ffff"), label_scale)
+        power_text = f"PWR {int(getattr(state, 'chassis_power_w', 0))}/{int(getattr(state, 'power_limit', 0))}W"
         power_w = self.font.logical_width(power_text) * label_scale
-        self.font.draw(painter, layout.hotbar.right() - power_w, layout.food[-1].top() - 7 * label_scale, power_text, QColor("#ffff55"), label_scale)
+        self.font.draw(painter, layout.hotbar.right() - power_w, layout.food[-1].top() - 7 * label_scale, power_text, QColor("#55aaff") if chassis_ratio < 0.85 else QColor("#ffff55"), label_scale)
 
-        self._draw_boss_bar(painter, layout.boss_bars[0], "blue", self._ratio(getattr(state, "base_health", 0), getattr(state, "base_max_health", 1)), f"ALLY BASE  SHIELD {int(getattr(state, 'base_shield', 0))}%")
-        self._draw_boss_bar(painter, layout.boss_bars[1], "red", self._ratio(getattr(state, "enemy_base_health", 0), getattr(state, "enemy_base_max_health", 1)), f"ENEMY BASE  SHIELD {int(getattr(state, 'enemy_base_shield', 0))}%")
-        self._draw_boss_bar(painter, layout.boss_bars[2], "yellow", self._ratio(getattr(state, "target_health", 0), getattr(state, "target_max_health", 1)), f"TARGET {int(getattr(state, 'target_id', 0))}")
+        hud_module = registry.get("HUD") if registry is not None else None
+        dynamic_setting = hud_module.get_setting("Dynamic Island") if hud_module is not None else None
+        dynamic_island_active = bool(dynamic_setting is None or dynamic_setting.value)
+        if not dynamic_island_active:
+            self._draw_boss_bar(painter, layout.boss_bars[0], "blue", self._ratio(getattr(state, "base_health", 0), getattr(state, "base_max_health", 1)), f"ALLY BASE  SHIELD {int(getattr(state, 'base_shield', 0))}%")
+            self._draw_boss_bar(painter, layout.boss_bars[1], "red", self._ratio(getattr(state, "enemy_base_health", 0), getattr(state, "enemy_base_max_health", 1)), f"ENEMY BASE  SHIELD {int(getattr(state, 'enemy_base_shield', 0))}%")
+            self._draw_boss_bar(painter, layout.boss_bars[2], "yellow", self._ratio(getattr(state, "target_health", 0), getattr(state, "target_max_health", 1)), f"TARGET {int(getattr(state, 'target_id', 0))}")
 
         self._draw_scoreboard(painter, layout.scoreboard, lines, scale)
         effects = (
@@ -475,7 +514,9 @@ class MinecraftCombatHudRenderer:
             ("SBF", bool(getattr(state, "small_buff", False))),
             ("LBF", bool(getattr(state, "large_buff", False))),
         )
-        self._draw_effects(painter, layout.effects_origin, effects, scale)
+        tactical_map = registry.get("TacticalMap") if registry is not None else None
+        if tactical_map is None or not tactical_map.enabled:
+            self._draw_effects(painter, layout.effects_origin, effects, scale)
         painter.restore()
         painter.end()
         destination_painter.save()
@@ -516,6 +557,50 @@ class MinecraftCombatHudRenderer:
             elif fill == 1:
                 self._sprite(painter, half, rect)
 
+    @staticmethod
+    def _draw_coolant_cells(painter: QPainter, rects: tuple[QRectF, ...], ratio: float) -> None:
+        units = max(0, min(20, int(round(ratio * 20.0))))
+        for index, rect in enumerate(rects):
+            body = QRectF(rect.left() + 1.0, rect.top() + 2.0, 7.0, 6.0)
+            painter.fillRect(body, QColor("#17242d"))
+            painter.fillRect(QRectF(body.left() + 1.0, body.top() + 1.0, 5.0, 4.0), QColor("#30434f"))
+            fill = units - index * 2
+            if fill <= 0:
+                continue
+            danger = ratio < 0.30
+            active = QColor("#ff5555") if danger else QColor("#55ffff")
+            width = 5.0 if fill >= 2 else 3.0
+            painter.fillRect(QRectF(body.left() + 1.0, body.top() + 1.0, width, 4.0), active)
+            painter.fillRect(QRectF(body.left() + 2.0, body.top(), max(1.0, width - 2.0), 1.0), active.lighter(125))
+
+    @staticmethod
+    def _draw_power_pips(painter: QPainter, rects: tuple[QRectF, ...], ratio: float) -> None:
+        units = max(0, min(20, int(round(ratio * 20.0))))
+        for index, rect in enumerate(rects):
+            # The food rect tuple runs right-to-left.  A tiny stepped bolt is
+            # legible at 1x and remains perfectly crisp after nearest scaling.
+            cx = rect.center().x()
+            y = rect.top() + 1.0
+            outline = QPolygonF(
+                [
+                    QPointF(cx + 1.0, y),
+                    QPointF(cx - 2.0, y + 4.0),
+                    QPointF(cx, y + 4.0),
+                    QPointF(cx - 1.0, y + 8.0),
+                    QPointF(cx + 3.0, y + 3.0),
+                    QPointF(cx + 1.0, y + 3.0),
+                ]
+            )
+            painter.setBrush(QColor("#273548"))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.drawPolygon(outline)
+            fill = units - index * 2
+            if fill <= 0:
+                continue
+            active = QColor("#ffff55") if ratio >= 0.85 else QColor("#55aaff")
+            painter.setBrush(active if fill >= 2 else QColor(active.red(), active.green(), active.blue(), 150))
+            painter.drawPolygon(outline)
+
     def _draw_boss_bar(self, painter: QPainter, rect: QRectF, palette: str, ratio: float, title: str) -> None:
         self._sprite(painter, f"boss_{palette}_background", rect)
         image = self.images[f"boss_{palette}_progress"]
@@ -535,6 +620,15 @@ class MinecraftCombatHudRenderer:
             painter.fillRect(row, QColor(0, 0, 0, 105 if index else 150))
             if index == 0:
                 painter.fillRect(QRectF(row.left(), row.top(), 2 * scale, row.height()), QColor("#55ffff"))
+                text_w = self.font.logical_width(text) * scale
+                self.font.draw(painter, row.center().x() - text_w * 0.5, row.top(), text, text_color, scale)
+                continue
+            if "|" in text:
+                left, right = text.split("|", 1)
+                right_w = self.font.logical_width(right) * scale
+                self.font.draw(painter, row.left() + 3 * scale, row.top(), left, QColor("#55ff55"), scale)
+                self.font.draw(painter, row.right() - right_w - 3 * scale, row.top(), right, QColor("#ff5555"), scale)
+                continue
             text_w = self.font.logical_width(text) * scale
             self.font.draw(painter, row.right() - text_w - 2 * scale, row.top(), text, text_color, scale)
 

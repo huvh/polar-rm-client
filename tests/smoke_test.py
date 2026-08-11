@@ -83,6 +83,14 @@ from rm_client.ui.overlay_coordinator import OverlayCoordinator, OverlayKind
 from rm_client.ui.quick_action_wheel import DEFAULT_ACTIONS, QuickActionWheelState
 from rm_client.ui.economy_workspace import EconomyIslandState, EconomyWorkspaceLayer, adaptive_backdrop_dim
 from rm_client.ui.minecraft_hud import MinecraftCombatHudRenderer, vanilla_gui_scale
+from rm_client.ui.jello_locale import (
+    LANGUAGE_CHINESE,
+    LANGUAGE_ENGLISH,
+    category_label as jello_category_label,
+    module_label as jello_module_label,
+    option_label as jello_option_label,
+    setting_label as jello_setting_label,
+)
 from rm_client.ui.hero_deploy import HeroDeployInterfaceState, HeroDeployRenderer
 from rm_client.ui.startup_gl import TextureOrigin, normalize_image_for_texture
 from rm_client.ui.vision_motion import (
@@ -109,6 +117,8 @@ def test_registry() -> None:
     assert click_gui.get_setting("Render Backend").value == "Unified GPU"
     assert click_gui.get_setting("Scale").max_value == 2.0
     assert click_gui.get_setting("Scale").step == 0.05
+    assert click_gui.get_setting("Language").value == LANGUAGE_ENGLISH
+    assert click_gui.get_setting("Language").options == [LANGUAGE_ENGLISH, LANGUAGE_CHINESE]
     hero_lob = registry.get("HeroLob")
     assert hero_lob is not None
     assert hero_lob.get_setting("Muzzle Length").value == 0.35
@@ -1635,6 +1645,52 @@ def test_jello_clickgui_layout_and_old_group() -> None:
         assert {command.raster_scale for command in main.texts} == {1.0}
         assert {viewport["mode"] for viewport in window.gui_scroll_viewports} == {"jello_panel"}
         assert any(hotspot.action == "jello_open_settings" and hotspot.payload == "ClickGui" for hotspot in window.hotspots)
+        language_hotspot = next(
+            hotspot for hotspot in window.hotspots
+            if hotspot.action == "jello_toggle_language"
+        )
+        assert any(text.text.endswith("· EN") for text in main.texts)
+        assert jello_category_label("Combat", True) == "战斗"
+        assert jello_module_label("ArmorAutoAim", True) == "装甲自瞄"
+        assert jello_setting_label("ModuleList Alignment", True) == "功能列表对齐"
+        assert jello_option_label("Unified GPU", True) == "统一 GPU"
+
+        # The profile/default area is the one-click language switch.  It must
+        # alter display strings only: module hotspot payloads stay stable keys.
+        saved_languages: list[str] = []
+        window.auto_save_config = lambda: saved_languages.append(
+            str(window.registry.get("ClickGui").get_setting("Language").value)
+        )
+        window.dispatch(
+            language_hotspot.action,
+            language_hotspot.payload,
+            QPointF(language_hotspot.rect.center()),
+            1,
+            language_hotspot.rect,
+        )
+        assert window.registry.get("ClickGui").get_setting("Language").value == LANGUAGE_CHINESE
+        window.hotspots.clear()
+        chinese_main = window.build_gpu_clickgui(1280, 720, 1.0)
+        assert any(text.text == "战斗" for text in chinese_main.texts)
+        assert any(text.text == "装甲自瞄" for text in chinese_main.texts)
+        assert any(text.text.endswith("· 中文") for text in chinese_main.texts)
+        assert any(
+            hotspot.action == "jello_module_press" and hotspot.payload == "ArmorAutoAim"
+            for hotspot in window.hotspots
+        )
+        language_hotspot = next(
+            hotspot for hotspot in window.hotspots
+            if hotspot.action == "jello_toggle_language"
+        )
+        window.dispatch(
+            language_hotspot.action,
+            language_hotspot.payload,
+            QPointF(language_hotspot.rect.center()),
+            1,
+            language_hotspot.rect,
+        )
+        assert window.registry.get("ClickGui").get_setting("Language").value == LANGUAGE_ENGLISH
+        assert saved_languages == [LANGUAGE_CHINESE, LANGUAGE_ENGLISH]
 
         class RoutePool:
             def __init__(self) -> None:
@@ -1700,6 +1756,7 @@ def test_jello_clickgui_layout_and_old_group() -> None:
         mode_hotspot = next(
             hotspot for hotspot in window.hotspots
             if hotspot.action == "jello_mode_dropdown"
+            and hotspot.payload[1].name == "Render Backend"
         )
         window.dispatch(
             mode_hotspot.action,
@@ -3206,10 +3263,21 @@ def test_minecraft_hud_assets_layout_and_render() -> None:
         {"id": 107, "name": "Sentry", "hp": 530, "max": 600, "state": "PATROL"},
     ]
     texts = tuple(text for text, _color in renderer.scoreboard_lines(state))
-    assert any(text.startswith("A003") and "LOCAL" in text for text in texts)
-    assert any(text.startswith("E103") and "420/600" in text for text in texts)
-    assert any(text.startswith("BASE ") and "SH100%" in text for text in texts)
-    assert any(text.startswith("E BASE ") and "SH100%" in text for text in texts)
+    assert len(texts) <= 10
+    assert any(text.startswith(">A03 560|") for text in texts)
+    assert any("|E03 420" in text for text in texts)
+    assert any(text.startswith("BASE A") and "|E" in text for text in texts)
+    assert any(text.startswith("SHLD A") and "|E" in text for text in texts)
+    state.robot_rows.extend(
+        [
+            {"id": robot_id, "name": "Infantry", "hp": 400 + robot_id, "max": 600, "state": "ALIVE"}
+            for robot_id in (2, 5, 6, 102, 105, 106)
+        ]
+    )
+    seven_v_seven = tuple(text for text, _color in renderer.scoreboard_lines(state))
+    assert len(seven_v_seven) == 10
+    assert seven_v_seven[5].startswith(">A03 560|")
+    assert "A+4 MORE|E+4 MORE" in seven_v_seven
     expected = {
         (1000, 620): 2,
         (1280, 720): 3,
@@ -3226,6 +3294,7 @@ def test_minecraft_hud_assets_layout_and_render() -> None:
         assert layout.hotbar.bottom() <= height
         assert layout.scoreboard.left() >= 0 and layout.scoreboard.right() <= width
         assert layout.scoreboard.bottom() <= height
+        assert layout.scoreboard.bottom() < layout.hotbar.top()
         effects_right = layout.effects_origin.x() + 154 * scale
         effects_bottom = layout.effects_origin.y() + 24 * scale
         assert effects_right < layout.scoreboard.left()
@@ -3287,7 +3356,8 @@ def test_minecraft_hud_assets_layout_and_render() -> None:
 
 def test_minecraft_hud_keeps_client_overlay_stack() -> None:
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-    from PySide6.QtGui import QImage, QPainter
+    from PySide6.QtCore import QRectF
+    from PySide6.QtGui import QColor, QImage, QPainter
     from PySide6.QtWidgets import QApplication
     from rm_client.ui.polar_app import PolarRMWindow
 
@@ -3301,7 +3371,10 @@ def test_minecraft_hud_keeps_client_overlay_stack() -> None:
         mc.enabled = True
         hud = window.registry.get("HUD")
         hud.get_setting("Right Display").value = "ModuleListHud"
-        window.registry.get("TacticalMap").enabled = True
+        tactical_map = window.registry.get("TacticalMap")
+        tactical_map.enabled = True
+        tactical_map.get_setting("Map Size").value = "Full Tactical"
+        tactical_map.get_setting("Status Display").value = "LiquidCards"
         window.registry.get("EnergyAutoAim").enabled = False
         window._vision_source = "Local"
 
@@ -3310,7 +3383,9 @@ def test_minecraft_hud_keeps_client_overlay_stack() -> None:
         window.paint_combat_target_overlay = lambda *_args, **_kwargs: calls.add("target")
         window.draw_dynamic_island = lambda *_args, **_kwargs: calls.add("island")
         window.draw_tactical_map_hud = lambda *_args, **_kwargs: calls.add("map")
-        window.draw_module_list_hud = lambda *_args, **_kwargs: calls.add("modulelist")
+        module_list_args: list[tuple[tuple, dict]] = []
+        window.draw_minecraft_module_list = lambda *args, **kwargs: (calls.add("modulelist"), module_list_args.append((args, kwargs)))
+        window.draw_match_header = lambda *_args, **_kwargs: calls.add("match_header")
         window.draw_chassis_gimbal_indicator = lambda *_args, **_kwargs: calls.add("chassis")
         window.draw_telemetry_strip = lambda *_args, **_kwargs: calls.add("telemetry")
         window.draw_match_chat = lambda *_args, **_kwargs: calls.add("chat")
@@ -3353,13 +3428,101 @@ def test_minecraft_hud_keeps_client_overlay_stack() -> None:
             "island",
             "map",
             "modulelist",
-            "chassis",
-            "telemetry",
             "chat",
             "radial",
             "elimination",
             "hero",
         } <= calls
+        assert "match_header" not in calls
+        assert "chassis" not in calls
+        assert "telemetry" not in calls
+        assert module_list_args
+
+        # MC uses a dedicated compact map and right-side Sigma list without
+        # mutating the user's normal PolarTextList preference.
+        window.draw_minecraft_module_list = PolarRMWindow.draw_minecraft_module_list.__get__(window)
+        captured_list: list[tuple[float | None, float | None, dict]] = []
+        window.draw_module_list_debug_white = lambda _p, _w, start_y=None, available_height=None, **kwargs: captured_list.append((start_y, available_height, kwargs))
+        window._last_minecraft_hud_layout = window.minecraft_hud.layout(
+            1280,
+            720,
+            "Auto",
+            (text for text, _ in window.minecraft_hud.scoreboard_lines(window.state)),
+        )
+        window.draw_minecraft_module_list(painter, 1280, 720, 1.0)
+        assert captured_list and captured_list[-1][0] == 8.0
+        assert captured_list[-1][1] > 36.0
+        assert captured_list[-1][2] == {"gameplay_only": True, "max_rows": 14}
+        assert window.tactical_map_rect(1280, 720).width() <= 216.0
+        assert window.effective_tactical_map_status_display() == "Off"
+        assert window.compact_map_status_label("RED BASE YOU") == "A BASE"
+        assert window.compact_map_status_label("BLUE BASE") == "E BASE"
+        assert window.compact_map_status_label("RED OUTPOST") == "POST"
+
+        # Leaving MC must restore the ordinary render policy and the exact
+        # saved map/list preference; no temporary adaptation is persisted.
+        calls.clear()
+        mc.enabled = False
+        hud.get_setting("Combat Preset").value = "Polar"
+        window.draw_module_list_hud = lambda *_args, **_kwargs: calls.add("normal_modulelist")
+        restored_image = QImage(1280, 720, QImage.Format.Format_ARGB32_Premultiplied)
+        restored_image.fill(0)
+        restored_painter = QPainter(restored_image)
+        window.paint_hud_motion_overlay(
+            restored_painter,
+            1280,
+            720,
+            include_vision=False,
+        )
+        restored_painter.end()
+        assert {"normal_modulelist", "chassis", "telemetry"} <= calls
+        assert "minecraft" not in calls
+        window.tactical_map_rect(1280, 720)
+        assert window.registry.get("TacticalMap").get_setting("Map Size").value == "Full Tactical"
+        assert window.tactical_map_state.container.target_width == 360.0
+        assert window.effective_tactical_map_status_display() == "LiquidCards"
+
+        # Narrow map cards/bars must allocate distinct bounds instead of
+        # painting the value over the label (the reported 2K collision).
+        liquid_map = window.registry.get("LiquidTacticalMap")
+        liquid_map.get_setting("Show Values").value = True
+        text_calls: list[tuple[QRectF, str]] = []
+        original_draw_text = window.draw_text
+        window.draw_text = lambda _p, rect, text, *_args, **_kwargs: text_calls.append((QRectF(rect), str(text)))
+        bounds_image = QImage(180, 100, QImage.Format.Format_ARGB32_Premultiplied)
+        bounds_image.fill(0)
+        bounds_painter = QPainter(bounds_image)
+        window.draw_liquid_status_bar(
+            bounds_painter,
+            QRectF(4, 4, 62, 28),
+            "RED BASE YOU",
+            "4996/5000",
+            0.8,
+            QColor("#55ffff"),
+            "bounds_bar",
+            "base",
+            minimal=True,
+        )
+        bar_label = text_calls[0][0]
+        bar_value = text_calls[2][0]
+        assert bar_label.right() < bar_value.left()
+        text_calls.clear()
+        window.draw_liquid_status_card(
+            bounds_painter,
+            QRectF(74, 4, 62, 40),
+            "RED BASE YOU",
+            "4996/5000",
+            0.8,
+            QColor("#55ffff"),
+            "bounds_card",
+            "base",
+            minimal=True,
+        )
+        bounds_painter.end()
+        card_label = text_calls[0][0]
+        card_value = text_calls[1][0]
+        assert card_label.bottom() - card_value.top() <= 1.0
+        window.draw_text = original_draw_text
     finally:
         window.close()
     app.processEvents()

@@ -101,6 +101,15 @@ from .fonts import FontBook
 from .gui_cache import ClickGuiLayerCache
 from .clickgui_gpu import ClickGuiDrawList, ClickGuiGpuRenderer
 from .jello_clickgui import JelloClickGuiRenderer, JelloClickGuiState, JelloMainTimeline
+from .jello_locale import (
+    LANGUAGE_CHINESE,
+    LANGUAGE_ENGLISH,
+    LANGUAGE_SETTING,
+    category_label as jello_category_label,
+    module_label as jello_module_label,
+    option_label as jello_option_label,
+    setting_label as jello_setting_label,
+)
 from .hero_deploy import HeroDeployInterfaceState, HeroDeployRenderer
 from .minecraft_hud import MinecraftCombatHudRenderer
 from .gpu_frame_compositor import GlassOwner, GpuFrameCompositor, LensMaterial
@@ -411,6 +420,7 @@ class PolarRMWindow(QOpenGLWidget):
         self.minecraft_hud = MinecraftCombatHudRenderer(
             self.workspace / "rm_custom_client" / "assets" / "minecraft_hud"
         )
+        self._last_minecraft_hud_layout = None
         self.hero_deploy_ui = HeroDeployInterfaceState()
         self.hero_deploy_renderer = HeroDeployRenderer()
         self._last_deploy_status_revision = 0
@@ -832,10 +842,10 @@ class PolarRMWindow(QOpenGLWidget):
 
         pages: dict[float, set[str]] = {
             14.0: set(),
-            18.0: {">", "Run", "Show all", "Hide"},
+            18.0: {">", "Run", "Show all", "Hide", "执行", "显示全部", "收起"},
             20.0: {module.description},
             25.0: set(),
-            40.0: {module.name},
+            40.0: {module.name, jello_module_label(module.name, True)},
         }
         legacy_labels = {
             "PolarOld": "Polar Old",
@@ -846,27 +856,28 @@ class PolarRMWindow(QOpenGLWidget):
             "PolarMulti": "Polar Multi",
         }
         for setting in module.settings:
-            pages[14.0].update((setting.name, setting.description))
-            pages[25.0].add(setting.name)
+            localized_setting = jello_setting_label(setting.name, True)
+            pages[14.0].update((setting.name, localized_setting, setting.description))
+            pages[25.0].update((setting.name, localized_setting))
             if setting.kind == "action_group":
-                pages[14.0].update(
-                    legacy_labels.get(str(option), str(option))
-                    for option in setting.options
-                )
+                for option in setting.options:
+                    legacy = legacy_labels.get(str(option), str(option))
+                    pages[14.0].update((legacy, f"旧版 {legacy}"))
             if setting.kind != "mode":
                 continue
             values = {str(setting.value), *(str(option) for option in setting.options)}
             for value in values:
-                pages[18.0].add(
-                    self.jello_clickgui._elided_module_name(
-                        fonts[18.0], value, 82.0
+                for display_value in (value, jello_option_label(value, True)):
+                    pages[18.0].add(
+                        self.jello_clickgui._elided_module_name(
+                            fonts[18.0], display_value, 82.0
+                        )
                     )
-                )
-                pages[18.0].add(
-                    self.jello_clickgui._elided_module_name(
-                        fonts[18.0], value, 103.0
+                    pages[18.0].add(
+                        self.jello_clickgui._elided_module_name(
+                            fonts[18.0], display_value, 103.0
+                        )
                     )
-                )
         return pages
 
     def prewarm_jello_module_resources(self, module: Module) -> None:
@@ -923,9 +934,9 @@ class PolarRMWindow(QOpenGLWidget):
         }
         jello_labels_by_size: dict[float, set[str]] = {
             14.0: set(),
-            18.0: {">", "Run", "Show all", "Hide"},
+            18.0: {">", "Run", "Show all", "Hide", "执行", "显示全部", "收起"},
             20.0: set(),
-            25.0: set(CATEGORIES),
+            25.0: {*CATEGORIES, *(jello_category_label(category, True) for category in CATEGORIES)},
             40.0: set(),
         }
         numeric_characters = set("0123456789.-+%/abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ ")
@@ -948,7 +959,8 @@ class PolarRMWindow(QOpenGLWidget):
             self.font("material", 12.0, QFont.Weight.Bold),
         )
         jello_fonts = self._jello_gpu_fonts()
-        jello_labels_by_size[20.0].add(self.current_profile())
+        profile = self.current_profile()
+        jello_labels_by_size[20.0].update((profile, f"{profile} · EN", f"{profile} · 中文"))
         for module in self.registry.modules:
             # Disabled/enabled rows reserve 168/160 logical pixels
             # respectively.  Prewarm both terminal-ellipsis variants.
@@ -960,6 +972,17 @@ class PolarRMWindow(QOpenGLWidget):
             jello_labels_by_size[20.0].add(
                 self.jello_clickgui._elided_module_name(
                     jello_fonts[20.0], module.name, 160.0
+                )
+            )
+            localized_module = jello_module_label(module.name, True)
+            jello_labels_by_size[20.0].add(
+                self.jello_clickgui._elided_module_name(
+                    jello_fonts[20.0], localized_module, 168.0
+                )
+            )
+            jello_labels_by_size[20.0].add(
+                self.jello_clickgui._elided_module_name(
+                    jello_fonts[20.0], localized_module, 160.0
                 )
             )
         self.clickgui_gpu.prewarm(fonts, labels, self.devicePixelRatioF())
@@ -2350,7 +2373,7 @@ class PolarRMWindow(QOpenGLWidget):
             # Original MC chrome is one low-resolution nearest-neighbour
             # layer.  Every client/mod overlay below remains at its own HUD
             # scale, matching Sigma's Minecraft composition model.
-            self.minecraft_hud.draw(
+            self._last_minecraft_hud_layout = self.minecraft_hud.draw(
                 p,
                 width,
                 height,
@@ -2364,8 +2387,9 @@ class PolarRMWindow(QOpenGLWidget):
         if minecraft_active:
             if self.setting_bool(hud, "Watermark", True):
                 self.draw_watermark(p)
-            if self.registry.get("MatchTimer") and self.registry.get("MatchTimer").enabled:
-                self.draw_match_header(p, logical_width)
+            # Match time/base/robot state already lives in the compact MC
+            # sidebar.  Repainting POLAR's match header duplicates the same
+            # information over boss bars and Dynamic Island.
 
         display_result = self.interpolated_vision_result(now)
         armor_module = self.registry.get("ArmorAutoAim")
@@ -2420,7 +2444,9 @@ class PolarRMWindow(QOpenGLWidget):
         if draw_map and tactical_map and tactical_map.enabled:
             self.draw_tactical_map_hud(p, logical_width, logical_height)
         # ModuleList lives here so OpenZen RGB + row anim tick every frame.
-        if self.setting_bool(hud, "Module List", True):
+        if minecraft_active and self.setting_bool(hud, "Module List", True):
+            self.draw_minecraft_module_list(p, logical_width, logical_height, scale)
+        elif self.setting_bool(hud, "Module List", True):
             mode_setting = hud.get_setting("Right Display") if hud else None
             mode = str(mode_setting.value) if mode_setting else HUD_MODES[0]
             if mode in ("ModuleListHud", "TacticalMapHud"):
@@ -2432,8 +2458,12 @@ class PolarRMWindow(QOpenGLWidget):
             mode = str(mode_setting.value) if mode_setting else HUD_MODES[0]
             if mode != "KeyBindsHud":
                 self.draw_keybinds_strip(p, logical_width, logical_height)
-        self.draw_chassis_gimbal_indicator(p, logical_width, logical_height)
-        self.draw_telemetry_strip(p, logical_width, logical_height)
+        if not minecraft_active:
+            # The custom COOL/PWR rows replace these two bottom-centre status
+            # surfaces while MC mode is active.  This is a render policy only;
+            # leaving MC restores the user's existing modules unchanged.
+            self.draw_chassis_gimbal_indicator(p, logical_width, logical_height)
+            self.draw_telemetry_strip(p, logical_width, logical_height)
         p.restore()
         if include_chat:
             self.draw_match_chat(p, width, height, now=now)
@@ -8524,7 +8554,13 @@ class PolarRMWindow(QOpenGLWidget):
         density = self.hud_density()
         # CombatCompact 始终以缩略尺寸作为 morph 起点。不能在按键按下时
         # 先切换 base size，否则会在连续动画开始前产生一次明显跳变。
-        if density == "CombatCompact":
+        if self.minecraft_hud_active():
+            # MC composition owns a dedicated upper-left safe area.  Do not
+            # mutate Map Size: leaving the preset restores the user's exact
+            # POLAR geometry on the next frame.
+            base_w = min(216.0, max(168.0, width * 0.19))
+            base_h = min(154.0, max(116.0, height * 0.19))
+        elif density == "CombatCompact":
             base_w, base_h = 170.0, 118.0
         elif mode == "Compact":
             base_w, base_h = 220.0, 170.0
@@ -8538,7 +8574,8 @@ class PolarRMWindow(QOpenGLWidget):
         target_h = expanded_h if self.tactical_map_hold else base_h
         target_w = min(target_w, max(190.0, width - 36.0))
         target_h = min(target_h, max(150.0, height - 96.0))
-        self.tactical_map_state.set_target(12.0, 58.0, target_w, target_h, self.tactical_map_hold)
+        map_y = 48.0 if self.minecraft_hud_active() else 58.0
+        self.tactical_map_state.set_target(12.0, map_y, target_w, target_h, self.tactical_map_hold)
         state = self.tactical_map_state.container
         return QRectF(state.x, state.y, state.width, state.height)
 
@@ -8572,8 +8609,13 @@ class PolarRMWindow(QOpenGLWidget):
         )
         return value if value in valid else "LiquidAuto"
 
+    def effective_tactical_map_status_display(self) -> str:
+        """Return the render-only map status policy for the active preset."""
+
+        return "Off" if self.minecraft_hud_active() else self.tactical_map_status_display()
+
     def tactical_map_status_kind(self, minimal: bool) -> str:
-        value = self.tactical_map_status_display()
+        value = self.effective_tactical_map_status_display()
         if value == "Off":
             return "off"
         if value == "LegacyBars":
@@ -8614,9 +8656,13 @@ class PolarRMWindow(QOpenGLWidget):
         rect: QRectF,
     ) -> None:
         hold_amount = self.tactical_map_hold_amount()
-        compact_density = self.hud_density() == "CombatCompact"
+        compact_density = self.hud_density() == "CombatCompact" or self.minecraft_hud_active()
         compact = compact_density
-        display = self.tactical_map_status_display()
+        # Base/outpost and COOL/PWR already have dedicated MC surfaces.  Keep
+        # the tactical map as a map instead of repeating those cards in the
+        # upper-left; the configured status display returns unchanged as soon
+        # as the MC preset is left.
+        display = self.effective_tactical_map_status_display()
         active = self.anim.value("hud.tactical_map.liquid", 1.0, self.anim_duration(0.17), Easings.ease_out_expo, initial=0.0)
         slide = (1.0 - active) * 16.0
         rect = rect.translated(slide, 0)
@@ -9070,6 +9116,10 @@ class PolarRMWindow(QOpenGLWidget):
     def liquid_status_color(self, label: str, ratio: float, fallback: QColor) -> QColor:
         label = label.upper()
         ratio = max(0.0, min(1.0, ratio))
+        if "BASE" in label:
+            return self.map_team_color("ally" if "YOU" in label else "enemy")
+        if "OUTPOST" in label:
+            return self.hud_warning() if "YOU" in label else self.hud_danger()
         if label in ("RED", "RED YOU"):
             return self.map_team_color("red")
         if label in ("BLUE", "BLUE YOU"):
@@ -9126,11 +9176,26 @@ class PolarRMWindow(QOpenGLWidget):
         value_font = self.font("poppins_medium", 5.5 if minimal else 6.5)
         short_label = self.compact_map_status_label(label) if minimal else label
         text_left = bar_rect.adjusted(5.0, 0.0, -5.0, 0.0)
-        self.draw_text(p, text_left.translated(0.5, 0.7), short_label, label_font, color("#000000", 0.72))
-        self.draw_text(p, text_left, short_label, label_font, THEME.text)
-        if self.liquid_map_bool("Show Values", True):
-            self.draw_text(p, text_left.translated(0.5, 0.7), value, value_font, color("#000000", 0.72), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-            self.draw_text(p, text_left, value, value_font, THEME.text, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        show_value = self.liquid_map_bool("Show Values", True)
+        value_width = text_width(p, value_font, value) if show_value else 0.0
+        label_width = text_width(p, label_font, short_label)
+        if show_value and label_width + value_width + 7.0 > text_left.width():
+            short_label = self.compact_map_status_label(label)
+            value_area_w = min(max(18.0, value_width + 1.0), text_left.width() * 0.48)
+            label_area = QRectF(text_left.left(), text_left.top(), max(1.0, text_left.width() - value_area_w - 4.0), text_left.height())
+            value_area = QRectF(text_left.right() - value_area_w, text_left.top(), value_area_w, text_left.height())
+            short_label = self.elide(p, label_font, short_label, label_area.width())
+            display_value = self.elide(p, value_font, value, value_area.width())
+        else:
+            label_area = QRectF(text_left)
+            value_area = QRectF(text_left)
+            display_value = value
+        self.draw_text(p, label_area.translated(0.5, 0.7), short_label, label_font, color("#000000", 0.72))
+        self.draw_text(p, label_area, short_label, label_font, THEME.text)
+        if show_value:
+            align = Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+            self.draw_text(p, value_area.translated(0.5, 0.7), display_value, value_font, color("#000000", 0.72), align)
+            self.draw_text(p, value_area, display_value, value_font, THEME.text, align)
         self.add_hotspot(bar_rect.adjusted(-3.0, -3.0, 3.0, 3.0), "map_status", key, tooltip=tooltip)
 
     def draw_liquid_status_card(
@@ -9160,9 +9225,28 @@ class PolarRMWindow(QOpenGLWidget):
         label_font = self.font("poppins_medium", 5.2 if minimal else 6.1)
         value_font = self.font("poppins_bold", 5.5 if minimal else 6.7)
         label_text = self.compact_map_status_label(label) if minimal else label
-        self.draw_text(p, card_rect.adjusted(6.0, 1.0, -5.0, -10.0), label_text, label_font, THEME.muted)
-        if self.liquid_map_bool("Show Values", True):
-            self.draw_text(p, card_rect.adjusted(6.0, 1.0, -5.0, -10.0), value, value_font, THEME.text, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        text_rect = card_rect.adjusted(6.0, 1.0, -5.0, -7.0)
+        show_value = self.liquid_map_bool("Show Values", True)
+        combined = text_width(p, label_font, label_text) + text_width(p, value_font, value) + 6.0
+        stacked = show_value and (card_rect.width() < 82.0 or combined > text_rect.width())
+        if stacked:
+            label_text = self.compact_map_status_label(label)
+            split_h = max(7.0, text_rect.height() * 0.48)
+            label_rect = QRectF(text_rect.left(), text_rect.top(), text_rect.width(), split_h)
+            value_rect = QRectF(text_rect.left(), label_rect.bottom() - 1.0, text_rect.width(), max(6.0, text_rect.bottom() - label_rect.bottom() + 1.0))
+            label_text = self.elide(p, label_font, label_text, label_rect.width())
+            display_value = self.elide(p, value_font, value, value_rect.width())
+            value_align = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        else:
+            value_w = min(text_rect.width() * 0.46, text_width(p, value_font, value) + 2.0) if show_value else 0.0
+            label_rect = QRectF(text_rect.left(), text_rect.top(), max(1.0, text_rect.width() - value_w - 4.0), text_rect.height())
+            value_rect = QRectF(text_rect.right() - value_w, text_rect.top(), value_w, text_rect.height())
+            label_text = self.elide(p, label_font, label_text, label_rect.width())
+            display_value = self.elide(p, value_font, value, value_rect.width())
+            value_align = Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        self.draw_text(p, label_rect, label_text, label_font, THEME.muted)
+        if show_value:
+            self.draw_text(p, value_rect, display_value, value_font, THEME.text, value_align)
         bar = QRectF(card_rect.left() + 6.0, card_rect.bottom() - 5.0, card_rect.width() - 12.0, 2.0)
         draw_bar(p, bar, lag_ratio, with_alpha(main, 0.18), color("#ffffff", 0.10), 1.0)
         draw_bar(p, bar, fast_ratio, with_alpha(main, 0.78), color("#ffffff", 0.00), 1.0)
@@ -9564,6 +9648,11 @@ class PolarRMWindow(QOpenGLWidget):
         p.restore()
 
     def compact_map_status_label(self, label: str) -> str:
+        upper = " ".join(str(label).upper().split())
+        if "BASE" in upper:
+            return "A BASE" if "YOU" in upper or upper.startswith("ALLY") else "E BASE"
+        if "OUTPOST" in upper:
+            return "POST"
         return {
             "ALLY": "ALLY",
             "ENEMY": "ENMY",
@@ -9577,7 +9666,7 @@ class PolarRMWindow(QOpenGLWidget):
             "EBASE": "EBASE",
             "OUTPOST": "OUT",
             "AMMO": "AMMO",
-        }.get(label, label[:5])
+        }.get(upper, upper[:5])
 
     def map_status_groups(self) -> tuple[list[tuple[str, str, float, QColor, str, str]], list[tuple[str, str, float, QColor, str, str]]]:
         config = self.match_mode_manager.current
@@ -9889,6 +9978,36 @@ class PolarRMWindow(QOpenGLWidget):
             right_margin=right_margin,
             top_margin=top_margin,
             clip_rect=clip,
+        )
+
+    def draw_minecraft_module_list(
+        self,
+        p: QPainter,
+        width: int,
+        height: int,
+        hud_scale: float = 1.0,
+    ) -> None:
+        """Draw Sigma ActiveMods in MC's reserved upper-right column.
+
+        This deliberately ignores the normal HUD alignment/style *for this
+        frame only*.  It mirrors Jello's Minecraft composition and guarantees
+        that a left-aligned PolarTextList cannot merge with the tactical map.
+        """
+
+        start_y = 8.0
+        bottom = float(height) - 54.0
+        layout = self._last_minecraft_hud_layout
+        if layout is not None and hasattr(layout, "scoreboard"):
+            scale = max(0.001, float(hud_scale))
+            bottom = min(bottom, float(layout.scoreboard.top()) / scale - 8.0)
+        available = max(36.0, bottom - start_y)
+        self.draw_module_list_debug_white(
+            p,
+            width,
+            start_y,
+            available,
+            gameplay_only=True,
+            max_rows=14,
         )
 
     def draw_module_list_hud(
@@ -10227,6 +10346,9 @@ class PolarRMWindow(QOpenGLWidget):
         width: int,
         start_y: float | None = None,
         available_height: float | None = None,
+        *,
+        gameplay_only: bool = False,
+        max_rows: int | None = None,
     ) -> None:
         """Exact Sigma 5.1.0 ``ActiveMods`` geometry and 150 ms motion.
 
@@ -10234,7 +10356,6 @@ class PolarRMWindow(QOpenGLWidget):
         former Tahoma/solid-plate implementation is intentionally gone.
         """
 
-        del start_y
         hud = self.registry.get("HUD")
         size = self.setting_mode(hud, "Jello List Size", "Normal")
         pixel_size = {"Normal": 20.0, "Small": 18.0, "Tiny": 14.0}.get(size, 20.0)
@@ -10258,6 +10379,14 @@ class PolarRMWindow(QOpenGLWidget):
         # client's equivalent category, so ClickGui/HUD visual modules never
         # contaminate the list.
         visible = [module for module in self.registry.enabled_modules() if module.category != "Render"]
+        if gameplay_only:
+            gameplay_names = {
+                "ArmorAutoAim", "EnergyAutoAim", "ArmorLock", "HeroLob",
+                "FrictionWheel", "LockState", "SpinMode", "AutoSpinOnHit",
+                "ChassisAssist", "PowerGuard", "Armor3DESP", "RobotOverlay",
+                "RadarOverlay", "MapMarker",
+            }
+            visible = [module for module in visible if module.name in gameplay_names]
         visible_names = {module.name for module in visible}
         for module in visible:
             row = rows.setdefault(module.name, {"module": module, "progress": 0.0})
@@ -10289,6 +10418,8 @@ class PolarRMWindow(QOpenGLWidget):
                 (module, text_w, sort_w, max(0.0, min(1.0, float(row["progress"]))))
             )
         render_rows.sort(key=lambda item: -item[2])
+        if max_rows is not None:
+            render_rows = render_rows[:max(1, int(max_rows))]
         if not render_rows:
             return
 
@@ -10298,16 +10429,16 @@ class PolarRMWindow(QOpenGLWidget):
             shadow = QImage(str(shadow_path)).convertToFormat(QImage.Format.Format_ARGB32_Premultiplied)
             self._jello_hud_shadow = shadow
 
-        y = 6.0
+        y = 6.0 if start_y is None else max(6.0, float(start_y))
         margin = 7.0 if size == "Tiny" else 10.0
-        height_limit = float(self.height()) if available_height is None else 6.0 + float(available_height)
+        height_limit = float(self.height()) if available_height is None else y + max(0.0, float(available_height))
         p.save()
         p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
         p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         p.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
         p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
         for module, text_w, _sort_w, progress in render_rows:
-            if y > height_limit:
+            if y + font_height > height_limit:
                 break
             scale = 0.86 + 0.14 * progress
             x = float(width) - margin - text_w
@@ -13823,6 +13954,7 @@ class PolarRMWindow(QOpenGLWidget):
             "setting_mode_next", "select_category", "gui_mode", "old_expand", "dropdown_expand", "polar_drag",
             "jello_open_settings", "jello_close_settings", "jello_toggle_old_group",
             "jello_mode_dropdown", "jello_mode_select", "jello_open_legacy", "jello_return", "jello_module_press",
+            "jello_toggle_language",
         }:
             self.invalidate_gui_cache()
         if action == "jello_module_press" and button == 1:
@@ -13880,6 +14012,22 @@ class PolarRMWindow(QOpenGLWidget):
             # Compatibility for stale hotspots/tests: a historical mode is a
             # transient legacy launch, never a persisted primary mode.
             self.open_legacy_clickgui(str(payload))
+        elif action == "jello_toggle_language":
+            click_gui = self.registry.get("ClickGui")
+            language = click_gui.get_setting(LANGUAGE_SETTING) if click_gui is not None else None
+            if language is not None:
+                language.value = (
+                    LANGUAGE_ENGLISH
+                    if str(language.value) == LANGUAGE_CHINESE
+                    else LANGUAGE_CHINESE
+                )
+                self.jello_state.close_dropdown()
+                self.prewarm_jello_module_resources(
+                    self.registry.get(self.jello_state.settings_module or "") or click_gui
+                )
+                self.after_setting_changed(language)
+                self.toast("ClickGUI：简体中文" if language.value == LANGUAGE_CHINESE else "ClickGUI: English")
+                self.frame_scheduler.force()
         elif action == "jello_open_settings":
             module = self.registry.get(str(payload))
             if module is not None:

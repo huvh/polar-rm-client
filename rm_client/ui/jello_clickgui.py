@@ -21,6 +21,15 @@ from PySide6.QtGui import (
 from ..model import CATEGORIES, LEGACY_GUI_MODES, Module, Setting
 from .animation import Easings
 from .clickgui_gpu import ClickGuiDrawList, GpuImage, GpuRect, GpuText
+from .jello_locale import (
+    action_label,
+    category_label,
+    chinese_enabled,
+    module_label,
+    option_label,
+    profile_language_badge,
+    setting_label,
+)
 
 
 JELLO_MAIN_MODE = "JelloSigma"
@@ -621,17 +630,26 @@ class JelloClickGuiRenderer:
         # ProfileManager's current profile is drawn at the raw screen
         # coordinate before the transformed child list.
         profile = str(host.current_profile()) if hasattr(host, "current_profile") else "default"
+        chinese = chinese_enabled(host.registry)
+        profile_display = f"{profile} · {profile_language_badge(chinese)}"
         profile_font = self._font(host, "jello_light", 20.0)
         profile_metrics = QFontMetricsF(profile_font)
-        profile_x = float(width) - profile_metrics.horizontalAdvance(profile) - 80.0
+        profile_width = profile_metrics.horizontalAdvance(profile_display)
+        profile_x = float(width) - profile_width - 80.0
         profile_y = float(height) - 47.0
+        profile_rect = QRectF(profile_x, profile_y, profile_width + 4.0, profile_metrics.height() + 4.0)
         commands.text(
-            QRectF(profile_x, profile_y, profile_metrics.horizontalAdvance(profile) + 4.0, profile_metrics.height() + 4.0),
-            profile,
+            profile_rect,
+            profile_display,
             profile_font,
             self._argb(LIGHT_GREYISH_BLUE, 0.5 * _clamp01(child_visual)),
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop,
             raster_scale=1.0,
+        )
+        host.add_hotspot(
+            profile_rect.adjusted(-7.0, -5.0, 7.0, 5.0),
+            "jello_toggle_language",
+            tooltip="切换为英语" if chinese else "切换为简体中文",
         )
 
         for category in CATEGORIES:
@@ -726,7 +744,7 @@ class JelloClickGuiRenderer:
                 panel.width() - 40.0 * scale,
                 60.0 * scale,
             ),
-            category,
+            category_label(category, chinese_enabled(host.registry)),
             title_font,
             self._argb(DEEP_TEAL, 0.5 * alpha),
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
@@ -784,9 +802,10 @@ class JelloClickGuiRenderer:
                 1.0,
                 panel.width() / max(0.001, scale) - text_x - 10.0,
             )
+            localized_name = module_label(module.name, chinese_enabled(host.registry))
             display_name = self._elided_module_name(
                 row_font,
-                module.name,
+                localized_name,
                 logical_text_width,
             )
             commands.rect(row, 0.0, fill, clip=viewport)
@@ -804,14 +823,14 @@ class JelloClickGuiRenderer:
                 "jello_module_press",
                 module.name,
                 button=1,
-                tooltip=module.name,
+                tooltip=localized_name,
             )
             host.add_hotspot(
                 visible,
                 "jello_open_settings",
                 module.name,
                 button=3,
-                tooltip=module.name,
+                tooltip=localized_name,
             )
 
         self._build_scrollbar(
@@ -975,7 +994,11 @@ class JelloClickGuiRenderer:
         )
         commands.text(
             title,
-            module.name,
+            self._elided_module_name(
+                self._font(host, "jello_medium", 40.0),
+                module_label(module.name, chinese_enabled(host.registry)),
+                490.0,
+            ),
             self._font(host, "jello_medium", 40.0),
             self._argb(LIGHT_GREYISH_BLUE, raw),
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop,
@@ -1129,9 +1152,15 @@ class JelloClickGuiRenderer:
         visible = rect.intersected(clip)
         if visible.isEmpty():
             return
+        localized_name = setting_label(setting.name, chinese_enabled(host.registry))
+        localized_name = self._elided_module_name(
+            self._font(host, "jello_light", 25.0),
+            localized_name,
+            max(1.0, rect.width() / max(0.001, scale) - 4.0),
+        )
         commands.text(
             rect,
-            setting.name,
+            localized_name,
             self._font(host, "jello_light", 25.0),
             self._argb(DEEP_TEAL, alpha),
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
@@ -1140,7 +1169,7 @@ class JelloClickGuiRenderer:
         )
         if rect.contains(host.hover_point):
             state._setting_hovered_this_frame = True
-            state.hovered_setting_name = setting.name
+            state.hovered_setting_name = localized_name
             state.hovered_setting_description = setting.description or ""
 
     def _build_setting(
@@ -1251,7 +1280,8 @@ class JelloClickGuiRenderer:
             text_font = self._font(host, "jello_light", 18.0)
             animated = is_open
             value_text = str(setting.value)
-            display_value = self._elided_module_name(text_font, value_text, 82.0)
+            localized_value = option_label(value_text, chinese_enabled(host.registry))
+            display_value = self._elided_module_name(text_font, localized_value, 82.0)
             if not animated or state.dropdown_animation.progress <= 0.001:
                 commands.text(
                     dropdown.adjusted(10.0 * scale, 0.0, -27.0 * scale, 0.0),
@@ -1285,7 +1315,7 @@ class JelloClickGuiRenderer:
                 dropdown.intersected(clip),
                 "jello_mode_dropdown",
                 (key, setting),
-                tooltip=value_text,
+                tooltip=localized_value,
             )
             # The global reversible animation belongs exclusively to its
             # retained dropdown_key.  Returning a request for every mode row
@@ -1313,7 +1343,7 @@ class JelloClickGuiRenderer:
                 commands.rect(action, 6.0 * scale, self._argb(ENABLED_PRIMARY, alpha), clip=clip)
             commands.text(
                 action.adjusted(10.0 * scale, 0.0, -10.0 * scale, 0.0),
-                "Run",
+                action_label("Run", chinese_enabled(host.registry)),
                 self._font(host, "jello_light", 18.0),
                 self._argb(LIGHT_GREYISH_BLUE if hovered else 0xFF131313, (1.0 if hovered else 0.7) * alpha),
                 Qt.AlignmentFlag.AlignCenter,
@@ -1327,7 +1357,7 @@ class JelloClickGuiRenderer:
             header = QRectF(row.left() + 337.0 * scale, row.top() + 5.0 * scale, 123.0 * scale, 27.0 * scale)
             commands.text(
                 header.adjusted(10.0 * scale, 0.0, -27.0 * scale, 0.0),
-                "Hide" if state.old_clickguis_expanded else "Show all",
+                action_label("Hide" if state.old_clickguis_expanded else "Show all", chinese_enabled(host.registry)),
                 self._font(host, "jello_light", 18.0),
                 self._argb(0xFF131313, 0.7 * alpha),
                 Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
@@ -1386,9 +1416,12 @@ class JelloClickGuiRenderer:
                         alpha,
                     )
                     commands.rect(option, 0.0, background, clip=options_clip)
+                    legacy_label = _LEGACY_LABELS.get(mode, mode)
+                    if chinese_enabled(host.registry):
+                        legacy_label = f"旧版 {legacy_label}"
                     commands.text(
                         option.adjusted(8.0 * scale, 0.0, -8.0 * scale, 0.0),
-                        _LEGACY_LABELS.get(mode, mode),
+                        self._elided_module_name(option_font, legacy_label, 107.0),
                         option_font,
                         self._argb(DEEP_TEAL, alpha * raw_reveal),
                         Qt.AlignmentFlag.AlignCenter,
@@ -1470,9 +1503,10 @@ class JelloClickGuiRenderer:
         )
         option_font = self._font(host, "jello_light", 18.0)
         current_value = str(request.setting.value)
+        localized_current = option_label(current_value, chinese_enabled(host.registry))
         commands.text(
             request.rect.adjusted(10.0 * request.scale, 0.0, -27.0 * request.scale, 0.0),
-            self._elided_module_name(option_font, current_value, 82.0),
+            self._elided_module_name(option_font, localized_current, 82.0),
             option_font,
             self._argb(0xFF131313, 0.7 * request.alpha),
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
@@ -1524,9 +1558,10 @@ class JelloClickGuiRenderer:
                 request.alpha,
             )
             commands.rect(option, 0.0, background, clip=popup_clip)
+            localized_option = option_label(value, chinese_enabled(host.registry))
             commands.text(
                 option.adjusted(10.0 * request.scale, 0.0, -10.0 * request.scale, 0.0),
-                self._elided_module_name(option_font, str(value), 103.0),
+                self._elided_module_name(option_font, localized_option, 103.0),
                 option_font,
                 self._argb(DEEP_TEAL, request.alpha),
                 Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
@@ -1537,7 +1572,7 @@ class JelloClickGuiRenderer:
                 visible,
                 "jello_mode_select",
                 (request.setting, value),
-                tooltip=str(value),
+                tooltip=localized_option,
             )
 
     def paint_compat(

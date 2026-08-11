@@ -1409,6 +1409,7 @@ def build_default_registry() -> ModuleRegistry:
             "RightShift",
             [
                 number_setting("Scale", 1.0, 0.5, 2.0, 0.05),
+                mode_setting("Language", "English", ["English", "简体中文"], "一键切换 Jello ClickGUI 显示语言；不改变配置键和协议值。"),
                 mode_setting("Render Backend", "Unified GPU", ["Unified GPU", "Compatibility Painter"]),
                 bool_setting("Save Layout", True),
                 action_group_setting(
