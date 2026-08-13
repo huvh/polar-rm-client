@@ -2,9 +2,9 @@
 
 职责：
     - 按场景（LabDebug / CampusSimulation / OfficialEvent）控制是否允许真实发布
-    - 官方限幅：指令 10Hz 限频、比赛阶段门控（仅 FIGHTING 阶段允许控制类指令）
+    - 官方限幅：KMC/CustomControl 75Hz、事件指令 10Hz、比赛阶段门控
     - 急停（e-stop）与断连保护
-    - 心跳超时归零（由串口后端使用）
+    - 急停锁止；机器人侧仍必须实现控制超时归零
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ FIGHTING_STAGES = frozenset({"4", "MATCH"})
 CONTROL_TOPICS = frozenset({
     "KeyboardMouseControl",
     "CustomControl",
-    "MapClickInfoNotify",
+    "MapClickCmd",
     "AssemblyCommand",
     "RobotPerformanceSelectionCommand",
     "CommonCommand",
@@ -44,6 +44,10 @@ class OfficialSafety:
         self._stage_seen = False  # 收到真实 GameStatus 前 fail-closed
         self._publish_at: dict[str, float] = {}
         self._publish_limit_hz = 10.0
+        self._topic_limit_hz = {
+            "KeyboardMouseControl": 75.0,
+            "CustomControl": 75.0,
+        }
         self.last_reason = ""
 
     # ------------------------------------------------------------------
@@ -83,7 +87,7 @@ class OfficialSafety:
         return self._stage_seen and self.current_stage in FIGHTING_STAGES
 
     # ------------------------------------------------------------------
-    # 心跳/归零保护（串口后端使用）
+    # 发布门控与限频
     # ------------------------------------------------------------------
     def can_publish(self, topic: str, now: float | None = None) -> tuple[bool, str]:
         """返回 (是否允许发布, 原因)。"""
@@ -100,8 +104,9 @@ class OfficialSafety:
                 self.last_reason = "非比赛阶段，禁止发布控制类指令"
                 return False, self.last_reason
             previous = self._publish_at.get(name, -1.0)
-            if previous >= 0.0 and now - previous < 1.0 / self._publish_limit_hz:
-                self.last_reason = f"{name} 发布频率超过 {self._publish_limit_hz:g}Hz"
+            limit_hz = self._topic_limit_hz.get(name, self._publish_limit_hz)
+            if previous >= 0.0 and now - previous < 1.0 / limit_hz:
+                self.last_reason = f"{name} 发布频率超过 {limit_hz:g}Hz"
                 return False, self.last_reason
         return True, "ok"
 
@@ -125,7 +130,7 @@ class OfficialSafety:
         return (time.perf_counter() if now is None else now) - self.estop_at
 
     # ------------------------------------------------------------------
-    # 心跳/归零保护（串口后端使用）
+    # 兼容旧调用方的超时判断工具；实际看门狗必须由机器人固件实现。
     # ------------------------------------------------------------------
     def heartbeat_deadline(self, last_write_at: float, now: float | None = None,
                            timeout_s: float = 0.5) -> bool:

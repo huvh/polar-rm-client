@@ -255,7 +255,8 @@ class RobotState:
     match_title: str = "RMUC 7v7"
     match_duration_sec: int = 420
     alliance_color: str = "Red"
-    current_stage: str = "MATCH"
+    # 启动/赛制选择不能伪造“比赛中”；只接受真实 GameStatus 后进入 MATCH。
+    current_stage: str = "NOT_STARTED"
     stage_countdown_sec: int = 420
     stage_elapsed_sec: int = 0
     current_round: int = 1
@@ -732,6 +733,17 @@ def build_default_registry() -> ModuleRegistry:
             description="本地客户端配置保存、加载和导入管理器。",
         ),
         Module(
+            "EmergencyStop",
+            "System",
+            "F12",
+            [
+                action_setting("Trigger E-Stop", "立即发送全零键鼠帧并锁止全部上行。"),
+                action_setting("Release E-Stop", "仅在确认机器人安全后解除；快捷键 Ctrl+Shift+F12。"),
+            ],
+            enabled=True,
+            description="赛事控制急停：F12 触发，Ctrl+Shift+F12 解除。",
+        ),
+        Module(
             "ArmorAutoAim",
             "Combat",
             "V",
@@ -889,9 +901,14 @@ def build_default_registry() -> ModuleRegistry:
                 mode_setting("Direction", "Auto", ["Auto", "CW", "CCW"]),
                 number_setting("Spin Speed", 420, 120, 720, 10, "dps"),
                 bool_setting("Power Guard", True),
+                bool_setting(
+                    "Mock Output",
+                    True,
+                    "关闭后才会通过 MQTT CustomControl 发送 PRM1 kind=2；机器人固件必须实现同一 schema。",
+                ),
             ],
             enabled=True,
-            description="RM 底盘小陀螺模式，并预留后续控制输出钩子。",
+            description="RM 底盘小陀螺模式；真实输出仅走官方 MQTT CustomControl，默认安全模拟。",
         ),
         Module(
             "AutoSpinOnHit",
@@ -1144,7 +1161,7 @@ def build_default_registry() -> ModuleRegistry:
                 bool_setting("Tech Level", True),
                 bool_setting("Radar Level", True),
                 mode_setting("Open Style", "Dynamic Island", ["Dynamic Island", "Full Sheet"]),
-                bool_setting("Mock Requests", True),
+                bool_setting("Mock Requests", False, "正式赛事默认通过 MQTT 发送；实验室/模拟场景仍强制 Mock。"),
             ],
             enabled=True,
             description="按比赛模式与机器人状态提供弹丸、恢复、复活和支援操作。",
@@ -1155,7 +1172,7 @@ def build_default_registry() -> ModuleRegistry:
             "None",
             [
                 mode_setting("Ammo Type", "17mm", ["17mm", "42mm"]),
-                bool_setting("Mock Request", True),
+                bool_setting("Mock Request", False, "正式赛事默认通过 MQTT 发送；实验室/模拟场景仍强制 Mock。"),
                 bool_setting("Show Cost", True),
             ],
             enabled=True,

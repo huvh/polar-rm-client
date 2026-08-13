@@ -10,6 +10,8 @@ PySide6>=6.6,<7
 # --- 图传 / 图像 / 数值 ---
 opencv-python>=4.8
 numpy>=1.26
+# Wheel includes a tested ffmpeg binary, used when no system/bundled decoder exists.
+imageio-ffmpeg>=0.5,<1
 
 # --- 同济 Local 视觉（OpenVINO 加载 yolov5.xml/.bin）---
 # 权重文件见：同济自瞄/sp_vision_25/assets/（已入库，非 pip）

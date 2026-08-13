@@ -58,6 +58,7 @@ from rm_client.native_viewer_telemetry import (
     parse_video_0310_chunk,
 )
 from rm_client.backend.manager import BackendManager
+from rm_client.backend import protocol as backend_proto
 from rm_client.backend.readiness import audit_backend
 from rm_client.backend.serial_backend import RmSerialBackend
 from rm_client.scenarios import ScenarioManager
@@ -144,6 +145,7 @@ def test_registry() -> None:
     assert auto_spin is not None and auto_spin.enabled is False
     assert auto_spin.get_setting("Require Referee Link").value is True
     assert auto_spin.get_setting("Duration").value == 2.5
+    assert registry.get("SpinMode").get_setting("Mock Output").value is True
     mc_hud = registry.get("MinecraftCombatHUD")
     assert mc_hud is not None and mc_hud.enabled is False
     assert mc_hud.get_setting("GUI Scale").value == "Auto"
@@ -873,6 +875,11 @@ def test_config_store_roundtrip() -> None:
         assert loaded["polar_windows"]["Combat"]["x"] == 80
         assert loaded["quick_action_wheel"]["sectors"] == 6
         assert loaded["quick_action_wheel"]["labels"][0] == "Economy"
+        assert not list(Path(temp_dir).glob("*.tmp"))
+        store.profile_path("bad-version").write_text(
+            '{"version":"not-a-number","modules":{}}', encoding="utf-8"
+        )
+        assert store.load("bad-version") is None
         fresh = build_default_registry()
         apply_registry_config(fresh, loaded)
         assert fresh.get("ArmorAutoAim").keybind == "J"
@@ -1170,23 +1177,50 @@ def test_referee_frame_codec() -> None:
 def test_keyboard_control_bridge() -> None:
     from rm_client.control import KeyboardControlBridge
 
+    class KeyboardPublisher:
+        def __init__(self) -> None:
+            self.calls: list[dict[str, Any]] = []
+
+        def publish_keyboard_mouse(self, mouse_x, mouse_y, mouse_z, **kwargs):
+            self.calls.append({
+                "mouse_x": mouse_x,
+                "mouse_y": mouse_y,
+                "mouse_z": mouse_z,
+                **kwargs,
+            })
+            return True, "ok"
+
     registry = build_default_registry()
     state = RobotState()
-    serial = SerialBridgeStub()
-    bridge = KeyboardControlBridge(serial, mock_output=True)
+    publisher = KeyboardPublisher()
+    bridge = KeyboardControlBridge(publisher, mock_output=True)
     command = bridge.set_key("W", True, state, registry)
     assert command is not None
     assert command.vx == 1.0
     assert command.vy == 0.0
-    assert b"rm_control.chassis.v1" in bridge.last_payload
-    assert len(command.to_custom_control()) == 30
-    assert serial.last_write == b""
+    assert command.keyboard_value == 1
+    assert b"rm2026.KeyboardMouseControl.v1.3.1" in bridge.last_payload
+    assert publisher.calls == []
 
     bridge.mock_output = False
+    bridge.add_mouse_motion(12, 7)
+    bridge.add_wheel(120)
     command = bridge.set_key("W", False, state, registry)
     assert command is not None
     assert command.vx == 0.0
-    assert serial.last_write == bridge.last_payload
+    assert publisher.calls[-1]["keyboard_value"] == 0
+    assert publisher.calls[-1]["mouse_x"] == 12
+    assert publisher.calls[-1]["mouse_y"] == -7
+    assert publisher.calls[-1]["mouse_z"] == 120
+    assert bridge.mouse_x == bridge.mouse_y == bridge.mouse_z == 0
+    bridge.set_key("A", True, state, registry)
+    bridge.set_mouse_button(1, True, state, registry)
+    before_release = len(publisher.calls)
+    neutral = bridge.release_all(state, registry)
+    assert len(publisher.calls) == before_release + 1
+    assert neutral.keyboard_value == 0
+    assert publisher.calls[-1]["keyboard_value"] == 0
+    assert publisher.calls[-1]["left"] is False
 
 
 def test_scenario_manager() -> None:
@@ -1205,13 +1239,16 @@ def test_scenario_manager() -> None:
     assert registry.get("TongjiVisionBridge").get_setting("Vision Kill Sensitivity").value == "Match Reliable"
     assert registry.get("MQTTLink").get_setting("Host").value == "192.168.12.1"
     assert registry.get("SerialBridge").get_setting("Mock Writes").value is True
+    assert registry.get("EconomyPanel").get_setting("Mock Requests").value is False
+    assert registry.get("ProjectileShop").get_setting("Mock Request").value is False
     assert mqtt.host == "192.168.12.1"
     assert mqtt.mock_output is False
     assert udp.port == 3334
-    assert control.mock_output is True
+    assert control.mock_output is False
     manager.set_scenario("CampusSimulation")
     manager.apply_to_registry(registry)
     assert registry.get("TongjiVisionBridge").get_setting("Vision Kill Sensitivity").value == "Balanced"
+    assert registry.get("EconomyPanel").get_setting("Mock Requests").value is True
     manager.set_scenario("LabDebug")
     manager.apply_to_registry(registry)
     assert registry.get("TongjiVisionBridge").get_setting("Vision Kill Sensitivity").value == "Lab Responsive"
@@ -1642,6 +1679,9 @@ def test_jello_clickgui_layout_and_old_group() -> None:
     app = QApplication.instance() or QApplication([])
     window = PolarRMWindow()
     try:
+        # This visual contract starts in English regardless of the operator's
+        # persisted default profile. Language toggling itself is tested below.
+        window.registry.get("ClickGui").get_setting("Language").value = LANGUAGE_ENGLISH
         assert window.font("jello_light", 12.0).weight() == QFont.Weight.Light
         assert window.font("jello_medium", 12.0).weight() == QFont.Weight.Medium
         for width, height in ((1280, 720), (1600, 900), (1920, 1080), (2560, 1440)):
@@ -2146,10 +2186,20 @@ def test_robot_profiles_and_economy_rules() -> None:
     accepted_transaction = accepted.submit(state, mock_offer, mock=False, now=30.0)
     state.economy_status_revision += 1
     assert accepted.update(state, now=30.10).status == "pending"
+    # Shared team gold may change because a teammate buys something; it must
+    # not acknowledge our local projectile request.
     state.remaining_economy -= 10
+    state.economy_status_revision += 1
+    assert accepted.update(state, now=30.15).status == "pending"
     state.remaining_ammo += 10
     state.economy_status_revision += 1
     assert accepted.update(state, now=30.20).status == "succeeded"
+
+    timed_out = EconomyCommandBridge()
+    timed_out.sender = lambda _request: True
+    timeout_transaction = timed_out.submit(state, mock_offer, mock=False, now=40.0)
+    assert timed_out.update(state, now=45.01).status == "timed_out"
+    assert "不会自动重试" in timeout_transaction.message
 
     hero_profile = profile_by_key("RMUC7v7", "Hero")
     apply_profile_to_state(state, hero_profile, resolve_performance("RMUC7v7", "Hero"), 1)
@@ -2162,7 +2212,7 @@ def test_robot_profiles_and_economy_rules() -> None:
     economy_module = registry.get("EconomyPanel")
     assert robot_module is not None and robot_module.get_setting("Role") is not None
     assert economy_module is not None and economy_module.keybind == "B"
-    assert economy_module.get_setting("Mock Requests").value is True
+    assert economy_module.get_setting("Mock Requests").value is False
     assert registry.get("ProjectileShop") is not None
     assert registry.get("UIScale").get_setting("HUD Refresh Rate").value == "144"
 
@@ -2504,7 +2554,7 @@ def test_official_economy_status_decode() -> None:
     )
     assert logistics["remaining_economy"] == 320
     assert logistics["total_economy_obtained"] == 780
-    assert logistics["_economy_revision_increment"] == 1
+    assert "_economy_revision_increment" not in logistics
 
     _events, respawn = feed.consume(
         "RobotRespawnStatus",
@@ -3752,35 +3802,35 @@ def test_minecraft_hud_keeps_client_overlay_stack() -> None:
 
 
 def test_estop_zero_frame_bypass_and_backend_readiness() -> None:
-    class FakeSerial:
-        is_open = True
-
-        def __init__(self) -> None:
-            self.frames: list[bytes] = []
-
-        def write(self, payload: bytes) -> int:
-            self.frames.append(bytes(payload))
-            return len(payload)
-
     backend = RmSerialBackend(port="COM_TEST", mock_writes=False)
-    fake = FakeSerial()
-    backend._serial = fake
-    backend.connected = True
     backend.trigger_estop()
     assert backend.estop_active
-    assert len(fake.frames) == 1 and fake.frames[0][0] == 0xA5
-    assert backend.frames_written == 1
     ok, _message = backend.write(b"unsafe")
-    assert not ok and len(fake.frames) == 1
+    assert not ok and backend.frames_written == 0
+    ok, reason = backend.write_frame(0x0311, b"\x00" * 30)
+    assert not ok and "0x0311" in reason
 
     state = RobotState()
     manager = BackendManager(state=state)
+    manager.mqtt.mock_output = True
+    ok, reason = manager.trigger_estop()
+    assert ok and reason == "mock"
+    assert manager.safety.estop_active and manager.serial.estop_active
+    assert manager.mqtt.publish_records[-1].topic == "KeyboardMouseControl"
+    assert manager.mqtt.publish_records[-1].payload == backend_proto.encode_keyboard_mouse_control()
+    manager.release_estop()
+    assert not manager.safety.estop_active and not manager.serial.estop_active
     report = audit_backend(manager, state)
     assert not report.ready
     assert report.verdict == "NOT READY FOR REAL MATCH"
     assert any(gate.requires_live_validation for gate in report.blockers)
     gates = {gate.key: gate for gate in report.gates}
     assert not gates["video_source_declared"].passed
+    assert not gates["spin_firmware_schema"].passed
+    consumed = manager.apply_readiness(state, live_evidence={"video_source": "udp"})
+    assert consumed["verdict"] == "NOT READY FOR REAL MATCH"
+    assert state.backend_stats["readiness"] is consumed
+    assert "field_signoff" in consumed["blockers"]
 
     class FakeAuditManager:
         scenario_key = "OfficialEvent"
@@ -3790,7 +3840,6 @@ def test_estop_zero_frame_bypass_and_backend_readiness() -> None:
             return {
                 "scenario": "OfficialEvent",
                 "mqtt": {"connected": True, "mock_output": False},
-                "serial": {"connected": True, "mock_writes": False},
                 "udp": {
                     "connected": True,
                     "decoded_connected": True,

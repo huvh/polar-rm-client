@@ -2,16 +2,16 @@
 
 LabDebug / CampusSimulation / OfficialEvent 各自：
 - MQTT：真实连接（可收）、按场景决定是否真实发布（LabDebug mock）
-- UDP：监听图传端口、codec 检测、MJPEG 解码、统计
-- 串口：Stub 或真实 PySerial + 心跳归零 + 急停
-- 安全：官方限幅（10Hz + 比赛阶段门控 + 急停）
+- UDP：监听图传端口、codec 检测、H.264/H.265/MJPEG 解码、统计
+- 串口：仅保留非图传链路接口；明确拒绝把 0x0311 写入 115200 串口
+- 安全：KMC/CustomControl 75Hz、事件命令 10Hz、阶段门控与急停
 
-同时把全量下行消息解码结果写入 RobotState（前端 UI 无需改动即可读取新数据），
-并提供缺失的 7 条上行指令编码发布入口。
+同时把全量下行消息解码结果写入 RobotState，并提供 V1.3.1 上行编码入口。
 """
 
 from __future__ import annotations
 
+import logging
 import time
 from typing import Any
 
@@ -35,8 +35,8 @@ SHOOTER_COOLING = 1
 SHOOTER_BURST = 2
 CHASSIS_HEALTH = 1
 CHASSIS_POWER = 2
-SENTRY_AUTOMATIC = 1
-SENTRY_SEMI_AUTO = 2
+SENTRY_AUTOMATIC = 0
+SENTRY_SEMI_AUTO = 1
 
 _RUNE_PHASE = {1: "INACTIVE", 2: "ACTIVATING", 3: "ACTIVE"}
 # ??? ID ? ?????? 1-9 / ?? 101-109??? = ?? + 100?
@@ -47,6 +47,8 @@ BUFF_TYPE_NAMES = {1: "Attack Boost", 2: "Defense Boost", 3: "Heat Cooling",
                    4: "Chassis Power", 5: "Health Regen", 6: "Exchange Ammo", 7: "Terrain"}
 DEFAULT_MAX_HEALTH = 600
 _STAGE_STR = {0: "NOT_STARTED", 1: "PREPARE", 2: "SELF_CHECK", 3: "COUNTDOWN", 4: "MATCH", 5: "SETTLEMENT"}
+_HEALTH_ROLE_ORDER = (1, 2, 3, 4, 7)
+_LOG = logging.getLogger(__name__)
 
 
 class BackendManager:
@@ -82,6 +84,8 @@ class BackendManager:
         self._native_0310_blocked_until_sps = True
         self._native_0310_decoder_restarts = 0
         self._native_0310_decoder_started_once = False
+        self._apply_error_count = 0
+        self._last_apply_error = ""
         self.config = SCENARIOS.get(scenario_key, SCENARIOS["LabDebug"])
         self._apply_config(self.config)
 
@@ -100,12 +104,18 @@ class BackendManager:
         self.serial.baud = int(config.connection.serial_baud)
         self.serial.mock_writes = bool(config.safety.mock_writes)
 
-    def apply_scenario(self, key: str) -> None:
+    def apply_scenario(self, key: str, *, start: bool = True) -> None:
         key = key if key in SCENARIOS else "LabDebug"
-        self.shutdown()
+        self.shutdown(restart=True)
         self.scenario_key = key
         config = SCENARIOS[key]
         self._apply_config(config)
+        # shutdown() deliberately latches local E-stop.  A scenario switch has
+        # already emitted the neutral frame and now creates a fresh fail-closed
+        # safety epoch; it must not inherit the old software latch forever.
+        self.release_estop()
+        if not start:
+            return
         # 三种模式都启动 MQTT（可收裁判数据；发布按场景门控）
         self.mqtt.start()
         # 三种模式都监听 UDP 图传（codec 检测 + MJPEG 解码 + 统计）
@@ -132,14 +142,29 @@ class BackendManager:
             return
         state.backend_frontend_synced = True
 
-        health = [int(v) for v in state.official_robot_health]
+        health = [int(v) for v in state.official_robot_health[:10]]
+        own_blue = int(state.robot_id) >= 100 or str(state.alliance_color).lower() == "blue"
+        ally_ids = tuple(role + (100 if own_blue else 0) for role in _HEALTH_ROLE_ORDER)
+        enemy_ids = tuple(role + (0 if own_blue else 100) for role in _HEALTH_ROLE_ORDER)
+        health_by_id = {
+            robot_id: health[index]
+            for index, robot_id in enumerate(ally_ids + enemy_ids)
+            if index < len(health)
+        }
+        observed_ids = {
+            *(int(key) for key in state.robot_statics),
+            *(int(key) for key in state.robot_dynamics),
+            *(int(key) for key in state.robot_modules),
+            *(int(item.get("robot_id", 0)) for item in state.robot_positions),
+        }
+        robot_ids = list(ally_ids + enemy_ids)
+        robot_ids.extend(sorted(robot_id for robot_id in observed_ids if robot_id > 0 and robot_id not in robot_ids))
         rows: list[dict[str, Any]] = []
-        for robot_id in list(range(1, 8)) + list(range(101, 108)):
+        for robot_id in robot_ids:
             base = robot_id if robot_id < 100 else robot_id - 100
             statics = state.robot_statics.get(robot_id, {})
             dynamics = state.robot_dynamics.get(robot_id, {})
-            index = robot_id - 1 if robot_id < 100 else robot_id - 94  # ????? index 7 ??
-            global_hp = int(health[index]) if index < len(health) and health[index] > 0 else 0
+            global_hp = max(0, int(health_by_id.get(robot_id, 0)))
             dynamic_hp = int(dynamics.get("current_health", 0))
             # ??? 10Hz RobotDynamicStatus??????????? 1Hz ??????
             hp = dynamic_hp if robot_id == int(state.robot_id) and dynamic_hp > 0 else global_hp or dynamic_hp
@@ -174,14 +199,13 @@ class BackendManager:
             map_robots: list[dict[str, Any]] = []
             for robot_id, pos in positions.items():
                 base = robot_id if robot_id < 100 else robot_id - 100
-                index = robot_id - 1 if robot_id < 100 else robot_id - 94  # ????? index 7 ??
-                global_hp = int(health[index]) if index < len(health) and health[index] > 0 else 0
+                global_hp = max(0, int(health_by_id.get(robot_id, 0)))
                 dynamic_hp = int(state.robot_dynamics.get(robot_id, {}).get("current_health", 0))
                 hp = dynamic_hp if robot_id == int(state.robot_id) and dynamic_hp > 0 else global_hp or dynamic_hp
                 hp_max = int(state.robot_statics.get(robot_id, {}).get("max_health", 0)) or DEFAULT_MAX_HEALTH
                 map_robots.append({
                     "id": robot_id,
-                    "team": "ally" if robot_id < 100 else "enemy",
+                    "team": "ally" if robot_id in ally_ids else "enemy",
                     "name": ROBOT_ID_NAMES.get(base, "Robot"),
                     "x": float(pos.get("x", 0.0)),
                     "y": float(pos.get("y", 0.0)),
@@ -211,16 +235,46 @@ class BackendManager:
         if new_id == self.mqtt.client_id:
             return
         was_started = self.mqtt._started
-        self.mqtt.stop()
+        self.mqtt.stop(publish_status=False)
         self.mqtt.client_id = new_id
         if was_started:
             self.mqtt.start()
 
-    def shutdown(self) -> None:
-        self.mqtt.stop()
+    def shutdown(self, *, restart: bool = False) -> None:
+        # Best-effort neutral KMC before disconnect.  This does not replace the
+        # robot-side watchdog or F12 E-stop, but prevents an ordinary app exit
+        # or scenario switch from leaving the last movement key latched.
+        if self.mqtt.connected and not self.mqtt.mock_output:
+            self.mqtt.publish_estop_zero()
+        self.safety.trigger_estop()
+        self.serial.trigger_estop()
+        # Scenario changes are reconnects, not process shutdowns.  Do not let a
+        # retained offline status race the replacement connection.  A genuine
+        # application exit still publishes the retained offline status.
+        self.mqtt.stop(publish_status=not restart)
         self.udp.stop()
         self.serial.stop()
         self.native_decoder.stop()
+
+    def apply_readiness(
+        self,
+        state: RobotState | None = None,
+        *,
+        live_evidence: Any = None,
+    ) -> dict[str, Any]:
+        """Run and store the fail-closed match audit for non-UI consumers."""
+
+        from .readiness import audit_backend
+
+        target = state or self.state
+        if target is None:
+            raise ValueError("RobotState is required for readiness audit")
+        report = audit_backend(self, target, live_evidence=live_evidence)
+        payload = report.as_dict()
+        payload["audited_at"] = time.perf_counter()
+        payload["blockers"] = [gate.key for gate in report.blockers]
+        target.backend_stats["readiness"] = payload
+        return payload
 
     def latest_video_frame(
         self,
@@ -266,8 +320,18 @@ class BackendManager:
         messages = self.mqtt.drain_decoded()
         count = 0
         for _topic, name, data, _ts in messages:
-            count += 1
-            self._apply_one(state, name, data)
+            try:
+                self._apply_one(state, name, data)
+                count += 1
+            except Exception as exc:
+                # 单条坏消息不能中断本帧，更不能让 Qt timer 永久假死。
+                self._apply_error_count += 1
+                self._last_apply_error = f"{name}: {type(exc).__name__}: {exc}"
+                _LOG.warning(
+                    "discarding malformed referee message %s: %s",
+                    name,
+                    self._last_apply_error,
+                )
         if messages and state is not None:
             runtime_stats = self.stats()
             for key, value in state.backend_stats.items():
@@ -284,6 +348,7 @@ class BackendManager:
 
     def _apply_one(self, state: RobotState, name: str, data: dict[str, Any]) -> None:
         present = frozenset(data.get("__present__", ()))
+        economy_before = self._economy_signature(state)
         if name == "GameStatus":
             state.current_round = int(data.get("current_round", state.current_round))
             state.total_rounds = int(data.get("total_rounds", state.total_rounds))
@@ -347,8 +412,9 @@ class BackendManager:
             state.can_remote_heal = bool(data.get("can_remote_heal", state.can_remote_heal))
             state.can_remote_ammo = bool(data.get("can_remote_ammo", state.can_remote_ammo))
         elif name == "RobotModuleStatus":
-            state.robot_module_status = {k: int(v) for k, v in data.items()}
-            state.robot_modules[state.robot_id] = self._clean(data)
+            clean = self._clean(data)
+            state.robot_module_status = {k: int(v) for k, v in clean.items()}
+            state.robot_modules[state.robot_id] = clean
         elif name == "RobotPosition":
             self._upsert_positions(state, data)
         elif name == "Buff":
@@ -357,12 +423,24 @@ class BackendManager:
             self._upsert_penalty(state, data)
         elif name == "RobotPathPlanInfo":
             state.path_plan = self._clean(data)
+        elif name == "MapClickInfo":
+            clean = self._clean(data)
+            marker = {
+                "label": chr(int(clean.get("ascii", 0))) if 32 <= int(clean.get("ascii", 0)) <= 126 else "MARK",
+                "x": float(clean.get("map_x", 0.0)),
+                "y": float(clean.get("map_y", 0.0)),
+                "kind": "attack" if int(clean.get("type", 0)) == 1 else "marker",
+                "pulse": True,
+                **clean,
+            }
+            state.map_markers = [*state.map_markers[-15:], marker]
         elif name == "RadarInfoToClient":
             state.radar_detections = [dict(r) for r in data.get("robots", ())]
         elif name == "TechCoreMotionStateSync":
             state.tech_core = self._clean(data)
         elif name == "RobotPerformanceSelectionSync":
-            state.performance_sync = {k: int(v) for k, v in data.items()}
+            clean = self._clean(data)
+            state.performance_sync = {k: int(v) for k, v in clean.items()}
         elif name == "DeployModeStatusSync":
             next_status = 1 if int(data.get("status", 0)) else 0
             if next_status != int(state.deploy_mode):
@@ -578,6 +656,23 @@ class BackendManager:
             state.respawn_gold_cost = int(data.get("gold_cost_for_respawn", state.respawn_gold_cost))
             state.respawn_can_pay = bool(data.get("can_pay_for_respawn", state.respawn_can_pay))
 
+        # Economy confirmation is driven by an actual relevant field change,
+        # not by the arrival count of unrelated team messages.  This prevents
+        # a teammate's purchase from acknowledging our pending request.
+        if self._economy_signature(state) != economy_before:
+            state.economy_status_revision = int(state.economy_status_revision) + 1
+            state.economy_command_status = ""
+
+    @staticmethod
+    def _economy_signature(state: RobotState) -> tuple[Any, ...]:
+        return (
+            int(state.remaining_economy),
+            int(state.remaining_ammo),
+            int(state.current_health),
+            bool(state.respawn_pending),
+            bool(state.air_support_active),
+        )
+
     def _upsert_positions(self, state: RobotState, data: dict[str, Any]) -> None:
         robot_id = int(data.get("robot_id", 0))
         positions = list(state.robot_positions)
@@ -629,14 +724,53 @@ class BackendManager:
     def publish_custom_control(self, data: bytes) -> tuple[bool, str]:
         return self._publish("CustomControl", proto.encode_custom_control(data))
 
-    def publish_map_click_info(self, x: float, y: float, z: float = 0.0) -> tuple[bool, str]:
-        return self._publish("MapClickInfo", proto.encode_map_click_info(x, y, z))
+    def publish_vision_control(
+        self, *, sequence: int, yaw_deg: float, pitch_deg: float,
+        target_id: int = 0, tracking: bool = False,
+    ) -> tuple[bool, str]:
+        payload = proto.encode_vision_control_payload(
+            sequence=sequence,
+            yaw_deg=yaw_deg,
+            pitch_deg=pitch_deg,
+            target_id=target_id,
+            tracking=tracking,
+            fire=False,
+        )
+        return self.publish_custom_control(payload)
 
-    def publish_map_click_notify(self, *, is_send_all=0, robot_id=b"", mode=1,
-                                 enemy_id=0, ascii_code=0, mark_type=1,
-                                 map_x=0.0, map_y=0.0) -> tuple[bool, str]:
-        return self._publish("MapClickInfoNotify", proto.encode_map_click_info_notify(
+    def publish_spin_control(
+        self, *, sequence: int, enabled: bool, direction: str = "Auto",
+        speed_dps: float = 420.0, power_guard: bool = True,
+    ) -> tuple[bool, str]:
+        """Publish the reviewed team spin schema through official CustomControl."""
+        payload = proto.encode_spin_control_payload(
+            sequence=sequence,
+            enabled=enabled,
+            direction=direction,
+            speed_dps=speed_dps,
+            power_guard=power_guard,
+        )
+        return self.publish_custom_control(payload)
+
+    def trigger_estop(self) -> tuple[bool, str]:
+        """先尽力发送全零 KMC，再锁死所有上行；断网时仍立即本地锁止。"""
+        zero_result = self.mqtt.publish_estop_zero()
+        self.safety.trigger_estop()
+        self.serial.trigger_estop()
+        return zero_result
+
+    def release_estop(self) -> None:
+        self.serial.release_estop()
+        self.safety.release_estop()
+
+    def publish_map_click_cmd(self, *, is_send_all=0, robot_id=b"", mode=1,
+                              enemy_id=0, ascii_code=0, mark_type=1,
+                              map_x=0.0, map_y=0.0) -> tuple[bool, str]:
+        return self._publish("MapClickCmd", proto.encode_map_click_cmd(
             is_send_all, robot_id, mode, enemy_id, ascii_code, mark_type, map_x, map_y))
+
+    # 旧内部调用兼容，但不再发布已废弃/方向错误的 topic。
+    publish_map_click_notify = publish_map_click_cmd
 
     def publish_assembly_command(self, operation: int, difficulty: int) -> tuple[bool, str]:
         return self._publish("AssemblyCommand", proto.encode_assembly_command(operation, difficulty))
@@ -731,5 +865,9 @@ class BackendManager:
                 "input_chunks_written": self.native_decoder.input_chunks_written,
                 "input_bytes_written": self.native_decoder.input_bytes_written,
                 "last_error": self.native_decoder.last_error,
+            },
+            "message_apply": {
+                "errors": self._apply_error_count,
+                "last_error": self._last_apply_error,
             },
         }

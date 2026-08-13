@@ -224,6 +224,8 @@ class TongjiVisionReceiver:
                 except OSError:
                     pass
             self._socket = None
+            self.running = False
+            self.connected = False
 
 
 class PolarPublisher:

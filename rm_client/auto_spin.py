@@ -3,8 +3,9 @@
 The referee ``RobotInjuryStat`` message contains cumulative damage counters.
 This module deliberately consumes only a *new positive delta* published by the
 backend; health changes, vision detections and the first cumulative sample are
-never treated as projectile hits.  The controller only toggles the existing
-``SpinMode`` module and never emits a fire command.
+never treated as projectile hits.  The controller only requests changes to the
+existing ``SpinMode`` module and never emits a fire command; the UI listener
+owns the separately gated team CustomControl output.
 """
 
 from __future__ import annotations

@@ -199,7 +199,7 @@ class HeroLobPlanner:
         )
         if not math.isfinite(roll) or abs(roll) > max(0.1, float(max_roll_deg)):
             reasons.append("roll/yaw coupling guard")
-        if str(getattr(state, "current_stage", "")) != "MATCH":
+        if str(getattr(state, "current_stage", "")).upper() not in {"MATCH", "4"}:
             reasons.append("match stage required")
         if int(getattr(state, "remaining_ammo", 0)) <= 0 and int(getattr(state, "native_bullet_count", 0)) <= 0:
             reasons.append("no projectile")

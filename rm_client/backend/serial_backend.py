@@ -1,9 +1,9 @@
-"""串口后端（补齐 SharkClient 没有、本地一直缺的真串口链路）。
+"""裁判/队内串口后端。
 
 - PySerial 真实串口 + 官方 0xA5 帧编解码（RefereeFrameCodec）
 - Mock Writes 模式只记录不写
-- 心跳看门狗：真实模式下长时间无指令自动发停止帧（超时归零）
-- 急停：立即发送停止帧并禁止后续写入，直到释放
+- 不承载 0x0311：该命令字属于 921600 图传链路，CustomControl 由 MQTT 发布
+- 急停只锁住本地串口写入；机器人归零由 KeyboardMouseControl MQTT 负责
 - 后台读线程解析下位机回包
 """
 
@@ -14,10 +14,8 @@ import time
 from collections import deque
 from typing import Any
 
-from ..protocol import RefereeFrameCodec, encode_custom_control_30
+from ..protocol import RefereeFrameCodec
 from ..transports import SerialBridgeStub
-
-CUSTOM_CONTROL_CMD_ID = 0x0311
 
 
 class RmSerialBackend(SerialBridgeStub):
@@ -40,9 +38,7 @@ class RmSerialBackend(SerialBridgeStub):
         self.frames_read = 0
         self.last_write_at = 0.0
         self.last_frame_at = 0.0
-        self.heartbeat_interval_s = 0.25
         self.estop_active = False
-        self._last_stop_at = 0.0
         self._serial = None
         self._reader: threading.Thread | None = None
         self._running = False
@@ -89,6 +85,12 @@ class RmSerialBackend(SerialBridgeStub):
 
     # ------------------------------------------------------------------
     def write_frame(self, cmd_id: int, data: bytes = b"") -> tuple[bool, str]:
+        if int(cmd_id) == 0x0311:
+            self.last_error = (
+                "0x0311 属于 921600 图传链路；客户端上行必须经 MQTT "
+                "CustomControl，禁止写入 115200 裁判/下位机串口"
+            )
+            return False, self.last_error
         frame = self.codec.encode(cmd_id, data)
         return self.write(frame)
 
@@ -122,42 +124,26 @@ class RmSerialBackend(SerialBridgeStub):
     # 心跳/急停
     # ------------------------------------------------------------------
     def tick(self, now: float | None = None) -> None:
-        if self.mock_writes or not self.connected:
-            return
-        now = time.perf_counter() if now is None else now
         # 与 safety 双向同步急停状态（避免粘滞/矛盾）
         if self.safety is not None:
             self.estop_active = bool(self.safety.estop_active)
-        # 超时归零：长时间没有指令就发一次停止帧（节流 1Hz，避免刷屏）
-        if self.last_write_at and now - self.last_write_at > self.heartbeat_interval_s:
-            if now - self._last_stop_at >= 1.0:
-                self.write_stop_command()
-                self._last_stop_at = now
 
     def trigger_estop(self) -> None:
         self.estop_active = True
-        self.write_stop_command()
 
     def release_estop(self) -> None:
         self.estop_active = False
 
     def write_stop_command(self) -> tuple[bool, str]:
-        """发送全零停止帧（vx=vy=wz=0, 限幅保持, spin off）。"""
-        payload = encode_custom_control_30(
-            seq=self.codec.seq,
-            vx=0.0, vy=0.0, wz=0.0,
-            speed_limit=0, power_limit=0, spin_mode=False,
-        )
-        frame = self.codec.encode(CUSTOM_CONTROL_CMD_ID, payload)
-        # The payload above is constructed locally and is always all-zero.
-        # Keeping the bypass private prevents arbitrary commands while latched.
-        return self._write_payload(frame, bypass_estop=True)
+        """拒绝伪造串口 0x0311；调用方应使用 BackendManager.trigger_estop。"""
+        self.last_error = "0x0311 属图传/MQTT CustomControl，禁止经 115200 串口发送"
+        return False, self.last_error
 
     # ------------------------------------------------------------------
     def _read_loop(self) -> None:
         buffer = bytearray()
-        while self._running and self._serial is not None:
-            try:
+        try:
+            while self._running and self._serial is not None:
                 chunk = self._serial.read(256)
                 if not chunk:
                     continue
@@ -171,10 +157,11 @@ class RmSerialBackend(SerialBridgeStub):
                             self._rx.append(frame)
                             self.frames_read += 1
                             self.last_frame_at = time.perf_counter()
-            except Exception as exc:  # pragma: no cover - hardware dependent
-                self.last_error = str(exc)
-                self.connected = False
-                break
+        except Exception as exc:  # pragma: no cover - hardware dependent
+            self.last_error = str(exc)
+        finally:
+            self._running = False
+            self.connected = False
 
     def drain_frames(self) -> list[Any]:
         with self._rx_lock:

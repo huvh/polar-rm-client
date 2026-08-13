@@ -95,21 +95,31 @@ class UDPVideoReceiver:
             self.last_error = str(exc)
             self.running = False
             return
-        while self.running:
-            try:
-                packet, _addr = self._socket.recvfrom(65535)
-            except socket.timeout:
-                continue
-            except OSError as exc:
-                if self.running:
-                    self.last_error = str(exc)
-                break
-            self.packets_received += 1
-            frame = self._assembler.push_packet(packet)
-            if frame is not None:
-                self.frames_received += 1
-                if self.on_frame:
-                    self.on_frame(frame)
+        try:
+            while self.running:
+                try:
+                    packet, _addr = self._socket.recvfrom(65535)
+                except socket.timeout:
+                    continue
+                except OSError as exc:
+                    if self.running:
+                        self.last_error = str(exc)
+                    break
+                self.packets_received += 1
+                frame = self._assembler.push_packet(packet)
+                if frame is not None:
+                    self.frames_received += 1
+                    if self.on_frame:
+                        self.on_frame(frame)
+        finally:
+            self.running = False
+            sock = self._socket
+            self._socket = None
+            if sock is not None:
+                try:
+                    sock.close()
+                except OSError:
+                    pass
 
 
 class CameraFeed:
@@ -222,7 +232,9 @@ class OfficialMqttBridge(MQTTTransport):
         super().__init__(host, port)
         self.client_id = client_id
         self.mock_output = True
-        self.publish_records: list[MqttPublishRecord] = []
+        # Debug history must not grow for the duration of an event.  Indexing,
+        # len(), and append() stay compatible with the former list API.
+        self.publish_records: deque[MqttPublishRecord] = deque(maxlen=1024)
         self._received_messages: deque[tuple[str, bytes, float]] = deque(maxlen=512)
         self._received_lock = threading.Lock()
         self._command_publish_at: dict[str, float] = {}

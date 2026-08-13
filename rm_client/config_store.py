@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -33,7 +35,13 @@ class ClientConfigStore:
             data = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             return None
-        if not isinstance(data, dict) or int(data.get("version", 0)) > CONFIG_VERSION:
+        if not isinstance(data, dict):
+            return None
+        try:
+            version = int(data.get("version", 0))
+        except (TypeError, ValueError, OverflowError):
+            return None
+        if version < 0 or version > CONFIG_VERSION:
             return None
         return data
 
@@ -42,7 +50,25 @@ class ClientConfigStore:
         payload = dict(data)
         payload["version"] = CONFIG_VERSION
         payload["profile"] = self.clean_profile_name(profile)
-        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        serialized = json.dumps(payload, ensure_ascii=False, indent=2)
+        # A power loss or process termination must leave either the old valid
+        # profile or the new valid profile, never a half-written default.json.
+        fd, temp_name = tempfile.mkstemp(
+            prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent)
+        )
+        temp_path = Path(temp_name)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
+                handle.write(serialized)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temp_path, path)
+        except Exception:
+            try:
+                temp_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+            raise
         return path
 
     def ensure_default(self, data: dict[str, Any]) -> Path:

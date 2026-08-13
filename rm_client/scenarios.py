@@ -132,6 +132,11 @@ class ScenarioManager:
         self._set_setting(registry, "SerialBridge", "Baud", config.connection.serial_baud)
         self._set_setting(registry, "SerialBridge", "Mock Writes", config.safety.mock_writes)
         self._set_setting(registry, "TongjiVisionBridge", "Vision Kill Sensitivity", vision_sensitivity)
+        # Economy is a referee MQTT command path, not a serial path.  Official
+        # mode is live by default; local scenarios remain deterministic mocks.
+        economy_mock = config.key != "OfficialEvent"
+        self._set_setting(registry, "EconomyPanel", "Mock Requests", economy_mock)
+        self._set_setting(registry, "ProjectileShop", "Mock Request", economy_mock)
 
     def apply_to_runtime(self, mqtt: Any, udp: Any, control: Any) -> None:
         config = self.current
@@ -141,7 +146,9 @@ class ScenarioManager:
             mqtt.mock_output = not config.safety.allow_mqtt_publish
         udp.host = config.connection.udp_host
         udp.port = config.connection.udp_port
-        control.mock_output = config.safety.mock_writes
+        # 键鼠走 MQTT/图传，不跟随串口 Mock Writes。官方与校内 MQTT
+        # 场景可真实发布；实验室保持 mock。
+        control.mock_output = not config.safety.allow_mqtt_publish
 
     def _set_setting(self, registry: Any, module_name: str, setting_name: str, value: object) -> None:
         module = registry.get(module_name)

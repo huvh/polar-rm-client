@@ -14,7 +14,12 @@ from collections import deque
 from typing import Any, Callable
 
 from ..transports import MqttPublishRecord, OfficialMqttBridge
-from .protocol import decode_message, encode_custom_control, topic_message_name
+from .protocol import (
+    decode_message,
+    encode_custom_control,
+    encode_keyboard_mouse_control,
+    topic_message_name,
+)
 from .safety import OfficialSafety
 
 
@@ -78,15 +83,24 @@ class RmMqttBackend(OfficialMqttBridge):
             self.connected = False
             self._started = False
 
-    def stop(self) -> None:
+    def stop(self, *, publish_status: bool = True) -> None:
         self._started = False
         client = self.client
         self.client = None
         if client is not None:
-            try:
-                client.publish("ClientStatus", b'{"online":false}', qos=1, retain=True)
-            except Exception:
-                pass
+            if publish_status:
+                try:
+                    info = client.publish(
+                        "ClientStatus", b'{"online":false}', qos=1, retain=True
+                    )
+                    # Give QoS1 a short bounded chance to leave the process
+                    # before disconnect.  Fake/legacy clients need no special
+                    # handling, and shutdown must never block indefinitely.
+                    waiter = getattr(info, "wait_for_publish", None)
+                    if callable(waiter):
+                        waiter(timeout=0.5)
+                except Exception:
+                    pass
             try:
                 client.disconnect()
             except Exception:
@@ -220,6 +234,31 @@ class RmMqttBackend(OfficialMqttBridge):
     def publish_keyboard_mouse(self, payload: bytes) -> bool:
         ok, _ = self.publish_topic("KeyboardMouseControl", payload, qos=1)
         return ok
+
+    def publish_estop_zero(self) -> tuple[bool, str]:
+        """仅发布固定全零 KMC，绕过普通限频以避免按键释放被 75Hz 门控吞掉。"""
+        payload = encode_keyboard_mouse_control()
+        if self.mock_output:
+            self._publish_record("KeyboardMouseControl", payload, 1)
+            return True, "mock"
+        if self.client is None or not self.connected:
+            self.last_error = "未连接 MQTT 客户端，急停零帧未上网"
+            return False, self.last_error
+        try:
+            info = self.client.publish("KeyboardMouseControl", payload, qos=1)
+            rc = getattr(info, "rc", 0)
+            mqtt = getattr(self, "_mqtt", None)
+            success = rc == 0 or (mqtt is not None and rc == mqtt.MQTT_ERR_SUCCESS)
+            if not success:
+                self.last_error = f"急停零帧未进入网络（rc={rc}）"
+                return False, self.last_error
+            self._publish_record("KeyboardMouseControl", payload, 1)
+            self.messages_sent += 1
+            self.safety.mark_published("KeyboardMouseControl")
+            return True, "ok"
+        except Exception as exc:
+            self.last_error = str(exc)
+            return False, self.last_error
 
     def publish_custom_control(self, data: bytes) -> bool:
         if len(data) > 30:

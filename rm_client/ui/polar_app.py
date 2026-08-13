@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from enum import Enum
 import math
+import logging
 import os
 from pathlib import Path
 import sys
@@ -131,6 +132,9 @@ from .overlay_coordinator import OverlayCoordinator, OverlayKind
 from .quick_action_wheel import ACTION_LABELS, DEFAULT_ACTIONS, QuickActionWheelState
 from .quick_action_wheel_gpu import QuickActionWheelCommand, QuickActionWheelGpuRenderer
 from .startup_gl import StartupGpuCompositor, TextureOrigin
+
+
+_LOG = logging.getLogger(__name__)
 from .vision_wire_gpu import VisionWireBatch, VisionWireGpuRenderer
 from .paint import (
     accent_color,
@@ -355,6 +359,7 @@ class PolarRMWindow(QOpenGLWidget):
         self._fluorescent_circle_cache: dict[tuple[int, int, int], tuple[QImage, float]] = {}
         self._combat_hud_last_time = time.perf_counter()
         self._ui_frame_index = 0
+        self._spin_control_sequence = 0
         self._combat_hud_frame_index = -1
         self._jello_active_mods_frame_index = -1
         self.scenario_manager = ScenarioManager("LabDebug")
@@ -391,7 +396,7 @@ class PolarRMWindow(QOpenGLWidget):
         # a second Shark fragment header. Keep the compatibility pipeline for
         # explicit tools, but do not double-assemble the production stream.
         self.backend.udp.external_on_frame = None
-        self.control = KeyboardControlBridge(self.serial, mock_output=True)
+        self.control = KeyboardControlBridge(self.backend, mock_output=True)
         self.auto_spin = ProjectileHitSpinController()
         self.economy_bridge = EconomyCommandBridge()
         self.economy_bridge.sender = self.send_economy_request
@@ -498,6 +503,11 @@ class PolarRMWindow(QOpenGLWidget):
         self.render_frame_ms_ema = 0.0
         self._last_render_tune = time.perf_counter()
         self._last_logic_time = time.perf_counter()
+        # Coalesce slider/drag updates into one atomic profile write.  Saving a
+        # complete JSON document for every mouse event caused avoidable frame
+        # stalls even after the store itself became crash-safe.
+        self._auto_save_pending = False
+        self._auto_save_due_at = 0.0
 
         scenario_module = self.registry.get("Scenario")
         self.home_visible = self.setting_bool(scenario_module, "Show Startup", True)
@@ -564,7 +574,13 @@ class PolarRMWindow(QOpenGLWidget):
         self.fps_samples: list[float] = []
         self._last_present_time = time.perf_counter()
         self.last_frame_time = time.perf_counter()
+        self._tick_error_count = 0
+        self._tick_last_error = ""
+        self._tick_last_log_at: dict[str, float] = {}
+        self._last_readiness_audit_at = 0.0
         self.last_control_toast = 0.0
+        self._control_mouse_point: QPointF | None = None
+        self._combat_input_was_allowed = False
         self.tactical_map_hold = False
         self.config_loading = False
         self.wallpaper_picker_visible = False
@@ -649,6 +665,7 @@ class PolarRMWindow(QOpenGLWidget):
 
     def on_tick(self) -> None:
         now = time.perf_counter()
+        self.flush_auto_save_if_due(now)
         self.gui_motion.begin_frame(now)
         self._ui_frame_index += 1
         elapsed = max(0.0, now - self.last_frame_time)
@@ -677,6 +694,15 @@ class PolarRMWindow(QOpenGLWidget):
         self.economy_offers_scroll.update(ui_dt)
         self.economy_detail_scroll.update(ui_dt)
         self.quick_action_wheel.update(ui_dt)
+        input_allowed = self.combat_control_input_allowed()
+        if self._combat_input_was_allowed and not input_allowed:
+            # Opening ClickGUI/chat/economy while holding a key must release the
+            # robot immediately; waiting for a key-up event would leave motion
+            # latched behind the modal input owner.
+            self.control.mock_output = bool(self.backend.mqtt.mock_output)
+            self.control.release_all(self.state, self.registry)
+            self._control_mouse_point = None
+        self._combat_input_was_allowed = input_allowed
         for motion in self.polar_settings_scroll_motion.values():
             motion.update(ui_dt)
         self.gui_timeline.set_target(1.0 if self.gui_visible else 0.0)
@@ -765,17 +791,22 @@ class PolarRMWindow(QOpenGLWidget):
             self.state.serial_connected = self.serial.connected
             self.state.tick(logic_dt)
             # 后端：心跳/安全 tick + 全量协议解码写入 RobotState（UI 只读）
-            self.backend.tick()
-            self.backend.apply_updates(self.state)
-            self.update_hero_deploy_state(now)
-            self.update_hero_lob_guard()
-            self.update_auto_spin_guard(now)
-            self.control.tick(self.state, self.registry, now)
-            self.consume_official_messages()
-            self.apply_official_state()
-            self.sync_tongji_vision_state()
-            self.process_vision_kill_events()
-            self.registry.tick(self.state, logic_dt)
+            stages = (
+                ("backend.tick", self.backend.tick),
+                ("backend.apply", lambda: self.backend.apply_updates(self.state)),
+                ("backend.readiness", lambda: self.update_backend_readiness(now)),
+                ("hero.deploy", lambda: self.update_hero_deploy_state(now)),
+                ("hero.lob", self.update_hero_lob_guard),
+                ("auto.spin", lambda: self.update_auto_spin_guard(now)),
+                ("control", lambda: self.control.tick(self.state, self.registry, now)),
+                ("official.consume", self.consume_official_messages),
+                ("official.apply", self.apply_official_state),
+                ("vision.sync", self.sync_tongji_vision_state),
+                ("vision.events", self.process_vision_kill_events),
+                ("registry", lambda: self.registry.tick(self.state, logic_dt)),
+            )
+            for stage_name, callback in stages:
+                self._run_tick_stage(stage_name, callback, now)
             match_chat = self.registry.get("MatchChat")
             if (
                 match_chat is not None
@@ -798,6 +829,48 @@ class PolarRMWindow(QOpenGLWidget):
         )
         if self.frame_scheduler.should_request(now, high_rate, self.render_fps_target):
             self.update()
+
+    def _run_tick_stage(self, name: str, callback: Any, now: float | None = None) -> bool:
+        """Keep one backend/vision fault from killing the Qt timer callback."""
+
+        try:
+            callback()
+            return True
+        except Exception as exc:
+            now = time.perf_counter() if now is None else float(now)
+            self._tick_error_count += 1
+            self._tick_last_error = f"{name}: {type(exc).__name__}: {exc}"
+            self.state.backend_stats["ui_tick"] = {
+                "errors": self._tick_error_count,
+                "last_error": self._tick_last_error,
+            }
+            if now - self._tick_last_log_at.get(name, 0.0) >= 1.0:
+                self._tick_last_log_at[name] = now
+                _LOG.exception("UI tick stage failed: %s", name)
+            return False
+
+    def update_backend_readiness(self, now: float | None = None, *, force: bool = False) -> dict[str, Any]:
+        """Publish the fail-closed audit into runtime state for UI/diagnostics."""
+
+        now = time.perf_counter() if now is None else float(now)
+        previous = self.state.backend_stats.get("readiness")
+        if not force and now - self._last_readiness_audit_at < 1.0 and isinstance(previous, dict):
+            return previous
+        self._last_readiness_audit_at = now
+        payload = self.backend.apply_readiness(
+            self.state,
+            live_evidence={"video_source": self.readiness_video_source()},
+        )
+        return payload
+
+    def readiness_video_source(self) -> str:
+        source = self.setting_mode(self.registry.get("CameraFeed"), "Source", "")
+        normalized = source.strip().lower()
+        if normalized in {"native", "native 0x0310", "0x0310"}:
+            return "native_0310"
+        if normalized in {"shark udp", "udp hevc", "hevc", "h265"}:
+            return "udp"
+        return ""
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
@@ -3492,10 +3565,9 @@ class PolarRMWindow(QOpenGLWidget):
                 spin,
                 source="auto_hit" if requested else "auto_hit_release",
             )
-        serial_module = self.registry.get("SerialBridge")
-        mock_setting = serial_module.get_setting("Mock Writes") if serial_module else None
-        self.control.mock_output = bool(mock_setting.value) if mock_setting else True
-        self.control.send_from_state(self.state, self.registry)
+        # The registry listener publishes the separately gated PRM1 kind=2
+        # state. KeyboardMouseControl remains the physical key/mouse stream;
+        # 0x0311 is never written to the 115200 referee serial link.
         message = (
             f"AutoSpin ON: {directive.reason}"
             if requested
@@ -4549,6 +4621,9 @@ class PolarRMWindow(QOpenGLWidget):
         return time.perf_counter() - self.startup_transition_started < 0.85
 
     def closeEvent(self, event: QCloseEvent) -> None:
+        self.control.mock_output = bool(self.backend.mqtt.mock_output)
+        self.control.release_all(self.state, self.registry)
+        self.flush_auto_save(force=True)
         if self.context() is not None:
             self.makeCurrent()
             self.clickgui_gpu.release()
@@ -4810,8 +4885,20 @@ class PolarRMWindow(QOpenGLWidget):
         if local_result is not None:
             timestamp_ns, sequence, frame_width, frame_height, armors, fps, latency_ms, loss_evidence = local_result
             self.sync_local_autoaim_fov(frame_width, frame_height)
+            calibration_valid = self.calibration.is_valid_for(frame_width, frame_height)
+            calibration_matrix = self.calibration.profile.camera_matrix if calibration_valid and self.calibration.profile else None
             local_snapshot = snapshot_from_local_result(
-                timestamp_ns, sequence, frame_width, frame_height, armors, fps, latency_ms, self.local_vision.active_device, loss_evidence
+                timestamp_ns,
+                sequence,
+                frame_width,
+                frame_height,
+                armors,
+                fps,
+                latency_ms,
+                self.local_vision.active_device,
+                loss_evidence,
+                calibrated=calibration_valid,
+                camera_matrix=calibration_matrix,
             )
         else:
             self.sync_local_autoaim_fov()
@@ -4984,23 +5071,25 @@ class PolarRMWindow(QOpenGLWidget):
     def consume_official_messages(self) -> None:
         for topic, payload, _received_at in self.mqtt.drain_received_messages():
             events, updates = self.official_feed.consume(topic, payload, alliance=self.alliance_side(), local_robot_id=self.state.robot_id)
-            revision_increment = int(updates.pop("_economy_revision_increment", 0))
-            if revision_increment > 0:
-                self.state.economy_status_revision += revision_increment
-                self.state.economy_command_status = ""
             self._official_state_updates.update(updates)
             for event in events:
                 self.accept_combat_event(event)
 
     def apply_official_state(self) -> None:
         if not self._official_state_updates:
-            self.state.official_events_online = False
+            self.state.official_events_online = self.official_feed.is_fresh()
             return
-        for key, value in self._official_state_updates.items():
+        updates = self._official_state_updates
+        self._official_state_updates = {}
+        economy_before = BackendManager._economy_signature(self.state)
+        for key, value in updates.items():
             if hasattr(self.state, key):
                 setattr(self.state, key, value)
+        if BackendManager._economy_signature(self.state) != economy_before:
+            self.state.economy_status_revision += 1
+            self.state.economy_command_status = ""
         self.state.official_events_online = self.official_feed.is_fresh()
-        self.state.official_feed_at = float(self._official_state_updates.get("official_feed_at", 0.0))
+        self.state.official_feed_at = float(updates.get("official_feed_at", self.state.official_feed_at))
 
     def process_vision_kill_events(self) -> None:
         effect = self.registry.get("EliminationFX")
@@ -5132,6 +5221,34 @@ class PolarRMWindow(QOpenGLWidget):
         else:
             self.state.target_locked = False
             self.state.lock_state = False
+        self.publish_vision_control_if_armed(result)
+
+    def publish_vision_control_if_armed(self, result: VisionResult) -> None:
+        """Fail-closed optional team CustomControl gimbal path; never fires."""
+
+        module = self.registry.get("ArmorAutoAim")
+        live = bool(
+            module is not None
+            and module.enabled
+            and not self.setting_bool(module, "Mock Output", True)
+            and self.state.target_locked
+            and self.state.vision_calibrated
+        )
+        if not live:
+            return
+        ok, reason = self.backend.publish_vision_control(
+            sequence=result.sequence,
+            yaw_deg=result.aim_yaw_deg,
+            pitch_deg=result.aim_pitch_deg,
+            target_id=self.state.target_id,
+            tracking=True,
+        )
+        self.state.backend_stats["vision_control"] = {
+            "published": bool(ok),
+            "reason": str(reason),
+            "sequence": result.sequence,
+            "fire": False,
+        }
 
     def tongji_target(self, width: int, height: int, result: VisionResult) -> VisionTarget | None:
         observation = result.aim_armor or next((armor for armor in result.detections if len(armor.points) == 4), None)
@@ -13728,6 +13845,10 @@ class PolarRMWindow(QOpenGLWidget):
             if hotspot.rect.contains(point):
                 self.dispatch(hotspot.action, hotspot.payload, point, button, hotspot.rect)
                 return
+        if self.combat_control_input_allowed():
+            self.control.mock_output = bool(self.backend.mqtt.mock_output)
+            self.control.set_mouse_button(button, True, self.state, self.registry)
+            event.accept()
         if button == 1:
             self.search_focus = False
 
@@ -13743,6 +13864,17 @@ class PolarRMWindow(QOpenGLWidget):
         previous_tooltip = self.hover_tooltip
         previous_point = self.hover_point
         self.hover_point = event.position()
+        if (
+            self.combat_control_input_allowed()
+            and self._control_mouse_point is not None
+        ):
+            delta = self.hover_point - self._control_mouse_point
+            self.control.add_mouse_motion(delta.x(), delta.y())
+        self._control_mouse_point = (
+            QPointF(self.hover_point)
+            if self.combat_control_input_allowed()
+            else None
+        )
         self.hover_tooltip = ""
         hovered_action = ""
         for hotspot in reversed(self.hotspots):
@@ -13825,6 +13957,10 @@ class PolarRMWindow(QOpenGLWidget):
         if self.drag and self.drag.get("type") in {"old_panel", "polar_window"}:
             self.auto_save_config()
         self.drag = None
+        if self.combat_control_input_allowed():
+            self.control.mock_output = bool(self.backend.mqtt.mock_output)
+            self.control.set_mouse_button(self.qt_button(event), False, self.state, self.registry)
+            event.accept()
 
     def wheelEvent(self, event: QWheelEvent) -> None:
         point = event.position()
@@ -13909,8 +14045,29 @@ class PolarRMWindow(QOpenGLWidget):
             self.frame_scheduler.force()
             event.accept()
             return
+        if self.combat_control_input_allowed():
+            self.control.add_wheel(event.angleDelta().y())
+            self.control.mock_output = bool(self.backend.mqtt.mock_output)
+            self.control.send_from_state(self.state, self.registry)
+            event.accept()
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
+        if event.key() == Qt.Key.Key_F12 and not event.isAutoRepeat():
+            modifiers = event.modifiers()
+            release = bool(
+                modifiers & Qt.KeyboardModifier.ControlModifier
+                and modifiers & Qt.KeyboardModifier.ShiftModifier
+            )
+            if release:
+                self.backend.release_estop()
+                self.toast("E-STOP RELEASED — verify robot before control")
+            else:
+                self.control.reset_inputs()
+                ok, reason = self.backend.trigger_estop()
+                self.control.clear_pending()
+                self.toast("E-STOP ACTIVE" if ok else f"E-STOP ACTIVE ({reason})")
+            event.accept()
+            return
         if self.binding_module is not None:
             self.handle_keybind_event(event)
             return
@@ -14100,14 +14257,13 @@ class PolarRMWindow(QOpenGLWidget):
         if self.handle_tactical_map_hold_event(event, True):
             return
         if self.handle_control_key_event(event, True):
+            # Keys such as X/G/V are valid official KMC bits and are also
+            # configurable local module binds.  Preserve both semantics rather
+            # than swallowing the module toggle after the KMC frame is sent.
+            self.toggle_bound_module_for_event(event, key_name)
             return
-        for module in self.registry.modules:
-            if module.keybind != "None" and self.keybind_matches(module.keybind, key_name, event):
-                self.registry.toggle_module(module, source="keybind")
-                self.selected_module = module
-                self.toast(f"{module.name} {'已启用' if module.enabled else '已关闭'}")
-                self.auto_save_config()
-                return
+        if self.toggle_bound_module_for_event(event, key_name):
+            return
 
     def keyReleaseEvent(self, event: QKeyEvent) -> None:
         if self.binding_module is not None or self.search_focus:
@@ -14152,12 +14308,12 @@ class PolarRMWindow(QOpenGLWidget):
         return True
 
     def handle_control_key_event(self, event: QKeyEvent, pressed: bool) -> bool:
+        if not self.combat_control_input_allowed():
+            return False
         if event.isAutoRepeat():
             return False
         key = self.key_name(event)
-        serial_module = self.registry.get("SerialBridge")
-        mock_setting = serial_module.get_setting("Mock Writes") if serial_module else None
-        self.control.mock_output = bool(mock_setting.value) if mock_setting else True
+        self.control.mock_output = bool(self.backend.mqtt.mock_output)
         command = self.control.set_key(key, pressed, self.state, self.registry)
         if command is None:
             return False
@@ -14165,6 +14321,67 @@ class PolarRMWindow(QOpenGLWidget):
             self.toast("WASD -> 模拟底盘命令" if command.mock_output else "WASD -> 底盘命令已发送")
             self.last_control_toast = time.perf_counter()
         return True
+
+    def combat_control_input_allowed(self) -> bool:
+        """Only the unobstructed combat viewport owns robot key/mouse input."""
+
+        return bool(
+            not self.home_visible
+            and not self.gui_visible
+            and not self.economy_visible
+            and not self.hero_deploy_ui.visible
+            and not self.match_chat.input_open
+            and not self.quick_action_wheel.active
+            and not self.overlay_coordinator.blocks_combat_input
+        )
+
+    def toggle_bound_module_for_event(self, event: QKeyEvent, key_name: str) -> bool:
+        if event.isAutoRepeat():
+            return False
+        for module in self.registry.modules:
+            if module.keybind != "None" and self.keybind_matches(module.keybind, key_name, event):
+                self.registry.toggle_module(module, source="keybind")
+                self.selected_module = module
+                self.toast(f"{module.name} {'已启用' if module.enabled else '已关闭'}")
+                self.auto_save_config()
+                return True
+        return False
+
+    def publish_spin_control_state(
+        self,
+        enabled: bool,
+        *,
+        source: str,
+        force_live_disable: bool = False,
+    ) -> tuple[bool, str]:
+        """Publish one fail-closed team spin state, never a fire command."""
+        spin = self.registry.get("SpinMode")
+        if spin is None:
+            return False, "SpinMode unavailable"
+        mock = self.setting_bool(spin, "Mock Output", True)
+        if mock and not force_live_disable:
+            result = (True, "mock")
+        else:
+            self._spin_control_sequence = (self._spin_control_sequence + 1) & 0xFFFF
+            result = self.backend.publish_spin_control(
+                sequence=self._spin_control_sequence,
+                enabled=bool(enabled),
+                direction=self.setting_mode(spin, "Direction", "Auto"),
+                speed_dps=self.get_setting_number(spin, "Spin Speed", 420.0),
+                power_guard=self.setting_bool(spin, "Power Guard", True),
+            )
+        ok, reason = result
+        self.state.backend_stats["spin_control"] = {
+            "published": bool(ok and not mock),
+            "requested_enabled": bool(enabled),
+            "mock": bool(mock and not force_live_disable),
+            "reason": str(reason),
+            "source": str(source),
+            "fire": False,
+        }
+        if not ok:
+            self.state.events.appendleft(f"Spin output blocked: {reason}")
+        return result
 
     def handle_keybind_event(self, event: QKeyEvent) -> None:
         module = self.binding_module
@@ -14364,11 +14581,14 @@ class PolarRMWindow(QOpenGLWidget):
             self.reset_startup_page_animation("match")
             self.begin_startup_page_transition("match")
         elif action == "startup_open_gui":
+            # 启动页快捷入口与正常场景入口必须启动同一套真实后端。
+            self.backend.apply_scenario(self.scenario_manager.current.key)
             self.home_visible = False
             self.startup_step = "done"
             self.set_clickgui_visible(True, announce=False)
             self.toast("ClickGUI opened from launcher")
         elif action == "startup_open_config":
+            self.backend.apply_scenario(self.scenario_manager.current.key)
             config_module = self.registry.get("ConfigManager")
             self.selected_category = "System"
             if config_module:
@@ -14500,10 +14720,37 @@ class PolarRMWindow(QOpenGLWidget):
         quick_wheel = self.registry.get("QuickActionWheel")
         if quick_wheel and setting in quick_wheel.settings:
             self.sync_quick_action_wheel_settings()
+        spin = self.registry.get("SpinMode")
+        if spin and setting in spin.settings:
+            mock_setting = spin.get_setting("Mock Output")
+            if setting is mock_setting and not bool(setting.value) and spin.enabled:
+                # Arming live transport must never inherit the default/on-screen
+                # enabled state. Force the module off; the operator must make a
+                # second explicit toggle to send an enable command.
+                self.registry.toggle_module(spin, source="live_output_armed")
+                self.toast("Spin live output armed; toggle SpinMode again to enable")
+                self.auto_save_config()
+                return
+            # Switching back to Mock sends one explicit live disable before
+            # local output is suppressed, clearing any robot-side latch.
+            force_disable = bool(setting is mock_setting and bool(setting.value))
+            self.publish_spin_control_state(
+                False if force_disable else spin.enabled,
+                source=f"setting:{setting.name}",
+                force_live_disable=force_disable,
+            )
         self.auto_save_config()
 
     def handle_config_action(self, action_name: str) -> None:
-        if action_name == "Save Current":
+        if action_name == "Trigger E-Stop":
+            self.control.reset_inputs()
+            ok, reason = self.backend.trigger_estop()
+            self.control.clear_pending()
+            self.toast("E-STOP ACTIVE" if ok else f"E-STOP ACTIVE ({reason})")
+        elif action_name == "Release E-Stop":
+            self.backend.release_estop()
+            self.toast("E-STOP RELEASED — verify robot before control")
+        elif action_name == "Save Current":
             self.save_current_config()
         elif action_name == "Reload Profile":
             self.reload_current_config()
@@ -14710,8 +14957,10 @@ class PolarRMWindow(QOpenGLWidget):
                     self.toast("HeroLob disabled; explicitly EXIT deploy mode")
                 else:
                     self.close_hero_deploy_interface(force=True)
-        elif module.name == "SpinMode" and not str(source).startswith("auto_hit"):
-            self.auto_spin.operator_override()
+        elif module.name == "SpinMode":
+            if not str(source).startswith("auto_hit"):
+                self.auto_spin.operator_override()
+            self.publish_spin_control_state(enabled, source=source)
         audio = self.registry.get("AudioFeedback")
         active = bool(
             audio
@@ -14908,7 +15157,8 @@ class PolarRMWindow(QOpenGLWidget):
         self.state.stage_countdown_sec = config.duration_sec
         self.state.stage_elapsed_sec = 0
         self.state.start_time = time.perf_counter()
-        self.state.current_stage = "MATCH"
+        # 赛制选择只初始化展示数据，不能冒充权威裁判的比赛阶段。
+        self.state.current_stage = "NOT_STARTED"
         match_module = self.registry.get("MatchMode")
         alliance = match_module.get_setting("Alliance") if match_module else None
         self.state.alliance_color = str(alliance.value) if alliance else "Red"
@@ -15124,20 +15374,30 @@ class PolarRMWindow(QOpenGLWidget):
         scenario = self.registry.get("Scenario")
         scenario_setting = scenario.get_setting("Mode") if scenario else None
         if scenario_setting:
+            start_backend = not self.setting_bool(scenario, "Show Startup", True)
             self.scenario_manager.set_scenario(str(scenario_setting.value))
+            # A scenario owns its transport endpoints and safety defaults.
+            # Re-applying them on load migrates old OfficialEvent profiles
+            # whose economy path was incorrectly persisted in mock mode.
+            self.scenario_manager.apply_to_registry(self.registry)
             self.scenario_manager.apply_to_runtime(self.mqtt, self.udp, self.control)
-            # 配置加载后按场景重建后端连接（host/port/mock 属性变更对已连接的 paho 无效）
-            self.backend.apply_scenario(self.scenario_manager.current.key)
+            # Loading a profile must configure the selected backend but must
+            # not bypass the startup screen and open network links early.
+            self.backend.apply_scenario(
+                self.scenario_manager.current.key,
+                start=start_backend,
+            )
         match_mode = self.registry.get("MatchMode")
         match_setting = match_mode.get_setting("Mode") if match_mode else None
         if match_setting:
             config = self.match_mode_manager.set_mode(str(match_setting.value))
             self.seed_match_state(config)
         self.apply_robot_profile(self.current_robot_profile_key(), close_home=False, announce=False)
-        self.home_visible = self.setting_bool(scenario, "Show Startup", True)
+        self.home_visible = not start_backend if scenario_setting else self.home_visible
         self.startup_step = "scenario" if self.home_visible else "done"
 
     def save_current_config(self, announce: bool = True) -> None:
+        self._auto_save_pending = False
         path = self.config_store.save(self.current_profile(), self.current_config_data())
         self.refresh_config_profiles()
         if announce:
@@ -15170,7 +15430,23 @@ class PolarRMWindow(QOpenGLWidget):
         module = self.registry.get("ConfigManager")
         if self.config_loading or not self.setting_bool(module, "Auto Save", True):
             return
+        self._auto_save_pending = True
+        self._auto_save_due_at = time.perf_counter() + 0.25
+
+    def flush_auto_save_if_due(self, now: float | None = None) -> None:
+        if not self._auto_save_pending:
+            return
+        now = time.perf_counter() if now is None else float(now)
+        if now < self._auto_save_due_at:
+            return
         self.save_current_config(announce=False)
+
+    def flush_auto_save(self, *, force: bool = False) -> None:
+        if not self._auto_save_pending:
+            return
+        if force:
+            self._auto_save_due_at = 0.0
+        self.flush_auto_save_if_due()
 
     def sync_mode_setting(self) -> None:
         click_gui = self.registry.get("ClickGui")

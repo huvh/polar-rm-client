@@ -1,17 +1,28 @@
-"""RM2026 自定义客户端全量协议层（对齐 SharkClient messages.proto）。
+"""RM2026 自定义客户端协议层（对齐官方 V1.3.1 messages.proto）。
 
 手写 protobuf wire 编解码，零第三方依赖：
 - 解码全部下行消息（24 条）为 dict
 - 编码全部上行消息（12 条）为 bytes
 
-消息名与字段号严格对照
-SharkClient-ref/UDP-MQTT Server/proto/messages.proto（v1.0.0）。
+消息名、方向与字段号以 2026-05-19 发布的 V1.3.1 为准。
 """
 
 from __future__ import annotations
 
 import struct
 from typing import Any, Callable
+
+PROTOCOL_VERSION = "1.3.1"
+
+# Team-defined payload carried inside official CustomControl.data (<=30 B).
+# Robot firmware must implement this exact schema before live output is armed.
+TEAM_CONTROL_MAGIC = b"PRM1"
+TEAM_CONTROL_VERSION = 1
+TEAM_CONTROL_VISION = 1
+TEAM_CONTROL_SPIN = 2
+# Compatibility names retained for existing integrations.
+VISION_CONTROL_MAGIC = TEAM_CONTROL_MAGIC
+VISION_CONTROL_VERSION = TEAM_CONTROL_VERSION
 
 # --------------------------------------------------------------------------
 # protobuf wire 基础编解码
@@ -221,8 +232,7 @@ def _sub(fields: dict[int, list[Any]], field: int) -> list[dict[int, list[Any]]]
 UPLINK_MESSAGES = frozenset({
     "KeyboardMouseControl",
     "CustomControl",
-    "MapClickInfo",
-    "MapClickInfoNotify",
+    "MapClickCmd",
     "AssemblyCommand",
     "RobotPerformanceSelectionCommand",
     "CommonCommand",
@@ -248,6 +258,7 @@ DOWNLINK_MESSAGES = frozenset({
     "Buff",
     "PenaltyInfo",
     "RobotPathPlanInfo",
+    "MapClickInfo",
     "RadarInfoToClient",
     "CustomByteBlock",
     "TechCoreMotionStateSync",
@@ -442,6 +453,22 @@ def _decode_path_plan(fields: dict[int, list[Any]]) -> dict[str, Any]:
     }
 
 
+def _decode_map_click(fields: dict[int, list[Any]]) -> dict[str, Any]:
+    """V1.3.1 地图标记公共结构（下行 Info / 上行 Cmd 字段相同）。"""
+    return {
+        "is_send_all": _u(fields, 1),
+        "robot_id": _b(fields, 2),
+        # 官方 proto 的字段名与表格文字存在 mode/type 描述互换；wire 编号
+        # 以 proto 为准：3=mode、6=type。
+        "mode": _u(fields, 3),
+        "enemy_id": _u(fields, 4),
+        "ascii": _u(fields, 5),
+        "type": _u(fields, 6),
+        "map_x": _f(fields, 7),
+        "map_y": _f(fields, 8),
+    }
+
+
 def _decode_radar(fields: dict[int, list[Any]]) -> dict[str, Any]:
     robots = []
     for sub in _sub(fields, 1):
@@ -530,6 +557,7 @@ _DOWNLINK_DECODERS: dict[str, Callable[[dict[int, list[Any]]], dict[str, Any]]] 
     "Buff": _decode_buff,
     "PenaltyInfo": _decode_penalty,
     "RobotPathPlanInfo": _decode_path_plan,
+    "MapClickInfo": _decode_map_click,
     "RadarInfoToClient": _decode_radar,
     "CustomByteBlock": _decode_custom_byte_block,
     "TechCoreMotionStateSync": _decode_tech_core,
@@ -592,15 +620,71 @@ def encode_custom_control(data: bytes) -> bytes:
     return encode_bytes(1, data)
 
 
-def encode_map_click_info(target_x: float, target_y: float, target_z: float) -> bytes:
-    return b"".join([
-        encode_float(1, target_x),
-        encode_float(2, target_y),
-        encode_float(3, target_z),
-    ])
+def encode_vision_control_payload(
+    *,
+    sequence: int,
+    yaw_deg: float,
+    pitch_deg: float,
+    target_id: int = 0,
+    tracking: bool = False,
+    fire: bool = False,
+) -> bytes:
+    """Encode POLAR's documented team gimbal payload (14 bytes).
+
+    Layout ``<4sBBHhhBB``: magic, version, kind, sequence, yaw/pitch in
+    centidegrees, target id, flags. Desktop call sites force fire false.
+    """
+
+    flags = (0x01 if tracking else 0x00) | (0x02 if fire else 0x00)
+
+    def centidegrees(value: float) -> int:
+        return max(-32768, min(32767, int(round(float(value) * 100.0))))
+
+    return struct.pack(
+        "<4sBBHhhBB",
+        TEAM_CONTROL_MAGIC,
+        TEAM_CONTROL_VERSION,
+        TEAM_CONTROL_VISION,
+        int(sequence) & 0xFFFF,
+        centidegrees(yaw_deg),
+        centidegrees(pitch_deg),
+        int(target_id) & 0xFF,
+        flags,
+    )
 
 
-def encode_map_click_info_notify(
+def encode_spin_control_payload(
+    *,
+    sequence: int,
+    enabled: bool,
+    direction: str = "Auto",
+    speed_dps: float = 420.0,
+    power_guard: bool = True,
+) -> bytes:
+    """Encode the documented POLAR team chassis-spin payload (12 bytes).
+
+    Layout ``<4sBBHhBB``: magic, version, kind, sequence, non-negative
+    speed in degrees/second, direction (0 auto / 1 CW / 2 CCW), and flags
+    (bit 0 enabled, bit 1 power guard).  It is transported only inside the
+    official MQTT ``CustomControl`` message; it is never a 115200 serial frame.
+    """
+
+    direction_code = {"AUTO": 0, "CW": 1, "CCW": 2}.get(str(direction).upper(), 0)
+    speed = max(0, min(32767, int(round(float(speed_dps)))))
+    flags = (0x01 if enabled else 0x00) | (0x02 if power_guard else 0x00)
+    return struct.pack(
+        "<4sBBHhBB",
+        TEAM_CONTROL_MAGIC,
+        TEAM_CONTROL_VERSION,
+        TEAM_CONTROL_SPIN,
+        int(sequence) & 0xFFFF,
+        speed,
+        direction_code,
+        flags,
+    )
+
+
+def encode_map_click_cmd(
     is_send_all: int = 0,
     robot_id: bytes = bytes(7),
     mode: int = 1,
@@ -610,6 +694,10 @@ def encode_map_click_info_notify(
     map_x: float = 0.0,
     map_y: float = 0.0,
 ) -> bytes:
+    robot_id = bytes(robot_id)
+    if len(robot_id) > 7:
+        raise ValueError(f"MapClickCmd robot_id 固定 7 字节，实际 {len(robot_id)} 字节")
+    robot_id = robot_id.ljust(7, b"\x00")
     return b"".join([
         encode_uint(1, is_send_all),
         encode_bytes(2, robot_id),
@@ -620,6 +708,10 @@ def encode_map_click_info_notify(
         encode_float(7, map_x),
         encode_float(8, map_y),
     ])
+
+
+# 仅保留 Python API 兼容性；实际发布 topic 必须是 V1.3.1 MapClickCmd。
+encode_map_click_info_notify = encode_map_click_cmd
 
 
 def encode_assembly_command(operation: int, difficulty: int) -> bytes:

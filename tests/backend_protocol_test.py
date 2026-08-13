@@ -15,7 +15,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from rm_client.backend import protocol as proto  # noqa: E402
 from rm_client.backend.manager import BackendManager  # noqa: E402
 from rm_client.backend.safety import OfficialSafety  # noqa: E402
-from rm_client.backend.video_backend import ContinuousMjpegDecoder, RmVideoBackend, detect_frame_codec  # noqa: E402
+from rm_client.backend.video_backend import (  # noqa: E402
+    ContinuousMjpegDecoder,
+    RmVideoBackend,
+    detect_frame_codec,
+    resolve_ffmpeg_executable,
+)
 from rm_client.backend.serial_backend import RmSerialBackend  # noqa: E402
 from rm_client.backend.mqtt_backend import RmMqttBackend  # noqa: E402
 from rm_client.model import RobotState, build_default_registry  # noqa: E402
@@ -46,13 +51,13 @@ def test_uplink_roundtrip() -> None:
     check("dart open", proto._bool(fields, 2) is True)
     check("dart confirm", proto._bool(fields, 3) is False)
 
-    payload = proto.encode_map_click_info_notify(
+    payload = proto.encode_map_click_cmd(
         is_send_all=1, robot_id=bytes([1, 3]), mode=2, enemy_id=103,
         ascii_code=65, mark_type=3, map_x=12.5, map_y=7.25,
     )
     fields = proto.decode_fields(payload)
     check("map is_send_all", proto._u(fields, 1) == 1)
-    check("map robot_id", proto._b(fields, 2) == bytes([1, 3]))
+    check("map robot_id fixed 7 bytes", proto._b(fields, 2) == bytes([1, 3, 0, 0, 0, 0, 0]))
     check("map mode", proto._u(fields, 3) == 2)
     check("map enemy", proto._u(fields, 4) == 103)
     check("map ascii", proto._u(fields, 5) == 65)
@@ -72,6 +77,31 @@ def test_uplink_roundtrip() -> None:
     payload = proto.encode_custom_control(bytes([1, 2, 3]) * 10)
     fields = proto.decode_fields(payload)
     check("cc len", len(proto._b(fields, 1)) == 30)
+    vision = proto.encode_vision_control_payload(
+        sequence=513, yaw_deg=12.34, pitch_deg=-5.67,
+        target_id=103, tracking=True, fire=False,
+    )
+    check("vision custom payload bounded", len(vision) <= 30)
+    check("vision custom payload versioned", vision[:4] == b"PRM1" and vision[-1] == 1)
+    spin = proto.encode_spin_control_payload(
+        sequence=514, enabled=True, direction="CCW", speed_dps=420,
+        power_guard=True,
+    )
+    check("spin custom payload bounded", len(spin) == 12 and len(spin) <= 30)
+    check("spin custom payload versioned", spin[:6] == b"PRM1\x01\x02")
+    check("spin custom payload direction/flags", spin[-2:] == bytes([2, 3]))
+    manager = BackendManager(state=RobotState())
+    manager.mqtt.mock_output = True
+    ok, reason = manager.publish_spin_control(
+        sequence=9, enabled=False, direction="CW", speed_dps=500,
+        power_guard=False,
+    )
+    spin_wire = manager.mqtt.publish_records[-1]
+    check("spin manager mock publishes", ok and reason == "mock")
+    check("spin manager uses CustomControl", spin_wire.topic == "CustomControl")
+    spin_outer = proto.decode_fields(spin_wire.payload)
+    check("spin manager wraps team payload", proto._b(spin_outer, 1)[:6] == b"PRM1\x01\x02")
+    manager.shutdown()
 
     for name, fn in [
         ("AssemblyCommand", lambda: proto.encode_assembly_command(1, 3)),
@@ -80,7 +110,7 @@ def test_uplink_roundtrip() -> None:
         ("SentryCtrlCommand", lambda: proto.encode_sentry_ctrl_command(2)),
         ("AirSupportCommand", lambda: proto.encode_air_support_command(1)),
         ("CommonCommand", lambda: proto.encode_common_command(1, 100)),
-        ("MapClickInfo", lambda: proto.encode_map_click_info(1.0, 2.0, 0.0)),
+        ("MapClickCmd", lambda: proto.encode_map_click_cmd(map_x=1.0, map_y=2.0)),
     ]:
         check(f"{name} encodes", len(fn()) > 0)
 
@@ -197,6 +227,16 @@ def test_safety_modes() -> None:
     s.mark_published("DartCommand")  # 模拟真实发布记录时间戳
     ok, reason = s.can_publish("DartCommand")
     check("Official 10Hz limited", ok is False and "10Hz" in reason)
+
+    # KMC/CustomControl are video-link streams and have an official 75 Hz
+    # ceiling; they must not inherit the 10 Hz event-command limit.
+    ok, _ = s.can_publish("KeyboardMouseControl", now=20.0)
+    check("KMC first publish allowed", ok is True)
+    s.mark_published("KeyboardMouseControl", now=20.0)
+    ok, reason = s.can_publish("KeyboardMouseControl", now=20.01)
+    check("KMC 75Hz limited", ok is False and "75Hz" in reason)
+    ok, _ = s.can_publish("KeyboardMouseControl", now=20.014)
+    check("KMC 75Hz cadence allowed", ok is True)
 
     s.trigger_estop()
     ok, reason = s.can_publish("DartCommand")
@@ -372,12 +412,14 @@ def test_decoded_video_timestamp_and_source_selection() -> None:
 
 
 def test_serial_backend() -> None:
-    print("[serial] mock + stop frame")
+    print("[serial] mock + reject video-link 0x0311")
     serial = RmSerialBackend(port="Stub", baud=115200, mock_writes=True)
     serial.start()
     check("stub not connected", serial.connected is False)
     ok, reason = serial.write_frame(0x0311, b"\x00" * 30)
-    check("mock write ok", ok is True and reason == "mock")
+    check("serial 0x0311 rejected", ok is False and "0x0311" in reason)
+    ok, reason = serial.write_frame(0x0201, b"\x00")
+    check("other serial mock write ok", ok is True and reason == "mock")
     serial.stop()
 
 
@@ -398,6 +440,7 @@ def test_manager_updates_state() -> None:
     }, time.perf_counter()))
     manager.mqtt._decoded.append(("RobotModuleStatus", "RobotModuleStatus", {
         "power_manager": 1, "rfid": 1, "capacitor": 1,
+        "__present__": frozenset({1, 2, 3}),
     }, time.perf_counter()))
     manager.mqtt._decoded.append(("RobotPosition", "RobotPosition", {
         "robot_id": 103, "x": 12.0, "y": 7.0, "yaw": 90.0,
@@ -427,6 +470,125 @@ def test_manager_updates_state() -> None:
     manager.shutdown()
 
 
+def test_real_present_metadata_and_fault_isolation() -> None:
+    print("[manager] real decoder metadata + per-message isolation")
+    state = RobotState()
+    manager = BackendManager(state=state, client_id="3", scenario_key="LabDebug")
+    modules = proto.decode_message(
+        "RobotModuleStatus",
+        proto.encode_uint(1, 1) + proto.encode_uint(2, 1) + proto.encode_uint(3, 0),
+    )
+    performance = proto.decode_message(
+        "RobotPerformanceSelectionSync",
+        proto.encode_uint(1, 2) + proto.encode_uint(2, 1) + proto.encode_uint(3, 0),
+    )
+    manager.mqtt._decoded.append(("RobotModuleStatus", "RobotModuleStatus", modules, time.perf_counter()))
+    manager.mqtt._decoded.append(("bad", "RobotModuleStatus", {"power_manager": object()}, time.perf_counter()))
+    manager.mqtt._decoded.append(("RobotPerformanceSelectionSync", "RobotPerformanceSelectionSync", performance, time.perf_counter()))
+    count = manager.apply_updates(state)
+    check("present metadata does not crash", count == 2)
+    check("module values applied", state.robot_module_status["power_manager"] == 1)
+    check("performance values applied after bad message", state.performance_sync["shooter"] == 2)
+    check("bad message counted", manager.stats()["message_apply"]["errors"] == 1)
+    manager.shutdown()
+
+
+def test_map_click_downlink_and_health_order() -> None:
+    print("[protocol] V1.3.1 map direction + 5+5 health order")
+    payload = proto.encode_map_click_cmd(
+        is_send_all=1,
+        robot_id=bytes((1, 2)),
+        mode=1,
+        enemy_id=103,
+        ascii_code=ord("C"),
+        mark_type=1,
+        map_x=8.5,
+        map_y=4.25,
+    )
+    decoded = proto.decode_message("MapClickInfo", payload)
+    check("map downlink decoded", decoded["enemy_id"] == 103 and abs(decoded["map_x"] - 8.5) < 1e-4)
+
+    state = RobotState(robot_id=103, alliance_color="Blue")
+    state.official_robot_health = [610, 510, 410, 310, 710, 600, 500, 400, 300, 700]
+    manager = BackendManager(state=state)
+    manager.sync_frontend_state(state)
+    rows = {row["id"]: row for row in state.robot_rows}
+    check("blue ally order", rows[101]["hp"] == 610 and rows[107]["hp"] == 710)
+    check("blue enemy order", rows[1]["hp"] == 600 and rows[7]["hp"] == 700)
+    manager.shutdown()
+
+
+def test_shutdown_neutral_frame_and_readiness_consumption() -> None:
+    print("[manager] neutral shutdown + consumed readiness")
+
+    class PublishResult:
+        rc = 0
+
+    class FakeClient:
+        def __init__(self) -> None:
+            self.messages: list[tuple[str, bytes, int]] = []
+
+        def publish(self, topic, payload, qos=0, **_kwargs):
+            self.messages.append((str(topic), bytes(payload), int(qos)))
+            return PublishResult()
+
+        def disconnect(self):
+            return None
+
+        def loop_stop(self, **_kwargs):
+            return None
+
+    state = RobotState()
+    manager = BackendManager(state=state, scenario_key="OfficialEvent")
+    fake = FakeClient()
+    manager.mqtt.client = fake
+    manager.mqtt.connected = True
+    manager.mqtt.mock_output = False
+    report = manager.apply_readiness(state, live_evidence={"video_source": "udp"})
+    check("readiness consumed into state", state.backend_stats["readiness"] is report)
+    check("readiness remains fail closed", report["verdict"] == "NOT READY FOR REAL MATCH")
+    manager.shutdown()
+    kmc = [item for item in fake.messages if item[0] == "KeyboardMouseControl"]
+    check("shutdown emits neutral KMC", bool(kmc))
+    check("shutdown neutral payload exact", kmc[-1][1] == proto.encode_keyboard_mouse_control())
+    check("shutdown latches local estop", manager.safety.estop_active and manager.serial.estop_active)
+    status = [item for item in fake.messages if item[0] == "ClientStatus"]
+    check("shutdown publishes retained offline", bool(status) and status[-1][1] == b'{"online":false}')
+
+
+def test_scenario_restart_does_not_publish_offline() -> None:
+    print("[manager] reconnect retained-status safety")
+
+    class PublishResult:
+        rc = 0
+
+    class FakeClient:
+        def __init__(self) -> None:
+            self.messages: list[tuple[str, bytes, int]] = []
+
+        def publish(self, topic, payload, qos=0, **_kwargs):
+            self.messages.append((str(topic), bytes(payload), int(qos)))
+            return PublishResult()
+
+        def disconnect(self):
+            return None
+
+        def loop_stop(self, **_kwargs):
+            return None
+
+    manager = BackendManager(state=RobotState(), scenario_key="OfficialEvent")
+    fake = FakeClient()
+    manager.mqtt.client = fake
+    manager.mqtt.connected = True
+    manager.mqtt.mock_output = False
+    manager.apply_scenario("LabDebug", start=False)
+    check("restart emits neutral KMC", any(item[0] == "KeyboardMouseControl" for item in fake.messages))
+    check("restart omits retained offline", not any(item[0] == "ClientStatus" for item in fake.messages))
+    check("start false keeps transports stopped", not manager.mqtt._started and not manager.udp.running)
+    check("new scenario starts fail closed", manager.safety.estop_active is False and manager.safety.is_fighting() is False)
+    manager.shutdown()
+
+
 def test_protocol_regressions() -> None:
     print("[protocol] regression fixes")
     check("empty payload -> {}", proto.decode_message("GameStatus", b"") == {})
@@ -438,9 +600,12 @@ def test_protocol_regressions() -> None:
     data = proto.decode_message("RobotStaticStatus", payload)
     check("present marker", data["__present__"] == frozenset({4, 9}))
     check("missing field default", data["robot_id"] == 3 and data["max_health"] == 600)
-    payload = proto.encode_map_click_info_notify()
+    payload = proto.encode_map_click_cmd()
     fields = proto.decode_fields(payload)
     check("robot_id default 7 bytes", len(proto._b(fields, 2)) == 7)
+    check("MapClickCmd uplink", "MapClickCmd" in proto.UPLINK_MESSAGES)
+    check("MapClickInfo downlink", "MapClickInfo" in proto.DOWNLINK_MESSAGES)
+    check("MapClickInfo not uplink", "MapClickInfo" not in proto.UPLINK_MESSAGES)
     try:
         proto.encode_custom_control(b"x" * 31)
         check("custom_control >30 raises", False)
@@ -537,7 +702,7 @@ def test_backend_frontend_sync() -> None:
     state = RobotState()
     manager = BackendManager(state=state, client_id="3", scenario_key="OfficialEvent")
     manager.mqtt._decoded.append(("GlobalUnitStatus", "GlobalUnitStatus", {
-        "robot_health": [600, 520, 400, 300, 200, 100, 50, 580, 480, 380, 280, 180, 80, 0],
+        "robot_health": [600, 520, 400, 300, 200, 580, 480, 380, 280, 0],
         "robot_bullets": [],
     }, time.perf_counter()))
     manager.mqtt._decoded.append(("RobotPosition", "RobotPosition", {
@@ -577,13 +742,14 @@ def test_backend_frontend_sync() -> None:
 
 def test_native_0310_video_pipeline() -> None:
     print("[native] 0x0310 H.264 reassembly -> persistent decoder")
-    import shutil, subprocess
-    if not shutil.which("ffmpeg"):
+    import subprocess
+    ffmpeg = resolve_ffmpeg_executable()
+    if not ffmpeg:
         print("  skip (no ffmpeg)")
         return
     proc = subprocess.run(
         [
-            "ffmpeg", "-v", "error", "-f", "lavfi",
+            ffmpeg, "-v", "error", "-f", "lavfi",
             "-i", "testsrc2=size=160x120:rate=10:duration=0.6",
             "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
             "-f", "h264", "pipe:1",
@@ -626,14 +792,15 @@ def test_native_0310_video_pipeline() -> None:
 
 def test_persistent_h264_decoder() -> None:
     print("[decoder] ContinuousMjpegDecoder h264 end-to-end")
-    import shutil, subprocess
-    if not shutil.which("ffmpeg"):
+    import subprocess
+    ffmpeg = resolve_ffmpeg_executable()
+    if not ffmpeg:
         print("  skip (no ffmpeg)")
         return
     from rm_client.backend.video_backend import ContinuousMjpegDecoder
     proc = subprocess.run(
         [
-            "ffmpeg", "-v", "error", "-f", "lavfi",
+            ffmpeg, "-v", "error", "-f", "lavfi",
             "-i", "testsrc2=size=160x120:rate=10:duration=0.4",
             "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
             "-f", "h264", "pipe:1",
@@ -687,6 +854,10 @@ def main() -> None:
     test_decoded_video_timestamp_and_source_selection()
     test_serial_backend()
     test_manager_updates_state()
+    test_real_present_metadata_and_fault_isolation()
+    test_map_click_downlink_and_health_order()
+    test_shutdown_neutral_frame_and_readiness_consumption()
+    test_scenario_restart_does_not_publish_offline()
     test_protocol_regressions()
     test_serial_partial_frame()
     test_codec_regressions()

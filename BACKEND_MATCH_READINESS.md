@@ -1,74 +1,50 @@
-# 后端比赛实战就绪审查
+# 后端比赛实战就绪审计
 
-审查日期：2026-08-11
+审计日期：2026-08-13
 分支：`deepseekv4flash后端`
 
 ## 结论
 
-**NOT READY FOR REAL MATCH（当前不能认定为比赛实战可用）**
+**NOT READY FOR REAL MATCH**
 
-代码已经具备较完整的协议解析、连续视频解码、模拟链路、失效保护和 UI 状态映射，但自动化测试不能替代真车、裁判系统、图传发射端和现场网络联调。默认配置仍保留 mock 输出；Hero 吊射只提供决策预览，不发送云台或发射命令。
+本轮已经修复可由桌面代码证明的 P0/P1 缺陷，但真车、裁判系统、正式图传发射端和队内机器人固件尚未形成现场闭环。`rm_client.backend.readiness.audit_backend()` 继续 fail-closed；缺少任一现场证据时绝不会报告 READY。
 
-运行时可通过 `rm_client.backend.readiness.audit_backend()` 生成 fail-closed 报告。所有门禁都通过之前，报告不会返回 `READY FOR REAL MATCH`。
+## 2026-08-12 已修复
 
-## 2026-08-11 本次修复验证
+- 解码器附加的 `__present__` 元数据不再进入 `int()`；单条坏裁判消息有异常隔离和错误统计，不会中止该帧后续消息。
+- `robot_health` 按官方 5+5（1/2/3/4/7）映射，且依据本机阵营构造双方 ID。
+- `Event.param` 支持官方逗号格式；数值比赛阶段统一映射，Hero 吊射不再因 `MATCH`/`4` 双写被锁死。
+- 协议层标记为 V1.3.1：`MapClickInfo` 是下行，`MapClickCmd` 是上行；哨兵控制值修正为 0/1。
+- 键盘 16 位、鼠标三轴和三键进入官方 `KeyboardMouseControl` MQTT 链路，按 75 Hz 门控；按键释放会可靠重试。
+- F12 先尽力发布全零 KMC，再锁止全部上行；`Ctrl+Shift+F12` 仅用于人工确认后的解锁。
+- 正常退出会先发送全零 KMC，再发布 retained offline；场景/客户端 ID 重连不会发布可能与新连接竞争的离线状态。
+- 115200 串口明确拒绝 `0x0311`。CustomControl 只经官方 MQTT/图传链路发布。
+- 自瞄提供显式、版本化的 14 字节 `PRM1 kind=1` 队内 CustomControl 载荷；桌面端永不置 fire 位。
+- 小陀螺提供 12 字节 `PRM1 kind=2` 启停/方向/速度载荷；`AutoSpinOnHit` 的裁判受击判定可驱动同一路径。两者默认 Mock，必须在机器人固件实现同一 schema 和超时归零后手动启用。
+- 官方场景下经济请求默认走 MQTT。确认只接受本机弹量、血量、复活或支援状态变化，团队金币变化不再作为成功依据；超时不自动重试，避免 QoS1 重复扣款。
+- UDP/串口/同济接收线程退出后清除 running；YOLO 加载失败有退避；Qt 逻辑阶段逐项隔离异常。
+- H.264/H.265 解码支持系统、发布包内置或 `imageio-ffmpeg`，普通 HEVC P/B slice 在已锁定流中不会被误丢。
+- 配置版本非法时安全返回；保存采用临时文件、`fsync` 和原子替换。
+- 自动保存已做 250 ms 合并，拖动滑块不再逐事件全量写盘；运行时每秒执行 fail-closed readiness audit 并写入 `RobotState.backend_stats["readiness"]`。
+- 发布脚本只打包 Git 跟踪内容，校验核心 backend/Hero/Jello/Minecraft 文件、默认 JSON 和 Python 编译，并内置 ffmpeg；不会打包工作区中用户修改的 `configs/default.json`。
 
-- Jello 文字已改为整行字形运行缓存，显式固定中英文回退链，并完成下拉框所有权、动画期间缓存复用及高 DPI 冒烟检查。
-- 经济场景已覆盖关闭、关闭中重开、复活后关闭和单次 RightShift 排队恢复；恢复后的普通 HUD 合成非空。
-- Minecraft HUD 已验证 `Scale Multiplier` 为 `0.50/1.00/1.50/2.00` 时的最近邻合成、拖放命中与外挂覆盖层共存。
-- Hero 部署状态已验证普通流与 `Native 0x0310` 隔离：部署确认前使用普通流，确认后只允许 Native 帧，断流不回退，退出状态同步后才恢复普通流。
-- 2560×1440 稳态测试中，ClickGUI 完整 `paintGL` P95 为 **5.393 ms**，达到 `<8.3 ms` 目标；当前用户配置下 HUD 动态层 P95 为 **7.155 ms**，但完整 `paintGL` P95 为 **11.841 ms**，仍高于 `<11.1 ms` 目标 **0.741 ms**，因此不能把性能门禁标记为通过。
-- 最新 fail-closed 审查为 **19 项门禁、1 项通过**；其余门禁仍缺少真车、正式裁判系统、正式图传源、断链恢复、整场 soak 和现场签字证据，结论保持 **NOT READY FOR REAL MATCH**。
+## 仍阻止实战签字的现场项
 
-## 已完成并通过自动化检查的部分
+1. 正式 MQTT 下行、75 Hz KMC/CustomControl 上行和机器人侧超时归零未做真车全链路测试。
+2. `PRM1` 队内 CustomControl schema 需要机器人固件实现、代码评审和台架验证；Hero 仍只做决策辅助，绝不自动开火。
+3. 正式 UDP HEVC 与 Native `0x0310` 发射端尚未覆盖丢包、乱序、SPS 恢复、分辨率切换和解码器崩溃。
+4. 经济协议没有逐请求官方 ACK；当前采取“本机结果字段确认 + 禁止自动重试”的保守策略，仍需裁判系统实测。
+5. 相机标定、Hero yaw/pitch/炮口/初速、部署模式生命周期、小陀螺误触发均需隔离场地验证。
+6. 需要完整赛程的 P50/P95/P99 延迟、CPU/GPU/显存、队列、网络断链和热稳定 soak。
+7. 需要操作员和安全负责人保存审计 JSON、日志与现场签字。
 
-- MQTT/官方消息到 `RobotState` 的全量状态映射及场景配置边界。
-- RoboMaster `0xA5` 串口帧 CRC8/CRC16 编解码、限频、比赛阶段门控和急停锁存。
-- 急停内部零帧可以穿过锁存器；锁存后任意外部写入仍被拒绝。
-- UDP 帧重组、MJPEG/H.264/H.265 类型识别、常驻 ffmpeg 解码和前端最新帧发布路径；编码包时间与解码帧时间已经分离。
-- `rm-native-viewer` 的 `PDL1` 遥测包严格解析，以及固定 300 字节 `0x0310` H.264 分块的连续解码、reset/序号回绕/缺包/重复包处理；reset、缺包或解码器异常后按参考实现阻塞到下一个 Annex-B SPS，再从 SPS 恢复。
-- `0x0310` 不再保存无限增长的历史字节流；ffmpeg stdin 使用有界后台队列，不阻塞 UI/UDP 线程，UDP H.265 异常恢复也移出接收线程；运行统计保留已消费字节、队列丢弃、缺包、迟到包、SPS 恢复丢弃、解码器重启和最新解码帧状态。
-- 遥测序号重启、定位丢失/重定位状态会自动撤销 Hero 吊射重定位确认和预备状态；自然 `uint32` 回绕不会误触发。
-- Hero 专用部署/吊射界面、高/低弧弹道、炮口随 pitch 位移的迭代补偿、遥测时效、热量、横滚、校准和重定位门禁。
-- 部署模式采用二次确认、2 秒等待和 `DeployModeStatusSync` 生命周期；部署期间官方图传切断时仍保留自定义 UI/地图。
-- Hero 模块永不产生自动发射或云台控制输出；`Arm Assisted Lob` 的含义仅为“预览已通过门禁”。
-- `RobotInjuryStat` 累计 17/42 mm 伤害只从第二个样本开始计算增量；`AutoSpinOnHit` 有伤害阈值、持续时间、冷却、比赛/裁判链路/功率门禁和人工所有权保护。
-- 活跃底盘命令使用 8 Hz 心跳，低于 10 Hz 限频并高于 250 ms 看门狗最低需求。
-- 默认配置、旧 GUI 配置迁移、经济界面复活后关闭/重开、后端协议、GPU 合成、高 DPI 和 UI 冒烟测试。
+## 最低现场证据
 
-## 阻塞实战签字的问题
+- `video_source` 明确为 `udp` 或 `native_0310`，并持续产生新解码帧。
+- `codec_field_test`、`estop_robot_test`、`command_ack_test`、`control_heartbeat_test`。
+- `robot_firmware_schema`：固件正确解析 `PRM1 kind=1`，并证明 fire 位保持 0。
+- `spin_firmware_schema`：固件正确解析 `PRM1 kind=2`，并证明启停、方向、速度和失联超时归零。
+- `projectile_hit_spin_test`、`hero_deploy_status_test`、`hero_lob_live_test`。
+- `loss_recovery_test`、`latency_soak_test`、`field_signoff`。
 
-1. **H.264/H.265 尚未使用比赛现场发射端认证。** 桌面生成码流通过不等于现场通过；仍需覆盖真实丢包、乱序、关键帧恢复、分辨率变化、ffmpeg 异常退出和长时间运行。
-2. **真实串口/底盘默认关闭，官方 MQTT 尚无现场认证。** `OfficialEvent` 会在比赛阶段/10 Hz 门禁下开放裁判系统 MQTT 上行，但 `serial.mock_writes=true`、串口端口仍为 `Stub`，Hero/经济等模块也各自保留 mock 开关；这不是实战完成证明。
-3. **命令 ACK 语义没有真机闭环证据。** 需要验证命令编号、幂等、超时、拒绝、重试、8 Hz 心跳和急停后的恢复流程。
-4. **缺少断链与重连演练。** MQTT、视频、串口任一路径中断时必须验证 UI 告警、控制归零、重新订阅、解码器恢复和状态重建。
-5. **缺少整场时长的延迟/温度/内存 soak。** 必须记录 P50/P95/P99 延迟、丢帧、队列深度、CPU/GPU/显存、纹理数量和 ffmpeg 进程状态。
-6. **Hero 吊射未完成真车标定。** 参考方案本身强调 yaw、pitch、炮口位移和重定位校准；桌面轨迹不能替代实际弹道、安全区和裁判规则验证。
-7. **部署模式未在官方场地闭环。** 必须确认进入/退出命令、2 秒切换、状态同步、自动退出、图传切断以及自定义 UI 保留均与现场裁判系统一致。
-8. **`AutoSpinOnHit` 未做真车误触发与安全验证。** 必须确认首次累计样本、复活清零、重复/延迟消息和多次命中不会造成越权或持续旋转。
-9. **缺少现场操作员与安全负责人签字。** 软件测试通过不能自动放行真实运动或发射。
-
-## 实战前最低验证清单
-
-- 使用正式 `OfficialEvent` 配置和正式 client/robot ID 建立真实 MQTT 下行及允许的上行。
-- 在 `live_evidence.video_source` 中明确选择 `udp` 或 `native_0310`，并用正式发射端验证该路径确实产生持续的新解码帧。
-- 对选定视频源执行丢包、乱序、关键帧恢复、分辨率切换、ffmpeg 崩溃重启和断电恢复测试。
-- 对真实串口执行：启动归零、心跳、急停、急停锁存、人工解除、异常 payload 拒绝。
-- 对每一条比赛命令记录请求、ACK/状态 revision、超时和拒绝结果。
-- 在有线网络、无线网络、丢包和断电恢复条件下各跑一次完整比赛时长。
-- 使用真实相机完成标定，验证装甲坐标、延迟、帧率和掉线时的 fail-closed 行为。
-- Hero 在隔离安全场地完成 yaw/pitch/炮口长度/初速标定；每次定位重置后重新确认。
-- 按官方规则验证 Hero 部署模式的进入条件、二次确认、2 秒等待、退出条件、状态同步和图传生命周期。
-- 用真实 `RobotInjuryStat` 验证小陀螺自动触发阈值、持续时间、冷却、人工覆盖、复活清零和断链行为。
-- 保存 `audit_backend(...).as_dict()`、串口/MQTT/视频日志和现场签字记录。
-
-## 参考实现边界
-
-- RoboMaster 2026 机甲大师超级对抗赛比赛规则手册 V1.4.0：<https://bbs-web-static.robomaster.com/38afa6d7914345f7bb5d496692fd429b1773977681621/RoboMaster%202026%20%E6%9C%BA%E7%94%B2%E5%A4%A7%E5%B8%88%E8%B6%85%E7%BA%A7%E5%AF%B9%E6%8A%97%E8%B5%9B%E6%AF%94%E8%B5%9B%E8%A7%84%E5%88%99%E6%89%8B%E5%86%8CV1.4.0%EF%BC%8820260320%EF%BC%89.pdf>
-- 实战客户端文章：<https://bbs.robomaster.com/article/1882895?source=1>
-- SharkClient：<https://github.com/JNU-SHARK/SharkClient>
-- `rm-native-viewer`：<https://github.com/dkjsiogu/rm-native-viewer>
-- Hero 吊射文章：<https://bbs.robomaster.com/article/1883342?source=11>
-- Hero 吊射示例代码：<https://github.com/qwq9966qwq/ITL_Hero_Shoot>
-
-这些参考用于理解遥测/视频分块和校准约束；本客户端没有把参考项目的仿真结果当作实战认证。
+软件测试通过不能替代上述现场证据。

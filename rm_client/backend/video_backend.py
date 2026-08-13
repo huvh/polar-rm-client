@@ -14,10 +14,33 @@ import struct
 import subprocess
 import threading
 import time
+import os
+from pathlib import Path
 from queue import Empty, Full, Queue
 from typing import Any, Callable
 
 from ..transports import UDPVideoReceiver
+
+
+def resolve_ffmpeg_executable() -> str | None:
+    """Resolve bundled/system/wheel ffmpeg without downloading at runtime."""
+    candidates = [
+        os.environ.get("POLAR_FFMPEG", ""),
+        str(Path(__file__).resolve().parents[2] / "bin" / "ffmpeg.exe"),
+        shutil.which("ffmpeg") or "",
+    ]
+    for candidate in candidates:
+        if candidate and Path(candidate).is_file():
+            return str(Path(candidate))
+    try:
+        import imageio_ffmpeg  # type: ignore
+
+        candidate = imageio_ffmpeg.get_ffmpeg_exe()
+        if candidate and Path(candidate).is_file():
+            return str(Path(candidate))
+    except Exception:
+        pass
+    return None
 
 
 def detect_frame_codec(frame: bytes) -> str:
@@ -80,10 +103,11 @@ class RmVideoBackend(UDPVideoReceiver):
         self.last_frame_at = 0.0
         self.external_on_frame: Callable[[bytes], None] | None = None
         self.decode_h265 = True  # 有 ffmpeg 时自动开持久解码器
-        self.ffmpeg_available: bool = shutil.which("ffmpeg") is not None
-        self.h265_decoder: ContinuousMjpegDecoder | None = (
-            ContinuousMjpegDecoder("h265") if self.ffmpeg_available else None
-        )
+        self.ffmpeg_executable = resolve_ffmpeg_executable()
+        self.ffmpeg_available: bool = self.ffmpeg_executable is not None
+        # Always construct the decoder. Its start() re-resolves ffmpeg so a
+        # bundled binary becoming available before runtime is picked up.
+        self.h265_decoder: ContinuousMjpegDecoder | None = ContinuousMjpegDecoder("h265")
         self._started_at = 0.0
         self._frame_times: list[float] = []
         self._bytes_this_second = 0
@@ -96,6 +120,8 @@ class RmVideoBackend(UDPVideoReceiver):
 
     # ------------------------------------------------------------------
     def start(self) -> None:
+        self.ffmpeg_executable = resolve_ffmpeg_executable()
+        self.ffmpeg_available = self.ffmpeg_executable is not None
         self.on_frame = self._on_assembled_frame
         self._started_at = time.perf_counter()
         self._last_stats_at = time.perf_counter()
@@ -122,6 +148,10 @@ class RmVideoBackend(UDPVideoReceiver):
         codec = "unknown"
         with self._lock:
             codec = detect_frame_codec(frame)
+            # 官方 UDP 源为连续 HEVC；VPS/SPS 只在关键帧出现。锁定后，普通
+            # type 0..31 P/B slices 不能被当成 unknown 丢弃。
+            if codec == "unknown" and self.codec == "h265":
+                codec = "h265"
             self.codec = codec
             self.last_frame_at = now
             self._frame_times.append(now)
@@ -185,7 +215,7 @@ class RmVideoBackend(UDPVideoReceiver):
         try:
             proc = subprocess.run(
                 [
-                    "ffmpeg", "-v", "error", "-f", "hevc", "-i", "pipe:0",
+                    self.ffmpeg_executable or "ffmpeg", "-v", "error", "-f", "hevc", "-i", "pipe:0",
                     "-f", "rawvideo", "-pix_fmt", "bgr24", "pipe:1",
                 ],
                 input=frame, capture_output=True, timeout=5.0,
@@ -362,7 +392,7 @@ class ContinuousMjpegDecoder:
         # instance so recovery never leaks ffmpeg children or stale queues.
         if self._proc is not None:
             self.stop(clear_latest=False)
-        ffmpeg = shutil.which("ffmpeg")
+        ffmpeg = resolve_ffmpeg_executable()
         if not ffmpeg:
             self.last_error = "ffmpeg 不可用"
             return False

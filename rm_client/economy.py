@@ -600,7 +600,7 @@ class EconomyCommandBridge:
             transaction.completed_at = now
         elif now >= transaction.deadline_at:
             transaction.status = "timed_out"
-            transaction.message = "未在时限内收到状态确认"
+            transaction.message = "未确认；不会自动重试，避免 QoS1 重复扣款"
             transaction.completed_at = now
         return transaction
 
@@ -614,9 +614,12 @@ class EconomyCommandBridge:
         ammo = int(getattr(state, "remaining_ammo", transaction.baseline_ammo))
         health = int(getattr(state, "current_health", transaction.baseline_health))
         if "ammo" in key or "_17_" in key or "_42_" in key:
-            return ammo > transaction.baseline_ammo or gold < transaction.baseline_gold
+            # Team gold is shared.  A teammate spending coins is not an ACK for
+            # this robot.  Only the local RobotDynamicStatus ammo delta can
+            # confirm a projectile request.
+            return ammo > transaction.baseline_ammo
         if "heal" in key:
-            return health > transaction.baseline_health or gold < transaction.baseline_gold
+            return health > transaction.baseline_health
         if "respawn" in key:
             pending = bool(getattr(state, "respawn_pending", True))
             return health > transaction.baseline_health or (transaction.baseline_respawn_pending and not pending)

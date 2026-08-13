@@ -143,6 +143,18 @@ def _parse_event_param(raw: bytes) -> dict[str, Any]:
     try:
         value = json.loads(text)
     except json.JSONDecodeError:
+        # 官方 Event.param 是逗号分隔字符串；击杀事件示例为
+        # "victim_id,killer_id"，不是 JSON。
+        parts = [part.strip() for part in text.split(",")]
+        if len(parts) >= 2:
+            try:
+                return {
+                    "victim_id": int(parts[0]),
+                    "killer_id": int(parts[1]),
+                    "detail": text,
+                }
+            except ValueError:
+                pass
         return {"detail": text}
     if not isinstance(value, dict):
         return {"detail": text}
@@ -185,7 +197,10 @@ class OfficialMatchFeed:
                 "total_rounds": _field_int(fields, 2, 1),
                 "red_score": _field_int(fields, 3),
                 "blue_score": _field_int(fields, 4),
-                "current_stage": str(_field_int(fields, 5)),
+                "current_stage": {
+                    0: "NOT_STARTED", 1: "PREPARE", 2: "SELF_CHECK",
+                    3: "COUNTDOWN", 4: "MATCH", 5: "SETTLEMENT",
+                }.get(_field_int(fields, 5), str(_field_int(fields, 5))),
                 "stage_countdown_sec": _field_int(fields, 6),
                 "stage_elapsed_sec": _field_int(fields, 7),
             })
@@ -195,7 +210,6 @@ class OfficialMatchFeed:
                 "total_economy_obtained": _field_int(fields, 2),
                 "tech_level": _field_int(fields, 3),
                 "encryption_level": _field_int(fields, 4),
-                "_economy_revision_increment": 1,
             })
         elif name == "GlobalUnitStatus":
             health_values = fields.get(11) or fields.get(6) or []
@@ -230,7 +244,6 @@ class OfficialMatchFeed:
                 "respawn_can_free": bool(_field_int(fields, 4)),
                 "respawn_gold_cost": _field_int(fields, 5),
                 "respawn_can_pay": bool(_field_int(fields, 6)),
-                "_economy_revision_increment": 1,
             })
         elif name == "RobotDynamicStatus":
             updates.update({
@@ -243,7 +256,6 @@ class OfficialMatchFeed:
                 "out_of_combat": bool(_field_int(fields, 10)),
                 "can_remote_heal": bool(_field_int(fields, 12)),
                 "can_remote_ammo": bool(_field_int(fields, 13)),
-                "_economy_revision_increment": 1,
             })
         elif name == "AirSupportStatusSync":
             free_time = _field_int(fields, 2)
@@ -252,7 +264,6 @@ class OfficialMatchFeed:
                 "air_support_free_time_sec": free_time,
                 "air_support_can_free": free_time > 0,
                 "air_support_cost_coins": _field_int(fields, 3),
-                "_economy_revision_increment": 1,
             })
         elif name == "Event":
             event_id = _field_int(fields, 1)

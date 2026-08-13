@@ -9,8 +9,19 @@ desktop mock run as match ready.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 import time
 from typing import Any, Mapping
+
+from .protocol import PROTOCOL_VERSION
+from .video_backend import resolve_ffmpeg_executable
+
+
+@lru_cache(maxsize=1)
+def _ffmpeg_available() -> bool:
+    """Cache the install-level decoder gate for cheap runtime audits."""
+
+    return bool(resolve_ffmpeg_executable())
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,7 +76,6 @@ def audit_backend(
     stats = manager.stats() if manager is not None and hasattr(manager, "stats") else {}
     mqtt = dict(stats.get("mqtt", {}))
     udp = dict(stats.get("udp", {}))
-    serial = dict(stats.get("serial", {}))
     native_video = dict(stats.get("native_0310", {}))
     # Compatibility with a manager snapshot taken before native stats were
     # promoted to the top level.
@@ -114,6 +124,16 @@ def audit_backend(
             True,
         ),
         ReadinessGate(
+            "protocol_v1_3_1",
+            PROTOCOL_VERSION == "1.3.1",
+            f"protocol={PROTOCOL_VERSION}; MapClickInfo downlink / MapClickCmd uplink",
+        ),
+        ReadinessGate(
+            "ffmpeg_decoder",
+            _ffmpeg_available(),
+            "bundled/system ffmpeg decoder is resolvable without runtime download",
+        ),
+        ReadinessGate(
             "video_source_declared",
             source_declared,
             "live_evidence.video_source must explicitly be udp or native_0310",
@@ -125,7 +145,12 @@ def audit_backend(
             f"configured {selected_video_source or 'undeclared'} path has a fresh decoded frame",
             True,
         ),
-        ReadinessGate("serial_link", bool(serial.get("connected", False)) and not bool(serial.get("mock_writes", True)), "real lower-controller serial link", True),
+        ReadinessGate(
+            "control_transport",
+            bool(mqtt.get("connected", False)) and not bool(mqtt.get("mock_output", True)),
+            "KeyboardMouseControl/CustomControl use official MQTT video-link uplink; 0x0311 is blocked on 115200 serial",
+            True,
+        ),
         ReadinessGate(
             "native_0310_decoder",
             selected_video_source != "native_0310" or native_decoded,
@@ -149,7 +174,7 @@ def audit_backend(
         ReadinessGate(
             "control_heartbeat_test",
             bool(evidence.get("control_heartbeat_test", False)),
-            "8 Hz active-command heartbeat and 250 ms watchdog validated on the lower controller",
+            "75 Hz KeyboardMouseControl heartbeat and robot-side timeout validated",
             True,
         ),
         ReadinessGate(
@@ -161,13 +186,25 @@ def audit_backend(
             True,
         ),
         ReadinessGate(
+            "spin_firmware_schema",
+            bool(evidence.get("spin_firmware_schema", False)),
+            "robot firmware parses PRM1 kind=2 enable/disable, direction and speed with a watchdog timeout",
+            True,
+        ),
+        ReadinessGate(
             "hero_deploy_status_test",
             bool(evidence.get("hero_deploy_status_test", False))
             and float(getattr(state, "deploy_status_at", 0.0) or 0.0) > 0.0,
             "Hero enter/exit command and DeployModeStatusSync/video-cut lifecycle validated on field hardware",
             True,
         ),
-        ReadinessGate("loss_recovery_test", bool(evidence.get("loss_recovery_test", False)), "MQTT/video/serial loss and reconnect drill", True),
+        ReadinessGate("loss_recovery_test", bool(evidence.get("loss_recovery_test", False)), "MQTT/video/decoder loss and reconnect drill", True),
+        ReadinessGate(
+            "robot_firmware_schema",
+            bool(evidence.get("robot_firmware_schema", False)),
+            "robot firmware parses PRM1 kind=1 vision payload and never treats it as a fire command",
+            True,
+        ),
         ReadinessGate("latency_soak_test", bool(evidence.get("latency_soak_test", False)), "full-duration match latency/thermal soak", True),
         ReadinessGate(
             "hero_lob_live_test",

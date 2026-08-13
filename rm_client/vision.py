@@ -239,9 +239,22 @@ def snapshot_from_tongji_packet(packet: TongjiPacket, *, source: str = "Tongji",
 def snapshot_from_local_result(
     timestamp_ns: int, sequence: int, width: int, height: int, armors: list[dict[str, Any]], inference_fps: float, latency_ms: float, device: str,
     loss_evidence: dict[str, Any] | None = None,
+    *, calibrated: bool = False, camera_matrix: list[float] | None = None,
 ) -> VisionSnapshot:
     packet = TongjiPacket(timestamp_ns, width, height, "auto_aim", armors[0] if armors else None, tuple(armors), None, {}, {"control": False, "fire": False})
     snapshot = snapshot_from_tongji_packet(packet, source="Local", inference_device=device)
+    aim_yaw_deg = 0.0
+    aim_pitch_deg = 0.0
+    primary = snapshot.result.aim_armor
+    matrix = camera_matrix or []
+    if calibrated and primary is not None and len(primary.points) >= 2 and len(matrix) >= 9:
+        fx, fy = float(matrix[0]), float(matrix[4])
+        cx, cy = float(matrix[2]), float(matrix[5])
+        if fx > 0.0 and fy > 0.0:
+            point_x = sum(point[0] for point in primary.points) / len(primary.points)
+            point_y = sum(point[1] for point in primary.points) / len(primary.points)
+            aim_yaw_deg = math.degrees(math.atan2(point_x - cx, fx))
+            aim_pitch_deg = -math.degrees(math.atan2(point_y - cy, fy))
     result = VisionResult(
         sequence=sequence,
         timestamp_ns=timestamp_ns,
@@ -252,13 +265,26 @@ def snapshot_from_local_result(
         predicted_armors=snapshot.result.predicted_armors,
         aim_armor=snapshot.result.aim_armor,
         tracking_state=snapshot.result.tracking_state,
-        calibrated=False,
+        calibrated=bool(calibrated),
         inference_device=device,
         inference_fps=inference_fps,
         latency_ms=latency_ms,
+        aim_yaw_deg=aim_yaw_deg,
+        aim_pitch_deg=aim_pitch_deg,
         loss_evidence=VisionLossEvidence.from_payload(loss_evidence),
     )
-    return VisionSnapshot("Local", result, timestamp_ns, {"control": False, "fire": False})
+    return VisionSnapshot(
+        "Local",
+        result,
+        timestamp_ns,
+        {
+            "control": False,
+            "fire": False,
+            "calibrated": bool(calibrated),
+            "yaw_rad": math.radians(aim_yaw_deg),
+            "pitch_rad": math.radians(aim_pitch_deg),
+        },
+    )
 
 
 class CompositeVisionPipeline:

@@ -342,6 +342,7 @@ class LocalAlignedVision:
         self.armor_count = 4
         self.radius_m = 0.23
         self.horizon_s = 0.06
+        self.retry_after = 0.0
 
     def configure(self, model_path: Path, device: str) -> None:
         if model_path == self.model_path and device == self.device:
@@ -361,6 +362,8 @@ class LocalAlignedVision:
 
     def start(self) -> None:
         if self.running:
+            return
+        if time.perf_counter() < self.retry_after:
             return
         self.running = True
         self._thread = threading.Thread(target=self._run, name="polar-tongji-local", daemon=True)
@@ -487,5 +490,8 @@ class LocalAlignedVision:
         except Exception as error:
             self.last_error = str(error)
             self.active_device = "unavailable"
+            # A missing/corrupt model must not spawn a new loader at every
+            # 60 Hz UI tick. Retry slowly so a repaired file is still picked up.
+            self.retry_after = time.perf_counter() + 5.0
         finally:
             self.running = False
