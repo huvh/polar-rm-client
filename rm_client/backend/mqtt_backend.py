@@ -47,6 +47,8 @@ class RmMqttBackend(OfficialMqttBridge):
         self._decoded_lock = threading.Lock()
         self._started = False
         self._on_connect_hook: Callable[[], None] | None = None
+        self.event_hook: Callable[[str, dict[str, Any]], None] | None = None
+        self.disconnected_at = time.perf_counter()
 
     # ------------------------------------------------------------------
     # 生命周期
@@ -110,6 +112,8 @@ class RmMqttBackend(OfficialMqttBridge):
             except Exception:
                 pass
         self.connected = False
+        self.disconnected_at = time.perf_counter()
+        self._emit_event("mqtt_disconnect", reason="stop")
 
     # ------------------------------------------------------------------
     # paho 回调
@@ -119,6 +123,8 @@ class RmMqttBackend(OfficialMqttBridge):
         self.connected = ok
         if ok:
             self.connected_at = time.time()
+            self.disconnected_at = 0.0
+            self._emit_event("mqtt_connect", host=self.host, port=self.port)
             try:
                 client.publish("ClientStatus", b'{"online":true}', qos=1, retain=True)
             except Exception:
@@ -134,6 +140,8 @@ class RmMqttBackend(OfficialMqttBridge):
         if self.connected:
             self.reconnect_count += 1
         self.connected = False
+        self.disconnected_at = time.perf_counter()
+        self._emit_event("mqtt_disconnect", reason=str(_reason_code))
 
     def _on_message(self, client, userdata, msg) -> None:
         super()._on_message(client, userdata, msg)
@@ -142,6 +150,7 @@ class RmMqttBackend(OfficialMqttBridge):
         self.bytes_received += len(payload)
         self.last_message_at = time.time()
         topic = str(msg.topic)
+        self._emit_event("referee_rx", topic=topic, payload=payload)
         name = topic_message_name(topic)
         if name in {"GameStatus"}:
             # 比赛阶段同步给安全策略
@@ -170,20 +179,29 @@ class RmMqttBackend(OfficialMqttBridge):
     # 发布（带安全门控 + 10Hz 限频）
     # ------------------------------------------------------------------
     def publish_topic(self, topic: str, payload: bytes, *, qos: int = 1,
-                      now: float | None = None) -> tuple[bool, str]:
+                      now: float | None = None, intent: str = "control",
+                      qualification_token: str | None = None) -> tuple[bool, str]:
         # 急停在任何模式（含 mock）都立即生效
         if self.safety.estop_active:
             self.last_error = "急停激活，禁止发布"
             return False, self.last_error
-        allowed, reason = self.safety.can_publish(topic, now=now)
+        allowed, reason = self.safety.can_publish(
+            topic,
+            now=now,
+            intent=intent,
+            qualification_token=qualification_token,
+        )
         if not allowed and not self.mock_output:
             self.last_error = reason
+            self._emit_event("publish_result", topic=topic, ok=False, reason=reason, intent=intent)
             return False, reason
         record = self._publish_record(topic, payload, qos)
         if self.mock_output:
+            self._emit_event("publish_result", topic=topic, ok=True, reason="mock", intent=intent)
             return True, "mock"
         if self.client is None or not self.connected:
             self.last_error = "未连接 MQTT 客户端"
+            self._emit_event("publish_result", topic=topic, ok=False, reason=self.last_error, intent=intent)
             return False, self.last_error
         try:
             info = self.client.publish(topic, payload, qos=qos)
@@ -192,12 +210,15 @@ class RmMqttBackend(OfficialMqttBridge):
             success = rc == 0 or (mqtt is not None and rc == mqtt.MQTT_ERR_SUCCESS)
             if not success:
                 self.last_error = f"MQTT 发布未进入网络（rc={rc}）"
+                self._emit_event("publish_result", topic=topic, ok=False, reason=self.last_error, intent=intent)
                 return False, self.last_error
             self.messages_sent += 1
             self.safety.mark_published(topic, now=now)
+            self._emit_event("publish_result", topic=topic, ok=True, reason="ok", intent=intent)
             return True, "ok"
         except Exception as exc:  # pragma: no cover
             self.last_error = str(exc)
+            self._emit_event("publish_result", topic=topic, ok=False, reason=self.last_error, intent=intent)
             return False, str(exc)
 
     def _publish_record(self, topic: str, payload: bytes, qos: int) -> MqttPublishRecord:
@@ -209,16 +230,50 @@ class RmMqttBackend(OfficialMqttBridge):
         return record
 
     def publish_named(self, name: str, payload: bytes, *, qos: int = 1,
-                      now: float | None = None) -> tuple[bool, str]:
-        return self.publish_topic(name, payload, qos=qos, now=now)
+                      now: float | None = None, intent: str = "control",
+                      qualification_token: str | None = None) -> tuple[bool, str]:
+        return self.publish_topic(
+            name,
+            payload,
+            qos=qos,
+            now=now,
+            intent=intent,
+            qualification_token=qualification_token,
+        )
 
     # 兼容经济链路（透传 now，保持旧语义）
-    def publish_common_command(self, payload: bytes, *, now: float | None = None) -> bool:
-        ok, _ = self.publish_topic("CommonCommand", payload, qos=1, now=now)
+    def publish_common_command(
+        self,
+        payload: bytes,
+        *,
+        now: float | None = None,
+        qualification_token: str | None = None,
+    ) -> bool:
+        ok, _ = self.publish_topic(
+            "CommonCommand",
+            payload,
+            qos=1,
+            now=now,
+            intent="economy",
+            qualification_token=qualification_token,
+        )
         return ok
 
-    def publish_air_support_command(self, payload: bytes, *, now: float | None = None) -> bool:
-        ok, _ = self.publish_topic("AirSupportCommand", payload, qos=1, now=now)
+    def publish_air_support_command(
+        self,
+        payload: bytes,
+        *,
+        now: float | None = None,
+        qualification_token: str | None = None,
+    ) -> bool:
+        ok, _ = self.publish_topic(
+            "AirSupportCommand",
+            payload,
+            qos=1,
+            now=now,
+            intent="economy",
+            qualification_token=qualification_token,
+        )
         return ok
 
     # 堵住继承入口的安全后门：所有发布统一走 publish_topic（门控 + 10Hz + 急停）
@@ -240,9 +295,11 @@ class RmMqttBackend(OfficialMqttBridge):
         payload = encode_keyboard_mouse_control()
         if self.mock_output:
             self._publish_record("KeyboardMouseControl", payload, 1)
+            self._emit_event("publish_result", topic="KeyboardMouseControl", ok=True, reason="estop mock", intent="estop_zero")
             return True, "mock"
         if self.client is None or not self.connected:
             self.last_error = "未连接 MQTT 客户端，急停零帧未上网"
+            self._emit_event("publish_result", topic="KeyboardMouseControl", ok=False, reason=self.last_error, intent="estop_zero")
             return False, self.last_error
         try:
             info = self.client.publish("KeyboardMouseControl", payload, qos=1)
@@ -251,13 +308,16 @@ class RmMqttBackend(OfficialMqttBridge):
             success = rc == 0 or (mqtt is not None and rc == mqtt.MQTT_ERR_SUCCESS)
             if not success:
                 self.last_error = f"急停零帧未进入网络（rc={rc}）"
+                self._emit_event("publish_result", topic="KeyboardMouseControl", ok=False, reason=self.last_error, intent="estop_zero")
                 return False, self.last_error
             self._publish_record("KeyboardMouseControl", payload, 1)
             self.messages_sent += 1
             self.safety.mark_published("KeyboardMouseControl")
+            self._emit_event("publish_result", topic="KeyboardMouseControl", ok=True, reason="ok", intent="estop_zero")
             return True, "ok"
         except Exception as exc:
             self.last_error = str(exc)
+            self._emit_event("publish_result", topic="KeyboardMouseControl", ok=False, reason=self.last_error, intent="estop_zero")
             return False, self.last_error
 
     def publish_custom_control(self, data: bytes) -> bool:
@@ -280,5 +340,15 @@ class RmMqttBackend(OfficialMqttBridge):
             "reconnect_count": self.reconnect_count,
             "last_message_at": self.last_message_at,
             "connected_at": self.connected_at,
+            "disconnected_at": self.disconnected_at,
             "last_error": self.last_error,
         }
+
+    def _emit_event(self, event: str, **payload: Any) -> None:
+        hook = self.event_hook
+        if hook is None:
+            return
+        try:
+            hook(event, **payload)
+        except Exception:
+            pass

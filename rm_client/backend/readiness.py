@@ -15,13 +15,21 @@ from typing import Any, Mapping
 
 from .protocol import PROTOCOL_VERSION
 from .video_backend import resolve_ffmpeg_executable
+from ..runtime_paths import RuntimePaths
 
 
 @lru_cache(maxsize=1)
 def _ffmpeg_available() -> bool:
     """Cache the install-level decoder gate for cheap runtime audits."""
 
-    return bool(resolve_ffmpeg_executable())
+    executable = resolve_ffmpeg_executable()
+    if not executable:
+        return False
+    paths = RuntimePaths.discover()
+    if paths.source_mode:
+        return True
+    ok, _detail = paths.validate_manifest_file(paths.ffmpeg_path)
+    return ok
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,6 +38,10 @@ class ReadinessGate:
     passed: bool
     detail: str
     requires_live_validation: bool = False
+    # Optional capabilities (currently the two PRM1 schemas, local vision and
+    # assisted lob calibration) must stay visible in diagnostics without
+    # preventing a separately-qualified core KMC candidate from arming.
+    required: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,15 +50,20 @@ class BackendReadinessReport:
 
     @property
     def ready(self) -> bool:
-        return bool(self.gates) and all(gate.passed for gate in self.gates)
+        required = tuple(gate for gate in self.gates if gate.required)
+        return bool(required) and all(gate.passed for gate in required)
 
     @property
     def verdict(self) -> str:
-        return "READY FOR REAL MATCH" if self.ready else "NOT READY FOR REAL MATCH"
+        # Desktop software and locally stored evidence can produce a field
+        # *candidate*, never an unconditional READY verdict. Final readiness
+        # requires external event-side certification that this application is
+        # deliberately unable to mint for itself.
+        return "FIELD CANDIDATE - EXTERNAL CERTIFICATION REQUIRED" if self.ready else "NOT READY FOR REAL MATCH"
 
     @property
     def blockers(self) -> tuple[ReadinessGate, ...]:
-        return tuple(gate for gate in self.gates if not gate.passed)
+        return tuple(gate for gate in self.gates if gate.required and not gate.passed)
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -58,6 +75,7 @@ class BackendReadinessReport:
                     "passed": gate.passed,
                     "detail": gate.detail,
                     "requires_live_validation": gate.requires_live_validation,
+                    "required": gate.required,
                 }
                 for gate in self.gates
             ],
@@ -72,7 +90,13 @@ def audit_backend(
 ) -> BackendReadinessReport:
     """Build a fail-closed report from runtime status plus explicit evidence."""
 
-    evidence = dict(live_evidence or {})
+    # Persisted config booleans are never evidence. Only the authenticated
+    # QualificationManager can contribute technical PASS records.
+    evidence = {}
+    qualification = getattr(manager, "qualification", None)
+    if qualification is not None:
+        evidence.update(qualification.evidence_flags())
+    request = dict(live_evidence or {})
     stats = manager.stats() if manager is not None and hasattr(manager, "stats") else {}
     mqtt = dict(stats.get("mqtt", {}))
     udp = dict(stats.get("udp", {}))
@@ -83,7 +107,7 @@ def audit_backend(
         dict(getattr(state, "backend_stats", {}).get("native_video_0310", {}))
     )
     scenario = str(stats.get("scenario", getattr(manager, "scenario_key", "")))
-    selected_video_source = str(evidence.get("video_source", "")).strip().lower()
+    selected_video_source = str(request.get("video_source", "")).strip().lower()
     selected_video_source = {
         "native": "native_0310",
         "native 0x0310": "native_0310",
@@ -136,7 +160,7 @@ def audit_backend(
         ReadinessGate(
             "video_source_declared",
             source_declared,
-            "live_evidence.video_source must explicitly be udp or native_0310",
+            "selected runtime source must explicitly be udp or native_0310",
             True,
         ),
         ReadinessGate(
@@ -149,6 +173,16 @@ def audit_backend(
             "control_transport",
             bool(mqtt.get("connected", False)) and not bool(mqtt.get("mock_output", True)),
             "KeyboardMouseControl/CustomControl use official MQTT video-link uplink; 0x0311 is blocked on 115200 serial",
+            True,
+        ),
+        ReadinessGate(
+            "control_hard_gate",
+            bool(
+                qualification is not None
+                and qualification.core_ready()[0]
+                and stats.get("safety", {}).get("control_state") == "MATCH_ARMED"
+            ),
+            "authenticated evidence passed and operator explicitly armed this launch",
             True,
         ),
         ReadinessGate(
@@ -167,10 +201,34 @@ def audit_backend(
             "configured H.264/H.265 path validated against the match transmitter",
             True,
         ),
+        ReadinessGate(
+            "preflight",
+            bool(evidence.get("preflight", False)),
+            "portable manifest, resources, FFmpeg, writable paths, Qt/OpenGL and ports passed preflight",
+            True,
+        ),
         ReadinessGate("fresh_referee_state", official_fresh, "official referee state received within 2 seconds", True),
-        ReadinessGate("camera_calibration", bool(getattr(state, "vision_calibrated", False)), "camera calibration loaded and accepted", True),
+        ReadinessGate(
+            "camera_calibration",
+            bool(getattr(state, "vision_calibrated", False)),
+            "optional local-vision camera calibration loaded and accepted",
+            True,
+            required=False,
+        ),
         ReadinessGate("estop_robot_test", bool(evidence.get("estop_robot_test", False)), "physical E-stop zero-frame and latch test", True),
-        ReadinessGate("command_ack_test", bool(evidence.get("command_ack_test", False)), "lower-controller command/ACK semantics validated", True),
+        ReadinessGate(
+            "firmware_loss_zero_test",
+            bool(evidence.get("firmware_loss_zero_test", False)),
+            "robot firmware watchdog was physically observed returning KMC output to zero within 500 ms",
+            True,
+        ),
+        ReadinessGate(
+            "command_ack_test",
+            bool(evidence.get("command_ack_test", False)),
+            "optional lower-controller command/ACK semantics validated",
+            True,
+            required=False,
+        ),
         ReadinessGate(
             "control_heartbeat_test",
             bool(evidence.get("control_heartbeat_test", False)),
@@ -182,14 +240,16 @@ def audit_backend(
             bool(evidence.get("projectile_hit_spin_test", False))
             and bool(getattr(state, "injury_stats_initialized", False))
             and int(getattr(state, "projectile_hit_revision", 0)) > 0,
-            "live RobotInjuryStat 17/42 mm delta triggers bounded SpinMode without false first-sample activation",
+            "optional live RobotInjuryStat 17/42 mm delta triggers bounded SpinMode without false first-sample activation",
             True,
+            required=False,
         ),
         ReadinessGate(
             "spin_firmware_schema",
             bool(evidence.get("spin_firmware_schema", False)),
-            "robot firmware parses PRM1 kind=2 enable/disable, direction and speed with a watchdog timeout",
+            "optional robot firmware parses PRM1 kind=2 enable/disable, direction and speed with a watchdog timeout",
             True,
+            required=False,
         ),
         ReadinessGate(
             "hero_deploy_status_test",
@@ -202,8 +262,9 @@ def audit_backend(
         ReadinessGate(
             "robot_firmware_schema",
             bool(evidence.get("robot_firmware_schema", False)),
-            "robot firmware parses PRM1 kind=1 vision payload and never treats it as a fire command",
+            "optional robot firmware parses PRM1 kind=1 vision payload and never treats it as a fire command",
             True,
+            required=False,
         ),
         ReadinessGate("latency_soak_test", bool(evidence.get("latency_soak_test", False)), "full-duration match latency/thermal soak", True),
         ReadinessGate(
@@ -212,8 +273,16 @@ def audit_backend(
             and bool(getattr(state, "hero_lob_yaw_calibrated", False))
             and bool(getattr(state, "hero_lob_pitch_calibrated", False))
             and bool(getattr(state, "hero_lob_relocalization_valid", False)),
-            "Hero lob yaw/pitch/relocalization calibrated and validated on the real robot",
+            "optional Hero lob yaw/pitch/relocalization calibrated and validated on the real robot",
             True,
+            required=False,
+        ),
+        ReadinessGate(
+            "economy_live_test",
+            bool(evidence.get("economy_live_test", False)),
+            "optional economy command lifecycle validated against live referee data",
+            True,
+            required=False,
         ),
         ReadinessGate("field_signoff", bool(evidence.get("field_signoff", False)), "operator and safety lead field sign-off", True),
     )

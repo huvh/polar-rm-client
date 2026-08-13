@@ -135,6 +135,7 @@ class JelloClickGuiState:
     settings_module: str | None = None
     settings_closing: bool = False
     old_clickguis_expanded: bool = False
+    expanded_action_group: str | None = None
     legacy_mode: str | None = None
     panel_scroll: dict[str, float] = field(
         default_factory=lambda: {category: 0.0 for category in CATEGORIES}
@@ -180,6 +181,7 @@ class JelloClickGuiState:
         self.settings_module = None
         self.settings_closing = False
         self.old_clickguis_expanded = False
+        self.expanded_action_group = None
         self.legacy_mode = None
         self.dropdown_key = None
         self.dropdown_opens_up = False
@@ -219,9 +221,9 @@ class JelloClickGuiState:
         self.settings_panel_animation.set_target(1.0)
         self.settings_background_animation.set_target(1.0)
         self.close_dropdown(immediate=True)
-        if module_name != "ClickGui":
-            self.old_clickguis_expanded = False
-            self.old_group_animation.reset(0.0)
+        self.old_clickguis_expanded = False
+        self.expanded_action_group = None
+        self.old_group_animation.reset(0.0)
 
     def close_settings(self, *, immediate: bool = False) -> None:
         if self.settings_module is None:
@@ -230,6 +232,7 @@ class JelloClickGuiState:
         self.settings_panel_animation.set_target(0.0)
         self.settings_background_animation.set_target(0.0)
         self.old_clickguis_expanded = False
+        self.expanded_action_group = None
         self.old_group_animation.set_target(0.0)
         self.close_dropdown(immediate=immediate)
         self._settings_scroll_targets.clear()
@@ -241,8 +244,10 @@ class JelloClickGuiState:
             self.settings_module = None
             self.settings_closing = False
 
-    def toggle_old_group(self) -> None:
-        self.old_clickguis_expanded = not self.old_clickguis_expanded
+    def toggle_old_group(self, key: str = "ClickGui:Old ClickGUIs") -> None:
+        key = str(key)
+        self.expanded_action_group = None if self.expanded_action_group == key else key
+        self.old_clickguis_expanded = self.expanded_action_group is not None
         self.old_group_animation.set_target(1.0 if self.old_clickguis_expanded else 0.0)
         self.close_dropdown()
 
@@ -1458,9 +1463,10 @@ class JelloClickGuiRenderer:
 
         if setting.kind == "action_group":
             header = QRectF(row.left() + 337.0 * scale, row.top() + 5.0 * scale, 123.0 * scale, 27.0 * scale)
+            expanded = state.expanded_action_group == key
             commands.text(
                 header.adjusted(10.0 * scale, 0.0, -27.0 * scale, 0.0),
-                action_label("Hide" if state.old_clickguis_expanded else "Show all", chinese_enabled(host.registry)),
+                action_label("Hide" if expanded else "Show all", chinese_enabled(host.registry)),
                 self._font(host, "jello_light", 18.0),
                 self._argb(0xFF131313, 0.7 * alpha),
                 Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
@@ -1486,7 +1492,7 @@ class JelloClickGuiRenderer:
                     header.top() + 15.0 * scale,
                 ),
             )
-            host.add_hotspot(header.intersected(clip), "jello_toggle_old_group", setting)
+            host.add_hotspot(header.intersected(clip), "jello_toggle_old_group", key)
             raw_reveal = _clamp01(state.old_group_animation.progress)
             height_reveal = self._dropdown_height_factor(state.old_group_animation)
             if height_reveal > 0.001:
@@ -1519,8 +1525,9 @@ class JelloClickGuiRenderer:
                         alpha,
                     )
                     commands.rect(option, 0.0, background, clip=options_clip)
-                    legacy_label = _LEGACY_LABELS.get(mode, mode)
-                    if chinese_enabled(host.registry):
+                    is_legacy = setting.name == "Old ClickGUIs"
+                    legacy_label = _LEGACY_LABELS.get(mode, mode) if is_legacy else mode
+                    if chinese_enabled(host.registry) and is_legacy:
                         legacy_label = f"旧版 {legacy_label}"
                     commands.text(
                         option.adjusted(8.0 * scale, 0.0, -8.0 * scale, 0.0),
@@ -1531,7 +1538,11 @@ class JelloClickGuiRenderer:
                         options_clip,
                         render_scale=scale,
                     )
-                    host.add_hotspot(option.intersected(options_clip), "jello_open_legacy", mode)
+                    host.add_hotspot(
+                        option.intersected(options_clip),
+                        "jello_open_legacy" if is_legacy else "config_action",
+                        mode,
+                    )
             return None
 
         return None

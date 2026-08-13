@@ -343,6 +343,8 @@ class LocalAlignedVision:
         self.radius_m = 0.23
         self.horizon_s = 0.06
         self.retry_after = 0.0
+        self._stop_event = threading.Event()
+        self._pending_event = threading.Event()
 
     def configure(self, model_path: Path, device: str) -> None:
         if model_path == self.model_path and device == self.device:
@@ -363,24 +365,45 @@ class LocalAlignedVision:
     def start(self) -> None:
         if self.running:
             return
+        if self._thread is not None and self._thread.is_alive():
+            return
         if time.perf_counter() < self.retry_after:
             return
+        self._stop_event = threading.Event()
+        self._pending_event = threading.Event()
         self.running = True
-        self._thread = threading.Thread(target=self._run, name="polar-tongji-local", daemon=True)
-        self._thread.start()
+        self._thread = threading.Thread(
+            target=self._run,
+            args=(self._stop_event, self._pending_event),
+            name="polar-tongji-local",
+            daemon=True,
+        )
+        try:
+            self._thread.start()
+        except Exception:
+            self.running = False
+            self._thread = None
+            raise
 
     def stop(self) -> None:
         self.running = False
-        if self._thread is not None and self._thread.is_alive():
-            self._thread.join(timeout=0.8)
-        self._thread = None
-        self._detector = None
+        self._stop_event.set()
+        self._pending_event.set()
+        thread = self._thread
+        if thread is not None and thread.is_alive() and thread is not threading.current_thread():
+            thread.join(timeout=1.2)
+        if thread is None or not thread.is_alive():
+            self._thread = None
+            self._detector = None
+            with self._lock:
+                self._pending = None
 
     def submit(self, sequence: int, width: int, height: int, bgr: Any) -> None:
         if not self.running:
             return
         with self._lock:
             self._pending = (sequence, width, height, bgr.copy())
+        self._pending_event.set()
 
     def latest(self, timeout_ms: float = 350.0) -> tuple[int, int, int, int, list[dict[str, Any]], float, float, dict[str, Any] | None] | None:
         with self._lock:
@@ -389,16 +412,23 @@ class LocalAlignedVision:
             return None
         return result
 
-    def _run(self) -> None:
+    def _run(self, stop_event: threading.Event, pending_event: threading.Event) -> None:
         try:
             self._detector = TongjiYoloV5(self.model_path, self.device)
             self.active_device = self._detector.active_device
-            while self.running:
+            while self.running and not stop_event.is_set():
+                # Waiting for a latest-frame notification avoids the previous
+                # 3 ms busy loop, which multiplied into 100+ hot threads when
+                # a camera was missing or several UI smoke windows were built.
+                if not pending_event.wait(0.25):
+                    continue
+                pending_event.clear()
+                if stop_event.is_set():
+                    break
                 with self._lock:
                     pending = self._pending
                     self._pending = None
                 if pending is None:
-                    time.sleep(0.003)
                     continue
                 sequence, width, height, bgr = pending
                 started = time.perf_counter()
@@ -495,3 +525,6 @@ class LocalAlignedVision:
             self.retry_after = time.perf_counter() + 5.0
         finally:
             self.running = False
+            self._detector = None
+            if self._thread is threading.current_thread():
+                self._thread = None

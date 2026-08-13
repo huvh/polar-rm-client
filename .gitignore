@@ -39,6 +39,7 @@ Desktop.ini
 tmp_render_checks/
 tmp_selfcheck/
 tmp_*/
+tmp_*.json
 _backup_*/
 
 # --- Release archives (large; rebuild with tools/build_release.ps1) ---
@@ -62,3 +63,11 @@ calibrations/*
 
 # --- Optional: ignore entire unpacked release tree under release/ ---
 release/POLAR-RM_Custom_Client_*/
+
+# Portable runtime state / qualification evidence (never source controlled)
+field_evidence/
+logs/
+user_data/
+build/
+dist/
+*.spec.bak

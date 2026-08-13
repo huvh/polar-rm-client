@@ -5,6 +5,9 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
 from PySide6.QtCore import QRectF, Qt, QTimer
 from PySide6.QtGui import QColor, QFont, QPainter, QSurfaceFormat
 from PySide6.QtOpenGLWidgets import QOpenGLWidget
@@ -103,8 +106,9 @@ class GpuSmokeWidget(QOpenGLWidget):
         painter.end()
 
     def finish(self, app: QApplication) -> None:
-        artifact = Path(__file__).with_name("_gpu_renderer_runtime.png")
-        self.grabFramebuffer().save(str(artifact))
+        artifact_name = __import__("os").environ.get("POLAR_GPU_SMOKE_ARTIFACT", "").strip()
+        if artifact_name:
+            self.grabFramebuffer().save(artifact_name)
         self.close()
         app.quit()
 

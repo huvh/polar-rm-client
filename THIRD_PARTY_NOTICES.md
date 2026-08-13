@@ -38,3 +38,10 @@
 
 - Hero 吊射的 yaw/pitch 标定、炮口出口随 pitch 移动和重定位失效约束参考 RoboMaster 社区文章 <https://bbs.robomaster.com/article/1883342?source=11> 及其示例仓库 <https://github.com/qwq9966qwq/ITL_Hero_Shoot>。
 - 本项目重新实现为无自动发射输出的 fail-closed 决策预览；未把参考项目的仿真结果声明为真车或比赛认证。
+
+## FFmpeg
+
+- Windows x64 便携候选包外置携带未修改的 Gyan.dev FFmpeg full build；该构建为 GPLv3。
+- 固定版本为 `2026-01-29-git-c898ddb8fe-full_build`，固定 SHA-256 为 `79BDD4C65ADC74D4CA937B6A9D939349806D6C66C8A42C848B0E866BCBDF4EB7`。
+- 对应上游源码提交为 <https://github.com/FFmpeg/FFmpeg/commit/c898ddb8fe>。完整 GPLv3 文本、构建参数、来源与对应源码说明随便携包放在 `licenses/`。
+- 发布脚本只从显式参数复制经哈希校验的本地二进制；程序和清单均不记录开发机绝对路径。

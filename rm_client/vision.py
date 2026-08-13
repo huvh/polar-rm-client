@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import json
 import math
+import os
 import socket
 import struct
 import threading
@@ -332,54 +333,103 @@ class CameraCaptureWorker:
         self._latest: CapturedFrame | None = None
         self._sequence = 0
         self.on_frame: Callable[[CapturedFrame], None] | None = None
+        self.retry_after = 0.0
+        self.open_failures = 0
+        self.read_failures = 0
+        self._stop_event = threading.Event()
 
     def configure(self, camera_id: int, size: tuple[int, int]) -> None:
         self.camera_id = camera_id
         self.size = (max(160, int(size[0])), max(120, int(size[1])))
 
-    def start(self) -> None:
+    def start(self) -> bool:
         if self.running:
-            return
+            return True
+        if self._thread is not None and self._thread.is_alive():
+            return False
+        if time.perf_counter() < self.retry_after:
+            return False
+        stop_event = threading.Event()
+        self._stop_event = stop_event
         self.running = True
-        self._thread = threading.Thread(target=self._run, name="polar-camera", daemon=True)
-        self._thread.start()
+        self._thread = threading.Thread(
+            target=self._run,
+            args=(stop_event,),
+            name="polar-camera",
+            daemon=True,
+        )
+        try:
+            self._thread.start()
+        except Exception:
+            self.running = False
+            self._thread = None
+            raise
+        return True
 
     def stop(self) -> None:
         self.running = False
-        if self._thread is not None and self._thread.is_alive():
-            self._thread.join(timeout=0.8)
-        self._thread = None
+        self._stop_event.set()
+        thread = self._thread
+        if thread is not None and thread.is_alive() and thread is not threading.current_thread():
+            thread.join(timeout=1.2)
+        if thread is None or not thread.is_alive():
+            self._thread = None
         self.connected = False
 
     def latest_frame(self) -> CapturedFrame | None:
         with self._lock:
             return self._latest
 
-    def _run(self) -> None:
+    def _mark_capture_failure(self, message: str) -> None:
+        self.last_error = message
+        self.open_failures += 1
+        # Device probing can enter native multimedia backends.  A bounded
+        # exponential retry prevents a missing camera from consuming a core or
+        # repeatedly exercising a broken Windows MSMF driver.
+        delay = min(5.0, 0.5 * (2 ** min(4, self.open_failures - 1)))
+        self.retry_after = time.perf_counter() + delay
+
+    def _run(self, stop_event: threading.Event) -> None:
+        capture: Any = None
+        produced_frame = False
         try:
             import cv2  # type: ignore
         except Exception as exc:  # pragma: no cover - local camera stack
-            self.last_error = str(exc)
+            self._mark_capture_failure(str(exc))
             self.running = False
             return
-        capture = cv2.VideoCapture(self.camera_id, cv2.CAP_DSHOW)
-        if not capture.isOpened():
-            capture.release()
-            capture = cv2.VideoCapture(self.camera_id)
-        if not capture.isOpened():
-            capture.release()
-            self.last_error = "摄像头不可用"
-            self.running = False
-            return
-        capture.set(cv2.CAP_PROP_FRAME_WIDTH, self.size[0])
-        capture.set(cv2.CAP_PROP_FRAME_HEIGHT, self.size[1])
-        self.connected = True
         try:
-            while self.running:
+            # Windows is the release target.  Do not fall through to OpenCV's
+            # automatic MSMF backend after DirectShow fails: several drivers
+            # report an opened stream and then throw native access violations
+            # forever from read().  Other platforms retain their native auto
+            # backend.
+            if os.name == "nt" and hasattr(cv2, "CAP_DSHOW"):
+                capture = cv2.VideoCapture(self.camera_id, cv2.CAP_DSHOW)
+            else:  # pragma: no cover - Windows is the packaged target
+                capture = cv2.VideoCapture(self.camera_id)
+            if capture is None or not capture.isOpened():
+                self._mark_capture_failure("摄像头不可用")
+                return
+            capture.set(cv2.CAP_PROP_FRAME_WIDTH, self.size[0])
+            capture.set(cv2.CAP_PROP_FRAME_HEIGHT, self.size[1])
+            self.connected = True
+            consecutive_read_failures = 0
+            while self.running and not stop_event.is_set():
                 ok, bgr = capture.read()
                 if not ok or bgr is None:
-                    time.sleep(0.01)
+                    consecutive_read_failures += 1
+                    self.read_failures += 1
+                    if consecutive_read_failures >= 12:
+                        self._mark_capture_failure("摄像头连续读取失败")
+                        break
+                    stop_event.wait(0.025)
                     continue
+                produced_frame = True
+                consecutive_read_failures = 0
+                self.open_failures = 0
+                self.retry_after = 0.0
+                self.last_error = ""
                 if bgr.shape[1] != self.size[0] or bgr.shape[0] != self.size[1]:
                     bgr = cv2.resize(bgr, self.size, interpolation=cv2.INTER_LINEAR)
                 rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
@@ -389,10 +439,26 @@ class CameraCaptureWorker:
                     self._latest = frame
                 callback = self.on_frame
                 if callback is not None:
-                    callback(frame)
+                    try:
+                        callback(frame)
+                    except Exception as exc:
+                        # A UI callback fault may drop one frame, but must not
+                        # abandon the only capture owner without diagnostics.
+                        self.last_error = f"摄像头回调失败: {exc}"
+        except Exception as exc:  # pragma: no cover - driver dependent
+            self._mark_capture_failure(f"摄像头异常: {exc}")
         finally:
-            capture.release()
+            if capture is not None:
+                try:
+                    capture.release()
+                except Exception:
+                    pass
             self.connected = False
+            self.running = False
+            if not produced_frame and not self.last_error and not stop_event.is_set():
+                self._mark_capture_failure("摄像头未输出画面")
+            if self._thread is threading.current_thread():
+                self._thread = None
 
 
 class TongjiVisionBridge:

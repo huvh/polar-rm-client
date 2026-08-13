@@ -132,7 +132,11 @@ python -m venv .venv
 
 ## 配置文件
 
-客户端配置保存在 `configs/` 目录，默认配置为 `configs/default.json`。配置会保存模块开关、按键绑定、设置值、GUI 模式、HUD 模式、比赛场景、7v7/3v3 模式、小地图设置、UI 缩放和面板展开/位置。
+源码与便携版都把默认文件视为只读模板：源码模板是
+`configs/default.json`，便携包模板是 `defaults/default.json`。实际用户配置
+统一保存在 `user_data/configs/`；首启仅在目标不存在时原子复制模板。配置会
+保存模块开关、按键绑定、设置值、GUI 模式、HUD 模式、比赛场景、7v7/3v3
+模式、小地图设置、UI 缩放和面板展开/位置。
 
 `ConfigManager` 模块提供这些入口：
 
@@ -168,7 +172,10 @@ python -m venv .venv
 - RMUI 语义模块：`GimbalPower`、`PowerLimit`、`SpeedLimit`、`Capacitor`、`FrictionWheel`、`LockState`、`BuffStatus`、`ProjectileAllowance`、`JumpPTEWheelLES`。
 - 比赛 HUD 语义模块：`MatchMode`、`TacticalMap`、`MatchTimer`、`BaseOutpostStatus`、`VictoryPointStatus`、`EconomyPanel`、`ProjectileShop`、`ThermalPowerPanel`、`BuffTimeline`。`EconomyPanel` 提供独立工作区，并按比赛制式、机器人、实时金币、弹量、脱战和复活状态过滤操作；复活结算后关闭会清理经济界面的瞬态玻璃/遮罩缓存，不会带走 HUD，随后可再次打开。
 
-当前没有实现真实发射和真实底盘控制。所有控制输出默认都是 mock/stub。
+真实 KeyboardMouseControl 已接到官方 MQTT 上行，但每次启动默认 `LOCKED`。
+只有现场资格测试器生成的当前构建/机器人/固件证据、24 小时有效期内的动态
+测试、双人签字和本次进程人工 Arm 全部通过后，才进入 `MATCH_ARMED`。
+PRM1 自瞄/小陀螺仍是独立 `LOCKED MOCK` 能力；客户端不提供自动发射输出。
 
 ## 接入点
 
@@ -184,6 +191,7 @@ python -m venv .venv
 ```powershell
 .\.venv\Scripts\python.exe tests\smoke_test.py
 .\.venv\Scripts\python.exe tests\backend_protocol_test.py
+.\.venv\Scripts\python.exe tests\field_candidate_test.py
 .\.venv\Scripts\python.exe tests\gpu_compositor_test.py
 .\.venv\Scripts\python.exe tests\gpu_renderer_runtime_smoke.py
 .\.venv\Scripts\python.exe tests\startup_gpu_runtime_smoke.py
@@ -202,3 +210,22 @@ python -m venv .venv
 
 - 视频壁纸在可用的 OpenGL 上下文中作为纹理合成，鼠标视差和相邻源帧交叉淡化不再依赖 QPainter 全屏缩放。
 - 视频解码和玻璃快照仍在后台线程处理；OpenGL、视频或着色器不可用时自动回退到原有 QPainter 路径。
+
+
+## 自包含现场候选包
+
+发布脚本以 PyInstaller 6.21 one-folder 方式构建，无需现场 Python、venv、
+pip 或网络。运行时只认可便携包 `bin/ffmpeg.exe`，OfficialEvent 还会校验
+FFmpeg 与 `BUILD_MANIFEST.json` 的哈希。
+
+```powershell
+.\tools\build_release.ps1 `
+  -GitRef <explicit-commit> `
+  -FfmpegPath '<local-ffmpeg.exe>' `
+  -TexasWallpaperPath '<local-texas.mp4>' `
+  -VendingWallpaperPath '<local-vending-machine.mp4>'
+```
+
+详见 `FIELD_CANDIDATE.md`。构建完成仅表示“现场候选版”；缺少真车、正式
+裁判系统、正式图传和双人签字证据时，结论必须保持
+`NOT READY FOR REAL MATCH`。

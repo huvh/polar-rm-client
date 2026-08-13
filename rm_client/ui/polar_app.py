@@ -35,7 +35,7 @@ from PySide6.QtGui import (
     QWheelEvent,
 )
 from PySide6.QtOpenGLWidgets import QOpenGLWidget
-from PySide6.QtWidgets import QApplication, QFileDialog, QWidget
+from PySide6.QtWidgets import QApplication, QFileDialog, QInputDialog, QWidget
 
 from ..calibration import CameraCalibrationManager
 from ..auto_spin import ProjectileHitSpinController
@@ -85,6 +85,7 @@ from ..tongji_bridge import GimbalCommandBridge, TongjiVisionReceiver
 from ..tongji_yolo import LocalAlignedVision
 from ..transports import OfficialMqttBridge, SerialBridgeStub, UDPVideoReceiver, VideoPipeline
 from ..backend import BackendManager
+from ..runtime_paths import RuntimePaths
 from ..ui_audio import UiAudioManager
 from ..vision import (
     CameraCaptureWorker,
@@ -351,7 +352,10 @@ class PolarRMWindow(QOpenGLWidget):
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setUpdateBehavior(QOpenGLWidget.UpdateBehavior.NoPartialUpdate)
 
-        self.workspace = Path(__file__).resolve().parents[3]
+        self.paths = RuntimePaths.discover()
+        self.paths.ensure_writable_dirs()
+        self.paths.seed_default_config()
+        self.workspace = self.paths.workspace_root
         self.registry = build_default_registry()
         self.state = RobotState()
         self.combat_hud_animator = CombatHudAnimator()
@@ -380,9 +384,9 @@ class PolarRMWindow(QOpenGLWidget):
         self.official_feed = OfficialMatchFeed()
         self.vision_kill_detector = VisionKillDetector()
         self._official_state_updates: dict[str, Any] = {}
-        self.kill_fx = KillFxRenderer(self.workspace / "rm_custom_client" / "assets" / "kill_fx" / "gd656")
+        self.kill_fx = KillFxRenderer(self.paths.asset("kill_fx", "gd656"))
         self.ui_audio = UiAudioManager(
-            self.workspace / "rm_custom_client" / "assets" / "ui_sounds"
+            self.paths.asset("ui_sounds")
         )
         self.registry.add_toggle_listener(self.on_module_toggled)
         self._vision_scene_luminance = 0.0
@@ -397,11 +401,14 @@ class PolarRMWindow(QOpenGLWidget):
         # explicit tools, but do not double-assemble the production stream.
         self.backend.udp.external_on_frame = None
         self.control = KeyboardControlBridge(self.backend, mock_output=True)
+        self.backend.input_clear_hook = self._clear_control_inputs_for_lock
+        self._clear_control_inputs_for_lock("startup locked")
+        self._qualification_runtime_baseline = self._capture_qualification_runtime_baseline()
         self.auto_spin = ProjectileHitSpinController()
         self.economy_bridge = EconomyCommandBridge()
         self.economy_bridge.sender = self.send_economy_request
-        self.config_store = ClientConfigStore(self.workspace / "rm_custom_client" / "configs")
-        self.calibration = CameraCalibrationManager(self.workspace)
+        self.config_store = ClientConfigStore(self.paths.configs_root)
+        self.calibration = CameraCalibrationManager(self.workspace, profile_dir=self.paths.calibrations_root)
         self.calibration.load("polar_webcam")
         self.tongji_receiver = TongjiVisionReceiver()
         self.gimbal_command_bridge = GimbalCommandBridge()
@@ -424,21 +431,27 @@ class PolarRMWindow(QOpenGLWidget):
         self._dynamic_hud_started_at = time.perf_counter()
         self.dynamic_hud_ms = 0.0
         self._armor_geometry_smooth: dict[tuple[int, int, bool, str], tuple[tuple[tuple[float, float], ...], tuple[tuple[float, float], ...]]] = {}
-        self.startup_wallpaper = StartupWallpaperManager(self.workspace)
+        self.startup_wallpaper = StartupWallpaperManager(
+            self.workspace,
+            assets_dir=self.paths.asset("wallpapers"),
+            user_dir=self.paths.user_data_root / "wallpapers",
+            pkg_dir=self.paths.resource_root / "3000925581",
+            cache_dir=self.paths.user_data_root / ".wallpaper_cache" / "3000925581",
+        )
         self.scenario_manager.apply_to_registry(self.registry)
         self.scenario_manager.apply_to_runtime(self.mqtt, self.udp, self.control)
         self.match_mode_manager.apply_to_registry(self.registry)
         self.fonts = FontBook()
-        self.fonts.load_from_project_assets(self.workspace)
+        self.fonts.load_from_project_assets(self.paths.resource_root)
         self.anim = AnimationBank()
         self.gui_motion = GuiMotionController(self.anim)
         self.gui_cache = ClickGuiLayerCache()
         self.clickgui_gpu = ClickGuiGpuRenderer()
         self.jello_clickgui = JelloClickGuiRenderer(
-            self.workspace / "rm_custom_client" / "assets" / "jello"
+            self.paths.asset("jello")
         )
         self.minecraft_hud = MinecraftCombatHudRenderer(
-            self.workspace / "rm_custom_client" / "assets" / "minecraft_hud"
+            self.paths.asset("minecraft_hud")
         )
         self._last_minecraft_hud_layout = None
         self.hero_deploy_ui = HeroDeployInterfaceState()
@@ -578,6 +591,8 @@ class PolarRMWindow(QOpenGLWidget):
         self._tick_last_error = ""
         self._tick_last_log_at: dict[str, float] = {}
         self._last_readiness_audit_at = 0.0
+        self._field_frame_times_ms: list[float] = []
+        self._last_field_frame_log_at = time.perf_counter()
         self.last_control_toast = 0.0
         self._control_mouse_point: QPointF | None = None
         self._combat_input_was_allowed = False
@@ -847,6 +862,13 @@ class PolarRMWindow(QOpenGLWidget):
             if now - self._tick_last_log_at.get(name, 0.0) >= 1.0:
                 self._tick_last_log_at[name] = now
                 _LOG.exception("UI tick stage failed: %s", name)
+                self.backend.field_log.emit(
+                    "thread_exception",
+                    stage=name,
+                    error_type=type(exc).__name__,
+                    error=str(exc),
+                    count=self._tick_error_count,
+                )
             return False
 
     def update_backend_readiness(self, now: float | None = None, *, force: bool = False) -> dict[str, Any]:
@@ -871,6 +893,39 @@ class PolarRMWindow(QOpenGLWidget):
         if normalized in {"shark udp", "udp hevc", "hevc", "h265"}:
             return "udp"
         return ""
+
+    def _capture_qualification_runtime_baseline(self) -> dict[str, Any]:
+        """Snapshot process-local counters that persisted evidence cannot fake.
+
+        Qualification buttons may only certify activity observed after this
+        process/session baseline. A decoder frame, deploy transition, economy
+        revision, or reconnect left over from an earlier run is not field
+        evidence for a newly created session.
+        """
+
+        stats = self.backend.stats()
+        safety = dict(stats.get("safety_evidence", {}))
+        return {
+            "captured_at_perf": time.perf_counter(),
+            "captured_at_wall": time.time(),
+            "deploy_revision": int(self.state.deploy_status_revision),
+            "economy_revision": int(self.state.economy_status_revision),
+            "mqtt_reconnect_count": int(self.backend.mqtt.reconnect_count),
+            "estop_at": float(self.backend.safety.estop_at),
+            "mqtt_disconnect_lock_at": float(safety.get("mqtt_disconnect_lock_at", 0.0)),
+            "mqtt_reconnected_locked_at": float(safety.get("mqtt_reconnected_locked_at", 0.0)),
+            "udp_frames": int(dict(stats.get("udp", {})).get("decoded_frames", 0) or 0),
+            "native_frames": int(
+                dict(stats.get("native_0310", {})).get("decoded_frames", 0) or 0
+            ),
+        }
+
+    def _qualification_baseline(self) -> dict[str, Any]:
+        baseline = getattr(self, "_qualification_runtime_baseline", None)
+        if not isinstance(baseline, dict):
+            baseline = self._capture_qualification_runtime_baseline()
+            self._qualification_runtime_baseline = baseline
+        return baseline
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
@@ -926,6 +981,24 @@ class PolarRMWindow(QOpenGLWidget):
         self.state.fps = sum(self.fps_samples) / len(self.fps_samples)
         elapsed_ms = (presented - started) * 1000.0
         self.render_frame_ms_ema = elapsed_ms if self.render_frame_ms_ema <= 0.0 else self.render_frame_ms_ema * 0.90 + elapsed_ms * 0.10
+        self._field_frame_times_ms.append(elapsed_ms)
+        if len(self._field_frame_times_ms) > 720:
+            del self._field_frame_times_ms[:-720]
+        if presented - self._last_field_frame_log_at >= 5.0 and self._field_frame_times_ms:
+            ordered = sorted(self._field_frame_times_ms)
+            p95_index = min(len(ordered) - 1, max(0, math.ceil(len(ordered) * 0.95) - 1))
+            self.backend.field_log.emit(
+                "frame_timing",
+                samples=len(ordered),
+                frame_ms_p95=ordered[p95_index],
+                frame_ms_max=ordered[-1],
+                frame_ms_ema=self.render_frame_ms_ema,
+                fps=self.state.fps,
+                render_target_fps=self.render_fps_target,
+                compositor_ms=getattr(self.gpu_compositor, "frame_ms", 0.0),
+            )
+            self._field_frame_times_ms.clear()
+            self._last_field_frame_log_at = presented
         # 不再依据视频或偶发纹理上传耗时自动降档。摄像头保持源帧率，
         # HUD 呈现频率由 UIScale.HUD Refresh Rate 独立控制。
 
@@ -3252,9 +3325,26 @@ class PolarRMWindow(QOpenGLWidget):
         if self.scenario_manager.current.key != "OfficialEvent":
             self.mqtt.last_error = "仅官方赛事场景允许发送正式经济请求"
             return False
-        if request.topic == "AirSupportCommand":
-            return self.mqtt.publish_air_support_command(request.payload)
-        return self.mqtt.publish_common_command(request.payload)
+        qualification_token = getattr(self, "_economy_qualification_token", None)
+        if qualification_token is not None:
+            # A qualification capability authorises one supervised attempt,
+            # not a 30-second burst of economy commands. Consume the UI copy
+            # before publishing and destroy the backend capability immediately
+            # afterwards, irrespective of broker acceptance.
+            self._economy_qualification_token = None
+        try:
+            if request.topic == "AirSupportCommand":
+                return self.mqtt.publish_air_support_command(
+                    request.payload,
+                    qualification_token=qualification_token,
+                )
+            return self.mqtt.publish_common_command(
+                request.payload,
+                qualification_token=qualification_token,
+            )
+        finally:
+            if qualification_token is not None:
+                self.backend.lock_control("economy qualification command attempted")
 
     def economy_offers(self, category: str | None = None) -> list[EconomyOffer]:
         offers = available_actions(self.state)
@@ -4640,7 +4730,42 @@ class PolarRMWindow(QOpenGLWidget):
         self.backend.shutdown()
         super().closeEvent(event)
 
+    def focusOutEvent(self, event) -> None:
+        """A lost foreground window is an unconditional control epoch break."""
+
+        try:
+            self.control.mock_output = bool(self.backend.mqtt.mock_output)
+            self.control.release_all(self.state, self.registry)
+            self.backend.mqtt.publish_estop_zero()
+            self.backend.lock_control("window focus lost")
+            self.control.clear_pending()
+        finally:
+            super().focusOutEvent(event)
+
+    def _clear_control_inputs_for_lock(self, _reason: str = "") -> None:
+        """Drop every local key/button/relative-mouse sample without sending.
+
+        The neutral wire frame is sent by the caller when a link still exists;
+        this hook only guarantees that a reconnect can never replay stale host
+        input or resume motion automatically.
+        """
+
+        self.control.reset_inputs()
+        self.control.clear_pending()
+        # Qualification privileges are process-memory capabilities, not UI
+        # flags. Any lock/scene/focus/disconnect epoch destroys the economy
+        # token before another request can be constructed.
+        self._economy_qualification_token = None
+        self._control_mouse_point = None
+        self._combat_input_was_allowed = False
+
     def ensure_camera_started(self) -> None:
+        if os.environ.get("POLAR_DISABLE_LOCAL_CAPTURE", "").lower() in ("1", "true", "yes"):
+            if self.camera_worker.running:
+                self.camera_worker.stop()
+            self.camera_started = False
+            self.camera_worker.last_error = "local capture disabled"
+            return
         source = self.registry.get("CameraFeed")
         source_setting = source.get_setting("Source") if source else None
         if source_setting is not None and source_setting.value != "Webcam":
@@ -4649,6 +4774,8 @@ class PolarRMWindow(QOpenGLWidget):
         capture_width = int(self.get_setting_number(source, "Capture Width", 960))
         capture_height = int(self.get_setting_number(source, "Capture Height", 540))
         requested_config = (camera_id, capture_width, capture_height)
+        if self.camera_started and not self.camera_worker.running:
+            self.camera_started = False
         if self.camera_started and self._camera_config != requested_config:
             self.camera_worker.stop()
             self.camera_started = False
@@ -4657,9 +4784,9 @@ class PolarRMWindow(QOpenGLWidget):
         if not self.camera_started:
             self.camera_worker.configure(camera_id, (capture_width, capture_height))
             self.camera_worker.on_frame = self.on_captured_camera_frame
-            self.camera_worker.start()
-            self.camera_started = True
-            self._camera_config = requested_config
+            self.camera_started = self.camera_worker.start()
+            if self.camera_started:
+                self._camera_config = requested_config
 
     def draw_video(self, p: QPainter, width: int, height: int) -> None:
         if self.hero_deploy_video_cut_active():
@@ -4677,6 +4804,19 @@ class PolarRMWindow(QOpenGLWidget):
         self.draw_synthetic_video(p, width, height)
 
     def refresh_vision_runtime(self) -> None:
+        self.backend.set_active_video_source(
+            self.setting_mode(self.registry.get("CameraFeed"), "Source", "")
+        )
+        if os.environ.get("POLAR_DISABLE_LOCAL_CAPTURE", "").lower() in ("1", "true", "yes"):
+            self._vision_source = "Mock"
+            self._tongji_enabled = False
+            if self.local_vision.running:
+                self.local_vision.stop()
+            if self.tongji_receiver.running:
+                self.tongji_receiver.stop()
+            if self.tongji_bridge.running:
+                self.tongji_bridge.stop()
+            return
         bridge_module = self.registry.get("TongjiVisionBridge")
         self._vision_source = os.environ.get("POLAR_VISION_SOURCE", self.setting_mode(bridge_module, "Vision Source", "Local"))
         if self._vision_source not in ("Local", "Tongji", "Auto", "Mock"):
@@ -9565,7 +9705,7 @@ class PolarRMWindow(QOpenGLWidget):
         return fit
 
     def official_map_image(self, config: MatchModeConfig) -> QImage | None:
-        path = self.workspace / "rm_custom_client" / config.field.asset_path
+        path = self.paths.resource_root / config.field.asset_path
         key = str(path)
         if key not in self.map_images:
             self.map_images[key] = QImage(key)
@@ -9575,7 +9715,7 @@ class PolarRMWindow(QOpenGLWidget):
     def official_map_display_image(self, config: MatchModeConfig, source: QImage, fit: QRectF) -> QImage:
         width = max(1, int(round(fit.width())))
         height = max(1, int(round(fit.height())))
-        source_key = str(self.workspace / "rm_custom_client" / config.field.asset_path)
+        source_key = str(self.paths.resource_root / config.field.asset_path)
         key = (source_key, width, height)
         cached = self.map_display_cache.get(key)
         if cached is not None and not cached.isNull():
@@ -10503,14 +10643,10 @@ class PolarRMWindow(QOpenGLWidget):
 
     def _client_asset_path(self, *parts: str) -> Path:
         """Resolve assets under rm_custom_client/ regardless of workspace root."""
-        here = Path(__file__).resolve().parents[2]  # .../rm_custom_client
-        primary = here.joinpath(*parts)
+        primary = self.paths.resource_root.joinpath(*parts)
         if primary.exists():
             return primary
-        alt = self.workspace / "rm_custom_client" / Path(*parts)
-        if alt.exists():
-            return alt
-        return self.workspace.joinpath(*parts)
+        return self.paths.app_root.joinpath(*parts)
 
     def debug_tahoma_font(self, pixel_size: int = 16) -> QFont:
         """jar tahoma from assets/fonts/tahoma.ttf (PLAIN).
@@ -14493,7 +14629,7 @@ class PolarRMWindow(QOpenGLWidget):
             self.jello_state.close_settings()
             self.frame_scheduler.force()
         elif action == "jello_toggle_old_group":
-            self.jello_state.toggle_old_group()
+            self.jello_state.toggle_old_group(str(payload))
             self.frame_scheduler.force()
         elif action == "jello_mode_dropdown":
             key, _setting = payload
@@ -14742,7 +14878,33 @@ class PolarRMWindow(QOpenGLWidget):
         self.auto_save_config()
 
     def handle_config_action(self, action_name: str) -> None:
-        if action_name == "Trigger E-Stop":
+        qualification_actions = {
+            "New Qualification Session",
+            "Reset Qualification Session",
+            "Run Preflight",
+            "Run Video Test",
+            "Run KMC Test",
+            "Run Economy Send Test",
+            "Record E-Stop Test",
+            "Observe Firmware Zero",
+            "Record Firmware Zero Test",
+            "Run Loss Recovery Test",
+            "Record Hero Test",
+            "Record Economy Test",
+            "Review PRM1 Vision Schema",
+            "Run PRM1 Vision Bench",
+            "Review PRM1 Spin Schema",
+            "Run PRM1 Spin Bench",
+            "Start Match Soak",
+            "Stop Match Soak",
+            "Export Evidence",
+            "Field Sign-off",
+            "Arm Match Control",
+            "Lock Match Control",
+        }
+        if action_name in qualification_actions:
+            self.handle_qualification_action(action_name)
+        elif action_name == "Trigger E-Stop":
             self.control.reset_inputs()
             ok, reason = self.backend.trigger_estop()
             self.control.clear_pending()
@@ -14905,6 +15067,351 @@ class PolarRMWindow(QOpenGLWidget):
                 self.setting_mode(audio, "Sound Theme", "Polar UI"),
                 self.custom_ui_sound_selection(audio),
             )
+
+    def handle_qualification_action(self, action_name: str) -> None:
+        """Run qualification operations without trusting persisted booleans."""
+
+        qualification = self.backend.qualification
+        try:
+            if action_name == "New Qualification Session":
+                operator, ok = QInputDialog.getText(self, "Field qualification", "Operator name:")
+                if not ok:
+                    return
+                firmware_hash, ok = QInputDialog.getText(
+                    self, "Field qualification", "Robot firmware SHA-256:"
+                )
+                if not ok:
+                    return
+                qualification.new_session(
+                    robot_id=str(self.state.robot_id),
+                    firmware_hash=firmware_hash,
+                    match_mode=self.match_mode_manager.current.key,
+                    video_source=self.readiness_video_source() or "UNDECLARED",
+                    operator=operator,
+                )
+                self.backend.lock_control("new qualification session")
+                self._qualification_runtime_baseline = self._capture_qualification_runtime_baseline()
+                self.toast("Qualification session created; control remains LOCKED")
+            elif action_name == "Reset Qualification Session":
+                qualification.reset()
+                self.backend.lock_control("qualification reset")
+                self._qualification_runtime_baseline = self._capture_qualification_runtime_baseline()
+                self.toast("Qualification evidence reset")
+            elif action_name == "Run Preflight":
+                from ..preflight import run_preflight
+
+                result = run_preflight(
+                    self.paths,
+                    official=self.scenario_manager.current.key == "OfficialEvent",
+                    codec_selftest=True,
+                    active_udp_owned_by_client=bool(self.backend.udp.running),
+                )
+                qualification.record_automatic(
+                    "preflight",
+                    result.passed,
+                    measured=result.as_dict(),
+                    threshold="all startup checks pass",
+                )
+                self.toast("Preflight PASS" if result.passed else "Preflight BLOCKED")
+            elif action_name == "Run Video Test":
+                source = self.readiness_video_source()
+                stats = self.backend.stats()
+                section = stats.get("native_0310" if source == "native_0310" else "udp", {})
+                decoded = int(section.get("decoded_frames", 0) or 0)
+                fresh = bool(section.get("decoded_connected", False))
+                baseline = self._qualification_baseline()
+                baseline_frames = int(
+                    baseline.get("native_frames" if source == "native_0310" else "udp_frames", 0)
+                )
+                session = qualification.session
+                session_age = time.time() - session.created_at if session is not None else 0.0
+                # A single button cannot fabricate the mandated 60-second
+                # transmitter run. It records a pass only when an external
+                # qualification runner has populated an observed duration.
+                duration = float(section.get("continuous_decoded_seconds", 0.0) or 0.0)
+                passed = (
+                    session is not None
+                    and source in {"udp", "native_0310"}
+                    and fresh
+                    and decoded > baseline_frames
+                    and duration >= 60.0
+                    and session_age >= 60.0
+                )
+                qualification.record_automatic(
+                    "codec_field_test",
+                    passed,
+                    measured={
+                        "source": source,
+                        "frames": decoded,
+                        "frames_since_baseline": max(0, decoded - baseline_frames),
+                        "seconds": duration,
+                        "session_age_seconds": session_age,
+                    },
+                    threshold={"seconds": 60, "fresh": True, "new_frames": True},
+                )
+                self.toast("Video field test PASS" if passed else "Video test needs a 60 s field capture")
+            elif action_name == "Run KMC Test":
+                self.start_kmc_qualification_test()
+                return
+            elif action_name == "Run Economy Send Test":
+                self.start_economy_qualification_test()
+                return
+            elif action_name == "Observe Firmware Zero":
+                baseline = self._qualification_baseline()
+                if self.backend.safety.estop_at <= float(baseline.get("estop_at", 0.0)):
+                    self.toast("Trigger a new F12 E-stop in this qualification session first")
+                    return
+                phrase, accepted = QInputDialog.getText(
+                    self,
+                    "Physical firmware watchdog observation",
+                    "After physically observing neutral output, type ZERO OBSERVED:",
+                )
+                if not accepted or phrase.strip() != "ZERO OBSERVED":
+                    self.toast("Firmware zero observation cancelled")
+                    return
+                elapsed_ms = self.backend.record_firmware_zero_observation()
+                self.toast(f"Physical neutral output observed at {elapsed_ms:.1f} ms")
+                return
+            elif action_name in {
+                "Record E-Stop Test", "Record Firmware Zero Test", "Run Loss Recovery Test", "Record Hero Test", "Record Economy Test"
+            }:
+                stats = self.backend.stats()
+                safety_evidence = dict(stats.get("safety_evidence", {}))
+                baseline = self._qualification_baseline()
+                latest_economy = self.economy_bridge.latest
+                estop_is_new = (
+                    self.backend.safety.estop_at > float(baseline.get("estop_at", 0.0))
+                )
+                observed = {
+                    "Record E-Stop Test": (
+                        "estop_robot_test",
+                        estop_is_new
+                        and bool(safety_evidence.get("estop_zero_publish_ok", False)),
+                    ),
+                    "Record Firmware Zero Test": (
+                        "firmware_loss_zero_test",
+                        estop_is_new
+                        and bool(self.state.backend_stats.get("firmware_zero_observed_ms", 0.0))
+                        and float(self.state.backend_stats.get("firmware_zero_observed_ms", 9999.0)) <= 500.0,
+                    ),
+                    "Run Loss Recovery Test": (
+                        "loss_recovery_test",
+                        self.backend.mqtt.reconnect_count
+                        > int(baseline.get("mqtt_reconnect_count", 0))
+                        and float(safety_evidence.get("mqtt_disconnect_lock_at", 0.0))
+                        > float(baseline.get("captured_at_perf", 0.0))
+                        and float(safety_evidence.get("mqtt_reconnected_locked_at", 0.0))
+                        > float(baseline.get("captured_at_perf", 0.0))
+                        and self.backend.safety.control_state.value == "LOCKED",
+                    ),
+                    "Record Hero Test": (
+                        "hero_deploy_status_test",
+                        self.state.deploy_status_revision
+                        >= int(baseline.get("deploy_revision", 0)) + 2
+                        and self.state.deploy_status_at
+                        > float(baseline.get("captured_at_perf", 0.0))
+                        and int(self.state.deploy_mode) == 0,
+                    ),
+                    "Record Economy Test": (
+                        "economy_live_test",
+                        latest_economy is not None
+                        and latest_economy.status == "succeeded"
+                        and not latest_economy.request.mock
+                        and latest_economy.request.timestamp
+                        >= float(baseline.get("captured_at_wall", 0.0))
+                        and self.state.economy_status_revision
+                        > int(baseline.get("economy_revision", 0))
+                        and not self.economy_uses_mock_transport(),
+                    ),
+                }
+                key, passed = observed[action_name]
+                measured: Any = {"runtime_observed": passed}
+                threshold: Any = "live lifecycle observed"
+                if action_name == "Record Firmware Zero Test":
+                    measured = {
+                        "zero_observed_ms": float(
+                            self.state.backend_stats.get("firmware_zero_observed_ms", 0.0)
+                        )
+                    }
+                    threshold = {"maximum_ms": 500, "physical_observer_required": True}
+                qualification.record_automatic(
+                    key,
+                    passed,
+                    measured=measured,
+                    threshold=threshold,
+                )
+                self.toast(f"{key}: {'PASS' if passed else 'BLOCKED'}")
+            elif action_name in {
+                "Review PRM1 Vision Schema",
+                "Run PRM1 Vision Bench",
+                "Review PRM1 Spin Schema",
+                "Run PRM1 Spin Bench",
+            }:
+                # PRM1 authorisation is deliberately harder than core KMC: a
+                # named reviewer records the exact firmware-bound schema, then
+                # a supervised fixture must have observed both active and
+                # watchdog/disable states. A persisted module toggle can never
+                # manufacture either record.
+                key_map = {
+                    "Review PRM1 Vision Schema": "prm1_vision_schema_review",
+                    "Run PRM1 Vision Bench": "prm1_vision_bench_test",
+                    "Review PRM1 Spin Schema": "prm1_spin_schema_review",
+                    "Run PRM1 Spin Bench": "prm1_spin_bench_test",
+                }
+                reviewer, accepted = QInputDialog.getText(
+                    self,
+                    "PRM1 capability evidence",
+                    "Named schema reviewer / bench safety observer:",
+                )
+                if not accepted or not reviewer.strip():
+                    return
+                phrase, accepted = QInputDialog.getText(
+                    self,
+                    "PRM1 capability evidence",
+                    "Type OBSERVED ON FIXTURE to confirm supervised evidence:",
+                )
+                passed = bool(accepted and phrase.strip() == "OBSERVED ON FIXTURE")
+                qualification.record_supervised_prm1(
+                    key_map[action_name],
+                    passed,
+                    reviewer=reviewer,
+                    measured={"active_and_watchdog_observed": passed},
+                    threshold="same robot + firmware hash; supervised active/disable/watchdog evidence",
+                )
+                self.backend.lock_control("PRM1 evidence recorded; explicit re-arm required")
+                self.toast(f"{key_map[action_name]}: {'PASS' if passed else 'BLOCKED'} · LOCKED")
+            elif action_name == "Start Match Soak":
+                self._qualification_soak_started_at = time.perf_counter()
+                self.toast("Match-duration soak started")
+            elif action_name == "Stop Match Soak":
+                started = float(getattr(self, "_qualification_soak_started_at", 0.0))
+                elapsed = time.perf_counter() - started if started > 0.0 else 0.0
+                required = max(420.0, float(self.state.match_duration_sec or 0.0))
+                qualification.record_automatic(
+                    "latency_soak_test",
+                    elapsed >= required,
+                    measured={"seconds": elapsed},
+                    threshold={"minimum_seconds": required},
+                )
+                self.toast("Soak PASS" if elapsed >= required else "Soak stopped too early")
+            elif action_name == "Export Evidence":
+                destination = QFileDialog.getExistingDirectory(self, "Export field evidence")
+                if destination:
+                    target = qualification.store.export_current(Path(destination))
+                    self.toast(f"Evidence exported: {target.name}")
+            elif action_name == "Field Sign-off":
+                lead, ok = QInputDialog.getText(self, "Dual sign-off", "Safety lead name:")
+                if ok:
+                    qualification.sign_off(lead)
+                    self.toast("Dual sign-off recorded")
+            elif action_name == "Arm Match Control":
+                session = qualification.session
+                ok, reason = self.backend.arm_match_control(
+                    robot_id=str(self.state.robot_id),
+                    firmware_hash=session.firmware_hash if session is not None else "",
+                    match_mode=self.match_mode_manager.current.key,
+                    video_source=self.readiness_video_source(),
+                )
+                self.toast("MATCH CONTROL ARMED" if ok else f"Arm blocked: {reason}")
+            elif action_name == "Lock Match Control":
+                self.control.reset_inputs()
+                self.backend.mqtt.publish_estop_zero()
+                self.backend.lock_control("operator lock")
+                self.toast("Match control LOCKED")
+        except Exception as exc:
+            self.backend.lock_control(f"qualification error: {exc}")
+            self.toast(f"Qualification blocked: {exc}")
+        self.update_backend_readiness(force=True)
+        self.frame_scheduler.force()
+
+    def start_kmc_qualification_test(self) -> None:
+        """Schedule 750 neutral KMC frames without blocking the render thread."""
+
+        if getattr(self, "_qualification_kmc_timer", None) is not None:
+            self.toast("KMC qualification is already running")
+            return
+        token = self.backend.begin_qualification({"core_kmc"}, ttl_s=15.0)
+        started = time.perf_counter()
+        samples: list[float] = []
+        sent = 0
+        next_due = started
+        timer = QTimer(self)
+        timer.setTimerType(Qt.TimerType.PreciseTimer)
+        # Poll at 2 ms but emit at most once every exact 1/75 second. A 13 ms
+        # timer is 76.9 Hz and was correctly rejected by the official limiter.
+        timer.setInterval(2)
+        self._qualification_kmc_timer = timer
+
+        def finish() -> None:
+            nonlocal sent
+            timer.stop()
+            timer.deleteLater()
+            self._qualification_kmc_timer = None
+            elapsed = time.perf_counter() - started
+            intervals = [
+                (samples[index] - samples[index - 1]) * 1000.0
+                for index in range(1, len(samples))
+            ]
+            ordered = sorted(intervals)
+            p95 = ordered[min(len(ordered) - 1, int(len(ordered) * 0.95))] if ordered else 9999.0
+            maximum = max(intervals, default=9999.0)
+            passed = sent == 750 and p95 < 20.0 and maximum < 100.0
+            try:
+                self.backend.qualification.record_automatic(
+                    "control_heartbeat_test",
+                    passed,
+                    measured={
+                        "sent": sent,
+                        "seconds": elapsed,
+                        "p95_interval_ms": p95,
+                        "max_interval_ms": maximum,
+                    },
+                    threshold={"sent": 750, "p95_interval_ms": 20, "max_interval_ms": 100},
+                )
+            finally:
+                self.backend.lock_control("qualification KMC test complete")
+            self.toast(f"KMC {'PASS' if passed else 'FAIL'} · P95 {p95:.1f} ms · LOCKED")
+            self.update_backend_readiness(force=True)
+
+        def send_neutral() -> None:
+            nonlocal sent, next_due
+            now = time.perf_counter()
+            if now < next_due:
+                return
+            ok, _ = self.backend.publish_keyboard_mouse(qualification_token=token.value)
+            if ok:
+                sent += 1
+                samples.append(now)
+                next_due = now + 1.0 / 75.0
+            if len(samples) >= 750 or now - started > 12.0:
+                finish()
+
+        timer.timeout.connect(send_neutral)
+        timer.start()
+        self.toast("KMC neutral 75 Hz qualification started")
+
+    def start_economy_qualification_test(self) -> None:
+        """Authorize exactly one supervised economy command for 30 seconds.
+
+        This does not mark the capability PASS. The operator still has to use
+        the normal Economy workspace, observe authoritative local-state
+        confirmation, and then record the lifecycle result.
+        """
+
+        if self.scenario_manager.current.key != "OfficialEvent":
+            self.toast("Economy qualification requires OfficialEvent")
+            return
+        if self.backend.qualification.session is None:
+            self.toast("Create a qualification session first")
+            return
+        token = self.backend.begin_qualification({"economy"}, ttl_s=30.0)
+        self._economy_qualification_token = token.value
+        self.backend.field_log.emit(
+            "economy_qualification_window",
+            expires_at=token.expires_at,
+            session_id=self.backend.qualification.session.session_id,
+        )
+        self.toast("Economy test window active for 30 s; send one supervised request")
 
     def restore_compact_hud(self) -> None:
         """Restore compact visuals without changing behavior or connection settings."""
@@ -15239,7 +15746,7 @@ class PolarRMWindow(QOpenGLWidget):
         self.auto_save_config()
 
     def import_wallpaper_from_dialog(self) -> None:
-        start = str(self.workspace / "rm_custom_client" / "assets" / "wallpapers")
+        start = str(self.paths.asset("wallpapers"))
         filters = "Wallpaper media (*.mp4 *.webm *.mov *.avi *.mkv *.gif *.png *.jpg *.jpeg)"
         path, _ = QFileDialog.getOpenFileName(self, "Import startup wallpaper", start, filters)
         if not path:

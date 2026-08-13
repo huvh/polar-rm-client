@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+import os
 from pathlib import Path
 import shutil
 from typing import Iterable
@@ -177,7 +178,15 @@ class UiAudioManager:
         # These are the two exact cues invoked by Sigma's ModListView.  Set
         # their media sources now so the first module click does not pay MP3
         # probing/decoder startup on the UI thread.
-        self.pool.preload_media(("jello/activate.mp3", "jello/deactivate.mp3"))
+        # QtMultimedia's FFmpeg backend probes compressed media on worker
+        # threads.  Creating those workers in an offscreen regression process
+        # is both unnecessary (the tests replace the pool before playback) and
+        # unsafe on Windows: tearing a QMediaPlayer down while OpenCV is also
+        # decoding the wallpaper has intermittently caused an access violation.
+        # Production keeps the eager preload so Sigma's first toggle remains
+        # latency-free; deterministic/headless runs opt out explicitly.
+        if not _media_preload_disabled():
+            self.pool.preload_media(("jello/activate.mp3", "jello/deactivate.mp3"))
 
     def custom_sound_names(self) -> list[str]:
         sounds = [
@@ -259,3 +268,12 @@ class UiAudioManager:
         }.get(kind)
         if sound:
             self.pool.play(sound, volume)
+
+
+def _media_preload_disabled() -> bool:
+    return os.environ.get("POLAR_DISABLE_MEDIA_PRELOAD", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }

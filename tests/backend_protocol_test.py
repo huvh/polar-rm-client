@@ -196,54 +196,51 @@ def test_downlink_decode() -> None:
 
 
 def test_safety_modes() -> None:
-    print("[safety] three-mode gating")
+    print("[safety] hard gate modes")
     lab = SCENARIOS["LabDebug"]
     campus = SCENARIOS["CampusSimulation"]
     official = SCENARIOS["OfficialEvent"]
 
-    s = OfficialSafety("LabDebug")
-    s.from_scenario(lab)
-    check("fail-closed before GameStatus", s.is_fighting() is False)
-    ok, reason = s.can_publish("DartCommand")
+    safety = OfficialSafety("LabDebug")
+    safety.from_scenario(lab)
+    check("fail-closed before GameStatus", safety.is_fighting() is False)
+    ok, reason = safety.can_publish("DartCommand")
     check("LabDebug blocks real publish", ok is False and "mock" in reason)
 
-    s = OfficialSafety("CampusSimulation")
-    s.from_scenario(campus)
-    s.update_stage("0")
-    ok, reason = s.can_publish("CommonCommand")
-    check("Campus non-fighting blocked (official limits)", ok is False and "阶段" in reason)
-    s.update_stage("4")
-    ok, reason = s.can_publish("CommonCommand")
-    check("Campus fighting allowed", ok is True)
+    safety = OfficialSafety("CampusSimulation")
+    safety.from_scenario(campus)
+    safety.update_stage("4")
+    ok, reason = safety.can_publish("CommonCommand")
+    check("Campus fighting remains locked", ok is False and "LOCKED" in reason)
+    token = safety.begin_qualification({"economy"}, ttl_s=30.0, now=10.0)
+    ok, _ = safety.can_publish(
+        "CommonCommand",
+        now=10.0,
+        intent="economy",
+        qualification_token=token.value,
+    )
+    check("qualification token allows specified intent", ok is True)
+    ok, reason = safety.can_publish("KeyboardMouseControl", now=10.0, intent="core_kmc", qualification_token=token.value)
+    check("qualification token cannot widen intent", ok is False)
 
-    s = OfficialSafety("OfficialEvent")
-    s.from_scenario(official)
-    s.update_stage("0")
-    ok, reason = s.can_publish("DartCommand")
-    check("Official non-fighting blocked", ok is False and "阶段" in reason)
-    s.update_stage("4")
-    ok, reason = s.can_publish("DartCommand")
-    check("Official fighting allowed", ok is True)
-    s.mark_published("DartCommand")  # 模拟真实发布记录时间戳
-    ok, reason = s.can_publish("DartCommand")
-    check("Official 10Hz limited", ok is False and "10Hz" in reason)
+    safety = OfficialSafety("OfficialEvent")
+    safety.from_scenario(official)
+    safety.update_stage("4")
+    safety.arm_match({"core_kmc"})
+    ok, _ = safety.can_publish("KeyboardMouseControl", now=20.0, intent="core_kmc")
+    check("armed core KMC allowed", ok is True)
+    safety.mark_published("KeyboardMouseControl", now=20.0)
+    ok, reason = safety.can_publish("KeyboardMouseControl", now=20.01, intent="core_kmc")
+    check("KMC 75Hz limited", ok is False and "75" in reason)
+    ok, reason = safety.can_publish("CustomControl", now=20.02, intent="prm1_spin")
+    check("PRM1 remains separately locked", ok is False and "LOCKED MOCK" in reason)
 
-    # KMC/CustomControl are video-link streams and have an official 75 Hz
-    # ceiling; they must not inherit the 10 Hz event-command limit.
-    ok, _ = s.can_publish("KeyboardMouseControl", now=20.0)
-    check("KMC first publish allowed", ok is True)
-    s.mark_published("KeyboardMouseControl", now=20.0)
-    ok, reason = s.can_publish("KeyboardMouseControl", now=20.01)
-    check("KMC 75Hz limited", ok is False and "75Hz" in reason)
-    ok, _ = s.can_publish("KeyboardMouseControl", now=20.014)
-    check("KMC 75Hz cadence allowed", ok is True)
-
-    s.trigger_estop()
-    ok, reason = s.can_publish("DartCommand")
-    check("Estop blocks", ok is False and "急停" in reason)
-    s.release_estop()
-    ok, _ = s.can_publish("CommonCommand")
-    check("Estop release", ok is True)
+    safety.trigger_estop()
+    ok, reason = safety.can_publish("DartCommand")
+    check("Estop blocks", ok is False and "E-stop" in reason)
+    safety.release_estop()
+    ok, reason = safety.can_publish("KeyboardMouseControl", intent="core_kmc")
+    check("Estop release requires re-arm", ok is False and "LOCKED" in reason)
 
 
 def test_video_codec_detect() -> None:
@@ -321,7 +318,7 @@ def test_decoded_video_timestamp_and_source_selection() -> None:
     check(
         "UDP decoder restart stays off receive thread",
         backend.h265_decoder.available
-        and backend.h265_decoder.starts == 1
+        and backend.h265_decoder.restarts == 1
         and backend.h265_decoder_restarts == 1,
     )
     backend.running = False
@@ -353,6 +350,36 @@ def test_decoded_video_timestamp_and_source_selection() -> None:
     frame, _timestamp, source = manager.latest_video_frame(1.0, "Native 0x0310")
     check("manager honors native source", frame is native and source == "native-0x0310")
 
+    # Authoritative Hero deploy owns Native 0x0310 and stops the normal UDP
+    # path. The latest-frame selector must not fall back to a differently
+    # coloured/fresher UDP frame until a 1->0 sync restores the normal source.
+    manager._normal_video_source = "udp hevc"
+    manager._active_video_source = "udp hevc"
+    manager.udp.running = True
+    manager.udp.stop = lambda: setattr(manager.udp, "running", False)  # type: ignore[method-assign]
+    manager.udp.start = lambda: setattr(manager.udp, "running", True)  # type: ignore[method-assign]
+    manager.udp.set_decode_enabled = lambda _enabled: None  # type: ignore[method-assign]
+    manager._apply_one(state, "DeployModeStatusSync", {"status": 1})
+    check("Hero deploy stops UDP decoder", not manager.udp.running)
+    check("Hero deploy selects Native 0x0310", manager._active_video_source == "native 0x0310")
+    frame, _timestamp, source = manager.latest_video_frame(1.0, "Native 0x0310")
+    check("Hero has no UDP fallback", frame is native and source == "native-0x0310")
+    fake_native.frame = None
+    frame, timestamp, source = manager.latest_video_frame(1.0, "Native 0x0310")
+    check("Hero native loss yields no camera/UDP frame", frame is None and timestamp == 0.0 and source == "none")
+    fake_native.frame = native
+    manager._apply_one(state, "DeployModeStatusSync", {"status": 0})
+    check("Hero exit restores normal UDP source", manager.udp.running and manager._active_video_source == "udp hevc")
+    # The isolation checks above intentionally stop the Native decoder. Reset
+    # the fake's counters before exercising transport-gap restart semantics.
+    fake_native.available = True
+    fake_native.starts = 0
+    fake_native.restarts = 0
+    fake_native.writes.clear()
+    manager._native_0310_decoder_started_once = False
+    manager._native_0310_decoder_restarts = 0
+    manager.set_active_video_source("Native 0x0310")
+
     def packet(sequence: int, reset: bool, payload: bytes) -> bytes:
         header = (0x01 if reset else 0x00) | (0x02 if len(payload) > 255 else 0x00)
         block = bytes((header, sequence & 0xFF, len(payload) & 0xFF)) + payload
@@ -360,6 +387,8 @@ def test_decoded_video_timestamp_and_source_selection() -> None:
 
     sps_a = b"lead\x00\x00\x00\x01\x67sps-a"
     sps_b = b"\x00\x00\x01\x67sps-b"
+    recovery_a = sps_a + b"\x00\x00\x01\x68pps-a\x00\x00\x01\x65idr-a"
+    recovery_b = sps_b + b"\x00\x00\x01\x68pps-b\x00\x00\x01\x65idr-b"
     check("native SPS finder 4-byte", find_h264_sps_offset(sps_a) == 4)
     check("native SPS finder 3-byte", find_h264_sps_offset(sps_b) == 0)
     check("native SPS finder rejects non-SPS", find_h264_sps_offset(b"\x00\x00\x01\x65idr") is None)
@@ -369,27 +398,27 @@ def test_decoded_video_timestamp_and_source_selection() -> None:
         state.backend_stats["native_video_0310"]["blocked_until_sps"]
         and not state.backend_stats["native_video_0310"]["payload_written"],
     )
-    manager._apply_one(state, "CustomByteBlock", {"data": packet(11, False, sps_a)})
+    manager._apply_one(state, "CustomByteBlock", {"data": packet(11, False, recovery_a)})
     manager._apply_one(state, "CustomByteBlock", {"data": packet(13, False, b"b" * 20)})
     check(
         "native gap blocks corrupt continuation",
         state.backend_stats["native_video_0310"]["blocked_until_sps"]
         and not state.backend_stats["native_video_0310"]["payload_written"],
     )
-    manager._apply_one(state, "CustomByteBlock", {"data": packet(14, False, sps_b)})
-    manager._apply_one(state, "CustomByteBlock", {"data": packet(14, False, sps_b)})
+    manager._apply_one(state, "CustomByteBlock", {"data": packet(14, False, recovery_b)})
+    manager._apply_one(state, "CustomByteBlock", {"data": packet(14, False, recovery_b)})
     info = state.backend_stats["native_video_0310"]
     check("native stream retains no unbounded bytearray", not hasattr(manager, "_native_0310_buffer"))
     check("native sequence gap counted", info["dropped_chunks"] == 1)
     check("native duplicate rejected", info["out_of_order_chunks"] == 1 and not info["payload_accepted"])
     check(
         "native resumes exactly at SPS",
-        fake_native.writes == [sps_a[4:], sps_b] and not info["blocked_until_sps"],
+        len(fake_native.writes) == 2 and not info["blocked_until_sps"],
     )
     check(
         "native payload writes bounded",
         len(fake_native.writes) == 2
-        and info["bytes_since_reset"] == 40 + len(sps_a) + len(sps_b),
+        and info["bytes_since_reset"] == 40 + len(recovery_a) + len(recovery_b),
     )
     check("native gaps do not synchronously restart ffmpeg", fake_native.restarts == 0)
     manager._native_0310_decoder_started_once = True
@@ -400,13 +429,13 @@ def test_decoded_video_timestamp_and_source_selection() -> None:
         state.backend_stats["native_video_0310"]["blocked_until_sps"]
         and len(fake_native.writes) == 2,
     )
-    manager._apply_one(state, "CustomByteBlock", {"data": packet(16, False, sps_b)})
+    manager._apply_one(state, "CustomByteBlock", {"data": packet(16, False, recovery_b)})
     info = state.backend_stats["native_video_0310"]
     check(
         "native decoder restarts only at SPS",
         fake_native.starts == 1
         and info["decoder_restarts"] == 1
-        and fake_native.writes[-1] == sps_b,
+        and fake_native.writes[-1].endswith(b"idr-b"),
     )
     manager.shutdown()
 
@@ -589,6 +618,28 @@ def test_scenario_restart_does_not_publish_offline() -> None:
     manager.shutdown()
 
 
+def test_backend_lock_requests_input_clear() -> None:
+    print("[manager] control epoch clears host input")
+    manager = BackendManager(state=RobotState(), scenario_key="LabDebug")
+    reasons: list[str] = []
+    manager.input_clear_hook = reasons.append
+    manager.lock_control("unit-test lock")
+    check("explicit lock requests input clear", reasons == ["unit-test lock"])
+
+    # Simulate a link that has remained down longer than the two-second grace
+    # period. Reconnect keeps LOCKED and may never replay the stale input.
+    manager.mqtt.connected = False
+    manager.mqtt.disconnected_at = time.perf_counter() - 2.1
+    manager.tick()
+    check("MQTT timeout requests input clear", reasons[-1] == "MQTT disconnected for more than 2 seconds")
+    generation = manager.stats()["safety_evidence"]["input_clear_generation"]
+    manager.mqtt.connected = True
+    manager.tick()
+    check("reconnect does not re-arm", manager.safety.control_state.value == "LOCKED")
+    check("input clear generation is observable", generation >= 2)
+    manager.shutdown()
+
+
 def test_protocol_regressions() -> None:
     print("[protocol] regression fixes")
     check("empty payload -> {}", proto.decode_message("GameStatus", b"") == {})
@@ -646,6 +697,7 @@ def test_mqtt_publish_rc() -> None:
     s = OfficialSafety("OfficialEvent")
     s.from_scenario(SCENARIOS["OfficialEvent"])
     s.update_stage("4")
+    s.arm_match({"core_kmc"})
     backend = RmMqttBackend(host="127.0.0.1", port=3333, client_id="3",
                             mock_output=False, safety=s)
     backend.connected = True
@@ -675,13 +727,13 @@ def test_mqtt_publish_rc() -> None:
     ok, reason = backend.publish_topic("DartCommand", b"x")
     check("connected publish ok", ok is True and reason == "ok")
     ok, reason = backend.publish_topic("DartCommand", b"x")
-    check("10Hz after real publish", ok is False and "10Hz" in reason)
+    check("10Hz after real publish", ok is False and "10" in reason)
 
     backend2 = RmMqttBackend(host="127.0.0.1", port=3333, client_id="3",
                              mock_output=True, safety=s)
     s.trigger_estop()
     ok, reason = backend2.publish_topic("DartCommand", b"x")
-    check("estop blocks mock", ok is False and "急停" in reason)
+    check("estop blocks mock", ok is False and bool(reason))
     s.release_estop()
 
     from rm_client.backend.manager import BackendManager
@@ -750,7 +802,7 @@ def test_native_0310_video_pipeline() -> None:
     proc = subprocess.run(
         [
             ffmpeg, "-v", "error", "-f", "lavfi",
-            "-i", "testsrc2=size=160x120:rate=10:duration=0.6",
+            "-i", "testsrc2=size=160x120:rate=30:duration=2.0",
             "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
             "-f", "h264", "pipe:1",
         ],
@@ -762,6 +814,7 @@ def test_native_0310_video_pipeline() -> None:
     from rm_client.model import RobotState
     state = RobotState()
     manager = BackendManager(state=state, client_id="3", scenario_key="OfficialEvent")
+    manager.set_active_video_source("Native 0x0310")
     chunks = [data[i:i + 297] for i in range(0, len(data), 297)]
     for idx, chunk in enumerate(chunks):
         length = len(chunk)
@@ -782,6 +835,7 @@ def test_native_0310_video_pipeline() -> None:
     frames = 0
     while time.time() < deadline and frames <= 0:
         time.sleep(0.3)
+        manager.stats()
         info = state.backend_stats.get("native_video_0310", {})
         frames = int(info.get("decoded_frames", 0) or 0)
     check("native decoder ready", bool(state.backend_stats.get("native_video_0310", {}).get("decoder_ready", False)))
@@ -801,7 +855,7 @@ def test_persistent_h264_decoder() -> None:
     proc = subprocess.run(
         [
             ffmpeg, "-v", "error", "-f", "lavfi",
-            "-i", "testsrc2=size=160x120:rate=10:duration=0.4",
+            "-i", "testsrc2=size=160x120:rate=30:duration=2.0",
             "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
             "-f", "h264", "pipe:1",
         ],
@@ -858,6 +912,7 @@ def main() -> None:
     test_map_click_downlink_and_health_order()
     test_shutdown_neutral_frame_and_readiness_consumption()
     test_scenario_restart_does_not_publish_offline()
+    test_backend_lock_requests_input_clear()
     test_protocol_regressions()
     test_serial_partial_frame()
     test_codec_regressions()

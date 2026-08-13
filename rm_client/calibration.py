@@ -24,9 +24,9 @@ class CalibrationProfile:
 class CameraCalibrationManager:
     """棋盘格采集、标定和同济桌面 YAML 导出。"""
 
-    def __init__(self, workspace: Path) -> None:
-        self.workspace = Path(workspace)
-        self.profile_dir = self.workspace / "rm_custom_client" / "calibrations"
+    def __init__(self, workspace: Path | None = None, *, profile_dir: Path | None = None) -> None:
+        self.workspace = Path(workspace or Path.cwd())
+        self.profile_dir = Path(profile_dir) if profile_dir is not None else self.workspace / "rm_custom_client" / "calibrations"
         self.profile_dir.mkdir(parents=True, exist_ok=True)
         self._object_points: list[Any] = []
         self._image_points: list[Any] = []

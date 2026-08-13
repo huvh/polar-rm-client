@@ -12,21 +12,21 @@ LabDebug / CampusSimulation / OfficialEvent 各自：
 from __future__ import annotations
 
 import logging
+import json
 import time
-from typing import Any
+from typing import Any, Callable
 
 from ..model import RobotState
-from ..native_viewer_telemetry import (
-    find_h264_sps_offset,
-    parse_vehicle_telemetry,
-    parse_video_0310_chunk,
-)
+from ..native_viewer_telemetry import parse_vehicle_telemetry, parse_video_0310_chunk
 from ..scenarios import SCENARIOS
 from . import protocol as proto
 from .mqtt_backend import RmMqttBackend
 from .safety import OfficialSafety
 from .serial_backend import RmSerialBackend
-from .video_backend import ContinuousMjpegDecoder, RmVideoBackend
+from .video_backend import AnnexBRecoveryGate, ContinuousMjpegDecoder, RmVideoBackend
+from .field_log import RotatingJsonlLogger
+from .qualification import QualificationEvidenceStore, QualificationManager
+from ..runtime_paths import RuntimePaths
 
 # 官方性能体系取值（对齐 messages.proto 与 Shark RoboModeSettings）
 HERO_MELEE = 3
@@ -61,7 +61,8 @@ class BackendManager:
         client_id: str = "3",
         scenario_key: str = "LabDebug",
     ) -> None:
-        self.workspace = workspace
+        self.paths = RuntimePaths.discover()
+        self.workspace = workspace if workspace is not None else self.paths.workspace_root
         self.state = state
         self.scenario_key = scenario_key
         self.safety = OfficialSafety(scenario_key)
@@ -72,6 +73,7 @@ class BackendManager:
         self.udp = RmVideoBackend(host="127.0.0.1", port=3334)
         self.serial = RmSerialBackend(port="Stub", baud=115200, mock_writes=True, safety=self.safety)
         self.native_decoder = ContinuousMjpegDecoder("h264")
+        self._native_recovery = AnnexBRecoveryGate("h264")
         # Native 0x0310 is a continuous stream.  Retaining every payload in a
         # bytearray caused unbounded memory growth during a full match even
         # though ffmpeg already consumes the bytes.  Keep counters and sequence
@@ -84,8 +86,32 @@ class BackendManager:
         self._native_0310_blocked_until_sps = True
         self._native_0310_decoder_restarts = 0
         self._native_0310_decoder_started_once = False
+        self._native_next_restart_at = 0.0
+        self._native_restart_backoff_s = 0.5
+        self._native_failure_epoch_handled = False
         self._apply_error_count = 0
         self._last_apply_error = ""
+        self._official_state_updates_count = 0
+        self._mqtt_disconnect_lock_applied = False
+        self._mqtt_disconnect_lock_at = 0.0
+        self._mqtt_reconnected_locked_at = 0.0
+        self._active_video_source = ""
+        self._normal_video_source = ""
+        self._hero_native_override = False
+        self._estop_triggered_at = 0.0
+        self._last_estop_zero_ok = False
+        self._last_estop_zero_reason = "not run"
+        self._input_clear_generation = 0
+        self.input_clear_hook: Callable[[str], None] | None = None
+        self._last_logged_stage = ""
+        self.field_log = RotatingJsonlLogger(self.paths.logs_root)
+        self.safety.input_clear_hook = self._request_input_clear
+        self.mqtt.event_hook = self._log_backend_event
+        self.udp.event_hook = self._log_backend_event
+        build_commit = self._build_commit()
+        self.qualification = QualificationManager(
+            QualificationEvidenceStore(self.paths.evidence_root, build_commit=build_commit)
+        )
         self.config = SCENARIOS.get(scenario_key, SCENARIOS["LabDebug"])
         self._apply_config(self.config)
 
@@ -103,6 +129,7 @@ class BackendManager:
         self.serial.port = config.connection.serial_port
         self.serial.baud = int(config.connection.serial_baud)
         self.serial.mock_writes = bool(config.safety.mock_writes)
+        self.set_active_video_source(config.connection.video_source)
 
     def apply_scenario(self, key: str, *, start: bool = True) -> None:
         key = key if key in SCENARIOS else "LabDebug"
@@ -113,13 +140,15 @@ class BackendManager:
         # shutdown() deliberately latches local E-stop.  A scenario switch has
         # already emitted the neutral frame and now creates a fresh fail-closed
         # safety epoch; it must not inherit the old software latch forever.
-        self.release_estop()
+        self.safety.release_estop()
         if not start:
             return
         # 三种模式都启动 MQTT（可收裁判数据；发布按场景门控）
         self.mqtt.start()
-        # 三种模式都监听 UDP 图传（codec 检测 + MJPEG 解码 + 统计）
-        self.udp.start()
+        # UDP socket/HEVC decoder are started only when that source is selected.
+        # Native 0x0310 arrives on MQTT and owns its own lazy decoder.
+        if self._active_video_source in {"shark udp", "udp", "udp hevc", "hevc", "h265"}:
+            self.udp.start()
         # 串口：Stub 或真实端口
         self.serial.start()
 
@@ -127,6 +156,174 @@ class BackendManager:
         if self.state is not None:
             self.safety.update_stage(self.state.current_stage)
         self.serial.tick()
+        if not self.mqtt.connected and self.mqtt.disconnected_at > 0.0:
+            if time.perf_counter() - self.mqtt.disconnected_at > 2.0 and not self._mqtt_disconnect_lock_applied:
+                self.lock_control("MQTT disconnected for more than 2 seconds")
+                self._mqtt_disconnect_lock_applied = True
+                self._mqtt_disconnect_lock_at = time.perf_counter()
+        elif self.mqtt.connected:
+            # Reconnect clears the detection edge, but intentionally never
+            # restores MATCH_ARMED.
+            if self._mqtt_disconnect_lock_applied:
+                self._mqtt_reconnected_locked_at = time.perf_counter()
+                self.field_log.emit(
+                    "mqtt_reconnected_locked",
+                    disconnected_lock_at=self._mqtt_disconnect_lock_at,
+                    safety_state=self.safety.control_state.value,
+                )
+            self._mqtt_disconnect_lock_applied = False
+        self._recover_video_decoders()
+
+    def _recover_video_decoders(self) -> None:
+        """Apply decoder health timeouts off the transport callback path.
+
+        An ffmpeg process can remain alive while producing no frame (bad GOP,
+        transmitter reset) or can leave a stale last image. Both conditions
+        are treated exactly like packet loss: reset the bounded Annex-B gate,
+        restart with backoff, and wait for a fresh parameter-set/keyframe.
+        """
+
+        if self.udp.decode_h265 and self.udp.running and self.udp.h265_decoder is not None:
+            health = self.udp.h265_decoder.health()
+            if health.get("first_frame_timeout") or health.get("stale"):
+                self.udp.h265_recovery.reset()
+                self.udp._request_h265_restart()
+
+        native_selected = self._active_video_source in {
+            "native", "native 0x0310", "0x0310",
+        } or int(getattr(self.state, "deploy_mode", 0) if self.state is not None else 0) == 1
+        if not native_selected:
+            return
+        health = self.native_decoder.health()
+        crashed = bool(
+            self._native_0310_decoder_started_once
+            and not self.native_decoder.available
+            and self._native_0310_bytes_since_reset > 0
+            and not self._native_failure_epoch_handled
+        )
+        if not (crashed or health.get("first_frame_timeout") or health.get("stale")):
+            return
+        now = time.perf_counter()
+        if now < self._native_next_restart_at:
+            return
+        restarted = self.native_decoder.restart(clear_latest=True)
+        self._native_failure_epoch_handled = bool(restarted)
+        self._native_recovery.reset()
+        self._native_0310_blocked_until_sps = True
+        if restarted:
+            self._native_0310_decoder_restarts += 1
+            self._native_0310_decoder_started_once = True
+            self._native_restart_backoff_s = 0.5
+            self._native_next_restart_at = 0.0
+        else:
+            self._native_next_restart_at = now + self._native_restart_backoff_s
+            self._native_restart_backoff_s = min(5.0, self._native_restart_backoff_s * 2.0)
+        self.field_log.emit(
+            "decoder_restart",
+            source="native_0310",
+            restarted=restarted,
+            health=health,
+        )
+
+    def _build_commit(self) -> str:
+        try:
+            if self.paths.manifest_path.is_file():
+                data = json.loads(self.paths.manifest_path.read_text(encoding="utf-8-sig"))
+                return str(data.get("git_commit", "UNKNOWN"))
+            marker = self.paths.app_root / "BUILD_COMMIT.txt"
+            if marker.is_file():
+                return marker.read_text(encoding="ascii").strip()
+        except Exception:
+            pass
+        # Source runs are explicitly not field-certifiable, but binding them
+        # to HEAD still makes tests and local evidence deterministic.
+        try:
+            import subprocess
+            result = subprocess.run(
+                ["git", "-C", str(self.paths.app_root), "rev-parse", "HEAD"],
+                capture_output=True,
+                text=True,
+                timeout=2.0,
+            )
+            if result.returncode == 0:
+                return result.stdout.strip()
+        except Exception:
+            pass
+        return "UNKNOWN"
+
+    def _log_backend_event(self, event: str, **payload: Any) -> None:
+        if event == "referee_rx" and isinstance(payload.get("payload"), bytes):
+            self.field_log.referee_payload(str(payload.get("topic", "")), payload["payload"])
+            return
+        self.field_log.emit(event, **payload)
+
+    def _request_input_clear(self, reason: str) -> None:
+        """Clear host input whenever a control authorization epoch ends.
+
+        The backend deliberately owns the request so disconnect and scenario
+        transitions cannot depend on a particular GUI path.  The callback is
+        optional for headless tests; production installs it immediately after
+        constructing ``KeyboardControlBridge``.
+        """
+
+        self._input_clear_generation += 1
+        hook = self.input_clear_hook
+        if hook is not None:
+            try:
+                hook(str(reason))
+            except Exception as exc:
+                self.field_log.emit(
+                    "input_clear_error",
+                    reason=reason,
+                    generation=self._input_clear_generation,
+                    error=f"{type(exc).__name__}: {exc}",
+                )
+                return
+        self.field_log.emit(
+            "input_clear",
+            reason=reason,
+            generation=self._input_clear_generation,
+            callback_installed=hook is not None,
+        )
+
+    def set_active_video_source(self, source_mode: str, *, _hero_transition: bool = False) -> None:
+        normalized = str(source_mode or "").strip().lower()
+        normalized = {
+            "shark udp": "udp hevc",
+            "udp": "udp hevc",
+            "hevc": "udp hevc",
+            "h265": "udp hevc",
+            "native": "native 0x0310",
+            "0x0310": "native 0x0310",
+        }.get(normalized, normalized)
+        if not _hero_transition:
+            self._normal_video_source = normalized
+        # DeployModeStatusSync=1 owns the video path regardless of the normal
+        # CameraFeed setting. The UDP socket/decoder is stopped during that
+        # authoritative interval, while Native 0x0310 remains lazy until its
+        # first complete SPS/PPS/IDR is received.
+        if self._hero_native_override:
+            normalized = "native 0x0310"
+        udp_selected = normalized in {"shark udp", "udp", "udp hevc", "hevc", "h265"}
+        if (
+            normalized == self._active_video_source
+            and (not udp_selected or self.udp.running)
+        ):
+            return
+        self._active_video_source = normalized
+        if udp_selected and not self.udp.running:
+            # The socket and decoder are both lazy. This avoids an unused HEVC
+            # process and an unnecessary UDP bind in Webcam/Native sessions.
+            self.udp.start()
+        elif not udp_selected and self.udp.running:
+            self.udp.stop()
+        self.udp.set_decode_enabled(udp_selected)
+        if normalized not in {"native", "native 0x0310", "0x0310"} and int(
+            getattr(self.state, "deploy_mode", 0) if self.state is not None else 0
+        ) != 1:
+            self.native_decoder.stop()
+            self._native_recovery.reset()
+            self._native_0310_blocked_until_sps = True
 
     def sync_frontend_state(self, state: RobotState) -> None:
         """????????????????? HUD ????
@@ -255,6 +452,8 @@ class BackendManager:
         self.udp.stop()
         self.serial.stop()
         self.native_decoder.stop()
+        self._native_recovery.reset()
+        self.field_log.emit("backend_shutdown", restart=restart)
 
     def apply_readiness(
         self,
@@ -323,6 +522,7 @@ class BackendManager:
             try:
                 self._apply_one(state, name, data)
                 count += 1
+                self._official_state_updates_count += 1
             except Exception as exc:
                 # 单条坏消息不能中断本帧，更不能让 Qt timer 永久假死。
                 self._apply_error_count += 1
@@ -357,6 +557,14 @@ class BackendManager:
             stage = int(data.get("current_stage", 0))
             state.current_stage = _STAGE_STR.get(stage, str(stage))
             self.safety.update_stage(stage)
+            if state.current_stage != self._last_logged_stage:
+                self._last_logged_stage = state.current_stage
+                self.field_log.emit(
+                    "match_stage",
+                    raw_stage=stage,
+                    stage=state.current_stage,
+                    round=state.current_round,
+                )
             state.stage_countdown_sec = max(0, int(data.get("stage_countdown_sec", state.stage_countdown_sec)))
             state.stage_elapsed_sec = max(0, int(data.get("stage_elapsed_sec", state.stage_elapsed_sec)))
         elif name == "GlobalUnitStatus":
@@ -447,6 +655,20 @@ class BackendManager:
                 state.deploy_status_revision += 1
             state.deploy_mode = next_status
             state.deploy_status_at = time.perf_counter()
+            if bool(next_status) != self._hero_native_override:
+                self._hero_native_override = bool(next_status)
+                if self._hero_native_override:
+                    self.set_active_video_source("Native 0x0310", _hero_transition=True)
+                else:
+                    self.set_active_video_source(
+                        self._normal_video_source or self.config.connection.video_source,
+                        _hero_transition=True,
+                    )
+                self.field_log.emit(
+                    "hero_video_source",
+                    deployed=bool(next_status),
+                    active_source=self._active_video_source,
+                )
         elif name == "RuneStatusSync":
             state.rune_status = self._clean(data)
             state.energy_rune_phase = _RUNE_PHASE.get(int(data.get("rune_status", 1)), "INACTIVE")
@@ -534,6 +756,17 @@ class BackendManager:
             else:
                 video_chunk = parse_video_0310_chunk(block)
                 if video_chunk is not None:
+                    native_selected = self._active_video_source in {
+                        "native", "native 0x0310", "0x0310",
+                    } or int(getattr(state, "deploy_mode", 0)) == 1
+                    if not native_selected:
+                        # An unselected Native stream must not wake ffmpeg or
+                        # retain a partial recovery epoch in the background.
+                        # Selecting Native later waits for fresh SPS/PPS/IDR.
+                        self._native_0310_last_sequence = None
+                        self._native_0310_blocked_until_sps = True
+                        self._native_recovery.reset()
+                        return
                     # 0x0310 原生 H.264 流：不保留无限增长的历史码流。
                     # reset 或向前序号缺口后停止喂流，直到下一个 Annex-B
                     # SPS；这与 rm-native-viewer 的正式链路恢复策略一致，
@@ -546,6 +779,8 @@ class BackendManager:
                         self._native_0310_bytes_since_reset = 0
                         self._native_0310_last_sequence = None
                         self._native_0310_blocked_until_sps = True
+                        self._native_failure_epoch_handled = False
+                        self._native_recovery.reset()
                     elif self._native_0310_last_sequence is not None:
                         expected = (self._native_0310_last_sequence + 1) % modulus
                         distance = (sequence - expected) % modulus
@@ -553,6 +788,8 @@ class BackendManager:
                             if distance < modulus // 2:
                                 self._native_0310_dropped_chunks += distance
                                 self._native_0310_blocked_until_sps = True
+                                self._native_failure_epoch_handled = False
+                                self._native_recovery.reset()
                             else:
                                 self._native_0310_out_of_order_chunks += 1
                                 accept_payload = False
@@ -569,15 +806,12 @@ class BackendManager:
                             # A crashed decoder has lost its SPS/PPS parser
                             # state even if transport sequence is continuous.
                             self._native_0310_blocked_until_sps = True
-                        if self._native_0310_blocked_until_sps:
-                            sps_offset = find_h264_sps_offset(video_chunk.payload)
-                            if sps_offset is None:
-                                self._native_0310_recovery_dropped_chunks += 1
-                            else:
-                                payload_to_write = video_chunk.payload[sps_offset:]
-                                self._native_0310_blocked_until_sps = False
-                        else:
-                            payload_to_write = video_chunk.payload
+                            if not self._native_failure_epoch_handled:
+                                self._native_recovery.reset()
+                        payload_to_write = self._native_recovery.feed(video_chunk.payload) or b""
+                        self._native_0310_blocked_until_sps = self._native_recovery.blocked
+                        if not payload_to_write:
+                            self._native_0310_recovery_dropped_chunks += 1
 
                     if payload_to_write:
                         if not self.native_decoder.available:
@@ -587,12 +821,25 @@ class BackendManager:
                             self._native_0310_decoder_started_once = bool(
                                 self._native_0310_decoder_started_once or started
                             )
+                            if started:
+                                self._native_failure_epoch_handled = False
                         if self.native_decoder.available:
                             wrote = self.native_decoder.write(payload_to_write)
+                            if not wrote:
+                                # Yield briefly to the dedicated stdin writer.
+                                # The MQTT callback remains bounded (<10 ms),
+                                # while a synthetic burst cannot overflow a
+                                # queue that is sized for live 0x0310 cadence.
+                                deadline = time.perf_counter() + 0.010
+                                while not wrote and time.perf_counter() < deadline:
+                                    time.sleep(0.0005)
+                                    wrote = self.native_decoder.write(payload_to_write)
                         if not wrote:
                             # A full/non-running decoder queue is equivalent to
                             # a transport gap.  Resume only from a future SPS.
                             self._native_0310_blocked_until_sps = True
+                            self._native_failure_epoch_handled = False
+                            self._native_recovery.reset()
                     state.backend_stats["native_video_0310"] = {
                         "sequence": sequence,
                         "reset": video_chunk.reset,
@@ -613,6 +860,9 @@ class BackendManager:
                         "decoder_ready": self.native_decoder.available,
                         "decoded_frames": self.native_decoder.frames_decoded,
                     }
+                    # The decoder thread advances independently after this
+                    # message snapshot; stats() is the authoritative live
+                    # source for decoded-frame counters.
         elif name == "RobotInjuryStat":
             clean = self._clean(data)
             killer_id = int(data.get("killer_id", 0))
@@ -713,16 +963,59 @@ class BackendManager:
     # ------------------------------------------------------------------
     # 上行指令（对齐 SharkClient MqttCommandPanel 全部命令）
     # ------------------------------------------------------------------
-    def _publish(self, name: str, payload: bytes) -> tuple[bool, str]:
-        return self.mqtt.publish_named(name, payload, qos=1)
+    def _publish(
+        self,
+        name: str,
+        payload: bytes,
+        *,
+        intent: str = "control",
+        qualification_token: str | None = None,
+    ) -> tuple[bool, str]:
+        return self.mqtt.publish_named(
+            name,
+            payload,
+            qos=1,
+            intent=intent,
+            qualification_token=qualification_token,
+        )
 
     def publish_keyboard_mouse(self, mouse_x=0, mouse_y=0, mouse_z=0, *,
-                               left=False, right=False, keyboard_value=0, mid=False) -> tuple[bool, str]:
-        return self._publish("KeyboardMouseControl", proto.encode_keyboard_mouse_control(
-            mouse_x, mouse_y, mouse_z, left, right, keyboard_value, mid))
+                               left=False, right=False, keyboard_value=0, mid=False,
+                               qualification_token: str | None = None) -> tuple[bool, str]:
+        return self._publish(
+            "KeyboardMouseControl",
+            proto.encode_keyboard_mouse_control(
+                mouse_x, mouse_y, mouse_z, left, right, keyboard_value, mid
+            ),
+            intent="core_kmc",
+            qualification_token=qualification_token,
+        )
 
-    def publish_custom_control(self, data: bytes) -> tuple[bool, str]:
-        return self._publish("CustomControl", proto.encode_custom_control(data))
+    def publish_custom_control(self, data: bytes, *, intent: str = "control") -> tuple[bool, str]:
+        return self._publish("CustomControl", proto.encode_custom_control(data), intent=intent)
+
+    def publish_qualification_custom_control(
+        self,
+        data: bytes,
+        *,
+        intent: str,
+        qualification_token: str,
+    ) -> tuple[bool, str]:
+        """Qualification-only CustomControl path bound to a live token.
+
+        Normal vision/spin publishers intentionally do not accept tokens, so a
+        UI toggle or config value cannot smuggle qualification privileges into
+        ordinary operation.
+        """
+
+        if intent not in {"prm1_vision", "prm1_spin"}:
+            return False, "unsupported qualification CustomControl intent"
+        return self._publish(
+            "CustomControl",
+            proto.encode_custom_control(data),
+            intent=intent,
+            qualification_token=qualification_token,
+        )
 
     def publish_vision_control(
         self, *, sequence: int, yaw_deg: float, pitch_deg: float,
@@ -736,7 +1029,7 @@ class BackendManager:
             tracking=tracking,
             fire=False,
         )
-        return self.publish_custom_control(payload)
+        return self.publish_custom_control(payload, intent="prm1_vision")
 
     def publish_spin_control(
         self, *, sequence: int, enabled: bool, direction: str = "Auto",
@@ -750,18 +1043,98 @@ class BackendManager:
             speed_dps=speed_dps,
             power_guard=power_guard,
         )
-        return self.publish_custom_control(payload)
+        return self.publish_custom_control(payload, intent="prm1_spin")
 
     def trigger_estop(self) -> tuple[bool, str]:
         """先尽力发送全零 KMC，再锁死所有上行；断网时仍立即本地锁止。"""
         zero_result = self.mqtt.publish_estop_zero()
+        self._last_estop_zero_ok, self._last_estop_zero_reason = zero_result
+        self._estop_triggered_at = time.perf_counter()
         self.safety.trigger_estop()
         self.serial.trigger_estop()
+        self.field_log.emit(
+            "estop",
+            zero_publish_ok=self._last_estop_zero_ok,
+            zero_publish_reason=self._last_estop_zero_reason,
+        )
         return zero_result
+
+    def record_firmware_zero_observation(self, observed_at: float | None = None) -> float:
+        """Record a physical observer/test fixture's neutral-output timestamp."""
+
+        if self._estop_triggered_at <= 0.0:
+            raise ValueError("trigger E-stop before recording firmware zero")
+        elapsed_ms = max(
+            0.0,
+            ((time.perf_counter() if observed_at is None else float(observed_at)) - self._estop_triggered_at)
+            * 1000.0,
+        )
+        if self.state is not None:
+            self.state.backend_stats["firmware_zero_observed_ms"] = elapsed_ms
+        self.field_log.emit("firmware_zero_observed", elapsed_ms=elapsed_ms)
+        return elapsed_ms
 
     def release_estop(self) -> None:
         self.serial.release_estop()
         self.safety.release_estop()
+
+    def lock_control(self, reason: str = "operator lock") -> None:
+        self.safety.lock_control(reason)
+        self.field_log.emit("control_lock", reason=reason)
+
+    def begin_qualification(self, intents: Any, *, ttl_s: float = 30.0):
+        token = self.safety.begin_qualification(intents, ttl_s=ttl_s)
+        self.field_log.emit(
+            "qualification_begin",
+            intents=sorted(token.intents),
+            expires_at=token.expires_at,
+        )
+        return token
+
+    def arm_match_control(
+        self,
+        *,
+        robot_id: str | None = None,
+        firmware_hash: str,
+        match_mode: str | None = None,
+        video_source: str | None = None,
+    ) -> tuple[bool, str]:
+        ready, reason = self.qualification.verified_core_ready()
+        if not ready:
+            self.safety.lock_control(reason)
+            return False, reason
+        session = self.qualification.session
+        if session is None:
+            self.safety.lock_control("qualification session disappeared")
+            return False, self.safety.last_reason
+        identity_ready, identity_reason = self.qualification.identity_matches(
+            robot_id=str(
+                robot_id
+                if robot_id is not None
+                else getattr(self.state, "robot_id", session.robot_id)
+            ),
+            firmware_hash=firmware_hash,
+            match_mode=match_mode or getattr(self.state, "match_mode", session.match_mode),
+            video_source=video_source or self._canonical_readiness_video_source(),
+        )
+        if not identity_ready:
+            self.safety.lock_control(identity_reason)
+            return False, identity_reason
+        capabilities = self.qualification.capabilities()
+        try:
+            self.safety.arm_match(capabilities)
+        except ValueError as exc:
+            return False, str(exc)
+        self.field_log.emit("control_arm", capabilities=sorted(capabilities))
+        return True, "MATCH_ARMED"
+
+    def _canonical_readiness_video_source(self) -> str:
+        source = str(self._active_video_source).strip().lower()
+        if source in {"native", "native 0x0310", "0x0310"}:
+            return "native_0310"
+        if source in {"shark udp", "udp", "udp hevc", "hevc", "h265"}:
+            return "udp"
+        return ""
 
     def publish_map_click_cmd(self, *, is_send_all=0, robot_id=b"", mode=1,
                               enemy_id=0, ascii_code=0, mark_type=1,
@@ -781,7 +1154,11 @@ class BackendManager:
                              proto.encode_robot_performance_selection_command(shooter, chassis, sentry_control))
 
     def publish_hero_deploy(self, mode: int) -> tuple[bool, str]:
-        return self._publish("HeroDeployModeEventCommand", proto.encode_hero_deploy_mode_event_command(mode))
+        return self._publish(
+            "HeroDeployModeEventCommand",
+            proto.encode_hero_deploy_mode_event_command(mode),
+            intent="hero",
+        )
 
     def publish_rune_activate(self, activate: int) -> tuple[bool, str]:
         return self._publish("RuneActivateCommand", proto.encode_rune_activate_command(activate))
@@ -793,7 +1170,9 @@ class BackendManager:
         return self._publish("SentryCtrlCommand", proto.encode_sentry_ctrl_command(command_id))
 
     def publish_common_command(self, cmd_type: int, param: int) -> tuple[bool, str]:
-        return self._publish("CommonCommand", proto.encode_common_command(cmd_type, param))
+        return self._publish(
+            "CommonCommand", proto.encode_common_command(cmd_type, param), intent="economy"
+        )
 
     def publish_air_support(self, command_id: int) -> tuple[bool, str]:
         return self._publish("AirSupportCommand", proto.encode_air_support_command(command_id))
@@ -839,6 +1218,12 @@ class BackendManager:
     def stats(self) -> dict[str, Any]:
         native_at = self.native_decoder.latest_timestamp()
         native_width, native_height = self.native_decoder.frame_size()
+        if self.state is not None:
+            native_info = self.state.backend_stats.get("native_video_0310")
+            if isinstance(native_info, dict):
+                native_info["decoded_frames"] = self.native_decoder.frames_decoded
+                native_info["decoder_ready"] = self.native_decoder.available
+                native_info["decoded_frame_at"] = native_at
         return {
             "scenario": self.scenario_key,
             "safety": self.safety.stats(),
@@ -851,6 +1236,7 @@ class BackendManager:
                     native_at > 0.0 and time.perf_counter() - native_at <= 2.0
                 ),
                 "decoded_frames": self.native_decoder.frames_decoded,
+                "continuous_decoded_seconds": self.native_decoder.continuous_decoded_seconds,
                 "decoded_frame_at": native_at,
                 "output_width": native_width,
                 "output_height": native_height,
@@ -865,9 +1251,30 @@ class BackendManager:
                 "input_chunks_written": self.native_decoder.input_chunks_written,
                 "input_bytes_written": self.native_decoder.input_bytes_written,
                 "last_error": self.native_decoder.last_error,
+                "decoder_health": self.native_decoder.health(),
+            },
+            "qualification": {
+                "session_id": self.qualification.session.session_id if self.qualification.session else "",
+                "core_ready": self.qualification.core_ready()[0],
+                "reason": self.qualification.core_ready()[1],
+                "capabilities": sorted(self.qualification.capabilities()),
+                "evidence_error": self.qualification.store.last_error,
+            },
+            "safety_evidence": {
+                "estop_triggered_at": self._estop_triggered_at,
+                "estop_zero_publish_ok": self._last_estop_zero_ok,
+                "estop_zero_publish_reason": self._last_estop_zero_reason,
+                "mqtt_disconnect_lock_at": self._mqtt_disconnect_lock_at,
+                "mqtt_reconnected_locked_at": self._mqtt_reconnected_locked_at,
+                "input_clear_generation": self._input_clear_generation,
+            },
+            "field_log": {
+                "path": str(self.field_log.path),
+                "last_error": self.field_log.last_error,
             },
             "message_apply": {
                 "errors": self._apply_error_count,
                 "last_error": self._last_apply_error,
+                "updates": self._official_state_updates_count,
             },
         }

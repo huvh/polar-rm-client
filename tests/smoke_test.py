@@ -9,6 +9,14 @@ from tempfile import TemporaryDirectory
 import time
 from typing import Any
 
+# UI regression tests use deterministic synthetic/backend frames. Never probe
+# a developer's physical webcam or load the local OpenVINO worker implicitly.
+os.environ.setdefault("POLAR_DISABLE_LOCAL_CAPTURE", "1")
+# Do not start QtMultimedia FFmpeg workers in an offscreen test process. Audio
+# routing is covered with a deterministic fake pool below; real media preload
+# remains enabled in the application and packaged desktop smokes.
+os.environ.setdefault("POLAR_DISABLE_MEDIA_PRELOAD", "1")
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
@@ -752,6 +760,33 @@ def test_wallpaper_profiles_and_user_import() -> None:
             manager.release()
 
 
+def test_wallpaper_primes_cv2_before_worker_start() -> None:
+    """The Windows native cv2 import must finish before a decode thread runs."""
+    import sys
+    from unittest.mock import patch
+
+    from rm_client.startup_wallpaper import VideoWallpaperPlayer
+
+    with TemporaryDirectory() as temp:
+        media = Path(temp) / "wallpaper.mp4"
+        media.write_bytes(b"not-a-real-video")
+        player = VideoWallpaperPlayer()
+
+        class FakeThread:
+            def __init__(self, *args, **kwargs) -> None:
+                self.started = False
+
+            def is_alive(self) -> bool:
+                return self.started
+
+            def start(self) -> None:
+                assert "cv2" in sys.modules
+                self.started = True
+
+        with patch("rm_client.startup_wallpaper.threading.Thread", FakeThread):
+            assert player.load(media)
+
+
 def test_hud_modes_and_rmui_modules() -> None:
     registry = build_default_registry()
     hud = registry.get("HUD")
@@ -1023,6 +1058,10 @@ def test_local_prediction_snapshot() -> None:
 
 def test_tongji_local_yolo_demo() -> None:
     """用同济自带 demo 验证 Windows/OpenVINO 路径真的能加载 XML/BIN 并完成一帧推理。"""
+    # The optional 60 MiB upstream demo is outside the immutable release
+    # source. Keep that lab integration from leaking into release regression.
+    if os.environ.get("POLAR_SKIP_EXTERNAL_INTEGRATION", "").lower() in ("1", "true", "yes"):
+        return
     model = ROOT.parent / "同济自瞄" / "sp_vision_25" / "assets" / "yolov5.xml"
     demo = ROOT.parent / "同济自瞄" / "sp_vision_25" / "assets" / "demo" / "demo.avi"
     if not model.exists() or not demo.exists():
@@ -1099,14 +1138,14 @@ def test_armor_3d_esp_render() -> None:
     try:
         visible_pixels = sum(
             1
-            for y in range(image.height())
-            for x in range(image.width())
+            for y in range(0, image.height(), 2)
+            for x in range(0, image.width(), 2)
             if image.pixelColor(x, y).alpha() > 0
         )
         fluorescent_white_pixels = sum(
             1
-            for y in range(image.height())
-            for x in range(image.width())
+            for y in range(0, image.height(), 2)
+            for x in range(0, image.width(), 2)
             if (
                 image.pixelColor(x, y).alpha() > 150
                 and image.pixelColor(x, y).red() > 225
@@ -1116,16 +1155,16 @@ def test_armor_3d_esp_render() -> None:
         )
         saturated_green_pixels = sum(
             1
-            for y in range(image.height())
-            for x in range(image.width())
+            for y in range(0, image.height(), 2)
+            for x in range(0, image.width(), 2)
             if (
                 image.pixelColor(x, y).alpha() > 120
                 and image.pixelColor(x, y).green() > image.pixelColor(x, y).red() + 36
                 and image.pixelColor(x, y).green() > image.pixelColor(x, y).blue() + 18
             )
         )
-        assert 20 < visible_pixels < 9000
-        assert fluorescent_white_pixels > 20
+        assert 5 < visible_pixels < 2250
+        assert fluorescent_white_pixels > 5
         assert saturated_green_pixels == 0
     finally:
         window.close()
@@ -3887,6 +3926,7 @@ if __name__ == "__main__":
     test_gd656_renderer_presets()
     test_wallpaper_pkg_index_reader()
     test_wallpaper_profiles_and_user_import()
+    test_wallpaper_primes_cv2_before_worker_start()
     test_hud_modes_and_rmui_modules()
     test_match_modes_and_official_map_assets()
     test_match_mode_manager()

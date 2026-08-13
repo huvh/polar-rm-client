@@ -27,7 +27,7 @@ class FontBook:
             "jello_medium": "Jello-Helvetica-Neue-Medium.ttf",
         }
         for key, filename in candidates.items():
-            path = self._find_font(workspace, filename)
+            path = self._find_font(Path(workspace), filename)
             if not path.exists():
                 continue
             font_id = QFontDatabase.addApplicationFont(str(path))
@@ -36,6 +36,9 @@ class FontBook:
                 self.loaded[key] = families[0]
 
     def _find_font(self, workspace: Path, pattern: str) -> Path:
+        direct = workspace / "assets" / "fonts" / pattern
+        if direct.exists():
+            return direct
         for path in workspace.rglob(pattern):
             if ".venv" in path.parts:
                 continue
