@@ -530,6 +530,8 @@ class PolarRMWindow(QOpenGLWidget):
         self._last_render_tune = time.perf_counter()
         self._last_logic_time = time.perf_counter()
         self._last_control_tick_time = 0.0
+        self._hud_static_defer_since = 0.0
+        self._last_module_toggle_at = 0.0
         # Coalesce slider/drag updates into one atomic profile write.  Saving a
         # complete JSON document for every mouse event caused avoidable frame
         # stalls even after the store itself became crash-safe.
@@ -1044,6 +1046,13 @@ class PolarRMWindow(QOpenGLWidget):
             20.0: self.font("jello_light", 20.0 * 72.0 / 96.0),
             25.0: self.font("jello_light", 25.0 * 72.0 / 96.0),
             40.0: self.font("jello_medium", 40.0 * 72.0 / 96.0),
+            # ActiveMods (Jello module list) renders module names at
+            # Normal/Small/Tiny pixel sizes. Without these pages the first
+            # appearance of a name in the list rebuilds the shaped glyph
+            # atlas mid-animation and visibly stutters the 150 ms fade.
+            15.0: self.font("jello_light", 15.0 * 72.0 / 96.0),
+            13.5: self.font("jello_light", 13.5 * 72.0 / 96.0),
+            10.5: self.font("jello_light", 10.5 * 72.0 / 96.0),
         }
 
     def _jello_module_text_pages(
@@ -1151,6 +1160,11 @@ class PolarRMWindow(QOpenGLWidget):
             20.0: set(),
             25.0: {*CATEGORIES, *(jello_category_label(category, True) for category in CATEGORIES)},
             40.0: set(),
+            # ActiveMods font pages (Normal/Small/Tiny), filled below with
+            # every module name so the list fade never rebuilds the atlas.
+            15.0: set(),
+            13.5: set(),
+            10.5: set(),
         }
         numeric_characters = set("0123456789.-+%/abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ ")
         for module in self.registry.modules:
@@ -1162,6 +1176,9 @@ class PolarRMWindow(QOpenGLWidget):
             # path never allocates a glyph atlas in a combat frame.
             for size in (14.0, 18.0, 20.0):
                 jello_labels_by_size[size].add(module.name)
+            for size in (15.0, 13.5, 10.5):
+                jello_labels_by_size[size].add(module.name)
+                jello_labels_by_size[size].add(jello_module_label(module.name, True))
             for setting in module.settings:
                 labels.add(setting.name)
                 labels.add(setting.display_value())
@@ -1564,6 +1581,13 @@ class PolarRMWindow(QOpenGLWidget):
             startup_scene = self.home_visible and not self.wallpaper_picker_visible and self.clickgui_gpu.available
             static_key = self.gpu_static_ui_key(width, height, ratio)
             rebuild_hud_static = not startup_scene and static_key != self._gpu_static_ui_key
+            if rebuild_hud_static and self._should_defer_hud_static_rebuild(static_key):
+                # A module toggle repaints the whole static HUD snapshot and
+                # the treated backdrop on the exact frame the 150 ms ActiveMods
+                # fade starts, which read as a hitch. The stale snapshot is
+                # invisible under the live motion layer, so wait for the row
+                # animation to settle (bounded) before rebuilding.
+                rebuild_hud_static = False
             self.gpu_compositor.begin_frame(rebuild_static_ui=rebuild_hud_static)
             if not self.gpu_compositor.clear_target_layer(functions):
                 return False
@@ -2142,6 +2166,39 @@ class PolarRMWindow(QOpenGLWidget):
             return rendered
         finally:
             self.gpu_compositor.release_layer("dynamic")
+
+    def module_list_animation_in_flight(self) -> bool:
+        """True while any module-list row is fading/sliding in or out."""
+        if self.anim.active("hud.modulelist."):
+            return True
+        rows = getattr(self, "_jello_active_mods_rows", None) or {}
+        for row in rows.values():
+            progress = float(row.get("progress", 1.0))
+            target = float(row.get("target", 1.0))
+            if abs(progress - target) > 0.002:
+                return True
+        return False
+
+    def _should_defer_hud_static_rebuild(self, static_key: tuple[object, ...]) -> bool:
+        """Defer a static HUD repaint while module-list rows are animating.
+
+        Only geometry-identical keys defer (a resize must rebuild
+        immediately), and a hard 450 ms deadline stops a stuck row from
+        freezing the static layer forever.
+        """
+        previous = self._gpu_static_ui_key
+        if previous is None or len(previous) < 4 or len(static_key) < 4:
+            return False
+        if tuple(static_key[1:4]) != tuple(previous[1:4]):
+            return False
+        now = time.perf_counter()
+        recently_toggled = now - float(getattr(self, "_last_module_toggle_at", 0.0)) < 0.25
+        if not recently_toggled and not self.module_list_animation_in_flight():
+            self._hud_static_defer_since = 0.0
+            return False
+        if self._hud_static_defer_since <= 0.0:
+            self._hud_static_defer_since = now
+        return now - self._hud_static_defer_since < 0.45
 
     def gpu_static_ui_key(self, width: int, height: int, ratio: float) -> tuple[object, ...]:
         """Return the low-frequency identity of the stable UI layer.
@@ -15720,6 +15777,12 @@ class PolarRMWindow(QOpenGLWidget):
             and self.active_clickgui_mode() == PRIMARY_GUI_MODE
         )
         self.invalidate_gui_cache()
+        # The ActiveMods fade starts on this event, but the row targets are
+        # only updated during the next paint (after begin_frame). Seed the
+        # static-HUD deferral window here so the toggle frame itself does not
+        # repaint the whole snapshot mid-fade.
+        self._last_module_toggle_at = time.perf_counter()
+        self._hud_static_defer_since = self._last_module_toggle_at
         if module.name == "MinecraftCombatHUD":
             hud = self.registry.get("HUD")
             preset = hud.get_setting("Combat Preset") if hud else None

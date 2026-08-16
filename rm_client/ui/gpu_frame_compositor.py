@@ -98,7 +98,25 @@ def normalize_premultiplied_pixel(
 
 
 def sanitize_premultiplied_rgba_bytes(payload: bytes | bytearray) -> bytes:
-    """Remove RGB residue from transparent premultiplied RGBA pixels."""
+    """Remove RGB residue from transparent premultiplied RGBA pixels.
+
+    The TargetHUD region runs through this every rendered frame. The scalar
+    loop cost ~5 ms per frame at 2K and was the single largest contributor to
+    module-list fade stutter, so vectorise with numpy when present and keep
+    the original loop only as a dependency-free fallback.
+    """
+    try:
+        import numpy as np  # type: ignore
+    except ImportError:
+        np = None  # type: ignore[assignment]
+    if np is not None:
+        usable = (len(payload) // 4) * 4
+        pixels = np.frombuffer(payload, dtype=np.uint8, count=usable).reshape(-1, 4).copy()
+        if pixels.size:
+            # min(rgb, alpha) also zeroes RGB wherever alpha == 0, which is
+            # exactly the original two-branch behaviour.
+            np.minimum(pixels[:, :3], pixels[:, 3:4], out=pixels[:, :3])
+        return pixels.tobytes()
     cleaned = bytearray(payload)
     usable = len(cleaned) - (len(cleaned) % 4)
     for offset in range(0, usable, 4):
@@ -222,6 +240,10 @@ class GpuFrameCompositor:
         self.blur_program: QOpenGLShaderProgram | None = None
         self.jello_blur_program: QOpenGLShaderProgram | None = None
         self.glass_program: QOpenGLShaderProgram | None = None
+        # uniformLocation is a per-name GL query (~40 us). The blur/glass/
+        # present passes re-resolved ~47 names every frame; memoise them per
+        # program identity and clear whenever programs are rebuilt.
+        self._uniform_cache: dict[tuple[int, str], int] = {}
         self.vertex_buffer = QOpenGLBuffer(QOpenGLBuffer.Type.VertexBuffer)
         self.vertex_array = QOpenGLVertexArrayObject()
 
@@ -232,6 +254,14 @@ class GpuFrameCompositor:
         self.last_dynamic_ms = 0.0
         self.last_present_ms = 0.0
 
+    def _uniform(self, program: QOpenGLShaderProgram, name: str) -> int:
+        key = (id(program), name)
+        location = self._uniform_cache.get(key)
+        if location is None:
+            location = int(program.uniformLocation(name))
+            self._uniform_cache[key] = location
+        return location
+
     def initialize(self) -> bool:
         if self.available:
             return True
@@ -240,6 +270,7 @@ class GpuFrameCompositor:
             self.blur_program = self._build_blur_program()
             self.jello_blur_program = self._build_jello_blur_program()
             self.glass_program = self._build_lens_program()
+            self._uniform_cache.clear()
             if not self.vertex_array.create():
                 raise RuntimeError("GPU compositor VAO creation failed")
             if not self.vertex_buffer.create():
@@ -724,26 +755,26 @@ class GpuFrameCompositor:
         self.blur_program.bind()
         functions.glActiveTexture(_GL_TEXTURE0)
         functions.glBindTexture(_GL_TEXTURE_2D, self.background_fbo.texture())
-        functions.glUniform1i(self.blur_program.uniformLocation("sourceTex"), 0)
+        functions.glUniform1i(self._uniform(self.blur_program, "sourceTex"), 0)
         functions.glActiveTexture(_GL_TEXTURE0 + 1)
         functions.glBindTexture(_GL_TEXTURE_2D, self.control_fbo.texture())
-        functions.glUniform1i(self.blur_program.uniformLocation("controlTex"), 1)
+        functions.glUniform1i(self._uniform(self.blur_program, "controlTex"), 1)
         functions.glActiveTexture(_GL_TEXTURE0 + 2)
         functions.glBindTexture(_GL_TEXTURE_2D, self.overlay_fbo.texture())
-        functions.glUniform1i(self.blur_program.uniformLocation("overlayTex"), 2)
+        functions.glUniform1i(self._uniform(self.blur_program, "overlayTex"), 2)
         functions.glActiveTexture(_GL_TEXTURE0 + 3)
         functions.glBindTexture(_GL_TEXTURE_2D, self.hud_glass_fbo.texture())
-        functions.glUniform1i(self.blur_program.uniformLocation("hudGlassTex"), 3)
-        functions.glUniform1i(self.blur_program.uniformLocation("sourceMode"), 0)
-        functions.glUniform2f(self.blur_program.uniformLocation("direction"), 1.0, 0.0)
+        functions.glUniform1i(self._uniform(self.blur_program, "hudGlassTex"), 3)
+        functions.glUniform1i(self._uniform(self.blur_program, "sourceMode"), 0)
+        functions.glUniform2f(self._uniform(self.blur_program, "direction"), 1.0, 0.0)
         functions.glUniform2f(
-            self.blur_program.uniformLocation("texel"),
+            self._uniform(self.blur_program, "texel"),
             1.0 / max(1.0, float(self._size.width())),
             1.0 / max(1.0, float(self._size.height())),
         )
-        functions.glUniform1f(self.blur_program.uniformLocation("blurRadiusPx"), float(radius_px))
+        functions.glUniform1f(self._uniform(self.blur_program, "blurRadiusPx"), float(radius_px))
         functions.glUniform1i(
-            self.blur_program.uniformLocation("includeOverlay"),
+            self._uniform(self.blur_program, "includeOverlay"),
             1 if include_overlay else 0,
         )
         self._draw_quad(functions, self.blur_program)
@@ -754,9 +785,9 @@ class GpuFrameCompositor:
             return False
         functions.glActiveTexture(_GL_TEXTURE0)
         functions.glBindTexture(_GL_TEXTURE_2D, temp_fbo.texture())
-        functions.glUniform1i(self.blur_program.uniformLocation("sourceTex"), 0)
-        functions.glUniform1i(self.blur_program.uniformLocation("sourceMode"), 1)
-        functions.glUniform2f(self.blur_program.uniformLocation("direction"), 0.0, 1.0)
+        functions.glUniform1i(self._uniform(self.blur_program, "sourceTex"), 0)
+        functions.glUniform1i(self._uniform(self.blur_program, "sourceMode"), 1)
+        functions.glUniform2f(self._uniform(self.blur_program, "direction"), 0.0, 1.0)
         self._draw_quad(functions, self.blur_program)
         self.blur_program.release()
         output_fbo.release()
@@ -798,25 +829,25 @@ class GpuFrameCompositor:
         program.bind()
         functions.glActiveTexture(_GL_TEXTURE0)
         functions.glBindTexture(_GL_TEXTURE_2D, self.background_fbo.texture())
-        functions.glUniform1i(program.uniformLocation("sourceTex"), 0)
+        functions.glUniform1i(self._uniform(program, "sourceTex"), 0)
         functions.glActiveTexture(_GL_TEXTURE0 + 1)
         functions.glBindTexture(_GL_TEXTURE_2D, self.control_fbo.texture())
-        functions.glUniform1i(program.uniformLocation("controlTex"), 1)
+        functions.glUniform1i(self._uniform(program, "controlTex"), 1)
         functions.glActiveTexture(_GL_TEXTURE0 + 2)
         functions.glBindTexture(_GL_TEXTURE_2D, self.overlay_fbo.texture())
-        functions.glUniform1i(program.uniformLocation("overlayTex"), 2)
+        functions.glUniform1i(self._uniform(program, "overlayTex"), 2)
         functions.glActiveTexture(_GL_TEXTURE0 + 3)
         functions.glBindTexture(_GL_TEXTURE_2D, self.hud_glass_fbo.texture())
-        functions.glUniform1i(program.uniformLocation("hudGlassTex"), 3)
-        functions.glUniform1i(program.uniformLocation("sourceMode"), 0)
-        functions.glUniform1i(program.uniformLocation("radiusPx"), radius)
+        functions.glUniform1i(self._uniform(program, "hudGlassTex"), 3)
+        functions.glUniform1i(self._uniform(program, "sourceMode"), 0)
+        functions.glUniform1i(self._uniform(program, "radiusPx"), radius)
         functions.glUniform1i(
-            program.uniformLocation("includeOverlay"),
+            self._uniform(program, "includeOverlay"),
             1 if include_overlay else 0,
         )
-        functions.glUniform2f(program.uniformLocation("direction"), 1.0, 0.0)
+        functions.glUniform2f(self._uniform(program, "direction"), 1.0, 0.0)
         functions.glUniform2f(
-            program.uniformLocation("texel"),
+            self._uniform(program, "texel"),
             1.0 / max(1.0, float(self._size.width())),
             1.0 / max(1.0, float(self._size.height())),
         )
@@ -828,9 +859,9 @@ class GpuFrameCompositor:
             return False
         functions.glActiveTexture(_GL_TEXTURE0)
         functions.glBindTexture(_GL_TEXTURE_2D, temp_fbo.texture())
-        functions.glUniform1i(program.uniformLocation("sourceTex"), 0)
-        functions.glUniform1i(program.uniformLocation("sourceMode"), 1)
-        functions.glUniform2f(program.uniformLocation("direction"), 0.0, 1.0)
+        functions.glUniform1i(self._uniform(program, "sourceTex"), 0)
+        functions.glUniform1i(self._uniform(program, "sourceMode"), 1)
+        functions.glUniform2f(self._uniform(program, "direction"), 0.0, 1.0)
         self._draw_quad(functions, program)
         program.release()
         output_fbo.release()
@@ -962,10 +993,10 @@ class GpuFrameCompositor:
             self.glass_program.bind()
             functions.glActiveTexture(_GL_TEXTURE0)
             functions.glBindTexture(_GL_TEXTURE_2D, self.background_fbo.texture())
-            functions.glUniform1i(self.glass_program.uniformLocation("backgroundTex"), 0)
+            functions.glUniform1i(self._uniform(self.glass_program, "backgroundTex"), 0)
             functions.glActiveTexture(_GL_TEXTURE0 + 1)
             functions.glBindTexture(_GL_TEXTURE_2D, self.control_fbo.texture())
-            functions.glUniform1i(self.glass_program.uniformLocation("controlTex"), 1)
+            functions.glUniform1i(self._uniform(self.glass_program, "controlTex"), 1)
             functions.glActiveTexture(_GL_TEXTURE0 + 2)
             blur_texture = (
                 self.treated_blur_fbo.texture()
@@ -975,24 +1006,24 @@ class GpuFrameCompositor:
                 else self.blur_fbo.texture()
             )
             functions.glBindTexture(_GL_TEXTURE_2D, blur_texture)
-            functions.glUniform1i(self.glass_program.uniformLocation("blurTex"), 2)
+            functions.glUniform1i(self._uniform(self.glass_program, "blurTex"), 2)
             functions.glActiveTexture(_GL_TEXTURE0 + 3)
             functions.glBindTexture(_GL_TEXTURE_2D, self.overlay_fbo.texture())
-            functions.glUniform1i(self.glass_program.uniformLocation("overlayTex"), 3)
+            functions.glUniform1i(self._uniform(self.glass_program, "overlayTex"), 3)
             functions.glActiveTexture(_GL_TEXTURE0 + 4)
             functions.glBindTexture(_GL_TEXTURE_2D, self.hud_glass_fbo.texture())
-            functions.glUniform1i(self.glass_program.uniformLocation("hudGlassTex"), 4)
+            functions.glUniform1i(self._uniform(self.glass_program, "hudGlassTex"), 4)
             functions.glUniform2f(
-                self.glass_program.uniformLocation("viewport"),
+                self._uniform(self.glass_program, "viewport"),
                 float(self._size.width()),
                 float(self._size.height()),
             )
             functions.glUniform2f(
-                self.glass_program.uniformLocation("sceneUvOffset"),
+                self._uniform(self.glass_program, "sceneUvOffset"),
                 *self._scene_uv_offset,
             )
             functions.glUniform1f(
-                self.glass_program.uniformLocation("backdropTreatment"),
+                self._uniform(self.glass_program, "backdropTreatment"),
                 float(
                     self._backdrop_treatment.progress
                     if apply_backdrop_treatment and self._backdrop_treatment.active
@@ -1000,7 +1031,7 @@ class GpuFrameCompositor:
                 ),
             )
             functions.glUniform1f(
-                self.glass_program.uniformLocation("backdropDimAlpha"),
+                self._uniform(self.glass_program, "backdropDimAlpha"),
                 float(
                     self._backdrop_treatment.dim_alpha
                     if apply_backdrop_treatment and self._backdrop_treatment.active
@@ -1031,36 +1062,36 @@ class GpuFrameCompositor:
                 sh = min(self._size.height() - sy, max(1, int(clip_h + 0.999)))
                 functions.glScissor(sx, sy, sw, sh)
                 functions.glUniform4f(
-                    self.glass_program.uniformLocation("glassRect"),
+                    self._uniform(self.glass_program, "glassRect"),
                     float(x), float(y), float(w), float(h),
                 )
-                functions.glUniform1f(self.glass_program.uniformLocation("radius"), float(command.radius * ratio))
-                functions.glUniform1f(self.glass_program.uniformLocation("strength"), float(command.strength))
+                functions.glUniform1f(self._uniform(self.glass_program, "radius"), float(command.radius * ratio))
+                functions.glUniform1f(self._uniform(self.glass_program, "strength"), float(command.strength))
                 functions.glUniform1i(
-                    self.glass_program.uniformLocation("surfaceKind"),
+                    self._uniform(self.glass_program, "surfaceKind"),
                     1 if command.surface == "sub" else 2 if command.surface == "clear" else 0,
                 )
-                functions.glUniform1f(self.glass_program.uniformLocation("hoverAmount"), float(command.hover))
-                functions.glUniform1f(self.glass_program.uniformLocation("opacity"), float(command.opacity))
+                functions.glUniform1f(self._uniform(self.glass_program, "hoverAmount"), float(command.hover))
+                functions.glUniform1f(self._uniform(self.glass_program, "opacity"), float(command.opacity))
                 functions.glUniform1i(
-                    self.glass_program.uniformLocation("materialKind"),
+                    self._uniform(self.glass_program, "materialKind"),
                     0 if command.material == LensMaterial.REGULAR else 1 if command.material == LensMaterial.STRONG else 2,
                 )
                 functions.glUniform1f(
-                    self.glass_program.uniformLocation("refractionHeightPx"),
+                    self._uniform(self.glass_program, "refractionHeightPx"),
                     float(command.refraction_height_px * ratio),
                 )
                 functions.glUniform1f(
-                    self.glass_program.uniformLocation("refractionAmountPx"),
+                    self._uniform(self.glass_program, "refractionAmountPx"),
                     float(command.refraction_amount_px * ratio),
                 )
                 functions.glUniform1f(
-                    self.glass_program.uniformLocation("chromaticAberration"),
+                    self._uniform(self.glass_program, "chromaticAberration"),
                     float(command.chromatic_aberration),
                 )
-                functions.glUniform1f(self.glass_program.uniformLocation("depthEffect"), float(command.depth_effect))
-                functions.glUniform1f(self.glass_program.uniformLocation("frostAmount"), float(command.frost_amount))
-                functions.glUniform1f(self.glass_program.uniformLocation("vibrancyAmount"), float(command.vibrancy_amount))
+                functions.glUniform1f(self._uniform(self.glass_program, "depthEffect"), float(command.depth_effect))
+                functions.glUniform1f(self._uniform(self.glass_program, "frostAmount"), float(command.frost_amount))
+                functions.glUniform1f(self._uniform(self.glass_program, "vibrancyAmount"), float(command.vibrancy_amount))
                 self._draw_quad(functions, self.glass_program)
 
             self.glass_program.release()
@@ -1140,17 +1171,17 @@ class GpuFrameCompositor:
             ):
                 functions.glActiveTexture(_GL_TEXTURE0 + unit)
                 functions.glBindTexture(_GL_TEXTURE_2D, texture_id)
-                functions.glUniform1i(self.present_program.uniformLocation(name), unit)
+                functions.glUniform1i(self._uniform(self.present_program, name), unit)
             functions.glUniform2f(
-                self.present_program.uniformLocation("sceneUvOffset"),
+                self._uniform(self.present_program, "sceneUvOffset"),
                 *self._scene_uv_offset,
             )
             functions.glUniform1f(
-                self.present_program.uniformLocation("backdropTreatment"),
+                self._uniform(self.present_program, "backdropTreatment"),
                 float(self._backdrop_treatment.progress if self._backdrop_treatment.active else 0.0),
             )
             functions.glUniform1f(
-                self.present_program.uniformLocation("backdropDimAlpha"),
+                self._uniform(self.present_program, "backdropDimAlpha"),
                 float(self._backdrop_treatment.dim_alpha if self._backdrop_treatment.active else 0.0),
             )
             self._draw_quad(functions, self.present_program)
@@ -1636,4 +1667,5 @@ class GpuFrameCompositor:
         self.blur_program = None
         self.jello_blur_program = None
         self.glass_program = None
+        self._uniform_cache.clear()
         self.available = False
