@@ -130,12 +130,14 @@ PRESET_ELEMENTS = {
     "Default Scrolling": ("kill_feed", "score", "bonus", "scrolling"),
     "Combo": ("kill_feed", "score", "bonus", "combo"),
     "Card": ("card_bar", "card"),
-    "Battlefield 1": ("score", "bonus", "battlefield1"),
+    "Battlefield 1": ("score", "bonus", "battlefield1", "match_progress"),
     "Minimal": ("score", "bonus"),
     "PUBG Subtitle": ("combo_subtitle", "kill_feed"),
-    "Battlefield 5": ("kill_feed", "score", "bonus", "scrolling_bf5"),
-    "Battlefield 6": ("kill_feed", "score", "bonus", "scrolling_bf6"),
-    "Total Battlefield": ("score", "bonus", "scrolling"),
+    "Battlefield 5": ("kill_feed", "score", "bonus", "scrolling_bf5", "match_progress"),
+    # 上游 00037 官方预设：BF6 = 滚动图标 + 击杀信息流 + 加分标签 + 分数
+    # + 命中信息 + 荣誉徽章；本客户端另挂基地推进条
+    "Battlefield 6": ("kill_feed", "score", "bonus", "scrolling_bf6", "hit_info", "honor", "match_progress"),
+    "Total Battlefield": ("score", "bonus", "scrolling", "match_progress"),
 }
 
 # 滚动图标风格 -> (纹理前缀, 允许的类型键)。battlefield5 原版只有
@@ -318,6 +320,110 @@ class ScrollingRenderer:
             point = QPointF(x, center.y())
             self.assets.draw_centered(p, name, point, 64.0, alpha, scale=draw_scale)
             _draw_ring(p, point, age, state.context.kill_type, scale)
+
+
+# gd656 加分项 -> honor 徽章映射。只在实际命中特殊条件时触发，
+# 普通击杀不亮徽章，保持上游"加分项才有荣誉图标"的语义。
+HONOR_RULES: tuple[tuple[str, dict[str, Any]], ...] = (
+    ("honor_tank_destroyer.png", {"kill_types": {"DESTROY_VEHICLE"}}),
+    ("honor_support.png", {"kill_types": {"ASSIST"}}),
+    ("honor_headhunter.png", {"kill_types": {"HEADSHOT"}}),
+    ("honor_warhead.png", {"kill_types": {"EXPLOSION"}}),
+    ("honor_sharp_shooter.png", {"kill_types": {"CRIT"}}),
+    ("honor_long_shot.png", {"min_distance_m": 8.0}),
+    ("honor_marksman.png", {"min_distance_m": 5.0}),
+    ("honor_frenzy.png", {"min_combo": 3}),
+    ("honor_unstoppable.png", {"min_combo": 5}),
+    ("honor_top.png", {"min_combo": 7}),
+)
+
+
+def honor_badges_for(context: TriggerContext) -> tuple[str, ...]:
+    badges: list[str] = []
+    for name, rule in HONOR_RULES:
+        if "kill_types" in rule and context.kill_type not in rule["kill_types"]:
+            continue
+        if "min_distance_m" in rule and context.distance_m < rule["min_distance_m"]:
+            continue
+        if "min_combo" in rule and context.combo < rule["min_combo"]:
+            continue
+        badges.append(name)
+        if len(badges) >= 2:
+            break
+    return tuple(badges)
+
+
+class HonorRenderer:
+    """gd656 kill_icon/honor：战况触发的荣誉徽章弹出。"""
+
+    def __init__(self, assets: AssetBank) -> None:
+        self.assets = assets
+        self.active: list[tuple[str, float, str]] = []
+
+    def trigger(self, context: TriggerContext, now: float) -> None:
+        for badge in honor_badges_for(context):
+            label = badge.removeprefix("honor_").removesuffix(".png").replace("_", " ").upper()
+            self.active.append((badge, now, label))
+        self.active = self.active[-3:]
+
+    def draw(self, p: QPainter, center: QPointF, now: float, scale: float) -> None:
+        self.active = [item for item in self.active if now - item[1] < 2.2]
+        for index, (badge, started, label) in enumerate(self.active):
+            age = now - started
+            alpha = _ease_out_cubic(age / 0.25) * (1.0 if age < 1.8 else max(0.0, 1.0 - (age - 1.8) / 0.4))
+            pop = 1.0 + 0.35 * (1.0 - _ease_out_cubic(age / 0.30))
+            point = QPointF(center.x(), center.y() - (54.0 + index * 46.0) * scale)
+            self.assets.draw_centered(p, f"honor/{badge}", point, 46.0, alpha, scale=pop * scale)
+            font = QFont("Poppins", max(6, int(8 * scale)), QFont.Weight.Bold)
+            p.setOpacity(alpha)
+            p.setFont(font)
+            p.setPen(QColor("#F5E9C8"))
+            p.drawText(
+                QRectF(point.x() - 110 * scale, point.y() + 16 * scale, 220 * scale, 16 * scale),
+                Qt.AlignmentFlag.AlignCenter, label,
+            )
+            p.setOpacity(1.0)
+
+
+class HitInfoRenderer:
+    """gd656 subtitle/hit_info：受击/命中伤害提示与命中音效。"""
+
+    def __init__(self, assets: AssetBank) -> None:
+        self.assets = assets
+        self.sounds: SoundPool | None = None
+        self.lines: list[tuple[int, str, float]] = []
+        self.last_hit_at = -1.0
+
+    def attach_sounds(self, sounds: SoundPool) -> None:
+        self.sounds = sounds
+
+    def trigger(self, damage: int, kind: str, now: float, *, volume: float, enabled: bool) -> None:
+        if damage <= 0:
+            return
+        label = {"42mm": "42MM HIT", "17mm+42mm": "COMBINED HIT"}.get(kind, "17MM HIT")
+        self.lines.append((damage, label, now))
+        self.lines = self.lines[-4:]
+        self.last_hit_at = now
+        if enabled and self.sounds is not None:
+            self.sounds.play("hitsound_bf6.ogg", volume)
+
+    def draw(self, p: QPainter, center: QPointF, now: float, scale: float) -> None:
+        self.lines = [line for line in self.lines if now - line[2] < 1.4]
+        for index, (damage, label, started) in enumerate(reversed(self.lines)):
+            age = now - started
+            alpha = min(1.0, age / 0.10, max(0.0, (1.4 - age) / 0.30))
+            rise = 26.0 * _ease_out_cubic(age / 0.35) * scale
+            point = QPointF(center.x() + 40 * scale, center.y() - 90 * scale - rise - index * 20 * scale)
+            font = QFont("Poppins", max(7, int(9 * scale)), QFont.Weight.Bold)
+            p.setFont(font)
+            p.setOpacity(alpha)
+            p.setPen(QColor("#FFFFFF"))
+            p.drawText(QRectF(point.x(), point.y(), 150 * scale, 16 * scale), Qt.AlignmentFlag.AlignLeft, f"+{damage}")
+            p.setOpacity(alpha * 0.75)
+            small = QFont("Poppins", max(5, int(7 * scale)))
+            p.setFont(small)
+            p.drawText(QRectF(point.x() + 44 * scale, point.y() + 1, 150 * scale, 14 * scale), Qt.AlignmentFlag.AlignLeft, label)
+            p.setOpacity(1.0)
 
 
 class ComboRenderer:
@@ -687,6 +793,75 @@ class CompanionHud:
             p.drawText(QRectF(center_x - 110 * scale, ace_y, 220 * scale, 40 * scale), Qt.AlignmentFlag.AlignCenter, "ACE")
 
 
+class MatchProgressRenderer:
+    """战地风格比分推进条：敌方/我方基地血量消耗进度 + 红蓝比分。
+
+    RM 规则下胜利条件是打空对方基地血量，因此推进度直接取
+    GlobalUnitStatus 的基地血量占比（1 - hp/max），比分数字取
+    GameStatus 的 red_score/blue_score。
+    """
+
+    def __init__(self) -> None:
+        self.shown_own = 0.0
+        self.shown_enemy = 0.0
+
+    def draw(
+        self,
+        p: QPainter,
+        width: int,
+        now: float,
+        scale: float,
+        *,
+        own_base_health: float,
+        own_base_max: float,
+        enemy_base_health: float,
+        enemy_base_max: float,
+        red_score: int,
+        blue_score: int,
+        own_blue: bool,
+    ) -> None:
+        own_progress = 0.0 if own_base_max <= 0 else 1.0 - max(0.0, min(1.0, own_base_health / own_base_max))
+        enemy_progress = 0.0 if enemy_base_max <= 0 else 1.0 - max(0.0, min(1.0, enemy_base_health / enemy_base_max))
+        # 平滑推进，血量跳变时条不闪跳
+        factor = 1.0 - math.exp(-(1.0 / 60.0) / 0.35)
+        self.shown_own += (own_progress - self.shown_own) * factor
+        self.shown_enemy += (enemy_progress - self.shown_enemy) * factor
+
+        bar_w = min(430.0, width * 0.42) * scale
+        bar_h = 7.0 * scale
+        y = 64.0 * scale
+        gap = 26.0 * scale
+        cx = width * 0.5
+        left_rect = QRectF(cx - gap - bar_w, y, bar_w, bar_h)
+        right_rect = QRectF(cx + gap, y, bar_w, bar_h)
+
+        own_color = QColor("#4FA3FF") if own_blue else QColor("#FF5A4F")
+        enemy_color = QColor("#FF5A4F") if own_blue else QColor("#4FA3FF")
+        # 左条恒为己方推进（打对方基地的进度），右条为敌方推进
+        own_rect, enemy_rect = (left_rect, right_rect)
+        for rect, color, progress in ((own_rect, own_color, self.shown_own), (enemy_rect, enemy_color, self.shown_enemy)):
+            track = QColor("#FFFFFF")
+            track.setAlphaF(0.10)
+            p.fillRect(rect, track)
+            fill = QRectF(rect)
+            fill.setWidth(rect.width() * max(0.0, min(1.0, progress)))
+            p.fillRect(fill, color)
+
+        p.setFont(QFont("Poppins", max(7, int(10 * scale)), QFont.Weight.Bold))
+        own_score = blue_score if own_blue else red_score
+        enemy_score = red_score if own_blue else blue_score
+        p.setPen(own_color)
+        p.drawText(QRectF(cx - gap - bar_w, y + bar_h + 4 * scale, bar_w, 18 * scale), Qt.AlignmentFlag.AlignRight, str(own_score))
+        p.setPen(enemy_color)
+        p.drawText(QRectF(cx + gap, y + bar_h + 4 * scale, bar_w, 18 * scale), Qt.AlignmentFlag.AlignLeft, str(enemy_score))
+        p.setPen(QColor("#FFFFFF"))
+        small = QFont("Poppins", max(5, int(7 * scale)))
+        p.setFont(small)
+        p.setOpacity(0.85)
+        p.drawText(QRectF(cx - gap, y - 14 * scale, gap * 2, 12 * scale), Qt.AlignmentFlag.AlignCenter, "BASE RACE")
+        p.setOpacity(1.0)
+
+
 class KillFxRenderer:
     """按 GD656 原始 renderer 职责和时序实现的击杀 HUD 调度器。"""
 
@@ -701,14 +876,63 @@ class KillFxRenderer:
         self.card_bar = CardBarRenderer(self.assets)
         self.battlefield = BattlefieldRenderer(self.assets)
         self.valorant = ValorantRenderer(self.assets)
+        self.honor = HonorRenderer(self.assets)
+        self.hit_info = HitInfoRenderer(self.assets)
+        self.hit_info.attach_sounds(self.sounds)
+        self.match_progress = MatchProgressRenderer()
         self.companion = CompanionHud()
         self.combo_count = 0
         self.last_kill_at = 0.0
         self.last_context: TriggerContext | None = None
         self._layout_anchor: QPointF | None = None
+        self._last_hit_revision = -1
 
     def clear(self) -> None:
         self.__init__(self.assets.texture_root.parent)
+
+    # ClickGUI 二级界面逐元素开关；缺省全开，保持预设原有行为。
+    ELEMENT_TOGGLES = {
+        "kill_feed": "Kill Feed",
+        "score": "Score Popup",
+        "bonus": "Bonus Tags",
+        "combo_subtitle": "Combo Subtitle",
+        "scrolling": "Scrolling Icons",
+        "scrolling_bf5": "Scrolling Icons",
+        "scrolling_bf6": "Scrolling Icons",
+        "combo": "Combo Icons",
+        "card": "Card Icons",
+        "card_bar": "Card Bars",
+        "battlefield1": "Battlefield 1 Icons",
+        "valorant": "Valorant Icons",
+        "honor": "Honor Badges",
+        "hit_info": "Hit Info",
+        "match_progress": "Match Progress",
+    }
+
+    @classmethod
+    def _filter_elements(cls, elements: tuple[str, ...], toggles: dict[str, bool] | None) -> tuple[str, ...]:
+        if not toggles:
+            return elements
+        return tuple(item for item in elements if toggles.get(item, True))
+
+    # 叠加式元素：开关打开时对任何预设生效（不依赖预设是否包含），
+    # 开关关闭时即使预设包含也不出现。滚动/卡牌等元素仍按预设走，
+    # 开关只做移除。
+    ADDITIVE_ELEMENTS = ("honor", "hit_info", "match_progress")
+
+    @classmethod
+    def effective_elements(cls, preset: str, visibility: str, toggles: dict[str, bool] | None) -> tuple[str, ...]:
+        elements = cls.elements_for_preset(preset, visibility)
+        if not toggles:
+            return elements
+        result = [item for item in elements if toggles.get(item, True)]
+        for key in cls.ADDITIVE_ELEMENTS:
+            # Icons Only 只保留图标类元素，字幕/进度条类不叠加
+            if visibility == "Icons Only" and key != "honor":
+                continue
+            if toggles.get(key, True) and key not in result:
+                result.append(key)
+        return tuple(result)
 
     @staticmethod
     def elements_for_preset(preset: str, visibility: str) -> tuple[str, ...]:
@@ -717,13 +941,13 @@ class KillFxRenderer:
         else:
             elements = PRESET_ELEMENTS.get(preset, PRESET_ELEMENTS["Default Scrolling"])
         if visibility == "Icons Only":
-            return tuple(item for item in elements if item in ("scrolling", "scrolling_bf5", "scrolling_bf6", "combo", "card", "card_bar", "battlefield1", "valorant"))
+            return tuple(item for item in elements if item in ("scrolling", "scrolling_bf5", "scrolling_bf6", "combo", "card", "card_bar", "battlefield1", "valorant", "honor"))
         if visibility == "Full HUD":
             companions = ("kill_feed", "combo_subtitle", "score", "bonus")
             return tuple(dict.fromkeys((*elements, *companions)))
         return elements
 
-    def trigger(self, event: CombatEvent, *, combo_window: float, sound_enabled: bool, volume: float, preset: str, visibility: str, now_override: float | None = None) -> None:
+    def trigger(self, event: CombatEvent, *, combo_window: float, sound_enabled: bool, volume: float, preset: str, visibility: str, now_override: float | None = None, element_toggles: dict[str, bool] | None = None) -> None:
         if event.kind not in ("elimination", "death"):
             return
         now = time.perf_counter() if now_override is None else now_override
@@ -738,7 +962,9 @@ class KillFxRenderer:
             event.victim_id, event.victim_name, event.distance_m, event.score_delta, event.tags, now,
         )
         self.last_context = context
-        elements = self.elements_for_preset(preset, visibility)
+        elements = self.effective_elements(preset, visibility, element_toggles)
+        if "honor" in elements:
+            self.honor.trigger(context, now)
         if "scrolling" in elements or "scrolling_bf5" in elements or "scrolling_bf6" in elements:
             self.scrolling.trigger(context, now)
         if "combo" in elements:
@@ -790,9 +1016,17 @@ class KillFxRenderer:
         }
         self.sounds.preload(names)
 
-    def draw(self, painter: QPainter, width: int, height: int, *, preset: str, visibility: str, team: str, scale: float, anchor_policy: str, x_offset: float, y_offset: float, responsive_scale: bool = True, device_pixel_ratio: float = 1.0, now_override: float | None = None) -> None:
+    def notify_hit(self, damage: int, kind: str, *, preset: str, visibility: str, sound_enabled: bool, volume: float, element_toggles: dict[str, bool] | None = None, now_override: float | None = None) -> None:
+        """RobotInjuryStat 命中回调：hit_info 弹字 + 命中音效。"""
         now = time.perf_counter() if now_override is None else now_override
-        elements = self.elements_for_preset(preset, visibility)
+        elements = self.effective_elements(preset, visibility, element_toggles)
+        if "hit_info" not in elements:
+            return
+        self.hit_info.trigger(damage, kind, now, volume=volume, enabled=sound_enabled)
+
+    def draw(self, painter: QPainter, width: int, height: int, *, preset: str, visibility: str, team: str, scale: float, anchor_policy: str, x_offset: float, y_offset: float, responsive_scale: bool = True, device_pixel_ratio: float = 1.0, now_override: float | None = None, element_toggles: dict[str, bool] | None = None, state: Any = None) -> None:
+        now = time.perf_counter() if now_override is None else now_override
+        elements = self.effective_elements(preset, visibility, element_toggles)
         layout = KillFxLayout.create(
             width, height,
             policy=anchor_policy,
@@ -831,5 +1065,21 @@ class KillFxRenderer:
         if "valorant" in elements:
             style = VALORANT_STYLES.get(preset.removeprefix("Valorant "), VALORANT_STYLES["Prime"])
             self.valorant.draw(painter, layout.primary(80.0), now, 0.85 * layout.scale, style)
+        if "honor" in elements:
+            self.honor.draw(painter, layout.primary(210.0), now, layout.scale)
+        if "hit_info" in elements:
+            self.hit_info.draw(painter, QPointF(width * 0.5, height * 0.5), now, layout.scale)
+        if "match_progress" in elements and state is not None:
+            own_blue = int(getattr(state, "robot_id", 3)) >= 100 or str(getattr(state, "alliance_color", "")).lower() == "blue"
+            self.match_progress.draw(
+                painter, width, now, layout.scale,
+                own_base_health=float(getattr(state, "base_health", 0)),
+                own_base_max=float(getattr(state, "base_max_health", 0)),
+                enemy_base_health=float(getattr(state, "enemy_base_health", 0)),
+                enemy_base_max=float(getattr(state, "enemy_base_max_health", 0)),
+                red_score=int(getattr(state, "red_score", 0)),
+                blue_score=int(getattr(state, "blue_score", 0)),
+                own_blue=own_blue,
+            )
         companion_anchor = layout.anchor if anchor_policy == "Combat Focus" else None
         self.companion.draw(painter, width, height, now, layout.scale, elements, offset, companion_anchor)

@@ -853,6 +853,7 @@ class PolarRMWindow(QOpenGLWidget):
                 ("auto.spin", lambda: self.update_auto_spin_guard(now)),
                 ("official.consume", self.consume_official_messages),
                 ("official.apply", self.apply_official_state),
+                ("fx.hit_info", self.update_elimination_hit_info),
                 ("vision.sync", self.sync_tongji_vision_state),
                 ("vision.events", self.process_vision_kill_events),
                 ("registry", lambda: self.registry.tick(self.state, logic_dt)),
@@ -5519,7 +5520,49 @@ class PolarRMWindow(QOpenGLWidget):
                 volume=self.get_setting_number(effect, "Sound Volume", 55.0),
                 preset=self.setting_mode(effect, "Preset", "Default Scrolling"),
                 visibility=self.setting_mode(effect, "Element Visibility", "Preset"),
+                element_toggles=self.elimination_element_toggles(effect),
             )
+
+    def elimination_element_toggles(self, effect: Module) -> dict[str, bool]:
+        """ClickGUI 二级界面的逐元素开关 -> kill_fx 元素键。"""
+        return {
+            "kill_feed": self.setting_bool(effect, "Kill Feed", True),
+            "score": self.setting_bool(effect, "Score Popup", True),
+            "bonus": self.setting_bool(effect, "Bonus Tags", True),
+            "combo_subtitle": self.setting_bool(effect, "Combo Subtitle", True),
+            "scrolling": self.setting_bool(effect, "Scrolling Icons", True),
+            "scrolling_bf5": self.setting_bool(effect, "Scrolling Icons", True),
+            "scrolling_bf6": self.setting_bool(effect, "Scrolling Icons", True),
+            "combo": self.setting_bool(effect, "Combo Icons", True),
+            "card": self.setting_bool(effect, "Card Icons", True),
+            "card_bar": self.setting_bool(effect, "Card Icons", True),
+            "battlefield1": self.setting_bool(effect, "Battlefield Icons", True),
+            "valorant": self.setting_bool(effect, "Valorant Icons", True),
+            "honor": self.setting_bool(effect, "Honor Badges", True),
+            "hit_info": self.setting_bool(effect, "Hit Info", True),
+            "match_progress": self.setting_bool(effect, "Match Progress", True),
+        }
+
+    def update_elimination_hit_info(self) -> None:
+        """把 RobotInjuryStat 命中边沿转成 hit_info 弹字/音效。"""
+        effect = self.registry.get("EliminationFX")
+        if effect is None or not effect.enabled:
+            return
+        revision = int(self.state.projectile_hit_revision)
+        if revision == self.kill_fx._last_hit_revision:
+            return
+        self.kill_fx._last_hit_revision = revision
+        if not self.setting_bool(effect, "Hit Info", True):
+            return
+        self.kill_fx.notify_hit(
+            int(self.state.last_projectile_damage_delta),
+            str(self.state.last_projectile_kind),
+            preset=self.setting_mode(effect, "Preset", "Default Scrolling"),
+            visibility=self.setting_mode(effect, "Element Visibility", "Preset"),
+            sound_enabled=self.setting_bool(effect, "Sound Enabled", True),
+            volume=self.get_setting_number(effect, "Sound Volume", 55.0),
+            element_toggles=self.elimination_element_toggles(effect),
+        )
 
     def draw_elimination_fx(self, p: QPainter, width: int, height: int) -> None:
         effect = self.registry.get("EliminationFX")
@@ -5532,6 +5575,8 @@ class PolarRMWindow(QOpenGLWidget):
             p, width, height,
             preset=self.setting_mode(effect, "Preset", "Default Scrolling"),
             visibility=self.setting_mode(effect, "Element Visibility", "Preset"),
+            element_toggles=self.elimination_element_toggles(effect),
+            state=self.state,
             team=team_theme,
             scale=self.get_setting_number(effect, "Scale", 1.0),
             anchor_policy=self.setting_mode(effect, "Anchor Policy", "Combat Focus"),
