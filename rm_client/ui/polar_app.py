@@ -1123,9 +1123,11 @@ class PolarRMWindow(QOpenGLWidget):
         self.makeCurrent()
         try:
             for size, font in fonts.items():
+                # _jello_gpu_fonts also carries the ActiveMods (module list)
+                # pages, which have no settings-page text; skip those sizes.
                 self.clickgui_gpu.prewarm(
                     (font,),
-                    pages[size],
+                    pages.get(size, ()),
                     self.devicePixelRatioF(),
                     raster_scale=raster_scale,
                     preserve_weight=True,
