@@ -129,12 +129,34 @@ class BackendManager:
         self.serial.port = config.connection.serial_port
         self.serial.baud = int(config.connection.serial_baud)
         self.serial.mock_writes = bool(config.safety.mock_writes)
+        if self.state is not None:
+            self.state.mock_simulation_enabled = config.key == "LabDebug"
+            if config.key != "LabDebug" and not self.state.official_state_active:
+                self._clear_mock_frontend_state(self.state)
         self.set_active_video_source(config.connection.video_source)
+
+    @staticmethod
+    def _clear_mock_frontend_state(state: RobotState) -> None:
+        state.robot_rows.clear()
+        state.map_robots.clear()
+        state.map_markers.clear()
+        state.buff_rows.clear()
+        state.backend_frontend_synced = False
+
+    def _begin_official_state(self, state: RobotState, timestamp: float) -> None:
+        if not state.official_state_active:
+            self._clear_mock_frontend_state(state)
+        state.official_state_active = True
+        state.official_state_at = max(float(state.official_state_at), float(timestamp))
 
     def apply_scenario(self, key: str, *, start: bool = True) -> None:
         key = key if key in SCENARIOS else "LabDebug"
         self.shutdown(restart=True)
         self.scenario_key = key
+        self._hero_native_override = False
+        self._normal_video_source = ""
+        if self.state is not None:
+            self._reset_state_for_scenario(self.state)
         config = SCENARIOS[key]
         self._apply_config(config)
         # shutdown() deliberately latches local E-stop.  A scenario switch has
@@ -151,6 +173,43 @@ class BackendManager:
             self.udp.start()
         # 串口：Stub 或真实端口
         self.serial.start()
+
+    def _reset_state_for_scenario(self, state: RobotState) -> None:
+        """Discard data from the previous transport epoch before reconnecting."""
+
+        self._clear_mock_frontend_state(state)
+        state.official_state_active = False
+        state.official_state_at = 0.0
+        state.official_robot_health.clear()
+        state.robot_positions.clear()
+        state.buffs.clear()
+        state.penalties.clear()
+        state.active_penalty.clear()
+        state.radar_detections.clear()
+        state.path_plan.clear()
+        state.tech_core.clear()
+        state.performance_sync.clear()
+        state.rune_status.clear()
+        state.sentry_status.clear()
+        state.dart_status.clear()
+        state.sentry_ctrl_result.clear()
+        state.special_mechanisms.clear()
+        state.robot_statics.clear()
+        state.robot_dynamics.clear()
+        state.robot_modules.clear()
+        state.robot_module_status.clear()
+        state.injury_stats.clear()
+        state.injury_stats_initialized = False
+        state.projectile_damage_small_total = 0
+        state.projectile_damage_large_total = 0
+        state.last_projectile_hit_at = 0.0
+        state.last_projectile_damage_delta = 0
+        state.last_projectile_kind = ""
+        state.last_projectile_killer_id = 0
+        state.deploy_mode = 0
+        state.deploy_status_revision += 1
+        state.deploy_status_at = 0.0
+        state.current_stage = "NOT_STARTED"
 
     def tick(self) -> None:
         if self.state is not None:
@@ -333,9 +392,14 @@ class BackendManager:
         - buff_rows  ? Buff ??
         ???????? mock????????? mock???????
         """
-        has_real = bool(state.official_robot_health) or bool(state.robot_positions) or bool(state.robot_statics)
+        has_real = (
+            bool(state.official_robot_health)
+            or bool(state.robot_positions)
+            or bool(state.robot_statics)
+            or bool(state.robot_dynamics)
+            or bool(state.robot_modules)
+        )
         if not has_real:
-            state.backend_frontend_synced = False
             return
         state.backend_frontend_synced = True
 
@@ -354,7 +418,7 @@ class BackendManager:
             *(int(key) for key in state.robot_modules),
             *(int(item.get("robot_id", 0)) for item in state.robot_positions),
         }
-        robot_ids = list(ally_ids + enemy_ids)
+        robot_ids = list(ally_ids + enemy_ids) if health else []
         robot_ids.extend(sorted(robot_id for robot_id in observed_ids if robot_id > 0 and robot_id not in robot_ids))
         rows: list[dict[str, Any]] = []
         for robot_id in robot_ids:
@@ -496,7 +560,6 @@ class BackendManager:
             "udp hevc",
             "hevc",
             "h265",
-            "synthetic",
         }
         candidates: list[tuple[Any, float, str]] = []
         if want_native and self.native_decoder.available:
@@ -520,6 +583,10 @@ class BackendManager:
         count = 0
         for _topic, name, data, _ts in messages:
             try:
+                # Disable synthetic state before applying the first official
+                # message. This preserves a first MapClick/Buff update instead
+                # of clearing it immediately after it was written.
+                self._begin_official_state(state, _ts)
                 self._apply_one(state, name, data)
                 count += 1
                 self._official_state_updates_count += 1

@@ -81,6 +81,9 @@ class KeyboardControlBridge:
         self.last_error = ""
         self.last_send_at = 0.0
         self.heartbeat_hz = 75.0
+        # Active input remains 75 Hz. While an operator-authorized match is
+        # idle, send a bounded 4 Hz neutral frame for the robot watchdog.
+        self.idle_zero_interval_s = 0.25
         self._dirty = False
 
     def set_key(self, key: str, pressed: bool, state: RobotState, registry: ModuleRegistry) -> ChassisCommand | None:
@@ -150,9 +153,25 @@ class KeyboardControlBridge:
             or self.mouse_y != 0
             or self.mouse_z != 0
         )
-        if (not active and not self._dirty) or now - self.last_send_at < 1.0 / self.heartbeat_hz:
+        if not active and not self._dirty and not self._idle_zero_authorized():
+            return None
+        interval = 1.0 / self.heartbeat_hz if active or self._dirty else self.idle_zero_interval_s
+        if now - self.last_send_at < interval:
             return None
         return self.send_from_state(state, registry)
+
+    def _idle_zero_authorized(self) -> bool:
+        """Avoid denied heartbeat/log spam while the fail-closed gate is locked."""
+
+        if self.mock_output:
+            return True
+        safety = getattr(self.publisher, "safety", None)
+        control_state = getattr(safety, "control_state", None)
+        value = getattr(control_state, "value", control_state)
+        if str(value) != "MATCH_ARMED":
+            return False
+        is_fighting = getattr(safety, "is_fighting", None)
+        return not callable(is_fighting) or bool(is_fighting())
 
     def build_command(self, state: RobotState, registry: ModuleRegistry) -> ChassisCommand:
         forward = float(self.key_state["W"]) - float(self.key_state["S"])

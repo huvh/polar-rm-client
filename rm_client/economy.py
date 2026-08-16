@@ -34,6 +34,7 @@ class EconomyContext:
     current_health: int
     max_health: int
     in_supply_zone: bool
+    supply_zone_known: bool
     out_of_combat: bool
     can_remote_heal: bool
     can_remote_ammo: bool
@@ -62,7 +63,8 @@ class EconomyContext:
             ammo_capacity=max(0, int(getattr(state, "ammo_capacity", 0))),
             current_health=max(0, int(getattr(state, "current_health", 0))),
             max_health=max(1, int(getattr(state, "max_health", 1))),
-            in_supply_zone=bool(getattr(state, "in_supply_zone", True)),
+            in_supply_zone=bool(getattr(state, "in_supply_zone", False)),
+            supply_zone_known=bool(getattr(state, "supply_zone_known", False)),
             out_of_combat=bool(getattr(state, "out_of_combat", True)),
             can_remote_heal=bool(getattr(state, "can_remote_heal", True)),
             can_remote_ammo=bool(getattr(state, "can_remote_ammo", True)),
@@ -236,7 +238,11 @@ def _local_ammo_offer(
     quantity: int,
     cost: int,
 ) -> EconomyOffer:
-    enabled, reason = _enabled(context.gold, cost, context.in_supply_zone, "需要进入补给区")
+    # CommonCommand is validated by the referee server. Because the documented
+    # protobuf feed omits the local RFID card bit, an unknown estimate must not
+    # disable a valid command (and must not claim the robot is inside either).
+    zone_allowed = context.in_supply_zone if context.supply_zone_known else True
+    enabled, reason = _enabled(context.gold, cost, zone_allowed, "需要进入补给区")
     command_type = 1 if projectile == "17mm" else 2
     return _offer(
         key=key,
@@ -252,6 +258,10 @@ def _local_ammo_offer(
         enabled=enabled,
         reason=reason,
         confirmation="double",
+        # ``estimated`` describes price uncertainty in the existing UI.  Zone
+        # eligibility is instead left to the authoritative server when the
+        # custom-client feed cannot observe the RFID state.
+        estimated=False,
     )
 
 

@@ -46,6 +46,8 @@ from rm_client.model import (
     MODULE_LIST_STYLES,
     TACTICAL_MAP_STATUS_DISPLAYS,
     GuiModeManager,
+    Module,
+    ModuleRegistry,
     RobotState,
     build_default_registry,
     normalize_gui_mode,
@@ -72,7 +74,12 @@ from rm_client.backend.serial_backend import RmSerialBackend
 from rm_client.scenarios import ScenarioManager
 from rm_client.startup_wallpaper import PkgVirtualFileSystem, StartupWallpaperManager
 from rm_client.transports import FrameAssembler, OfficialMqttBridge, SerialBridgeStub, UDPVideoReceiver, VideoPipeline
-from rm_client.tongji_bridge import DEFAULT_PORT, TongjiVisionReceiver, build_tongji_packet
+from rm_client.tongji_bridge import (
+    DEFAULT_PORT,
+    TongjiVisionReceiver,
+    build_tongji_packet,
+    parse_tongji_packet,
+)
 from rm_client.ui_audio import UiAudioManager
 from rm_client.ui.animation import (
     AnimationBank,
@@ -1022,12 +1029,40 @@ def test_tongji_udp_protocol() -> None:
         time.sleep(0.01)
     assert receiver._socket is not None
     port = receiver._socket.getsockname()[1]
+    bad_armor = (
+        b'{"protocol":"rm.vision.tongji.v1","frame_w":640,"frame_h":360,'
+        b'"armors":[{"id":"abc","points":[[1,2],[30,2],[30,20],[1,20]]}]}'
+    )
+    parsed_bad_armor = parse_tongji_packet(bad_armor)
+    assert parsed_bad_armor is not None and parsed_bad_armor.armors == ()
+    bad_pose = parse_tongji_packet(
+        b'{"protocol":"rm.vision.tongji.v1","frame_w":640,"frame_h":360,'
+        b'"gimbal":{"yaw_rad":"nan","calibrated":"yes"},'
+        b'"command":{"pitch_rad":0.25,"calibrated":1}}'
+    )
+    assert bad_pose is not None
+    assert "yaw_rad" not in bad_pose.gimbal and bad_pose.gimbal["calibrated"] is False
+    assert bad_pose.command["pitch_rad"] == 0.25 and bad_pose.command["calibrated"] is True
+    from rm_client.vision import snapshot_from_tongji_packet
+
+    missing_calibration = parse_tongji_packet(
+        b'{"protocol":"rm.vision.tongji.v1","frame_w":640,"frame_h":360,'
+        b'"command":{"control":"false","fire":"false"}}'
+    )
+    assert missing_calibration is not None
+    assert missing_calibration.command["control"] is False
+    assert missing_calibration.command["fire"] is False
+    assert snapshot_from_tongji_packet(missing_calibration).result.calibrated is False
     packet = build_tongji_packet(
         640,
         360,
         [{"name": "three", "color": "blue", "confidence": 0.91, "points": [[1, 2], [30, 2], [30, 20], [1, 20]], "locked": True}],
     )
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as publisher:
+        # A structurally invalid packet and a malformed observation used to
+        # terminate this thread before the subsequent valid packet arrived.
+        publisher.sendto(b'{"protocol":"rm.vision.tongji.v1","frame_w":"bad"}', ("127.0.0.1", port))
+        publisher.sendto(bad_armor, ("127.0.0.1", port))
         publisher.sendto(packet, ("127.0.0.1", port))
     received = None
     deadline = time.perf_counter() + 1.0
@@ -1039,6 +1074,9 @@ def test_tongji_udp_protocol() -> None:
     receiver.stop()
     assert received is not None
     assert received.primary is not None and received.primary["name"] == "three"
+    assert receiver.packets_received >= 3
+    assert receiver.invalid_packets >= 1
+    assert receiver.parse_errors == 0
 
 
 def test_local_prediction_snapshot() -> None:
@@ -1189,6 +1227,44 @@ def test_udp_reassembly() -> None:
     assert assembler.push_packet(p0) is None
     assert assembler.push_packet(p1) == payload
 
+    def fragment(frame_id: int, index: int, total: int, data: bytes) -> bytes:
+        return (
+            frame_id.to_bytes(2, "big")
+            + index.to_bytes(2, "big")
+            + total.to_bytes(4, "big")
+            + data
+        )
+
+    # Conflicting metadata, missing chunk indexes and conflicting duplicates
+    # are corrupt frames, never byte sequences to concatenate/truncate.
+    assert assembler.push_packet(fragment(8, 0, 4, b"ab")) is None
+    assert assembler.push_packet(fragment(8, 1, 5, b"cd")) is None
+    assert 8 not in assembler.frames
+    assert assembler.push_packet(fragment(9, 0, 4, b"ab")) is None
+    assert assembler.push_packet(fragment(9, 2, 4, b"cd")) is None
+    assert 9 not in assembler.frames
+    assert assembler.push_packet(fragment(10, 0, 4, b"ab")) is None
+    assert assembler.push_packet(fragment(10, 0, 4, b"zz")) is None
+    assert 10 not in assembler.frames
+    assert assembler.push_packet(fragment(11, 0, FrameAssembler.MAX_FRAME_BYTES + 1, b"x")) is None
+    assert assembler.invalid_count >= 4
+
+    flood = FrameAssembler()
+    for frame_id in range(FrameAssembler.MAX_IN_FLIGHT + 5):
+        assert flood.push_packet(fragment(frame_id, 0, 2, b"x")) is None
+    assert len(flood.frames) == FrameAssembler.MAX_IN_FLIGHT
+    assert flood.dropped_count == 5
+
+    # The frame-count bound alone allowed 64 partial 16 MiB frames to retain
+    # about one GiB. Exercise aggregate eviction with a tiny per-test ceiling.
+    memory_bound = FrameAssembler()
+    memory_bound.MAX_BUFFERED_BYTES = 5
+    assert memory_bound.push_packet(fragment(20, 0, 10, b"abcd")) is None
+    assert memory_bound.buffered_bytes == 4
+    assert memory_bound.push_packet(fragment(21, 0, 10, b"wxyz")) is None
+    assert 20 not in memory_bound.frames and 21 in memory_bound.frames
+    assert memory_bound.buffered_bytes == 4 and memory_bound.dropped_count == 1
+
 
 def test_video_pipeline_reassembly() -> None:
     pipeline = VideoPipeline()
@@ -1260,6 +1336,51 @@ def test_keyboard_control_bridge() -> None:
     assert neutral.keyboard_value == 0
     assert publisher.calls[-1]["keyboard_value"] == 0
     assert publisher.calls[-1]["left"] is False
+
+    class SafetyState:
+        value = "LOCKED"
+
+    class Safety:
+        def __init__(self) -> None:
+            self.control_state = SafetyState()
+            self.fighting = False
+
+        def is_fighting(self) -> bool:
+            return self.fighting
+
+    publisher.safety = Safety()
+    heartbeat = KeyboardControlBridge(publisher, mock_output=False)
+    assert heartbeat.tick(state, registry, now=100.0) is None
+    locked_calls = len(publisher.calls)
+    publisher.safety.control_state.value = "MATCH_ARMED"
+    # Arming outside the authoritative fighting stage must not create an
+    # uplink that looks like active match traffic.
+    assert heartbeat.tick(state, registry, now=100.0) is None
+    publisher.safety.fighting = True
+    neutral = heartbeat.tick(state, registry, now=100.0)
+    assert neutral is not None and neutral.keyboard_value == 0
+    assert len(publisher.calls) == locked_calls + 1
+    heartbeat.last_send_at = 100.0
+    assert heartbeat.tick(state, registry, now=100.249) is None
+    assert heartbeat.tick(state, registry, now=100.251) is not None
+
+
+def test_registry_tick_enabled_modules_only() -> None:
+    class CountingModule(Module):
+        def __init__(self, name: str, enabled: bool) -> None:
+            super().__init__(name=name, category="System", enabled=enabled)
+            self.calls = 0
+
+        def on_tick(self, state: RobotState, dt: float) -> None:
+            assert isinstance(state, RobotState)
+            assert dt == 0.02
+            self.calls += 1
+
+    enabled = CountingModule("Enabled", True)
+    disabled = CountingModule("Disabled", False)
+    ModuleRegistry([enabled, disabled]).tick(RobotState(), 0.02)
+    assert enabled.calls == 1
+    assert disabled.calls == 0
 
 
 def test_scenario_manager() -> None:
@@ -1440,6 +1561,14 @@ def test_liquid_glass_snapshot_stability() -> None:
         return bytes(image.constBits())
 
     assert render() == render()
+    renderer = LiquidGlassRenderer()
+    renderer.update("hud", background, QRectF(0, 0, 320, 180))
+    renderer.light_state[("hud", 1, 2, 3, 4)] = 1.0
+    renderer.light_time[("hud", 1, 2, 3, 4)] = time.perf_counter()
+    renderer.discard("hud")
+    assert "hud" not in renderer.snapshots
+    assert not any(key[0] == "hud" for key in renderer.light_state)
+    assert not any(key[0] == "hud" for key in renderer.light_time)
     app.processEvents()
 
 
@@ -2115,6 +2244,7 @@ def test_robot_profiles_and_economy_rules() -> None:
     state.total_economy_obtained = 700
     state.stage_countdown_sec = 300
     state.in_supply_zone = True
+    state.supply_zone_known = True
     state.out_of_combat = True
     state.can_remote_ammo = True
     state.can_remote_heal = True
@@ -2155,6 +2285,14 @@ def test_robot_profiles_and_economy_rules() -> None:
     assert (rmuc_infantry["rmuc_infantry_17_10"].minimum, rmuc_infantry["rmuc_infantry_17_10"].cost) == (10, 10)
     assert (rmuc_infantry["rmuc_infantry_17_100"].minimum, rmuc_infantry["rmuc_infantry_17_100"].cost) == (100, 100)
     assert (rmuc_infantry["rmuc_infantry_remote_17_100"].minimum, rmuc_infantry["rmuc_infantry_remote_17_100"].cost) == (100, 150)
+    state.in_supply_zone = False
+    state.supply_zone_known = False
+    unknown_zone = {offer.key: offer for offer in available_actions(state)}["rmuc_infantry_17_10"]
+    assert unknown_zone.enabled is True and unknown_zone.estimated is False
+    state.supply_zone_known = True
+    known_outside = {offer.key: offer for offer in available_actions(state)}["rmuc_infantry_17_10"]
+    assert known_outside.enabled is False and known_outside.estimated is False
+    state.in_supply_zone = True
 
     state.robot_profile = "Engineer"
     state.current_health = state.max_health
@@ -3403,6 +3541,9 @@ def test_hero_native_video_isolation_and_authoritative_lock() -> None:
         normal.fill(QColor("#ff0000"))
         window.frame_image = normal
         window.frame_pixmap = QPixmap.fromImage(normal)
+        window._normal_backend_mode = "webcam"
+        window._normal_frame_source = "webcam"
+        window._display_frame_sequence += 1
         assert window.consume_hero_native_video_frame()
         assert fake_backend.calls == ["Native 0x0310"]
 
@@ -3472,6 +3613,80 @@ def test_hero_native_video_isolation_and_authoritative_lock() -> None:
     finally:
         window.backend = original_backend
         window.ensure_camera_started = original_ensure_camera
+        window.close()
+    app.processEvents()
+
+
+def test_normal_backend_video_freshness_and_source_ownership() -> None:
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    import numpy as np
+    from PySide6.QtGui import QColor, QImage, QPainter
+    from PySide6.QtWidgets import QApplication
+    from rm_client.ui.polar_app import PolarRMWindow
+
+    app = QApplication.instance() or QApplication([])
+    window = PolarRMWindow()
+    window.timer.stop()
+    original_backend = window.backend
+    now = time.perf_counter()
+    backend_bgr = np.zeros((90, 160, 3), dtype=np.uint8)
+    backend_bgr[:, :, 2] = 255
+
+    class FakeUdp:
+        def __init__(self) -> None:
+            self.clears = 0
+
+        def clear_stale_decoded_frame(self, _timeout: float) -> bool:
+            self.clears += 1
+            return True
+
+    class FakeBackend:
+        def __init__(self) -> None:
+            self.udp = FakeUdp()
+            self.calls = 0
+
+        def latest_video_frame(self, _timeout: float, source_mode: str):
+            self.calls += 1
+            assert source_mode == "UDP HEVC"
+            if self.calls == 1:
+                return backend_bgr, now, "udp"
+            return None, 0.0, "none"
+
+    fake_backend = FakeBackend()
+    window.backend = fake_backend
+    camera = window.registry.get("CameraFeed")
+    camera.get_setting("Source").value = "UDP HEVC"
+    try:
+        window.consume_capture_frame()
+        assert window._normal_backend_mode == "udp hevc"
+        assert window._normal_frame_source == "backend"
+        assert window.frame_image is not None and window.frame_pixmap is not None
+        assert window.normal_video_frame_ready(now + 0.1)
+
+        # A later no-frame result releases both the visible texture and the
+        # Compatibility Painter glass snapshot; it cannot freeze indefinitely.
+        window.update_hud_liquid_source(window.frame_image)
+        assert "hud" in window.liquid_glass.snapshots
+        window.consume_capture_frame()
+        assert fake_backend.udp.clears == 1
+        assert window.frame_image is None and window.frame_pixmap is None
+        assert window._normal_frame_source == "none"
+        assert "hud" not in window.liquid_glass.snapshots
+
+        lost = QImage(320, 180, QImage.Format.Format_ARGB32_Premultiplied)
+        lost.fill(QColor("#ffffff"))
+        painter = QPainter(lost)
+        window.draw_video(painter, 320, 180)
+        painter.end()
+        assert lost.pixelColor(4, 4).red() < 20
+
+        camera.get_setting("Source").value = "Synthetic"
+        calls_before = fake_backend.calls
+        window.consume_capture_frame()
+        assert fake_backend.calls == calls_before
+        assert not window.normal_video_frame_ready()
+    finally:
+        window.backend = original_backend
         window.close()
     app.processEvents()
 
@@ -3943,6 +4158,7 @@ if __name__ == "__main__":
     test_video_pipeline_reassembly()
     test_referee_frame_codec()
     test_keyboard_control_bridge()
+    test_registry_tick_enabled_modules_only()
     test_scenario_manager()
     test_official_mqtt_bridge_mock_publish()
     test_robot_state_tick()
@@ -3968,6 +4184,7 @@ if __name__ == "__main__":
     test_projectile_hit_auto_spin_uses_cumulative_deltas()
     test_hero_deploy_console_state_and_responsive_render()
     test_hero_native_video_isolation_and_authoritative_lock()
+    test_normal_backend_video_freshness_and_source_ownership()
     test_minecraft_hud_assets_layout_and_render()
     test_minecraft_hud_keeps_client_overlay_stack()
     test_estop_zero_frame_bypass_and_backend_readiness()

@@ -31,7 +31,10 @@ def main() -> int:
     window.resize(2560, 1440)
     camera = window.registry.get("CameraFeed")
     if camera and camera.get_setting("Source"):
-        camera.get_setting("Source").value = "Synthetic"
+        camera.get_setting("Source").value = "Webcam"
+    # This visual fixture injects a deterministic frame below; never let a
+    # physical webcam race it while transition screenshots are captured.
+    window.ensure_camera_started = lambda: None
     output = Path("tmp_render_checks")
     output.mkdir(exist_ok=True)
     window.show()
@@ -67,7 +70,9 @@ def main() -> int:
         painter.end()
         window.frame_image = frame
         window.frame_pixmap = QPixmap.fromImage(frame)
-        window._last_capture_sequence += 1
+        window._normal_backend_mode = "webcam"
+        window._normal_frame_source = "webcam"
+        window._display_frame_sequence += 1
         window._gpu_background_key = None
         # Keep the center HUD visible without fabricating a vision target.  A
         # lost target remains in its documented ten-second grace phase, which

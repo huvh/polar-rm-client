@@ -271,6 +271,9 @@ def test_decoded_video_timestamp_and_source_selection() -> None:
         def latest(self, _timeout_s: float = 0.5):
             return self.frame
 
+        def latest_timestamp(self) -> float:
+            return self.timestamp
+
         def start(self) -> bool:
             self.available = True
             self.starts += 1
@@ -299,15 +302,20 @@ def test_decoded_video_timestamp_and_source_selection() -> None:
     backend.latest_bgr_at = now
     backend.last_frame_at = now
     backend.h265_decoder = FakeDecoder(h265, now + 0.001)  # type: ignore[assignment]
+    check("decoded freshness probe avoids packet-only state", backend.decoded_frame_fresh(1.0))
     frame, timestamp = backend.latest_video_frame(1.0)
     check("freshest UDP decode wins", frame is h265 and timestamp > now)
 
     # Encoded traffic must not make an old decoded MJPEG image look fresh.
     backend.h265_decoder.available = False
+    backend.h265_decoder.timestamp = now - 5.0
     backend.latest_bgr_at = now - 5.0
     backend.last_frame_at = time.perf_counter()
     frame, timestamp = backend.latest_video_frame(0.1)
     check("encoded timestamp cannot refresh stale image", frame is None and timestamp == 0.0)
+    check("stale decoded freshness resets", not backend.decoded_frame_fresh(0.1))
+    check("stale MJPEG image released", backend.clear_stale_decoded_frame(0.1))
+    check("released MJPEG cannot freeze", backend.latest_bgr is None and backend.latest_bgr_at == 0.0)
 
     backend.running = True
     backend._h265_next_restart_at = 0.0
@@ -335,6 +343,25 @@ def test_decoded_video_timestamp_and_source_selection() -> None:
     check("decoder input drop is observable", queued_decoder.input_chunks_dropped == 1)
     queued_decoder._running = False
     queued_decoder._proc = None
+
+    # Synthetic is a renderer-owned test pattern. It must never inherit a
+    # stale UDP/native frame through BackendManager's Auto source fallback.
+    manager_stub = object.__new__(BackendManager)
+    manager_stub.native_decoder = FakeDecoder(object(), now + 2.0)
+    manager_stub.udp = type(
+        "FakeUdp",
+        (),
+        {"latest_video_frame": lambda self, _timeout: (object(), now + 1.0)},
+    )()
+    frame, frame_at, source = BackendManager.latest_video_frame(
+        manager_stub,
+        1.0,
+        "Synthetic",
+    )
+    check(
+        "synthetic source cannot reuse backend frame",
+        frame is None and frame_at == 0.0 and source == "none",
+    )
     queued_decoder._drain_input_queue()
 
     state = RobotState()
@@ -787,6 +814,57 @@ def test_backend_frontend_sync() -> None:
     check("dead row", dead["hp"] == 0 and dead["state"] == "DEAD")
     check("map_robots real", any(m["id"] == 3 and m["x"] == 8.2 for m in state.map_robots))
     check("buff_rows real", any(b["name"] == "Attack Boost" and b["remaining"] == 12 for b in state.buff_rows))
+    rows_before = [dict(row) for row in state.robot_rows]
+    map_before = [dict(row) for row in state.map_robots]
+    buffs_before = [dict(row) for row in state.buff_rows]
+    health_before = state.current_health
+    state.tick(1.0 / 60.0)
+    check(
+        "official rows survive 60Hz model tick",
+        state.robot_rows == rows_before and state.map_robots == map_before,
+    )
+    check(
+        "official values survive 60Hz model tick",
+        state.current_health == health_before and state.buff_rows == buffs_before,
+    )
+
+    # The first official MapClick must clear old mock data before, not after,
+    # applying the marker; otherwise it disappears on the same frame.
+    marker_state = RobotState()
+    marker_state.tick(1.0 / 60.0)
+    marker_manager = BackendManager(state=marker_state, client_id="3", scenario_key="OfficialEvent")
+    marker_manager.mqtt._decoded.append(("MapClickInfo", "MapClickInfo", {
+        "ascii": ord("A"), "map_x": 4.5, "map_y": 6.5, "type": 1,
+        "__present__": frozenset({2, 6, 7, 8}),
+    }, time.perf_counter()))
+    check("first MapClick applied", marker_manager.apply_updates(marker_state) == 1)
+    check(
+        "first MapClick retained",
+        len(marker_state.map_markers) == 1 and marker_state.map_markers[0]["label"] == "A",
+    )
+    marker_state.tick(1.0 / 60.0)
+    check("MapClick survives next model tick", len(marker_state.map_markers) == 1)
+    marker_manager.shutdown()
+
+    # A scenario/transport epoch change resets cumulative injury baselines so
+    # the first post-reconnect sample cannot look like a fresh projectile hit.
+    state.injury_stats[103] = {"small_projectile_damage": 25}
+    state.injury_stats_initialized = True
+    state.projectile_damage_small_total = 25
+    state.projectile_damage_large_total = 50
+    revision_before = state.projectile_hit_revision
+    manager._reset_state_for_scenario(state)
+    check(
+        "scenario reset clears injury baseline",
+        not state.injury_stats
+        and not state.injury_stats_initialized
+        and state.projectile_damage_small_total == 0
+        and state.projectile_damage_large_total == 0,
+    )
+    check(
+        "scenario reset preserves monotonic hit revision",
+        state.projectile_hit_revision == revision_before,
+    )
     manager.shutdown()
 
 

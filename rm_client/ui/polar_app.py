@@ -343,6 +343,8 @@ class PolarHudOverlay(QWidget):
 class PolarRMWindow(QOpenGLWidget):
     """主窗口直接使用 Qt OpenGL 表面，所有 QPainter UI 都由 OpenGL 合成呈现。"""
 
+    NORMAL_BACKEND_VIDEO_STALE_S = 2.0
+
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("POLAR-RM Custom Client")
@@ -421,7 +423,13 @@ class PolarRMWindow(QOpenGLWidget):
         self._tongji_enabled = False
         self._vision_snapshot: VisionSnapshot | None = None
         self._last_capture_sequence = 0
+        # Webcam/vision sequence numbers come from CameraCaptureWorker.  Keep
+        # the render upload sequence separate so time spent on UDP/Native does
+        # not make a later webcam restart wait for thousands of frame numbers.
+        self._display_frame_sequence = 0
         self._last_backend_video_at = 0.0
+        self._normal_backend_mode = ""
+        self._normal_frame_source = "none"
         self._last_vision_result: VisionResult | None = None
         self.vision_render_interpolator = VisionRenderInterpolator()
         self.target_hud_presence = TargetHudPresenceState()
@@ -802,7 +810,11 @@ class PolarRMWindow(QOpenGLWidget):
             self.consume_capture_frame()
             self.state.camera_connected = self.camera_worker.connected
             self.state.mqtt_connected = self.mqtt.connected
-            self.state.udp_video_connected = self.udp.frames_received > 0
+            # The full decoder health tree includes queue/process diagnostics;
+            # do not rebuild it on every render tick merely for a status LED.
+            self.state.udp_video_connected = self.udp.decoded_frame_fresh(
+                self.NORMAL_BACKEND_VIDEO_STALE_S
+            )
             self.state.serial_connected = self.serial.connected
             self.state.tick(logic_dt)
             # 后端：心跳/安全 tick + 全量协议解码写入 RobotState（UI 只读）
@@ -1483,9 +1495,14 @@ class PolarRMWindow(QOpenGLWidget):
                 # The cached compositor owns the aspect-fit/letterbox Hero
                 # path.  Never let this legacy fast path upload frame_image.
                 return False
-            if self.frame_image is None or self.frame_image.isNull() or not self.hud_video_gpu.available:
+            if (
+                self.frame_image is None
+                or self.frame_image.isNull()
+                or not self.hud_video_gpu.available
+                or not self.normal_video_frame_ready()
+            ):
                 return False
-            self.hud_video_gpu.update_frame(self.frame_image, canvas, self._last_capture_sequence, 1.0 / 30.0, 0.0)
+            self.hud_video_gpu.update_frame(self.frame_image, canvas, self._display_frame_sequence, 1.0 / 30.0, 0.0)
             self.hud_video_gpu.discard_interpolation_history()
             if not self.hud_video_gpu.render(functions, canvas, interpolate=False):
                 return False
@@ -2218,17 +2235,28 @@ class PolarRMWindow(QOpenGLWidget):
                 height,
                 round(ratio, 3),
             )
-        elif self.frame_pixmap is not None and not self.frame_pixmap.isNull():
+        elif self.backend_video_source_selected() and not self.normal_backend_video_fresh():
+            background_key = (
+                "backend-video-lost",
+                self.setting_mode(self.registry.get("CameraFeed"), "Source", ""),
+                width,
+                height,
+                round(ratio, 3),
+            )
+            transform_key = ("backend-video-lost-transform", width, height)
+            self.gpu_compositor.set_scene_uv_offset(0.0, 0.0)
+            blur_source_key = background_key
+        elif self.normal_video_frame_ready() and self.frame_pixmap is not None and not self.frame_pixmap.isNull():
             background_key = (
                 "camera",
-                self._last_capture_sequence,
+                self._display_frame_sequence,
                 width,
                 height,
                 round(ratio, 3),
             )
             transform_key = ("camera-transform", width, height)
             self.gpu_compositor.set_scene_uv_offset(0.0, 0.0)
-            blur_source_key = ("camera-blur", self._last_capture_sequence, width, height, round(ratio, 3))
+            blur_source_key = ("camera-blur", self._display_frame_sequence, width, height, round(ratio, 3))
         else:
             background_key = (
                 "synthetic",
@@ -2303,7 +2331,9 @@ class PolarRMWindow(QOpenGLWidget):
                 self.draw_startup_background(painter, width, height)
             elif self.hero_deploy_video_cut_active():
                 self.draw_hero_native_background(painter, width, height)
-            elif self.frame_image is not None and not self.frame_image.isNull():
+            elif self.backend_video_source_selected() and not self.normal_backend_video_fresh():
+                self.draw_backend_video_lost(painter, width, height)
+            elif self.normal_video_frame_ready() and self.frame_image is not None and not self.frame_image.isNull():
                 painter.drawImage(canvas, self.frame_image, QRectF(self.frame_image.rect()))
             else:
                 self.draw_synthetic_video(painter, width, height)
@@ -4681,14 +4711,20 @@ class PolarRMWindow(QOpenGLWidget):
     def draw_hud_gpu_background(self) -> bool:
         if self.hero_deploy_video_cut_active():
             return False
-        if self.home_visible or not self.hud_video_gpu.available or self.frame_image is None or self.frame_image.isNull():
+        if (
+            self.home_visible
+            or not self.hud_video_gpu.available
+            or self.frame_image is None
+            or self.frame_image.isNull()
+            or not self.normal_video_frame_ready()
+        ):
             return False
         try:
             canvas = QRectF(0, 0, self.width(), self.height())
             self.hud_video_gpu.update_frame(
                 self.frame_image,
                 canvas,
-                self._last_capture_sequence,
+                self._display_frame_sequence,
                 1.0 / 60.0,
                 0.0,
             )
@@ -4769,6 +4805,11 @@ class PolarRMWindow(QOpenGLWidget):
         source = self.registry.get("CameraFeed")
         source_setting = source.get_setting("Source") if source else None
         if source_setting is not None and source_setting.value != "Webcam":
+            # A hidden webcam must not keep sampling or feeding local vision
+            # after UDP/Native/Synthetic takes ownership of CameraFeed.
+            if self.camera_worker.running:
+                self.camera_worker.stop()
+            self.camera_started = False
             return
         camera_id = int(self.get_setting_number(source, "Camera ID", 0))
         capture_width = int(self.get_setting_number(source, "Capture Width", 960))
@@ -4779,8 +4820,7 @@ class PolarRMWindow(QOpenGLWidget):
         if self.camera_started and self._camera_config != requested_config:
             self.camera_worker.stop()
             self.camera_started = False
-            self.frame_image = None
-            self.frame_pixmap = None
+            self.clear_normal_backend_video_frame()
         if not self.camera_started:
             self.camera_worker.configure(camera_id, (capture_width, capture_height))
             self.camera_worker.on_frame = self.on_captured_camera_frame
@@ -4795,10 +4835,27 @@ class PolarRMWindow(QOpenGLWidget):
         source = self.registry.get("CameraFeed")
         source_setting = source.get_setting("Source") if source else None
         use_camera = source_setting is None or source_setting.value == "Webcam"
+        normalized_source = (
+            "webcam"
+            if source_setting is None
+            else str(source_setting.value).strip().lower()
+        )
+        if normalized_source == "synthetic":
+            self.draw_synthetic_video(p, width, height)
+            return
         if use_camera:
             self.ensure_camera_started()
+        backend_source = bool(
+            not use_camera
+            and source_setting is not None
+            and str(source_setting.value).strip().lower() != "synthetic"
+        )
+        if backend_source and not self.normal_backend_video_fresh():
+            self.clear_normal_backend_video_frame()
+            self.draw_backend_video_lost(p, width, height)
+            return
         # ?? UDP MJPEG / ??????? frame_pixmap?QPainter ?????????
-        if self.frame_pixmap is not None and not self.frame_pixmap.isNull():
+        if self.normal_video_frame_ready() and self.frame_pixmap is not None and not self.frame_pixmap.isNull():
             p.drawPixmap(QRectF(0, 0, width, height), self.frame_pixmap, QRectF(self.frame_pixmap.rect()))
             return
         self.draw_synthetic_video(p, width, height)
@@ -4957,7 +5014,14 @@ class PolarRMWindow(QOpenGLWidget):
             # Do not even query webcam/UDP/synthetic normal-feed sources.
             return
         camera_module = self.registry.get("CameraFeed")
-        if self.setting_mode(camera_module, "Source", "Webcam") != "Webcam":
+        source_mode = self.setting_mode(camera_module, "Source", "Webcam")
+        normalized_mode = source_mode.strip().lower()
+        if normalized_mode != self._normal_backend_mode:
+            self.clear_normal_backend_video_frame()
+            self._normal_backend_mode = normalized_mode
+        if normalized_mode == "synthetic":
+            return
+        if normalized_mode != "webcam":
             self.consume_backend_video_frame()
             return
         frame = self.camera_worker.latest_frame()
@@ -4973,6 +5037,8 @@ class PolarRMWindow(QOpenGLWidget):
         if self.setting_bool(camera_module, "Mirror", False):
             image = image.mirrored(True, False)
         self.frame_image = image
+        self._normal_frame_source = "webcam"
+        self._display_frame_sequence += 1
         # QPixmap 会由 Qt OpenGL Paint Engine 缓存为纹理；同一摄像头帧在
         # 120/144Hz HUD 重绘期间不再反复上传 QImage。
         self.frame_pixmap = QPixmap.fromImage(image)
@@ -4983,7 +5049,18 @@ class PolarRMWindow(QOpenGLWidget):
 
         camera_module = self.registry.get("CameraFeed")
         source_mode = self.setting_mode(camera_module, "Source", "Webcam")
-        bgr, frame_at, _frame_source = self.backend.latest_video_frame(0.5, source_mode)
+        normalized_mode = source_mode.strip().lower()
+        if normalized_mode != self._normal_backend_mode:
+            self.clear_normal_backend_video_frame()
+            self._normal_backend_mode = normalized_mode
+        bgr, frame_at, _frame_source = self.backend.latest_video_frame(
+            self.NORMAL_BACKEND_VIDEO_STALE_S,
+            source_mode,
+        )
+        if bgr is None or frame_at <= 0.0:
+            self.backend.udp.clear_stale_decoded_frame(self.NORMAL_BACKEND_VIDEO_STALE_S)
+            self.clear_normal_backend_video_frame()
+            return
         if frame_at <= self._last_backend_video_at:
             return
         try:
@@ -5007,8 +5084,9 @@ class PolarRMWindow(QOpenGLWidget):
         if self.setting_bool(camera_module, "Mirror", False):
             image = image.mirrored(True, False)
         self._last_backend_video_at = frame_at
-        self._last_capture_sequence += 1
+        self._display_frame_sequence += 1
         self.frame_image = image
+        self._normal_frame_source = "backend"
         self.frame_pixmap = QPixmap.fromImage(image)
         try:
             self._vision_scene_luminance = float(bgr[::32, ::32].mean()) / 255.0
@@ -5016,6 +5094,61 @@ class PolarRMWindow(QOpenGLWidget):
         except Exception:
             pass
         self.update_hud_liquid_source(image)
+
+    def normal_backend_video_fresh(self, now: float | None = None) -> bool:
+        now = time.perf_counter() if now is None else float(now)
+        source = self.setting_mode(self.registry.get("CameraFeed"), "Source", "Webcam")
+        normalized_source = source.strip().lower()
+        return bool(
+            self.backend_video_source_selected()
+            and self._normal_backend_mode == normalized_source
+            and self._normal_frame_source == "backend"
+            and self._last_backend_video_at > 0.0
+            and now - self._last_backend_video_at <= self.NORMAL_BACKEND_VIDEO_STALE_S
+        )
+
+    def normal_video_frame_ready(self, now: float | None = None) -> bool:
+        source = self.setting_mode(self.registry.get("CameraFeed"), "Source", "Webcam")
+        normalized_source = source.strip().lower()
+        if normalized_source in {"", "webcam"}:
+            return bool(
+                self._normal_backend_mode in {"", "webcam"}
+                and self._normal_frame_source == "webcam"
+            )
+        if normalized_source == "synthetic":
+            return False
+        return self.normal_backend_video_fresh(now)
+
+    def clear_normal_backend_video_frame(self) -> bool:
+        # Compatibility Painter keeps a CPU glass snapshot separate from the
+        # main frame fields. Invalidate it even when the selected source was
+        # Synthetic and therefore had no ``_normal_frame_source`` owner.
+        self.liquid_glass.discard("hud")
+        if self._last_backend_video_at <= 0.0 and self._normal_frame_source == "none":
+            return False
+        self._last_backend_video_at = 0.0
+        self._normal_frame_source = "none"
+        self.frame_image = None
+        self.frame_pixmap = None
+        self._gpu_background_key = None
+        self._gpu_blur_source_key = None
+        self._gpu_background_changed = True
+        return True
+
+    def backend_video_source_selected(self) -> bool:
+        source = self.setting_mode(self.registry.get("CameraFeed"), "Source", "Webcam")
+        return source.strip().lower() not in {"webcam", "synthetic", ""}
+
+    def draw_backend_video_lost(self, painter: QPainter, width: int, height: int) -> None:
+        canvas = QRectF(0.0, 0.0, float(width), float(height))
+        painter.fillRect(canvas, QColor("#02070b"))
+        painter.setPen(QColor("#b9d7e5"))
+        painter.setFont(self.font("poppins_bold", 10.0))
+        painter.drawText(
+            canvas,
+            Qt.AlignmentFlag.AlignCenter,
+            "VIDEO SIGNAL LOST · WAITING FOR FRESH DECODED FRAME",
+        )
 
     def active_tongji_result(self) -> VisionResult | None:
         bridge_module = self.registry.get("TongjiVisionBridge")

@@ -14,44 +14,147 @@ class FrameAssembler:
     包头格式：frame_id uint16 BE、chunk_index uint16 BE、total_bytes uint32 BE。
     """
 
+    HEADER_BYTES = 8
+    MAX_FRAME_BYTES = 16 * 1024 * 1024
+    MAX_BUFFERED_BYTES = 64 * 1024 * 1024
+    MAX_IN_FLIGHT = 64
+    MAX_CHUNKS_PER_FRAME = 4096
+    STALE_SECONDS = 2.0
+
     def __init__(self) -> None:
         self.frames: dict[int, dict[str, object]] = {}
         self.dropped_count = 0
+        self.invalid_count = 0
+        self.buffered_bytes = 0
+
+    def clear(self) -> None:
+        self.frames.clear()
+        self.buffered_bytes = 0
+        self.dropped_count = 0
+        self.invalid_count = 0
 
     def push_packet(self, packet: bytes) -> bytes | None:
-        if len(packet) < 8:
+        if len(packet) < self.HEADER_BYTES:
+            self.invalid_count += 1
             return None
         frame_id = int.from_bytes(packet[0:2], "big")
         chunk_index = int.from_bytes(packet[2:4], "big")
         total_bytes = int.from_bytes(packet[4:8], "big")
-        payload = packet[8:]
-        entry = self.frames.setdefault(
-            frame_id,
-            {"total": total_bytes, "chunks": {}, "received": 0, "created": time.time()},
-        )
+        payload = packet[self.HEADER_BYTES:]
+        self._drop_old_frames()
+        if (
+            not payload
+            or not (1 <= total_bytes <= self.MAX_FRAME_BYTES)
+            or len(payload) > total_bytes
+            or chunk_index >= self.MAX_CHUNKS_PER_FRAME
+        ):
+            self.invalid_count += 1
+            return None
+        entry = self.frames.get(frame_id)
+        if entry is not None and int(entry["total"]) != total_bytes:
+            self._remove_frame(frame_id, dropped=True)
+            self.invalid_count += 1
+            return None
+        if entry is None:
+            if not self._make_room(len(payload), new_frame=True):
+                self.invalid_count += 1
+                return None
+            entry = {
+                "total": total_bytes,
+                "chunks": {},
+                "received": 0,
+                "created": time.monotonic(),
+            }
+            self.frames[frame_id] = entry
         chunks: dict[int, bytes] = entry["chunks"]  # type: ignore[assignment]
-        if chunk_index not in chunks:
+        existing = chunks.get(chunk_index)
+        if existing is not None and existing != payload:
+            self._remove_frame(frame_id, dropped=True)
+            self.invalid_count += 1
+            return None
+        if existing is None:
+            if len(chunks) >= self.MAX_CHUNKS_PER_FRAME:
+                self._remove_frame(frame_id, dropped=True)
+                self.invalid_count += 1
+                return None
+            if not self._make_room(len(payload), protected_frame_id=frame_id):
+                self._remove_frame(frame_id, dropped=True)
+                self.invalid_count += 1
+                return None
             chunks[chunk_index] = payload
             entry["received"] = int(entry["received"]) + len(payload)
-        if int(entry["received"]) >= total_bytes:
-            ordered = [chunks[idx] for idx in sorted(chunks)]
+            self.buffered_bytes += len(payload)
+        received = int(entry["received"])
+        if received > total_bytes:
+            self._remove_frame(frame_id, dropped=True)
+            self.invalid_count += 1
+            return None
+        if received == total_bytes:
+            indexes = sorted(chunks)
+            if indexes != list(range(len(indexes))):
+                self._remove_frame(frame_id, dropped=True)
+                self.invalid_count += 1
+                return None
+            ordered = [chunks[idx] for idx in indexes]
             complete = b"".join(ordered)
-            if len(complete) >= total_bytes:
-                self.frames.pop(frame_id, None)
-                return complete[:total_bytes]
-        self._drop_old_frames()
+            if len(complete) == total_bytes:
+                self._remove_frame(frame_id)
+                return complete
+            self._remove_frame(frame_id, dropped=True)
+            self.invalid_count += 1
         return None
 
+    def _remove_frame(self, frame_id: int, *, dropped: bool = False) -> None:
+        entry = self.frames.pop(frame_id, None)
+        if entry is None:
+            return
+        self.buffered_bytes = max(0, self.buffered_bytes - int(entry.get("received", 0)))
+        if dropped:
+            self.dropped_count += 1
+
+    def _make_room(
+        self,
+        reserve_bytes: int,
+        *,
+        protected_frame_id: int | None = None,
+        new_frame: bool = False,
+    ) -> bool:
+        """Bound both frame count and aggregate fragment memory.
+
+        A single valid frame is at most 16 MiB, but sixty-four such partial
+        frames would otherwise retain roughly one GiB.  Prefer evicting the
+        oldest unrelated frame; an in-progress frame is protected while its
+        next fragment is admitted.
+        """
+
+        reserve_bytes = max(0, int(reserve_bytes))
+        while (
+            (new_frame and len(self.frames) >= self.MAX_IN_FLIGHT)
+            or self.buffered_bytes + reserve_bytes > self.MAX_BUFFERED_BYTES
+        ):
+            candidates = [
+                frame_id
+                for frame_id in self.frames
+                if frame_id != protected_frame_id
+            ]
+            if not candidates:
+                return False
+            oldest = min(
+                candidates,
+                key=lambda frame_id: float(self.frames[frame_id].get("created", 0.0)),
+            )
+            self._remove_frame(oldest, dropped=True)
+        return True
+
     def _drop_old_frames(self) -> None:
-        now = time.time()
+        now = time.monotonic()
         stale = [
             frame_id
             for frame_id, entry in self.frames.items()
-            if now - float(entry.get("created", now)) > 2.0
+            if now - float(entry.get("created", now)) > self.STALE_SECONDS
         ]
         for frame_id in stale:
-            self.frames.pop(frame_id, None)
-        self.dropped_count += len(stale)
+            self._remove_frame(frame_id, dropped=True)
 
 
 @dataclass

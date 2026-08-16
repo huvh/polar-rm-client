@@ -229,7 +229,9 @@ def snapshot_from_tongji_packet(packet: TongjiPacket, *, source: str = "Tongji",
         predicted_armors=predicted,
         aim_armor=primary,
         tracking_state="tracking" if primary else "detected" if observed else "lost",
-        calibrated=bool(packet.command.get("calibrated", True)),
+        # External detections are display-only until the producer explicitly
+        # asserts calibration; omission must never unlock control semantics.
+        calibrated=packet.command.get("calibrated") is True,
         inference_device=inference_device,
         aim_yaw_deg=math.degrees(float(packet.command.get("yaw_rad", packet.gimbal.get("yaw_rad", 0.0)))),
         aim_pitch_deg=math.degrees(float(packet.command.get("pitch_rad", packet.gimbal.get("pitch_rad", 0.0)))),

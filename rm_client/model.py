@@ -283,7 +283,10 @@ class RobotState:
     total_projectiles_fired: int = 12
     remaining_economy: int = 260
     total_economy_obtained: int = 620
-    in_supply_zone: bool = True
+    # The custom-client feed does not expose the robot's current supply-zone
+    # RFID card bit. Unknown must never be presented as an authoritative True.
+    in_supply_zone: bool = False
+    supply_zone_known: bool = False
     out_of_combat: bool = True
     can_remote_heal: bool = True
     can_remote_ammo: bool = True
@@ -447,8 +450,15 @@ class RobotState:
     robot_dynamics: dict[int, dict[str, Any]] = field(default_factory=dict)
     robot_modules: dict[int, dict[str, Any]] = field(default_factory=dict)
     backend_frontend_synced: bool = False
+    mock_simulation_enabled: bool = True
+    official_state_active: bool = False
+    official_state_at: float = 0.0
 
     def tick(self, dt: float) -> None:
+        # The desktop demo must never race 1--10 Hz referee messages. Official
+        # and Campus scenes hold the last authoritative values between updates.
+        if not self.mock_simulation_enabled or self.official_state_active:
+            return
         elapsed = time.perf_counter() - self.start_time
         duration = max(1, int(self.match_duration_sec))
         self.stage_countdown_sec = max(0, duration - int(elapsed) % (duration + 1))

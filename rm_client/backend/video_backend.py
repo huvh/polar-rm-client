@@ -315,7 +315,7 @@ class RmVideoBackend(UDPVideoReceiver):
             self.dropped_frames = 0
             self._h265_next_restart_at = 0.0
             self._h265_restart_backoff_s = 0.5
-            self._assembler.frames.clear()
+            self._assembler.clear()
         super().start()
 
     def _on_assembled_frame(self, frame: bytes) -> None:
@@ -444,6 +444,33 @@ class RmVideoBackend(UDPVideoReceiver):
             return mjpeg_frame, mjpeg_at
         return None, 0.0
 
+    def clear_stale_decoded_frame(self, timeout_s: float = 0.5) -> bool:
+        """Release stale decoded images so callers cannot render a frozen feed."""
+
+        cutoff = max(0.0, float(timeout_s))
+        now = time.perf_counter()
+        cleared = False
+        with self._lock:
+            if self.latest_bgr_at > 0.0 and now - self.latest_bgr_at > cutoff:
+                self.latest_bgr = None
+                self.latest_bgr_at = 0.0
+                cleared = True
+        # Keep the decoder timestamp until the 2 s health monitor observes it
+        # and performs an SPS/keyframe-gated restart. UI callers already reject
+        # it by age, so retaining this one frame cannot cause a visual freeze.
+        return cleared
+
+    def decoded_frame_fresh(self, timeout_s: float = 2.0) -> bool:
+        """Cheap HUD connectivity probe without building the full stats tree."""
+
+        h265_at = self.h265_decoder.latest_timestamp() if self.h265_decoder else 0.0
+        with self._lock:
+            decoded_at = max(float(self.latest_bgr_at), float(h265_at))
+        return bool(
+            decoded_at > 0.0
+            and time.perf_counter() - decoded_at <= max(0.0, float(timeout_s))
+        )
+
     def _request_h265_restart(self) -> None:
         decoder = self.h265_decoder
         now = time.perf_counter()
@@ -539,6 +566,7 @@ class RmVideoBackend(UDPVideoReceiver):
                 "packets_received": self.packets_received,
                 "frames_received": self.frames_received,
                 "dropped_frames": self.dropped_frames + self._assembler.dropped_count,
+                "invalid_fragments": self._assembler.invalid_count,
                 "codec": self.codec,
                 "fps": round(self.fps, 1),
                 "bitrate": round(self.bitrate, 1),

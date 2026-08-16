@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Field-chain hardening
+
+- Isolated malformed Tongji UDP observations, made calibration/control flags fail closed, and kept the receiver alive for subsequent valid packets.
+- Bounded and validated fragmented video frame assembly, including conflicting totals, duplicate chunks, gaps, in-flight floods and aggregate retained memory.
+- Stopped 60 Hz demo telemetry from overwriting authoritative referee state outside `LabDebug`.
+- Added a 250 ms neutral KMC heartbeat only while match control is explicitly armed in the fighting stage.
+- Expired stale normal-video frames after two seconds, isolated frame ownership across video sources, and removed the fake default supply-zone assertion.
+
 ### Low-resolution UI
 
 - Small text uses a supersampled alpha atlas, linear filtering, safe UV padding and physical-pixel snapping.
