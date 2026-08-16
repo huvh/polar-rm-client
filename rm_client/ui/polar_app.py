@@ -532,6 +532,8 @@ class PolarRMWindow(QOpenGLWidget):
         self._last_control_tick_time = 0.0
         self._hud_static_defer_since = 0.0
         self._last_module_toggle_at = 0.0
+        self._text_metric_cache: dict[tuple[str, str], float] = {}
+        self._font_height_cache: dict[str, float] = {}
         # Coalesce slider/drag updates into one atomic profile write.  Saving a
         # complete JSON document for every mouse event caused avoidable frame
         # stalls even after the store itself became crash-safe.
@@ -3042,7 +3044,7 @@ class PolarRMWindow(QOpenGLWidget):
             text = f"<{message.source}> {message.text}" if message.source == "you" else message.text
             text_width_px = min(
                 chat_width - 14.0,
-                QFontMetricsF(font).horizontalAdvance(text) + 13.0,
+                self.text_advance(font, text) + 13.0,
             )
             rect = QRectF(margin, y, max(80.0, text_width_px), row_height - 1.0)
             rounded_rect(
@@ -7144,7 +7146,7 @@ class PolarRMWindow(QOpenGLWidget):
                 accent,
                 glow_radius,
             )
-            title_w = QFontMetricsF(z_font).horizontalAdvance("POLAR-RM")
+            title_w = self.text_advance(z_font, "POLAR-RM")
             self.draw_text(
                 cache_painter,
                 QRectF(22 + title_w, 12, 90, 24),
@@ -8656,8 +8658,8 @@ class PolarRMWindow(QOpenGLWidget):
         payload = self.dynamic_island_payload()
         title_font = self.font("poppins_bold", 9.4)
         desc_font = self.font("poppins_regular", 8.2)
-        title_w = QFontMetricsF(title_font).horizontalAdvance(payload["title"])
-        desc_w = QFontMetricsF(desc_font).horizontalAdvance(payload["description"])
+        title_w = self.text_advance(title_font, payload["title"])
+        desc_w = self.text_advance(desc_font, payload["description"])
         content_active = bool(payload["active"])
         collapsed_w = max(300.0, min(580.0, title_w + desc_w + 92.0))
         expanded_w = max(210.0, min(580.0, max(title_w, desc_w) + 66.0))
@@ -8723,9 +8725,9 @@ class PolarRMWindow(QOpenGLWidget):
         title_font = self.font("poppins_bold", 9.4)
         desc_font = self.font("poppins_regular", 8.2)
         p.setFont(title_font)
-        title_w = QFontMetricsF(title_font).horizontalAdvance(payload["title"])
+        title_w = self.text_advance(title_font, payload["title"])
         p.setFont(desc_font)
-        desc_w = QFontMetricsF(desc_font).horizontalAdvance(payload["description"])
+        desc_w = self.text_advance(desc_font, payload["description"])
         content_active = bool(payload["active"])
         collapsed_w = max(300.0, min(580.0, title_w + desc_w + 92.0))
         expanded_w = max(210.0, min(580.0, max(title_w, desc_w) + 66.0))
@@ -9092,7 +9094,7 @@ class PolarRMWindow(QOpenGLWidget):
             text += f"  SCORE {self.state.red_score}:{self.state.blue_score}"
         font = self.font("poppins_medium", 8.6)
         p.setFont(font)
-        rect_w = max(280.0, min(520.0, QFontMetricsF(font).horizontalAdvance(text) + 44.0))
+        rect_w = max(280.0, min(520.0, self.text_advance(font, text) + 44.0))
         hud = self.registry.get("HUD")
         dynamic_enabled = self.setting_bool(hud, "Dynamic Island", True)
         y_offset = self.anim.value("hud.match_header.dynamic_offset", 12.0 if dynamic_enabled else 0.0, self.anim_duration(0.24), Easings.ease_out_expo)
@@ -11106,13 +11108,16 @@ class PolarRMWindow(QOpenGLWidget):
         size = self.setting_mode(hud, "Jello List Size", "Normal")
         pixel_size = {"Normal": 20.0, "Small": 18.0, "Tiny": 14.0}.get(size, 20.0)
         font = self.font("jello_light", pixel_size * 72.0 / 96.0)
-        metrics = QFontMetricsF(font)
         # ActiveMods' comparator is hard-wired to JelloLightFont20 even when
         # Small/Tiny is selected.  Python's stable sort preserves the source
         # order when that comparator returns zero.
         sort_font = self.font("jello_light", 20.0 * 72.0 / 96.0)
-        sort_metrics = QFontMetricsF(sort_font)
-        font_height = float(math.ceil(metrics.height()))
+        # DirectWrite metrics queries are ~1.5 ms/frame when repeated; the
+        # heights are constant per font, and the metrics objects below are
+        # only needed on a width-cache miss.
+        font_height = math.ceil(self.font_line_height(font))
+        metrics: QFontMetricsF | None = None
+        sort_metrics: QFontMetricsF | None = None
         animations = self.setting_bool(hud, "Jello List Animations", True)
         now = float(self.gui_motion.now)
         frame_index = int(getattr(self, "_ui_frame_index", 0))
@@ -11179,6 +11184,10 @@ class PolarRMWindow(QOpenGLWidget):
             cache_key = (font_key, sort_font_key, module.name)
             widths = width_cache.get(cache_key)
             if widths is None:
+                if metrics is None:
+                    metrics = QFontMetricsF(font)
+                if sort_metrics is None:
+                    sort_metrics = QFontMetricsF(sort_font)
                 widths = (
                     float(metrics.horizontalAdvance(module.name)),
                     float(sort_metrics.horizontalAdvance(module.name)),
@@ -11499,7 +11508,7 @@ class PolarRMWindow(QOpenGLWidget):
             return
         labels = [entry["module"].name for entry in shown]
         text = "  |  ".join(labels)
-        target_w = max(250.0, min(620.0, QFontMetricsF(font).horizontalAdvance(text) + 58.0))
+        target_w = max(250.0, min(620.0, self.text_advance(font, text) + 58.0))
         active = max(entry["alpha"] for entry in shown)
         y = 18.0 if start_y is None else start_y
         rect = QRectF(width / 2 - target_w / 2, y, target_w, 30)
@@ -14189,7 +14198,7 @@ class PolarRMWindow(QOpenGLWidget):
             title = self.dynamic_message_title(msg, kind)
             title_font = self.font("poppins_bold", 7.7)
             body_font = self.font("poppins_regular", 7.3)
-            tw = max(210.0, min(430.0, max(QFontMetricsF(title_font).horizontalAdvance(title), QFontMetricsF(body_font).horizontalAdvance(msg)) + 58.0))
+            tw = max(210.0, min(430.0, max(self.text_advance(title_font, title), self.text_advance(body_font, msg)) + 58.0))
             if self.gui_visible:
                 y = self.height() - 82.0 - i * 42.0 + (1.0 - slide) * 18.0
             else:
@@ -14251,7 +14260,7 @@ class PolarRMWindow(QOpenGLWidget):
     def draw_pill(self, p: QPainter, point: QPointF, text: str, c: QColor) -> None:
         font = self.font("poppins_medium", 8.0)
         p.setFont(font)
-        w = max(92.0, QFontMetricsF(font).horizontalAdvance(text) + 18.0)
+        w = max(92.0, self.text_advance(font, text) + 18.0)
         rect = QRectF(point.x(), point.y(), w, 20)
         rounded_rect(p, rect, 7, color("#090a0d", 0.86), c, 1.1)
         self.draw_text(p, rect.adjusted(8, 0, -8, 0), text, font, c)
@@ -14262,7 +14271,7 @@ class PolarRMWindow(QOpenGLWidget):
         font = self.font("poppins_regular", 8.0)
         p.setFont(font)
         text = self.elide(p, font, text, 340)
-        tw = QFontMetricsF(font).horizontalAdvance(text) + 18
+        tw = self.text_advance(font, text) + 18
         x = min(point.x() + 14, self.width() - tw - 10)
         y = min(point.y() + 18, self.height() - 30)
         rect = QRectF(x, y, tw, 24)
@@ -16526,6 +16535,34 @@ class PolarRMWindow(QOpenGLWidget):
 
     def font(self, key: str, size: float, weight: QFont.Weight | None = None) -> QFont:
         return self.fonts.font(key, max(1.0, size), weight)
+
+    def text_advance(self, font: QFont, text: str) -> float:
+        """Cached QFontMetricsF.horizontalAdvance.
+
+        A DirectWrite metrics query costs a fraction of a millisecond, and the
+        island/toasts/modlist re-measured the same strings every frame. The
+        value only depends on the font identity and the text, so cache it.
+        """
+
+        cache = self._text_metric_cache
+        key = (font.key(), text)
+        value = cache.get(key)
+        if value is None:
+            value = float(QFontMetricsF(font).horizontalAdvance(text))
+            if len(cache) >= 8192:
+                cache.clear()
+            cache[key] = value
+        return value
+
+    def font_line_height(self, font: QFont) -> float:
+        """Cached QFontMetricsF.height — identical reasoning to text_advance."""
+        key = font.key()
+        cache = self._font_height_cache
+        value = cache.get(key)
+        if value is None:
+            value = float(QFontMetricsF(font).height())
+            cache[key] = value
+        return value
 
     def draw_text(
         self,
