@@ -176,6 +176,7 @@ class OfficialSafety:
             return self._deny("E-stop active; only the dedicated zero KMC bypass is allowed")
         if not self.allow_mqtt_publish:
             return self._deny("current scenario is mock-only and does not allow real MQTT publishing")
+        authorized_qualification = False
         if name in CONTROL_TOPICS:
             if self.control_state == ControlState.LOCKED:
                 return self._deny("match control is LOCKED")
@@ -190,12 +191,18 @@ class OfficialSafety:
                 ):
                     self.lock_control("qualification token invalid or expired")
                     return False, self.last_reason
+                authorized_qualification = True
             elif self.control_state == ControlState.MATCH_ARMED:
                 capability = self._capability_for(name, str(intent))
                 if capability not in self._authorized_capabilities:
                     return self._deny(f"capability {capability} remains LOCKED MOCK")
         if self.enforce_official_limits and name in CONTROL_TOPICS:
-            if not self.is_fighting():
+            # A token-bound qualification frame is a supervised, neutral test
+            # publish.  The stage gate exists to stop unsupervised control in
+            # non-fighting stages; requiring stage 4 here would make the whole
+            # qualification flow unreachable before a match.  Rate limits still
+            # apply, which is exactly what the heartbeat test measures.
+            if not authorized_qualification and not self.is_fighting():
                 return self._deny("not in an authoritative fighting stage")
             previous = self._publish_at.get(name, -1.0)
             limit_hz = self._topic_limit_hz.get(name, self._publish_limit_hz)

@@ -1166,6 +1166,16 @@ class BackendManager:
         match_mode: str | None = None,
         video_source: str | None = None,
     ) -> tuple[bool, str]:
+        # Evidence must be minted over the real transport. A mock bridge
+        # reports every publish as OK, so a LabDebug/mock session could
+        # otherwise produce valid-looking KMC/E-stop evidence without a
+        # single byte reaching the referee system.
+        if self.mqtt.mock_output or not self.safety.allow_mqtt_publish:
+            self.safety.lock_control("arm requires a real MQTT output scenario (mock evidence is not signable)")
+            return False, self.safety.last_reason
+        if not self.mqtt.connected:
+            self.safety.lock_control("arm requires a live MQTT referee connection")
+            return False, self.safety.last_reason
         ready, reason = self.qualification.verified_core_ready()
         if not ready:
             self.safety.lock_control(reason)

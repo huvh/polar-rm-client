@@ -524,6 +524,7 @@ class PolarRMWindow(QOpenGLWidget):
         self.render_frame_ms_ema = 0.0
         self._last_render_tune = time.perf_counter()
         self._last_logic_time = time.perf_counter()
+        self._last_control_tick_time = 0.0
         # Coalesce slider/drag updates into one atomic profile write.  Saving a
         # complete JSON document for every mouse event caused avoidable frame
         # stalls even after the store itself became crash-safe.
@@ -550,6 +551,11 @@ class PolarRMWindow(QOpenGLWidget):
         self._bottom_left_diagnostics: list[tuple[str, QColor, int]] = []
         self.polar_unified_morph = MorphState(progress=0.0, target=0.0, duration=0.62)
         self.tactical_map_state = MapIslandState()
+        # Screen-space field rect cached by the last tactical-map paint so a
+        # click during the Tab-expanded hold can be mapped back to metres.
+        self.tactical_map_field_rect = QRectF()
+        self.tactical_map_field_layout: FieldLayout | None = None
+        self.tactical_map_field_mirrored = False
         self.selected_category = "Combat"
         self.selected_module = self.registry.get("ArmorAutoAim") or self.registry.modules[0]
         self.search_query = ""
@@ -799,6 +805,17 @@ class PolarRMWindow(QOpenGLWidget):
         )
         self.dynamic_island_state.update(ui_dt)
         logic_interval = 1.0 / 60.0
+        # KMC runs on its own 75 Hz sub-tick. Keeping it inside the 60 Hz
+        # logic layer capped real output at 60 Hz while the official limiter
+        # (and qualification evidence) assumes 75 Hz frames.
+        control_interval = 1.0 / 75.0
+        if now - self._last_control_tick_time >= control_interval * 0.92:
+            self._last_control_tick_time = now
+            self._run_tick_stage(
+                "control.75hz",
+                lambda: self.control.tick(self.state, self.registry, now),
+                now,
+            )
         if now - self._last_logic_time >= logic_interval * 0.92:
             logic_dt = max(0.001, min(0.05, now - self._last_logic_time))
             self._last_logic_time = now
@@ -825,7 +842,6 @@ class PolarRMWindow(QOpenGLWidget):
                 ("hero.deploy", lambda: self.update_hero_deploy_state(now)),
                 ("hero.lob", self.update_hero_lob_guard),
                 ("auto.spin", lambda: self.update_auto_spin_guard(now)),
-                ("control", lambda: self.control.tick(self.state, self.registry, now)),
                 ("official.consume", self.consume_official_messages),
                 ("official.apply", self.apply_official_state),
                 ("vision.sync", self.sync_tongji_vision_state),
@@ -5085,6 +5101,12 @@ class PolarRMWindow(QOpenGLWidget):
             image = image.mirrored(True, False)
         self._last_backend_video_at = frame_at
         self._display_frame_sequence += 1
+        # OfficialEvent stops the local webcam while the judge feed owns the
+        # screen; the decoded backend frame is the only live image, so local
+        # vision must consume it or detection/ESP silently lose all input.
+        if self._vision_source in ("Local", "Auto") and self.local_vision.running:
+            self._backend_vision_sequence = int(getattr(self, "_backend_vision_sequence", 0)) + 1
+            self.local_vision.submit(self._backend_vision_sequence, width, height, bgr)
         self.frame_image = image
         self._normal_frame_source = "backend"
         self.frame_pixmap = QPixmap.fromImage(image)
@@ -9079,6 +9101,15 @@ class PolarRMWindow(QOpenGLWidget):
             p.restore()
         map_rect = rect.adjusted(6 if minimal else 8 if compact else 10, header_h, -6 if minimal else -8 if compact else -10, -footer_h)
         field_rect = self.draw_official_map(p, map_rect, config)
+        self.tactical_map_field_rect = QRectF(field_rect)
+        self.tactical_map_field_layout = config.field
+        alliance_profile = self.registry.get("AllianceProfile")
+        self.tactical_map_field_mirrored = bool(
+            config.field.mirror_for_blue
+            and self.alliance_side() == "Blue"
+            and self.setting_bool(module, "Mirror Blue", True)
+            and self.setting_bool(alliance_profile, "Mirror Tactical Map", True)
+        )
         map_content_opacity = self.anim.value("hud.tactical_map.content_alpha", 1.0, self.anim_duration(0.16), Easings.ease_out_expo, initial=0.0)
         p.save()
         p.setOpacity(p.opacity() * map_content_opacity)
@@ -9147,6 +9178,97 @@ class PolarRMWindow(QOpenGLWidget):
 
     def tactical_map_hold_amount(self) -> float:
         return self.tactical_map_morph_progress()
+
+    def publish_map_click_from_screen(self, point: QPointF) -> bool:
+        """Send an official MapClickCmd for a click inside the expanded map.
+
+        Only active while the Tab hold has the tactical map expanded; during
+        normal combat every left click belongs to KMC and must not leak a
+        referee event command. The backend safety layer still enforces
+        MATCH_ARMED capability and the 10 Hz event-command rate limit.
+        """
+
+        if not self.tactical_map_hold:
+            return False
+        field = self.tactical_map_field_layout
+        rect = self.tactical_map_field_rect
+        if field is None or rect.isNull() or not rect.contains(point):
+            return False
+        nx = (point.x() - rect.left()) / max(1.0, rect.width())
+        ny = (rect.bottom() - point.y()) / max(1.0, rect.height())
+        if self.tactical_map_field_mirrored:
+            nx, ny = 1.0 - nx, 1.0 - ny
+        map_x = max(0.0, min(1.0, nx)) * field.width_m
+        map_y = max(0.0, min(1.0, ny)) * field.height_m
+        ok, reason = self.backend.publish_map_click_cmd(
+            is_send_all=1, mode=1, mark_type=1, map_x=round(map_x, 3), map_y=round(map_y, 3)
+        )
+        self.toast(f"Map click ({map_x:.1f}, {map_y:.1f})m {'sent' if ok else reason}")
+        return True
+
+    def open_event_command_menu(self) -> None:
+        """Dialog launcher for referee event commands without a dedicated HUD.
+
+        Everything funnels through the backend publishers, so MATCH_ARMED
+        capability checks, rate limits, and mock gating still apply.
+        """
+
+        commands = (
+            "Rune Activate (energy mechanism)",
+            "Dart Command",
+            "Sentry Control",
+            "Assembly Command",
+            "Performance Selection (from RobotProfile)",
+        )
+        choice, ok = QInputDialog.getItem(
+            self, "Event commands", "Referee event command:", commands, 0, False
+        )
+        if not ok:
+            return
+        try:
+            if choice.startswith("Rune"):
+                value, accepted = QInputDialog.getItem(
+                    self, "RuneActivateCommand", "Activate value:", ["1 = activate", "0 = cancel"], 0, False
+                )
+                if accepted:
+                    activate = 1 if value.startswith("1") else 0
+                    ok_pub, reason = self.backend.publish_rune_activate(activate)
+                    self.toast(f"Rune {'sent' if ok_pub else reason}")
+            elif choice.startswith("Dart"):
+                target, accepted = QInputDialog.getInt(self, "DartCommand", "Target robot ID:", 1, 1, 209)
+                if accepted:
+                    open_gate, accepted2 = QInputDialog.getItem(
+                        self, "DartCommand", "Open gate:", ["False", "True"], 0, False
+                    )
+                    if accepted2:
+                        ok_pub, reason = self.backend.publish_dart_command(
+                            target, open_gate == "True", False
+                        )
+                        self.toast(f"Dart {'sent' if ok_pub else reason}")
+            elif choice.startswith("Sentry"):
+                command_id, accepted = QInputDialog.getInt(
+                    self, "SentryCtrlCommand", "Command ID (0=N/A,1=allow,2=deny):", 1, 0, 2
+                )
+                if accepted:
+                    ok_pub, reason = self.backend.publish_sentry_command(command_id)
+                    self.toast(f"Sentry {'sent' if ok_pub else reason}")
+            elif choice.startswith("Assembly"):
+                operation, accepted = QInputDialog.getInt(
+                    self, "AssemblyCommand", "Operation (1=exchange ore,2=submit,3=stash):", 1, 1, 3
+                )
+                if accepted:
+                    difficulty, accepted2 = QInputDialog.getInt(
+                        self, "AssemblyCommand", "Difficulty (1-3):", 1, 1, 3
+                    )
+                    if accepted2:
+                        ok_pub, reason = self.backend.publish_assembly_command(operation, difficulty)
+                        self.toast(f"Assembly {'sent' if ok_pub else reason}")
+            elif choice.startswith("Performance"):
+                ok_pub, reason = self.backend.publish_performance_from_registry(self.registry)
+                self.toast(f"Performance selection {'sent' if ok_pub else reason}")
+        except Exception as exc:
+            self.toast(f"Event command failed: {exc}")
+
 
     def tactical_map_chrome(self) -> str:
         module = self.registry.get("TacticalMap")
@@ -14114,6 +14236,9 @@ class PolarRMWindow(QOpenGLWidget):
             if hotspot.rect.contains(point):
                 self.dispatch(hotspot.action, hotspot.payload, point, button, hotspot.rect)
                 return
+        if button == 1 and self.publish_map_click_from_screen(point):
+            event.accept()
+            return
         if self.combat_control_input_allowed():
             self.control.mock_output = bool(self.backend.mqtt.mock_output)
             self.control.set_mouse_button(button, True, self.state, self.registry)
@@ -14489,6 +14614,13 @@ class PolarRMWindow(QOpenGLWidget):
         if event.key() == Qt.Key.Key_F9:
             # Jello Sigma is the only public ClickGUI. Legacy renderers are
             # deliberately reachable only from ClickGui -> Old ClickGUIs.
+            event.accept()
+            return
+        if event.key() == Qt.Key.Key_F7 and not event.isAutoRepeat() and not self.home_visible:
+            # Referee event commands (rune/dart/sentry/assembly/performance).
+            # MapClickCmd has its own gesture: click inside the Tab-expanded
+            # tactical map.
+            self.open_event_command_menu()
             event.accept()
             return
         if event.key() == Qt.Key.Key_Escape and self.gui_visible:
@@ -15462,6 +15594,11 @@ class PolarRMWindow(QOpenGLWidget):
 
         if getattr(self, "_qualification_kmc_timer", None) is not None:
             self.toast("KMC qualification is already running")
+            return
+        # A mock bridge reports every frame as delivered, which would mint
+        # fake heartbeat evidence. Qualification must run on the real link.
+        if self.backend.mqtt.mock_output or not self.backend.mqtt.connected:
+            self.toast("KMC qualification requires a live real MQTT connection")
             return
         token = self.backend.begin_qualification({"core_kmc"}, ttl_s=15.0)
         started = time.perf_counter()

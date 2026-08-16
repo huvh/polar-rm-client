@@ -71,3 +71,4 @@ user_data/
 build/
 dist/
 *.spec.bak
+_pdf_extract.txt
