@@ -134,7 +134,17 @@ PRESET_ELEMENTS = {
     "Minimal": ("score", "bonus"),
     "PUBG Subtitle": ("combo_subtitle", "kill_feed"),
     "Battlefield 5": ("kill_feed", "score", "bonus", "scrolling_bf5"),
+    "Battlefield 6": ("kill_feed", "score", "bonus", "scrolling_bf6"),
     "Total Battlefield": ("score", "bonus", "scrolling"),
+}
+
+# 滚动图标风格 -> (纹理前缀, 允许的类型键)。battlefield5 原版只有
+# headshot/assist/destroyvehicle 三种专用图标，其余回落 default；
+# battlefield6 是 GD656 1.1.0 新增的全类型图标集。
+SCROLLING_STYLES = {
+    "default": ("killicon_scrolling_", None),
+    "bf5": ("killicon_battlefield5_", frozenset({"headshot", "assist", "destroyvehicle"})),
+    "bf6": ("killicon_battlefield6_", None),
 }
 
 
@@ -279,12 +289,13 @@ class ScrollingRenderer:
         if len(self.icons) > 7 and self.icons[-8].forced_fade < 0:
             self.icons[-8].forced_fade = now
 
-    def draw(self, p: QPainter, center: QPointF, now: float, scale: float, bf5: bool = False) -> None:
+    def draw(self, p: QPainter, center: QPointF, now: float, scale: float, style: str = "default") -> None:
         while self.pending and now - self.last_display >= 0.10:
             self._add(self.pending.pop(0), self.last_display + 0.10)
         self.icons = [i for i in self.icons if now - i.started < 3.55 and not (i.forced_fade > 0 and now - i.forced_fade > 0.30)]
         visible = self.icons[-7:]
         spacing = (64.0 + 4.0) * scale
+        prefix, allowed_keys = SCROLLING_STYLES.get(style, SCROLLING_STYLES["default"])
         for index, state in enumerate(visible):
             target = center.x() - (index - (len(visible) - 1) / 2.0) * spacing
             if abs(target - state.target_x) > 0.1:
@@ -301,12 +312,9 @@ class ScrollingRenderer:
                 alpha *= max(0.0, 1.0 - (now - state.forced_fade) / 0.30)
             draw_scale = (2.0 + (1.0 - 2.0) * _ease_out_cubic(age / 0.30)) * scale
             key = TYPE_TEXTURE.get(state.context.kill_type, "default")
-            if bf5:
-                if key not in ("headshot", "assist", "destroyvehicle"):
-                    key = "default"
-                name = f"killicon_battlefield5_{key}.png"
-            else:
-                name = f"killicon_scrolling_{key}.png"
+            if allowed_keys is not None and key not in allowed_keys:
+                key = "default"
+            name = f"{prefix}{key}.png"
             point = QPointF(x, center.y())
             self.assets.draw_centered(p, name, point, 64.0, alpha, scale=draw_scale)
             _draw_ring(p, point, age, state.context.kill_type, scale)
@@ -709,7 +717,7 @@ class KillFxRenderer:
         else:
             elements = PRESET_ELEMENTS.get(preset, PRESET_ELEMENTS["Default Scrolling"])
         if visibility == "Icons Only":
-            return tuple(item for item in elements if item in ("scrolling", "scrolling_bf5", "combo", "card", "card_bar", "battlefield1", "valorant"))
+            return tuple(item for item in elements if item in ("scrolling", "scrolling_bf5", "scrolling_bf6", "combo", "card", "card_bar", "battlefield1", "valorant"))
         if visibility == "Full HUD":
             companions = ("kill_feed", "combo_subtitle", "score", "bonus")
             return tuple(dict.fromkeys((*elements, *companions)))
@@ -731,7 +739,7 @@ class KillFxRenderer:
         )
         self.last_context = context
         elements = self.elements_for_preset(preset, visibility)
-        if "scrolling" in elements or "scrolling_bf5" in elements:
+        if "scrolling" in elements or "scrolling_bf5" in elements or "scrolling_bf6" in elements:
             self.scrolling.trigger(context, now)
         if "combo" in elements:
             self.combo.trigger(context, now)
@@ -760,6 +768,13 @@ class KillFxRenderer:
             name = "headshotkillsound_bf1.ogg" if key == "headshot" else "killsound_bf1.ogg"
         elif preset == "Battlefield 5":
             name = "vehiclekillsound_bf5.ogg" if key == "destroyvehicle" else "headshotkillsound_bf5.ogg" if key == "headshot" else "killsound_bf5.ogg"
+        elif preset == "Battlefield 6":
+            if key == "headshot":
+                name = "headshotkillsound_bf6.ogg"
+            elif key == "assist":
+                name = "assistsound_bf6.ogg"
+            else:
+                name = "killsound_bf6.ogg"
         elif preset.startswith("Valorant "):
             style = VALORANT_STYLES.get(preset.removeprefix("Valorant "), VALORANT_STYLES["Prime"])
             name = "valorant_headshot.ogg" if key == "headshot" else f"{style.sound_prefix}{max(1, min(5, combo))}.ogg"
@@ -800,9 +815,11 @@ class KillFxRenderer:
         team_key = "ct" if team in ("Alliance", "CT Blue") else "t"
         bottom = layout.primary(120.0)
         if "scrolling" in elements:
-            self.scrolling.draw(painter, bottom, now, layout.scale, False)
+            self.scrolling.draw(painter, bottom, now, layout.scale, "default")
         if "scrolling_bf5" in elements:
-            self.scrolling.draw(painter, bottom, now, layout.scale, True)
+            self.scrolling.draw(painter, bottom, now, layout.scale, "bf5")
+        if "scrolling_bf6" in elements:
+            self.scrolling.draw(painter, bottom, now, layout.scale, "bf6")
         if "combo" in elements:
             self.combo.draw(painter, layout.primary(120.0), now, 0.60 * layout.scale)
         if "card" in elements:

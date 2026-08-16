@@ -821,7 +821,7 @@ def build_default_registry() -> ModuleRegistry:
             [
                 mode_setting("Preset", "Default Scrolling", [
                     "Default Scrolling", "Combo", "Card", "Battlefield 1", "Minimal", "PUBG Subtitle",
-                    "Battlefield 5", "Total Battlefield", "Valorant Prime", "Valorant Glitchpop",
+                    "Battlefield 5", "Battlefield 6", "Total Battlefield", "Valorant Prime", "Valorant Glitchpop",
                     "Valorant Singularity V1", "Valorant Singularity V2", "Valorant Singularity V3",
                     "Valorant Gaia", "Valorant Gaia V1", "Valorant Gaia V2", "Valorant Gaia V3",
                     "Valorant Bubblegum", "Valorant Bubblegum V1", "Valorant Bubblegum V2", "Valorant Bubblegum V3",
