@@ -464,7 +464,12 @@ class PolarRMWindow(QOpenGLWidget):
         self._last_minecraft_hud_layout = None
         self.hero_deploy_ui = HeroDeployInterfaceState()
         self.hero_deploy_renderer = HeroDeployRenderer()
-        self._last_deploy_status_revision = 0
+        # Align the baseline instead of leaving it at zero: scenario setup
+        # already bumps deploy_status_revision once, and treating that as a
+        # state change invalidated the whole compositor scene one second after
+        # the launcher appeared — wiping the cached startup glass commands
+        # while _startup_static_page_key still claimed the page was cached.
+        self._last_deploy_status_revision = int(self.state.deploy_status_revision)
         self._last_deploy_mode = int(self.state.deploy_mode)
         self.hero_native_image: QImage | None = None
         self.hero_native_pixmap: QPixmap | None = None
@@ -3819,6 +3824,10 @@ class PolarRMWindow(QOpenGLWidget):
         self._gpu_motion_layer_ready = False
         self._gpu_motion_layer_updated_at = 0.0
         self._gpu_background_changed = True
+        # The compositor just dropped its static glass commands; the startup
+        # page must be rebuilt too, or the launcher keeps its "cached" key and
+        # permanently loses every glass panel until a page transition.
+        self._startup_static_page_key = None
         self.gpu_compositor.invalidate_transient_layers()
 
     def _finalize_economy_restore(self, generation: int) -> None:

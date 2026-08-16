@@ -14,6 +14,7 @@
 ## OpenZen 与 TestClient
 
 - ModuleList 与保留的旧 ClickGUI 仅迁移界面结构、布局规则和动效语言；RM 模块及业务逻辑由 POLAR-RM 自身实现。
+- `assets/fonts` 中的 `MaterialIcons-Regular.ttf`（Material Icons Outlined，Google，Apache License 2.0）、`Poppins-Regular/Medium/Bold.ttf`（ITF，SIL Open Font License 1.1）与 `zenicon-Regular.ttf`（OpenZen 自带图标字体）复制自本机 OpenZen 工程的资源目录，用于恢复启动页场景图标与 Poppins 排版；其余权利归各自权利人所有。
 
 ## Sigma Jello ClickGUI
 
