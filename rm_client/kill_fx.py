@@ -798,12 +798,14 @@ class MatchProgressRenderer:
 
     RM 规则下胜利条件是打空对方基地血量，因此推进度直接取
     GlobalUnitStatus 的基地血量占比（1 - hp/max），比分数字取
-    GameStatus 的 red_score/blue_score。
+    GameStatus 的 red_score/blue_score。条的位置跟随灵动岛下边缘
+    （anchor_bottom 传入时），岛展开/收起时一起灵动。
     """
 
     def __init__(self) -> None:
         self.shown_own = 0.0
         self.shown_enemy = 0.0
+        self.shown_y: float | None = None
 
     def draw(
         self,
@@ -819,6 +821,7 @@ class MatchProgressRenderer:
         red_score: int,
         blue_score: int,
         own_blue: bool,
+        anchor_bottom: float | None = None,
     ) -> None:
         own_progress = 0.0 if own_base_max <= 0 else 1.0 - max(0.0, min(1.0, own_base_health / own_base_max))
         enemy_progress = 0.0 if enemy_base_max <= 0 else 1.0 - max(0.0, min(1.0, enemy_base_health / enemy_base_max))
@@ -826,10 +829,18 @@ class MatchProgressRenderer:
         factor = 1.0 - math.exp(-(1.0 / 60.0) / 0.35)
         self.shown_own += (own_progress - self.shown_own) * factor
         self.shown_enemy += (enemy_progress - self.shown_enemy) * factor
+        # 跟随灵动岛：目标 y 取岛底 + 间隙；无岛时回落到固定槽位。
+        target_y = (anchor_bottom + 12.0 * scale) if anchor_bottom is not None else 64.0 * scale
+        if self.shown_y is None:
+            self.shown_y = target_y
+        else:
+            # 与灵动岛形变同节奏的轻微跟随阻尼
+            y_factor = 1.0 - math.exp(-(1.0 / 60.0) / 0.22)
+            self.shown_y += (target_y - self.shown_y) * y_factor
 
         bar_w = min(430.0, width * 0.42) * scale
         bar_h = 7.0 * scale
-        y = 64.0 * scale
+        y = self.shown_y
         gap = 26.0 * scale
         cx = width * 0.5
         left_rect = QRectF(cx - gap - bar_w, y, bar_w, bar_h)
@@ -847,18 +858,20 @@ class MatchProgressRenderer:
             fill.setWidth(rect.width() * max(0.0, min(1.0, progress)))
             p.fillRect(fill, color)
 
+        row_y = y + bar_h + 4 * scale
         p.setFont(QFont("Poppins", max(7, int(10 * scale)), QFont.Weight.Bold))
         own_score = blue_score if own_blue else red_score
         enemy_score = red_score if own_blue else blue_score
         p.setPen(own_color)
-        p.drawText(QRectF(cx - gap - bar_w, y + bar_h + 4 * scale, bar_w, 18 * scale), Qt.AlignmentFlag.AlignRight, str(own_score))
+        p.drawText(QRectF(cx - gap - bar_w, row_y, bar_w, 18 * scale), Qt.AlignmentFlag.AlignRight, str(own_score))
         p.setPen(enemy_color)
-        p.drawText(QRectF(cx + gap, y + bar_h + 4 * scale, bar_w, 18 * scale), Qt.AlignmentFlag.AlignLeft, str(enemy_score))
+        p.drawText(QRectF(cx + gap, row_y, bar_w, 18 * scale), Qt.AlignmentFlag.AlignLeft, str(enemy_score))
         p.setPen(QColor("#FFFFFF"))
         small = QFont("Poppins", max(5, int(7 * scale)))
         p.setFont(small)
         p.setOpacity(0.85)
-        p.drawText(QRectF(cx - gap, y - 14 * scale, gap * 2, 12 * scale), Qt.AlignmentFlag.AlignCenter, "BASE RACE")
+        # BASE RACE 标签放在比分行中央，不再占用条上方空间（会撞灵动岛）
+        p.drawText(QRectF(cx - gap, row_y, gap * 2, 18 * scale), Qt.AlignmentFlag.AlignCenter, "BASE RACE")
         p.setOpacity(1.0)
 
 
@@ -1024,7 +1037,7 @@ class KillFxRenderer:
             return
         self.hit_info.trigger(damage, kind, now, volume=volume, enabled=sound_enabled)
 
-    def draw(self, painter: QPainter, width: int, height: int, *, preset: str, visibility: str, team: str, scale: float, anchor_policy: str, x_offset: float, y_offset: float, responsive_scale: bool = True, device_pixel_ratio: float = 1.0, now_override: float | None = None, element_toggles: dict[str, bool] | None = None, state: Any = None) -> None:
+    def draw(self, painter: QPainter, width: int, height: int, *, preset: str, visibility: str, team: str, scale: float, anchor_policy: str, x_offset: float, y_offset: float, responsive_scale: bool = True, device_pixel_ratio: float = 1.0, now_override: float | None = None, element_toggles: dict[str, bool] | None = None, state: Any = None, island_anchor_bottom: float | None = None) -> None:
         now = time.perf_counter() if now_override is None else now_override
         elements = self.effective_elements(preset, visibility, element_toggles)
         layout = KillFxLayout.create(
@@ -1080,6 +1093,7 @@ class KillFxRenderer:
                 red_score=int(getattr(state, "red_score", 0)),
                 blue_score=int(getattr(state, "blue_score", 0)),
                 own_blue=own_blue,
+                anchor_bottom=island_anchor_bottom,
             )
         companion_anchor = layout.anchor if anchor_policy == "Combat Focus" else None
         self.companion.draw(painter, width, height, now, layout.scale, elements, offset, companion_anchor)

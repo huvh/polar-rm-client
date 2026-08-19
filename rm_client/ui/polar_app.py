@@ -5564,6 +5564,22 @@ class PolarRMWindow(QOpenGLWidget):
             element_toggles=self.elimination_element_toggles(effect),
         )
 
+    def dynamic_island_bottom_anchor(self, width: int, height: int) -> float | None:
+        """灵动岛下边缘（物理像素），供基地推进条跟随。
+
+        岛的几何是逐帧动画状态，条读到的是当前形变位置；岛关闭或
+        尚未有几何时返回 None，条回落到固定槽位。
+        """
+        hud = self.registry.get("HUD")
+        if not self.setting_bool(hud, "Dynamic Island", True):
+            return None
+        island = self.dynamic_island_state
+        if getattr(island, "height", 0.0) <= 0.0:
+            return None
+        # 岛在 HUD 逻辑坐标系里绘制，换算回物理像素
+        hud_scale = self.get_hud_scale(width, height)
+        return (float(island.y) + float(island.height)) * hud_scale
+
     def draw_elimination_fx(self, p: QPainter, width: int, height: int) -> None:
         effect = self.registry.get("EliminationFX")
         if effect is None or not effect.enabled:
@@ -5577,6 +5593,7 @@ class PolarRMWindow(QOpenGLWidget):
             visibility=self.setting_mode(effect, "Element Visibility", "Preset"),
             element_toggles=self.elimination_element_toggles(effect),
             state=self.state,
+            island_anchor_bottom=self.dynamic_island_bottom_anchor(width, height),
             team=team_theme,
             scale=self.get_setting_number(effect, "Scale", 1.0),
             anchor_policy=self.setting_mode(effect, "Anchor Policy", "Combat Focus"),
