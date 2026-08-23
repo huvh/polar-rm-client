@@ -90,6 +90,12 @@ class ConfigActionsMixin:
 
     def after_setting_changed(self, setting: Setting) -> None:
         self.invalidate_gui_cache()
+        hud = self.registry.get("HUD")
+        if hud and setting is hud.get_setting("Visual Tone"):
+            # The palette is memoized for one UI frame.  A direct UI setting
+            # change can occur before the next timer tick, so invalidate it
+            # explicitly rather than displaying the previous tone for a frame.
+            self._hud_palette_cache = None
         scenario = self.registry.get("Scenario")
         if scenario and setting is scenario.get_setting("Mode"):
             self.apply_scenario(str(setting.value), close_home=False)
@@ -127,7 +133,6 @@ class ConfigActionsMixin:
             self.module_expanded.clear()
             self.play_gui_transition_sound("expand")
             self.toast(f"GUI 模式：{setting.value}")
-        hud = self.registry.get("HUD")
         if hud and setting is hud.get_setting("Combat Preset"):
             minecraft = self.registry.get("MinecraftCombatHUD")
             selected = str(setting.value) == "Minecraft 1.21.11"

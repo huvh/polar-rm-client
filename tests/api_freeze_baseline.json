@@ -204,6 +204,16 @@
       "sig": "dict",
       "type": "dict"
     },
+    "_gimbal_scratch_cache": {
+      "kind": "plain-attribute",
+      "sig": "None",
+      "type": "NoneType"
+    },
+    "_gimbal_scratch_image": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow._gimbal_scratch_image",
+      "type": "method"
+    },
     "_gpu_background_changed": {
       "kind": "plain-attribute",
       "sig": "True",
@@ -297,10 +307,20 @@
       "type": "float",
       "volatile": true
     },
+    "_hud_palette_cache": {
+      "kind": "plain-attribute",
+      "sig": "None",
+      "type": "NoneType"
+    },
     "_hud_static_defer_since": {
       "kind": "plain-attribute",
       "sig": "float",
       "type": "float"
+    },
+    "_hud_style_palette": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow._hud_style_palette",
+      "type": "method"
     },
     "_jello_active_mods_frame_index": {
       "kind": "plain-attribute",

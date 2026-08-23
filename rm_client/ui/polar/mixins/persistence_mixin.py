@@ -305,6 +305,9 @@ class PersistenceMixin:
             self.refresh_wallpaper_profiles()
             self.refresh_custom_ui_sound_options()
             apply_registry_config(self.registry, data)
+            # Runtime profile reload can change HUD tone between two display
+            # ticks; discard the frame-local palette immediately.
+            self._hud_palette_cache = None
             gui_mode = normalize_gui_mode(str(data.get("gui_mode", self.mode_manager.mode)))
             self.mode_manager.set_mode(gui_mode)
             self.selected_category = str(data.get("selected_category", self.selected_category))

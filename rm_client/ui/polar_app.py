@@ -136,6 +136,7 @@ from .startup_gl import StartupGpuCompositor, TextureOrigin
 
 
 _LOG = logging.getLogger(__name__)
+
 from .vision_wire_gpu import VisionWireBatch, VisionWireGpuRenderer
 from .paint import (
     accent_color,
@@ -149,6 +150,22 @@ from .paint import (
     with_alpha,
 )
 from .theme import THEME, color
+
+# P8: hud_state_color 的 PolarLegacy 分支常量表（原为每次调用重建的字面量
+# dict；值全部来自模块级 THEME/color 常量，逐项等价搬运）。
+_HUD_LEGACY_STATE_COLORS: dict[str, QColor] = {
+    "ally": THEME.cyan,
+    "enemy": THEME.red,
+    "danger": THEME.red,
+    "warning": color("#ffd166"),
+    "success": THEME.green,
+    "gold": color("#ffd166"),
+    "ammo": THEME.green,
+    "control": THEME.pink,
+    "spin": THEME.pink,
+}
+_HUD_STATE_COLOR_FALLBACK: QColor = THEME.cyan
+
 from .vision_motion import (
     AngleRenderTrack,
     ScalarRenderTrack,
@@ -389,6 +406,12 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             self.paths.asset("ui_sounds")
         )
         self.registry.add_toggle_listener(self.on_module_toggled)
+        # P6: ModuleRegistry 在 toggle/set/direct assignment 三条 enabled
+        # 写路径上统一推进代际，静态 key 不再每帧构造 N+1 元组。
+        # P8: hud_* 色彩家族的帧级 memo；UI/配置写入路径会显式失效。
+        self._hud_palette_cache: tuple[float, bool, QColor, QColor, QColor, QColor] | None = None
+        # P2: 云台指示器 ARGB 草图缓冲（尺寸/dpr 匹配时复用，内容仍每帧重画）。
+        self._gimbal_scratch_cache: tuple[tuple[object, ...], QImage] | None = None
         self._vision_scene_luminance = 0.0
         # UDP/串口由 backend 提供（保持旧属性名，其余代码无需改动）
         self.udp = self.backend.udp
@@ -1979,7 +2002,9 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             if not self.clickgui_gpu.available or self.wallpaper_picker_visible:
                 return (*key, int(time.perf_counter() * 60.0))
             return key
-        enabled_state = tuple((module.name, module.enabled) for module in self.registry.modules)
+        # P6: enabled 状态以 registry 代际计数入 key（见 __init__ 接线说明），
+        # 避免每帧为比较 key 构造 N+1 元组。
+        enabled_revision = self.registry.enabled_revision
         return (
             "battle-ui",
             width,
@@ -1989,7 +2014,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             self.state.current_stage,
             self.state.stage_countdown_sec,
             self.state.last_event,
-            enabled_state,
+            enabled_revision,
             # Rebuild when a modal takes ownership so the complete native HUD
             # is captured once, then softened as a stable backdrop.
             bool(self.economy_visible or self.economy_island.progress > 0.01),
@@ -3300,7 +3325,8 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         # filtered before this method and remains an exclusive scene.
         if self.setting_bool(hud, "Watermark", True):
             self.draw_watermark(p)
-        if self.registry.get("MatchTimer") and self.registry.get("MatchTimer").enabled:
+        match_timer = self.registry.get("MatchTimer")
+        if match_timer is not None and match_timer.enabled:
             self.draw_match_header(p, scaled_width)
         chat_reserve = self.match_chat_reserved_height(now=time.perf_counter()) / hud_scale
         bottom_left = HudAnchorStack(
@@ -3353,59 +3379,81 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         value = str(setting.value) if setting else "LiquidClean"
         return value if value in ("LiquidClean", "PolarLegacy") else "LiquidClean"
 
+    def _hud_style_palette(self) -> tuple[float, bool, QColor, QColor, QColor, QColor]:
+        """P8: hud_* 色彩家族的帧级 memo。
+
+        token = ``gui_motion.now``（每 UI tick 推进的单调时钟）：同一 tick 内
+        全部助手共享一次 registry 读取；UI 与配置加载路径会在写入 Visual
+        Tone 时显式清空缓存。返回的 QColor 为缓存实例，对外一律经 QColor()
+        拷贝（调用方可能就地 setAlpha）。
+        """
+        token = float(self.gui_motion.now)
+        cache = self._hud_palette_cache
+        if cache is not None and cache[0] == token:
+            return cache
+        hud = self.registry.get("HUD")
+        tone_setting = hud.get_setting("Visual Tone") if hud else None
+        tone = str(tone_setting.value) if tone_setting else "LiquidClean"
+        if tone not in ("LiquidClean", "PolarLegacy"):
+            tone = "LiquidClean"
+        clean = tone == "LiquidClean"
+        palette: tuple[float, bool, QColor, QColor, QColor, QColor] = (
+            token,
+            clean,
+            color("#5d8cff") if clean else THEME.cyan,
+            color("#efbf04") if clean else color("#ffd166"),
+            color("#fc4130") if clean else THEME.red,
+            color("#4dac68") if clean else THEME.green,
+        )
+        self._hud_palette_cache = palette
+        return palette
+
     def hud_clean(self) -> bool:
-        return self.hud_visual_tone() == "LiquidClean"
+        return self._hud_style_palette()[1]
 
     def hud_accent(self) -> QColor:
-        return color("#5d8cff") if self.hud_clean() else THEME.cyan
+        return QColor(self._hud_style_palette()[2])
 
     def hud_surface(self, alpha: float = 0.68) -> QColor:
-        return color("#000000", alpha if self.hud_clean() else min(0.86, alpha + 0.08))
+        clean = self._hud_style_palette()[1]
+        return color("#000000", alpha if clean else min(0.86, alpha + 0.08))
 
     def hud_panel_outline(self, alpha: float = 0.10) -> QColor:
-        return color("#ffffff", alpha if self.hud_clean() else min(0.20, alpha + 0.04))
+        clean = self._hud_style_palette()[1]
+        return color("#ffffff", alpha if clean else min(0.20, alpha + 0.04))
 
     def hud_warning(self) -> QColor:
-        return color("#efbf04") if self.hud_clean() else color("#ffd166")
+        return QColor(self._hud_style_palette()[3])
 
     def hud_danger(self) -> QColor:
-        return color("#fc4130") if self.hud_clean() else THEME.red
+        return QColor(self._hud_style_palette()[4])
 
     def hud_success(self) -> QColor:
-        return color("#4dac68") if self.hud_clean() else THEME.green
+        return QColor(self._hud_style_palette()[5])
 
     def hud_state_color(self, kind: str = "info", ratio: float = 0.0) -> QColor:
-        if not self.hud_clean():
-            return {
-                "ally": THEME.cyan,
-                "enemy": THEME.red,
-                "danger": THEME.red,
-                "warning": color("#ffd166"),
-                "success": THEME.green,
-                "gold": color("#ffd166"),
-                "ammo": THEME.green,
-                "control": THEME.pink,
-                "spin": THEME.pink,
-            }.get(kind, THEME.cyan)
+        _token, clean, accent, warning, danger, success = self._hud_style_palette()
+        if not clean:
+            return QColor(_HUD_LEGACY_STATE_COLORS.get(kind, _HUD_STATE_COLOR_FALLBACK))
         if kind in ("enemy", "danger"):
-            return self.hud_danger()
+            return QColor(danger)
         if kind in ("warning", "gold", "power"):
             if ratio >= 0.95:
-                return self.hud_danger()
-            return self.hud_warning() if ratio >= 0.78 or kind in ("warning", "gold", "power") else self.hud_accent()
+                return QColor(danger)
+            return QColor(warning) if ratio >= 0.78 or kind in ("warning", "gold", "power") else QColor(accent)
         if kind in ("success", "ammo", "cap"):
             if kind == "cap" and ratio < 0.18:
-                return self.hud_danger()
+                return QColor(danger)
             if kind == "cap" and ratio < 0.34:
-                return self.hud_warning()
-            return self.hud_success() if kind in ("success", "ammo") else self.hud_accent()
+                return QColor(warning)
+            return QColor(success) if kind in ("success", "ammo") else QColor(accent)
         if kind in ("heat", "speed"):
             if ratio >= 0.92:
-                return self.hud_danger()
+                return QColor(danger)
             if ratio >= 0.78:
-                return self.hud_warning()
-            return self.hud_accent()
-        return self.hud_accent()
+                return QColor(warning)
+            return QColor(accent)
+        return QColor(accent)
 
     def liquid_map_enabled(self) -> bool:
         module = self.registry.get("LiquidTacticalMap")
@@ -3528,6 +3576,30 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         p.drawLine(QPointF(cx, cy - size), QPointF(cx, cy - 6))
         p.drawLine(QPointF(cx, cy + 6), QPointF(cx, cy + size))
 
+    def _gimbal_scratch_image(
+        self,
+        key: tuple[object, ...],
+        img_w: int,
+        img_h: int,
+        image_dpr: float,
+    ) -> QImage:
+        """P2: 云台指示器 ARGB 草图缓冲复用。
+
+        内容（旋转指针/文本）必须每帧重画，但 (kind, w, h, dpr) 匹配时
+        底层缓冲不必每帧 malloc。尺寸/dpr 变化即重建（失效条件在 key 中）。
+        """
+        cache = self._gimbal_scratch_cache
+        if cache is not None and cache[0] == key:
+            return cache[1]
+        image = QImage(
+            max(1, int(math.ceil(img_w * image_dpr))),
+            max(1, int(math.ceil(img_h * image_dpr))),
+            QImage.Format.Format_ARGB32_Premultiplied,
+        )
+        image.setDevicePixelRatio(image_dpr)
+        self._gimbal_scratch_cache = (key, image)
+        return image
+
     def draw_chassis_gimbal_indicator(self, p: QPainter, width: int, height: int) -> None:
         """Bottom chassis/gimbal compass (main & gestalt-lab layout).
 
@@ -3570,12 +3642,10 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             img_h = int(math.ceil(size * 1.65 + pad * 2))
             origin = QPointF(center.x() - img_w * 0.5, center.y() - img_h * 0.5)
             image_dpr = max(1.0, float(self.devicePixelRatioF()))
-            image = QImage(
-                max(1, int(math.ceil(img_w * image_dpr))),
-                max(1, int(math.ceil(img_h * image_dpr))),
-                QImage.Format.Format_ARGB32_Premultiplied,
+            # P2: (micro, w, h, dpr) 匹配时复用草图缓冲，仍 fill(0)+全量重画。
+            image = self._gimbal_scratch_image(
+                ("gimbal-micro", img_w, img_h, image_dpr), img_w, img_h, image_dpr,
             )
-            image.setDevicePixelRatio(image_dpr)
             image.fill(0)
             ip = QPainter(image)
             ip.setRenderHint(QPainter.RenderHint.Antialiasing, True)
@@ -3624,12 +3694,10 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         img_h = int(math.ceil(panel_h)) + 6
         origin = QPointF(x - 3.0, y - 3.0)
         image_dpr = max(1.0, float(self.devicePixelRatioF()))
-        image = QImage(
-            max(1, int(math.ceil(img_w * image_dpr))),
-            max(1, int(math.ceil(img_h * image_dpr))),
-            QImage.Format.Format_ARGB32_Premultiplied,
+        # P2: (panel, w, h, dpr) 匹配时复用草图缓冲，仍 fill(0)+全量重画。
+        image = self._gimbal_scratch_image(
+            ("gimbal-panel", img_w, img_h, image_dpr), img_w, img_h, image_dpr,
         )
-        image.setDevicePixelRatio(image_dpr)
         image.fill(0)
         ip = QPainter(image)
         ip.setRenderHint(QPainter.RenderHint.Antialiasing, True)

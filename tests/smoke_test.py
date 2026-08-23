@@ -358,8 +358,19 @@ def test_audio_feedback_and_kill_sound_mapping() -> None:
     registry.add_toggle_listener(lambda module, enabled, source: toggles.append((module.name, enabled, source)))
     target = registry.get("SpeedLimit")
     assert target is not None
+    revision = registry.enabled_revision
     registry.toggle_module(target, source="clickgui")
     assert toggles == [("SpeedLimit", target.enabled, "clickgui")]
+    assert registry.enabled_revision == revision + 1
+    revision = registry.enabled_revision
+    target.set_enabled(not target.enabled)
+    assert registry.enabled_revision == revision + 1
+    assert len(toggles) == 1  # direct writes retain the existing no-UI-event contract
+    revision = registry.enabled_revision
+    target.enabled = target.enabled
+    assert registry.enabled_revision == revision
+    target.enabled = not target.enabled
+    assert registry.enabled_revision == revision + 1
 
     renderer = KillFxRenderer(ROOT / "assets" / "kill_fx" / "gd656")
     assert renderer._sound_name("NORMAL", 1, "Default Scrolling") == "killsound_df.ogg"
@@ -1068,7 +1079,16 @@ def test_tongji_udp_protocol() -> None:
     deadline = time.perf_counter() + 1.0
     while time.perf_counter() < deadline:
         received = receiver.latest(1_000)
-        if received is not None:
+        # ``bad_armor`` is a structurally valid telemetry packet whose single
+        # malformed observation is intentionally dropped.  It may therefore
+        # be published briefly before the following valid packet; wait for the
+        # payload this test is actually asserting instead of racing the UDP
+        # receiver's latest-only handoff.
+        if (
+            received is not None
+            and received.primary is not None
+            and received.primary.get("name") == "three"
+        ):
             break
         time.sleep(0.01)
     receiver.stop()

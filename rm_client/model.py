@@ -163,6 +163,31 @@ class Module:
     enabled: bool = False
     description: str = ""
     bind_capture_hint: str = "右键模块或使用绑定行"
+    _enabled_change_hook: Callable[["Module", bool], None] | None = field(
+        default=None,
+        init=False,
+        repr=False,
+        compare=False,
+    )
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        """Keep registry cache generations correct for every enabled write.
+
+        Production code normally uses ``toggle_module``/``set_enabled``, but
+        configuration migration and diagnostic tools also assign ``enabled``
+        directly.  The static HUD cache must observe all three paths without
+        rebuilding an enabled-state tuple every display tick.
+        """
+        if name != "enabled":
+            object.__setattr__(self, name, value)
+            return
+        existed = "enabled" in self.__dict__
+        previous = self.__dict__.get("enabled")
+        object.__setattr__(self, name, value)
+        if existed and previous != value:
+            hook = self.__dict__.get("_enabled_change_hook")
+            if hook is not None:
+                hook(self, bool(value))
 
     def toggle(self) -> None:
         self.enabled = not self.enabled
@@ -203,6 +228,12 @@ class ModuleRegistry:
         self.modules = modules
         self._by_name = {module.name: module for module in modules}
         self._toggle_listeners: list[Callable[[Module, bool, str], None]] = []
+        self.enabled_revision = 0
+        for module in modules:
+            module._enabled_change_hook = self._on_module_enabled_changed
+
+    def _on_module_enabled_changed(self, _module: Module, _enabled: bool) -> None:
+        self.enabled_revision += 1
 
     def get(self, name: str) -> Module | None:
         return self._by_name.get(name)
