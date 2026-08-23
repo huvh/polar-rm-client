@@ -60,6 +60,10 @@ class GpuRect:
     outline_width: float = 0.0
     gradient: QColor | None = None
     clip: QRectF | None = None
+    # Rounded-rect SDF clip (logical px). 0.0 disables it. Lets narrow accent
+    # strips inherit the host panel corner radius so they never poke outside
+    # the glass silhouette at rounded corners.
+    clip_radius: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -127,7 +131,7 @@ class ClickGuiDrawList:
     def _append(self, payload: GpuRect | GpuText | GpuImage, *, layer: int = 0, opacity: float = 1.0) -> None:
         self.commands.append(GpuUiCommand(len(self.commands), payload, layer, opacity))
 
-    def rect(self, rect: QRectF, radius: float, fill: QColor, outline: QColor | None = None, outline_width: float = 0.0, gradient: QColor | None = None, clip: QRectF | None = None) -> None:
+    def rect(self, rect: QRectF, radius: float, fill: QColor, outline: QColor | None = None, outline_width: float = 0.0, gradient: QColor | None = None, clip: QRectF | None = None, clip_radius: float = 0.0) -> None:
         payload = GpuRect(
             QRectF(rect) if self.copy_payloads else rect,
             radius,
@@ -140,6 +144,7 @@ class ClickGuiDrawList:
             outline_width,
             QColor(gradient) if gradient is not None and self.copy_payloads else gradient,
             QRectF(clip) if clip is not None and self.copy_payloads else clip,
+            float(clip_radius),
         )
         self.rects.append(payload)
         self._append(payload)
@@ -471,8 +476,11 @@ class ClickGuiGpuRenderer:
             layout(location=5) in float instanceOutlineWidth;
             layout(location=6) in vec4 instanceGradient;
             layout(location=7) in float instanceHasGradient;
+            layout(location=8) in vec4 instanceClipRect;
+            layout(location=9) in float instanceClipRadius;
             uniform vec2 viewport;
             out vec2 localUv;
+            out vec2 pixelPos;
             flat out vec2 rectSize;
             flat out vec4 fillColor;
             flat out vec4 outlineColor;
@@ -480,8 +488,11 @@ class ClickGuiGpuRenderer:
             flat out float outlineWidth;
             flat out vec4 gradientColor;
             flat out float hasGradient;
+            flat out vec4 clipRect;
+            flat out float clipRadius;
             void main() {
                 localUv = position;
+                pixelPos = instanceRect.xy + position * instanceRect.zw;
                 rectSize = instanceRect.zw;
                 fillColor = instanceFill;
                 outlineColor = instanceOutline;
@@ -489,6 +500,8 @@ class ClickGuiGpuRenderer:
                 outlineWidth = instanceOutlineWidth;
                 gradientColor = instanceGradient;
                 hasGradient = instanceHasGradient;
+                clipRect = instanceClipRect;
+                clipRadius = instanceClipRadius;
                 vec2 pixel = instanceRect.xy + position * instanceRect.zw;
                 vec2 ndc = vec2(pixel.x / viewport.x * 2.0 - 1.0, 1.0 - pixel.y / viewport.y * 2.0);
                 gl_Position = vec4(ndc, 0.0, 1.0);
@@ -499,6 +512,7 @@ class ClickGuiGpuRenderer:
         fragment = """
             #version 330
             in vec2 localUv;
+            in vec2 pixelPos;
             flat in vec2 rectSize;
             flat in vec4 fillColor;
             flat in vec4 outlineColor;
@@ -506,6 +520,8 @@ class ClickGuiGpuRenderer:
             flat in float outlineWidth;
             flat in vec4 gradientColor;
             flat in float hasGradient;
+            flat in vec4 clipRect;
+            flat in float clipRadius;
             out vec4 fragColor;
             float roundedBoxSdf(vec2 p, vec2 b, float r) {
                 vec2 q = abs(p) - b + vec2(r);
@@ -517,6 +533,15 @@ class ClickGuiGpuRenderer:
                 float distance = roundedBoxSdf((localUv - 0.5) * size, size * 0.5, r);
                 float edge = max(fwidth(distance), 0.8);
                 float inside = 1.0 - smoothstep(-edge, edge, distance);
+                if (clipRadius > 0.0 && clipRect.z > 0.0 && clipRect.w > 0.0) {
+                    float clipDistance = roundedBoxSdf(
+                        pixelPos - (clipRect.xy + clipRect.zw * 0.5),
+                        clipRect.zw * 0.5,
+                        min(clipRadius, min(clipRect.z, clipRect.w) * 0.5)
+                    );
+                    float clipEdge = max(fwidth(clipDistance), 0.8);
+                    inside *= 1.0 - smoothstep(-clipEdge, clipEdge, clipDistance);
+                }
                 vec4 base = hasGradient > 0.5 ? mix(fillColor, gradientColor, localUv.x) : fillColor;
                 if (outlineWidth > 0.0) {
                     float inner = 1.0 - smoothstep(-outlineWidth - edge, -outlineWidth + edge, distance);
@@ -803,6 +828,7 @@ class ClickGuiGpuRenderer:
                 payload.outline_width,
                 faded(payload.gradient) if payload.gradient is not None else None,
                 QRectF(payload.clip) if payload.clip is not None else None,
+                payload.clip_radius,
             )
         if isinstance(payload, GpuImage):
             return GpuImage(
@@ -905,8 +931,9 @@ class ClickGuiGpuRenderer:
         )
         packed = bytearray()
         for command in commands:
+            clip_rect = command.clip
             packed.extend(struct.pack(
-                "19f",
+                "24f",
                 command.rect.left() * ratio,
                 command.rect.top() * ratio,
                 command.rect.width() * ratio,
@@ -917,12 +944,21 @@ class ClickGuiGpuRenderer:
                 command.outline_width * ratio,
                 *self._rgba(command.gradient or command.fill),
                 1.0 if command.gradient else 0.0,
+                # Rounded SDF clip: logical px -> device px; zeros disable it.
+                (clip_rect.left() * ratio) if clip_rect is not None else 0.0,
+                (clip_rect.top() * ratio) if clip_rect is not None else 0.0,
+                (clip_rect.width() * ratio) if clip_rect is not None else 0.0,
+                (clip_rect.height() * ratio) if clip_rect is not None else 0.0,
+                (command.clip_radius * ratio) if clip_rect is not None and command.clip_radius > 0.0 else 0.0,
             ))
         self._bind_quad(program)
         self.instance_buffer.bind()
         self.instance_buffer.allocate(bytes(packed), len(packed))
-        stride = 19 * 4
-        offsets = ((1, 4, 0), (2, 4, 16), (3, 4, 32), (4, 1, 48), (5, 1, 52), (6, 4, 56), (7, 1, 72))
+        stride = 24 * 4
+        offsets = (
+            (1, 4, 0), (2, 4, 16), (3, 4, 32), (4, 1, 48), (5, 1, 52), (6, 4, 56), (7, 1, 72),
+            (8, 4, 76), (9, 1, 92),
+        )
         for location, size, offset in offsets:
             program.enableAttributeArray(location)
             program.setAttributeBuffer(location, _GL_FLOAT, offset, size, stride)

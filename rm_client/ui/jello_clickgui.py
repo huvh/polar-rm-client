@@ -904,7 +904,12 @@ class JelloClickGuiRenderer:
                 localized_name,
                 logical_text_width,
             )
-            commands.rect(row, 0.0, fill, clip=viewport)
+            # 缺陷 B 修复：视口底边与面板底边重合，整宽 radius=0 行若仅靠
+            # 矩形裁剪，会在面板底部两角切出方角。这里几何先与视口求交
+            # （保住顶部滚动裁切），再交给带面板圆角 SDF 的裁剪（GPU 走
+            # clickgui_gpu 的 clip_radius；CPU 兼容路径走 paint_compat 的
+            # 圆角 setClipPath），使行像素永远落在面板 10·scale 圆角剪影内。
+            commands.rect(visible, 0.0, fill, clip=QRectF(panel), clip_radius=10.0 * scale)
             commands.text(
                 row.adjusted(text_x * scale, 0.0, -10.0 * scale, 0.0),
                 display_name,
@@ -1742,6 +1747,18 @@ class JelloClickGuiRenderer:
             if isinstance(payload, GpuRect):
                 path = QPainterPath()
                 path.addRoundedRect(payload.rect, payload.radius, payload.radius)
+                # 缺陷 B 修复：与 GPU 管线的 clip_radius 语义保持一致。
+                # 这里用路径交集而非 setClipPath 实现圆角裁剪，是刻意选择而
+                # 非 clip 不可用——管线内实验（tmp_corner_verify/clip_audit_out）
+                # 证明本窗口三种绘制面的 QPainter clip 均生效；交集方案的优势
+                # 是正确性不依赖引擎 clip 行为（raster/GL 一致），且把圆角语义
+                # 烘焙进几何、与 GPU SDF mask 的结果逐像素对齐。
+                clip_radius = float(getattr(payload, "clip_radius", 0.0) or 0.0)
+                if clip is not None and clip_radius > 0.0:
+                    rounded_clip = min(clip_radius, min(clip.width(), clip.height()) * 0.5)
+                    clip_path = QPainterPath()
+                    clip_path.addRoundedRect(clip, rounded_clip, rounded_clip)
+                    path = path.intersected(clip_path)
                 if payload.gradient is not None:
                     brush = QLinearGradient(payload.rect.left(), 0.0, payload.rect.right(), 0.0)
                     brush.setColorAt(0.0, payload.fill)
