@@ -107,6 +107,53 @@ faulthandler.cancel_dump_traceback_later()
     if ($process.ExitCode -ne 0) { throw "$Label failed with exit code $($process.ExitCode)" }
 }
 
+function Invoke-PortablePreflight(
+    [string]$Executable,
+    [string]$ReportPath,
+    [string]$LogRoot,
+    [int]$TimeoutSeconds = 120
+) {
+    # POLAR-RM.exe uses the Windows GUI subsystem. PowerShell can wait for it,
+    # but $LASTEXITCODE is not guaranteed to be populated for such an image.
+    # Use Process.ExitCode and the emitted JSON report as two independent gates.
+    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = $Executable
+    $startInfo.Arguments = '--preflight --official --codec-selftest --preflight-output "' + $ReportPath.Replace('"', '\"') + '"'
+    $startInfo.WorkingDirectory = Split-Path -Parent $Executable
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    $process = [System.Diagnostics.Process]::Start($startInfo)
+    if ($null -eq $process) { throw "portable preflight failed to start" }
+    $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+    $stderrTask = $process.StandardError.ReadToEndAsync()
+    $timedOut = -not $process.WaitForExit($TimeoutSeconds * 1000)
+    if ($timedOut) {
+        try { $process.Kill($true) } catch { try { $process.Kill() } catch {} }
+        $process.WaitForExit(10000) | Out-Null
+    }
+    $stdout = $stdoutTask.GetAwaiter().GetResult()
+    $stderr = $stderrTask.GetAwaiter().GetResult()
+    New-Item -ItemType Directory -Force $LogRoot | Out-Null
+    [System.IO.File]::WriteAllText((Join-Path $LogRoot "portable_preflight.stdout.log"), $stdout, [System.Text.UTF8Encoding]::new($false))
+    [System.IO.File]::WriteAllText((Join-Path $LogRoot "portable_preflight.stderr.log"), $stderr, [System.Text.UTF8Encoding]::new($false))
+    if ($timedOut) { throw "portable preflight timed out after $TimeoutSeconds seconds" }
+    if ($process.ExitCode -ne 0) { throw "portable preflight failed with exit code $($process.ExitCode)" }
+    if (-not (Test-Path -LiteralPath $ReportPath -PathType Leaf)) {
+        throw "portable preflight report missing"
+    }
+    try {
+        $report = Get-Content -LiteralPath $ReportPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    }
+    catch { throw "portable preflight report is invalid JSON: $($_.Exception.Message)" }
+    if ($report.passed -ne $true) {
+        $failed = @($report.checks | Where-Object { $_.passed -ne $true } | ForEach-Object { $_.key })
+        throw "portable preflight report failed: $($failed -join ', ')"
+    }
+    return $report
+}
+
 function Get-TreeHash([string]$Python, [string]$Source, [string]$Root) {
     $script = "from pathlib import Path; from rm_client.runtime_paths import RuntimePaths; print(RuntimePaths.hash_tree(Path(__import__('sys').argv[1])))"
     $oldPythonPath = $env:PYTHONPATH
@@ -346,8 +393,11 @@ exit /b %errorlevel%
     $oldPath = $env:PATH
     try {
         $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
-        & (Join-Path $portable "POLAR-RM.exe") --preflight --official --codec-selftest
-        if ($LASTEXITCODE -ne 0) { throw "portable preflight failed" }
+        $portablePreflightReport = Join-Path $testLogRoot "portable_preflight.json"
+        $null = Invoke-PortablePreflight `
+            (Join-Path $portable "POLAR-RM.exe") `
+            $portablePreflightReport `
+            $testLogRoot
     } finally { $env:PATH = $oldPath }
 
     # The codec self-test owns short-lived ffmpeg children. Windows may retain
