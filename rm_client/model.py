@@ -421,6 +421,9 @@ class RobotState:
     penalties: list[dict[str, Any]] = field(default_factory=list)
     active_penalty: dict[str, Any] = field(default_factory=dict)
     radar_detections: list[dict[str, Any]] = field(default_factory=list)
+    # RadarInfoToClient 最近一次到达时刻（perf_counter 秒）。渲染层据此做
+    # TTL 衰减——雷达流断供后标记淡出，而不是永久残留在小地图上。
+    radar_detections_at: float = 0.0
     path_plan: dict[str, Any] = field(default_factory=dict)
     tech_core: dict[str, Any] = field(default_factory=dict)
     performance_sync: dict[str, int] = field(default_factory=dict)
@@ -453,6 +456,41 @@ class RobotState:
     mock_simulation_enabled: bool = True
     official_state_active: bool = False
     official_state_at: float = 0.0
+
+    # Buff 类型分组（对齐 backend BUFF_TYPE_NAMES：1=攻击 2=防御 3=冷却
+    # 4=底盘功率 5=回血）。攻击/防御两组作为指示灯语义；其余类型计入详情。
+    BUFF_ATK_TYPES = frozenset({1})
+    BUFF_DEF_TYPES = frozenset({2, 4, 5})
+
+    def buff_indicator_state(self) -> tuple[bool, bool, str]:
+        """返回 (攻击增益亮, 防御/回复增益亮, 详情文本)。
+
+        优先消费 backend 解码的 Buff 行（buff_rows 携带 buff_type）；
+        LabDebug 的 mock 行没有 buff_type，此时回退旧演示布尔，保证
+        LabDebug 演示动画不回归。真实对局中该值完全由裁判 Buff 消息驱动。
+        """
+        atk = dfn = False
+        names: list[str] = []
+        typed = False
+        for row in getattr(self, "buff_rows", ()) or ():
+            bt = row.get("buff_type")
+            if bt is None:
+                continue
+            typed = True
+            if not row.get("active"):
+                continue
+            b = int(bt)
+            label = str(row.get("name", f"Buff {b}"))
+            remaining = int(row.get("remaining", 0) or 0)
+            if b in self.BUFF_ATK_TYPES:
+                atk = True
+                names.append(f"{label} {remaining}s")
+            elif b in self.BUFF_DEF_TYPES:
+                dfn = True
+                names.append(f"{label} {remaining}s")
+        if not typed:
+            return bool(self.small_buff), bool(self.large_buff), ""
+        return atk, dfn, "; ".join(names[:4])
 
     def tick(self, dt: float) -> None:
         # The desktop demo must never race 1--10 Hz referee messages. Official
@@ -799,7 +837,7 @@ def build_default_registry() -> ModuleRegistry:
                 number_setting("Fov", 85, 10, 180, 1, "deg"),
                 number_setting("Smooth", 0.28, 0.01, 1.0, 0.01),
                 mode_setting("Priority", "Armor", ["Armor", "Distance", "Health", "Radar"]),
-                mode_setting("Lock Style", "White Outline", ["Polar Corner", "White Outline", "Minimal Bracket", "Rune Ring"]),
+                mode_setting("Lock Style", "White Outline", ["Polar Corner", "White Outline", "Minimal Bracket", "Rune Ring", "Heli Gimbal"]),
                 bool_setting("Draw Fov", True, "绘制中心荧光白自瞄圆（仅圆内可锁定）。"),
                 number_setting(
                     "Circle Size",
@@ -833,6 +871,7 @@ def build_default_registry() -> ModuleRegistry:
                 bool_setting("Kill Feed", True, "击杀信息流（ELIMINATED x N）。"),
                 bool_setting("Score Popup", True, "击杀 +分数 弹字。"),
                 bool_setting("Bonus Tags", True, "加分项标签行（gd656 bonus_list）。"),
+                bool_setting("Lock Target Bonus", True, "锁定目标加分：持续交战同一目标后的击杀追加“锁定目标”标签与提示音（gd656 LOCKED_TARGET）。"),
                 bool_setting("Combo Subtitle", True, "连杀字幕（N KILL COMBO）。"),
                 bool_setting("Scrolling Icons", True, "滚动击杀图标条（默认/BF5/BF6 通用）。"),
                 bool_setting("Combo Icons", True, "CF 连杀图标。"),
@@ -891,7 +930,7 @@ def build_default_registry() -> ModuleRegistry:
                 mode_setting("Predict", "Adaptive", ["Off", "Fixed", "Adaptive"]),
                 number_setting("Lead Time", 0.18, 0.0, 0.6, 0.01, "s"),
                 number_setting("Fov", 58, 10, 140, 1, "deg"),
-                mode_setting("Lock Style", "Rune Ring", ["Polar Corner", "White Outline", "Minimal Bracket", "Rune Ring"]),
+                mode_setting("Lock Style", "Rune Ring", ["Polar Corner", "White Outline", "Minimal Bracket", "Rune Ring", "Heli Gimbal"]),
                 bool_setting("Show Progress", True),
             ],
             description="7v7 能量机关自瞄 UI，并预留打符预测接口。",

@@ -186,6 +186,7 @@ class BackendManager:
         state.penalties.clear()
         state.active_penalty.clear()
         state.radar_detections.clear()
+        state.radar_detections_at = 0.0
         state.path_plan.clear()
         state.tech_core.clear()
         state.performance_sync.clear()
@@ -711,6 +712,7 @@ class BackendManager:
             state.map_markers = [*state.map_markers[-15:], marker]
         elif name == "RadarInfoToClient":
             state.radar_detections = [dict(r) for r in data.get("robots", ())]
+            state.radar_detections_at = time.perf_counter()
         elif name == "TechCoreMotionStateSync":
             state.tech_core = self._clean(data)
         elif name == "RobotPerformanceSelectionSync":

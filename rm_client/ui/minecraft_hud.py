@@ -473,13 +473,21 @@ class MinecraftCombatHudRenderer:
                     "target_health", "target_max_health", "target_id",
                 )
             )
+        # Buff 指示：优先裁判 Buff 解码（buff_indicator_state），
+        # LabDebug mock 行无 buff_type 时回退旧演示布尔。
+        buff_fn = getattr(state, "buff_indicator_state", None)
+        try:
+            atk_buf, def_buf = (bool(v) for v in buff_fn()[:2]) if callable(buff_fn) else (False, False)
+        except Exception:
+            atk_buf = bool(getattr(state, "small_buff", False))
+            def_buf = bool(getattr(state, "large_buff", False))
         effects = (
             ("JUP", bool(getattr(state, "jump_ready", False))),
             ("PTE", bool(getattr(state, "pte_ready", False))),
             ("WHE", bool(getattr(state, "wheel_online", False))),
             ("LES", bool(getattr(state, "les_online", False))),
-            ("SBF", bool(getattr(state, "small_buff", False))),
-            ("LBF", bool(getattr(state, "large_buff", False))),
+            ("SBF", atk_buf),
+            ("LBF", def_buf),
         )
         tactical_map = registry.get("TacticalMap") if registry is not None else None
         tactical_map_enabled = bool(tactical_map and tactical_map.enabled)
