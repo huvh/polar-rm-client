@@ -35,12 +35,31 @@ def _run_replay(argv: list[str]) -> int:
     return 0
 
 
+def _prepare_runtime_paths(
+    argv: list[str],
+    *,
+    paths: RuntimePaths | None = None,
+) -> RuntimePaths:
+    """Create writable runtime directories without mutating preflight media.
+
+    A packaged preflight runs before the application is launched and is also
+    executed while assembling a release.  Seeding ``user_data/configs`` during
+    that check made a newly built archive contain generated runtime state.
+    Normal application startup still receives its first-launch config copy;
+    preflight only verifies that the destination directories are writable.
+    """
+
+    runtime_paths = paths or RuntimePaths.discover()
+    runtime_paths.ensure_writable_dirs()
+    if "--preflight" not in argv:
+        runtime_paths.seed_default_config()
+    return runtime_paths
+
+
 if __name__ == "__main__":
     if "--replay-field-log" in sys.argv:
         raise SystemExit(_run_replay(sys.argv[1:]))
-    paths = RuntimePaths.discover()
-    paths.ensure_writable_dirs()
-    paths.seed_default_config()
+    paths = _prepare_runtime_paths(sys.argv[1:])
     if "--preflight" in sys.argv:
         from rm_client.preflight import run_preflight
 

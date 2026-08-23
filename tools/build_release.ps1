@@ -372,6 +372,21 @@ exit /b %errorlevel%
     }
     if (-not $ffmpegUnlocked) { throw "bundled FFmpeg remained locked after portable preflight" }
 
+    # A release archive must contain writable directory scaffolding, never
+    # state created by the build machine or by the preflight itself.  Keep this
+    # as a hard postcondition so future startup changes cannot silently ship a
+    # seeded config, logs, calibration, or qualification evidence.
+    $runtimeStateFiles = @(
+        Get-ChildItem -LiteralPath (Join-Path $portable "user_data") -Recurse -File -Force
+        Get-ChildItem -LiteralPath (Join-Path $portable "field_evidence") -Recurse -File -Force
+    )
+    if ($runtimeStateFiles.Count -ne 0) {
+        $relativeRuntimeFiles = $runtimeStateFiles | ForEach-Object {
+            $_.FullName.Substring($portable.Length).TrimStart("\")
+        }
+        throw "portable runtime state is not empty: $($relativeRuntimeFiles -join ', ')"
+    }
+
     $manifest.tests.portable_preflight = "PASS"
     $manifestJson = $manifest | ConvertTo-Json -Depth 8
     [System.IO.File]::WriteAllText($manifestPath, $manifestJson + "`n", [System.Text.UTF8Encoding]::new($false))

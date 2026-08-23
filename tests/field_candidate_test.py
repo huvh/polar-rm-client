@@ -22,6 +22,7 @@ from rm_client.replay import summarize_field_logs, write_replay_summary
 from rm_client.scenarios import SCENARIOS
 from rm_client.tongji_yolo import LocalAlignedVision
 from rm_client.vision import CameraCaptureWorker
+from main import _prepare_runtime_paths
 
 
 def require(value: bool, name: str) -> None:
@@ -165,6 +166,37 @@ def test_runtime_paths() -> None:
         require(bool(first) and first == second, "resource tree hash deterministic")
         (root / "b" / "c.txt").write_bytes(b"changed")
         require(RuntimePaths.hash_tree(root) != first, "resource tree hash detects mutation")
+
+
+def test_preflight_does_not_seed_runtime_config() -> None:
+    print("[field] preflight runtime-state isolation")
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        defaults = root / "defaults"
+        defaults.mkdir(parents=True)
+        (defaults / "default.json").write_text('{"source":"immutable"}\n', encoding="utf-8")
+        paths = RuntimePaths(
+            app_root=root,
+            resource_root=root / "resources",
+            defaults_root=defaults,
+            user_data_root=root / "user_data",
+            configs_root=root / "user_data" / "configs",
+            calibrations_root=root / "user_data" / "calibrations",
+            evidence_root=root / "field_evidence",
+            logs_root=root / "user_data" / "logs",
+            bin_root=root / "bin",
+            manifest_path=root / "BUILD_MANIFEST.json",
+            source_mode=False,
+        )
+        _prepare_runtime_paths(["--preflight", "--official"], paths=paths)
+        require(paths.configs_root.is_dir(), "preflight creates writable config directory")
+        require(not (paths.configs_root / "default.json").exists(), "preflight leaves user config empty")
+        _prepare_runtime_paths([], paths=paths)
+        require(
+            (paths.configs_root / "default.json").read_text(encoding="utf-8")
+            == '{"source":"immutable"}\n',
+            "normal launch seeds immutable default",
+        )
 
 
 def test_capture_workers_are_bounded() -> None:
@@ -390,6 +422,7 @@ def main() -> None:
     test_recovery_gate()
     test_decoder_recovery_after_loss()
     test_runtime_paths()
+    test_preflight_does_not_seed_runtime_config()
     test_capture_workers_are_bounded()
     test_evidence_and_hard_gate()
     test_qualification_intent_scope()
