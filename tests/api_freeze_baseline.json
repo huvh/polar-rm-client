@@ -1,0 +1,5307 @@
+{
+  "members": {
+    "NORMAL_BACKEND_VIDEO_STALE_S": {
+      "kind": "plain-attribute",
+      "sig": "float",
+      "type": "float"
+    },
+    "PaintDeviceMetric": {
+      "kind": "callable",
+      "sig": "QPaintDevice.PaintDeviceMetric",
+      "type": "EnumType"
+    },
+    "RenderFlag": {
+      "kind": "callable",
+      "sig": "QWidget.RenderFlag",
+      "type": "EnumType"
+    },
+    "TargetBuffer": {
+      "kind": "callable",
+      "sig": "QOpenGLWidget.TargetBuffer",
+      "type": "EnumType"
+    },
+    "UpdateBehavior": {
+      "kind": "callable",
+      "sig": "QOpenGLWidget.UpdateBehavior",
+      "type": "EnumType"
+    },
+    "_append_vision_wire_armor": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow._append_vision_wire_armor",
+      "type": "method"
+    },
+    "_armor_geometry_smooth": {
+      "kind": "plain-attribute",
+      "sig": "dict",
+      "type": "dict"
+    },
+    "_aspect_fit_image_rect": {
+      "kind": "method",
+      "sig": "PolarRMWindow._aspect_fit_image_rect",
+      "type": "function"
+    },
+    "_auto_save_due_at": {
+      "kind": "plain-attribute",
+      "sig": "*volatile*",
+      "type": "float",
+      "volatile": true
+    },
+    "_auto_save_pending": {
+      "kind": "plain-attribute",
+      "sig": "False",
+      "type": "bool"
+    },
+    "_bottom_left_diagnostics": {
+      "kind": "plain-attribute",
+      "sig": "list",
+      "type": "list"
+    },
+    "_camera_config": {
+      "kind": "plain-attribute",
+      "sig": "None",
+      "type": "NoneType"
+    },
+    "_capture_qualification_runtime_baseline": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow._capture_qualification_runtime_baseline",
+      "type": "method"
+    },
+    "_clear_control_inputs_for_lock": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow._clear_control_inputs_for_lock",
+      "type": "method"
+    },
+    "_client_asset_path": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow._client_asset_path",
+      "type": "method"
+    },
+    "_collect_gpu_hud_commands": {
+      "kind": "plain-attribute",
+      "sig": "False",
+      "type": "bool"
+    },
+    "_collect_gpu_island_icons": {
+      "kind": "plain-attribute",
+      "sig": "False",
+      "type": "bool"
+    },
+    "_collect_gpu_quick_action_wheel": {
+      "kind": "plain-attribute",
+      "sig": "False",
+      "type": "bool"
+    },
+    "_combat_hud_frame_index": {
+      "kind": "plain-attribute",
+      "sig": "-1",
+      "type": "int"
+    },
+    "_combat_hud_last_time": {
+      "kind": "plain-attribute",
+      "sig": "*volatile*",
+      "type": "float",
+      "volatile": true
+    },
+    "_combat_input_was_allowed": {
+      "kind": "plain-attribute",
+      "sig": "False",
+      "type": "bool"
+    },
+    "_control_mouse_point": {
+      "kind": "plain-attribute",
+      "sig": "None",
+      "type": "NoneType"
+    },
+    "_display_frame_sequence": {
+      "kind": "plain-attribute",
+      "sig": "0",
+      "type": "int"
+    },
+    "_draw_dynamic_island_legacy": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow._draw_dynamic_island_legacy",
+      "type": "method"
+    },
+    "_dynamic_hud_started_at": {
+      "kind": "plain-attribute",
+      "sig": "*volatile*",
+      "type": "float",
+      "volatile": true
+    },
+    "_economy_close_finalized": {
+      "kind": "plain-attribute",
+      "sig": "True",
+      "type": "bool"
+    },
+    "_economy_closing_generation": {
+      "kind": "plain-attribute",
+      "sig": "None",
+      "type": "NoneType"
+    },
+    "_economy_dim_around": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow._economy_dim_around",
+      "type": "method"
+    },
+    "_economy_generation": {
+      "kind": "plain-attribute",
+      "sig": "0",
+      "type": "int"
+    },
+    "_economy_glass_row": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow._economy_glass_row",
+      "type": "method"
+    },
+    "_economy_island_well": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow._economy_island_well",
+      "type": "method"
+    },
+    "_economy_pending_overlay": {
+      "kind": "plain-attribute",
+      "sig": "None",
+      "type": "NoneType"
+    },
+    "_economy_qualification_token": {
+      "kind": "plain-attribute",
+      "sig": "None",
+      "type": "NoneType"
+    },
+    "_economy_restore_pending_generation": {
+      "kind": "plain-attribute",
+      "sig": "None",
+      "type": "NoneType"
+    },
+    "_economy_scene_epoch": {
+      "kind": "plain-attribute",
+      "sig": "0",
+      "type": "int"
+    },
+    "_elide_cache": {
+      "kind": "plain-attribute",
+      "sig": "dict",
+      "type": "dict"
+    },
+    "_field_frame_times_ms": {
+      "kind": "plain-attribute",
+      "sig": "*volatile*",
+      "type": "list",
+      "volatile": true
+    },
+    "_finalize_economy_restore": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow._finalize_economy_restore",
+      "type": "method"
+    },
+    "_fluorescent_circle_cache": {
+      "kind": "plain-attribute",
+      "sig": "dict",
+      "type": "dict"
+    },
+    "_font_height_cache": {
+      "kind": "plain-attribute",
+      "sig": "dict",
+      "type": "dict"
+    },
+    "_gpu_background_changed": {
+      "kind": "plain-attribute",
+      "sig": "True",
+      "type": "bool"
+    },
+    "_gpu_background_key": {
+      "kind": "plain-attribute",
+      "sig": "None",
+      "type": "NoneType"
+    },
+    "_gpu_background_transform_key": {
+      "kind": "plain-attribute",
+      "sig": "None",
+      "type": "NoneType"
+    },
+    "_gpu_blur_source_key": {
+      "kind": "plain-attribute",
+      "sig": "None",
+      "type": "NoneType"
+    },
+    "_gpu_control_backdrop_key": {
+      "kind": "plain-attribute",
+      "sig": "None",
+      "type": "NoneType"
+    },
+    "_gpu_frame_recording": {
+      "kind": "plain-attribute",
+      "sig": "False",
+      "type": "bool"
+    },
+    "_gpu_hud_commands": {
+      "kind": "plain-attribute",
+      "sig": "ClickGuiDrawList",
+      "type": "ClickGuiDrawList"
+    },
+    "_gpu_island_icon_commands": {
+      "kind": "plain-attribute",
+      "sig": "list",
+      "type": "list"
+    },
+    "_gpu_motion_layer_ready": {
+      "kind": "plain-attribute",
+      "sig": "False",
+      "type": "bool"
+    },
+    "_gpu_motion_layer_updated_at": {
+      "kind": "plain-attribute",
+      "sig": "*volatile*",
+      "type": "float",
+      "volatile": true
+    },
+    "_gpu_quick_action_wheel_command": {
+      "kind": "plain-attribute",
+      "sig": "None",
+      "type": "NoneType"
+    },
+    "_gpu_quick_action_wheel_labels": {
+      "kind": "plain-attribute",
+      "sig": "ClickGuiDrawList",
+      "type": "ClickGuiDrawList"
+    },
+    "_gpu_static_ui_key": {
+      "kind": "plain-attribute",
+      "sig": "None",
+      "type": "NoneType"
+    },
+    "_gpu_warm_pending": {
+      "kind": "plain-attribute",
+      "sig": "True",
+      "type": "bool"
+    },
+    "_hero_native_sequence": {
+      "kind": "plain-attribute",
+      "sig": "0",
+      "type": "int"
+    },
+    "_hero_native_source": {
+      "kind": "plain-attribute",
+      "sig": "'none'",
+      "type": "str"
+    },
+    "_hero_native_video_at": {
+      "kind": "plain-attribute",
+      "sig": "*volatile*",
+      "type": "float",
+      "volatile": true
+    },
+    "_hero_native_wait_started": {
+      "kind": "plain-attribute",
+      "sig": "*volatile*",
+      "type": "float",
+      "volatile": true
+    },
+    "_hud_static_defer_since": {
+      "kind": "plain-attribute",
+      "sig": "float",
+      "type": "float"
+    },
+    "_jello_active_mods_frame_index": {
+      "kind": "plain-attribute",
+      "sig": "-1",
+      "type": "int"
+    },
+    "_jello_gpu_fonts": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow._jello_gpu_fonts",
+      "type": "method"
+    },
+    "_jello_module_text_pages": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow._jello_module_text_pages",
+      "type": "method"
+    },
+    "_last_backend_video_at": {
+      "kind": "plain-attribute",
+      "sig": "*volatile*",
+      "type": "float",
+      "volatile": true
+    },
+    "_last_capture_sequence": {
+      "kind": "plain-attribute",
+      "sig": "0",
+      "type": "int"
+    },
+    "_last_control_tick_time": {
+      "kind": "plain-attribute",
+      "sig": "*volatile*",
+      "type": "float",
+      "volatile": true
+    },
+    "_last_deploy_mode": {
+      "kind": "plain-attribute",
+      "sig": "0",
+      "type": "int"
+    },
+    "_last_deploy_status_revision": {
+      "kind": "plain-attribute",
+      "sig": "0",
+      "type": "int"
+    },
+    "_last_field_frame_log_at": {
+      "kind": "plain-attribute",
+      "sig": "*volatile*",
+      "type": "float",
+      "volatile": true
+    },
+    "_last_logic_time": {
+      "kind": "plain-attribute",
+      "sig": "*volatile*",
+      "type": "float",
+      "volatile": true
+    },
+    "_last_minecraft_hud_layout": {
+      "kind": "plain-attribute",
+      "sig": "None",
+      "type": "NoneType"
+    },
+    "_last_module_toggle_at": {
+      "kind": "plain-attribute",
+      "sig": "*volatile*",
+      "type": "float",
+      "volatile": true
+    },
+    "_last_present_time": {
+      "kind": "plain-attribute",
+      "sig": "*volatile*",
+      "type": "float",
+      "volatile": true
+    },
+    "_last_readiness_audit_at": {
+      "kind": "plain-attribute",
+      "sig": "*volatile*",
+      "type": "float",
+      "volatile": true
+    },
+    "_last_render_tune": {
+      "kind": "plain-attribute",
+      "sig": "*volatile*",
+      "type": "float",
+      "volatile": true
+    },
+    "_last_vision_result": {
+      "kind": "plain-attribute",
+      "sig": "None",
+      "type": "NoneType"
+    },
+    "_map_fit_cuts_panel_corners": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow._map_fit_cuts_panel_corners",
+      "type": "method"
+    },
+    "_module_list_sort_cache_key": {
+      "kind": "plain-attribute",
+      "sig": "None",
+      "type": "NoneType"
+    },
+    "_module_list_sort_widths": {
+      "kind": "plain-attribute",
+      "sig": "dict",
+      "type": "dict"
+    },
+    "_normal_backend_mode": {
+      "kind": "plain-attribute",
+      "sig": "''",
+      "type": "str"
+    },
+    "_normal_frame_source": {
+      "kind": "plain-attribute",
+      "sig": "'none'",
+      "type": "str"
+    },
+    "_official_state_updates": {
+      "kind": "plain-attribute",
+      "sig": "dict",
+      "type": "dict"
+    },
+    "_paint_gpu_frame_cached": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow._paint_gpu_frame_cached",
+      "type": "method"
+    },
+    "_qualification_baseline": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow._qualification_baseline",
+      "type": "method"
+    },
+    "_qualification_runtime_baseline": {
+      "kind": "plain-attribute",
+      "sig": "dict",
+      "type": "dict"
+    },
+    "_render_timer_interval_ms": {
+      "kind": "plain-attribute",
+      "sig": "7",
+      "type": "int"
+    },
+    "_rounded_map_layer": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow._rounded_map_layer",
+      "type": "method"
+    },
+    "_run_tick_stage": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow._run_tick_stage",
+      "type": "method"
+    },
+    "_should_defer_hud_static_rebuild": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow._should_defer_hud_static_rebuild",
+      "type": "method"
+    },
+    "_spin_control_sequence": {
+      "kind": "plain-attribute",
+      "sig": "0",
+      "type": "int"
+    },
+    "_startup_last_hover_action": {
+      "kind": "plain-attribute",
+      "sig": "''",
+      "type": "str"
+    },
+    "_startup_page_epoch": {
+      "kind": "plain-attribute",
+      "sig": "0",
+      "type": "int"
+    },
+    "_startup_static_page_key": {
+      "kind": "plain-attribute",
+      "sig": "None",
+      "type": "NoneType"
+    },
+    "_startup_static_ready_at": {
+      "kind": "plain-attribute",
+      "sig": "*volatile*",
+      "type": "float",
+      "volatile": true
+    },
+    "_text_metric_cache": {
+      "kind": "plain-attribute",
+      "sig": "dict",
+      "type": "dict"
+    },
+    "_tick_error_count": {
+      "kind": "plain-attribute",
+      "sig": "0",
+      "type": "int"
+    },
+    "_tick_last_error": {
+      "kind": "plain-attribute",
+      "sig": "''",
+      "type": "str"
+    },
+    "_tick_last_log_at": {
+      "kind": "plain-attribute",
+      "sig": "*volatile*",
+      "type": "dict",
+      "volatile": true
+    },
+    "_tongji_enabled": {
+      "kind": "plain-attribute",
+      "sig": "False",
+      "type": "bool"
+    },
+    "_ui_frame_index": {
+      "kind": "plain-attribute",
+      "sig": "0",
+      "type": "int"
+    },
+    "_vision_render_result": {
+      "kind": "plain-attribute",
+      "sig": "None",
+      "type": "NoneType"
+    },
+    "_vision_scene_luminance": {
+      "kind": "plain-attribute",
+      "sig": "float",
+      "type": "float"
+    },
+    "_vision_snapshot": {
+      "kind": "plain-attribute",
+      "sig": "None",
+      "type": "NoneType"
+    },
+    "_vision_source": {
+      "kind": "plain-attribute",
+      "sig": "'Mock'",
+      "type": "str"
+    },
+    "_vision_wire_key": {
+      "kind": "method",
+      "sig": "PolarRMWindow._vision_wire_key",
+      "type": "function"
+    },
+    "_watermark_cache_next_refresh_at": {
+      "kind": "plain-attribute",
+      "sig": "*volatile*",
+      "type": "float",
+      "volatile": true
+    },
+    "_watermark_title_cache": {
+      "kind": "plain-attribute",
+      "sig": "QImage",
+      "type": "QImage"
+    },
+    "_watermark_title_cache_key": {
+      "kind": "plain-attribute",
+      "sig": "None",
+      "type": "NoneType"
+    },
+    "_watermark_title_static_key": {
+      "kind": "plain-attribute",
+      "sig": "None",
+      "type": "NoneType"
+    },
+    "aboutToCompose": {
+      "kind": "callable",
+      "sig": "<PySide6.QtCore.SignalInstance aboutToCompose() at 0xADDR>",
+      "type": "SignalInstance"
+    },
+    "aboutToResize": {
+      "kind": "callable",
+      "sig": "<PySide6.QtCore.SignalInstance aboutToResize() at 0xADDR>",
+      "type": "SignalInstance"
+    },
+    "acceptDrops": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.acceptDrops",
+      "type": "builtin_function_or_method"
+    },
+    "accept_combat_event": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.accept_combat_event",
+      "type": "method"
+    },
+    "accessibleDescription": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.accessibleDescription",
+      "type": "builtin_function_or_method"
+    },
+    "accessibleIdentifier": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.accessibleIdentifier",
+      "type": "builtin_function_or_method"
+    },
+    "accessibleName": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.accessibleName",
+      "type": "builtin_function_or_method"
+    },
+    "actionEvent": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.actionEvent",
+      "type": "builtin_function_or_method"
+    },
+    "actions": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.actions",
+      "type": "builtin_function_or_method"
+    },
+    "activateWindow": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.activateWindow",
+      "type": "builtin_function_or_method"
+    },
+    "activate_economy_offer": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.activate_economy_offer",
+      "type": "method"
+    },
+    "activate_minecraft_function_slot": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.activate_minecraft_function_slot",
+      "type": "method"
+    },
+    "active_clickgui_mode": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.active_clickgui_mode",
+      "type": "method"
+    },
+    "active_tongji_result": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.active_tongji_result",
+      "type": "method"
+    },
+    "addAction": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.addAction",
+      "type": "builtin_function_or_method"
+    },
+    "addActions": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.addActions",
+      "type": "builtin_function_or_method"
+    },
+    "add_hotspot": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.add_hotspot",
+      "type": "method"
+    },
+    "adjustSize": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.adjustSize",
+      "type": "builtin_function_or_method"
+    },
+    "after_setting_changed": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.after_setting_changed",
+      "type": "method"
+    },
+    "alliance_side": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.alliance_side",
+      "type": "method"
+    },
+    "anim": {
+      "kind": "plain-attribute",
+      "sig": "AnimationBank",
+      "type": "AnimationBank"
+    },
+    "anim_duration": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.anim_duration",
+      "type": "method"
+    },
+    "animated_angle": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.animated_angle",
+      "type": "method"
+    },
+    "animated_scalar": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.animated_scalar",
+      "type": "method"
+    },
+    "animated_status_ratio": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.animated_status_ratio",
+      "type": "method"
+    },
+    "append_minecraft_drop_overlay": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.append_minecraft_drop_overlay",
+      "type": "method"
+    },
+    "apply_autoaim_fov_lock": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.apply_autoaim_fov_lock",
+      "type": "method"
+    },
+    "apply_config_data": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.apply_config_data",
+      "type": "method"
+    },
+    "apply_match_mode": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.apply_match_mode",
+      "type": "method"
+    },
+    "apply_official_state": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.apply_official_state",
+      "type": "method"
+    },
+    "apply_quick_action_wheel_to_settings": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.apply_quick_action_wheel_to_settings",
+      "type": "method"
+    },
+    "apply_robot_profile": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.apply_robot_profile",
+      "type": "method"
+    },
+    "apply_scenario": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.apply_scenario",
+      "type": "method"
+    },
+    "apply_wallpaper_profile": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.apply_wallpaper_profile",
+      "type": "method"
+    },
+    "armor_center_in_autoaim_fov": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.armor_center_in_autoaim_fov",
+      "type": "method"
+    },
+    "armor_esp_back_points": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.armor_esp_back_points",
+      "type": "method"
+    },
+    "armor_esp_points": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.armor_esp_points",
+      "type": "method"
+    },
+    "arraylist_shadow_image": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.arraylist_shadow_image",
+      "type": "method"
+    },
+    "assign_minecraft_function_slot": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.assign_minecraft_function_slot",
+      "type": "method"
+    },
+    "autoFillBackground": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.autoFillBackground",
+      "type": "builtin_function_or_method"
+    },
+    "auto_save_config": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.auto_save_config",
+      "type": "method"
+    },
+    "auto_spin": {
+      "kind": "plain-attribute",
+      "sig": "ProjectileHitSpinController",
+      "type": "ProjectileHitSpinController"
+    },
+    "autoaim_circle_radius": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.autoaim_circle_radius",
+      "type": "method"
+    },
+    "autoaim_logical_size": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.autoaim_logical_size",
+      "type": "method"
+    },
+    "backend": {
+      "kind": "plain-attribute",
+      "sig": "BackendManager",
+      "type": "BackendManager"
+    },
+    "backend_video_source_selected": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.backend_video_source_selected",
+      "type": "method"
+    },
+    "backgroundRole": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.backgroundRole",
+      "type": "builtin_function_or_method"
+    },
+    "backingStore": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.backingStore",
+      "type": "builtin_function_or_method"
+    },
+    "baseSize": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.baseSize",
+      "type": "builtin_function_or_method"
+    },
+    "begin_economy_hold": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.begin_economy_hold",
+      "type": "method"
+    },
+    "begin_gpu_hud_command_collection": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.begin_gpu_hud_command_collection",
+      "type": "method"
+    },
+    "begin_gpu_island_icon_collection": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.begin_gpu_island_icon_collection",
+      "type": "method"
+    },
+    "begin_gpu_quick_action_wheel_collection": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.begin_gpu_quick_action_wheel_collection",
+      "type": "method"
+    },
+    "begin_quick_action_wheel": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.begin_quick_action_wheel",
+      "type": "method"
+    },
+    "begin_startup_page_transition": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.begin_startup_page_transition",
+      "type": "method"
+    },
+    "binding_module": {
+      "kind": "plain-attribute",
+      "sig": "None",
+      "type": "NoneType"
+    },
+    "blockSignals": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.blockSignals",
+      "type": "builtin_function_or_method"
+    },
+    "build_gpu_clickgui": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.build_gpu_clickgui",
+      "type": "method"
+    },
+    "build_gpu_dropdown_gui": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.build_gpu_dropdown_gui",
+      "type": "method"
+    },
+    "build_gpu_economy_workspace": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.build_gpu_economy_workspace",
+      "type": "method"
+    },
+    "build_gpu_glass_rect": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.build_gpu_glass_rect",
+      "type": "method"
+    },
+    "build_gpu_inline_settings": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.build_gpu_inline_settings",
+      "type": "method"
+    },
+    "build_gpu_keybind_overlay": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.build_gpu_keybind_overlay",
+      "type": "method"
+    },
+    "build_gpu_legacy_return": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.build_gpu_legacy_return",
+      "type": "method"
+    },
+    "build_gpu_mode_switcher": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.build_gpu_mode_switcher",
+      "type": "method"
+    },
+    "build_gpu_module_list": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.build_gpu_module_list",
+      "type": "method"
+    },
+    "build_gpu_module_row": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.build_gpu_module_row",
+      "type": "method"
+    },
+    "build_gpu_new_gui": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.build_gpu_new_gui",
+      "type": "method"
+    },
+    "build_gpu_old_gui": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.build_gpu_old_gui",
+      "type": "method"
+    },
+    "build_gpu_panel_gui": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.build_gpu_panel_gui",
+      "type": "method"
+    },
+    "build_gpu_polar_glass": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.build_gpu_polar_glass",
+      "type": "method"
+    },
+    "build_gpu_polar_module_row": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.build_gpu_polar_module_row",
+      "type": "method"
+    },
+    "build_gpu_polar_multi": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.build_gpu_polar_multi",
+      "type": "method"
+    },
+    "build_gpu_polar_unified": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.build_gpu_polar_unified",
+      "type": "method"
+    },
+    "build_gpu_robot_profile_launcher": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.build_gpu_robot_profile_launcher",
+      "type": "method"
+    },
+    "build_gpu_scroll_island": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.build_gpu_scroll_island",
+      "type": "method"
+    },
+    "build_gpu_setting_row": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.build_gpu_setting_row",
+      "type": "method"
+    },
+    "build_gpu_settings": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.build_gpu_settings",
+      "type": "method"
+    },
+    "build_gpu_startup_bottom_bar": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.build_gpu_startup_bottom_bar",
+      "type": "method"
+    },
+    "build_gpu_startup_button": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.build_gpu_startup_button",
+      "type": "method"
+    },
+    "build_gpu_startup_hover_layer": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.build_gpu_startup_hover_layer",
+      "type": "method"
+    },
+    "build_gpu_startup_launcher": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.build_gpu_startup_launcher",
+      "type": "method"
+    },
+    "build_gpu_startup_session": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.build_gpu_startup_session",
+      "type": "method"
+    },
+    "build_gpu_startup_transition": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.build_gpu_startup_transition",
+      "type": "method"
+    },
+    "build_gpu_toasts": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.build_gpu_toasts",
+      "type": "method"
+    },
+    "build_gpu_toggle": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.build_gpu_toggle",
+      "type": "method"
+    },
+    "build_gpu_tooltip": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.build_gpu_tooltip",
+      "type": "method"
+    },
+    "build_vision_wire_batch": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.build_vision_wire_batch",
+      "type": "method"
+    },
+    "calibration": {
+      "kind": "plain-attribute",
+      "sig": "CameraCalibrationManager",
+      "type": "CameraCalibrationManager"
+    },
+    "camera_started": {
+      "kind": "plain-attribute",
+      "sig": "*volatile*",
+      "type": "bool",
+      "volatile": true
+    },
+    "camera_worker": {
+      "kind": "plain-attribute",
+      "sig": "CameraCaptureWorker",
+      "type": "CameraCaptureWorker"
+    },
+    "cancel_quick_action_wheel": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.cancel_quick_action_wheel",
+      "type": "method"
+    },
+    "category_icon": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.category_icon",
+      "type": "method"
+    },
+    "changeEvent": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.changeEvent",
+      "type": "builtin_function_or_method"
+    },
+    "chassis_follow_mode": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.chassis_follow_mode",
+      "type": "method"
+    },
+    "chat_event_adapter": {
+      "kind": "plain-attribute",
+      "sig": "ChatEventAdapter",
+      "type": "ChatEventAdapter"
+    },
+    "childAt": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.childAt",
+      "type": "builtin_function_or_method"
+    },
+    "childEvent": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.childEvent",
+      "type": "builtin_function_or_method"
+    },
+    "children": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.children",
+      "type": "builtin_function_or_method"
+    },
+    "childrenRect": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.childrenRect",
+      "type": "builtin_function_or_method"
+    },
+    "childrenRegion": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.childrenRegion",
+      "type": "builtin_function_or_method"
+    },
+    "clearFocus": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.clearFocus",
+      "type": "builtin_function_or_method"
+    },
+    "clearMask": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.clearMask",
+      "type": "builtin_function_or_method"
+    },
+    "clear_normal_backend_video_frame": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.clear_normal_backend_video_frame",
+      "type": "method"
+    },
+    "clickgui_gpu": {
+      "kind": "plain-attribute",
+      "sig": "ClickGuiGpuRenderer",
+      "type": "ClickGuiGpuRenderer"
+    },
+    "clickgui_gpu_layout_ms": {
+      "kind": "plain-attribute",
+      "sig": "float",
+      "type": "float"
+    },
+    "close": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.close",
+      "type": "builtin_function_or_method"
+    },
+    "closeEvent": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.closeEvent",
+      "type": "method"
+    },
+    "close_economy_workspace": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.close_economy_workspace",
+      "type": "method"
+    },
+    "close_hero_deploy_interface": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.close_hero_deploy_interface",
+      "type": "method"
+    },
+    "close_match_chat": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.close_match_chat",
+      "type": "method"
+    },
+    "colorCount": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.colorCount",
+      "type": "builtin_function_or_method"
+    },
+    "combat_control_input_allowed": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.combat_control_input_allowed",
+      "type": "method"
+    },
+    "combat_health_color": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.combat_health_color",
+      "type": "method"
+    },
+    "combat_heat_color": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.combat_heat_color",
+      "type": "method"
+    },
+    "combat_hud_animator": {
+      "kind": "plain-attribute",
+      "sig": "CombatHudAnimator",
+      "type": "CombatHudAnimator"
+    },
+    "combat_hud_preset": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.combat_hud_preset",
+      "type": "method"
+    },
+    "combat_target_visual": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.combat_target_visual",
+      "type": "method"
+    },
+    "compact_keybind": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.compact_keybind",
+      "type": "method"
+    },
+    "compact_map_status_label": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.compact_map_status_label",
+      "type": "method"
+    },
+    "composite_vision": {
+      "kind": "plain-attribute",
+      "sig": "CompositeVisionPipeline",
+      "type": "CompositeVisionPipeline"
+    },
+    "config_loading": {
+      "kind": "plain-attribute",
+      "sig": "False",
+      "type": "bool"
+    },
+    "config_store": {
+      "kind": "plain-attribute",
+      "sig": "ClientConfigStore",
+      "type": "ClientConfigStore"
+    },
+    "connect": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.connect",
+      "type": "builtin_function_or_method"
+    },
+    "connectNotify": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.connectNotify",
+      "type": "builtin_function_or_method"
+    },
+    "constrain_prediction_geometry": {
+      "kind": "method",
+      "sig": "PolarRMWindow.constrain_prediction_geometry",
+      "type": "function"
+    },
+    "consume_backend_video_frame": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.consume_backend_video_frame",
+      "type": "method"
+    },
+    "consume_capture_frame": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.consume_capture_frame",
+      "type": "method"
+    },
+    "consume_hero_native_video_frame": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.consume_hero_native_video_frame",
+      "type": "method"
+    },
+    "consume_official_messages": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.consume_official_messages",
+      "type": "method"
+    },
+    "contentsMargins": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.contentsMargins",
+      "type": "builtin_function_or_method"
+    },
+    "contentsRect": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.contentsRect",
+      "type": "builtin_function_or_method"
+    },
+    "context": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.context",
+      "type": "builtin_function_or_method"
+    },
+    "contextMenuEvent": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.contextMenuEvent",
+      "type": "builtin_function_or_method"
+    },
+    "contextMenuPolicy": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.contextMenuPolicy",
+      "type": "builtin_function_or_method"
+    },
+    "control": {
+      "kind": "plain-attribute",
+      "sig": "KeyboardControlBridge",
+      "type": "KeyboardControlBridge"
+    },
+    "create": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.create",
+      "type": "builtin_function_or_method"
+    },
+    "createWinId": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.createWinId",
+      "type": "builtin_function_or_method"
+    },
+    "createWindowContainer": {
+      "kind": "callable",
+      "sig": "QWidget.createWindowContainer",
+      "type": "builtin_function_or_method"
+    },
+    "currentTargetBuffer": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.currentTargetBuffer",
+      "type": "builtin_function_or_method"
+    },
+    "current_config_data": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.current_config_data",
+      "type": "method"
+    },
+    "current_profile": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.current_profile",
+      "type": "method"
+    },
+    "current_robot_performance": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.current_robot_performance",
+      "type": "method"
+    },
+    "current_robot_profile_key": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.current_robot_profile_key",
+      "type": "method"
+    },
+    "cursor": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.cursor",
+      "type": "builtin_function_or_method"
+    },
+    "customContextMenuRequested": {
+      "kind": "callable",
+      "sig": "<PySide6.QtCore.SignalInstance customContextMenuRequested(QPoint) at 0xADDR>",
+      "type": "SignalInstance"
+    },
+    "customEvent": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.customEvent",
+      "type": "builtin_function_or_method"
+    },
+    "custom_ui_sound_selection": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.custom_ui_sound_selection",
+      "type": "method"
+    },
+    "debug_tahoma16_font": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.debug_tahoma16_font",
+      "type": "method"
+    },
+    "debug_tahoma_font": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.debug_tahoma_font",
+      "type": "method"
+    },
+    "defaultFramebufferObject": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.defaultFramebufferObject",
+      "type": "builtin_function_or_method"
+    },
+    "deleteLater": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.deleteLater",
+      "type": "builtin_function_or_method"
+    },
+    "depth": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.depth",
+      "type": "builtin_function_or_method"
+    },
+    "destroy": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.destroy",
+      "type": "builtin_function_or_method"
+    },
+    "destroyed": {
+      "kind": "callable",
+      "sig": "<PySide6.QtCore.SignalInstance destroyed() at 0xADDR>",
+      "type": "SignalInstance"
+    },
+    "devType": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.devType",
+      "type": "builtin_function_or_method"
+    },
+    "devicePixelRatio": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.devicePixelRatio",
+      "type": "builtin_function_or_method"
+    },
+    "devicePixelRatioF": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.devicePixelRatioF",
+      "type": "builtin_function_or_method"
+    },
+    "devicePixelRatioFScale": {
+      "kind": "callable",
+      "sig": "QPaintDevice.devicePixelRatioFScale",
+      "type": "builtin_function_or_method"
+    },
+    "direction_point": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.direction_point",
+      "type": "method"
+    },
+    "disconnect": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.disconnect",
+      "type": "builtin_function_or_method"
+    },
+    "disconnectNotify": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.disconnectNotify",
+      "type": "builtin_function_or_method"
+    },
+    "dispatch": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.dispatch",
+      "type": "method"
+    },
+    "doneCurrent": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.doneCurrent",
+      "type": "builtin_function_or_method"
+    },
+    "drag": {
+      "kind": "plain-attribute",
+      "sig": "None",
+      "type": "NoneType"
+    },
+    "dragEnterEvent": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.dragEnterEvent",
+      "type": "builtin_function_or_method"
+    },
+    "dragLeaveEvent": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.dragLeaveEvent",
+      "type": "builtin_function_or_method"
+    },
+    "dragMoveEvent": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.dragMoveEvent",
+      "type": "builtin_function_or_method"
+    },
+    "draw_3d_esp_box": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_3d_esp_box",
+      "type": "method"
+    },
+    "draw_armor_3d_esp": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_armor_3d_esp",
+      "type": "method"
+    },
+    "draw_armor_fov_circle": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_armor_fov_circle",
+      "type": "method"
+    },
+    "draw_armor_quad": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_armor_quad",
+      "type": "method"
+    },
+    "draw_backend_video_lost": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_backend_video_lost",
+      "type": "method"
+    },
+    "draw_bind_row": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_bind_row",
+      "type": "method"
+    },
+    "draw_blackhole_disc_row": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_blackhole_disc_row",
+      "type": "method"
+    },
+    "draw_blackhole_status_disc": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_blackhole_status_disc",
+      "type": "method"
+    },
+    "draw_chassis_body_direction": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_chassis_body_direction",
+      "type": "method"
+    },
+    "draw_chassis_gimbal_compass_base": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_chassis_gimbal_compass_base",
+      "type": "method"
+    },
+    "draw_chassis_gimbal_indicator": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_chassis_gimbal_indicator",
+      "type": "method"
+    },
+    "draw_clean_3d_esp_box": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_clean_3d_esp_box",
+      "type": "method"
+    },
+    "draw_combat_target_arc": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_combat_target_arc",
+      "type": "method"
+    },
+    "draw_combat_target_card": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_combat_target_card",
+      "type": "method"
+    },
+    "draw_combat_target_hud": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_combat_target_hud",
+      "type": "method"
+    },
+    "draw_combat_target_hud_layer": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_combat_target_hud_layer",
+      "type": "method"
+    },
+    "draw_compact_setting_row": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_compact_setting_row",
+      "type": "method"
+    },
+    "draw_compact_telemetry_strip": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_compact_telemetry_strip",
+      "type": "method"
+    },
+    "draw_crosshair": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_crosshair",
+      "type": "method"
+    },
+    "draw_dropdown_gui": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_dropdown_gui",
+      "type": "method"
+    },
+    "draw_dropdown_panel": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_dropdown_panel",
+      "type": "method"
+    },
+    "draw_dynamic_island": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_dynamic_island",
+      "type": "method"
+    },
+    "draw_dynamic_island_icon": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_dynamic_island_icon",
+      "type": "method"
+    },
+    "draw_economy_overlay_compat": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_economy_overlay_compat",
+      "type": "method"
+    },
+    "draw_economy_overlay_legacy": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_economy_overlay_legacy",
+      "type": "method"
+    },
+    "draw_elimination_fx": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_elimination_fx",
+      "type": "method"
+    },
+    "draw_fluorescent_white_ellipse": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_fluorescent_white_ellipse",
+      "type": "method"
+    },
+    "draw_fluorescent_white_polyline": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_fluorescent_white_polyline",
+      "type": "method"
+    },
+    "draw_fluorescent_white_segments": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_fluorescent_white_segments",
+      "type": "method"
+    },
+    "draw_gimbal_turret_direction": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_gimbal_turret_direction",
+      "type": "method"
+    },
+    "draw_glass_text": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_glass_text",
+      "type": "method"
+    },
+    "draw_gui_cached_layer": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_gui_cached_layer",
+      "type": "method"
+    },
+    "draw_hero_deploy_interface": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_hero_deploy_interface",
+      "type": "method"
+    },
+    "draw_hero_native_background": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_hero_native_background",
+      "type": "method"
+    },
+    "draw_hud_gpu_background": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_hud_gpu_background",
+      "type": "method"
+    },
+    "draw_hud_liquid_glass": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_hud_liquid_glass",
+      "type": "method"
+    },
+    "draw_image_cover": {
+      "kind": "method",
+      "sig": "PolarRMWindow.draw_image_cover",
+      "type": "function"
+    },
+    "draw_inline_settings": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_inline_settings",
+      "type": "method"
+    },
+    "draw_keybind_overlay": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_keybind_overlay",
+      "type": "method"
+    },
+    "draw_keybinds_hud": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_keybinds_hud",
+      "type": "method"
+    },
+    "draw_keybinds_strip": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_keybinds_strip",
+      "type": "method"
+    },
+    "draw_legacy_glass_panel": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_legacy_glass_panel",
+      "type": "method"
+    },
+    "draw_legacy_return": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_legacy_return",
+      "type": "method"
+    },
+    "draw_liquid_bottom_bar": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_liquid_bottom_bar",
+      "type": "method"
+    },
+    "draw_liquid_glass_panel": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_liquid_glass_panel",
+      "type": "method"
+    },
+    "draw_liquid_icon": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_liquid_icon",
+      "type": "method"
+    },
+    "draw_liquid_main_button": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_liquid_main_button",
+      "type": "method"
+    },
+    "draw_liquid_map_robots": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_liquid_map_robots",
+      "type": "method"
+    },
+    "draw_liquid_menu_header": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_liquid_menu_header",
+      "type": "method"
+    },
+    "draw_liquid_mini_status_chip": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_liquid_mini_status_chip",
+      "type": "method"
+    },
+    "draw_liquid_mini_status_overlay": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_liquid_mini_status_overlay",
+      "type": "method"
+    },
+    "draw_liquid_radar_pointer": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_liquid_radar_pointer",
+      "type": "method"
+    },
+    "draw_liquid_small_action_button": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_liquid_small_action_button",
+      "type": "method"
+    },
+    "draw_liquid_startup_match_launcher": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_liquid_startup_match_launcher",
+      "type": "method"
+    },
+    "draw_liquid_startup_scene_launcher": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_liquid_startup_scene_launcher",
+      "type": "method"
+    },
+    "draw_liquid_status_bar": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_liquid_status_bar",
+      "type": "method"
+    },
+    "draw_liquid_status_card": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_liquid_status_card",
+      "type": "method"
+    },
+    "draw_liquid_status_dock": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_liquid_status_dock",
+      "type": "method"
+    },
+    "draw_liquid_status_item": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_liquid_status_item",
+      "type": "method"
+    },
+    "draw_liquid_status_panel": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_liquid_status_panel",
+      "type": "method"
+    },
+    "draw_liquid_status_row": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_liquid_status_row",
+      "type": "method"
+    },
+    "draw_liquid_tactical_map_hud": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_liquid_tactical_map_hud",
+      "type": "method"
+    },
+    "draw_map_markers": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_map_markers",
+      "type": "method"
+    },
+    "draw_map_robots": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_map_robots",
+      "type": "method"
+    },
+    "draw_map_status_orbit_dock": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_map_status_orbit_dock",
+      "type": "method"
+    },
+    "draw_map_zones": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_map_zones",
+      "type": "method"
+    },
+    "draw_match_chat": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_match_chat",
+      "type": "method"
+    },
+    "draw_match_header": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_match_header",
+      "type": "method"
+    },
+    "draw_match_mode_screen": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_match_mode_screen",
+      "type": "method"
+    },
+    "draw_match_status_lines": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_match_status_lines",
+      "type": "method"
+    },
+    "draw_match_status_rings": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_match_status_rings",
+      "type": "method"
+    },
+    "draw_match_status_stack": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_match_status_stack",
+      "type": "method"
+    },
+    "draw_minecraft_module_list": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_minecraft_module_list",
+      "type": "method"
+    },
+    "draw_minimal_bracket_lock": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_minimal_bracket_lock",
+      "type": "method"
+    },
+    "draw_mode_switcher": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_mode_switcher",
+      "type": "method"
+    },
+    "draw_module_list_debug_white": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_module_list_debug_white",
+      "type": "method"
+    },
+    "draw_module_list_dynamic_island": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_module_list_dynamic_island",
+      "type": "method"
+    },
+    "draw_module_list_fast_rows": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_module_list_fast_rows",
+      "type": "method"
+    },
+    "draw_module_list_for_tactical_map": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_module_list_for_tactical_map",
+      "type": "method"
+    },
+    "draw_module_list_glow_rows": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_module_list_glow_rows",
+      "type": "method"
+    },
+    "draw_module_list_hud": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_module_list_hud",
+      "type": "method"
+    },
+    "draw_module_list_keybind_rows": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_module_list_keybind_rows",
+      "type": "method"
+    },
+    "draw_module_list_liquid_array": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_module_list_liquid_array",
+      "type": "method"
+    },
+    "draw_module_list_polar_text": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_module_list_polar_text",
+      "type": "method"
+    },
+    "draw_module_list_rainbow_right": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_module_list_rainbow_right",
+      "type": "method"
+    },
+    "draw_module_list_robot_cards": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_module_list_robot_cards",
+      "type": "method"
+    },
+    "draw_module_list_segmented": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_module_list_segmented",
+      "type": "method"
+    },
+    "draw_module_list_status_bars": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_module_list_status_bars",
+      "type": "method"
+    },
+    "draw_new_gui": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_new_gui",
+      "type": "method"
+    },
+    "draw_new_module_block": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_new_module_block",
+      "type": "method"
+    },
+    "draw_new_panel_shell": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_new_panel_shell",
+      "type": "method"
+    },
+    "draw_official_map": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_official_map",
+      "type": "method"
+    },
+    "draw_old_gui": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_old_gui",
+      "type": "method"
+    },
+    "draw_panel_category_bar": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_panel_category_bar",
+      "type": "method"
+    },
+    "draw_panel_gui": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_panel_gui",
+      "type": "method"
+    },
+    "draw_panel_module_list": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_panel_module_list",
+      "type": "method"
+    },
+    "draw_particle_grid_background": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_particle_grid_background",
+      "type": "method"
+    },
+    "draw_pill": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_pill",
+      "type": "method"
+    },
+    "draw_polar_mechanical_wire": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_polar_mechanical_wire",
+      "type": "method"
+    },
+    "draw_profile_widget": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_profile_widget",
+      "type": "method"
+    },
+    "draw_quick_action_wheel": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_quick_action_wheel",
+      "type": "method"
+    },
+    "draw_right_hud_mode": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_right_hud_mode",
+      "type": "method"
+    },
+    "draw_rm_hud": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_rm_hud",
+      "type": "method"
+    },
+    "draw_rm_indicators_hud": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_rm_indicators_hud",
+      "type": "method"
+    },
+    "draw_robot_list_hud": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_robot_list_hud",
+      "type": "method"
+    },
+    "draw_robot_profile_screen": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_robot_profile_screen",
+      "type": "method"
+    },
+    "draw_rune_ring_lock": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_rune_ring_lock",
+      "type": "method"
+    },
+    "draw_search_bar": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_search_bar",
+      "type": "method"
+    },
+    "draw_setting_row": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_setting_row",
+      "type": "method"
+    },
+    "draw_settings_area": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_settings_area",
+      "type": "method"
+    },
+    "draw_startup_background": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_startup_background",
+      "type": "method"
+    },
+    "draw_startup_card_shadow": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_startup_card_shadow",
+      "type": "method"
+    },
+    "draw_startup_gpu_background": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_startup_gpu_background",
+      "type": "method"
+    },
+    "draw_startup_icon_card": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_startup_icon_card",
+      "type": "method"
+    },
+    "draw_startup_match_launcher": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_startup_match_launcher",
+      "type": "method"
+    },
+    "draw_startup_page_content": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_startup_page_content",
+      "type": "method"
+    },
+    "draw_startup_page_transition": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_startup_page_transition",
+      "type": "method"
+    },
+    "draw_startup_scene_launcher": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_startup_scene_launcher",
+      "type": "method"
+    },
+    "draw_startup_screen": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_startup_screen",
+      "type": "method"
+    },
+    "draw_startup_vignette": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_startup_vignette",
+      "type": "method"
+    },
+    "draw_status_cards_hud": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_status_cards_hud",
+      "type": "method"
+    },
+    "draw_status_label_capsule": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_status_label_capsule",
+      "type": "method"
+    },
+    "draw_string_with_shadow_mc": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_string_with_shadow_mc",
+      "type": "method"
+    },
+    "draw_synthetic_video": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_synthetic_video",
+      "type": "method"
+    },
+    "draw_synthetic_video_cached": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_synthetic_video_cached",
+      "type": "method"
+    },
+    "draw_synthetic_video_scene": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_synthetic_video_scene",
+      "type": "method"
+    },
+    "draw_tactical_map_hud": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_tactical_map_hud",
+      "type": "method"
+    },
+    "draw_target_bar_only": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_target_bar_only",
+      "type": "method"
+    },
+    "draw_target_card": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_target_card",
+      "type": "method"
+    },
+    "draw_target_hud_by_style": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_target_hud_by_style",
+      "type": "method"
+    },
+    "draw_target_overlay": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_target_overlay",
+      "type": "method"
+    },
+    "draw_target_round_compact": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_target_round_compact",
+      "type": "method"
+    },
+    "draw_telemetry_strip": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_telemetry_strip",
+      "type": "method"
+    },
+    "draw_text": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_text",
+      "type": "method"
+    },
+    "draw_toasts": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_toasts",
+      "type": "method"
+    },
+    "draw_toggle_switch": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_toggle_switch",
+      "type": "method"
+    },
+    "draw_tooltip": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_tooltip",
+      "type": "method"
+    },
+    "draw_video": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_video",
+      "type": "method"
+    },
+    "draw_wallpaper_card": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_wallpaper_card",
+      "type": "method"
+    },
+    "draw_wallpaper_picker": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_wallpaper_picker",
+      "type": "method"
+    },
+    "draw_watermark": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_watermark",
+      "type": "method"
+    },
+    "draw_white_outline_lock": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.draw_white_outline_lock",
+      "type": "method"
+    },
+    "dropEvent": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.dropEvent",
+      "type": "builtin_function_or_method"
+    },
+    "dropdown_panels": {
+      "kind": "plain-attribute",
+      "sig": "dict",
+      "type": "dict"
+    },
+    "dumpObjectInfo": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.dumpObjectInfo",
+      "type": "builtin_function_or_method"
+    },
+    "dumpObjectTree": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.dumpObjectTree",
+      "type": "builtin_function_or_method"
+    },
+    "dynamicPropertyNames": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.dynamicPropertyNames",
+      "type": "builtin_function_or_method"
+    },
+    "dynamic_hud_ms": {
+      "kind": "plain-attribute",
+      "sig": "float",
+      "type": "float"
+    },
+    "dynamic_island_bottom_anchor": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.dynamic_island_bottom_anchor",
+      "type": "method"
+    },
+    "dynamic_island_event_started": {
+      "kind": "plain-attribute",
+      "sig": "*volatile*",
+      "type": "float",
+      "volatile": true
+    },
+    "dynamic_island_last_event": {
+      "kind": "plain-attribute",
+      "sig": "''",
+      "type": "str"
+    },
+    "dynamic_island_payload": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.dynamic_island_payload",
+      "type": "method"
+    },
+    "dynamic_island_state": {
+      "kind": "plain-attribute",
+      "sig": "IslandContainerState",
+      "type": "IslandContainerState"
+    },
+    "dynamic_message_kind": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.dynamic_message_kind",
+      "type": "method"
+    },
+    "dynamic_message_title": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.dynamic_message_title",
+      "type": "method"
+    },
+    "dynamic_smooth": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.dynamic_smooth",
+      "type": "method"
+    },
+    "dynamic_smooth_values": {
+      "kind": "plain-attribute",
+      "sig": "dict",
+      "type": "dict"
+    },
+    "economy_armed_key": {
+      "kind": "plain-attribute",
+      "sig": "''",
+      "type": "str"
+    },
+    "economy_armed_until": {
+      "kind": "plain-attribute",
+      "sig": "float",
+      "type": "float"
+    },
+    "economy_bridge": {
+      "kind": "plain-attribute",
+      "sig": "EconomyCommandBridge",
+      "type": "EconomyCommandBridge"
+    },
+    "economy_categories": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.economy_categories",
+      "type": "method"
+    },
+    "economy_category": {
+      "kind": "plain-attribute",
+      "sig": "'ammo'",
+      "type": "str"
+    },
+    "economy_category_scroll": {
+      "kind": "plain-attribute",
+      "sig": "InertialScroll",
+      "type": "InertialScroll"
+    },
+    "economy_detail_scroll": {
+      "kind": "plain-attribute",
+      "sig": "InertialScroll",
+      "type": "InertialScroll"
+    },
+    "economy_hold_key": {
+      "kind": "plain-attribute",
+      "sig": "''",
+      "type": "str"
+    },
+    "economy_hold_rect": {
+      "kind": "plain-attribute",
+      "sig": "QRectF",
+      "type": "QRectF"
+    },
+    "economy_hold_started": {
+      "kind": "plain-attribute",
+      "sig": "*volatile*",
+      "type": "float",
+      "volatile": true
+    },
+    "economy_island": {
+      "kind": "plain-attribute",
+      "sig": "EconomyIslandState",
+      "type": "EconomyIslandState"
+    },
+    "economy_last_status_sequence": {
+      "kind": "plain-attribute",
+      "sig": "0",
+      "type": "int"
+    },
+    "economy_lerp_rect": {
+      "kind": "method",
+      "sig": "PolarRMWindow.economy_lerp_rect",
+      "type": "function"
+    },
+    "economy_offers": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.economy_offers",
+      "type": "method"
+    },
+    "economy_offers_scroll": {
+      "kind": "plain-attribute",
+      "sig": "InertialScroll",
+      "type": "InertialScroll"
+    },
+    "economy_opened_at": {
+      "kind": "plain-attribute",
+      "sig": "*volatile*",
+      "type": "float",
+      "volatile": true
+    },
+    "economy_phase": {
+      "kind": "plain-attribute",
+      "sig": "<EconomyScenePhase.CLOSED: 'closed'>",
+      "type": "EconomyScenePhase"
+    },
+    "economy_scale_steps": {
+      "kind": "method",
+      "sig": "PolarRMWindow.economy_scale_steps",
+      "type": "function"
+    },
+    "economy_selected": {
+      "kind": "plain-attribute",
+      "sig": "0",
+      "type": "int"
+    },
+    "economy_selected_key": {
+      "kind": "plain-attribute",
+      "sig": "''",
+      "type": "str"
+    },
+    "economy_selected_offer": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.economy_selected_offer",
+      "type": "method"
+    },
+    "economy_stage_active": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.economy_stage_active",
+      "type": "method"
+    },
+    "economy_ui_scale": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.economy_ui_scale",
+      "type": "method"
+    },
+    "economy_uses_mock_transport": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.economy_uses_mock_transport",
+      "type": "method"
+    },
+    "economy_visible": {
+      "kind": "plain-attribute",
+      "sig": "False",
+      "type": "bool"
+    },
+    "economy_workspace_layer": {
+      "kind": "plain-attribute",
+      "sig": "EconomyWorkspaceLayer",
+      "type": "EconomyWorkspaceLayer"
+    },
+    "effectiveWinId": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.effectiveWinId",
+      "type": "builtin_function_or_method"
+    },
+    "effective_tactical_map_status_display": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.effective_tactical_map_status_display",
+      "type": "method"
+    },
+    "elide": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.elide",
+      "type": "method"
+    },
+    "elide_for_gpu": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.elide_for_gpu",
+      "type": "method"
+    },
+    "elimination_element_toggles": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.elimination_element_toggles",
+      "type": "method"
+    },
+    "emit": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.emit",
+      "type": "builtin_function_or_method"
+    },
+    "encodeMetricF": {
+      "kind": "callable",
+      "sig": "QPaintDevice.encodeMetricF",
+      "type": "builtin_function_or_method"
+    },
+    "ensurePolished": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.ensurePolished",
+      "type": "builtin_function_or_method"
+    },
+    "ensure_camera_started": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.ensure_camera_started",
+      "type": "method"
+    },
+    "enterEvent": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.enterEvent",
+      "type": "builtin_function_or_method"
+    },
+    "event": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.event",
+      "type": "builtin_function_or_method"
+    },
+    "eventFilter": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.eventFilter",
+      "type": "builtin_function_or_method"
+    },
+    "execute_quick_action": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.execute_quick_action",
+      "type": "method"
+    },
+    "find": {
+      "kind": "callable",
+      "sig": "QWidget.find",
+      "type": "builtin_function_or_method"
+    },
+    "findChild": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.findChild",
+      "type": "builtin_function_or_method"
+    },
+    "findChildren": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.findChildren",
+      "type": "builtin_function_or_method"
+    },
+    "finish_economy_hold": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.finish_economy_hold",
+      "type": "method"
+    },
+    "finish_quick_action_wheel": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.finish_quick_action_wheel",
+      "type": "method"
+    },
+    "finish_startup_page_transition": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.finish_startup_page_transition",
+      "type": "method"
+    },
+    "fit_aspect": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.fit_aspect",
+      "type": "method"
+    },
+    "flush_auto_save": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.flush_auto_save",
+      "type": "method"
+    },
+    "flush_auto_save_if_due": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.flush_auto_save_if_due",
+      "type": "method"
+    },
+    "flush_gpu_hud_commands": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.flush_gpu_hud_commands",
+      "type": "method"
+    },
+    "flush_gpu_island_icons": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.flush_gpu_island_icons",
+      "type": "method"
+    },
+    "flush_gpu_quick_action_wheel": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.flush_gpu_quick_action_wheel",
+      "type": "method"
+    },
+    "focusInEvent": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.focusInEvent",
+      "type": "builtin_function_or_method"
+    },
+    "focusNextChild": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.focusNextChild",
+      "type": "builtin_function_or_method"
+    },
+    "focusNextPrevChild": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.focusNextPrevChild",
+      "type": "builtin_function_or_method"
+    },
+    "focusOutEvent": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.focusOutEvent",
+      "type": "method"
+    },
+    "focusPolicy": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.focusPolicy",
+      "type": "builtin_function_or_method"
+    },
+    "focusPreviousChild": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.focusPreviousChild",
+      "type": "builtin_function_or_method"
+    },
+    "focusProxy": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.focusProxy",
+      "type": "builtin_function_or_method"
+    },
+    "focusWidget": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.focusWidget",
+      "type": "builtin_function_or_method"
+    },
+    "font": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.font",
+      "type": "method"
+    },
+    "fontInfo": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.fontInfo",
+      "type": "builtin_function_or_method"
+    },
+    "fontMetrics": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.fontMetrics",
+      "type": "builtin_function_or_method"
+    },
+    "font_line_height": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.font_line_height",
+      "type": "method"
+    },
+    "fonts": {
+      "kind": "plain-attribute",
+      "sig": "FontBook",
+      "type": "FontBook"
+    },
+    "foregroundRole": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.foregroundRole",
+      "type": "builtin_function_or_method"
+    },
+    "format": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.format",
+      "type": "builtin_function_or_method"
+    },
+    "format_time": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.format_time",
+      "type": "method"
+    },
+    "fps_samples": {
+      "kind": "plain-attribute",
+      "sig": "list",
+      "type": "list"
+    },
+    "frameGeometry": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.frameGeometry",
+      "type": "builtin_function_or_method"
+    },
+    "frameSize": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.frameSize",
+      "type": "builtin_function_or_method"
+    },
+    "frameSwapped": {
+      "kind": "callable",
+      "sig": "<PySide6.QtCore.SignalInstance frameSwapped() at 0xADDR>",
+      "type": "SignalInstance"
+    },
+    "frame_dt": {
+      "kind": "plain-attribute",
+      "sig": "float",
+      "type": "float"
+    },
+    "frame_image": {
+      "kind": "plain-attribute",
+      "sig": "None",
+      "type": "NoneType"
+    },
+    "frame_pixmap": {
+      "kind": "plain-attribute",
+      "sig": "None",
+      "type": "NoneType"
+    },
+    "frame_scheduler": {
+      "kind": "plain-attribute",
+      "sig": "FrameScheduler",
+      "type": "FrameScheduler"
+    },
+    "geometry": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.geometry",
+      "type": "builtin_function_or_method"
+    },
+    "get_auto_ui_scale": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.get_auto_ui_scale",
+      "type": "method"
+    },
+    "get_gui_scale": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.get_gui_scale",
+      "type": "method"
+    },
+    "get_gui_scale_for_bounds": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.get_gui_scale_for_bounds",
+      "type": "method"
+    },
+    "get_hud_scale": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.get_hud_scale",
+      "type": "method"
+    },
+    "get_setting_number": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.get_setting_number",
+      "type": "method"
+    },
+    "gimbal_command_bridge": {
+      "kind": "plain-attribute",
+      "sig": "GimbalCommandBridge",
+      "type": "GimbalCommandBridge"
+    },
+    "gpu_alpha": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.gpu_alpha",
+      "type": "method"
+    },
+    "gpu_compositor": {
+      "kind": "plain-attribute",
+      "sig": "GpuFrameCompositor",
+      "type": "GpuFrameCompositor"
+    },
+    "gpu_static_ui_key": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.gpu_static_ui_key",
+      "type": "method"
+    },
+    "gpu_viewport_enabled": {
+      "kind": "plain-attribute",
+      "sig": "False",
+      "type": "bool"
+    },
+    "grab": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.grab",
+      "type": "builtin_function_or_method"
+    },
+    "grabFramebuffer": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.grabFramebuffer",
+      "type": "builtin_function_or_method"
+    },
+    "grabGesture": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.grabGesture",
+      "type": "builtin_function_or_method"
+    },
+    "grabKeyboard": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.grabKeyboard",
+      "type": "builtin_function_or_method"
+    },
+    "grabMouse": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.grabMouse",
+      "type": "builtin_function_or_method"
+    },
+    "grabShortcut": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.grabShortcut",
+      "type": "builtin_function_or_method"
+    },
+    "graphicsEffect": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.graphicsEffect",
+      "type": "builtin_function_or_method"
+    },
+    "graphicsProxyWidget": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.graphicsProxyWidget",
+      "type": "builtin_function_or_method"
+    },
+    "gui_cache": {
+      "kind": "plain-attribute",
+      "sig": "ClickGuiLayerCache",
+      "type": "ClickGuiLayerCache"
+    },
+    "gui_disabled_text": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.gui_disabled_text",
+      "type": "method"
+    },
+    "gui_mode_label": {
+      "kind": "method",
+      "sig": "PolarRMWindow.gui_mode_label",
+      "type": "function"
+    },
+    "gui_motion": {
+      "kind": "plain-attribute",
+      "sig": "GuiMotionController",
+      "type": "GuiMotionController"
+    },
+    "gui_primary_text": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.gui_primary_text",
+      "type": "method"
+    },
+    "gui_scroll_viewports": {
+      "kind": "plain-attribute",
+      "sig": "list",
+      "type": "list"
+    },
+    "gui_secondary_text": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.gui_secondary_text",
+      "type": "method"
+    },
+    "gui_timeline": {
+      "kind": "plain-attribute",
+      "sig": "JelloMainTimeline",
+      "type": "JelloMainTimeline"
+    },
+    "gui_visible": {
+      "kind": "plain-attribute",
+      "sig": "False",
+      "type": "bool"
+    },
+    "handle_calibration_action": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.handle_calibration_action",
+      "type": "method"
+    },
+    "handle_config_action": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.handle_config_action",
+      "type": "method"
+    },
+    "handle_control_key_event": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.handle_control_key_event",
+      "type": "method"
+    },
+    "handle_keybind_event": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.handle_keybind_event",
+      "type": "method"
+    },
+    "handle_qualification_action": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.handle_qualification_action",
+      "type": "method"
+    },
+    "handle_startup_key": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.handle_startup_key",
+      "type": "method"
+    },
+    "handle_tactical_map_hold_event": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.handle_tactical_map_hold_event",
+      "type": "method"
+    },
+    "hasFocus": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.hasFocus",
+      "type": "builtin_function_or_method"
+    },
+    "hasHeightForWidth": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.hasHeightForWidth",
+      "type": "builtin_function_or_method"
+    },
+    "hasMouseTracking": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.hasMouseTracking",
+      "type": "builtin_function_or_method"
+    },
+    "hasTabletTracking": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.hasTabletTracking",
+      "type": "builtin_function_or_method"
+    },
+    "has_valid_combat_target": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.has_valid_combat_target",
+      "type": "method"
+    },
+    "height": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.height",
+      "type": "builtin_function_or_method"
+    },
+    "heightForWidth": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.heightForWidth",
+      "type": "builtin_function_or_method"
+    },
+    "heightMM": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.heightMM",
+      "type": "builtin_function_or_method"
+    },
+    "hero_deploy_renderer": {
+      "kind": "plain-attribute",
+      "sig": "HeroDeployRenderer",
+      "type": "HeroDeployRenderer"
+    },
+    "hero_deploy_ui": {
+      "kind": "plain-attribute",
+      "sig": "HeroDeployInterfaceState",
+      "type": "HeroDeployInterfaceState"
+    },
+    "hero_deploy_uses_mock_transport": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.hero_deploy_uses_mock_transport",
+      "type": "method"
+    },
+    "hero_deploy_video_cut_active": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.hero_deploy_video_cut_active",
+      "type": "method"
+    },
+    "hero_lob_preview": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.hero_lob_preview",
+      "type": "method"
+    },
+    "hero_native_frame_state": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.hero_native_frame_state",
+      "type": "method"
+    },
+    "hero_native_image": {
+      "kind": "plain-attribute",
+      "sig": "None",
+      "type": "NoneType"
+    },
+    "hero_native_pixmap": {
+      "kind": "plain-attribute",
+      "sig": "None",
+      "type": "NoneType"
+    },
+    "hero_range_profile_selected": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.hero_range_profile_selected",
+      "type": "method"
+    },
+    "hide": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.hide",
+      "type": "builtin_function_or_method"
+    },
+    "hideEvent": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.hideEvent",
+      "type": "builtin_function_or_method"
+    },
+    "high_res_optimize": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.high_res_optimize",
+      "type": "method"
+    },
+    "home_visible": {
+      "kind": "plain-attribute",
+      "sig": "True",
+      "type": "bool"
+    },
+    "hotspots": {
+      "kind": "plain-attribute",
+      "sig": "list",
+      "type": "list"
+    },
+    "hover_point": {
+      "kind": "plain-attribute",
+      "sig": "QPointF",
+      "type": "QPointF"
+    },
+    "hover_tooltip": {
+      "kind": "plain-attribute",
+      "sig": "''",
+      "type": "str"
+    },
+    "hud_accent": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.hud_accent",
+      "type": "method"
+    },
+    "hud_angle_tracks": {
+      "kind": "plain-attribute",
+      "sig": "dict",
+      "type": "dict"
+    },
+    "hud_clean": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.hud_clean",
+      "type": "method"
+    },
+    "hud_danger": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.hud_danger",
+      "type": "method"
+    },
+    "hud_density": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.hud_density",
+      "type": "method"
+    },
+    "hud_panel_outline": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.hud_panel_outline",
+      "type": "method"
+    },
+    "hud_state_color": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.hud_state_color",
+      "type": "method"
+    },
+    "hud_success": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.hud_success",
+      "type": "method"
+    },
+    "hud_surface": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.hud_surface",
+      "type": "method"
+    },
+    "hud_video_gpu": {
+      "kind": "plain-attribute",
+      "sig": "StartupGpuCompositor",
+      "type": "StartupGpuCompositor"
+    },
+    "hud_visual_tone": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.hud_visual_tone",
+      "type": "method"
+    },
+    "hud_warning": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.hud_warning",
+      "type": "method"
+    },
+    "import_config_from_dialog": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.import_config_from_dialog",
+      "type": "method"
+    },
+    "import_custom_ui_sound": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.import_custom_ui_sound",
+      "type": "method"
+    },
+    "import_wallpaper_from_dialog": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.import_wallpaper_from_dialog",
+      "type": "method"
+    },
+    "inherits": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.inherits",
+      "type": "builtin_function_or_method"
+    },
+    "initPainter": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.initPainter",
+      "type": "builtin_function_or_method"
+    },
+    "initializeGL": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.initializeGL",
+      "type": "method"
+    },
+    "inline_bind_height": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.inline_bind_height",
+      "type": "method"
+    },
+    "inline_setting_height": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.inline_setting_height",
+      "type": "method"
+    },
+    "inputMethodEvent": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.inputMethodEvent",
+      "type": "builtin_function_or_method"
+    },
+    "inputMethodHints": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.inputMethodHints",
+      "type": "builtin_function_or_method"
+    },
+    "inputMethodQuery": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.inputMethodQuery",
+      "type": "builtin_function_or_method"
+    },
+    "insertAction": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.insertAction",
+      "type": "builtin_function_or_method"
+    },
+    "insertActions": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.insertActions",
+      "type": "builtin_function_or_method"
+    },
+    "installEventFilter": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.installEventFilter",
+      "type": "builtin_function_or_method"
+    },
+    "internalWinId": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.internalWinId",
+      "type": "builtin_function_or_method"
+    },
+    "interpolated_vision_result": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.interpolated_vision_result",
+      "type": "method"
+    },
+    "invalidate_gui_cache": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.invalidate_gui_cache",
+      "type": "method"
+    },
+    "invalidate_transient_overlay_scene": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.invalidate_transient_overlay_scene",
+      "type": "method"
+    },
+    "isActiveWindow": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.isActiveWindow",
+      "type": "builtin_function_or_method"
+    },
+    "isAncestorOf": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.isAncestorOf",
+      "type": "builtin_function_or_method"
+    },
+    "isEnabled": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.isEnabled",
+      "type": "builtin_function_or_method"
+    },
+    "isEnabledTo": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.isEnabledTo",
+      "type": "builtin_function_or_method"
+    },
+    "isFullScreen": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.isFullScreen",
+      "type": "builtin_function_or_method"
+    },
+    "isHidden": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.isHidden",
+      "type": "builtin_function_or_method"
+    },
+    "isLeftToRight": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.isLeftToRight",
+      "type": "builtin_function_or_method"
+    },
+    "isMaximized": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.isMaximized",
+      "type": "builtin_function_or_method"
+    },
+    "isMinimized": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.isMinimized",
+      "type": "builtin_function_or_method"
+    },
+    "isModal": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.isModal",
+      "type": "builtin_function_or_method"
+    },
+    "isQmlExposed": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.isQmlExposed",
+      "type": "builtin_function_or_method"
+    },
+    "isQuickItemType": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.isQuickItemType",
+      "type": "builtin_function_or_method"
+    },
+    "isRightToLeft": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.isRightToLeft",
+      "type": "builtin_function_or_method"
+    },
+    "isSignalConnected": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.isSignalConnected",
+      "type": "builtin_function_or_method"
+    },
+    "isTopLevel": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.isTopLevel",
+      "type": "builtin_function_or_method"
+    },
+    "isValid": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.isValid",
+      "type": "builtin_function_or_method"
+    },
+    "isVisible": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.isVisible",
+      "type": "builtin_function_or_method"
+    },
+    "isVisibleTo": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.isVisibleTo",
+      "type": "builtin_function_or_method"
+    },
+    "isWidgetType": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.isWidgetType",
+      "type": "builtin_function_or_method"
+    },
+    "isWindow": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.isWindow",
+      "type": "builtin_function_or_method"
+    },
+    "isWindowModified": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.isWindowModified",
+      "type": "builtin_function_or_method"
+    },
+    "isWindowType": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.isWindowType",
+      "type": "builtin_function_or_method"
+    },
+    "is_right_shift_event": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.is_right_shift_event",
+      "type": "method"
+    },
+    "island_icon_gpu": {
+      "kind": "plain-attribute",
+      "sig": "IslandIconGpuRenderer",
+      "type": "IslandIconGpuRenderer"
+    },
+    "jello_clickgui": {
+      "kind": "plain-attribute",
+      "sig": "JelloClickGuiRenderer",
+      "type": "JelloClickGuiRenderer"
+    },
+    "jello_state": {
+      "kind": "plain-attribute",
+      "sig": "JelloClickGuiState",
+      "type": "JelloClickGuiState"
+    },
+    "keyPressEvent": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.keyPressEvent",
+      "type": "method"
+    },
+    "keyReleaseEvent": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.keyReleaseEvent",
+      "type": "method"
+    },
+    "key_name": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.key_name",
+      "type": "method"
+    },
+    "keybind_matches": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.keybind_matches",
+      "type": "method"
+    },
+    "keyboardGrabber": {
+      "kind": "callable",
+      "sig": "QWidget.keyboardGrabber",
+      "type": "builtin_function_or_method"
+    },
+    "killTimer": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.killTimer",
+      "type": "builtin_function_or_method"
+    },
+    "kill_fx": {
+      "kind": "plain-attribute",
+      "sig": "KillFxRenderer",
+      "type": "KillFxRenderer"
+    },
+    "last_control_toast": {
+      "kind": "plain-attribute",
+      "sig": "float",
+      "type": "float"
+    },
+    "last_frame_time": {
+      "kind": "plain-attribute",
+      "sig": "*volatile*",
+      "type": "float",
+      "volatile": true
+    },
+    "layout": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.layout",
+      "type": "builtin_function_or_method"
+    },
+    "layoutDirection": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.layoutDirection",
+      "type": "builtin_function_or_method"
+    },
+    "leaveEvent": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.leaveEvent",
+      "type": "builtin_function_or_method"
+    },
+    "liquid_entity_color": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.liquid_entity_color",
+      "type": "method"
+    },
+    "liquid_glass": {
+      "kind": "plain-attribute",
+      "sig": "LiquidGlassRenderer",
+      "type": "LiquidGlassRenderer"
+    },
+    "liquid_map_bool": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.liquid_map_bool",
+      "type": "method"
+    },
+    "liquid_map_enabled": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.liquid_map_enabled",
+      "type": "method"
+    },
+    "liquid_map_setting": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.liquid_map_setting",
+      "type": "method"
+    },
+    "liquid_menu_layout": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.liquid_menu_layout",
+      "type": "method"
+    },
+    "liquid_press_amount": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.liquid_press_amount",
+      "type": "method"
+    },
+    "liquid_press_point": {
+      "kind": "plain-attribute",
+      "sig": "QPointF",
+      "type": "QPointF"
+    },
+    "liquid_press_until": {
+      "kind": "plain-attribute",
+      "sig": "float",
+      "type": "float"
+    },
+    "liquid_status_color": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.liquid_status_color",
+      "type": "method"
+    },
+    "liquid_status_footer_height": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.liquid_status_footer_height",
+      "type": "method"
+    },
+    "load_startup_config": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.load_startup_config",
+      "type": "method"
+    },
+    "local_vision": {
+      "kind": "plain-attribute",
+      "sig": "LocalAlignedVision",
+      "type": "LocalAlignedVision"
+    },
+    "locale": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.locale",
+      "type": "builtin_function_or_method"
+    },
+    "logicalDpiX": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.logicalDpiX",
+      "type": "builtin_function_or_method"
+    },
+    "logicalDpiY": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.logicalDpiY",
+      "type": "builtin_function_or_method"
+    },
+    "lower": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.lower",
+      "type": "builtin_function_or_method"
+    },
+    "makeCurrent": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.makeCurrent",
+      "type": "builtin_function_or_method"
+    },
+    "mapFrom": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.mapFrom",
+      "type": "builtin_function_or_method"
+    },
+    "mapFromGlobal": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.mapFromGlobal",
+      "type": "builtin_function_or_method"
+    },
+    "mapFromParent": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.mapFromParent",
+      "type": "builtin_function_or_method"
+    },
+    "mapTo": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.mapTo",
+      "type": "builtin_function_or_method"
+    },
+    "mapToGlobal": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.mapToGlobal",
+      "type": "builtin_function_or_method"
+    },
+    "mapToParent": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.mapToParent",
+      "type": "builtin_function_or_method"
+    },
+    "map_control_color": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.map_control_color",
+      "type": "method"
+    },
+    "map_display_cache": {
+      "kind": "plain-attribute",
+      "sig": "dict",
+      "type": "dict"
+    },
+    "map_images": {
+      "kind": "plain-attribute",
+      "sig": "dict",
+      "type": "dict"
+    },
+    "map_point": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.map_point",
+      "type": "method"
+    },
+    "map_status_groups": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.map_status_groups",
+      "type": "method"
+    },
+    "map_team_color": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.map_team_color",
+      "type": "method"
+    },
+    "map_telemetry_status_rows": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.map_telemetry_status_rows",
+      "type": "method"
+    },
+    "mask": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.mask",
+      "type": "builtin_function_or_method"
+    },
+    "match_chat": {
+      "kind": "plain-attribute",
+      "sig": "MatchChatController",
+      "type": "MatchChatController"
+    },
+    "match_chat_reserved_height": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.match_chat_reserved_height",
+      "type": "method"
+    },
+    "match_mode_manager": {
+      "kind": "plain-attribute",
+      "sig": "MatchModeManager",
+      "type": "MatchModeManager"
+    },
+    "match_status_ring_rows": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.match_status_ring_rows",
+      "type": "method"
+    },
+    "match_status_rows": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.match_status_rows",
+      "type": "method"
+    },
+    "maximumHeight": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.maximumHeight",
+      "type": "builtin_function_or_method"
+    },
+    "maximumSize": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.maximumSize",
+      "type": "builtin_function_or_method"
+    },
+    "maximumWidth": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.maximumWidth",
+      "type": "builtin_function_or_method"
+    },
+    "measure_debug_tahoma16": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.measure_debug_tahoma16",
+      "type": "method"
+    },
+    "menu_overlay_active": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.menu_overlay_active",
+      "type": "method"
+    },
+    "metaObject": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.metaObject",
+      "type": "builtin_function_or_method"
+    },
+    "metric": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.metric",
+      "type": "builtin_function_or_method"
+    },
+    "minecraft_hud": {
+      "kind": "plain-attribute",
+      "sig": "MinecraftCombatHudRenderer",
+      "type": "MinecraftCombatHudRenderer"
+    },
+    "minecraft_hud_active": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.minecraft_hud_active",
+      "type": "method"
+    },
+    "minimumHeight": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.minimumHeight",
+      "type": "builtin_function_or_method"
+    },
+    "minimumSize": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.minimumSize",
+      "type": "builtin_function_or_method"
+    },
+    "minimumSizeHint": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.minimumSizeHint",
+      "type": "builtin_function_or_method"
+    },
+    "minimumWidth": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.minimumWidth",
+      "type": "builtin_function_or_method"
+    },
+    "mix_color": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.mix_color",
+      "type": "method"
+    },
+    "mode_manager": {
+      "kind": "plain-attribute",
+      "sig": "GuiModeManager",
+      "type": "GuiModeManager"
+    },
+    "module_draw_height": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.module_draw_height",
+      "type": "method"
+    },
+    "module_expanded": {
+      "kind": "plain-attribute",
+      "sig": "set",
+      "type": "set"
+    },
+    "module_list_animation_in_flight": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.module_list_animation_in_flight",
+      "type": "method"
+    },
+    "module_list_entries": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.module_list_entries",
+      "type": "method"
+    },
+    "module_list_layout": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.module_list_layout",
+      "type": "method"
+    },
+    "module_list_preferences": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.module_list_preferences",
+      "type": "method"
+    },
+    "module_list_rows": {
+      "kind": "plain-attribute",
+      "sig": "dict",
+      "type": "dict"
+    },
+    "module_list_surface": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.module_list_surface",
+      "type": "method"
+    },
+    "module_list_tag": {
+      "kind": "method",
+      "sig": "PolarRMWindow.module_list_tag",
+      "type": "function"
+    },
+    "mouseDoubleClickEvent": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.mouseDoubleClickEvent",
+      "type": "builtin_function_or_method"
+    },
+    "mouseGrabber": {
+      "kind": "callable",
+      "sig": "QWidget.mouseGrabber",
+      "type": "builtin_function_or_method"
+    },
+    "mouseMoveEvent": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.mouseMoveEvent",
+      "type": "method"
+    },
+    "mousePressEvent": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.mousePressEvent",
+      "type": "method"
+    },
+    "mouseReleaseEvent": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.mouseReleaseEvent",
+      "type": "method"
+    },
+    "move": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.move",
+      "type": "builtin_function_or_method"
+    },
+    "moveEvent": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.moveEvent",
+      "type": "builtin_function_or_method"
+    },
+    "moveToThread": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.moveToThread",
+      "type": "builtin_function_or_method"
+    },
+    "mqtt": {
+      "kind": "plain-attribute",
+      "sig": "RmMqttBackend",
+      "type": "RmMqttBackend"
+    },
+    "nativeEvent": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.nativeEvent",
+      "type": "builtin_function_or_method"
+    },
+    "nativeParentWidget": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.nativeParentWidget",
+      "type": "builtin_function_or_method"
+    },
+    "new_panels": {
+      "kind": "plain-attribute",
+      "sig": "dict",
+      "type": "dict"
+    },
+    "nextInFocusChain": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.nextInFocusChain",
+      "type": "builtin_function_or_method"
+    },
+    "normalGeometry": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.normalGeometry",
+      "type": "builtin_function_or_method"
+    },
+    "normal_backend_video_fresh": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.normal_backend_video_fresh",
+      "type": "method"
+    },
+    "normal_video_frame_ready": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.normal_video_frame_ready",
+      "type": "method"
+    },
+    "objectName": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.objectName",
+      "type": "builtin_function_or_method"
+    },
+    "objectNameChanged": {
+      "kind": "callable",
+      "sig": "<PySide6.QtCore.SignalInstance objectNameChanged(QString) at 0xADDR>",
+      "type": "SignalInstance"
+    },
+    "official_feed": {
+      "kind": "plain-attribute",
+      "sig": "OfficialMatchFeed",
+      "type": "OfficialMatchFeed"
+    },
+    "official_map_display_image": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.official_map_display_image",
+      "type": "method"
+    },
+    "official_map_fit_rect": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.official_map_fit_rect",
+      "type": "method"
+    },
+    "official_map_image": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.official_map_image",
+      "type": "method"
+    },
+    "old_panels": {
+      "kind": "plain-attribute",
+      "sig": "dict",
+      "type": "dict"
+    },
+    "on_captured_camera_frame": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.on_captured_camera_frame",
+      "type": "method"
+    },
+    "on_module_toggled": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.on_module_toggled",
+      "type": "method"
+    },
+    "on_tick": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.on_tick",
+      "type": "method"
+    },
+    "open_economy_workspace": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.open_economy_workspace",
+      "type": "method"
+    },
+    "open_event_command_menu": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.open_event_command_menu",
+      "type": "method"
+    },
+    "open_hero_deploy_interface": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.open_hero_deploy_interface",
+      "type": "method"
+    },
+    "open_legacy_clickgui": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.open_legacy_clickgui",
+      "type": "method"
+    },
+    "open_match_chat": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.open_match_chat",
+      "type": "method"
+    },
+    "overlay_coordinator": {
+      "kind": "plain-attribute",
+      "sig": "OverlayCoordinator",
+      "type": "OverlayCoordinator"
+    },
+    "overrideWindowFlags": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.overrideWindowFlags",
+      "type": "builtin_function_or_method"
+    },
+    "overrideWindowState": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.overrideWindowState",
+      "type": "builtin_function_or_method"
+    },
+    "paintEngine": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.paintEngine",
+      "type": "builtin_function_or_method"
+    },
+    "paintEvent": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.paintEvent",
+      "type": "builtin_function_or_method"
+    },
+    "paintGL": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.paintGL",
+      "type": "method"
+    },
+    "paint_clickgui_overlay": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.paint_clickgui_overlay",
+      "type": "method"
+    },
+    "paint_combat_target_overlay": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.paint_combat_target_overlay",
+      "type": "method"
+    },
+    "paint_direct_gpu_background": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.paint_direct_gpu_background",
+      "type": "method"
+    },
+    "paint_gpu_background": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.paint_gpu_background",
+      "type": "method"
+    },
+    "paint_gpu_control_backdrop": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.paint_gpu_control_backdrop",
+      "type": "method"
+    },
+    "paint_gpu_frame": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.paint_gpu_frame",
+      "type": "method"
+    },
+    "paint_gpu_startup": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.paint_gpu_startup",
+      "type": "method"
+    },
+    "paint_gpu_startup_interaction_layer": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.paint_gpu_startup_interaction_layer",
+      "type": "method"
+    },
+    "paint_gpu_target_hud_layer": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.paint_gpu_target_hud_layer",
+      "type": "method"
+    },
+    "paint_gpu_vision_layer": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.paint_gpu_vision_layer",
+      "type": "method"
+    },
+    "paint_hud_motion_overlay": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.paint_hud_motion_overlay",
+      "type": "method"
+    },
+    "paint_overlay": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.paint_overlay",
+      "type": "method"
+    },
+    "paint_priority_interaction_layer": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.paint_priority_interaction_layer",
+      "type": "method"
+    },
+    "painter_device_scale": {
+      "kind": "method",
+      "sig": "PolarRMWindow.painter_device_scale",
+      "type": "function"
+    },
+    "painters": {
+      "kind": "plain-attribute",
+      "sig": "0",
+      "type": "int"
+    },
+    "paintingActive": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.paintingActive",
+      "type": "builtin_function_or_method"
+    },
+    "palette": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.palette",
+      "type": "builtin_function_or_method"
+    },
+    "panel_module_scroll": {
+      "kind": "plain-attribute",
+      "sig": "dict",
+      "type": "dict"
+    },
+    "panel_modules": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.panel_modules",
+      "type": "method"
+    },
+    "panel_modules_rect": {
+      "kind": "plain-attribute",
+      "sig": "QRectF",
+      "type": "QRectF"
+    },
+    "panel_settings_rect": {
+      "kind": "plain-attribute",
+      "sig": "QRectF",
+      "type": "QRectF"
+    },
+    "parent": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.parent",
+      "type": "builtin_function_or_method"
+    },
+    "parentWidget": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.parentWidget",
+      "type": "builtin_function_or_method"
+    },
+    "paths": {
+      "kind": "plain-attribute",
+      "sig": "RuntimePaths",
+      "type": "RuntimePaths"
+    },
+    "physicalDpiX": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.physicalDpiX",
+      "type": "builtin_function_or_method"
+    },
+    "physicalDpiY": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.physicalDpiY",
+      "type": "builtin_function_or_method"
+    },
+    "play_gui_transition_sound": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.play_gui_transition_sound",
+      "type": "method"
+    },
+    "polar_settings_scroll_motion": {
+      "kind": "plain-attribute",
+      "sig": "dict",
+      "type": "dict"
+    },
+    "polar_unified_morph": {
+      "kind": "plain-attribute",
+      "sig": "MorphState",
+      "type": "MorphState"
+    },
+    "polar_unified_scroll": {
+      "kind": "plain-attribute",
+      "sig": "float",
+      "type": "float"
+    },
+    "polar_unified_scroll_motion": {
+      "kind": "plain-attribute",
+      "sig": "InertialScroll",
+      "type": "InertialScroll"
+    },
+    "polar_view_modules": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.polar_view_modules",
+      "type": "method"
+    },
+    "polar_windows": {
+      "kind": "plain-attribute",
+      "sig": "dict",
+      "type": "dict"
+    },
+    "pos": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.pos",
+      "type": "builtin_function_or_method"
+    },
+    "preview_elimination_fx": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.preview_elimination_fx",
+      "type": "method"
+    },
+    "previousInFocusChain": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.previousInFocusChain",
+      "type": "builtin_function_or_method"
+    },
+    "prewarm_gpu_clickgui_resources": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.prewarm_gpu_clickgui_resources",
+      "type": "method"
+    },
+    "prewarm_jello_module_resources": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.prewarm_jello_module_resources",
+      "type": "method"
+    },
+    "process_vision_kill_events": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.process_vision_kill_events",
+      "type": "method"
+    },
+    "property": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.property",
+      "type": "builtin_function_or_method"
+    },
+    "publish_map_click_from_screen": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.publish_map_click_from_screen",
+      "type": "method"
+    },
+    "publish_spin_control_state": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.publish_spin_control_state",
+      "type": "method"
+    },
+    "publish_vision_control_if_armed": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.publish_vision_control_if_armed",
+      "type": "method"
+    },
+    "qt_button": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.qt_button",
+      "type": "method"
+    },
+    "queue_gpu_module_list": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.queue_gpu_module_list",
+      "type": "method"
+    },
+    "quick_action_sector_path": {
+      "kind": "method",
+      "sig": "PolarRMWindow.quick_action_sector_path",
+      "type": "function"
+    },
+    "quick_action_wheel": {
+      "kind": "plain-attribute",
+      "sig": "QuickActionWheelState",
+      "type": "QuickActionWheelState"
+    },
+    "quick_action_wheel_gpu": {
+      "kind": "plain-attribute",
+      "sig": "QuickActionWheelGpuRenderer",
+      "type": "QuickActionWheelGpuRenderer"
+    },
+    "raise_": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.raise_",
+      "type": "builtin_function_or_method"
+    },
+    "rasterize_fluorescent_white_circle": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.rasterize_fluorescent_white_circle",
+      "type": "method"
+    },
+    "readiness_video_source": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.readiness_video_source",
+      "type": "method"
+    },
+    "receivers": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.receivers",
+      "type": "builtin_function_or_method"
+    },
+    "rect": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.rect",
+      "type": "builtin_function_or_method"
+    },
+    "rect_visible": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.rect_visible",
+      "type": "method"
+    },
+    "redirected": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.redirected",
+      "type": "builtin_function_or_method"
+    },
+    "refresh_config_profiles": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.refresh_config_profiles",
+      "type": "method"
+    },
+    "refresh_custom_ui_sound_options": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.refresh_custom_ui_sound_options",
+      "type": "method"
+    },
+    "refresh_vision_runtime": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.refresh_vision_runtime",
+      "type": "method"
+    },
+    "refresh_wallpaper_profiles": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.refresh_wallpaper_profiles",
+      "type": "method"
+    },
+    "register_gui_scroll_viewport": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.register_gui_scroll_viewport",
+      "type": "method"
+    },
+    "registry": {
+      "kind": "plain-attribute",
+      "sig": "ModuleRegistry",
+      "type": "ModuleRegistry"
+    },
+    "releaseKeyboard": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.releaseKeyboard",
+      "type": "builtin_function_or_method"
+    },
+    "releaseMouse": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.releaseMouse",
+      "type": "builtin_function_or_method"
+    },
+    "releaseShortcut": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.releaseShortcut",
+      "type": "builtin_function_or_method"
+    },
+    "reload_current_config": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.reload_current_config",
+      "type": "method"
+    },
+    "removeAction": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.removeAction",
+      "type": "builtin_function_or_method"
+    },
+    "removeEventFilter": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.removeEventFilter",
+      "type": "builtin_function_or_method"
+    },
+    "remove_wallpaper_profile": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.remove_wallpaper_profile",
+      "type": "method"
+    },
+    "render": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.render",
+      "type": "builtin_function_or_method"
+    },
+    "render_fps_cap": {
+      "kind": "plain-attribute",
+      "sig": "float",
+      "type": "float"
+    },
+    "render_fps_target": {
+      "kind": "plain-attribute",
+      "sig": "float",
+      "type": "float"
+    },
+    "render_frame_ms_ema": {
+      "kind": "plain-attribute",
+      "sig": "float",
+      "type": "float"
+    },
+    "repaint": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.repaint",
+      "type": "builtin_function_or_method"
+    },
+    "reset_startup_page_animation": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.reset_startup_page_animation",
+      "type": "method"
+    },
+    "reset_wallpaper_profile": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.reset_wallpaper_profile",
+      "type": "method"
+    },
+    "resize": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.resize",
+      "type": "builtin_function_or_method"
+    },
+    "resizeEvent": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.resizeEvent",
+      "type": "method"
+    },
+    "resizeGL": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.resizeGL",
+      "type": "builtin_function_or_method"
+    },
+    "resized": {
+      "kind": "callable",
+      "sig": "<PySide6.QtCore.SignalInstance resized() at 0xADDR>",
+      "type": "SignalInstance"
+    },
+    "restoreGeometry": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.restoreGeometry",
+      "type": "builtin_function_or_method"
+    },
+    "restore_compact_hud": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.restore_compact_hud",
+      "type": "method"
+    },
+    "return_to_jello_clickgui": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.return_to_jello_clickgui",
+      "type": "method"
+    },
+    "saveGeometry": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.saveGeometry",
+      "type": "builtin_function_or_method"
+    },
+    "save_current_config": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.save_current_config",
+      "type": "method"
+    },
+    "scenario_manager": {
+      "kind": "plain-attribute",
+      "sig": "ScenarioManager",
+      "type": "ScenarioManager"
+    },
+    "screen": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.screen",
+      "type": "builtin_function_or_method"
+    },
+    "scroll": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.scroll",
+      "type": "builtin_function_or_method"
+    },
+    "search_focus": {
+      "kind": "plain-attribute",
+      "sig": "False",
+      "type": "bool"
+    },
+    "search_query": {
+      "kind": "plain-attribute",
+      "sig": "''",
+      "type": "str"
+    },
+    "seed_match_state": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.seed_match_state",
+      "type": "method"
+    },
+    "select_economy_offer": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.select_economy_offer",
+      "type": "method"
+    },
+    "selected_category": {
+      "kind": "plain-attribute",
+      "sig": "'System'",
+      "type": "str"
+    },
+    "selected_module": {
+      "kind": "plain-attribute",
+      "sig": "Module",
+      "type": "Module"
+    },
+    "send_economy_request": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.send_economy_request",
+      "type": "method"
+    },
+    "send_hero_deploy_request": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.send_hero_deploy_request",
+      "type": "method"
+    },
+    "sender": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.sender",
+      "type": "builtin_function_or_method"
+    },
+    "senderSignalIndex": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.senderSignalIndex",
+      "type": "builtin_function_or_method"
+    },
+    "serial": {
+      "kind": "plain-attribute",
+      "sig": "RmSerialBackend",
+      "type": "RmSerialBackend"
+    },
+    "setAcceptDrops": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setAcceptDrops",
+      "type": "builtin_function_or_method"
+    },
+    "setAccessibleDescription": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setAccessibleDescription",
+      "type": "builtin_function_or_method"
+    },
+    "setAccessibleIdentifier": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setAccessibleIdentifier",
+      "type": "builtin_function_or_method"
+    },
+    "setAccessibleName": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setAccessibleName",
+      "type": "builtin_function_or_method"
+    },
+    "setAttribute": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setAttribute",
+      "type": "builtin_function_or_method"
+    },
+    "setAutoFillBackground": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setAutoFillBackground",
+      "type": "builtin_function_or_method"
+    },
+    "setBackgroundRole": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setBackgroundRole",
+      "type": "builtin_function_or_method"
+    },
+    "setBaseSize": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setBaseSize",
+      "type": "builtin_function_or_method"
+    },
+    "setContentsMargins": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setContentsMargins",
+      "type": "builtin_function_or_method"
+    },
+    "setContextMenuPolicy": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setContextMenuPolicy",
+      "type": "builtin_function_or_method"
+    },
+    "setCursor": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setCursor",
+      "type": "builtin_function_or_method"
+    },
+    "setDisabled": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setDisabled",
+      "type": "builtin_function_or_method"
+    },
+    "setEnabled": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setEnabled",
+      "type": "builtin_function_or_method"
+    },
+    "setFixedHeight": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setFixedHeight",
+      "type": "builtin_function_or_method"
+    },
+    "setFixedSize": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setFixedSize",
+      "type": "builtin_function_or_method"
+    },
+    "setFixedWidth": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setFixedWidth",
+      "type": "builtin_function_or_method"
+    },
+    "setFocus": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setFocus",
+      "type": "builtin_function_or_method"
+    },
+    "setFocusPolicy": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setFocusPolicy",
+      "type": "builtin_function_or_method"
+    },
+    "setFocusProxy": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setFocusProxy",
+      "type": "builtin_function_or_method"
+    },
+    "setFont": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setFont",
+      "type": "builtin_function_or_method"
+    },
+    "setForegroundRole": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setForegroundRole",
+      "type": "builtin_function_or_method"
+    },
+    "setFormat": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setFormat",
+      "type": "builtin_function_or_method"
+    },
+    "setGeometry": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setGeometry",
+      "type": "builtin_function_or_method"
+    },
+    "setGraphicsEffect": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setGraphicsEffect",
+      "type": "builtin_function_or_method"
+    },
+    "setHidden": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setHidden",
+      "type": "builtin_function_or_method"
+    },
+    "setInputMethodHints": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setInputMethodHints",
+      "type": "builtin_function_or_method"
+    },
+    "setLayout": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setLayout",
+      "type": "builtin_function_or_method"
+    },
+    "setLayoutDirection": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setLayoutDirection",
+      "type": "builtin_function_or_method"
+    },
+    "setLocale": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setLocale",
+      "type": "builtin_function_or_method"
+    },
+    "setMask": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setMask",
+      "type": "builtin_function_or_method"
+    },
+    "setMaximumHeight": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setMaximumHeight",
+      "type": "builtin_function_or_method"
+    },
+    "setMaximumSize": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setMaximumSize",
+      "type": "builtin_function_or_method"
+    },
+    "setMaximumWidth": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setMaximumWidth",
+      "type": "builtin_function_or_method"
+    },
+    "setMinimumHeight": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setMinimumHeight",
+      "type": "builtin_function_or_method"
+    },
+    "setMinimumSize": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setMinimumSize",
+      "type": "builtin_function_or_method"
+    },
+    "setMinimumWidth": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setMinimumWidth",
+      "type": "builtin_function_or_method"
+    },
+    "setMouseTracking": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setMouseTracking",
+      "type": "builtin_function_or_method"
+    },
+    "setObjectName": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setObjectName",
+      "type": "builtin_function_or_method"
+    },
+    "setPalette": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setPalette",
+      "type": "builtin_function_or_method"
+    },
+    "setParent": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setParent",
+      "type": "builtin_function_or_method"
+    },
+    "setProperty": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setProperty",
+      "type": "builtin_function_or_method"
+    },
+    "setScreen": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setScreen",
+      "type": "builtin_function_or_method"
+    },
+    "setShortcutAutoRepeat": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setShortcutAutoRepeat",
+      "type": "builtin_function_or_method"
+    },
+    "setShortcutEnabled": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setShortcutEnabled",
+      "type": "builtin_function_or_method"
+    },
+    "setSizeIncrement": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setSizeIncrement",
+      "type": "builtin_function_or_method"
+    },
+    "setSizePolicy": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setSizePolicy",
+      "type": "builtin_function_or_method"
+    },
+    "setStatusTip": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setStatusTip",
+      "type": "builtin_function_or_method"
+    },
+    "setStyle": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setStyle",
+      "type": "builtin_function_or_method"
+    },
+    "setStyleSheet": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setStyleSheet",
+      "type": "builtin_function_or_method"
+    },
+    "setTabOrder": {
+      "kind": "callable",
+      "sig": "QWidget.setTabOrder",
+      "type": "builtin_function_or_method"
+    },
+    "setTabletTracking": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setTabletTracking",
+      "type": "builtin_function_or_method"
+    },
+    "setTextureFormat": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setTextureFormat",
+      "type": "builtin_function_or_method"
+    },
+    "setToolTip": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setToolTip",
+      "type": "builtin_function_or_method"
+    },
+    "setToolTipDuration": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setToolTipDuration",
+      "type": "builtin_function_or_method"
+    },
+    "setUpdateBehavior": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setUpdateBehavior",
+      "type": "builtin_function_or_method"
+    },
+    "setUpdatesEnabled": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setUpdatesEnabled",
+      "type": "builtin_function_or_method"
+    },
+    "setVisible": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setVisible",
+      "type": "builtin_function_or_method"
+    },
+    "setWhatsThis": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setWhatsThis",
+      "type": "builtin_function_or_method"
+    },
+    "setWindowFilePath": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setWindowFilePath",
+      "type": "builtin_function_or_method"
+    },
+    "setWindowFlag": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setWindowFlag",
+      "type": "builtin_function_or_method"
+    },
+    "setWindowFlags": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setWindowFlags",
+      "type": "builtin_function_or_method"
+    },
+    "setWindowIcon": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setWindowIcon",
+      "type": "builtin_function_or_method"
+    },
+    "setWindowIconText": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setWindowIconText",
+      "type": "builtin_function_or_method"
+    },
+    "setWindowModality": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setWindowModality",
+      "type": "builtin_function_or_method"
+    },
+    "setWindowModified": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setWindowModified",
+      "type": "builtin_function_or_method"
+    },
+    "setWindowOpacity": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setWindowOpacity",
+      "type": "builtin_function_or_method"
+    },
+    "setWindowRole": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setWindowRole",
+      "type": "builtin_function_or_method"
+    },
+    "setWindowState": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setWindowState",
+      "type": "builtin_function_or_method"
+    },
+    "setWindowTitle": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.setWindowTitle",
+      "type": "builtin_function_or_method"
+    },
+    "set_clickgui_visible": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.set_clickgui_visible",
+      "type": "method"
+    },
+    "set_wallpaper_picker_visible": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.set_wallpaper_picker_visible",
+      "type": "method"
+    },
+    "setting_bool": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.setting_bool",
+      "type": "method"
+    },
+    "setting_mode": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.setting_mode",
+      "type": "method"
+    },
+    "settings_scroll": {
+      "kind": "plain-attribute",
+      "sig": "dict",
+      "type": "dict"
+    },
+    "sharedPainter": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.sharedPainter",
+      "type": "builtin_function_or_method"
+    },
+    "short_outpost_value": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.short_outpost_value",
+      "type": "method"
+    },
+    "short_ring_number": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.short_ring_number",
+      "type": "method"
+    },
+    "show": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.show",
+      "type": "builtin_function_or_method"
+    },
+    "showEvent": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.showEvent",
+      "type": "builtin_function_or_method"
+    },
+    "showFullScreen": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.showFullScreen",
+      "type": "builtin_function_or_method"
+    },
+    "showMaximized": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.showMaximized",
+      "type": "builtin_function_or_method"
+    },
+    "showMinimized": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.showMinimized",
+      "type": "builtin_function_or_method"
+    },
+    "showNormal": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.showNormal",
+      "type": "builtin_function_or_method"
+    },
+    "signalsBlocked": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.signalsBlocked",
+      "type": "builtin_function_or_method"
+    },
+    "size": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.size",
+      "type": "builtin_function_or_method"
+    },
+    "sizeHint": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.sizeHint",
+      "type": "builtin_function_or_method"
+    },
+    "sizeIncrement": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.sizeIncrement",
+      "type": "builtin_function_or_method"
+    },
+    "sizePolicy": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.sizePolicy",
+      "type": "builtin_function_or_method"
+    },
+    "smooth_armor_geometry": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.smooth_armor_geometry",
+      "type": "method"
+    },
+    "stackUnder": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.stackUnder",
+      "type": "builtin_function_or_method"
+    },
+    "startTimer": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.startTimer",
+      "type": "builtin_function_or_method"
+    },
+    "start_economy_qualification_test": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.start_economy_qualification_test",
+      "type": "method"
+    },
+    "start_kmc_qualification_test": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.start_kmc_qualification_test",
+      "type": "method"
+    },
+    "startup_cache": {
+      "kind": "plain-attribute",
+      "sig": "StartupLayerCache",
+      "type": "StartupLayerCache"
+    },
+    "startup_glass_settings": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.startup_glass_settings",
+      "type": "method"
+    },
+    "startup_gpu": {
+      "kind": "plain-attribute",
+      "sig": "StartupGpuCompositor",
+      "type": "StartupGpuCompositor"
+    },
+    "startup_gpu_enabled": {
+      "kind": "plain-attribute",
+      "sig": "False",
+      "type": "bool"
+    },
+    "startup_match_meta": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.startup_match_meta",
+      "type": "method"
+    },
+    "startup_menu_accent": {
+      "kind": "method",
+      "sig": "PolarRMWindow.startup_menu_accent",
+      "type": "function"
+    },
+    "startup_needs_high_rate": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.startup_needs_high_rate",
+      "type": "method"
+    },
+    "startup_page_morph": {
+      "kind": "plain-attribute",
+      "sig": "MorphState",
+      "type": "MorphState"
+    },
+    "startup_scenario_meta": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.startup_scenario_meta",
+      "type": "method"
+    },
+    "startup_stagger_value": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.startup_stagger_value",
+      "type": "method"
+    },
+    "startup_step": {
+      "kind": "plain-attribute",
+      "sig": "'scenario'",
+      "type": "str"
+    },
+    "startup_transition_from": {
+      "kind": "plain-attribute",
+      "sig": "None",
+      "type": "NoneType"
+    },
+    "startup_transition_started": {
+      "kind": "plain-attribute",
+      "sig": "*volatile*",
+      "type": "float",
+      "volatile": true
+    },
+    "startup_transition_to": {
+      "kind": "plain-attribute",
+      "sig": "None",
+      "type": "NoneType"
+    },
+    "startup_wallpaper": {
+      "kind": "plain-attribute",
+      "sig": "StartupWallpaperManager",
+      "type": "StartupWallpaperManager"
+    },
+    "state": {
+      "kind": "plain-attribute",
+      "sig": "RobotState",
+      "type": "RobotState"
+    },
+    "staticMetaObject": {
+      "kind": "plain-attribute",
+      "sig": "QMetaObject",
+      "type": "QMetaObject"
+    },
+    "statusTip": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.statusTip",
+      "type": "builtin_function_or_method"
+    },
+    "style": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.style",
+      "type": "builtin_function_or_method"
+    },
+    "styleSheet": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.styleSheet",
+      "type": "builtin_function_or_method"
+    },
+    "submit_economy_offer": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.submit_economy_offer",
+      "type": "method"
+    },
+    "sync_local_autoaim_fov": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.sync_local_autoaim_fov",
+      "type": "method"
+    },
+    "sync_mode_setting": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.sync_mode_setting",
+      "type": "method"
+    },
+    "sync_quick_action_wheel_settings": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.sync_quick_action_wheel_settings",
+      "type": "method"
+    },
+    "sync_runtime_from_registry": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.sync_runtime_from_registry",
+      "type": "method"
+    },
+    "sync_tongji_vision_state": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.sync_tongji_vision_state",
+      "type": "method"
+    },
+    "synthetic_video_cache": {
+      "kind": "plain-attribute",
+      "sig": "None",
+      "type": "NoneType"
+    },
+    "synthetic_video_cache_key": {
+      "kind": "plain-attribute",
+      "sig": "None",
+      "type": "NoneType"
+    },
+    "synthetic_video_cache_time": {
+      "kind": "plain-attribute",
+      "sig": "*volatile*",
+      "type": "float",
+      "volatile": true
+    },
+    "tabletEvent": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.tabletEvent",
+      "type": "builtin_function_or_method"
+    },
+    "tactical_map_chrome": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.tactical_map_chrome",
+      "type": "method"
+    },
+    "tactical_map_field_layout": {
+      "kind": "plain-attribute",
+      "sig": "None",
+      "type": "NoneType"
+    },
+    "tactical_map_field_mirrored": {
+      "kind": "plain-attribute",
+      "sig": "False",
+      "type": "bool"
+    },
+    "tactical_map_field_rect": {
+      "kind": "plain-attribute",
+      "sig": "QRectF",
+      "type": "QRectF"
+    },
+    "tactical_map_footer_height": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.tactical_map_footer_height",
+      "type": "method"
+    },
+    "tactical_map_hold": {
+      "kind": "plain-attribute",
+      "sig": "False",
+      "type": "bool"
+    },
+    "tactical_map_hold_amount": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.tactical_map_hold_amount",
+      "type": "method"
+    },
+    "tactical_map_morph_progress": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.tactical_map_morph_progress",
+      "type": "method"
+    },
+    "tactical_map_rect": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.tactical_map_rect",
+      "type": "method"
+    },
+    "tactical_map_state": {
+      "kind": "plain-attribute",
+      "sig": "MapIslandState",
+      "type": "MapIslandState"
+    },
+    "tactical_map_status_display": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.tactical_map_status_display",
+      "type": "method"
+    },
+    "tactical_map_status_kind": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.tactical_map_status_kind",
+      "type": "method"
+    },
+    "target_compact_info": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.target_compact_info",
+      "type": "method"
+    },
+    "target_hud_presence": {
+      "kind": "plain-attribute",
+      "sig": "TargetHudPresenceState",
+      "type": "TargetHudPresenceState"
+    },
+    "target_hud_style": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.target_hud_style",
+      "type": "method"
+    },
+    "target_overlay_label": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.target_overlay_label",
+      "type": "method"
+    },
+    "target_ratio": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.target_ratio",
+      "type": "method"
+    },
+    "target_short_name": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.target_short_name",
+      "type": "method"
+    },
+    "telemetry_render_tracks": {
+      "kind": "plain-attribute",
+      "sig": "dict",
+      "type": "dict"
+    },
+    "testAttribute": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.testAttribute",
+      "type": "builtin_function_or_method"
+    },
+    "text_advance": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.text_advance",
+      "type": "method"
+    },
+    "textureFormat": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.textureFormat",
+      "type": "builtin_function_or_method"
+    },
+    "thread": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.thread",
+      "type": "builtin_function_or_method"
+    },
+    "timer": {
+      "kind": "plain-attribute",
+      "sig": "QTimer",
+      "type": "QTimer"
+    },
+    "timerEvent": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.timerEvent",
+      "type": "builtin_function_or_method"
+    },
+    "toast": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.toast",
+      "type": "method"
+    },
+    "toasts": {
+      "kind": "plain-attribute",
+      "sig": "list",
+      "type": "list"
+    },
+    "toggle_bound_module_for_event": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.toggle_bound_module_for_event",
+      "type": "method"
+    },
+    "tongji_bridge": {
+      "kind": "plain-attribute",
+      "sig": "TongjiVisionBridge",
+      "type": "TongjiVisionBridge"
+    },
+    "tongji_receiver": {
+      "kind": "plain-attribute",
+      "sig": "TongjiVisionReceiver",
+      "type": "TongjiVisionReceiver"
+    },
+    "tongji_target": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.tongji_target",
+      "type": "method"
+    },
+    "toolTip": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.toolTip",
+      "type": "builtin_function_or_method"
+    },
+    "toolTipDuration": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.toolTipDuration",
+      "type": "builtin_function_or_method"
+    },
+    "topLevelWidget": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.topLevelWidget",
+      "type": "builtin_function_or_method"
+    },
+    "tr": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.tr",
+      "type": "builtin_function_or_method"
+    },
+    "tune_render_rate": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.tune_render_rate",
+      "type": "method"
+    },
+    "udp": {
+      "kind": "plain-attribute",
+      "sig": "RmVideoBackend",
+      "type": "RmVideoBackend"
+    },
+    "ui_audio": {
+      "kind": "plain-attribute",
+      "sig": "UiAudioManager",
+      "type": "UiAudioManager"
+    },
+    "underMouse": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.underMouse",
+      "type": "builtin_function_or_method"
+    },
+    "ungrabGesture": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.ungrabGesture",
+      "type": "builtin_function_or_method"
+    },
+    "unsetCursor": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.unsetCursor",
+      "type": "builtin_function_or_method"
+    },
+    "unsetLayoutDirection": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.unsetLayoutDirection",
+      "type": "builtin_function_or_method"
+    },
+    "unsetLocale": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.unsetLocale",
+      "type": "builtin_function_or_method"
+    },
+    "update": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.update",
+      "type": "builtin_function_or_method"
+    },
+    "updateBehavior": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.updateBehavior",
+      "type": "builtin_function_or_method"
+    },
+    "updateGeometry": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.updateGeometry",
+      "type": "builtin_function_or_method"
+    },
+    "updateMicroFocus": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.updateMicroFocus",
+      "type": "builtin_function_or_method"
+    },
+    "update_auto_spin_guard": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.update_auto_spin_guard",
+      "type": "method"
+    },
+    "update_backend_readiness": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.update_backend_readiness",
+      "type": "method"
+    },
+    "update_elimination_hit_info": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.update_elimination_hit_info",
+      "type": "method"
+    },
+    "update_hero_deploy_state": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.update_hero_deploy_state",
+      "type": "method"
+    },
+    "update_hero_lob_guard": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.update_hero_lob_guard",
+      "type": "method"
+    },
+    "update_hud_liquid_source": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.update_hud_liquid_source",
+      "type": "method"
+    },
+    "updatesEnabled": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.updatesEnabled",
+      "type": "builtin_function_or_method"
+    },
+    "video_pipeline": {
+      "kind": "plain-attribute",
+      "sig": "VideoPipeline",
+      "type": "VideoPipeline"
+    },
+    "video_sample_size": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.video_sample_size",
+      "type": "method"
+    },
+    "visibleRegion": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.visibleRegion",
+      "type": "builtin_function_or_method"
+    },
+    "vision": {
+      "kind": "plain-attribute",
+      "sig": "MockVisionPipeline",
+      "type": "MockVisionPipeline"
+    },
+    "vision_kill_detector": {
+      "kind": "plain-attribute",
+      "sig": "VisionKillDetector",
+      "type": "VisionKillDetector"
+    },
+    "vision_render_interpolator": {
+      "kind": "plain-attribute",
+      "sig": "VisionRenderInterpolator",
+      "type": "VisionRenderInterpolator"
+    },
+    "vision_result_calibrated": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.vision_result_calibrated",
+      "type": "method"
+    },
+    "vision_result_for_display": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.vision_result_for_display",
+      "type": "method"
+    },
+    "vision_target_in_autoaim_fov": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.vision_target_in_autoaim_fov",
+      "type": "method"
+    },
+    "vision_wire_gpu": {
+      "kind": "plain-attribute",
+      "sig": "VisionWireGpuRenderer",
+      "type": "VisionWireGpuRenderer"
+    },
+    "wallpaper_picker_page": {
+      "kind": "plain-attribute",
+      "sig": "0",
+      "type": "int"
+    },
+    "wallpaper_picker_visible": {
+      "kind": "plain-attribute",
+      "sig": "False",
+      "type": "bool"
+    },
+    "waterfall_reveal": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.waterfall_reveal",
+      "type": "method"
+    },
+    "whatsThis": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.whatsThis",
+      "type": "builtin_function_or_method"
+    },
+    "wheelEvent": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.wheelEvent",
+      "type": "method"
+    },
+    "width": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.width",
+      "type": "builtin_function_or_method"
+    },
+    "widthMM": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.widthMM",
+      "type": "builtin_function_or_method"
+    },
+    "winId": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.winId",
+      "type": "builtin_function_or_method"
+    },
+    "window": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.window",
+      "type": "builtin_function_or_method"
+    },
+    "windowFilePath": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.windowFilePath",
+      "type": "builtin_function_or_method"
+    },
+    "windowFlags": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.windowFlags",
+      "type": "builtin_function_or_method"
+    },
+    "windowHandle": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.windowHandle",
+      "type": "builtin_function_or_method"
+    },
+    "windowIcon": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.windowIcon",
+      "type": "builtin_function_or_method"
+    },
+    "windowIconChanged": {
+      "kind": "callable",
+      "sig": "<PySide6.QtCore.SignalInstance windowIconChanged(QIcon) at 0xADDR>",
+      "type": "SignalInstance"
+    },
+    "windowIconText": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.windowIconText",
+      "type": "builtin_function_or_method"
+    },
+    "windowIconTextChanged": {
+      "kind": "callable",
+      "sig": "<PySide6.QtCore.SignalInstance windowIconTextChanged(QString) at 0xADDR>",
+      "type": "SignalInstance"
+    },
+    "windowModality": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.windowModality",
+      "type": "builtin_function_or_method"
+    },
+    "windowOpacity": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.windowOpacity",
+      "type": "builtin_function_or_method"
+    },
+    "windowRole": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.windowRole",
+      "type": "builtin_function_or_method"
+    },
+    "windowState": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.windowState",
+      "type": "builtin_function_or_method"
+    },
+    "windowTitle": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.windowTitle",
+      "type": "builtin_function_or_method"
+    },
+    "windowTitleChanged": {
+      "kind": "callable",
+      "sig": "<PySide6.QtCore.SignalInstance windowTitleChanged(QString) at 0xADDR>",
+      "type": "SignalInstance"
+    },
+    "windowType": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.windowType",
+      "type": "builtin_function_or_method"
+    },
+    "workspace": {
+      "kind": "plain-attribute",
+      "sig": "WindowsPath",
+      "type": "WindowsPath"
+    },
+    "x": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.x",
+      "type": "builtin_function_or_method"
+    },
+    "y": {
+      "kind": "callable",
+      "sig": "PolarRMWindow.y",
+      "type": "builtin_function_or_method"
+    }
+  },
+  "meta": {
+    "collected_by": "tests/api_freeze_test.py --update",
+    "python": "3.12.13",
+    "qt_platform": "offscreen",
+    "volatile_policy": "sig/kind 变化跨两次采样 => volatile，对比时只查存在性"
+  },
+  "module_symbols": {
+    "EconomyScenePhase": {
+      "kind": "class",
+      "sig": "EconomyScenePhase",
+      "type": "EnumType"
+    },
+    "FrameScheduler": {
+      "kind": "class",
+      "sig": "FrameScheduler",
+      "type": "type"
+    },
+    "Hotspot": {
+      "kind": "class",
+      "sig": "Hotspot",
+      "type": "type"
+    },
+    "InertialScroll": {
+      "kind": "class",
+      "sig": "InertialScroll",
+      "type": "type"
+    },
+    "ModuleListLayout": {
+      "kind": "class",
+      "sig": "ModuleListLayout",
+      "type": "type"
+    },
+    "PolarHudOverlay": {
+      "kind": "class",
+      "sig": "PolarHudOverlay",
+      "type": "ObjectType"
+    },
+    "PolarRMWindow": {
+      "kind": "class",
+      "sig": "PolarRMWindow",
+      "type": "ObjectType"
+    },
+    "StartupLayerCache": {
+      "kind": "class",
+      "sig": "StartupLayerCache",
+      "type": "type"
+    },
+    "VisionViewport": {
+      "kind": "class",
+      "sig": "VisionViewport",
+      "type": "ObjectType"
+    },
+    "main": {
+      "kind": "function",
+      "sig": "main",
+      "type": "function"
+    }
+  }
+}
