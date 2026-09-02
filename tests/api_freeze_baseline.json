@@ -55,6 +55,11 @@
       "sig": "dict",
       "type": "dict"
     },
+    "ROBOT_OVERLAY_COLOR_DEFAULT": {
+      "kind": "plain-attribute",
+      "sig": "'White'",
+      "type": "str"
+    },
     "RenderFlag": {
       "kind": "callable",
       "sig": "QWidget.RenderFlag",
@@ -4337,6 +4342,26 @@
       "kind": "bound-method",
       "sig": "EspWireframeMixin.robot_armor_boxes_visible",
       "type": "method"
+    },
+    "robot_overlay_armor_color": {
+      "kind": "bound-method",
+      "sig": "EspWireframeMixin.robot_overlay_armor_color",
+      "type": "method"
+    },
+    "robot_overlay_color_actual": {
+      "kind": "plain-attribute",
+      "sig": "'White'",
+      "type": "str"
+    },
+    "robot_overlay_color_mode": {
+      "kind": "bound-method",
+      "sig": "EspWireframeMixin.robot_overlay_color_mode",
+      "type": "method"
+    },
+    "robot_overlay_color_reason": {
+      "kind": "plain-attribute",
+      "sig": "''",
+      "type": "str"
     },
     "robot_overlay_distance_suffix": {
       "kind": "bound-method",

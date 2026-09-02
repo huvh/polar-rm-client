@@ -17,10 +17,10 @@ python tools/audit_settings.py --json out.json
 
 | 档位 | 数量 | 含义 |
 |---|---:|---|
-| **READ** | 267 | 有读取点且名字不冲突，能归属到具体模块 |
+| **READ** | 273 | 有读取点且名字不冲突，能归属到具体模块 |
 | **AMBIGUOUS** | 51 | 有读取点，但**多个模块共用同一个设置名**，读取点无法归属 —— 不算已对齐 |
 | **DYNAMIC** | 25 | 由 `f"Bind {槽}"` / `f"Slot {序号}"` 动态拼名读取（已逐个核实读取点存在） |
-| **ORPHAN** | **24** | **没有任何读取点——界面上能调，代码完全没人读** |
+| **ORPHAN** | **23** | **没有任何读取点——界面上能调，代码完全没人读** |
 
 ### 接线进度（只许减不许增，基线已接入 `tools/verify_all.py`）
 
@@ -46,6 +46,7 @@ python tools/audit_settings.py --json out.json
 | 第 17 批：同名档里挖出的两个 | **29**（不变）| `Crosshair/Style`、`RobotOverlay/Distance`。它们本来就不在孤儿数里（被同名的另一个模块洗白，归在 AMBIGUOUS，不计入也不计减），所以接完后这个数既不上升也不下降 |
 | 第 18 批：告警阈值 | **27** | `Heat Warn`、`Energy Warn`（`PowerGuard` 默认关着，接线零画面风险）|
 | 第 19 批：增益时间轴 | **24** | `Buffs`、`Special Mechanism`、`Timeline`——整个模块**本来连面板都没有**，本轮新建了消费者（位置是量出来的）|
+| 第 20 批：装甲盒配色 | **23** | `Color`——默认值改成等于接线前画面的 White；Team 只在认得出 red/blue 板色时染阵营色；Threat 无威胁度数据，按 `ArmorAutoAim/Priority` 的 Radar 先例**降级并记原因** |
 
 > 上表最后一行的“29 不变”不是没干活，而是旧口径看不见那两项。
 > 完整说明见下面「同名共用那 51 项」一节。
@@ -56,10 +57,11 @@ python tools/audit_settings.py --json out.json
 `hud_batch10_settings_test.py`（含缓冲上限的端到端解码断言）、
 `hud_batch13_settings_test.py`（含“默认编出的字节与接线前逐字节相同”）、
 `hud_batch14_settings_test.py`（三处消费点共用判据）、
-`hud_batch16_killfx_test.py`（从 ClickGUI 开关一路验到提示音）。
+`hud_batch16_killfx_test.py`（从 ClickGUI 开关一路验到提示音）、
+`hud_batch20_robotoverlay_color_test.py`（装甲盒配色：默认档三个消费点逐值不变，主目标面用真实 aim 板色）。
 全部已接入 `tools/verify_all.py`，孤儿基线由 `--max-orphans` 卡住。
 
-### 剩下 24 个：逐项查证后的真实分类
+### 剩下 23 个：逐项查证后的真实分类
 
 下面每一档都按**具体标识符查过**，不是凭印象。判断"无数据源"之前先枚举了
 `RobotState` 的字段——上一轮我就是没查字段就断言 `Small/Large Buff` 对不上，
@@ -70,35 +72,34 @@ python tools/audit_settings.py --json out.json
 | **刻意不做**（接了会上事故 / 没东西可接 / 按设计是空壳） | `MQTTLink/Auto Connect` 接上后新默认配置收不到裁判数据；`UDPVideo/Reassemble` 后端已交付整帧；`ClickGui/Save Layout` 全仓无此函数；`EnergyAutoAim` 无视觉管线也无发送出口（`readiness.py` 里有诚实性闸门作证）；`FireControlStub` 描述自陈“不输出真实发射命令” | 7 |
 | **得先新功能**（没有可接的消费者） | `Open Style` 的 `"Full Sheet"` 只出现在设置定义那一行；`Local Model` 只有一个选项。（`BuffTimeline` 三项本也在这一档，第 19 批已把面板建出来）| 2 |
 | **做它等于新增比赛行为** | `ArmorLock/Lock Point`、`ChassisAssist/Buffer Protect`、`PowerGuard/Auto Limit` 均无实现，补上就是客户端主动控车/限功率；`MapMarker/Repeat` 无对应字段且重复广播要过裁判侧 10Hz 限流；`Desktop Safe` 与 `ArmorAutoAim/Mock Output` 重叠，接上等于新开一道控制门 | 5 |
-| **等一句语义确认**（怎么定都不唯一） | `RobotOverlay/Color` 的 Threat 无威胁度数据；`RadarOverlay/Map` 默认 Mini 但今天两张图都画；`LockState/Lock Source` 的 Radar 需“地图→像素”投影、Manual 无手选目标子系统；`FrictionWheel/Spin Preview` 含义不明（客户端从不驱动摩擦轮，`manager.py` 里 `friction_on=False` 硬编） | 4 |
+| **等一句语义确认**（怎么定都不唯一） | `RadarOverlay/Map` 默认 Mini 但今天两张图都画；`LockState/Lock Source` 的 Radar 需“地图→像素”投影、Manual 无手选目标子系统；`FrictionWheel/Spin Preview` 含义不明（客户端从不驱动摩擦轮，`manager.py` 里 `friction_on=False` 硬编） | 3 |
 | **数据字段存在但含义要按裁判版本对** | `EconomyPanel/Radar Level`：0x0202 第 4 字段已解码进 `state.encryption_level`，且**全仓无处显示**。旧规则表这一槽叫“雷达合法等级”，新版叫“加密等级”——同一个槽在不同协议修订里名字不同，我不猜 | 1 |
 | **真无数据源** | `FrictionWheel/Target RPM`：摩擦轮在本仓只有一个布尔 `state.friction_wheel`，没有任何转速字段可读（云台电压**其实存在**且已接，见更正三） | 1 |
 | **B 类（处置建议见文末）** | 空中支援发送函数**零调用者**；`MapMarker` 已接 2/3（真实报文是 `MapClickCmd`，我先前判错了） | 4 |
 
-**孤儿按模块分布（17 个模块共 24 项，其余 42 个模块的设置项已全部有归属）**：
+**孤儿按模块分布（16 个模块共 23 项，其余 43 个模块的设置项已全部有归属）**：
 `AirSupport` 2、`EconomyPanel` 2、`EnergyAutoAim` 2、`FireControlStub` 2、
 `FrictionWheel` 2、`SentinelCommand` 2、`TongjiVisionBridge` 2，
 以及 `ArmorLock` / `ChassisAssist` / `ClickGui` / `LockState` / `MQTTLink` /
-`MapMarker` / `PowerGuard`（仅剩 `Auto Limit`）/ `RadarOverlay` / `RobotOverlay` /
-`UDPVideo` 各 1。
+`MapMarker` / `PowerGuard`（仅剩 `Auto Limit`）/ `RadarOverlay` / `UDPVideo` 各 1。
 `BuffTimeline` 本批整模块清零（3 项全接）。
 
-本会话让孤儿从 71 降到 24（共 47 项），其中 **46 项是真的接上了消费者**，
+本会话让孤儿从 71 降到 23（共 48 项），其中 **47 项是真的接上了消费者**，
 另有 1 项（48→47）是审计工具自己修了个假孤儿（常量别名没被认出来）。
 此外还有 **两项根本不在这个计数里**（被同名项洗白在 AMBIGUOUS 档）：
 `Crosshair/Style`、`RobotOverlay/Distance`，第 17 批接上。
-算上它们，本会话共接上 **48 项**。
-接上的 46 项分布在：`Capacitor`、`PowerLimit`、`SpeedLimit`、`GimbalPower`、`MatchTimer`、
+算上它们，本会话共接上 **49 项**。
+接上的 47 项分布在：`Capacitor`、`PowerLimit`、`SpeedLimit`、`GimbalPower`、`MatchTimer`、
 `MatchMode`、`BaseOutpostStatus`、`VictoryPointStatus`、`ProjectileAllowance`、
 `ProjectileShop`、`ThermalPowerPanel`、`BuffStatus`、`EliminationFX`（28 项里 0 孤儿）、
 `PowerGuard`（3 项里已接 2，只剩 `Auto Limit`）、`BuffTimeline`（3 项全接）
 等模块；`Capacitor`、`PowerLimit`、`MatchTimer`、`MatchMode`、`BuffStatus`、
-`BuffTimeline` 已整模块清零，
-`RobotOverlay`、`Armor3DESP`、`RadarOverlay`、`LockState`、`FrictionWheel`、
+`BuffTimeline`、`RobotOverlay` 已整模块清零，
+`Armor3DESP`、`RadarOverlay`、`LockState`、`FrictionWheel`、
 `EconomyPanel`、`MapMarker` 各剩最后一两项（都在上面的分类表里）。
 
-**结论**：凡是**已经有消费者、只是没供值**的孤儿都已接完（本会话把孤儿从 71 推到 24，
-其中 46 项接线，另有 2 项从同名档里挖出来）。剩下的 24 项每一项都需要
+**结论**：凡是**已经有消费者、只是没供值**的孤儿都已接完（本会话把孤儿从 71 推到 23，
+其中 47 项接线，另有 2 项从同名档里挖出来）。剩下的 23 项每一项都需要
 下面三件事中的一件：新建功能、新增比赛行为（必须你们授权）、
 或一句语义/数据口径确认。没有一项是“再努力一点”就能接完的，
 我也不把它们包装成“都快做完了”。
@@ -382,7 +383,7 @@ python tools/audit_settings.py --attribute      # 列出仍无法归属的那些
 | 模块 | 设置项 | 状态 |
 |---|---|---|
 | `RobotOverlay` | `Armor Boxes` | ✅ 已接（第 15 批）：关掉后装甲线框本体不画；与 `ESP Style` 不重叠——Style 选“长什么样”，本项选“画不画” |
-| `RobotOverlay` | `Color`（Team/Threat/Accent） | ❌ 等你们定：Threat 无威胁度数据，Team 会改观感 |
+| `RobotOverlay` | `Color` | ✅ 已接（第 20 批）：默认值改为 White（=接线前画面，三个消费点逐值不变）；Team 只在认得出板色时染阵营色；Threat 无数据源→降级 Team 并在诊断记原因 |
 | `RadarOverlay` | `High Light` | ✅ 已接（第 11 批） |
 | `RadarOverlay` | `Map`（Mini/Full/Hidden） | ❌ 等你们定：默认 Mini 但今天两张图都画，值域不覆盖现行行为 |
 | `Armor3DESP` | `Renderer` | ✅ 已接（第 6 批） |
@@ -490,10 +491,10 @@ python tools/audit_settings.py --attribute      # 列出仍无法归属的那些
 ## 防倒退
 
 孤儿数量被 `tools/verify_all.py` 盯着，**只许减不许增**：
-新加一个设置项而忘了接线，验证会红。当前基线 **24**（从最初的 71 降下来）。
+新加一个设置项而忘了接线，验证会红。当前基线 **23**（从最初的 71 降下来）。
 
 ```powershell
-python tools/audit_settings.py --max-orphans 24
+python tools/audit_settings.py --max-orphans 23
 ```
 
 AMBIGUOUS 那 51 项**不计入也不计减**基线，原因见上面那节。
@@ -592,7 +593,7 @@ AMBIGUOUS 那 51 项**不计入也不计减**基线，原因见上面那节。
 | `MQTTLink / Auto Connect` | 可否接受改默认值为 True + 加就绪告警 |
 | `EconomyPanel / Open Style` | 要不要真做第二套呈现（Full Sheet）|
 | `EconomyPanel / Radar Level` | 你们的裁判机跑的哪个协议修订？0x0202 第 4 字段到底该叫雷达等级还是加密等级 |
-| `RobotOverlay / Color`、`RadarOverlay / Map`、`LockState / Lock Source`、`FrictionWheel / Spin Preview` | 语义确认（每个都是一句话的事，但怎么定都不唯一，我不猜） |
+| `RadarOverlay / Map`、`LockState / Lock Source`、`FrictionWheel / Spin Preview` | 语义确认（每个都是一句话的事，但怎么定都不唯一，我不猜） |
 | `ArmorAutoAim / Smooth` | 它到底该管云台输出低通、画面插值，还是什么都不管（删开关）——见上面“同名洗白的真孤儿” |
 | `RobotLink / Port`、`/ Baud` | **场景配置与模块设置谁赢**？现在是场景说了算，界面上选串口/波特率无效（与 `Send Hz` 同形状）。接上会让官方场景去自动找串口，选错口有真实后果，我不自己定 |
 | `ArmorLock / Predict`、`/ Heat Guard`、`HeroLob / Mode` | 接它们都要新增锁定/吊射策略（模块自己写的是“预留”），需你们授权还是删开关 |

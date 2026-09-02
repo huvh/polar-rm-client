@@ -1329,6 +1329,11 @@ class EspWireframeMixin:
     #: 同一处理：把默认改成等于今天的实际行为，再用断言钉住）。
     ROBOT_OVERLAY_COLOR_DEFAULT = "White"
 
+    #: 上一帧实际生效的配色档与降级原因，供诊断/HUD 读取（与 autoaim_priority_* 同型）。
+    #: 两个字段每帧都写：只写一边会让诊断停在旧值，显示错误的降级原因。
+    robot_overlay_color_actual: str = "White"
+    robot_overlay_color_reason: str = ""
+
     def robot_overlay_color_mode(self) -> tuple[str, str]:
         """返回 `(实际生效的配色档, 降级原因)`。
 
@@ -1380,20 +1385,22 @@ class EspWireframeMixin:
         depth = self.get_setting_number(overlay, "3D Depth", 0.22)
         max_targets = int(self.get_setting_number(overlay, "Max Targets", 6))
         only_secondary = self.setting_bool(overlay, "Only Secondary", True)
-        primary = color("#ffffff", opacity)
         aim_color = color("#ffffff")
         # `RobotOverlay / Color`：三个消费点（观测盒 / Polar Outline 路径 / 主目标面）
-        # 必须用同一个助手，否则同一开关会“一处有效一处无效”。
-        # 默认 White 时下面两个值与接线前逐值相同（由断言钉住）。
+        # 必须共用助手 `robot_overlay_armor_color`，否则同一开关会“一处有效一处无效”。
+        # 默认 White 时各消费点取值与接线前逐值相同（由第 20 批断言钉住）。
         _color_mode, self.robot_overlay_color_reason = self.robot_overlay_color_mode()
-        if _color_mode != "White":
-            aim_color = self.robot_overlay_armor_color(None, 1.0)
+        self.robot_overlay_color_actual = _color_mode
 
         # VisionRenderInterpolator 已按视觉时间戳在显示帧间插值。这里必须直接使用
         # 插值结果，不能再做一次追赶平滑，否则低频推理会呈现明显拖滞和阶梯感。
         observed = [armor for armor in result.detections if len(armor.points) == 4]
         predicted = [armor for armor in result.predicted_armors if len(armor.points) == 4]
         aim = result.aim_armor if result.aim_armor and len(result.aim_armor.points) == 4 else None
+        if _color_mode != "White" and aim is not None:
+            # 主目标面的配色必须用 aim 板自己的板色。早期版本传的是 None，
+            # Team 档会出现“旁边的板变色、主目标不跟着变”的同型错位。
+            aim_color = self.robot_overlay_armor_color(aim, 1.0)
 
         if style == "JelloShadow":
             # Sigma ShadowESP: LIGHT_GREYISH_BLUE (#fefefe), literal 2 px
@@ -1453,7 +1460,9 @@ class EspWireframeMixin:
                 xs = [point.x() for point in points]
                 ys = [point.y() for point in points]
                 rect = QRectF(min(xs), min(ys), max(4.0, max(xs) - min(xs)), max(4.0, max(ys) - min(ys)))
-                c = aim_color if armor.aim else primary
+                # 与观测盒同一个助手：aim 板用全不透明（等价接线前的 aim_color），
+                # 其余板沿用 opacity（等价接线前的 primary）。
+                c = self.robot_overlay_armor_color(armor, 1.0 if armor.aim else opacity)
                 self.draw_minimal_bracket_lock(p, rect, VisionTarget(rect.x(), rect.y(), rect.width(), rect.height(), armor.confidence, armor.label), armor.aim)
                 if show_labels:
                     self.draw_pill(p, QPointF(rect.left(), rect.top() - 22), f"{armor.label.upper()} {armor.confidence:.0%}{self.robot_overlay_id_suffix(armor)}", c)
