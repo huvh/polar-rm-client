@@ -50,6 +50,16 @@
       "sig": "QPaintDevice.PaintDeviceMetric",
       "type": "EnumType"
     },
+    "RADAR_MAP_FULL_EXPANSION": {
+      "kind": "plain-attribute",
+      "sig": "float",
+      "type": "float"
+    },
+    "RADAR_MAP_MODE_DEFAULT": {
+      "kind": "plain-attribute",
+      "sig": "'Both'",
+      "type": "str"
+    },
     "RM_INDICATOR_SETTING": {
       "kind": "plain-attribute",
       "sig": "dict",
@@ -4161,6 +4171,21 @@
     "radar_high_light_enabled": {
       "kind": "bound-method",
       "sig": "TacticalMapMixin.radar_high_light_enabled",
+      "type": "method"
+    },
+    "radar_map_actual": {
+      "kind": "plain-attribute",
+      "sig": "'Both'",
+      "type": "str"
+    },
+    "radar_map_reason": {
+      "kind": "plain-attribute",
+      "sig": "''",
+      "type": "str"
+    },
+    "radar_overlay_map_visible": {
+      "kind": "bound-method",
+      "sig": "TacticalMapMixin.radar_overlay_map_visible",
       "type": "method"
     },
     "raise_": {

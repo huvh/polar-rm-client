@@ -1334,7 +1334,14 @@ def build_default_registry() -> ModuleRegistry:
             [
                 bool_setting("High Light", True),
                 number_setting("Fade", 0.65, 0.1, 1.0, 0.05),
-                mode_setting("Map", "Mini", ["Mini", "Full", "Hidden"]),
+                mode_setting(
+                    "Map",
+                    "Both",
+                    ["Both", "Mini", "Full", "Hidden"],
+                    "雷达标记画在哪种形态的地图上。默认 Both = 接线前的实际画面"
+                    "（缩略与展开态都画）；Mini 只在缩略态画，Full 只在长按展开态画，"
+                    "Hidden 都不画。",
+                ),
             ],
             description="雷达信息显示，并预留地图点击联动接口。",
         ),

@@ -135,6 +135,11 @@ def draw_radar_overlay(
     if age > _RADAR_TTL_SEC:
         return 0
     detail = (0.0 if compact else 1.0) if detail_progress is None else max(0.0, min(1.0, detail_progress))
+    # `RadarOverlay / Map`：经典面板与液态玻璃面板都走这一个门（本函数是
+    # 雷达标记的唯一消费者），同一个开关不会“一处有效一处无效”。
+    # Both（默认）时永远为 True——画面与接线前逐像素相同。
+    if not host.radar_overlay_map_visible(detail):
+        return 0
     fade = max(0.0, min(1.0, (_RADAR_TTL_SEC - age) / 2.0))
     base_opacity = p.opacity()
     warn_color = host.hud_warning()
@@ -387,6 +392,55 @@ class TacticalMapMixin:
         draw_bar(p, line, progress, bar_color, color("#ffffff", 0.10), bar_thickness)
         self.draw_glass_text(p, rect.adjusted(14, 0, -14, 0), text, font, THEME.text, Qt.AlignmentFlag.AlignCenter)
         p.restore()
+
+    #: `RadarOverlay / Map` 的默认档。**必须是 Both**：接线前雷达叠加在
+    #: 缩略态与展开态都画（`MapMarker / Send All`、`RobotOverlay / Color`
+    #: 的同型问题，同一处理：把默认改成等于今天的实际行为，再用断言钉住）。
+    RADAR_MAP_MODE_DEFAULT = "Both"
+
+    #: 展开判定用 `draw_radar_overlay` 自己已经在算的 detail 插值：
+    #: 0=缩略、1=长按展开。取 0.5 作拐点，两处面板共用一个真相源，
+    #: 不在两个渲染路径里各猜一套坐标阈值。
+    RADAR_MAP_FULL_EXPANSION = 0.5
+
+    #: 上一帧实际生效的档位与降级原因，供诊断/HUD 读取（与 autoaim_priority_* 同型）。
+    radar_map_actual: str = "Both"
+    radar_map_reason: str = ""
+
+    def radar_overlay_map_visible(self, detail: float) -> bool:
+        """`RadarOverlay / Map`：雷达叠加要不要画进当前形态的地图。
+
+        取值语义（Both 与接线前逐值相同）：
+          * Both   —— 缩略/展开都画（默认 = 现行画面）；
+          * Mini   —— 只画缩略态；
+          * Full   —— 只画长按展开态；
+          * Hidden —— 都不画（显示开关，不影响数据接收与 TTL）。
+
+        模块查不到、设置项缺失或值不认识：一律回落 Both 并记下原因——
+        “显示开关出错”不该演变成“情报凭空消失”。
+        """
+        expanded = detail >= self.RADAR_MAP_FULL_EXPANSION
+        module = self.registry.get("RadarOverlay")
+        wanted = ""
+        if module is not None:
+            setting = module.get_setting("Map")
+            wanted = str(getattr(setting, "value", "") or "").strip() if setting is not None else ""
+        if wanted == "Hidden":
+            self.radar_map_actual, self.radar_map_reason = "Hidden", ""
+            return False
+        if wanted == "Mini":
+            self.radar_map_actual, self.radar_map_reason = "Mini", ""
+            return not expanded
+        if wanted == "Full":
+            self.radar_map_actual, self.radar_map_reason = "Full", ""
+            return expanded
+        if wanted not in ("", "Both"):
+            self.radar_map_actual = self.RADAR_MAP_MODE_DEFAULT
+            self.radar_map_reason = f"unknown map mode {wanted!r}"
+        else:
+            self.radar_map_actual = self.RADAR_MAP_MODE_DEFAULT
+            self.radar_map_reason = ""
+        return True
 
     def radar_high_light_enabled(self) -> bool:
         """`RadarOverlay / High Light`：要不要把“雷达照射 / 双倍易伤”标出来。
