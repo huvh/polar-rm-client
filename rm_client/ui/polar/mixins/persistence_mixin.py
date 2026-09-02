@@ -46,7 +46,7 @@ from PySide6.QtWidgets import QFileDialog
 # 相对导入层级：rm_client/ui/polar/mixins/ → .... = rm_client、... = rm_client.ui
 from ....config_store import apply_registry_config, export_client_config
 from ....match_modes import MatchModeConfig
-from ....model import PRIMARY_GUI_MODE, Module, normalize_gui_mode
+from ....model import CONTROL_SLOT_ORDER, PRIMARY_GUI_MODE, Module, normalize_gui_mode
 from ....robot_profiles import (
     apply_profile_to_state,
     profile_by_key,
@@ -344,7 +344,29 @@ class PersistenceMixin:
         if announce:
             self.toast(f"配置已加载：{self.current_profile()}")
 
+    def sync_control_binds(self) -> None:
+        """把 ClickGUI 里的“Bind <槽位>”同步到键盘控制桥。
+
+        前端可自定义驾驶键，而后端发的永远是协议槽位；这里就是两者的唯一汇合点。
+        两个槽绑到同一物理键时 `set_bind` 会拒绝，不会默默丢动作。
+        """
+
+        link = self.registry.get("RobotLink")
+        if link is None or self.control is None:
+            return
+        for slot in CONTROL_SLOT_ORDER:
+            setting = link.get_setting(f"Bind {slot}")
+            if setting is None:
+                continue
+            wanted = str(setting.value or slot)
+            if str(self.control.binds.get(slot, "")).lower() == wanted.lower():
+                continue
+            if not self.control.set_bind(slot, wanted):
+                # 被别的槽占用或非法值：回滚显示，不静默失配
+                setting.value = self.control.binds.get(slot, slot)
+
     def sync_runtime_from_registry(self) -> None:
+        self.sync_control_binds()
         scenario = self.registry.get("Scenario")
         scenario_setting = scenario.get_setting("Mode") if scenario else None
         if scenario_setting:

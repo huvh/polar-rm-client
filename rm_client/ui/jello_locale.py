@@ -104,6 +104,8 @@ SETTING_ZH = {
     "Jello List Animations": "Jello 列表动画",
     "Jello List Sound": "Jello 列表音效",
     "Dynamic Island": "灵动岛",
+    "White": "纯白",
+    "Threat": "威胁度",
     "Target HUD": "目标面板",
     "Target Style": "目标样式",
     "Target RPM": "目标转速",

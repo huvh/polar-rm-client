@@ -9,9 +9,25 @@ from typing import Any, Callable
 from .match_modes import MATCH_MODE_KEYS
 from .robot_profiles import RMUC_ROBOTS
 from .scenarios import SCENARIO_MODES
+from .serial_ports import port_choices as polar_port_choices
 
 
 CATEGORIES = ["Combat", "Movement", "Vision", "Strategy", "System", "Render"]
+
+# 键鼠/驾驶协议槽的固定顺序，与 KeyboardMouseControl 位序一致。
+CONTROL_SLOT_ORDER = (
+    "W", "S", "A", "D", "SHIFT", "CTRL", "Q", "E",
+    "R", "F", "G", "Z", "X", "C", "V", "B",
+)
+
+# 可绑定的物理键候选（与 control.BINDABLE_KEY_NAMES 保持同步）。
+CONTROL_BIND_OPTIONS = [
+    "W", "A", "S", "D", "Q", "E", "R", "F", "G", "Z", "X", "C", "V", "B",
+    "Shift", "RightShift", "Ctrl", "Space", "Tab", "Enter", "Escape",
+    "Backspace", "Delete", "Insert", "Home", "End", "PageUp", "PageDown",
+    "Up", "Down", "Left", "Right", "F1", "F2", "F3", "F4", "F5",
+    "F6", "F7", "F8", "F9", "F10", "F11", "F12", "None",
+]
 
 PRIMARY_GUI_MODE = "JelloSigma"
 
@@ -408,6 +424,11 @@ class RobotState:
     vision_kill_status: str = "IDLE"
     official_feed_at: float = 0.0
     official_robot_health: list[int] = field(default_factory=list)
+    # GlobalUnitStatus.robot_bullets follows the fixed own-team role order
+    # (Hero, Engineer, Infantry 3, Infantry 4, Sentry).  Keep the authoritative
+    # vector separate from backend diagnostics so the HUD can be remapped when
+    # RobotStaticStatus later corrects this client's robot_id.
+    official_robot_bullets: list[int] = field(default_factory=list)
     official_events_online: bool = False
     kill_streak: int = 0
     visual_kill_count: int = 0
@@ -488,17 +509,103 @@ class RobotState:
     official_state_active: bool = False
     official_state_at: float = 0.0
 
+    # --- 队内 StandardRobot++ 0x5A 链路（下位机直供真值）-----------------
+    # overlay 由 backend/polar_bridge.py 汇总，在 tick() 之后统一回写，因此
+    # 不受「仿真先跑还是数据段先到」的顺序影响。
+    polar_overlay: dict[str, Any] = field(default_factory=dict)
+    polar_link_active: bool = False
+    polar_link_age_s: float = float("inf")
+    # 驾驶/云台授权与仲裁结果：上车时操作员必须能直接看到“现在指令能不能生效”
+    polar_drive_armed: bool = False
+    polar_gimbal_client: bool = False
+    polar_authority_state: str = "PASSIVE"
+    polar_authority_reason: str = ""
+    # 指令-实测校验：IDLE/WAITING/OK/NO_MOTION/STUCK/NO_FEEDBACK/STALE_FEEDBACK/NO_LINK
+    polar_motion_state: str = "IDLE"
+    polar_motion_detail: str = ""
+    polar_segments_received: int = 0
+    polar_dropped_segments: int = 0
+    # 云台/底盘姿态与实测速度：官方裁判协议不提供，是队内链路的独有增量
+    gimbal_pitch_deg: float = 0.0
+    imu_pitch_deg: float = 0.0
+    imu_roll_deg: float = 0.0
+    chassis_yaw_rate_rps: float = 0.0
+    measured_vx_mps: float = 0.0
+    measured_vy_mps: float = 0.0
+    measured_wz_rps: float = 0.0
+    # 下位机上报的执行器/部件状态
+    chassis_error: bool = False
+    gimbal_error: bool = False
+    shoot_error: bool = False
+    drive_ready: bool = False
+    armor_id: int = 0
+    launch_frequency_hz: int = 0
+    bullet_type: int = 0
+    recovery_buff: int = 0
+    vulnerability_buff: int = 0
+    report_cooling_buff: int = 0
+    rfid_status: int = 0
+    polar_debug_packages: dict[str, float] = field(default_factory=dict)
+    # 队内链路与官方结构体形状不兼容的增量数据，一律另存，不改写
+    # map_robots / robot_positions / official_robot_health 这些官方拥有的容器。
+    polar_self_x: float = 0.0
+    polar_self_y: float = 0.0
+    polar_self_angle_deg: float = 0.0
+    polar_ally_hp: dict[int, int] = field(default_factory=dict)
+    polar_ground_positions: dict[int, tuple[float, float]] = field(default_factory=dict)
+    polar_gold_coin: int = 0
+    polar_fortress_allowance: int = 0
+    polar_game_progress: int = 0
+    polar_game_type: int = 0
+    polar_stage_remain_s: float = 0.0
+    polar_event_bitmap: int = 0
+    polar_warning_level: int = 0
+    polar_warning_robot_id: int = 0
+    #: 机器人自己在 0x0A 里上报的编号。与操作员选的 `robot_id` 分开存，
+    #: 两者不一致就是“界面选的车和实际连的车不是同一台”，必须告警。
+    polar_reported_robot_id: int = 0
+    polar_warning_count: int = 0
+    polar_module_errors: dict[str, bool] = field(default_factory=dict)
+
     # Buff 类型分组（对齐 backend BUFF_TYPE_NAMES：1=攻击 2=防御 3=冷却
     # 4=底盘功率 5=回血）。攻击/防御两组作为指示灯语义；其余类型计入详情。
     BUFF_ATK_TYPES = frozenset({1})
     BUFF_DEF_TYPES = frozenset({2, 4, 5})
+    MODULE_INDICATOR_FIELDS = (
+        ("PWR", ("power_manager",)),
+        ("SHT", ("small_shooter", "big_shooter")),
+        ("CV", ("video_transmission",)),
+        ("ARM", ("armor",)),
+        ("MAIN", ("main_controller",)),
+    )
+
+    @property
+    def effective_capacitor_percent(self) -> int:
+        """电容/缓冲百分比的**唯一来源**：优先用裁判系统真实字段。
+
+        为什么不能直接用 `capacitor_percent`：那个字段只在 mock tick 里被赋值，
+        真实的 RobotDynamicStatus 从不写它。接上真车后它会永远停在 62，
+        于是电容条和"电容见底告警"全都变成死数据——看着在动，实际不动。
+
+        退回顺序：有可信的 max_buffer_energy 就用 current/max 算比例；
+        否则退回 `capacitor_percent`（桌面 mock 场景仍然可看）。
+        """
+        try:
+            maximum = int(self.max_buffer_energy or 0)
+            current = int(self.current_buffer_energy or 0)
+        except (TypeError, ValueError):
+            return max(0, min(100, int(self.capacitor_percent or 0)))
+        if maximum > 0:
+            return max(0, min(100, int(round(100.0 * current / maximum))))
+        return max(0, min(100, int(self.capacitor_percent or 0)))
 
     def buff_indicator_state(self) -> tuple[bool, bool, str]:
         """返回 (攻击增益亮, 防御/回复增益亮, 详情文本)。
 
-        优先消费 backend 解码的 Buff 行（buff_rows 携带 buff_type）；
-        LabDebug 的 mock 行没有 buff_type，此时回退旧演示布尔，保证
-        LabDebug 演示动画不回归。真实对局中该值完全由裁判 Buff 消息驱动。
+        优先消费 backend 解码的本机 Buff 行（buff_rows 携带 buff_type 与
+        robot_id）；LabDebug 的 mock 行没有 buff_type，此时回退旧演示布尔，
+        保证演示动画不回归。真实对局中即使暂时没有本机 Buff 行也返回全灭，
+        绝不借用 mock 布尔或把队友/敌方 Buff 显示成本机状态。
         """
         atk = dfn = False
         names: list[str] = []
@@ -508,6 +615,12 @@ class RobotState:
             if bt is None:
                 continue
             typed = True
+            try:
+                row_robot_id = int(row.get("robot_id", 0) or 0)
+            except (TypeError, ValueError):
+                continue
+            if row_robot_id != int(self.robot_id):
+                continue
             if not row.get("active"):
                 continue
             b = int(bt)
@@ -519,9 +632,46 @@ class RobotState:
             elif b in self.BUFF_DEF_TYPES:
                 dfn = True
                 names.append(f"{label} {remaining}s")
-        if not typed:
+        if not typed and not self.official_state_active:
             return bool(self.small_buff), bool(self.large_buff), ""
         return atk, dfn, "; ".join(names[:4])
+
+    def robot_module_indicator_state(self) -> tuple[tuple[str, bool], ...]:
+        """Return stable HUD chips for authoritative RobotModuleStatus.
+
+        An empty status produces no extra row, preserving the LabDebug layout.
+        Shooter is online when either the small or big projectile module is
+        reported online; every other chip maps one-to-one to the official
+        V1.3.1 field.  Values are decoded integers, where zero means offline.
+        """
+
+        modules = getattr(self, "robot_module_status", None) or {}
+        if not modules:
+            return ()
+        return tuple(
+            (
+                label,
+                any(int(modules.get(field_name, 0) or 0) != 0 for field_name in field_names),
+            )
+            for label, field_names in self.MODULE_INDICATOR_FIELDS
+        )
+
+    def apply_polar_overlay(self) -> None:
+        """把队内 0x5A 链路的真值回写到本状态对象。
+
+        必须在 `tick()` 之后调用：桌面仿真会写同一批字段（底盘/云台朝向、buff、
+        能量等），后写覆盖先写，才能保证接上真机器人时 HUD 显示的是实测量而不是
+        正弦动画。链路过期（`polar_link_active` 为假）时不再覆盖，交还给原有数据源。
+        """
+
+        if not self.polar_overlay:
+            return
+        if not self.polar_link_active:
+            return
+        for name, value in self.polar_overlay.items():
+            if hasattr(self, name):
+                setattr(self, name, value)
+        self.official_state_at = self.official_state_at or time.perf_counter()
 
     def tick(self, dt: float) -> None:
         # The desktop demo must never race 1--10 Hz referee messages. Official
@@ -1157,7 +1307,14 @@ def build_default_registry() -> ModuleRegistry:
                 bool_setting("Armor Boxes", True),
                 bool_setting("Robot ID", True),
                 bool_setting("Distance", True),
-                mode_setting("Color", "Team", ["Team", "Threat", "Accent"]),
+                mode_setting(
+                    "Color",
+                    "White",
+                    ["White", "Team", "Accent", "Threat"],
+                    "装甲盒配色。默认 White = 接线前的实际画面（纯白）；"
+                    "Team 按视觉识别到的装甲板颜色分红蓝；Threat 需威胁度数据，"
+                    "拿不到时降级回 Team 并在诊断里记原因。",
+                ),
                 mode_setting("ESP Style", "3D Wire", ["3D Wire", "3D Glass", "Polar Outline", "Flat 2D"]),
                 number_setting("3D Depth", 0.22, 0.05, 0.50, 0.01),
                 bool_setting("Predict Plates", True),
@@ -1187,7 +1344,16 @@ def build_default_registry() -> ModuleRegistry:
             "M",
             [
                 mode_setting("Mark Type", "Attack", ["Attack", "Defense", "Warning", "Custom"]),
-                bool_setting("Send All", False),
+                # 默认 True 是刻意的：接这个开关之前，发送处一直硬写
+                # `is_send_all=1`（全队广播）。若沿用 False 作默认，接线会把
+                # 广播变成单发——那是比赛可见的行为改变，不该顺带引入。
+                # wire 取值 1..4 按选项顺序映射（协议注释确认 3=mode、6=type，
+                # 但官方文档未列出各取值语义，需与裁判协议表交叉核对）。
+                bool_setting(
+                    "Send All",
+                    True,
+                    "广播给全队。默认开启以匹配接线前的实际发送行为。",
+                ),
                 number_setting("Repeat", 1, 1, 5, 1),
             ],
             description="MapClickInfo/MapClickCmd 的 UI 预留模块。",
@@ -1431,6 +1597,59 @@ def build_default_registry() -> ModuleRegistry:
                 bool_setting("Mock Writes", True),
             ],
             description="RS232/串口桥接 stub，用于后续接入真实机器人。",
+        ),
+        Module(
+            "RobotLink",
+            "System",
+            "None",
+            [
+                # 选项启动时从系统实际探测，机器人 USB CDC 在车上可能是任意 COM 号；
+                # "Auto" 会在启动时自动选中唯一/最像 STM32 的 USB 串口。
+                mode_setting("Port", "Auto", polar_port_choices()),
+                number_setting("Baud", 115200, 9600, 921600, 9600),
+                number_setting("Send Hz", 50, 10, 100, 1),
+                # 能力位：由场景写入，表示本环境允许队内链路真写。
+                bool_setting("Allow Drive", False),
+                # 队内链路的写入开关。**不能**复用场景级标志：场景级 `mock_writes`
+                # 的含义是“裁判/官方链路保持 mock”，而 `allow_polar_drive` 的含义是
+                # “这个场景能不能自动授权驾驶”。早期用后者反推队内写入开关，
+                # 导致大疆官方场景（allow_polar_drive=False）下队内链路被静默 mock，
+                # 一帧都发不出去。现在写入权只属于本设置项。
+                bool_setting("Mock Writes", False),
+                # 允许客户端下发 SHIFT（小陀螺）这类**模式切换**键位。
+                # 默认关：小陀螺是防御性底盘模式、不涉及发射，但它会改变底盘
+                # 行为，所以仍要操作员显式授权。“受击后小陀螺”走 0x5A 需要开启。
+                # 无论本项开关如何，Q/E（摩擦轮）与 F（sc_flag）永不下发。
+                bool_setting("Allow Spin Key", False),
+                # 意图位：由操作员控，两个都要开才会真的发。
+                bool_setting("Client Chassis Drive", False),
+                bool_setting("Client Gimbal Control", False),
+                # 现场约定：视觉 NUC 自瞄优先级最高，默认占用，客户端让位。
+                bool_setting("Vision NUC Occupied", True),
+                number_setting("Speed Scale %", 100, 10, 100, 5),
+                number_setting("Yaw Scale %", 100, 10, 100, 5),
+                number_setting("Gimbal Slew", 8, 1, 45, 1),
+                # 驾驶上行通道。virtual_rc 复用固件已生效的 WASD 驾驶
+                # （chassis_omni.c 读 rc->key.v 直接产生斜坡速度，自带限幅与
+                # 低通），固件只需补一处 VIRTUAL_RC_CTRL → rc_ctrl 接线；
+                # robot_cmd 则需新增 speed_vector 消费者。选 both 可平滑过渡。
+                mode_setting(
+                    "Drive Channel",
+                    "robot_cmd",
+                    ["robot_cmd", "virtual_rc", "both"],
+                ),
+                # 驾驶/键鼠协议槽的可自定义绑定。默认等于历史物理键（W/A/S/D…），
+                # 改绑后上位机发的仍是同一个协议槽位，因此不影响固件语义，
+                # 也不影响“只透传驾驶槽”的安全掩码。
+                *[
+                    mode_setting(f"Bind {slot}", slot, CONTROL_BIND_OPTIONS)
+                    for slot in CONTROL_SLOT_ORDER
+                ],
+            ],
+            description=(
+                "队内 StandardRobot++ 0x5A 链路：读取机器人自身遥测驱动 HUD，"
+                "并上发云台角度与底盘速度。fire 位始终为 0。"
+            ),
         ),
         Module(
             "HUD",

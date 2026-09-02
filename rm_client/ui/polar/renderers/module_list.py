@@ -1061,60 +1061,202 @@ class ModuleListMixin:
             self.draw_text(p, QRectF(row.right() - 25, row.top(), 21, row.height()), str(hp), self.font("poppins_regular", 7.5), THEME.muted, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         p.restore()
 
+    #: 状态卡片 -> 控制它是否出现的模块与设置项名。
+    #: 这三个开关此前只在 tactical_map 的两个构造器里被读，而这里是**第三个
+    #: 消费点**、原先无条件建 4 张卡——同一个设置项在一个面板有效、另一个无效，
+    #: 是本会话反复踩到的那类错。现在三处共用同一判据。
+    STATUS_CARD_SETTING: dict[str, tuple[str, str]] = {
+        "GIMPOWER": ("GimbalPower", "Show Voltage"),
+        "POWERLIM": ("PowerLimit", "Show Limit"),
+        "SPEEDLIM": ("SpeedLimit", "Show Speed"),
+        "CAP": ("Capacitor", "Show Bar"),
+    }
+
+    def status_card_visible(self, label: str) -> bool:
+        """这张卡该不该出现。查不到模块/设置项时返回 True（保持现行为）。"""
+        pair = self.STATUS_CARD_SETTING.get(label)
+        if pair is None:
+            return True
+        module = self.registry.get(pair[0])
+        if module is None or not module.enabled:
+            return False
+        setting = module.get_setting(pair[1])
+        return True if setting is None else bool(getattr(setting, "value", True))
+
+    def status_card_warning(self, label: str, ratio: float) -> bool:
+        """这张卡该不该用告警色。
+
+        - GIMPOWER：`GimbalPower / Warn Below`（伏特）。电压**越低越险**，
+          所以是 `gimbal_power < Warn Below`，不能拿 ratio>阈值去判。
+        - CAP：复用 `Capacitor / Warn`，与 tactical_map 两处构造器同一判据。
+        - POWERLIM / SPEEDLIM：保留原有 ratio>0.78 规则，不改既有观感。
+        """
+        try:
+            value = float(ratio)
+        except (TypeError, ValueError):
+            return False
+        if label == "GIMPOWER":
+            module = self.registry.get("GimbalPower")
+            if module is None or not module.enabled:
+                return False
+            setting = module.get_setting("Warn Below")
+            if setting is None:
+                return False
+            try:
+                floor = float(setting.value)
+            except (TypeError, ValueError):
+                return False
+            if floor <= 0.0:
+                return False  # 0 = 关闭告警
+            return float(self.state.gimbal_power) < floor
+        if label == "CAP":
+            return self.capacitor_below_warn()
+        return label in ("POWERLIM", "SPEEDLIM") and value > 0.78
+
+    def status_card_glow(self, label: str, warning: bool, clean: bool) -> float:
+        """卡片外发光量。
+
+        - 默认（无告警）与改动前完全一致：clean 0.05 / 否则 0.10。
+        - CAP 卡受 `Capacitor / Use Glow` 控制（关掉后为 0）。
+        - GIMPOWER 卡告警时按 `GimbalPower / Glow Alert` 加强发光：
+          这正是该设置项承诺的效果；关掉它则保持原发光量。
+        """
+        base = 0.05 if clean else 0.10
+        if label == "CAP":
+            module = self.registry.get("Capacitor")
+            setting = module.get_setting("Use Glow") if module is not None else None
+            if setting is not None and not bool(getattr(setting, "value", True)):
+                return 0.0
+        if label == "GIMPOWER" and warning:
+            module = self.registry.get("GimbalPower")
+            if module is not None:
+                setting = module.get_setting("Glow Alert")
+                if setting is None or bool(getattr(setting, "value", True)):
+                    return base + 0.22
+        return base
+
     def draw_status_cards_hud(self, p: QPainter, width: int) -> None:
         cards = [
-            ("GIMPOWER", f"{self.state.gimbal_power}V", self.state.gimbal_power / 30.0),
-            ("POWERLIM", f"{self.state.power_limit}W", self.state.power_limit / 120.0),
-            ("SPEEDLIM", f"{self.state.speed_limit}dps", self.state.speed_limit / 720.0),
-            ("CAP", f"{self.state.capacitor_percent}%", self.state.capacitor_percent / 100.0),
+            card for card in (
+                ("GIMPOWER", f"{self.state.gimbal_power}V", self.state.gimbal_power / 30.0),
+                ("POWERLIM", f"{self.state.power_limit}W", self.state.power_limit / 120.0),
+                ("SPEEDLIM", f"{self.state.speed_limit}dps", self.state.speed_limit / 720.0),
+                ("CAP", f"{self.state.effective_capacitor_percent}%", self.state.effective_capacitor_percent / 100.0),
+            )
+            if self.status_card_visible(card[0])
         ]
         x = width - 194
         y = 78.0
         for i, (label, value, ratio) in enumerate(cards):
             active = self.anim.value(f"hud.card.{label}", 1.0, self.anim_duration(0.25 + i * 0.02), Easings.ease_out_pow4, initial=0.0)
             rect = QRectF(x + (1.0 - active) * 30, y + i * 55, 170, 44)
+            clean = self.hud_clean()
+            warning = self.status_card_warning(label, ratio)
             p.save()
             p.setOpacity(active)
-            glow_rect(p, rect, 8, 0.05 if self.hud_clean() else 0.10)
+            glow_rect(p, rect, 8, self.status_card_glow(label, warning, clean))
             rounded_rect(p, rect, 8, self.hud_surface(0.72), self.hud_panel_outline(0.09))
             self.draw_text(p, rect.adjusted(12, 6, -12, -20), label, self.font("poppins_medium", 8), THEME.muted)
             self.draw_text(p, rect.adjusted(12, 15, -12, -5), value, self.font("poppins_bold", 11), THEME.text)
-            draw_bar(p, QRectF(rect.left() + 82, rect.top() + 27, 72, 5), ratio, self.hud_state_color("warning" if label in ("POWERLIM", "SPEEDLIM") and ratio > 0.78 else "info", ratio), color("#ffffff", 0.12))
+            draw_bar(p, QRectF(rect.left() + 82, rect.top() + 27, 72, 5), ratio, self.hud_state_color("warning" if warning else "info", ratio), color("#ffffff", 0.12))
             p.restore()
+
+    #: RM 指示灯 -> 控制它的模块与设置项名。
+    #: 这三行以前全是装饰：`Show State` / `Anti Rotation` / `Show Lock`
+    #: 在界面上能关，但灯永远亮着（`Show Lock` 上一批只接了装甲锁定框，
+    #: 没接这颗灯 —— 同一个设置名管两个视觉元素时，两处都得接，否则
+    #: 用户看到的就是"关了一半"）。
+    #: 没列出的灯不受模块级开关控制。
+    #:
+    #: ATKBUF/DEFBUF 与 Small/Large Buff 的对应不是猜的，证据在本仓库自己的
+    #: 代码里：`RobotState.buff_indicator_state()` 在无类型数据（LabDebug mock）
+    #: 时的回退分支字面返回 `(bool(self.small_buff), bool(self.large_buff), "")` ——
+    #: 即第一返回值（ATKBUF）就是 small_buff，第二返回值（DEFBUF）就是 large_buff。
+    #: 这也符合 RM 术语：小写增益=攻击增益，大写增益=防御增益。
+    RM_INDICATOR_SETTING: dict[str, tuple[str, str]] = {
+        "FRIC": ("FrictionWheel", "Show State"),
+        "LOCK": ("LockState", "Show Lock"),
+        "ANTIRO": ("BuffStatus", "Anti Rotation"),
+        "ATKBUF": ("BuffStatus", "Small Buff"),
+        "DEFBUF": ("BuffStatus", "Large Buff"),
+    }
+
+    def rm_indicator_visible(self, key: str) -> bool:
+        """这颗灯该不该占位。查不到模块或设置项时返回 True（不改现有行为）。
+
+        返回 False 是**整颗灯不出现**，而不是画成熄灭：指示灯数量决定面板
+        行数（rows = ceil(len/3)），所以隐藏会正确地把面板收窄。
+        画成"熄灭"会和"状态真的是关"混淆——操作员分不清是模块关了还是
+        功能没开，那是更糟的歧义。
+        """
+        pair = self.RM_INDICATOR_SETTING.get(key)
+        if pair is None:
+            return True
+        module = self.registry.get(pair[0])
+        if module is None:
+            return True
+        setting = module.get_setting(pair[1])
+        if setting is None:
+            return True
+        return bool(getattr(setting, "value", True))
 
     def draw_rm_indicators_hud(self, p: QPainter, width: int) -> None:
         # Buff 指示：优先裁判 Buff 解码（RobotState.buff_indicator_state），
         # LabDebug mock 行无 buff_type 时自动回退旧演示布尔。
         atk_buf, def_buf, buff_detail = self.state.buff_indicator_state()
         indicators = [
-            ("FRIC", bool(self.state.friction_wheel)),
-            ("LOCK", bool(self.state.lock_state)),
-            ("ATKBUF", atk_buf),
-            ("DEFBUF", def_buf),
-            ("ANTIRO", bool(self.state.anti_rotation)),
-            ("PTE", bool(self.state.pte_ready)),
-            ("JUP", bool(self.state.jump_ready)),
-            ("WHE", bool(self.state.wheel_online)),
-            ("LES", bool(self.state.les_online)),
+            (label, on)
+            for label, on in (
+                ("FRIC", bool(self.state.friction_wheel)),
+                ("LOCK", bool(self.state.lock_state)),
+                ("ATKBUF", atk_buf),
+                ("DEFBUF", def_buf),
+                ("ANTIRO", bool(self.state.anti_rotation)),
+                ("PTE", bool(self.state.pte_ready)),
+                ("JUP", bool(self.state.jump_ready)),
+                ("WHE", bool(self.state.wheel_online)),
+                ("LES", bool(self.state.les_online)),
+            )
+            if self.rm_indicator_visible(label)
         ]
         # 官方模块在线状态（RobotModuleStatus 已解码进 robot_module_status）：
         # 有真实数据时追加一行模块芯片；LabDebug/无数据时不占位、面板不拉高。
-        mods = getattr(self.state, "robot_module_status", None) or {}
-
-        def _mod_online(*keys: str) -> bool:
-            return any(int(mods.get(key, 0) or 0) != 0 for key in keys)
-
-        if mods:
+        indicators += list(self.state.robot_module_indicator_state())
+        # 队内 0x5A 链路芯片：仅在链路参与工作时出现，以免改变官方/实验室
+        # 的既有视觉基线。LNK=下位机在供数，DRV=底盘驾驶已授权，
+        # GIM=云台控制权在客户端（视觉 NUC 占用或抢环锁出时为关）。
+        if bool(getattr(self.state, "polar_link_active", False)):
             indicators += [
-                ("PWR", _mod_online("power_manager")),
-                ("SHT", _mod_online("small_shooter", "big_shooter")),
-                ("CV", _mod_online("video_transmission")),
-                ("ARM", _mod_online("armor")),
-                ("MAIN", _mod_online("main_controller")),
+                ("LNK", True),
+                ("DRV", bool(getattr(self.state, "polar_drive_armed", False))),
+                ("GIM", bool(getattr(self.state, "polar_gimbal_client", False))),
+                # MOT 亮 = 已交叉验证“给了速度且车确实在动”；不亮时要区分
+                # 是没给速度（IDLE）还是发了但没动（STUCK），看下方诊断行。
+                ("MOT", str(getattr(self.state, "polar_motion_state", "IDLE")) == "OK"),
             ]
         rows = -(-len(indicators) // 3)
         chips_bottom = 36 + rows * 28
-        rect = QRectF(width - 244, 78, 220, max(172, chips_bottom + 30))
+        # 链路诊断：连上时要显示端口/段数/仲裁态；连不上时必须把原因摊开，
+        # 否则操作员只看到 LNK 灯灭，分不清是没插、选错口还是固件没回。仅
+        # 在台架/实车场景或链路已活跃时占位，不影响官方/实验室视觉基线。
+        polar_stats = dict((getattr(self.state, "backend_stats", {}) or {}).get("polar_link") or {})
+        polar_wanted = bool(
+            polar_stats
+            and (
+                bool(getattr(self.state, "polar_link_active", False))
+                or str(polar_stats.get("port") or "")
+                in ("Auto",)
+                # 不能再把场景名当条件：队内 0x5A 链路是独立于场景的并行通道，
+                # 在大疆官方场景下配了 COM 口也要显示诊断面板。
+                or bool(str(polar_stats.get("port") or "").strip())
+                and str(polar_stats.get("port") or "").strip() != "Stub"
+            )
+        )
+        link_extra = 20 if polar_wanted else 0
+        # 链路活着时多给一行：排错时最需要的是“我指令 X / 车实测 Y”并排看到。
+        if bool(getattr(self.state, "polar_link_active", False)):
+            link_extra += 20
+        rect = QRectF(width - 244, 78, 220, max(172, chips_bottom + 30 + link_extra))
         active = self.anim.value("hud.rm_indicators", 1.0, self.anim_duration(0.26), Easings.ease_out_pow4, initial=0.0)
         p.save()
         p.setOpacity(active)
@@ -1137,6 +1279,109 @@ class ModuleListMixin:
         ammo = f"17mm {self.state.projectile_allowance_17mm} | 42mm {self.state.projectile_allowance_42mm}"
         ammo_rect = QRectF(rect.left() + 12, rect.top() + chips_bottom + 4, rect.width() - 24, 18)
         self.draw_text(p, ammo_rect, ammo, self.font("poppins_regular", 8.2), THEME.muted, Qt.AlignmentFlag.AlignVCenter)
+        if polar_wanted:
+            decode = dict(polar_stats.get("decode") or {})
+            authority_info = polar_stats.get("authority")
+            if not isinstance(authority_info, dict):
+                authority_info = {}
+            authority = str(authority_info.get("state") or "-")
+            link_alive = bool(polar_stats.get("link_alive"))
+            motion = dict(polar_stats.get("motion") or {})
+            motion_state = str(motion.get("state") or "IDLE")
+            if link_alive:
+                # 兵种上屏：限幅与驾驶权限现在跟“实际连的那台车”走，
+                # 操作员必须能看到现在算的是哪台、限速多少，否则选错车无从发现。
+                # HUD 字体无 CJK 字形，行内用规格里的 hud_code 短码。
+                role_tag = str(polar_stats.get("role_hud_code") or "?")
+                role_id = int(polar_stats.get("role_id") or 0)
+                role_limit = float(polar_stats.get("role_max_linear_mps") or 0.0)
+                base = (
+                    f"ROBOT {polar_stats.get('resolved_port') or polar_stats.get('port')}"
+                    f" · {int(polar_stats.get('segments_received') or 0)} seg"
+                    f" · {role_tag}#{role_id} {role_limit:.2f}m/s"
+                )
+                # 选错车是事故级信息（限速不同、给哨兵下驾驶指令会破坏自动巡线），
+                # 优先于其他一切状态上屏。
+                if str(polar_stats.get("role_mismatch") or ""):
+                    link_text = (
+                        f"{base} · ROLE MISMATCH UI#{int(polar_stats.get('role_selected_id') or 0)}"
+                        f"!=ROBOT#{int(polar_stats.get('role_reported_id') or 0)}"
+                    )
+                    link_color = self.hud_warning()
+                elif str(polar_stats.get("role_drive_block") or ""):
+                    link_text = f"{base} · DRIVE BLOCKED"
+                    link_color = self.hud_warning()
+                # 车辆不响应是比仲裁态更紧急的信息，优先上屏。
+                elif motion_state in ("STUCK", "NO_FEEDBACK", "STALE_FEEDBACK", "NO_MOTION"):
+                    link_text = f"{base} · {motion_state}"
+                    link_color = self.hud_warning()
+                else:
+                    link_text = f"{base} · {authority}"
+                    link_color = self.hud_success() if motion_state == "OK" else self.hud_accent()
+            else:
+                # HUD 字体无 CJK 字形，行内只能用 ASCII 状态码；中文原因放 tooltip。
+                code = str(polar_stats.get("last_error_code") or "") or "NO_STREAM"
+                port = str(polar_stats.get("port") or "-")
+                link_text = f"LINK OFF · {code} · {port}"
+                link_color = self.hud_warning()
+            link_rect = QRectF(rect.left() + 12, rect.top() + chips_bottom + 22, rect.width() - 24, 16)
+            self.draw_text(p, link_rect, link_text, self.font("poppins_medium", 7.6), link_color, Qt.AlignmentFlag.AlignVCenter)
+            detail = (
+                f"兵种 {polar_stats.get('role_label') or '?'}（编号 {int(polar_stats.get('role_id') or 0)}）"
+                f"· {polar_stats.get('role_chassis') or '?'} · 限速 "
+                f"{float(polar_stats.get('role_max_linear_mps') or 0.0):.2f} m/s / "
+                f"{float(polar_stats.get('role_max_yaw_rps') or 0.0):.2f} rad/s\n"
+            )
+            if not polar_stats.get("role_known", True):
+                detail += "⚠ 该兵种的固件参数未能查证，已按保守限速执行，请核对 robot_param_*.h\n"
+            mismatch_text = str(polar_stats.get("role_mismatch") or "")
+            if mismatch_text:
+                detail += f"⚠ {mismatch_text}\n"
+            drive_block_text = str(polar_stats.get("role_drive_block") or "")
+            if drive_block_text:
+                detail += f"⚠ {drive_block_text}\n"
+            detail += (
+                f"端口 {polar_stats.get('port')} → {polar_stats.get('resolved_port') or '未解析'}\n"
+                f"状态码 {polar_stats.get('last_error_code') or 'OK'}\n"
+                f"原因 {polar_stats.get('last_error') or '无'}\n"
+                f"已收段 {polar_stats.get('segment_counts')}\n"
+                f"CRC8 错 {decode.get('crc8_errors', 0)} / CRC16 错 {decode.get('crc16_errors', 0)} / "
+                f"长度错 {decode.get('length_errors', 0)} / 未知段 {decode.get('unknown_segments', 0)}\n"
+                f"仲裁 {authority}：{str(authority_info.get('reason') or '')}\n"
+                f"车辆响应 {motion_state}：{str(motion.get('detail') or '')}\n"
+                f"指令 {float(motion.get('commanded_mps') or 0.0):.2f} m/s / 实测 {float(motion.get('measured_mps') or 0.0):.2f} m/s\n"
+                f"已探测到：{(polar_stats.get('detected_ports') or ['无'])[:4]}\n"
+                f"发送 {int(polar_stats.get('frames_sent') or 0)} 帧（含 {int(polar_stats.get('zero_frames_sent') or 0)} 帧归零）"
+            )
+            self.add_hotspot(link_rect, "polar_link", "diagnostics", tooltip=detail[:500])
+            if link_alive:
+                # 第 3 行：实测速度 + 云台姿态。全 ASCII（HUD 字体无 CJK 字形）。
+                overlay = getattr(self.state, "polar_overlay", {}) or {}
+                spd = float(overlay.get("measured_vx_mps", 0.0) or 0.0)
+                lat = float(overlay.get("measured_vy_mps", 0.0) or 0.0)
+                yaw_rate = float(overlay.get("measured_wz_rps", 0.0) or 0.0)
+                gimbal_yaw = float(overlay.get("gimbal_yaw_deg", 0.0) or 0.0)
+                gimbal_pitch = float(overlay.get("gimbal_pitch_deg", 0.0) or 0.0)
+                telem_text = (
+                    f"v {spd:+.2f}/{lat:+.2f}  w {yaw_rate:+.2f}  G {gimbal_yaw:+.0f}/{gimbal_pitch:+.0f}"
+                )
+                telem_rect = QRectF(rect.left() + 12, rect.top() + chips_bottom + 38, rect.width() - 24, 16)
+                self.draw_text(
+                    p, telem_rect, telem_text, self.font("poppins_medium", 7.4),
+                    THEME.muted, Qt.AlignmentFlag.AlignVCenter,
+                )
+                self.add_hotspot(
+                    telem_rect,
+                    "polar_link",
+                    "telemetry",
+                    tooltip=(
+                        f"实测速度 vx {spd:+.3f} / vy {lat:+.3f} m/s，角速度 {yaw_rate:+.3f} rad/s\n"
+                        f"云台 yaw {gimbal_yaw:+.2f}° / pitch {gimbal_pitch:+.2f}°\n"
+                        f"底盘驾驶授权：{'开' if getattr(self.state, 'polar_drive_armed', False) else '关'}"
+                        f"　云台控制权：{getattr(self.state, 'polar_authority_state', 'PASSIVE')}\n"
+                        f"{getattr(self.state, 'polar_authority_reason', '')}"
+                    )[:500],
+                )
         p.restore()
 
     def build_gpu_module_list(

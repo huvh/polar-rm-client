@@ -30,6 +30,21 @@ KEYBOARD_BITS = {
 }
 CONTROL_KEYS = frozenset(KEYBOARD_BITS)
 
+# 默认绑定：协议槽位 -> 物理键名。与历史行为一致（硬编码 W/A/S/D…），
+# 但现在可以被用户改绑。这里存的是“这个协议槽由哪个物理键触发”，
+# 而不是反过来——因为上位机下发的永远是协议槽位，固件按槽位语义解读。
+DEFAULT_CONTROL_BINDS: dict[str, str] = {slot: slot for slot in KEYBOARD_BITS}
+
+# 可供绑定的物理键名候选（与 `PolarRMWindow.key_name()` 的输出同一命名体系）。
+BINDABLE_KEY_NAMES = (
+    "W", "A", "S", "D", "Q", "E", "R", "F", "G", "Z", "X", "C", "V", "B",
+    "Shift", "RightShift", "Ctrl", "Space", "Tab", "Enter", "Escape",
+    "Backspace", "Delete", "Insert", "Home", "End", "PageUp", "PageDown",
+    "Up", "Down", "Left", "Right", "F1", "F2", "F3", "F4", "F5",
+    "F6", "F7", "F8", "F9", "F10", "F11", "F12",
+    "None",
+)
+
 
 @dataclass
 class ChassisCommand:
@@ -69,6 +84,8 @@ class KeyboardControlBridge:
         self.publisher = publisher
         self.mock_output = bool(mock_output)
         self.key_state: dict[str, bool] = {key: False for key in CONTROL_KEYS}
+        # 协议槽 -> 已绑物理键名；可由前端改绑，默认与旧行为一致。
+        self.binds: dict[str, str] = dict(DEFAULT_CONTROL_BINDS)
         self.mouse_x = 0
         self.mouse_y = 0
         self.mouse_z = 0
@@ -85,6 +102,53 @@ class KeyboardControlBridge:
         # idle, send a bounded 4 Hz neutral frame for the robot watchdog.
         self.idle_zero_interval_s = 0.25
         self._dirty = False
+
+    def set_bind(self, slot: str, key_name: str) -> bool:
+        """改绑一个协议槽。失败时返回 False 且不改变现有状态。
+
+        不允许两个槽位绑到同一个物理键（会造成一键双动作）；也不允许
+        把槽位绑成 "None" 以外的重复值。绑成 "None" 表示该槽不接物理键。
+        """
+
+        slot = str(slot).upper()
+        if slot not in CONTROL_KEYS:
+            return False
+        candidate = str(key_name or "None").strip()
+        if candidate and candidate not in BINDABLE_KEY_NAMES:
+            return False
+        if candidate != "None":
+            lowered = candidate.lower()
+            for other, bound in self.binds.items():
+                if other != slot and str(bound).lower() == lowered:
+                    return False  # 已被别的槽占用
+            # 物理键名与默认槽名相同时，仍要先把旧的同名绑定释放，避免两个槽同时响应
+            for other in list(self.binds):
+                if other != slot and str(self.binds[other]).lower() == lowered:
+                    self.binds[other] = DEFAULT_CONTROL_BINDS[other]
+        self.binds[slot] = candidate or "None"
+        return True
+
+    def reset_binds(self) -> None:
+        self.binds = dict(DEFAULT_CONTROL_BINDS)
+
+    def resolve_slot(self, key_name: str, is_right_shift: bool = False) -> str | None:
+        """把按下的物理键解析为它当前驱动的协议槽（可能有多个）。
+
+        返回所有命中的槽位，调用方逐个 set_key。一个物理键可以合法地驱动
+        多个协议槽（例如 Shift 与 RightShift 共享同一个物理键），但同一个槽
+        只能有一个绑定。
+        """
+
+        name = str(key_name or "").strip()
+        if not name:
+            return ()
+        lowered = name.lower()
+        hits = tuple(
+            slot
+            for slot, bound in self.binds.items()
+            if slot in CONTROL_KEYS and str(bound).lower() == lowered
+        )
+        return hits
 
     def set_key(self, key: str, pressed: bool, state: RobotState, registry: ModuleRegistry) -> ChassisCommand | None:
         key = key.upper()

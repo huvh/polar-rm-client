@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Any
 
 
-SCENARIO_MODES = ["LabDebug", "CampusSimulation", "OfficialEvent"]
+SCENARIO_MODES = ["OfficialEvent", "CampusSimulation", "LabDebug"]
 
 
 @dataclass
@@ -16,6 +16,11 @@ class ConnectionProfile:
     serial_port: str
     serial_baud: int
     video_source: str
+    # 队内 StandardRobot++ 0x5A 链路（机器人自身 USB CDC / 串口）。
+    # 与上面那个 referee 串口是两条不同物理链路，必须分开配置。
+    polar_port: str = "Stub"
+    polar_baud: int = 115200
+    polar_send_hz: float = 50.0
 
 
 @dataclass
@@ -24,6 +29,9 @@ class SafetyProfile:
     allow_real_serial: bool
     allow_mqtt_publish: bool
     enforce_official_limits: bool
+    # 队内链路驾驶开关。默认关闭：只有台架/校内场景显式打开，
+    # 且仍受 LOCKED 状态机与本地看门狗约束。
+    allow_polar_drive: bool = False
 
 
 @dataclass
@@ -131,6 +139,10 @@ class ScenarioManager:
         self._set_setting(registry, "SerialBridge", "Port", config.connection.serial_port)
         self._set_setting(registry, "SerialBridge", "Baud", config.connection.serial_baud)
         self._set_setting(registry, "SerialBridge", "Mock Writes", config.safety.mock_writes)
+        # 队内 0x5A 链路的设置**不在此处触碰**：它是与裁判系统并行的独立通道，
+        # 端口/波特率/频率/驾驶授权全部归 RobotLink 模块自己管，在所有场景下
+        # 一致且持久。曾经由场景写入会覆盖用户选择，把“选了大疆官方就开不了车”
+        # 固化成架构约束，已整块移除。
         self._set_setting(registry, "TongjiVisionBridge", "Vision Kill Sensitivity", vision_sensitivity)
         # Economy is a referee MQTT command path, not a serial path.  Official
         # mode is live by default; local scenarios remain deterministic mocks.

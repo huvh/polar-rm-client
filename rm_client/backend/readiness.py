@@ -82,11 +82,32 @@ class BackendReadinessReport:
         }
 
 
+def _energy_rune_claimed_live(registry: Any) -> bool:
+    """操作员是否“以为真实打符已上线”：模块启用且把 Mock Output 关了。
+
+    registry 为 None 时返回 False（报不出也无法判断，宁可不报也不误报）。
+    """
+
+    if registry is None:
+        return False
+    try:
+        module = registry.get("EnergyAutoAim")
+    except Exception:
+        return False
+    if module is None or not getattr(module, "enabled", False):
+        return False
+    setting = module.get_setting("Mock Output") if hasattr(module, "get_setting") else None
+    if setting is None:
+        return False
+    return not bool(setting.value)
+
+
 def audit_backend(
     manager: Any,
     state: Any,
     *,
     live_evidence: Mapping[str, Any] | None = None,
+    registry: Any = None,
 ) -> BackendReadinessReport:
     """Build a fail-closed report from runtime status plus explicit evidence."""
 
@@ -285,5 +306,18 @@ def audit_backend(
             required=False,
         ),
         ReadinessGate("field_signoff", bool(evidence.get("field_signoff", False)), "operator and safety lead field sign-off", True),
+        # 诚实性闸门（不阻塞 arm，但必须可见）：EnergyAutoAim 目前**没有发送出口**。
+        # 它只在本地视觉源为 Mock 时画一个预测框，`energy_target_locked` 是用
+        # 时间算出来的仿真值。所以操作员把 “Mock Output” 关掉后，看起来是
+        # “上线了真实打符”，实际什么都不会发 —— 属于“静默失效”类陷阱。
+        # 本 gate 的作用：只要有人这么配，诊断里就必须标出来。
+        ReadinessGate(
+            "energy_rune_egress",
+            not _energy_rune_claimed_live(registry),
+            "EnergyAutoAim has no command egress; enabling it with Mock Output off "
+            "does not send anything to the robot (vision rune targeting is not implemented)",
+            False,
+            required=False,
+        ),
     )
     return BackendReadinessReport(gates)

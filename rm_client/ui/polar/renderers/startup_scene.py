@@ -150,6 +150,30 @@ class StartupSceneMixin:
         except Exception:
             return False
 
+    def startup_second_step_enabled(self) -> bool:
+        """`MatchMode / Second Step`：场景选完后要不要插一级 RMUC/RMUL 选择页。
+
+        这个开关以前完全没人读：四个跳转点全部硬写 "match"，所以无论
+        开还是关都必须经二级页。没有该设置项时按 True（保持现行为）。
+        """
+        module = self.registry.get("MatchMode")
+        setting = module.get_setting("Second Step") if module is not None else None
+        if setting is None:
+            return True
+        return bool(getattr(setting, "value", True))
+
+    def startup_page_after_scenario(self) -> str:
+        """场景选完后的下一页。"""
+        return "match" if self.startup_second_step_enabled() else "robot"
+
+    def startup_page_before_robot(self) -> str:
+        """机器人页回退（Backspace）应该回到的上一页。
+
+        必须跟着 `Second Step` 变：否则关掉二级页后，从机器人页
+        按退格会跳到一个本来被跳过的页面，流程看起来像坏了。
+        """
+        return "match" if self.startup_second_step_enabled() else "scenario"
+
     def begin_startup_page_transition(self, page: str) -> None:
         """Switch launcher pages through one reversible GPU-only timeline."""
         if page not in ("scenario", "match", "robot") or page == self.startup_step:
@@ -562,9 +586,10 @@ class StartupSceneMixin:
         body_font = self.font("poppins_medium", 10.5 * scale)
         small_font = self.font("poppins_regular", 8.0 * scale)
         gap = 18.0 * scale
-        card_w = min(292.0 * scale, (width - 112.0 * scale - gap * 2.0) / 3.0)
+        # 四个场景：卡片宽度按 4 列计算，保证 1280宽也不会重叠或溢出
+        card_w = min(292.0 * scale, (width - 112.0 * scale - gap * 3.0) / 4.0)
         card_h = 166.0 * scale
-        total_w = card_w * 3.0 + gap * 2.0
+        total_w = card_w * 4.0 + gap * 3.0
         x = width / 2.0 - total_w / 2.0
         y = height / 2.0 - card_h / 2.0 + 26.0 * scale
 
@@ -1418,8 +1443,10 @@ class StartupSceneMixin:
     def handle_startup_key(self, event: QKeyEvent) -> bool:
         if self.startup_step == "robot":
             if event.key() == Qt.Key.Key_Backspace:
-                self.reset_startup_page_animation("match")
-                self.begin_startup_page_transition("match")
+                # 回退目标跟着 `Second Step`：关掉二级页时不能退回一个被跳过的页
+                back_page = self.startup_page_before_robot()
+                self.reset_startup_page_animation(back_page)
+                self.begin_startup_page_transition(back_page)
                 return True
             profiles = profiles_for_match(self.match_mode_manager.current.key)
             mapping = {getattr(Qt.Key, f"Key_{index + 1}"): profile.key for index, profile in enumerate(profiles[:9])}
@@ -1461,8 +1488,9 @@ class StartupSceneMixin:
         if key is None:
             return False
         self.apply_scenario(str(key), close_home=False)
-        self.reset_startup_page_animation("match")
-        self.begin_startup_page_transition("match")
+        next_page = self.startup_page_after_scenario()
+        self.reset_startup_page_animation(next_page)
+        self.begin_startup_page_transition(next_page)
         self.auto_save_config()
         return True
 

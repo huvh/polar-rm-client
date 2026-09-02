@@ -315,8 +315,11 @@ def _on_action_dropdown_expand(self, payload: Any, point: QPointF, button: int, 
 
 def _on_action_select_scenario(self, payload: Any, point: QPointF, button: int, rect: QRectF) -> None:
     self.apply_scenario(str(payload), close_home=False)
-    self.reset_startup_page_animation("match")
-    self.begin_startup_page_transition("match")
+    # 下一页跟着 `MatchMode / Second Step`：以前四个跳转点全硬写 "match"，
+    # 那个开关无论开关都必须过二级页，等于界面承诺了一个关不掉的东西。
+    next_page = self.startup_page_after_scenario()
+    self.reset_startup_page_animation(next_page)
+    self.begin_startup_page_transition(next_page)
     self.auto_save_config()
 
 
@@ -342,8 +345,11 @@ def _on_action_startup_back(self, payload: Any, point: QPointF, button: int, rec
 
 
 def _on_action_startup_back_match(self, payload: Any, point: QPointF, button: int, rect: QRectF) -> None:
-    self.reset_startup_page_animation("match")
-    self.begin_startup_page_transition("match")
+    # 这是机器人页上的"返回"按钮，回退目标必须与 Backspace 一致，
+    # 否则关掉二级页时两个入口会跳到不同页面。
+    back_page = self.startup_page_before_robot()
+    self.reset_startup_page_animation(back_page)
+    self.begin_startup_page_transition(back_page)
 
 
 def _on_action_startup_open_gui(self, payload: Any, point: QPointF, button: int, rect: QRectF) -> None:
@@ -1039,7 +1045,16 @@ class InputDispatchMixin:
             return False
         key = self.key_name(event)
         self.control.mock_output = bool(self.backend.mqtt.mock_output)
-        command = self.control.set_key(key, pressed, self.state, self.registry)
+        # 走绑定层：用户可能把“前进”改绑到↑等任意键。上位机下发的永远是
+        # 协议槽位，所以改绑不影响固件侧语义，也不影响驾驶键掩码。
+        slots = self.control.resolve_slot(key) or ()
+        if not slots:
+            return False
+        command = None
+        for slot in slots:
+            result = self.control.set_key(slot, pressed, self.state, self.registry)
+            if result is not None:
+                command = result
         if command is None:
             return False
         if pressed and time.perf_counter() - self.last_control_toast > 1.2:

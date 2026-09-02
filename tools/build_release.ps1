@@ -200,6 +200,36 @@ try {
     }
     Set-Content -LiteralPath (Join-Path $sourceRoot "BUILD_COMMIT.txt") -Value $commit -Encoding ASCII
 
+    # 队内 0x5A 链路的协议规格是数据文件（电控改它即可适配新固件）。
+    # 代码在规格缺失/损坏时会回退到内置表继续跑，所以“能跑”不代表“规格已 shipped”。
+    # 发布一个缺规格的包，会让电控改的 JSON 静默失效 —— 必须在这里拦住。
+    $polarSpecJson = Join-Path $sourceRoot "rm_client\backend\polar_protocol.json"
+    $polarSpecPy  = Join-Path $sourceRoot "rm_client\backend\polar_spec.py"
+    $polarRolesPy = Join-Path $sourceRoot "rm_client\robot_roles.py"
+    foreach ($pair in @(@($polarSpecJson, "polar protocol spec"), @($polarSpecPy, "polar spec loader"), @($polarRolesPy, "robot role table"))) {
+        if (-not (Test-Path -LiteralPath $pair[0] -PathType Leaf)) {
+            throw "$($pair[1]) missing from the release source tree: $($pair[0]). " +
+                  "Untracked files are not archived by git archive - commit them first."
+        }
+    }
+
+    # 不只要文件在，还要真能加载且不回退
+    & (Join-Path $clientRoot ".venv\Scripts\python.exe") -c @"
+import sys
+sys.path.insert(0, r'$sourceRoot')
+from rm_client.backend import polar_spec
+spec = polar_spec.load_spec(r'$polarSpecJson')
+if not spec.ok:
+    raise SystemExit('polar protocol spec failed validation: ' + spec.error_text())
+if not spec.segment_formats:
+    raise SystemExit('polar protocol spec loaded but produced no segment table')
+if not spec.roles:
+    raise SystemExit('polar protocol spec loaded but produced no role table')
+print('polar spec OK: %d segments, %d roles, %d warnings'
+      % (len(spec.segment_formats), len(spec.roles), len(spec.warnings)))
+"@
+    if ($LASTEXITCODE -ne 0) { throw "polar protocol spec is not usable in the release source tree" }
+
     # The two licensed wallpaper inputs intentionally stay outside Git. Inject
     # the hash-locked copies into the disposable source tree before tests and
     # freezing so both exercise exactly the resources shipped in the bundle.
@@ -244,6 +274,19 @@ try {
         # already selected the Windows platform plugin.
         $env:QT_QPA_PLATFORM = "offscreen"
         Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\backend_protocol_test.py") "backend_protocol" 240 $testLogRoot
+        # Team StandardRobot++ 0x5A link: framing/CRC parity with the team's own
+        # reference implementation, HUD overlay + arbitration, a virtual-robot
+        # end-to-end loop, and a real-window startup path. These are the gates
+        # that prove the client can talk to the actual robots, so a release must
+        # never be cut without them.
+        Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\polar_spec_test.py") "polar_spec" 180 $testLogRoot
+        Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\robot_roles_test.py") "robot_roles" 180 $testLogRoot
+        Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\polar_link_test.py") "polar_link" 180 $testLogRoot
+        Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\polar_bridge_test.py") "polar_bridge" 240 $testLogRoot
+        Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\polar_integration_test.py") "polar_integration" 240 $testLogRoot
+        Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\polar_selftest_test.py") "polar_selftest" 240 $testLogRoot
+        Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\polar_startup_test.py") "polar_startup" 240 $testLogRoot
+        Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\api_freeze_test.py") "api_freeze" 180 $testLogRoot
         Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\field_candidate_test.py") "field_candidate" 240 $testLogRoot
         Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\smoke_test.py") "ui_backend_regression" 300 $testLogRoot
         Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\gpu_compositor_test.py") "gpu_compositor" 180 $testLogRoot

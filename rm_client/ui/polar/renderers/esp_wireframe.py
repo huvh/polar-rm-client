@@ -119,7 +119,68 @@ class EspWireframeMixin:
             return False
         cx = sum(point.x() for point in points) / len(points)
         cy = sum(point.y() for point in points) / len(points)
-        return math.hypot(cx - logical_w * 0.5, cy - logical_h * 0.5) <= radius
+        if math.hypot(cx - logical_w * 0.5, cy - logical_h * 0.5) > radius:
+            return False
+        # 第二道门槛：ArmorAutoAim 的 `Fov`（角度）。两道取交集（都满足才算）。
+        return self.armor_center_in_autoaim_fov_angle(armor, result)
+
+    def autoaim_fov_radius_source_px(self) -> float | None:
+        """把 ArmorAutoAim 的 `Fov`（度）换算成源图像像素半径；不能换算时返回 None。
+
+        这个设置项曾经是**纯装饰**：界面上能拖 10~180 度，但全仓没人读它，
+        实际锁定范围只由像素半径 `Circle Size` 决定。
+
+        换算用针孔模型的精确关系 `半径 = fx × tan(fov/2)`，fx 来自相机内参
+        ——就是 vision.py:254 求 aim_yaw_deg 用的同一个 fx，不是拍脑袋的比例。
+
+        **拿不到内参时返回 None，含义是“不加这道门槛”**，而不是猜一个换算系数。
+        未标定就瞎换算，等于用一个编出来的数字去改变瞄准行为，比赛客户端
+        不能这么做。返回 None 时行为与接线前完全一致（只有像素圆生效）。
+        """
+
+        module = self.registry.get("ArmorAutoAim")
+        if module is None or not module.enabled:
+            return None
+        fov_deg = float(self.get_setting_number(module, "Fov", 0.0) or 0.0)
+        # <=0 或 >=360 都不是有意义的视场角（设置项范围 10..180）
+        if fov_deg <= 0.0 or fov_deg >= 360.0:
+            return None
+        try:
+            profile = getattr(self.calibration, "profile", None)
+            matrix = list(getattr(profile, "camera_matrix", []) or [])
+            fx = float(matrix[0]) if matrix else 0.0
+        except (TypeError, ValueError, IndexError):
+            return None
+        if fx <= 0.0:
+            return None
+        # `Fov` 读作**全宽**角度（上限 180 = 整幅画面），所以取半角。
+        return fx * math.tan(math.radians(fov_deg) * 0.5)
+
+    def armor_center_in_autoaim_fov_angle(self, armor, result: VisionResult) -> bool:
+        """装甲板中心是否落在 `Fov` 度数的锥形内（在**源像素**空间量）。
+
+        必须在源像素空间算：fx 是对源图像定义的，换算成 HUD 逻辑像素反而
+        多一层缩放误差。`armor.points` 本身就是源坐标，所以这里不需要变换。
+        """
+
+        radius_px = self.autoaim_fov_radius_source_px()
+        if radius_px is None:
+            return True  # 不能换算 -> 不加这道门（见上面的说明）
+        if armor is None or not getattr(armor, "points", ()):
+            return False
+        src_w = int(getattr(result, "source_width", 0) or 0)
+        src_h = int(getattr(result, "source_height", 0) or 0)
+        if src_w <= 0 or src_h <= 0:
+            return True
+        # 内参只对标定时的分辨率成立；分辨率不匹配时换算无效，宁可不限制。
+        try:
+            if not self.calibration.is_valid_for(src_w, src_h):
+                return True
+        except (AttributeError, TypeError):
+            return True
+        cx = sum(float(point[0]) for point in armor.points) / len(armor.points)
+        cy = sum(float(point[1]) for point in armor.points) / len(armor.points)
+        return math.hypot(cx - src_w * 0.5, cy - src_h * 0.5) <= radius_px
 
     def vision_target_in_autoaim_fov(self, target: VisionTarget, width: int, height: int) -> bool:
         module = self.registry.get("ArmorAutoAim")
@@ -129,6 +190,113 @@ class EspWireframeMixin:
         cx = target.x + target.w * 0.5
         cy = target.y + target.h * 0.5
         return math.hypot(cx - width * 0.5, cy - height * 0.5) <= radius
+
+    #: 上一选靶实际生效的优先级与降级原因，供诊断/HUD 读取。
+    #: 为什么要暴露：操作员在下拉框里选了“血量优先”，但如果根本没有
+    #: 裁判系统流量（台架上只连机器人 USB），那个选择兑不了。不告知
+    #: 就等于“选了跟没选一样”，与本次要修的孤儿设置项是同一类问题。
+    autoaim_priority_actual: str = "Armor"
+    autoaim_priority_reason: str = ""
+
+    def _armor_distance_m(self, armor) -> float:
+        """取装甲板距离（米）；拿不到时返回一个极大值而不是 0。
+
+        0 会被当成“贴脸”，把缺数据的靶排到最前，那比不优先更坑。
+        """
+        for attr in ("distance_m", "depth_m"):
+            try:
+                value = float(getattr(armor, attr, 0.0) or 0.0)
+            except (TypeError, ValueError):
+                continue
+            if value > 0.0:
+                return value
+        return float("inf")
+
+    def _armor_health_fraction(self, armor) -> float | None:
+        """从 state.robot_rows 查该靶所属机器人的剩余血量比例；查不到返回 None。
+
+        刻意不重抄 official_robot_health 的索引数学：那张表已在
+        manager.sync_frontend_state 里算好了（含敌我 id 偏移、存活状态），
+        再实现一遍只会漂移。复用它是单一真相。
+        """
+        target_id = int(getattr(armor, "target_id", -1) or -1)
+        if target_id <= 0:
+            return None
+        try:
+            rows = list(getattr(self.state, "robot_rows", []) or [])
+        except (AttributeError, TypeError):
+            return None
+        for row in rows:
+            try:
+                if int(row.get("id", -1)) != target_id:
+                    continue
+            except (AttributeError, TypeError, ValueError):
+                continue
+            if str(row.get("state", "")) == "DEAD":
+                return None  # 已阵亡的不当低血量优先目标
+            hp = float(row.get("hp", 0) or 0)
+            hp_max = float(row.get("max", 1) or 1)
+            if hp <= 0.0 or hp_max <= 0.0:
+                return None
+            return max(0.0, min(1.0, hp / hp_max))
+        return None
+
+    def pick_autoaim_armor(self, candidates, priority: str):
+        """按 Priority 选装甲板；数据不足时降级并记下原因。
+
+        这个设置项曾经也是纯装饰：界面上有 Armor/Distance/Health/Radar
+        四个选项，但选靶代码写死了 `max(..., key=confidence)`，选哪个都一样。
+
+        降级规则（都是“退到原有行为”，不引入新风险）：
+          Distance —— 装甲观察量自带 distance_m/depth_m，不依赖裁判系统；
+          Health   —— 需要 robot_rows（来自裁判系统），没数据则降级；
+          Radar    —— **故意不实现**。雷达给的是地图坐标，与装甲板之间
+            需要“地图位置→图像像素”的投影才能对应，那是有真实误差来源的
+            独立功能，拿位置猜匹配会让客户端瞄错车，所以直接降级。
+        """
+        wanted = str(priority or "Armor").strip()
+        actual = wanted
+        reason = ""
+
+        if not candidates:
+            return None
+
+        def by_confidence(armor) -> tuple[float, int]:
+            # 同分用 plate_id 定点，避免每帧在等置信度靶之间反复跳变
+            return (float(armor.confidence), int(getattr(armor, "plate_id", -1) or -1))
+
+        chosen = None
+        if wanted == "Distance":
+            actual = "Distance"
+            # 距离近者优先。_armor_distance_m 拿不到时返回 inf，会被排到最继，
+            # 而不会像 0 那样被当成“贴脸”插到最前。
+            chosen = max(
+                candidates,
+                key=lambda a: (-(self._armor_distance_m(a)), by_confidence(a)[0]),
+            )
+        elif wanted == "Health":
+            scored = [(self._armor_health_fraction(a), a) for a in candidates]
+            known = [(frac, a) for frac, a in scored if frac is not None]
+            if known:
+                actual = "Health"
+                # 血量低者优先；同血量再按置信度
+                chosen = min(known, key=lambda item: (item[0], -by_confidence(item[1])[0]))[1]
+            else:
+                reason = "无裁判系统血量数据（未连裁判机或尚未收到血量帧），已按置信度选靶"
+        elif wanted == "Radar":
+            reason = "雷达上报的是地图坐标，与装甲板需要位置投影才能对应，未实现；已按置信度选靶"
+        elif wanted not in ("Armor",):
+            reason = f"未知优先级 {wanted!r}，已按置信度选靶"
+
+        if reason:
+            actual = "Armor"
+        # 两条路径都必须写：上一版在 Distance/Health 命中时提前 return 了，
+        # 诊断字段会停在上一帧的旧值，界面会显示错的降级原因。
+        self.autoaim_priority_actual = actual
+        self.autoaim_priority_reason = reason
+        if chosen is not None:
+            return chosen
+        return max(candidates, key=by_confidence)
 
     def apply_autoaim_fov_lock(self, result: VisionResult) -> VisionResult:
         """Keep all ESP detections; only plates inside FOV may be aim_armor / locked."""
@@ -145,7 +313,9 @@ class EspWireframeMixin:
                 if len(armor.points) == 4 and self.armor_center_in_autoaim_fov(armor, result)
             ]
             if candidates:
-                aim = max(candidates, key=lambda armor: float(armor.confidence))
+                priority_setting = module.get_setting("Priority") if module is not None else None
+                priority = str(getattr(priority_setting, "value", "Armor") or "Armor")
+                aim = self.pick_autoaim_armor(candidates, priority)
         # Predicted plates of the locked target may still draw; aim face only when in FOV.
         tracking = result.tracking_state
         if aim is None and (result.detections or result.predicted_armors):
@@ -202,7 +372,26 @@ class EspWireframeMixin:
             return False
         return self.calibration.is_valid_for(result.source_width, result.source_height)
 
+    def lock_indicator_visible(self) -> bool:
+        """`LockState / Show Lock`：要不要画目标锁定框。
+
+        这个开关以前没人读，关掉后锁定框照旧画。
+
+        保守取向：模块不存在、已关闭、或查不到该设置项时都返回 True，
+        等于保持接线前的行为。只有“模块开着 + 开关明确关了”才隐藏，
+        避免因为配置缺失把 HUD 元素弄消失。
+        """
+        module = self.registry.get("LockState")
+        if module is None or not module.enabled:
+            return True
+        setting = module.get_setting("Show Lock")
+        if setting is None:
+            return True
+        return bool(getattr(setting, "value", True))
+
     def draw_target_overlay(self, p: QPainter, target: VisionTarget, module: Module | None = None) -> None:
+        if not self.lock_indicator_visible():
+            return
         rect = QRectF(target.x, target.y, target.w, target.h)
         locked = self.state.energy_target_locked if target.kind == "energy" else self.state.target_locked
         setting = module.get_setting("Lock Style") if module else None
@@ -423,8 +612,37 @@ class EspWireframeMixin:
             p, center, radius, line_width=1.15, glow=0.90, alpha=1.0,
         )
 
+    def lock_pulse_strength(self, locked: bool) -> float:
+        """锁定时的呼吸强度 0..1。`LockState / Pulse Locked` 控制它。
+
+        以前这个开关没人读，且原本也不存在任何脉冲——锁定框的透明度是
+        固定 0.94。所以实现取向刻保守：
+
+          * 未锁定 → 0（不脉冲。“锁定脉冲”的含义就是只在已锁定时呼吸）
+          * 开关关 → 0，且调用处会回退到原值 0.94，画面与接线前逐值一致
+          * 查不到设置项 → 按 True 处理
+
+        返回的是幅度，调用方把它叠到原有 alpha 上，而不是接管颜色：
+        颜色已经由 locked/unlocked 在 accent/danger 之间切换，再叠一重
+        语义会让告警色和脉冲混在一起。
+        """
+        if not locked:
+            return 0.0
+        module = self.registry.get("LockState")
+        # 模块整体关闭时不得引入新增动画：脉冲是这个模块提供的，
+        # 关掉模块后还多出一套呼吸，等于“关不掉”。
+        if module is None or not module.enabled:
+            return 0.0
+        setting = module.get_setting("Pulse Locked")
+        if setting is None or not bool(getattr(setting, "value", True)):
+            return 0.0
+        wave = 0.5 + 0.5 * math.sin(time.perf_counter() * 4.0)
+        return max(0.0, min(1.0, wave))
+
     def draw_white_outline_lock(self, p: QPainter, rect: QRectF, target: VisionTarget, locked: bool) -> None:
-        alpha = 0.94 if locked else 0.62
+        # 开脉冲时在 0.94 基础上向下呼吸；不开时就是原来的常量 0.94。
+        base_alpha = 0.94 if locked else 0.62
+        alpha = max(0.30, base_alpha - 0.30 * self.lock_pulse_strength(locked))
         accent = self.hud_accent() if locked else self.hud_danger()
         p.save()
         p.setBrush(Qt.BrushStyle.NoBrush)
@@ -534,6 +752,43 @@ class EspWireframeMixin:
         offset = QPointF(-math.sin(angle) * thickness, math.cos(angle) * thickness * 0.34)
         return [center + (point - center) * 0.90 + offset for point in front]
 
+    def armor_depth_visible(self) -> bool:
+        """`Armor3DESP / Show Depth`：要不要画背面的 8 条深度边。
+
+        这个开关以前没人读。注意它**只能控制深度边**：不能靠传空
+        `back` 来实现，因为两个盒子函数开头都是 `len(back) != 4: return`，
+        那样会变成整个装甲盒消失，而不是“只去掉深度线”。
+
+        取不到设置项时返回 True（= 保持接线前的 12 边行为）。
+        """
+        module = self.registry.get("Armor3DESP")
+        if module is None:
+            return True
+        setting = module.get_setting("Show Depth")
+        if setting is None:
+            return True
+        return bool(getattr(setting, "value", True))
+
+    def armor_box_edges(
+        self, front: list[QPointF], back: list[QPointF], *, show_depth: bool | None = None
+    ) -> list[tuple[QPointF, QPointF]]:
+        """拼装甲盒边：开深度时 12 条（前框 4 + 背框 4 + 连接 4），否则只 4 条。
+
+        抽成函数而不是在两个盒子绘制里各写一遍 for 循环：两处必须一致，
+        否则会出现"一个样式去了深度线、另一个没去"的不一致。
+        """
+        if len(front) != 4:
+            return []
+        depth_on = self.armor_depth_visible() if show_depth is None else bool(show_depth)
+        edges: list[tuple[QPointF, QPointF]] = []
+        has_back = len(back) == 4
+        for i in range(4):
+            edges.append((front[i], front[(i + 1) % 4]))
+            if depth_on and has_back:
+                edges.append((back[i], back[(i + 1) % 4]))
+                edges.append((front[i], back[i]))
+        return edges
+
     def draw_3d_esp_box(self, p: QPainter, front: list[QPointF], back: list[QPointF], c: QColor, line_width: float, *, glass: bool, ghost: bool, label: str | None = None) -> None:
         if len(front) != 4 or len(back) != 4:
             return
@@ -543,12 +798,8 @@ class EspWireframeMixin:
         alpha = max(0.15, min(1.0, c.alphaF() if isinstance(c, QColor) else 1.0))
         if ghost:
             alpha *= 0.72
-        # Full 12-edge outlined box — fluorescent white only (no fill default).
-        edges: list[tuple[QPointF, QPointF]] = []
-        for i in range(4):
-            edges.append((front[i], front[(i + 1) % 4]))
-            edges.append((back[i], back[(i + 1) % 4]))
-            edges.append((front[i], back[i]))
+        # 开着 Show Depth 时是完整 12 边闭合盒；关掉后只留前框 4 边。
+        edges = self.armor_box_edges(front, back)
         self.draw_fluorescent_white_segments(
             p, edges, line_width=base_w, glow=0.85, alpha=alpha, dashed=ghost,
         )
@@ -605,11 +856,7 @@ class EspWireframeMixin:
         alpha = max(0.15, min(1.0, c.alphaF() if isinstance(c, QColor) else 1.0))
         if ghost:
             alpha *= 0.72
-        edges: list[tuple[QPointF, QPointF]] = []
-        for i in range(4):
-            edges.append((front[i], front[(i + 1) % 4]))
-            edges.append((back[i], back[(i + 1) % 4]))
-            edges.append((front[i], back[i]))
+        edges = self.armor_box_edges(front, back)
         self.draw_fluorescent_white_segments(
             p, edges, line_width=base_w, glow=0.85, alpha=alpha, dashed=ghost,
         )
@@ -652,7 +899,7 @@ class EspWireframeMixin:
         base_w = max(0.75, float(line_width) * 0.5 * (0.85 if predicted else 1.0))
         glow = 0.85
 
-        if len(back) == 4:
+        if len(back) == 4 and self.armor_depth_visible():
             back_edges = [(back[i], back[(i + 1) % 4]) for i in range(4)]
             depth_edges = [(front[i], back[i]) for i in range(4)]
             self.draw_fluorescent_white_segments(
@@ -880,6 +1127,30 @@ class EspWireframeMixin:
             emitted.add(aim_key)
         return batch
 
+    def vision_gpu_renderer_allows(self) -> bool:
+        """按 `Armor3DESP / Renderer` 判断能不能走 GPU 线框路径。
+
+        这个开关以前完全没人读：选项里有 CPU，但分流只看
+        `vision_wire_gpu.available`，所以选 CPU 也没用——GPU 在时永久走 GPU。
+
+        返回 False 时 `native_owner` 为 False，调用侧会算
+        `include_vision = not native_vision_owner`（polar_app.py:1726），
+        于是 CPU 的 QPainter 路径（`draw_armor_3d_esp`）接管。
+        不是“什么都不画”，而是真的降到另一条已存在的渲染路径。
+
+        取不到设置项、模块缺失或取值不认识时返回 True（= 不干预，等价于
+        GPU Auto），保持接线前的现行为。只有明确选了 CPU 才强制降级。
+        """
+        module = self.registry.get("Armor3DESP")
+        if module is None:
+            return True
+        setting = module.get_setting("Renderer")
+        if setting is None:
+            return True
+        value = str(getattr(setting, "value", "") or "").strip().lower()
+        # 只有明确选了 CPU 才强制降级；其余取值（包括 "gpu auto"）不干预
+        return value != "cpu"
+
     def paint_gpu_vision_layer(
         self,
         functions,
@@ -900,6 +1171,8 @@ class EspWireframeMixin:
             and self.setting_mode(module, "Style", "PolarMechanicalWire") == "PolarMechanicalWire"
             and self.setting_mode(overlay, "ESP Style", "3D Wire") != "Polar Outline"
             and self._vision_source != "Mock"
+            # `Renderer` 选 CPU 时必须真的降到 QPainter 路径，而不是照走 GPU
+            and self.vision_gpu_renderer_allows()
             and self.vision_wire_gpu.available
             and self.clickgui_gpu.available
         )
@@ -926,6 +1199,24 @@ class EspWireframeMixin:
             return True
         finally:
             self.gpu_compositor.end_vision_layer()
+
+    def robot_armor_boxes_visible(self) -> bool:
+        """`RobotOverlay / Armor Boxes`：要不要画装甲线框本体。
+
+        以前这个开关没人读。它与 `ESP Style` 不重叠：`ESP Style` 选的是
+        盒子“长什么样”（3D Wire / Glass / Outline / Flat），本项选的是
+        “画不画盒子”。关掉后标签仍然按 `Show Labels` / `Robot ID` 自己的规则出，
+        因为那是另一组开关管的事。
+
+        查不到设置项时返回 True（= 保持接线前行为）。
+        """
+        module = self.registry.get("RobotOverlay")
+        if module is None:
+            return True
+        setting = module.get_setting("Armor Boxes")
+        if setting is None:
+            return True
+        return bool(getattr(setting, "value", True))
 
     def draw_armor_quad(self, p: QPainter, points: list[QPointF], c: QColor, line_width: float, *, dashed: bool = False, aim: bool = False) -> None:
         if len(points) != 4:
@@ -982,6 +1273,97 @@ class EspWireframeMixin:
         self._armor_geometry_smooth[key] = (points, back_points)
         return replace(armor, points=points, back_points=back_points)
 
+    def robot_overlay_id_suffix(self, armor) -> str:
+        """按 `RobotOverlay / Robot ID` 给出要拼到标签后的机器人编号后缀。
+
+        这个开关以前完全没人读。抽成返回字符串的小函数而不是在绘制里写 if，
+        是为了能直接断言“开了就有编号、关了就没有”，不必靠看图验证。
+
+        `target_id` 未知时是 -1，不能拼出个“#-1”让人以为是某个车，
+        所以宁可不拼。
+        """
+        overlay = self.registry.get("RobotOverlay")
+        # 模块整体关闭时它的设置不得再生效：这些标签虽然由 Armor3DESP 的路径
+        # 绘制，但 `Robot ID` 归 RobotOverlay 管，关了就不应改变别人。
+        if overlay is None or not overlay.enabled:
+            return ""
+        if not self.setting_bool(overlay, "Robot ID", True):
+            return ""
+        try:
+            target_id = int(getattr(armor, "target_id", -1))
+        except (TypeError, ValueError):
+            return ""
+        if target_id <= 0:
+            return ""
+        return f" #{target_id}"
+
+    def robot_overlay_distance_suffix(self, armor) -> str:
+        """按 `RobotOverlay / Distance` 给出要拼到标签里的距离段。
+
+        跟 `Robot ID` 同一个形状：标签里的“12.3m”一直是写死的，
+        界面上那个“距离”开关从来没管过它——关掉之后数字照旧在。
+
+        fail-open 口径与 `lock_indicator_visible()` 一致：**只有“模块开着
+        + 开关明确关了”才隐藏**。模块不存在或整体关闭时仍给距离：
+        接线前就是这个画面（当时根本没人看过模块开关），把“关掉整个
+        模块”顺手变成“抽掉距离”是未经授权的视觉改变。
+
+        注意只管已经存在的那一处：`Polar Outline` 样式的标签本来就不带
+        距离，本批**不**给它新增——那是改现有外观，不是接线。“开了两处都
+        该有距离”这件事需要你们先定，已记进 SETTINGS_GAPS.md。
+        """
+        overlay = self.registry.get("RobotOverlay")
+        if overlay is not None and overlay.enabled and not self.setting_bool(overlay, "Distance", True):
+            return ""
+        try:
+            distance = float(getattr(armor, "distance_m", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            distance = 0.0
+        # 前导空格写在段里：拼接后与接线前的字符串逐字节相同。
+        return f" {distance:.1f}m"
+
+    #: `RobotOverlay / Color` 的默认档。**必须是 White**：接线前代码画的就是
+    #: 纯白（`primary = color("#ffffff", opacity)`），而设置项原来的默认写的是
+    #: `Team`——那个默认值从来没对应过任何真实行为。照旧默认值直接接，
+    #: 会把所有人的装甲盒从白变成红蓝（与 `MapMarker / Send All` 同型问题，
+    #: 同一处理：把默认改成等于今天的实际行为，再用断言钉住）。
+    ROBOT_OVERLAY_COLOR_DEFAULT = "White"
+
+    def robot_overlay_color_mode(self) -> tuple[str, str]:
+        """返回 `(实际生效的配色档, 降级原因)`。
+
+        `Threat`（威胁度）在本仓**没有数据源**：视觉只给装甲板颜色
+        （red/blue/purple/extinguish），裁判给血量但不给“威胁度”。拿血量现算
+        一个威胁度等于发明一套没人定义过的评分——所以与
+        `ArmorAutoAim / Priority` 的 Radar 选项同一处理：**降级并明说原因**，
+        不谎称“已按威胁度着色”。
+
+        查不到模块/设置项、或值不在值域里，都回落 White（= 接线前的画面）。
+        """
+        overlay = self.registry.get("RobotOverlay")
+        wanted = str(self.setting_mode(overlay, "Color", self.ROBOT_OVERLAY_COLOR_DEFAULT) or "").strip()
+        if wanted == "Threat":
+            return "Team", "threat score has no data source (vision reports plate color only)"
+        if wanted not in ("White", "Team", "Accent"):
+            return self.ROBOT_OVERLAY_COLOR_DEFAULT, f"unknown color mode {wanted!r}"
+        return wanted, ""
+
+    def robot_overlay_armor_color(self, armor, opacity: float) -> QColor:
+        """装甲盒主色。`opacity` 沿用调用方算好的值，不另立一套透明度。
+
+        Team 只在看得出装甲板颜色时才用阵营色：`purple` / `extinguish`（灭灯）
+        这些认不出阵营的值**不当成某一方**，回落纯白——把认不出的板涂成
+        “敌方红”比不涂危险得多。
+        """
+        mode, _reason = self.robot_overlay_color_mode()
+        if mode == "Accent":
+            return with_alpha(self.hud_accent(), opacity)
+        if mode == "Team":
+            plate = str(getattr(armor, "color", "") or "").strip().lower()
+            if plate in ("red", "blue"):
+                return with_alpha(self.map_team_color(plate), opacity)
+        return color("#ffffff", opacity)
+
     def draw_armor_3d_esp(self, p: QPainter, width: int, height: int, result: VisionResult, module: Module) -> None:
         if not result.detections and not result.predicted_armors:
             self._armor_geometry_smooth.clear()
@@ -1000,6 +1382,12 @@ class EspWireframeMixin:
         only_secondary = self.setting_bool(overlay, "Only Secondary", True)
         primary = color("#ffffff", opacity)
         aim_color = color("#ffffff")
+        # `RobotOverlay / Color`：三个消费点（观测盒 / Polar Outline 路径 / 主目标面）
+        # 必须用同一个助手，否则同一开关会“一处有效一处无效”。
+        # 默认 White 时下面两个值与接线前逐值相同（由断言钉住）。
+        _color_mode, self.robot_overlay_color_reason = self.robot_overlay_color_mode()
+        if _color_mode != "White":
+            aim_color = self.robot_overlay_armor_color(None, 1.0)
 
         # VisionRenderInterpolator 已按视觉时间戳在显示帧间插值。这里必须直接使用
         # 插值结果，不能再做一次追赶平滑，否则低频推理会呈现明显拖滞和阶梯感。
@@ -1068,7 +1456,7 @@ class EspWireframeMixin:
                 c = aim_color if armor.aim else primary
                 self.draw_minimal_bracket_lock(p, rect, VisionTarget(rect.x(), rect.y(), rect.width(), rect.height(), armor.confidence, armor.label), armor.aim)
                 if show_labels:
-                    self.draw_pill(p, QPointF(rect.left(), rect.top() - 22), f"{armor.label.upper()} {armor.confidence:.0%}", c)
+                    self.draw_pill(p, QPointF(rect.left(), rect.top() - 22), f"{armor.label.upper()} {armor.confidence:.0%}{self.robot_overlay_id_suffix(armor)}", c)
             return
 
         glass = overlay_style == "3D Glass"
@@ -1084,7 +1472,10 @@ class EspWireframeMixin:
                     # 主目标由下方的 Aim Face 单独绘制，不能再作为 RobotOverlay 重复画一次。
                     continue
             ghost = armor.predicted
-            display_color = color("#ffffff", prediction_alpha(armor) * 0.72) if ghost else primary
+            display_color = color("#ffffff", prediction_alpha(armor) * 0.72) if ghost else self.robot_overlay_armor_color(armor, opacity)
+            if not self.robot_armor_boxes_visible():
+                # 不画盒子，也不再为它算背面（避开无谓的投影开销）
+                continue
             back = self.armor_esp_back_points(armor, result, width, height, depth)
             if ghost and aim_front:
                 front, back = self.constrain_prediction_geometry(front, back, aim_front)
@@ -1108,22 +1499,27 @@ class EspWireframeMixin:
                     line_width,
                     glass=glass,
                     ghost=ghost,
-                    label=(f"P{armor.plate_id}" if ghost else f"{armor.label.upper()} {armor.distance_m:.1f}m") if show_labels else None,
+                    label=(
+                        (f"P{armor.plate_id}" if ghost
+                         else f"{armor.label.upper()}{self.robot_overlay_distance_suffix(armor)}{self.robot_overlay_id_suffix(armor)}")
+                        if show_labels else None
+                    ),
                 )
         if aim is not None:
             points = aim_front
             back = self.armor_esp_back_points(aim, result, width, height, depth)
-            if style == "PolarMechanicalWire":
-                self.draw_polar_mechanical_wire(
-                    p,
-                    points,
-                    back,
-                    aim_color,
-                    line_width + 0.35,
-                    predicted=False,
-                )
-            else:
-                self.draw_clean_3d_esp_box(p, points, back, aim_color, line_width + 0.35, glass=glass, ghost=False, label=None)
+            if self.robot_armor_boxes_visible():
+                if style == "PolarMechanicalWire":
+                    self.draw_polar_mechanical_wire(
+                        p,
+                        points,
+                        back,
+                        aim_color,
+                        line_width + 0.35,
+                        predicted=False,
+                    )
+                else:
+                    self.draw_clean_3d_esp_box(p, points, back, aim_color, line_width + 0.35, glass=glass, ghost=False, label=None)
             if show_labels:
                 box = QPolygonF(points).boundingRect()
                 distance = aim.distance_m if aim.distance_m > 0 else aim.depth_m

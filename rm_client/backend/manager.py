@@ -18,9 +18,26 @@ from typing import Any, Callable
 
 from ..model import RobotState
 from ..native_viewer_telemetry import parse_vehicle_telemetry, parse_video_0310_chunk
+from .. import robot_roles
 from ..scenarios import SCENARIOS
 from . import protocol as proto
 from .mqtt_backend import RmMqttBackend
+from .polar_bridge import (
+    PolarControlArbiter,
+    PolarMotionVerifier,
+    PolarStateBridge,
+    scale_drive,
+)
+from .polar_link import (
+    SEG_CHASSIS_STATE,
+    SEG_ROBOT_MOTION,
+    SEG_ROBOT_STATUS,
+    SPIN_CMD_NONE,
+    SPIN_CMD_OFF,
+    SPIN_CMD_ON,
+    deg_to_rad,
+)
+from .polar_transport import PolarDriveIntent, PolarLinkTransport
 from .safety import OfficialSafety
 from .serial_backend import RmSerialBackend
 from .video_backend import AnnexBRecoveryGate, ContinuousMjpegDecoder, RmVideoBackend
@@ -37,6 +54,9 @@ CHASSIS_HEALTH = 1
 CHASSIS_POWER = 2
 SENTRY_AUTOMATIC = 0
 SENTRY_SEMI_AUTO = 1
+
+# 队内链路未连上时的重连间隔（秒）。Auto 重连会重新枚举串口。
+POLAR_RETRY_S = 2.0
 
 _RUNE_PHASE = {1: "INACTIVE", 2: "ACTIVATING", 3: "ACTIVE"}
 # ??? ID ? ?????? 1-9 / ?? 101-109??? = ?? + 100?
@@ -72,6 +92,29 @@ class BackendManager:
         )
         self.udp = RmVideoBackend(host="127.0.0.1", port=3334)
         self.serial = RmSerialBackend(port="Stub", baud=115200, mock_writes=True, safety=self.safety)
+        # 队内 StandardRobot++ 0x5A 链路。与 referee 串口是两条独立物理链路：
+        # 那条走官方 0xA5 裁判帧，这条走机器人自己的上位机协议。
+        self.polar = PolarLinkTransport(
+            port="Stub", baud=115200, mock_writes=True, safety=self.safety
+        )
+        self.polar_bridge = PolarStateBridge()
+        self.polar_arbiter = PolarControlArbiter()
+        self.polar_motion = PolarMotionVerifier()
+        # 队内链路自动重连节律：启动后才插机器人、机器人中途重启都能接回。
+        self._polar_last_connect_attempt = 0.0
+        self._polar_last_logged_error = ""
+        self._polar_gimbal_last: tuple[float, float] | None = None
+        # 自转指令（0x04）状态机，见 _update_spin_command。
+        #: 客户端是否曾经主动要求过“开自转”。只有为真时才允许发 OFF——
+        #: 否则驾驶员用自己遥控器开的自转会被客户端擅自关掉。
+        self._spin_ever_on = False
+        #: 开始发 OFF 的时刻；无 0x1F 回读时用它做有界压制。
+        self._spin_off_since = 0.0
+        #: 当前正压在线上的指令，供诊断/HUD 读取。
+        self._spin_assert = SPIN_CMD_NONE
+        #: 是否收到过下行 0x1F。没收到就说明固件未打 host_bridge 补丁，
+        #: 自转只能降级为“指令已发、无法确认”，不得假装成功。
+        self.polar_chassis_state_seen = False
         self.native_decoder = ContinuousMjpegDecoder("h264")
         self._native_recovery = AnnexBRecoveryGate("h264")
         # Native 0x0310 is a continuous stream.  Retaining every payload in a
@@ -129,6 +172,15 @@ class BackendManager:
         self.serial.port = config.connection.serial_port
         self.serial.baud = int(config.connection.serial_baud)
         self.serial.mock_writes = bool(config.safety.mock_writes)
+        # 队内链路：端口与驾驶能力位随场景切换。非台架场景 polar_port 保持
+        # Stub，transport 会直接不启动，因此不会意外往串口写任何东西。
+        self.polar.port = str(getattr(config.connection, "polar_port", "Stub"))
+        self.polar.baud = int(getattr(config.connection, "polar_baud", 115200))
+        self.polar.send_hz = float(getattr(config.connection, "polar_send_hz", 50.0))
+        # 队内链路的写入开关不在此推导：它只由 RobotLink 模块自己的
+        # “Mock Writes” 设置项决定（见 _configure_polar_link）。
+        # 这里先置 fail-closed 默认，等模块表态后再打开。
+        self.polar.mock_writes = True
         if self.state is not None:
             self.state.mock_simulation_enabled = config.key == "LabDebug"
             if config.key != "LabDebug" and not self.state.official_state_active:
@@ -141,6 +193,11 @@ class BackendManager:
         state.map_robots.clear()
         state.map_markers.clear()
         state.buff_rows.clear()
+        # Official/Campus scenes must not display the LabDebug countdown as
+        # referee ammunition.  The next GlobalUnitStatus sample repopulates the
+        # applicable calibre; until then zero is explicitly "no source".
+        state.projectile_allowance_17mm = 0
+        state.projectile_allowance_42mm = 0
         state.backend_frontend_synced = False
 
     def _begin_official_state(self, state: RobotState, timestamp: float) -> None:
@@ -173,14 +230,421 @@ class BackendManager:
             self.udp.start()
         # 串口：Stub 或真实端口
         self.serial.start()
+        # 队内 0x5A 链路是**与裁判系统并行的独立通道**，不属于任何一个场景：
+        # 正式比赛本来就要同时用裁判系统（血量/增益/能量）和机器人 USB（驾驶与本体遥测）。
+        # 所以按“有没有配真实端口”决定要不要起，而不是按场景名。
+        # 端口为 ""/"Stub" 时 transport 自己会拒连，不会往任何串口写字节。
+        self.polar.start()
+
+    def _retry_polar_connect(self) -> None:
+        """操作员经常是先启动客户端、后插机器人，或者中途重启机器人。
+
+        `polar.start()` 原本只在 `apply_scenario` 里调一次，所以那种情况下
+        链路会永远停在未连接，界面上只会看到 LNK 不亮。这里在“场景要求队内
+        链路但未连上”时按固定间隔重试；Auto 也会重新探测端口枚举，因此
+        插上新 COM 号能自动接上。
+        """
+
+        # 重试的判据是“用户给这条链路配了真端口”，而不是场景名：
+        # 否则在大疆官方场景下选了 COM3 也永远不会重连。
+        if str(self.polar.port or "").strip() in ("", "Stub", "None"):
+            return
+        if self.polar.connected or self.polar._running:
+            return
+        now = time.perf_counter()
+        if now - self._polar_last_connect_attempt < POLAR_RETRY_S:
+            return
+        self._polar_last_connect_attempt = now
+        was_connected = self.polar.connected
+        self.polar.start()
+        if self.polar.connected and not was_connected:
+            self.field_log.emit(
+                "polar_link_up",
+                port=self.polar.resolved_port,
+                requested_port=self.polar.port,
+                send_hz=self.polar.send_hz,
+            )
+        elif not self.polar.connected and self._polar_last_connect_attempt > 0.0:
+            # 不刷屏：只在端口曾经可用又掉线时记一次
+            if self.polar.last_error and self.polar.last_error != self._polar_last_logged_error:
+                self._polar_last_logged_error = self.polar.last_error
+                self.field_log.emit("polar_link_unavailable", error=self.polar.last_error)
+
+    #: 没有 0x1F 回读时，OFF 指令最多压制这么久然后放手。
+    #: 必须有限：无限发 OFF 会永久锁死驾驶员用物理遥控器开自转的能力。
+    #: 取 1.0s：足够覆盖固件 150ms 新鲜度窗口与几次丢帧，又不会长到影响操作。
+    SPIN_OFF_ASSERT_S = 1.0
+
+    def _update_spin_command(self, *, desired: bool, reported: Any) -> int:
+        """把“想要自转开/关”翻成上行 0x04 的显式指令，并用 0x1F 回读收敛。
+
+        三条规则，每条都对应一个真实风险：
+
+        1) 想要开 -> 持续发 ON（**电平**语义）。
+           固件 HOST_SPIN_CMD_VALID_MS=150ms 内没刷新就把指令收回 NONE，
+           所以必须每 tick 重发，不能只发一次。
+
+        2) 想要关 -> 发 OFF，**直到 0x1F 确认已停**就改发 NONE。
+           必须收敛到 NONE：否则会永久压制驾驶员用物理遥控器开自转的能力。
+           无回读时用 SPIN_OFF_ASSERT_S 做有界压制兼底。
+
+        3) 从未要求过开 -> 一直发 NONE，完全不干预。
+           操作员可能已经用自己的遥控器开了自转，客户端无权替他关。
+
+        返回当前压在线上的指令，供诊断快照与 HUD 使用。
+        """
+
+        now = time.perf_counter()
+        if desired:
+            self._spin_ever_on = True
+            self._spin_off_since = 0.0
+            cmd = SPIN_CMD_ON
+        elif not self._spin_ever_on:
+            # 客户端从未主张过自转，不碰驾驶员的状态
+            cmd = SPIN_CMD_NONE
+        elif reported is None:
+            # 固件未打 host_bridge 补丁（不发 0x1F），无法闭环：
+            # 有界发 OFF 后放手，宁可“可能没关掉”也不能锁死遥控器。
+            if self._spin_off_since <= 0.0:
+                self._spin_off_since = now
+            if now - self._spin_off_since >= self.SPIN_OFF_ASSERT_S:
+                self._spin_ever_on = False
+                self._spin_off_since = 0.0
+                cmd = SPIN_CMD_NONE
+            else:
+                cmd = SPIN_CMD_OFF
+        elif bool(reported):
+            # 回读说还在转，继续发 OFF
+            self._spin_off_since = 0.0
+            cmd = SPIN_CMD_OFF
+        else:
+            # 回读确认已停 -> 交还控制权
+            self._spin_ever_on = False
+            self._spin_off_since = 0.0
+            cmd = SPIN_CMD_NONE
+
+        self._spin_assert = cmd
+        self.polar.set_spin_command(cmd)
+        return cmd
+
+    def tick_polar_link(
+        self,
+        state: RobotState | None = None,
+        registry: Any = None,
+        control: Any = None,
+    ) -> dict[str, Any]:
+        """队内 0x5A 链路的单帧泵：下行入 HUD，已授权的意图上线。
+
+        必须排在 tick 阶段表的**最后**：`RobotState.tick()` 的桌面仿真会写同一批
+        字段（底盘/云台朝向、buff、能量），只有后写才能覆盖先写。
+        """
+
+        target = state if state is not None else self.state
+        if target is None:
+            return {"active": False}
+        self._retry_polar_connect()
+        for segment in self.polar.drain_segments():
+            self.polar_bridge.apply(segment)
+            if segment.segment_id == SEG_ROBOT_MOTION:
+                self.polar_motion.note_motion_segment()
+            elif segment.segment_id == SEG_ROBOT_STATUS:
+                # 0x0A 带测速模块坐标：没有 0x1E 时用它以位移判定车是否动。
+                self.polar_motion.note_position(
+                    self.polar_bridge.overlay.get("polar_self_x", 0.0),
+                    self.polar_bridge.overlay.get("polar_self_y", 0.0),
+                )
+            elif segment.segment_id == SEG_CHASSIS_STATE:
+                # 0x1F 只有打了 host_bridge 补丁的固件才会发。
+                # 它是自转指令唯一的闭环证据，必须单独记一笔。
+                self.polar_chassis_state_seen = True
+
+        bridge = self.polar_bridge
+        target.polar_link_active = bridge.active
+        target.polar_link_age_s = min(bridge.link_age_s, 999.0)
+        target.polar_segments_received = sum(bridge.segment_counts.values())
+        target.polar_dropped_segments = bridge.dropped
+        target.polar_debug_packages = dict(bridge.debug_packages)
+        target.polar_module_errors = dict(bridge.module_errors)
+        target.polar_overlay = dict(bridge.overlay)
+        target.apply_polar_overlay()
+
+        module = registry.get("RobotLink") if registry is not None else None
+        settings = {
+            name: (module.get_setting(name) if module is not None else None)
+            for name in (
+                "Allow Drive",
+                "Mock Writes",
+                "Allow Spin Key",
+                "Client Chassis Drive",
+                "Client Gimbal Control",
+                "Vision NUC Occupied",
+                "Speed Scale %",
+                "Yaw Scale %",
+                "Gimbal Slew",
+                "Drive Channel",
+                "Send Hz",
+            )
+        }
+        # 驾驶授权与队内写入开关都属于模块自己，**不能**取场景标志：
+        # 大疆官方场景的 allow_polar_drive=False 只表示“本场景不自动授权”，
+        # 开不了“操作员手动开了”的情形。早期版本拿它当闸门，导致官方场景下
+        # 无论怎么勾选都发不出指令（现由集成测试固定断言）。
+        allow_setting = settings["Allow Drive"]
+        allow_drive = bool(allow_setting.value) if allow_setting is not None else False
+        mock_setting = settings["Mock Writes"]
+        if mock_setting is not None:
+            self.polar.mock_writes = bool(mock_setting.value)
+        slew_setting = settings["Gimbal Slew"]
+        if slew_setting is not None and self.polar_arbiter.slew != float(slew_setting.value):
+            self.polar_arbiter.slew = max(1.0, min(45.0, float(slew_setting.value)))
+        # 发送频率归模块设置管。原来它只在 __init__ 里从场景配置
+        # （config.connection.polar_send_hz）读一次，界面上的 “Send Hz” 滑块
+        # 根本没人读——拖了、存了、重启也还在，但频率一点没变。
+        # 场景配置仍作为初值（见 __init__），模块设置是运行期的唯一真相。
+        hz_setting = settings.get("Send Hz")
+        if hz_setting is not None:
+            try:
+                self.polar.set_send_hz(float(hz_setting.value))
+            except (TypeError, ValueError):
+                # 垃圾值不得把链路带倒：保持当前频率，不报错不中断 tick
+                pass
+        # 驾驶上行通道：virtual_rc 复用固件已生效的 WASD 驾驶逻辑，
+        # 只需固件补一处 VIRTUAL_RC_CTRL → rc_ctrl 接线。
+        channel_setting = settings.get("Drive Channel")
+        if channel_setting is not None:
+            channel = str(channel_setting.value or "robot_cmd").strip().lower().replace(" ", "_")
+            self.polar.drive_channel = channel if channel in (
+                "robot_cmd",
+                "virtual_rc",
+                "both",
+            ) else "robot_cmd"
+
+        self.polar_arbiter.request_takeover(
+            client_gimbal_enabled=bool(
+                settings["Client Gimbal Control"].value
+            )
+            if settings["Client Gimbal Control"] is not None
+            else False,
+            vision_nuc_occupied=bool(settings["Vision NUC Occupied"].value)
+            if settings["Vision NUC Occupied"] is not None
+            else True,
+        )
+
+        # 急停优先于一切：同帧锁零，且不再给云台/底盘产生任何非零意图。
+        # 这里不提前 return：否则下面的诊断快照与授权字段会被跳过，HUD 会卡在旧值。
+        estopped = bool(getattr(self.safety, "estop_active", False))
+        if estopped:
+            self.polar.trigger_estop()
+            self._polar_gimbal_last = None
+        else:
+            self.polar.release_estop()
+
+        plan = None
+        if (
+            not estopped
+            and self.polar_arbiter.may_command_gimbal
+            and bridge.active
+            and getattr(target, "vision_calibrated", False)
+            and getattr(target, "target_locked", False)
+            and not robot_roles.gimbal_block_reason(
+                int(getattr(target, "robot_id", 0) or 0)
+            )
+        ):
+            plan = self.polar_arbiter.plan_gimbal(
+                float(getattr(target, "vision_aim_yaw_deg", 0.0) or 0.0),
+                float(getattr(target, "vision_aim_pitch_deg", 0.0) or 0.0),
+                bridge.overlay.get("gimbal_yaw_deg"),
+                bridge.overlay.get("gimbal_pitch_deg"),
+            )
+        self._polar_gimbal_last = plan
+
+        chassis_setting = settings["Client Chassis Drive"]
+        command = getattr(control, "last_command", None) if control is not None else None
+        vx = vy = wz = 0.0
+        # 兵种对齐：限幅与可驾驶性查固件参数表（rm_client/robot_roles.py）。
+        # 机器人会在 0x0A 里上报自己的编号（`polar_reported_robot_id`），那才是
+        # 实际连上的那台车，所以限幅跟它走；操作员选的 `robot_id` 用作交叉校验。
+        selected_id = int(getattr(target, "robot_id", 0) or 0)
+        reported_id = int(getattr(target, "polar_reported_robot_id", 0) or 0)
+        role_id = reported_id or selected_id
+        role = robot_roles.limits_for(role_id)
+        role_block = robot_roles.drive_block_reason(role_id)
+        # 选错车是真实事故源：限速不同（英雄 2.0 / 步兵 1.5），而且给哨兵下
+        # 驾驶指令会破坏它的自动巡线。两边都知道时不一致就必须告警。
+        role_mismatch = (
+            ""
+            if not (selected_id and reported_id and selected_id != reported_id)
+            else f"界面选的兵种是 {selected_id}，但机器人自报编号是 {reported_id}；"
+                 f"限幅与驾驶权限已按实际车辆（{role.label}）执行，请核对界面选择"
+        )
+
+        drive_armed = bool(
+            not estopped
+            and not role_block
+            and allow_drive
+            and module is not None
+            and module.enabled
+            and chassis_setting is not None
+            and chassis_setting.value
+            and bridge.active
+        )
+        if drive_armed and command is not None:
+            speed_scale = float(settings["Speed Scale %"].value or 100) / 100.0
+            yaw_scale = float(settings["Yaw Scale %"].value or 100) / 100.0
+            vx, vy, wz = scale_drive(
+                command.vx,
+                command.vy,
+                command.wz,
+                # 限幅跟兵种走：英雄麦轮 2.0，全向轮步兵 1.5
+                max_linear_mps=role.max_linear_mps * speed_scale,
+                max_yaw_rps=role.max_yaw_rps * yaw_scale,
+            )
+
+        # 指令-实测交叉校验：把「链路正常但车不动」变成可读告警。
+        motion_state = self.polar_motion.update(
+            link_active=bridge.active,
+            commanded_vx=vx,
+            commanded_vy=vy,
+            commanded_wz=wz,
+            measured_vx=bridge.overlay.get("measured_vx_mps"),
+            measured_vy=bridge.overlay.get("measured_vy_mps"),
+            measured_wz=bridge.overlay.get("measured_wz_rps"),
+        )
+        motion_stats = self.polar_motion.stats()
+        target.polar_motion_state = motion_state
+        target.polar_motion_detail = str(motion_stats["detail"] or "")
+
+        # 把仲裁结果回写到 state：上车时操作员必须能直接看到指令现在是否生效。
+        arbiter_stats = self.polar_arbiter.stats()
+        target.polar_drive_armed = drive_armed
+        target.polar_gimbal_client = self.polar_arbiter.may_command_gimbal
+        target.polar_authority_state = "ESTOP" if estopped else str(arbiter_stats["state"])
+        target.polar_authority_reason = (
+            "急停激活，队内链路控制已锁零" if estopped else str(arbiter_stats["reason"] or "")
+        )
+        # 诊断快照必须每帧自己刷：`apply_updates` 只在收到官方 MQTT 消息时
+        # 才写 backend_stats，而台架/实车场景根本没有裁判机流量。
+        target.backend_stats["polar_link"] = {
+            **self.polar.stats(),
+            "link_alive": bool(bridge.active),
+            "segment_counts": {
+                f"0x{key:02X}": int(value)
+                for key, value in sorted(bridge.segment_counts.items())
+            },
+            "dropped_segments": bridge.dropped,
+            "decode": {
+                "frames_ok": self.polar.codec.stats.frames_ok,
+                "crc8_errors": self.polar.codec.stats.crc8_errors,
+                "crc16_errors": self.polar.codec.stats.crc16_errors,
+                "unknown_segments": self.polar.codec.stats.unknown_segments,
+                "length_errors": self.polar.codec.stats.length_errors,
+                "buffer_overflows": self.polar.codec.stats.buffer_overflows,
+            },
+            "authority": arbiter_stats,
+            "motion": motion_stats,
+            "timestamp_roll_detected": self.polar.timestamp.roll_detected,
+        }
+
+        # “受击后小陀螺”走 0x5A。
+        #
+        # 这里曾经把 SpinMode 的启用状态翻成 0x03 的 SHIFT 键位，那是**错的**：
+        # 固件对 SHIFT 是边沿翻转（chassis_mecanum.c:177 置 1 / :223 置 0 /
+        # chassis_omni.c:96 取反，而松手 :187 / :107 不改变 spin_flag），
+        # 客户端因此只能开、关不掉，再开一次反而把自转关掉。
+        # 现在改走上行 0x04 的显式“设定”指令，并用下行 0x1F 回读闭环确认。
+        #
+        # 刻意**不**挂在 drive_armed 上：
+        #   1) 0x04 不覆盖驾驶员物理遥控器（只维护 spin_flag），没有 0x03
+        #      那种“冻结真实摇杆”的风险；
+        #   2) “我只想开自转、不想用客户端开车”是合理诉求，
+        #      原来的写法让它根本发不出去。
+        # 设置项名仍叫 “Allow Spin Key”（不改名以免弄坏已保存的配置），
+        # 但它现在闸的是 0x04 自转指令，而 SHIFT 键位永不再从客户端注入。
+        spin_setting = settings.get("Allow Spin Key")
+        allow_spin_cmd = bool(spin_setting.value) if spin_setting is not None else False
+        spin_module = registry.get("SpinMode") if registry is not None else None
+        spin_desired = bool(
+            allow_spin_cmd
+            and not estopped
+            and bridge.active
+            and spin_module is not None
+            and spin_module.enabled
+        )
+        # 0x1F 回读。未打 host_bridge 补丁的固件不发这一段，此时为 None，
+        # 客户端据此降级为“指令已发、无法确认”，而不是假装成功。
+        spin_reported = bridge.overlay.get("polar_spin_active")
+        if spin_reported is None:
+            spin_reported = bridge.overlay.get("spin_active")
+        spin_cmd = self._update_spin_command(desired=spin_desired, reported=spin_reported)
+        # 驾驶键位只留 W/S/A/D：SHIFT 已改走 0x04，此处永不再置位。
+        key_value = int(getattr(command, "keyboard_value", 0) or 0) if drive_armed else 0
+
+        self.polar.submit(
+            PolarDriveIntent(
+                vx=vx,
+                vy=vy,
+                wz=wz,
+                gimbal_pitch_rad=deg_to_rad(plan[1]) if plan else 0.0,
+                gimbal_yaw_rad=deg_to_rad(plan[0]) if plan else 0.0,
+                friction_on=False,
+                tracking=bool(plan),
+                # 固件 `rc_ctrl.key.v` 位序与官方 keyboard_value 完全一致，直接复用。
+                key_value=key_value,
+                # 恒 False：自转已改走 0x04，不允许再通过 0x03 注入 SHIFT。
+                allow_spin_key=False,
+            )
+        )
+        return {
+            "active": bridge.active,
+            "drive_armed": drive_armed,
+            "estopped": estopped,
+            "motion_state": motion_state,
+            "authority": self.polar_arbiter.state if not estopped else "ESTOP",
+            "gimbal_target_deg": plan,
+            "error": self.polar.last_error or bridge.last_error,
+            # 兵种对齐可观测：操作员要能看出“现在按的是哪台车、它的限速多少、
+            # 为什么不让驾驶”，而不是只看到 DRV 不亮。
+            "role_id": role_id,
+            "role_label": role.label,
+            "role_hud_code": role.hud_code,
+            "role_chassis": role.chassis,
+            "role_max_linear_mps": round(role.max_linear_mps, 3),
+            "role_max_yaw_rps": round(role.max_yaw_rps, 3),
+            "role_known": role.known,
+            "role_drive_block": role_block,
+            "role_gimbal_block": robot_roles.gimbal_block_reason(role_id),
+            "role_selected_id": selected_id,
+            "role_reported_id": reported_id,
+            "role_mismatch": role_mismatch,
+            # 云台出口归属：让操作员看得见“现在角度是由哪条通道在发”，
+            # 否则双出口互斥被抑制时只会表现为“自瞄没反应”而无解释。
+            "gimbal_egress": self.gimbal_egress_owner(target, registry),
+        }
 
     def _reset_state_for_scenario(self, state: RobotState) -> None:
         """Discard data from the previous transport epoch before reconnecting."""
 
         self._clear_mock_frontend_state(state)
+        # 上一台机器人的队内链路真值不能残留到下一个场景：否则 HUD 会拿
+        # 旧机器人姿态接着显示，驾驶门控也会误判链路仍活。
+        state.polar_overlay = {}
+        state.polar_link_active = False
+        state.polar_link_age_s = float("inf")
+        state.polar_debug_packages = {}
+        state.polar_module_errors = {}
+        state.polar_ally_hp = {}
+        state.polar_ground_positions = {}
+        self.polar_bridge.reset()
+        self.polar_arbiter.clear_lockout()
+        self.polar_motion._ever_had_feedback = False
+        self.polar_motion._last_feedback_segment_at = None
+        self.polar_motion._moving_since = None
+        self.polar_motion.state = "IDLE"
+        self.polar_motion.detail = ""
         state.official_state_active = False
         state.official_state_at = 0.0
         state.official_robot_health.clear()
+        state.official_robot_bullets.clear()
         state.robot_positions.clear()
         state.buffs.clear()
         state.penalties.clear()
@@ -211,6 +675,37 @@ class BackendManager:
         state.deploy_status_revision += 1
         state.deploy_status_at = 0.0
         state.current_stage = "NOT_STARTED"
+
+    @staticmethod
+    def _sync_local_projectile_allowance(state: RobotState) -> None:
+        """Map GlobalUnitStatus.robot_bullets onto this robot's HUD calibre.
+
+        The referee array is own-team-only and ordered by roles 1/2/3/4/7,
+        independent of alliance colour.  Hero consumes 42 mm; the remaining
+        listed roles use the 17 mm HUD slot (Engineer normally reports zero).
+        Unknown robot IDs or short/missing arrays remain fail-unknown instead
+        of reusing a stale LabDebug value.
+        """
+
+        bullets = getattr(state, "official_robot_bullets", None) or []
+        role_id = int(getattr(state, "robot_id", 0)) % 100
+        try:
+            index = _HEALTH_ROLE_ORDER.index(role_id)
+        except ValueError:
+            state.projectile_allowance_17mm = 0
+            state.projectile_allowance_42mm = 0
+            return
+        if index >= len(bullets):
+            state.projectile_allowance_17mm = 0
+            state.projectile_allowance_42mm = 0
+            return
+        allowance = max(0, int(bullets[index]))
+        if role_id == 1:
+            state.projectile_allowance_17mm = 0
+            state.projectile_allowance_42mm = allowance
+        else:
+            state.projectile_allowance_17mm = allowance
+            state.projectile_allowance_42mm = 0
 
     def tick(self) -> None:
         if self.state is not None:
@@ -510,12 +1005,16 @@ class BackendManager:
             self.mqtt.publish_estop_zero()
         self.safety.trigger_estop()
         self.serial.trigger_estop()
+        # 队内链路：固件侧没有断流归零，必须主动发零帧覆盖最后一条指令。
+        self.polar.trigger_estop()
         # Scenario changes are reconnects, not process shutdowns.  Do not let a
         # retained offline status race the replacement connection.  A genuine
         # application exit still publishes the retained offline status.
         self.mqtt.stop(publish_status=not restart)
         self.udp.stop()
         self.serial.stop()
+        # stop() 内部会先发归零突发帧再关口，避免把最后一条驾驶指令冻在车上。
+        self.polar.stop()
         self.native_decoder.stop()
         self._native_recovery.reset()
         self.field_log.emit("backend_shutdown", restart=restart)
@@ -525,6 +1024,7 @@ class BackendManager:
         state: RobotState | None = None,
         *,
         live_evidence: Any = None,
+        registry: Any = None,
     ) -> dict[str, Any]:
         """Run and store the fail-closed match audit for non-UI consumers."""
 
@@ -533,7 +1033,7 @@ class BackendManager:
         target = state or self.state
         if target is None:
             raise ValueError("RobotState is required for readiness audit")
-        report = audit_backend(self, target, live_evidence=live_evidence)
+        report = audit_backend(self, target, live_evidence=live_evidence, registry=registry)
         payload = report.as_dict()
         payload["audited_at"] = time.perf_counter()
         payload["blockers"] = [gate.key for gate in report.blockers]
@@ -649,9 +1149,11 @@ class BackendManager:
             health = [int(v) for v in data.get("robot_health", ()) if isinstance(v, int)]
             if health:
                 state.official_robot_health = health
-            bullets = [int(v) for v in data.get("robot_bullets", ()) if isinstance(v, int)]
-            if bullets:
-                state.backend_stats["robot_bullets"] = bullets
+            if 12 in present or "robot_bullets" in data:
+                bullets = [int(v) for v in data.get("robot_bullets", ()) if isinstance(v, int)]
+                state.official_robot_bullets = bullets
+                state.backend_stats["robot_bullets"] = list(bullets)
+                self._sync_local_projectile_allowance(state)
         elif name == "GlobalLogisticsStatus":
             state.remaining_economy = int(data.get("remaining_economy", state.remaining_economy))
             state.total_economy_obtained = int(data.get("total_economy_obtained", state.total_economy_obtained))
@@ -661,6 +1163,7 @@ class BackendManager:
             if 4 in present and data["robot_id"]:
                 state.robot_id = int(data["robot_id"])
                 state.robot_statics[state.robot_id] = self._clean(data)
+                self._sync_local_projectile_allowance(state)
             if 8 in present and data["level"]:
                 state.level = int(data["level"])
             if 9 in present and data["max_health"]:
@@ -672,6 +1175,12 @@ class BackendManager:
                 state.heat_cooldown_rate = float(data["heat_cooldown_rate"])
             if 12 in present and data["max_power"]:
                 state.power_limit = int(data["max_power"])
+            # 缓冲能量上限属于 RobotStaticStatus（协议字段 13），不在动态报文里。
+            # 上一版把它误写进 RobotDynamicStatus 分支，那里根本没这个键，
+            # data.get 永远回退到现值 —— 看着接上了，实际一行都不生效。
+            # 不写它，effective_capacitor_percent 只能按默认上限 100 算比例。
+            if 13 in present and data["max_buffer_energy"]:
+                state.max_buffer_energy = int(data["max_buffer_energy"])
             if 6 in present:
                 state.performance_sync["shooter"] = int(data["performance_system_shooter"])
             if 7 in present:
@@ -1086,6 +1595,38 @@ class BackendManager:
             qualification_token=qualification_token,
         )
 
+    def gimbal_egress_owner(self, state: RobotState | None = None,
+                            registry: Any = None) -> str:
+        """云台角度到底由哪条出口发 —— 单一裁决点。
+
+        为什么必须有：同一份 `vision_aim_yaw/pitch_deg` 同时被两条出口读：
+        官方 PRM1 kind=1（MQTT/图传）和队内 0x5A 的 `0x01 RobotCmd.gimbal.*`。
+        两边各自只查自己那套开关，**代码层以前没有任何互锁**：同时打开时
+        机器人会同时收到两套云台角指令，互相覆盖、表现为云台抖动或乱转。
+        而 0x5A 侧的抢环锁出只能看到另一个 0x5A 主控，**看不见 PRM1 这条**。
+
+        规则（保守）：队内链路已活跃且已获授权控云台时，云台归 0x5A，
+        PRM1 不得再发；否则按官方出口。返回 "none" 表示两边都不该发。
+        """
+
+        target = state if state is not None else self.state
+        if target is None:
+            return "none"
+        polar_wants = bool(
+            getattr(target, "polar_link_active", False)
+            and self.polar_arbiter.may_command_gimbal
+            and self._polar_gimbal_last is not None
+        )
+        if polar_wants:
+            return "polar"
+        module = registry.get("ArmorAutoAim") if registry is not None else None
+        if module is None or not module.enabled:
+            return "none"
+        mock = module.get_setting("Mock Output") if module else None
+        if mock is not None and bool(mock.value):
+            return "none"
+        return "official"
+
     def publish_vision_control(
         self, *, sequence: int, yaw_deg: float, pitch_deg: float,
         target_id: int = 0, tracking: bool = False,
@@ -1121,6 +1662,9 @@ class BackendManager:
         self._estop_triggered_at = time.perf_counter()
         self.safety.trigger_estop()
         self.serial.trigger_estop()
+        # 队内 0x5A 链路必须同帧锁死：固件侧没有断流归零，不能等下一帧的
+        # tick_polar_link 才发现（那一帧之前本地看门狗要 0.2s，车上有速度时太慢）。
+        self.polar.trigger_estop()
         self.field_log.emit(
             "estop",
             zero_publish_ok=self._last_estop_zero_ok,
@@ -1145,6 +1689,8 @@ class BackendManager:
 
     def release_estop(self) -> None:
         self.serial.release_estop()
+        # 权威在 safety；这里只是把队内链路的本地锁存与之同步。
+        self.polar.release_estop()
         self.safety.release_estop()
 
     def lock_control(self, reason: str = "operator lock") -> None:
@@ -1309,6 +1855,25 @@ class BackendManager:
             "mqtt": self.mqtt.stats(),
             "udp": self.udp.stats(),
             "serial": self.serial.stats(),
+            "polar_link": {
+                **self.polar.stats(),
+                "link_alive": bool(self.polar_bridge.active),
+                "segment_counts": {
+                    f"0x{key:02X}": int(value)
+                    for key, value in sorted(self.polar_bridge.segment_counts.items())
+                },
+                "dropped_segments": self.polar_bridge.dropped,
+                "decode": {
+                    "frames_ok": self.polar.codec.stats.frames_ok,
+                    "crc8_errors": self.polar.codec.stats.crc8_errors,
+                    "crc16_errors": self.polar.codec.stats.crc16_errors,
+                    "unknown_segments": self.polar.codec.stats.unknown_segments,
+                    "length_errors": self.polar.codec.stats.length_errors,
+                    "buffer_overflows": self.polar.codec.stats.buffer_overflows,
+                },
+                "authority": self.polar_arbiter.stats(),
+                "timestamp_roll_detected": self.polar.timestamp.roll_detected,
+            },
             "native_0310": {
                 "decoder_ready": self.native_decoder.available,
                 "decoded_connected": bool(

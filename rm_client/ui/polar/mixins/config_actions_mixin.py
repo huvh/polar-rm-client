@@ -90,6 +90,14 @@ class ConfigActionsMixin:
 
     def after_setting_changed(self, setting: Setting) -> None:
         self.invalidate_gui_cache()
+        # 驾驶/键鼠槽位的改绑要立即生效，不能等下次加载配置；
+        # 否则用户改完键后前几次按键仍按旧绑定开车。
+        link_module = self.registry.get("RobotLink")
+        if link_module is not None and str(getattr(setting, "name", "")).startswith("Bind "):
+            if setting is link_module.get_setting(str(setting.name)):
+                self.sync_control_binds()
+                self.auto_save_config()
+                return
         hud = self.registry.get("HUD")
         if hud and setting is hud.get_setting("Visual Tone"):
             # The palette is memoized for one UI frame.  A direct UI setting

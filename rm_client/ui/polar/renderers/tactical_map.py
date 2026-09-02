@@ -145,7 +145,10 @@ def draw_radar_overlay(
         try:
             x_m = _radar_coord_to_m(det.get("target_pos_x", 0.0), field.width_m)
             y_m = _radar_coord_to_m(det.get("target_pos_y", 0.0), field.height_m)
-            highlighted = int(det.get("is_high_light", 0) or 0) != 0
+            highlighted = (
+                int(det.get("is_high_light", 0) or 0) != 0
+                and host.radar_high_light_enabled()
+            )
         except (TypeError, ValueError):
             continue
         if x_m <= 0.0 and y_m <= 0.0:
@@ -291,7 +294,11 @@ class TacticalMapMixin:
 
     def draw_module_list_for_tactical_map(self, p: QPainter, width: int, height: int) -> None:
         map_rect = self.tactical_map_rect(width, height)
-        below_start = map_rect.bottom() + 14
+        # BuffTimeline 占的就是地图下面这条带；它在时模块列表必须从带子
+        # 下面开始，否则两块直接叠在一起。共用 `buff_timeline_band()`
+        # 算高度，不各处自己写数字。
+        band = self.buff_timeline_band(width, height)
+        below_start = band.bottom() + 14 if band is not None else map_rect.bottom() + 14
         if height - below_start >= 180:
             self.draw_module_list_hud(p, width, height, start_y=below_start)
             return
@@ -301,13 +308,59 @@ class TacticalMapMixin:
             return
         self.draw_module_list_hud(p, width, height, start_y=below_start)
 
-    def draw_match_header(self, p: QPainter, width: int) -> None:
+    #: `MatchTimer / Pulse Last 30s` 的“末段”窗口宽度（秒）。
+    MATCH_PULSE_WINDOW_S = 30.0
+
+    def match_header_text(self) -> str:
+        """拼顶栏文字。`Show Stage` / `Show Scores` 分别控制两段。
+
+        这两个开关以前完全被无视：`draw_match_header` 无条件把阶段、
+        倒计时、分数全拼进去。
+
+        抽成纯函数而不是直接写在绘制里：否则“关了就不出现”这种
+        行为只能靠看图验证。现在可以直接对字符串做断言。
+        """
         config = self.match_mode_manager.current
-        text = f"{config.title}  {self.state.current_stage}  {self.format_time(self.state.stage_countdown_sec)}"
-        if config.key == "RMUL3v3":
-            text += f"  VP {self.state.ally_victory_points}:{self.state.enemy_victory_points}"
-        else:
-            text += f"  SCORE {self.state.red_score}:{self.state.blue_score}"
+        parts = [str(config.title)]
+        if self._bool_on("MatchTimer", "Show Stage"):
+            parts.append(str(self.state.current_stage))
+            parts.append(self.format_time(self.state.stage_countdown_sec))
+        if self._bool_on("MatchTimer", "Show Scores"):
+            if config.key == "RMUL3v3":
+                parts.append(
+                    f"VP {self.state.ally_victory_points}:{self.state.enemy_victory_points}"
+                )
+            else:
+                parts.append(
+                    f"SCORE {self.state.red_score}:{self.state.blue_score}"
+                )
+        return "  ".join(parts)
+
+    def match_header_pulse_strength(self) -> float:
+        """顶栏末段脉冲强度 0..1。关掉 `Pulse Last 30s` 或不在窗口内时为 0。
+
+        方向注意：倒计时是**递减**的，“最后 30 秒”意味着
+        `0 <= countdown <= 30`。必须排除负数（超时/未开始会给 0 或负值），
+        否则倒计时未走时反而会一直脉冲。
+        """
+        if not self._bool_on("MatchTimer", "Pulse Last 30s"):
+            return 0.0
+        module = self.registry.get("MatchTimer")
+        if module is None or not module.enabled:
+            return 0.0
+        try:
+            left = float(self.state.stage_countdown_sec)
+        except (TypeError, ValueError):
+            return 0.0
+        if left <= 0.0 or left > self.MATCH_PULSE_WINDOW_S:
+            return 0.0
+        # 越接近 0 越强；再用正弦做实际闪烁
+        closeness = 1.0 - (left / self.MATCH_PULSE_WINDOW_S)
+        wave = 0.5 + 0.5 * math.sin(time.perf_counter() * 4.5)
+        return max(0.0, min(1.0, closeness * wave))
+
+    def draw_match_header(self, p: QPainter, width: int) -> None:
+        text = self.match_header_text()
         font = self.font("poppins_medium", 8.6)
         p.setFont(font)
         rect_w = max(280.0, min(520.0, self.text_advance(font, text) + 44.0))
@@ -325,9 +378,147 @@ class TacticalMapMixin:
             rounded_rect(p, rect, 12, self.hud_surface(0.62), self.hud_panel_outline(0.08))
         progress = max(0.0, min(1.0, self.state.stage_countdown_sec / max(1.0, float(getattr(self.state, "match_duration_sec", 300)))))
         line = QRectF(rect.left() + 12, rect.bottom() - 3.0, rect.width() - 24, 1.2)
-        draw_bar(p, line, progress, self.hud_accent(), color("#ffffff", 0.10), 0.6)
+        # `Pulse Last 30s` 的真实效果：最后 30 秒内进度条向告警色兼并加粗。
+        # 强度为 0 时与原行为一致（同一个 accent 色、同一条宽），
+        # 所以关掉开关或不在窗口内时，画面不会发生任何变化。
+        pulse = self.match_header_pulse_strength()
+        bar_color = self.hud_warning() if pulse > 0.5 else self.hud_accent()
+        bar_thickness = 0.6 + 1.4 * pulse
+        draw_bar(p, line, progress, bar_color, color("#ffffff", 0.10), bar_thickness)
         self.draw_glass_text(p, rect.adjusted(14, 0, -14, 0), text, font, THEME.text, Qt.AlignmentFlag.AlignCenter)
         p.restore()
+
+    def radar_high_light_enabled(self) -> bool:
+        """`RadarOverlay / High Light`：要不要把“雷达照射 / 双倍易伤”标出来。
+
+        这个开关以前没人读：只要报文里 `is_high_light` 置位，标记就一定
+        换成告警色并画脉冲环，完全关不掉。
+
+        关掉后是**取消高亮强调**（回到普通色、不画脉冲环），而不是把
+        标记删掉：数据本身仍应该可见。否则一个“显示样式”开关会变成
+        “隐藏情报”，那是两回事。
+
+        查不到模块或设置项时返回 True（保持现行为）。
+        """
+        module = self.registry.get("RadarOverlay")
+        if module is None:
+            return True
+        setting = module.get_setting("High Light")
+        if setting is None:
+            return True
+        return bool(getattr(setting, "value", True))
+
+    #: BuffTimeline 的消费者落在“战术地图面板下方”这条实测出来的空带上
+    #: （1600x900 / 1920x1080 / 1280x720 下地图底部到屏幕底部都有 535px 以上余量）。
+    #: 模块列表在同一条带上有自己的落点（右侧放不下时才用带下方），
+    #: 所以两处都走 `buff_timeline_band()` 这一个真相源，重叠在结构上不可能。
+    BUFF_TIMELINE_BAND_HEIGHT = 22.0
+    BUFF_TIMELINE_GAP = 6.0
+    BUFF_TIMELINE_MAX_ITEMS = 4
+
+    def buff_timeline_rows(self) -> list[tuple[str, str, int]]:
+        """要显示的标签：`(类别, 名称, 剩余秒数)`。三个开关各管一件事。
+
+        * `Buffs` → 本机增益行；
+        * `Special Mechanism` → 全局特殊机制行；
+        * `Timeline` → 名称后面带不带剩余秒数（由绘制层读）。
+
+        只拿**真实且属于本机**的数据：
+          * LabDebug 的 mock 行没有 `buff_type`，直接过滤掉——否则实验室
+            演示会凭空多出一排假标签；
+          * `robot_id` 不是本机的不显示（与 `buff_indicator_state()` 同一口径），
+            绝不把队友/敌方增益显示成本机状态。
+
+        文本全用 ASCII：HUD 字体没有 CJK 字形（仓库内已有同样的处理注释）。
+        """
+        module = self.registry.get("BuffTimeline")
+        if module is None or not module.enabled:
+            return []
+        rows: list[tuple[str, str, int]] = []
+        if self._bool_on("BuffTimeline", "Buffs"):
+            try:
+                own_id = int(getattr(self.state, "robot_id", 0) or 0)
+            except (TypeError, ValueError):
+                own_id = 0
+            for row in getattr(self.state, "buff_rows", ()) or ():
+                if row.get("buff_type") is None:
+                    continue
+                try:
+                    if int(row.get("robot_id", 0) or 0) != own_id:
+                        continue
+                except (TypeError, ValueError):
+                    continue
+                if not row.get("active"):
+                    continue
+                name = str(row.get("name") or f"Buff {row.get('buff_type')}")
+                try:
+                    remaining = max(0, int(row.get("remaining", 0) or 0))
+                except (TypeError, ValueError):
+                    remaining = 0
+                rows.append(("buff", name, remaining))
+        if self._bool_on("BuffTimeline", "Special Mechanism"):
+            for item in getattr(self.state, "special_mechanisms", ()) or ():
+                try:
+                    mechanism_id = int(item.get("mechanism_id", 0) or 0)
+                    seconds = max(0, int(item.get("time_sec", 0) or 0))
+                except (AttributeError, TypeError, ValueError):
+                    continue
+                if mechanism_id <= 0:
+                    continue
+                rows.append(("mechanism", f"MECH{mechanism_id}", seconds))
+        return rows[: self.BUFF_TIMELINE_MAX_ITEMS]
+
+    def buff_timeline_band(self, width: int, height: int) -> QRectF | None:
+        """标签带到底占哪一块；没内容时返回 None。
+
+        没内容就**不占位也不拉高任何面板**，所以默认画面与接线前完全一致：
+        只有裁判系统真的推了本机增益 / 特殊机制，这条带才会出现。
+        """
+        if not self.buff_timeline_rows():
+            return None
+        tactical = self.registry.get("TacticalMap")
+        if tactical is not None and not tactical.enabled:
+            return None          # 地图没画，挂在地图下面的带也不能凭空浮在视频上
+        map_rect = self.tactical_map_rect(width, height)
+        return QRectF(
+            map_rect.left(),
+            map_rect.bottom() + self.BUFF_TIMELINE_GAP,
+            map_rect.width(),
+            self.BUFF_TIMELINE_BAND_HEIGHT,
+        )
+
+    def draw_buff_timeline_hud(self, p: QPainter, width: int, height: int) -> None:
+        """`BuffTimeline` 的三个开关在此落地。
+
+        这个模块以前**没有任何消费者**：界面上开了它、三个子开关全勾着，
+        屏幕上什么都不会多出来——增益与特殊机制的时间其实已经解码到了
+        `state.buff_rows` / `state.special_mechanisms`，只是没人读。
+
+        这里只做“把已有数据标出来”，不发明比例条：裁判报文只给剩余秒数、
+        不给总时长，拿一个猜出来的满量程画条就是在骗人。所以 `Timeline`
+        的含义定为“标签上带不带剩余秒数”。
+        """
+        band = self.buff_timeline_band(width, height)
+        if band is None:
+            return
+        show_time = self._bool_on("BuffTimeline", "Timeline")
+        font = self.font("poppins_medium", 7.4)
+        accent = self.hud_accent()
+        x = band.left()
+        for kind, name, remaining in self.buff_timeline_rows():
+            text = f"{name} {remaining}s" if show_time and remaining > 0 else name
+            chip_w = max(28.0, self.text_advance(font, text) + 12.0)
+            if x + chip_w > band.right():
+                break                      # 放不下就截断，不画到边界外
+            rect = QRectF(x, band.top(), chip_w, band.height())
+            tint = accent if kind == "buff" else self.hud_warning()
+            rounded_rect(p, rect, 4, color("#000000", 0.30), with_alpha(tint, 0.30))
+            self.draw_text(p, rect, text, font, tint, Qt.AlignmentFlag.AlignCenter)
+            self.add_hotspot(
+                rect, "buff_timeline", f"{kind}:{name}",
+                tooltip=f"{'本机增益' if kind == 'buff' else '特殊机制'}：{name} 剩余 {remaining}s",
+            )
+            x += chip_w + 4.0
 
     def draw_tactical_map_hud(self, p: QPainter, width: int, height: int) -> None:
         module = self.registry.get("TacticalMap")
@@ -465,6 +656,34 @@ class TacticalMapMixin:
     def tactical_map_hold_amount(self) -> float:
         return self.tactical_map_morph_progress()
 
+    #: `Mark Type` 选项 -> MapClickCmd 字段 6（type）的取值。
+    #: 按选项顺序 1..4 映射；默认 "Attack"=1，与接线前硬写的 mark_type=1 一致，
+    #: 所以默认配置下发出的字节不变。官方协议注释确认 3=mode、6=type，
+    #: 但没列各取值语义 —— 上线前应与裁判协议版本表交叉核对。
+    MAP_MARKER_TYPE_CODES: dict[str, int] = {
+        "Attack": 1,
+        "Defense": 2,
+        "Warning": 3,
+        "Custom": 4,
+    }
+
+    def map_click_command_values(self) -> tuple[int, int]:
+        """返回本次地图标记要用的 (is_send_all, mark_type)。
+
+        取不到模块或设置项时，回落到接线前那对硬编码值 (1, 1)，
+        保证不会因为读设置失败而改变外发内容。
+        """
+        module = self.registry.get("MapMarker")
+        if module is None:
+            return 1, 1
+        send_all_setting = module.get_setting("Send All")
+        type_setting = module.get_setting("Mark Type")
+        is_send_all = 1 if (
+            send_all_setting is None or bool(getattr(send_all_setting, "value", True))
+        ) else 0
+        label = str(getattr(type_setting, "value", "Attack") if type_setting else "Attack")
+        return is_send_all, self.MAP_MARKER_TYPE_CODES.get(label.strip(), 1)
+
     def publish_map_click_from_screen(self, point: QPointF) -> bool:
         """Send an official MapClickCmd for a click inside the expanded map.
 
@@ -486,8 +705,13 @@ class TacticalMapMixin:
             nx, ny = 1.0 - nx, 1.0 - ny
         map_x = max(0.0, min(1.0, nx)) * field.width_m
         map_y = max(0.0, min(1.0, ny)) * field.height_m
+        is_send_all, mark_type = self.map_click_command_values()
         ok, reason = self.backend.publish_map_click_cmd(
-            is_send_all=1, mode=1, mark_type=1, map_x=round(map_x, 3), map_y=round(map_y, 3)
+            is_send_all=is_send_all,
+            mode=1,
+            mark_type=mark_type,
+            map_x=round(map_x, 3),
+            map_y=round(map_y, 3),
         )
         self.toast(f"Map click ({map_x:.1f}, {map_y:.1f})m {'sent' if ok else reason}")
         return True
@@ -1104,7 +1328,10 @@ class TacticalMapMixin:
             return color("#e6bd68") if self.hud_clean() else self.hud_warning()
         if label in ("AMMO",):
             return self.hud_success()
-        if label in ("HEAT", "POWER", "PWR"):
+        if label == "HEAT":
+            # 热量单独走：除了比例分档，还要听 `PowerGuard / Heat Warn`。
+            return self.heat_display_color(ratio)
+        if label in ("POWER", "PWR"):
             if ratio >= 0.92:
                 return self.hud_danger()
             if ratio >= 0.78:
@@ -1599,7 +1826,9 @@ class TacticalMapMixin:
             self.anim_duration(0.16),
             Easings.ease_out_cubic,
         )
-        danger = label in ("HEAT", "POWER", "SPEED") and fast_ratio > 0.82
+        danger = (label in ("HEAT", "POWER", "SPEED") and fast_ratio > 0.82) or (
+            label == "HEAT" and self.heat_over_warn()
+        )
         if self.hud_clean():
             if danger or label in ("ENEMY", "EBASE"):
                 main = self.hud_danger()
@@ -1735,53 +1964,269 @@ class TacticalMapMixin:
         red_vp = self.state.ally_victory_points if own_side == "Red" else self.state.enemy_victory_points
         blue_vp = self.state.enemy_victory_points if own_side == "Red" else self.state.ally_victory_points
         if config.key == "RMUL3v3":
-            if self.registry.get("VictoryPointStatus") and self.registry.get("VictoryPointStatus").enabled:
+            # `Team Status` 控制标签上不标“YOU”。关掉后两边看起来完全对称，
+            # 这是一个内容开关而不是行开关，所以不能走 hud_row_visible。
+            tag_side = self._bool_on("VictoryPointStatus", "Team Status")
+            red_label = "RED" + (" YOU" if tag_side and own_side == "Red" else "")
+            blue_label = "BLUE" + (" YOU" if tag_side and own_side == "Blue" else "")
+            if self.hud_row_visible("VictoryPointStatus", "Victory Points"):
                 match_rows.extend(
                     [
-                        ("RED" + (" YOU" if own_side == "Red" else ""), str(red_vp), red_vp / 200.0, self.map_team_color("red"), "red_vp", f"RED VP {red_vp}"),
-                        ("BLUE" + (" YOU" if own_side == "Blue" else ""), str(blue_vp), blue_vp / 200.0, self.map_team_color("blue"), "blue_vp", f"BLUE VP {blue_vp}"),
-                        ("CTRL", f"{int(self.state.control_progress)}%", self.state.control_progress / 100.0, self.map_control_color(), "control", f"CONTROL {self.state.control_owner} {self.state.control_progress}%"),
+                        (red_label, str(red_vp), red_vp / 200.0, self.map_team_color("red"), "red_vp", f"RED VP {red_vp}"),
+                        (blue_label, str(blue_vp), blue_vp / 200.0, self.map_team_color("blue"), "blue_vp", f"BLUE VP {blue_vp}"),
                     ]
                 )
-            if self.registry.get("EconomyPanel") and self.registry.get("EconomyPanel").enabled:
-                match_rows.append(("GOLD", str(int(self.state.remaining_economy)), min(1.0, self.state.remaining_economy / 400.0), self.hud_state_color("gold"), "gold", f"GOLD {self.state.remaining_economy} / T{self.state.tech_level}"))
+            if self.hud_row_visible("VictoryPointStatus", "Control Zone"):
+                match_rows.append(
+                    ("CTRL", f"{int(self.state.control_progress)}%", self.state.control_progress / 100.0, self.map_control_color(), "control", f"CONTROL {self.state.control_owner} {self.state.control_progress}%")
+                )
+            if self.hud_row_visible("EconomyPanel", "Gold"):
+                match_rows.append(("GOLD", str(int(self.state.remaining_economy)), min(1.0, self.state.remaining_economy / 400.0), self.hud_state_color("gold"), "gold", self.economy_gold_text()))
         else:
-            if self.registry.get("BaseOutpostStatus") and self.registry.get("BaseOutpostStatus").enabled:
-                match_rows.extend(
-                    [
-                        (f"{own_side.upper()} BASE YOU", self.short_ring_number(self.state.base_health), self.state.base_health / max(1, self.state.base_max_health), self.map_team_color("ally"), "base", f"{own_side} BASE {self.state.base_health}/{self.state.base_max_health}"),
-                        (f"{enemy_side.upper()} BASE", self.short_ring_number(self.state.enemy_base_health), self.state.enemy_base_health / max(1, self.state.enemy_base_max_health), self.map_team_color("enemy"), "enemy_base", f"{enemy_side} BASE {self.state.enemy_base_health}/{self.state.enemy_base_max_health}"),
-                        ("OUTPOST", self.short_outpost_value(), self.state.enemy_outpost_health / max(1, self.state.enemy_outpost_max_health), self.map_team_color("enemy"), "outpost", f"{enemy_side} OUTPOST {self.state.enemy_outpost_status}"),
-                    ]
+            show_shield = self._bool_on("BaseOutpostStatus", "Shield")
+            if self.hud_row_visible("BaseOutpostStatus", "Own Base"):
+                match_rows.append(
+                    (f"{own_side.upper()} BASE YOU", self.short_ring_number(self.state.base_health), self.state.base_health / max(1, self.state.base_max_health), self.map_team_color("ally"), "base", self.base_row_text(own_side, self.state.base_health, self.state.base_max_health, self.state.base_shield, show_shield))
                 )
-            if self.registry.get("EconomyPanel") and self.registry.get("EconomyPanel").enabled:
-                match_rows.append(("GOLD", str(int(self.state.remaining_economy)), min(1.0, self.state.remaining_economy / 400.0), self.hud_state_color("gold"), "gold", f"GOLD {self.state.remaining_economy} / T{self.state.tech_level}"))
+            if self.hud_row_visible("BaseOutpostStatus", "Enemy Base"):
+                match_rows.append(
+                    (f"{enemy_side.upper()} BASE", self.short_ring_number(self.state.enemy_base_health), self.state.enemy_base_health / max(1, self.state.enemy_base_max_health), self.map_team_color("enemy"), "enemy_base", self.base_row_text(enemy_side, self.state.enemy_base_health, self.state.enemy_base_max_health, self.state.enemy_base_shield, show_shield))
+                )
+            if self.hud_row_visible("BaseOutpostStatus", "Outposts"):
+                match_rows.append(
+                    ("OUTPOST", self.short_outpost_value(), self.state.enemy_outpost_health / max(1, self.state.enemy_outpost_max_health), self.map_team_color("enemy"), "outpost", f"{enemy_side} OUTPOST {self.state.enemy_outpost_status}")
+                )
+            if self.hud_row_visible("EconomyPanel", "Gold"):
+                match_rows.append(("GOLD", str(int(self.state.remaining_economy)), min(1.0, self.state.remaining_economy / 400.0), self.hud_state_color("gold"), "gold", self.economy_gold_text()))
             if self.registry.get("ProjectileShop") and self.registry.get("ProjectileShop").enabled:
-                match_rows.append(("AMMO", str(int(self.state.projectile_allowance_17mm)), min(1.0, self.state.projectile_allowance_17mm / 180.0), self.hud_state_color("ammo"), "ammo", f"AMMO 17mm {self.state.projectile_allowance_17mm} | 42mm {self.state.projectile_allowance_42mm}"))
+                match_rows.append(self.projectile_ammo_row())
         return match_rows[:5], self.map_telemetry_status_rows()
+
+    def base_row_text(self, side: str, hp: int, hp_max: int, shield: int, show_shield: bool) -> str:
+        """基地行提示。`BaseOutpostStatus / Shield` 控制带不带护盾。"""
+        text = f"{side} BASE {int(hp)}/{int(hp_max)}"
+        if show_shield:
+            text += f" SHIELD {int(shield)}"
+        return text
+
+    def economy_gold_text(self) -> str:
+        """金币行提示。`EconomyPanel / Tech Level` 控制带不带科技等级。"""
+        text = f"GOLD {int(self.state.remaining_economy)}"
+        if self._bool_on("EconomyPanel", "Tech Level"):
+            text += f" / T{self.state.tech_level}"
+        return text
+
+    def projectile_ammo_value(self) -> tuple[str, float]:
+        """按 `ProjectileShop / Ammo Type` 选主显示哪种弹，返回 (显示值, 比例)。"""
+        module = self.registry.get("ProjectileShop")
+        setting = module.get_setting("Ammo Type") if module is not None else None
+        prefer_large = str(getattr(setting, "value", "17mm") if setting is not None else "17mm").strip() == "42mm"
+        if prefer_large:
+            count = int(self.state.projectile_allowance_42mm)
+            return f"42mm {count}", min(1.0, count / 30.0)
+        count = int(self.state.projectile_allowance_17mm)
+        return f"17mm {count}", min(1.0, count / 180.0)
+
+    def projectile_ammo_row(self) -> tuple[str, str, float, QColor, str, str]:
+        """AMMO 行（6 元组版）。`Ammo Type` 选主显示，`Show Cost` 控制带不带价格。
+
+        告警色判据与 `match_status_rows` 的 4 元组版共用同一个
+        `projectile_below_warn`：两个构造器不一致会比统一不接更坑。
+        """
+        value, ratio = self.projectile_ammo_value()
+        detail = f"AMMO {value} | 42mm {int(self.state.projectile_allowance_42mm)}"
+        if self._bool_on("ProjectileShop", "Show Cost"):
+            detail += f" | PRICE {int(self.state.projectile_shop_price)}"
+        color_value = (
+            self.hud_danger() if self.projectile_below_warn(ratio)
+            else self.hud_state_color("ammo")
+        )
+        return ("AMMO", value, ratio, color_value, "ammo", detail)
+
+    #: 弹药“算低”的比例。`ProjectileAllowance / Warn Low` 是个布尔开关，
+    #: 没有配套的阈值设置项，所以这个数是我定的：**需你们确认**。
+    #: 写成常量而不是散在代码里的魔数，是为了看得见、改得动。
+    AMMO_LOW_RATIO = 0.25
+
+    def projectile_below_warn(self, ratio: float) -> bool:
+        """主显示弹种的允许量是否已低到需要告警。
+
+        `Warn Low` 以前没人读：弹药见底时 AMMO 行颜色完全不变。
+        开关关闭时一律返回 False（不告警），而不是“默认告警”。
+        """
+        module = self.registry.get("ProjectileAllowance")
+        if module is None or not module.enabled:
+            return False
+        setting = module.get_setting("Warn Low")
+        if setting is None or not bool(getattr(setting, "value", True)):
+            return False
+        try:
+            return 0.0 <= float(ratio) <= self.AMMO_LOW_RATIO
+        except (TypeError, ValueError):
+            return False
+
+    def telemetry_buffer_text(self) -> str:
+        """`ThermalPowerPanel / Buffer`：该面板要不要带缓冲能量。
+
+        模块描述本身就写着“热量、底盘功率、**缓冲能量**和弹丸数量显示”，
+        但代码只发了 HEAT/PWR，缓冲能量从没出现过。电容百分比就是那个量。
+        """
+        module = self.registry.get("ThermalPowerPanel")
+        if module is None or not module.enabled:
+            return ""
+        setting = module.get_setting("Buffer")
+        if setting is None or not bool(getattr(setting, "value", True)):
+            return ""
+        return f"  BUF {self.state.effective_capacitor_percent}%"
+
+    def hud_row_visible(self, module_name: str, show_setting: str | None = None) -> bool:
+        """状态行到底画不画：模块开着 **且** 该行自己的开关也开着。
+
+        以前只判 `module.enabled`，于是 `Own Base` / `Enemy Base` / `Outposts` /
+        `Victory Points` / `Control Zone` / `Gold` / `Show Speed` 这些开关
+        界面上能关，但 HUD 照旧画。
+
+        传 `show_setting=None` 等价于只判模块开关；查不到该设置项时返回 True
+        ——不因规格缺失而默认隐藏面板。
+
+        为什么收模块名而不是模块对象：三个构造器（`map_status_groups` /
+        `match_status_ring_rows` / `match_status_rows`）都要用同一判据，
+        传名字让它们能共用同一份实现而不各自拿 registry 取一遍。
+        """
+        module = self.registry.get(module_name)
+        if module is None or not module.enabled:
+            return False
+        if show_setting is None:
+            return True
+        setting = module.get_setting(show_setting)
+        if setting is None:
+            return True
+        return bool(getattr(setting, "value", True))
+
+    def _bool_on(self, module_name: str, setting_name: str, default: bool = True) -> bool:
+        """读一个布尔开关（包括模块未开的情况），用于控制行内容而不是行存在。"""
+        module = self.registry.get(module_name)
+        if module is None:
+            return default
+        setting = module.get_setting(setting_name)
+        if setting is None:
+            return default
+        return bool(getattr(setting, "value", default))
+
+    def telemetry_panel_visible(self, module, show_setting: str) -> bool:
+        """面板到底画不画：模块开着 **且** 它自己的“显示”开关也开着。
+
+        以前只判 `module.enabled`，所以 `Capacitor / Show Bar` 与
+        `PowerLimit / Show Limit` 界面上能关，但 HUD 照旧画。
+        没有这个设置项时返回 True——不因规格缺失而默认隐藏面板。
+        """
+        if module is None or not module.enabled:
+            return False
+        setting = module.get_setting(show_setting)
+        if setting is None:
+            return True
+        return bool(getattr(setting, "value", True))
+
+    def capacitor_below_warn(self) -> bool:
+        """电容是否已低到告警阈值。
+
+        阈值有两个可能来源：`Capacitor / Warn` 与 `PowerGuard / Energy Warn`。
+        以前两个都是装饰：能拖 0~100%，但 CAP 行永远按固定比例上色。
+
+        两个都在时**取更严（阈值更高、告警更早）的那个**：告警宁早不晚，
+        而“哪个说了算”若反过来（取小）则“多开一个保护模块”会变成
+        “告警被推后”，那不是保护模块该有的语义。
+        两个模块都关着时不告警（= 接线前的行为）。
+
+        注意方向：电容是**越低越危险**，而 `hud_state_color(name, ratio)`
+        按“比例越高越危险”处理（功率/温度那些是高为险）。所以不能直接
+        把 ratio 传进去，必须显式判一次，否则调高阈值反而不告警。
+        """
+        thresholds: list[float] = []
+        for module_name, setting_name in (("Capacitor", "Warn"), ("PowerGuard", "Energy Warn")):
+            module = self.registry.get(module_name)
+            if module is None or not module.enabled:
+                continue
+            try:
+                value = float(self.get_setting_number(module, setting_name, 0.0) or 0.0)
+            except (TypeError, ValueError):
+                continue
+            if value > 0.0:                     # 0 = 该模块主动关掉告警
+                thresholds.append(value)
+        if not thresholds:
+            return False
+        try:
+            return float(self.state.effective_capacitor_percent) <= max(thresholds)
+        except (TypeError, ValueError):
+            return False
+
+    #: 热量告警档（与 `hud_state_color("heat", ...)` 的 warning 区间起点一致）。
+    #: 用“把比例顶到该档”而不是直接返一个告警色：两条调色路径
+    #: （清爽风格与遗留固定色）都能走通，不会混进一套外来的颜色。
+    HEAT_WARN_RATIO_FLOOR = 0.78
+
+    def heat_over_warn(self) -> bool:
+        """本机热量是否已越过 `PowerGuard / Heat Warn` 的绝对阈值。
+
+        这个开关以前完全没人读：`PowerGuard` 模块打开后，界面上那个
+        “热量警告 180”什么都不会发生（模块名字就叫“功率保护”，却没有任何
+        可见效果）。接上后：热量达到该绝对值时，热量行至少进入告警色。
+
+        三个关键取向：
+          * **只有模块开着才参与**。`PowerGuard` 默认是关的，所以接线本身
+            不改变任何人的画面；但一旦有人把它打开，它就必须真的生效。
+          * 方向与电容相反：热量是**越高越险**，所以用 `>=`。
+          * 只能加严不能放松（见 `heat_display_color`）。
+        """
+        module = self.registry.get("PowerGuard")
+        if module is None or not module.enabled:
+            return False
+        try:
+            threshold = float(self.get_setting_number(module, "Heat Warn", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            return False
+        if threshold <= 0.0:
+            return False                        # 0 / 非法值：不强行告警
+        try:
+            return float(getattr(self.state, "current_heat", 0.0) or 0.0) >= threshold
+        except (TypeError, ValueError):
+            return False
+
+    def heat_display_color(self, ratio: float) -> QColor:
+        """热量行的最终颜色：原有比例分档 + `PowerGuard / Heat Warn` 的绝对阈值。
+
+        用 `max(ratio, 0.78)` 而不是返另一个颜色：比例只能被顶高，所以结果
+        永远不比对阈值时更不显眼（已在 danger 档就留在 danger 档）。
+        """
+        if not self.heat_over_warn():
+            return self.hud_state_color("heat", ratio)
+        return self.hud_state_color("heat", max(ratio, self.HEAT_WARN_RATIO_FLOOR))
 
     def map_telemetry_status_rows(self) -> list[tuple[str, str, float, QColor, str, str]]:
         rows: list[tuple[str, str, float, QColor, str, str]] = []
         thermal = self.registry.get("ThermalPowerPanel")
         if thermal and thermal.enabled:
             ratio = self.state.current_heat / max(1.0, self.state.max_heat)
-            rows.append(("HEAT", str(int(self.state.current_heat)), ratio, self.hud_state_color("heat", ratio), "heat", f"HEAT {int(self.state.current_heat)}/{int(self.state.max_heat)}"))
+            rows.append(("HEAT", str(int(self.state.current_heat)), ratio, self.heat_display_color(ratio), "heat", f"HEAT {int(self.state.current_heat)}/{int(self.state.max_heat)}"))
         power = self.registry.get("PowerLimit")
-        if power and power.enabled:
+        if self.telemetry_panel_visible(power, "Show Limit"):
             limit = max(1.0, self.get_setting_number(power, "Limit", float(self.state.power_limit)))
             ratio = self.state.chassis_power_w / limit
             rows.append(("POWER", str(int(self.state.chassis_power_w)), ratio, self.hud_state_color("power", ratio), "power", f"POWER {int(self.state.chassis_power_w)} / {int(limit)}W"))
         speed = self.registry.get("SpeedLimit")
-        if speed and speed.enabled:
+        if self.telemetry_panel_visible(speed, "Show Speed"):
             limit = max(1.0, self.get_setting_number(speed, "Limit", float(self.state.speed_limit)))
             unit_setting = speed.get_setting("Unit")
             unit = str(unit_setting.value) if unit_setting else "dps"
             ratio = self.state.speed_limit / limit
             rows.append(("SPEED", str(int(self.state.speed_limit)), ratio, self.hud_state_color("speed", ratio), "speed", f"SPEED {int(self.state.speed_limit)} {unit}"))
         capacitor = self.registry.get("Capacitor")
-        if capacitor and capacitor.enabled:
-            ratio = self.state.capacitor_percent / 100.0
-            rows.append(("CAP", f"{self.state.capacitor_percent}%", ratio, self.hud_state_color("cap", ratio), "cap", f"CAP {self.state.capacitor_percent}%"))
+        if self.telemetry_panel_visible(capacitor, "Show Bar"):
+            percent = self.state.effective_capacitor_percent
+            ratio = percent / 100.0
+            # 低于 Warn 阈值时强制告警色，而不是跟着比例走
+            cap_color = self.hud_danger() if self.capacitor_below_warn() else self.hud_state_color("cap", ratio)
+            rows.append(("CAP", f"{percent}%", ratio, cap_color, "cap", f"CAP {percent}%"))
         return rows[:4]
 
     def draw_match_status_lines(self, p: QPainter, rect: QRectF) -> None:
@@ -1845,63 +2290,84 @@ class TacticalMapMixin:
         config = self.match_mode_manager.current
         rows: list[tuple[str, str, float, QColor]] = []
         if config.key == "RMUL3v3":
-            if self.registry.get("VictoryPointStatus") and self.registry.get("VictoryPointStatus").enabled:
+            if self.hud_row_visible("VictoryPointStatus", "Victory Points"):
                 rows.extend(
                     [
                         ("ALLY", str(self.state.ally_victory_points), self.state.ally_victory_points / 200.0, self.hud_state_color("ally")),
                         ("ENEMY", str(self.state.enemy_victory_points), self.state.enemy_victory_points / 200.0, self.hud_state_color("enemy")),
-                        ("CTRL", f"{int(self.state.control_progress)}%", self.state.control_progress / 100.0, self.hud_state_color("control")),
                     ]
                 )
-            if self.registry.get("ThermalPowerPanel") and self.registry.get("ThermalPowerPanel").enabled:
+            if self.hud_row_visible("VictoryPointStatus", "Control Zone"):
+                rows.append(
+                    ("CTRL", f"{int(self.state.control_progress)}%", self.state.control_progress / 100.0, self.hud_state_color("control"))
+                )
+            if self.hud_row_visible("ThermalPowerPanel", "Heat"):
                 ratio = self.state.current_heat / max(1.0, self.state.max_heat)
-                rows.append(("HEAT", f"{int(self.state.current_heat)}", ratio, self.hud_state_color("heat", ratio)))
+                rows.append(("HEAT", f"{int(self.state.current_heat)}", ratio, self.heat_display_color(ratio)))
             return rows[:4]
 
-        if self.registry.get("BaseOutpostStatus") and self.registry.get("BaseOutpostStatus").enabled:
-            rows.extend(
-                [
-                    ("BASE", self.short_ring_number(self.state.base_health), self.state.base_health / max(1, self.state.base_max_health), self.hud_state_color("ally")),
-                    ("EBASE", self.short_ring_number(self.state.enemy_base_health), self.state.enemy_base_health / max(1, self.state.enemy_base_max_health), self.hud_state_color("enemy")),
-                    ("OUT", self.short_outpost_value(), self.state.enemy_outpost_health / max(1, self.state.enemy_outpost_max_health), self.hud_state_color("warning")),
-                ]
+        if self.hud_row_visible("BaseOutpostStatus", "Own Base"):
+            rows.append(
+                ("BASE", self.short_ring_number(self.state.base_health), self.state.base_health / max(1, self.state.base_max_health), self.hud_state_color("ally"))
             )
-        if self.registry.get("EconomyPanel") and self.registry.get("EconomyPanel").enabled:
+        if self.hud_row_visible("BaseOutpostStatus", "Enemy Base"):
+            rows.append(
+                ("EBASE", self.short_ring_number(self.state.enemy_base_health), self.state.enemy_base_health / max(1, self.state.enemy_base_max_health), self.hud_state_color("enemy"))
+            )
+        if self.hud_row_visible("BaseOutpostStatus", "Outposts"):
+            rows.append(
+                ("OUT", self.short_outpost_value(), self.state.enemy_outpost_health / max(1, self.state.enemy_outpost_max_health), self.hud_state_color("warning"))
+            )
+        if self.hud_row_visible("EconomyPanel", "Gold"):
             rows.append(("GOLD", str(int(self.state.remaining_economy)), min(1.0, self.state.remaining_economy / 400.0), self.hud_state_color("gold")))
         if len(rows) < 4 and self.registry.get("ProjectileShop") and self.registry.get("ProjectileShop").enabled:
-            rows.append(("AMMO", str(int(self.state.projectile_allowance_17mm)), min(1.0, self.state.projectile_allowance_17mm / 180.0), self.hud_state_color("ammo")))
-        if len(rows) < 4 and self.registry.get("ThermalPowerPanel") and self.registry.get("ThermalPowerPanel").enabled:
+            value, ratio = self.projectile_ammo_value()
+            rows.append(("AMMO", value, ratio, self.hud_state_color("ammo")))
+        if len(rows) < 4 and self.hud_row_visible("ThermalPowerPanel", "Heat"):
             ratio = self.state.current_heat / max(1.0, self.state.max_heat)
-            rows.append(("HEAT", f"{int(self.state.current_heat)}", ratio, self.hud_state_color("heat", ratio)))
+            rows.append(("HEAT", f"{int(self.state.current_heat)}", ratio, self.heat_display_color(ratio)))
         return rows[:4]
 
     def match_status_rows(self, compact: bool = False) -> list[tuple[str, str, float, QColor]]:
         config = self.match_mode_manager.current
         rows: list[tuple[str, str, float, QColor]] = []
         if config.key == "RMUL3v3":
-            if self.registry.get("VictoryPointStatus") and self.registry.get("VictoryPointStatus").enabled:
+            if self.hud_row_visible("VictoryPointStatus", "Victory Points"):
                 rows.extend(
                     [
                         ("ALLY VP", str(self.state.ally_victory_points), self.state.ally_victory_points / 200.0, self.hud_state_color("ally")),
                         ("ENEMY VP", str(self.state.enemy_victory_points), self.state.enemy_victory_points / 200.0, self.hud_state_color("enemy")),
-                        ("CONTROL", f"{self.state.control_owner} {self.state.control_progress}%", self.state.control_progress / 100.0, self.hud_state_color("control")),
                     ]
                 )
-        elif self.registry.get("BaseOutpostStatus") and self.registry.get("BaseOutpostStatus").enabled:
-            rows.extend(
-                [
-                    ("OWN BASE", f"{self.state.base_health}/{self.state.base_max_health}", self.state.base_health / max(1, self.state.base_max_health), self.hud_state_color("ally")),
-                    ("ENEMY BASE", f"{self.state.enemy_base_health}/{self.state.enemy_base_max_health}", self.state.enemy_base_health / max(1, self.state.enemy_base_max_health), self.hud_state_color("enemy")),
-                    ("OUTPOST", f"{self.state.enemy_outpost_status}", self.state.enemy_outpost_health / max(1, self.state.enemy_outpost_max_health), self.hud_state_color("warning")),
-                ]
-            )
-        if self.registry.get("EconomyPanel") and self.registry.get("EconomyPanel").enabled:
-            rows.append(("GOLD", f"{self.state.remaining_economy} / T{self.state.tech_level}", min(1.0, self.state.remaining_economy / 400.0), self.hud_state_color("gold")))
+            if self.hud_row_visible("VictoryPointStatus", "Control Zone"):
+                rows.append(
+                    ("CONTROL", f"{self.state.control_owner} {self.state.control_progress}%", self.state.control_progress / 100.0, self.hud_state_color("control"))
+                )
+        else:
+            if self.hud_row_visible("BaseOutpostStatus", "Own Base"):
+                rows.append(
+                    ("OWN BASE", f"{self.state.base_health}/{self.state.base_max_health}", self.state.base_health / max(1, self.state.base_max_health), self.hud_state_color("ally"))
+                )
+            if self.hud_row_visible("BaseOutpostStatus", "Enemy Base"):
+                rows.append(
+                    ("ENEMY BASE", f"{self.state.enemy_base_health}/{self.state.enemy_base_max_health}", self.state.enemy_base_health / max(1, self.state.enemy_base_max_health), self.hud_state_color("enemy"))
+                )
+            if self.hud_row_visible("BaseOutpostStatus", "Outposts"):
+                rows.append(
+                    ("OUTPOST", f"{self.state.enemy_outpost_status}", self.state.enemy_outpost_health / max(1, self.state.enemy_outpost_max_health), self.hud_state_color("warning"))
+                )
+        if self.hud_row_visible("EconomyPanel", "Gold"):
+            rows.append(("GOLD", self.economy_gold_text(), min(1.0, self.state.remaining_economy / 400.0), self.hud_state_color("gold")))
         if self.registry.get("ProjectileShop") and self.registry.get("ProjectileShop").enabled:
-            rows.append(("AMMO", f"17 {self.state.projectile_allowance_17mm} | 42 {self.state.projectile_allowance_42mm}", min(1.0, self.state.projectile_allowance_17mm / 180.0), self.hud_state_color("ammo")))
-        if self.registry.get("ThermalPowerPanel") and self.registry.get("ThermalPowerPanel").enabled:
+            value, ammo_ratio = self.projectile_ammo_value()
+            ammo_color = (
+                self.hud_danger() if self.projectile_below_warn(ammo_ratio)
+                else self.hud_state_color("ammo")
+            )
+            rows.append(("AMMO", f"{value} | 42 {self.state.projectile_allowance_42mm}", ammo_ratio, ammo_color))
+        if self.hud_row_visible("ThermalPowerPanel", "Heat"):
             ratio = self.state.current_heat / max(1.0, self.state.max_heat)
-            rows.append(("HEAT/PWR", f"{int(self.state.current_heat)}/{int(self.state.max_heat)}  {int(self.state.chassis_power_w)}W", ratio, self.hud_state_color("heat", ratio)))
+            rows.append(("HEAT/PWR", f"{int(self.state.current_heat)}/{int(self.state.max_heat)}  {int(self.state.chassis_power_w)}W{self.telemetry_buffer_text()}", ratio, self.heat_display_color(ratio)))
         if compact:
             compact_labels = {
                 "ALLY VP": "ALLY",
@@ -1924,15 +2390,15 @@ class TacticalMapMixin:
         if thermal and thermal.enabled:
             heat = self.animated_scalar("telemetry.heat", self.state.current_heat, 20.0)
             heat_ratio = heat / max(1.0, self.state.max_heat)
-            cards.append(("HEAT", f"{int(round(heat))}/{int(self.state.max_heat)}", heat_ratio, self.hud_state_color("heat", heat_ratio), "ThermalPowerPanel"))
+            cards.append(("HEAT", f"{int(round(heat))}/{int(self.state.max_heat)}", heat_ratio, self.heat_display_color(heat_ratio), "ThermalPowerPanel"))
         power = self.registry.get("PowerLimit")
-        if power and power.enabled:
+        if self.telemetry_panel_visible(power, "Show Limit"):
             limit = max(1.0, self.get_setting_number(power, "Limit", float(self.state.power_limit)))
             power_value = self.animated_scalar("telemetry.power", self.state.chassis_power_w, 18.0)
             ratio = power_value / limit
             cards.append(("POWER", f"{int(round(power_value))} / {int(limit)}W", ratio, self.hud_state_color("power", ratio), "PowerLimit"))
         speed = self.registry.get("SpeedLimit")
-        if speed and speed.enabled:
+        if self.telemetry_panel_visible(speed, "Show Speed"):
             limit = max(1.0, self.get_setting_number(speed, "Limit", float(self.state.speed_limit)))
             unit_setting = speed.get_setting("Unit")
             unit = str(unit_setting.value) if unit_setting else "dps"
@@ -1940,10 +2406,13 @@ class TacticalMapMixin:
             ratio = speed_value / max(1.0, limit)
             cards.append(("SPEED", f"{int(round(speed_value))} {unit}", ratio, self.hud_state_color("speed", ratio), "SpeedLimit"))
         capacitor = self.registry.get("Capacitor")
-        if capacitor and capacitor.enabled:
-            cap_value = self.animated_scalar("telemetry.cap", self.state.capacitor_percent, 18.0)
+        if self.telemetry_panel_visible(capacitor, "Show Bar"):
+            cap_value = self.animated_scalar("telemetry.cap", self.state.effective_capacitor_percent, 18.0)
             ratio = cap_value / 100.0
-            cards.append(("CAP", f"{int(round(cap_value))}%", ratio, self.hud_state_color("cap", ratio), "Capacitor"))
+            # 与 map_telemetry_status_rows 保持同一套开关与告警判据：
+            # 两处构造器不一致会比统一不接更坑（同一个滑块在一处有效一处无效）。
+            cap_color = self.hud_danger() if self.capacitor_below_warn() else self.hud_state_color("cap", ratio)
+            cards.append(("CAP", f"{int(round(cap_value))}%", ratio, cap_color, "Capacitor"))
         cards = cards[:4]
         if not cards:
             return
@@ -1959,18 +2428,57 @@ class TacticalMapMixin:
         y = height - 62.0
         for index, (label, value, ratio, c, key) in enumerate(cards):
             active = self.anim.value(f"hud.telemetry.{key}", 1.0, self.anim_duration(0.20 + index * 0.02), Easings.ease_out_pow4, initial=0.0)
+            # 脉必须用**钳位前**的原始比例算：超限时 ratio > 1，而下面传给
+            # draw_bar 的是 max(0,min(1,ratio))——拿钳位后的值去判“超限”，
+            # 永远只能拿到 1.0，脉冲就永远不会触发。紧凑路径同理。
+            pulse = self.telemetry_pulse_strength(key, ratio)
+            bar_color = self.hud_danger() if pulse > 0.5 else c
             rect = QRectF(x + index * (card_w + gap), y + (1.0 - active) * 12.0, card_w, card_h)
             p.save()
             p.setOpacity(active)
             if self.hud_clean():
                 self.draw_hud_liquid_glass(p, rect, 7, surface="SubGlass")
             else:
-                glow_rect(p, rect, 8, 0.11)
+                glow_rect(p, rect, 8, self.telemetry_glow_amount(key))
                 rounded_rect(p, rect, 7, self.hud_surface(0.68), self.hud_panel_outline(0.09))
             self.draw_text(p, QRectF(rect.left() + 9, rect.top() + 5, 48, 12), label, self.font("poppins_medium", 7.0), THEME.muted)
             self.draw_text(p, QRectF(rect.left() + 46, rect.top() + 4, rect.width() - 55, 13), value, self.font("poppins_bold", 7.3), THEME.text, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-            draw_bar(p, QRectF(rect.left() + 9, rect.bottom() - 10, rect.width() - 18, 4.2), max(0.0, min(1.0, ratio)), c, color("#ffffff", 0.13), 2.1)
+            draw_bar(p, QRectF(rect.left() + 9, rect.bottom() - 10, rect.width() - 18, 4.2), max(0.0, min(1.0, ratio)), bar_color, color("#ffffff", 0.13), 2.1 + 1.2 * pulse)
             p.restore()
+
+    TELEMETRY_GLOW_BASE = 0.11
+
+    def telemetry_glow_amount(self, key: str) -> float:
+        """卡片外发光量。`Capacitor / Use Glow` 只管 CAP 卡，不抢别人的卡。
+
+        局限（如实记录，不自接效果）：只有 DebugFull 卡片路径会画每卡通光；
+        紧凑路径本来就不画，所以在紧凑下这个开关看不出差别。这不是“没接”，
+        而是没有可作用的表面——不去编一个“关了就调暗”的效果来假称接好了。
+        """
+        if key == "Capacitor" and not self._bool_on("Capacitor", "Use Glow"):
+            return 0.0
+        return self.TELEMETRY_GLOW_BASE
+
+    def telemetry_pulse_strength(self, key: str, ratio: float) -> float:
+        """超限脉冲强度 0..1。`PowerLimit / Pulse Overrun` 只在功率真的超限时动。
+
+        方向：功率是**越高越险**，所以超限（ratio > 1）才脉冲；
+        未超限、开关关闭、或非功率卡时一律回 0（画面与接线前一致）。
+        """
+        if key != "PowerLimit":
+            return 0.0
+        try:
+            over = float(ratio) - 1.0
+        except (TypeError, ValueError):
+            return 0.0
+        if over <= 0.0:
+            return 0.0
+        if not self._bool_on("PowerLimit", "Pulse Overrun"):
+            return 0.0
+        # 超限 25% 到达满幅；再乘正弦做实际闪烁
+        magnitude = min(1.0, over / 0.25)
+        wave = 0.5 + 0.5 * math.sin(time.perf_counter() * 4.5)
+        return max(0.0, min(1.0, magnitude * wave))
 
     def draw_compact_telemetry_strip(self, p: QPainter, width: int, height: int, cards: list[tuple[str, str, float, QColor, str]]) -> None:
         strip_w = min(420.0, max(300.0, width * 0.34))
@@ -1989,12 +2497,17 @@ class TacticalMapMixin:
         seg_w = (strip_w - 18.0 - gap * (len(cards) - 1)) / max(1, len(cards))
         seg_x = x + 9.0
         for label, value, ratio, c, key in cards:
+            # 同上：脉冲必须用钳位前的原始 ratio，否则超限判不出来。
+            pulse = self.telemetry_pulse_strength(key, ratio)
+            bar_color = self.hud_danger() if pulse > 0.5 else c
             ratio = max(0.0, min(1.0, ratio))
             row_active = self.anim.value(f"hud.telemetry.compact.{key}", 1.0, self.anim_duration(0.16), Easings.ease_out_pow4, initial=0.0)
             p.setOpacity(active * row_active)
             self.draw_text(p, QRectF(seg_x, y + 4, seg_w * 0.44, 10), label, self.font("poppins_medium", 6.4), THEME.muted)
             self.draw_text(p, QRectF(seg_x + seg_w * 0.38, y + 4, seg_w * 0.62, 10), value.replace(" / ", "/"), self.font("poppins_medium", 6.5), THEME.text, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-            draw_bar(p, QRectF(seg_x, y + 18, seg_w, 3.2), ratio, c, color("#ffffff", 0.12), 1.6)
+            # `Pulse Overrun` 在两条路径上行为必须一致：紧凑模式是默认视图，
+            # 只改 DebugFull 等于开关在大多数时候看不出效果。
+            draw_bar(p, QRectF(seg_x, y + 18, seg_w, 3.2), ratio, bar_color, color("#ffffff", 0.12), 1.6 + 1.0 * pulse)
             seg_x += seg_w + gap
         p.restore()
 

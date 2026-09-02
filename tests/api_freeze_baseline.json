@@ -1,5 +1,45 @@
 {
   "members": {
+    "AMMO_LOW_RATIO": {
+      "kind": "plain-attribute",
+      "sig": "float",
+      "type": "float"
+    },
+    "BUFF_TIMELINE_BAND_HEIGHT": {
+      "kind": "plain-attribute",
+      "sig": "float",
+      "type": "float"
+    },
+    "BUFF_TIMELINE_GAP": {
+      "kind": "plain-attribute",
+      "sig": "float",
+      "type": "float"
+    },
+    "BUFF_TIMELINE_MAX_ITEMS": {
+      "kind": "plain-attribute",
+      "sig": "4",
+      "type": "int"
+    },
+    "CROSSHAIR_DEFAULT_STYLE": {
+      "kind": "plain-attribute",
+      "sig": "'RM Dot'",
+      "type": "str"
+    },
+    "HEAT_WARN_RATIO_FLOOR": {
+      "kind": "plain-attribute",
+      "sig": "float",
+      "type": "float"
+    },
+    "MAP_MARKER_TYPE_CODES": {
+      "kind": "plain-attribute",
+      "sig": "dict",
+      "type": "dict"
+    },
+    "MATCH_PULSE_WINDOW_S": {
+      "kind": "plain-attribute",
+      "sig": "float",
+      "type": "float"
+    },
     "NORMAL_BACKEND_VIDEO_STALE_S": {
       "kind": "plain-attribute",
       "sig": "float",
@@ -10,10 +50,25 @@
       "sig": "QPaintDevice.PaintDeviceMetric",
       "type": "EnumType"
     },
+    "RM_INDICATOR_SETTING": {
+      "kind": "plain-attribute",
+      "sig": "dict",
+      "type": "dict"
+    },
     "RenderFlag": {
       "kind": "callable",
       "sig": "QWidget.RenderFlag",
       "type": "EnumType"
+    },
+    "STATUS_CARD_SETTING": {
+      "kind": "plain-attribute",
+      "sig": "dict",
+      "type": "dict"
+    },
+    "TELEMETRY_GLOW_BASE": {
+      "kind": "plain-attribute",
+      "sig": "float",
+      "type": "float"
     },
     "TargetBuffer": {
       "kind": "callable",
@@ -30,10 +85,20 @@
       "sig": "PolarRMWindow._append_vision_wire_armor",
       "type": "method"
     },
+    "_armor_distance_m": {
+      "kind": "bound-method",
+      "sig": "EspWireframeMixin._armor_distance_m",
+      "type": "method"
+    },
     "_armor_geometry_smooth": {
       "kind": "plain-attribute",
       "sig": "dict",
       "type": "dict"
+    },
+    "_armor_health_fraction": {
+      "kind": "bound-method",
+      "sig": "EspWireframeMixin._armor_health_fraction",
+      "type": "method"
     },
     "_aspect_fit_image_rect": {
       "kind": "method",
@@ -50,6 +115,11 @@
       "kind": "plain-attribute",
       "sig": "False",
       "type": "bool"
+    },
+    "_bool_on": {
+      "kind": "bound-method",
+      "sig": "TacticalMapMixin._bool_on",
+      "type": "method"
     },
     "_bottom_left_diagnostics": {
       "kind": "plain-attribute",
@@ -748,9 +818,24 @@
       "sig": "PolarRMWindow.apply_wallpaper_profile",
       "type": "method"
     },
+    "armor_box_edges": {
+      "kind": "bound-method",
+      "sig": "EspWireframeMixin.armor_box_edges",
+      "type": "method"
+    },
     "armor_center_in_autoaim_fov": {
       "kind": "bound-method",
       "sig": "PolarRMWindow.armor_center_in_autoaim_fov",
+      "type": "method"
+    },
+    "armor_center_in_autoaim_fov_angle": {
+      "kind": "bound-method",
+      "sig": "EspWireframeMixin.armor_center_in_autoaim_fov_angle",
+      "type": "method"
+    },
+    "armor_depth_visible": {
+      "kind": "bound-method",
+      "sig": "EspWireframeMixin.armor_depth_visible",
       "type": "method"
     },
     "armor_esp_back_points": {
@@ -793,10 +878,25 @@
       "sig": "PolarRMWindow.autoaim_circle_radius",
       "type": "method"
     },
+    "autoaim_fov_radius_source_px": {
+      "kind": "bound-method",
+      "sig": "EspWireframeMixin.autoaim_fov_radius_source_px",
+      "type": "method"
+    },
     "autoaim_logical_size": {
       "kind": "bound-method",
       "sig": "PolarRMWindow.autoaim_logical_size",
       "type": "method"
+    },
+    "autoaim_priority_actual": {
+      "kind": "plain-attribute",
+      "sig": "'Armor'",
+      "type": "str"
+    },
+    "autoaim_priority_reason": {
+      "kind": "plain-attribute",
+      "sig": "''",
+      "type": "str"
     },
     "backend": {
       "kind": "plain-attribute",
@@ -822,6 +922,11 @@
       "kind": "callable",
       "sig": "PolarRMWindow.baseSize",
       "type": "builtin_function_or_method"
+    },
+    "base_row_text": {
+      "kind": "bound-method",
+      "sig": "TacticalMapMixin.base_row_text",
+      "type": "method"
     },
     "begin_economy_hold": {
       "kind": "bound-method",
@@ -862,6 +967,16 @@
       "kind": "callable",
       "sig": "PolarRMWindow.blockSignals",
       "type": "builtin_function_or_method"
+    },
+    "buff_timeline_band": {
+      "kind": "bound-method",
+      "sig": "TacticalMapMixin.buff_timeline_band",
+      "type": "method"
+    },
+    "buff_timeline_rows": {
+      "kind": "bound-method",
+      "sig": "TacticalMapMixin.buff_timeline_rows",
+      "type": "method"
     },
     "build_gpu_clickgui": {
       "kind": "bound-method",
@@ -1037,6 +1152,11 @@
     "cancel_quick_action_wheel": {
       "kind": "bound-method",
       "sig": "PolarRMWindow.cancel_quick_action_wheel",
+      "type": "method"
+    },
+    "capacitor_below_warn": {
+      "kind": "bound-method",
+      "sig": "TacticalMapMixin.capacitor_below_warn",
       "type": "method"
     },
     "category_icon": {
@@ -1274,6 +1394,21 @@
       "sig": "QWidget.createWindowContainer",
       "type": "builtin_function_or_method"
     },
+    "crosshair_color": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.crosshair_color",
+      "type": "method"
+    },
+    "crosshair_primitives": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.crosshair_primitives",
+      "type": "method"
+    },
+    "crosshair_style": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow.crosshair_style",
+      "type": "method"
+    },
     "currentTargetBuffer": {
       "kind": "callable",
       "sig": "PolarRMWindow.currentTargetBuffer",
@@ -1457,6 +1592,11 @@
     "draw_blackhole_status_disc": {
       "kind": "bound-method",
       "sig": "PolarRMWindow.draw_blackhole_status_disc",
+      "type": "method"
+    },
+    "draw_buff_timeline_hud": {
+      "kind": "bound-method",
+      "sig": "TacticalMapMixin.draw_buff_timeline_hud",
       "type": "method"
     },
     "draw_chassis_body_direction": {
@@ -2240,6 +2380,11 @@
       "sig": "InertialScroll",
       "type": "InertialScroll"
     },
+    "economy_gold_text": {
+      "kind": "bound-method",
+      "sig": "TacticalMapMixin.economy_gold_text",
+      "type": "method"
+    },
     "economy_hold_key": {
       "kind": "plain-attribute",
       "sig": "''",
@@ -2782,6 +2927,16 @@
       "sig": "PolarRMWindow.has_valid_combat_target",
       "type": "method"
     },
+    "heat_display_color": {
+      "kind": "bound-method",
+      "sig": "TacticalMapMixin.heat_display_color",
+      "type": "method"
+    },
+    "heat_over_warn": {
+      "kind": "bound-method",
+      "sig": "TacticalMapMixin.heat_over_warn",
+      "type": "method"
+    },
     "height": {
       "kind": "callable",
       "sig": "PolarRMWindow.height",
@@ -2905,6 +3060,11 @@
     "hud_panel_outline": {
       "kind": "bound-method",
       "sig": "PolarRMWindow.hud_panel_outline",
+      "type": "method"
+    },
+    "hud_row_visible": {
+      "kind": "bound-method",
+      "sig": "TacticalMapMixin.hud_row_visible",
       "type": "method"
     },
     "hud_state_color": {
@@ -3288,6 +3448,16 @@
       "sig": "PolarRMWindow.locale",
       "type": "builtin_function_or_method"
     },
+    "lock_indicator_visible": {
+      "kind": "bound-method",
+      "sig": "EspWireframeMixin.lock_indicator_visible",
+      "type": "method"
+    },
+    "lock_pulse_strength": {
+      "kind": "bound-method",
+      "sig": "EspWireframeMixin.lock_pulse_strength",
+      "type": "method"
+    },
     "logicalDpiX": {
       "kind": "callable",
       "sig": "PolarRMWindow.logicalDpiX",
@@ -3338,6 +3508,11 @@
       "sig": "PolarRMWindow.mapToParent",
       "type": "builtin_function_or_method"
     },
+    "map_click_command_values": {
+      "kind": "bound-method",
+      "sig": "TacticalMapMixin.map_click_command_values",
+      "type": "method"
+    },
     "map_control_color": {
       "kind": "bound-method",
       "sig": "PolarRMWindow.map_control_color",
@@ -3386,6 +3561,16 @@
     "match_chat_reserved_height": {
       "kind": "bound-method",
       "sig": "PolarRMWindow.match_chat_reserved_height",
+      "type": "method"
+    },
+    "match_header_pulse_strength": {
+      "kind": "bound-method",
+      "sig": "TacticalMapMixin.match_header_pulse_strength",
+      "type": "method"
+    },
+    "match_header_text": {
+      "kind": "bound-method",
+      "sig": "TacticalMapMixin.match_header_text",
       "type": "method"
     },
     "match_mode_manager": {
@@ -3838,6 +4023,11 @@
       "sig": "PolarRMWindow.physicalDpiY",
       "type": "builtin_function_or_method"
     },
+    "pick_autoaim_armor": {
+      "kind": "bound-method",
+      "sig": "EspWireframeMixin.pick_autoaim_armor",
+      "type": "method"
+    },
     "play_gui_transition_sound": {
       "kind": "bound-method",
       "sig": "PolarRMWindow.play_gui_transition_sound",
@@ -3903,6 +4093,21 @@
       "sig": "PolarRMWindow.process_vision_kill_events",
       "type": "method"
     },
+    "projectile_ammo_row": {
+      "kind": "bound-method",
+      "sig": "TacticalMapMixin.projectile_ammo_row",
+      "type": "method"
+    },
+    "projectile_ammo_value": {
+      "kind": "bound-method",
+      "sig": "TacticalMapMixin.projectile_ammo_value",
+      "type": "method"
+    },
+    "projectile_below_warn": {
+      "kind": "bound-method",
+      "sig": "TacticalMapMixin.projectile_below_warn",
+      "type": "method"
+    },
     "property": {
       "kind": "callable",
       "sig": "PolarRMWindow.property",
@@ -3947,6 +4152,11 @@
       "kind": "plain-attribute",
       "sig": "QuickActionWheelGpuRenderer",
       "type": "QuickActionWheelGpuRenderer"
+    },
+    "radar_high_light_enabled": {
+      "kind": "bound-method",
+      "sig": "TacticalMapMixin.radar_high_light_enabled",
+      "type": "method"
     },
     "raise_": {
       "kind": "callable",
@@ -4116,6 +4326,26 @@
     "return_to_jello_clickgui": {
       "kind": "bound-method",
       "sig": "PolarRMWindow.return_to_jello_clickgui",
+      "type": "method"
+    },
+    "rm_indicator_visible": {
+      "kind": "bound-method",
+      "sig": "ModuleListMixin.rm_indicator_visible",
+      "type": "method"
+    },
+    "robot_armor_boxes_visible": {
+      "kind": "bound-method",
+      "sig": "EspWireframeMixin.robot_armor_boxes_visible",
+      "type": "method"
+    },
+    "robot_overlay_distance_suffix": {
+      "kind": "bound-method",
+      "sig": "EspWireframeMixin.robot_overlay_distance_suffix",
+      "type": "method"
+    },
+    "robot_overlay_id_suffix": {
+      "kind": "bound-method",
+      "sig": "EspWireframeMixin.robot_overlay_id_suffix",
       "type": "method"
     },
     "saveGeometry": {
@@ -4698,6 +4928,16 @@
       "sig": "PolarRMWindow.startup_needs_high_rate",
       "type": "method"
     },
+    "startup_page_after_scenario": {
+      "kind": "bound-method",
+      "sig": "StartupSceneMixin.startup_page_after_scenario",
+      "type": "method"
+    },
+    "startup_page_before_robot": {
+      "kind": "bound-method",
+      "sig": "StartupSceneMixin.startup_page_before_robot",
+      "type": "method"
+    },
     "startup_page_morph": {
       "kind": "plain-attribute",
       "sig": "MorphState",
@@ -4706,6 +4946,11 @@
     "startup_scenario_meta": {
       "kind": "bound-method",
       "sig": "PolarRMWindow.startup_scenario_meta",
+      "type": "method"
+    },
+    "startup_second_step_enabled": {
+      "kind": "bound-method",
+      "sig": "StartupSceneMixin.startup_second_step_enabled",
       "type": "method"
     },
     "startup_stagger_value": {
@@ -4754,6 +4999,21 @@
       "sig": "PolarRMWindow.statusTip",
       "type": "builtin_function_or_method"
     },
+    "status_card_glow": {
+      "kind": "bound-method",
+      "sig": "ModuleListMixin.status_card_glow",
+      "type": "method"
+    },
+    "status_card_visible": {
+      "kind": "bound-method",
+      "sig": "ModuleListMixin.status_card_visible",
+      "type": "method"
+    },
+    "status_card_warning": {
+      "kind": "bound-method",
+      "sig": "ModuleListMixin.status_card_warning",
+      "type": "method"
+    },
     "style": {
       "kind": "callable",
       "sig": "PolarRMWindow.style",
@@ -4767,6 +5027,11 @@
     "submit_economy_offer": {
       "kind": "bound-method",
       "sig": "PolarRMWindow.submit_economy_offer",
+      "type": "method"
+    },
+    "sync_control_binds": {
+      "kind": "bound-method",
+      "sig": "PersistenceMixin.sync_control_binds",
       "type": "method"
     },
     "sync_local_autoaim_fov": {
@@ -4903,6 +5168,26 @@
     "target_short_name": {
       "kind": "bound-method",
       "sig": "PolarRMWindow.target_short_name",
+      "type": "method"
+    },
+    "telemetry_buffer_text": {
+      "kind": "bound-method",
+      "sig": "TacticalMapMixin.telemetry_buffer_text",
+      "type": "method"
+    },
+    "telemetry_glow_amount": {
+      "kind": "bound-method",
+      "sig": "TacticalMapMixin.telemetry_glow_amount",
+      "type": "method"
+    },
+    "telemetry_panel_visible": {
+      "kind": "bound-method",
+      "sig": "TacticalMapMixin.telemetry_panel_visible",
+      "type": "method"
+    },
+    "telemetry_pulse_strength": {
+      "kind": "bound-method",
+      "sig": "TacticalMapMixin.telemetry_pulse_strength",
       "type": "method"
     },
     "telemetry_render_tracks": {
@@ -5105,6 +5390,11 @@
       "sig": "MockVisionPipeline",
       "type": "MockVisionPipeline"
     },
+    "vision_gpu_renderer_allows": {
+      "kind": "bound-method",
+      "sig": "EspWireframeMixin.vision_gpu_renderer_allows",
+      "type": "method"
+    },
     "vision_kill_detector": {
       "kind": "plain-attribute",
       "sig": "VisionKillDetector",
@@ -5268,7 +5558,7 @@
   },
   "meta": {
     "collected_by": "tests/api_freeze_test.py --update",
-    "python": "3.12.13",
+    "python": "3.13.15",
     "qt_platform": "offscreen",
     "volatile_policy": "sig/kind 变化跨两次采样 => volatile，对比时只查存在性"
   },

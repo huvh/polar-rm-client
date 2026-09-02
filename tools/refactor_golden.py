@@ -37,7 +37,11 @@ Subcommands:
    recipe); StartupVisual "Background Mode"="Static" on launcher pages.
 2. Mock telemetry disabled (window.state.mock_simulation_enabled=False right
    after construction) so HUD numbers stay at dataclass defaults instead of
-   drifting with wall-clock demo simulation.
+   drifting with wall-clock demo simulation.  ``state.start_time`` is also
+   pinned relative to the frozen clock during every grab: MockVisionPipeline
+   derives its target geometry from ``perf_counter() - start_time`` even when
+   telemetry ticking is disabled, so leaving the constructor timestamp live
+   made the target rectangle—and every blur sampling it—change between runs.
 3. Frozen paint clock: every wall-clock read goes through time.perf_counter()
    (polar_app, animation.GuiMotionController/AnimationBank, kill_fx, model)
    or time.time() (rm_client.ui.paint.rainbow_color / rainbow_color_index --
@@ -147,6 +151,7 @@ import numpy as np  # noqa: E402  (venv has numpy 2.x)
 
 # ---------------------------------------------------------------- constants
 FROZEN = 1_000_000_000.0          # frozen perf_counter value (> any real one)
+FIXED_MOCK_ELAPSED = 7.25          # deterministic MockVision target phase
 # Frozen wall-clock for time.time() consumers (rm_client.ui.paint.rainbow_color
 # drives HUD RGB cycles from epoch millis). Must be a FIXED constant across
 # runs (absolute-time terms like millis//speed%360 must be identical) and above
@@ -194,6 +199,7 @@ class FrozenClock:
         self._saved_pc = time.perf_counter
         self._saved_time = time.time
         self._pins: dict[str, float] = {}
+        self._saved_state_start_time: float | None = None
 
     def __enter__(self) -> "FrozenClock":
         w = self.window
@@ -228,6 +234,16 @@ class FrozenClock:
             w.synthetic_video_cache = None
         except Exception:
             pass
+        # MockVisionPipeline is intentionally rendered by the golden states.
+        # It does not consume RobotState.tick(), but it does animate from the
+        # dataclass construction timestamp.  Pin that origin so two fresh
+        # windows render the exact same target and therefore the same Jello
+        # blur source.
+        try:
+            self._saved_state_start_time = float(w.state.start_time)
+            w.state.start_time = FROZEN - FIXED_MOCK_ELAPSED
+        except Exception:
+            self._saved_state_start_time = None
         # Pin the wallpaper parallax (integrated against the real clock during
         # settle); a run-dependent residual would shift glass refraction by a
         # sub-pixel and produce sparse edge noise.
@@ -245,6 +261,11 @@ class FrozenClock:
     def __exit__(self, *exc) -> None:
         time.perf_counter = self._saved_pc  # type: ignore[assignment]
         time.time = self._saved_time  # type: ignore[assignment]
+        if self._saved_state_start_time is not None:
+            try:
+                self.window.state.start_time = self._saved_state_start_time
+            except Exception:
+                pass
         now = self._saved_pc()
         for attr in (
             "last_frame_time",

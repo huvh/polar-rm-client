@@ -492,7 +492,7 @@ def test_manager_updates_state() -> None:
     }, time.perf_counter()))
     manager.mqtt._decoded.append(("GlobalUnitStatus", "GlobalUnitStatus", {
         "base_health": 5000, "outpost_health": 1500, "enemy_base_health": 4800,
-        "robot_health": [600, 520], "robot_bullets": [10, 20],
+        "robot_health": [600, 520], "robot_bullets": [10, 20, 30, 40, 50],
     }, time.perf_counter()))
     manager.mqtt._decoded.append(("RobotModuleStatus", "RobotModuleStatus", {
         "power_manager": 1, "rfid": 1, "capacitor": 1,
@@ -513,11 +513,43 @@ def test_manager_updates_state() -> None:
     check("state red_score", state.red_score == 10)
     check("state base_health", state.base_health == 5000)
     check("state official_robot_health", state.official_robot_health == [600, 520])
+    check("state official_robot_bullets", state.official_robot_bullets == [10, 20, 30, 40, 50])
+    check(
+        "infantry projectile allowance mapped",
+        state.projectile_allowance_17mm == 30 and state.projectile_allowance_42mm == 0,
+    )
     check("state module_status", state.robot_module_status.get("power_manager") == 1)
     check("state positions", state.robot_positions[0]["robot_id"] == 103)
     check("state rune phase", state.energy_rune_phase == "ACTIVE")
     check("state rune progress", state.energy_rune_progress == 250)
     check("state active_penalty", state.active_penalty["penalty_type"] == 1)
+
+    # RobotStaticStatus can arrive after GlobalUnitStatus.  The retained
+    # own-team vector must be remapped immediately instead of waiting another
+    # 1 Hz global sample or retaining the Infantry value.
+    manager.mqtt._decoded.append(("RobotStaticStatus", "RobotStaticStatus", {
+        "robot_id": 101,
+        "__present__": frozenset({4}),
+    }, time.perf_counter()))
+    check("hero static status applied", manager.apply_updates(state) == 1)
+    check(
+        "blue hero projectile allowance remapped",
+        state.projectile_allowance_17mm == 0 and state.projectile_allowance_42mm == 10,
+    )
+
+    # An authoritative empty vector is fail-unknown and must clear the prior
+    # value rather than showing stale ammunition.
+    manager.mqtt._decoded.append(("GlobalUnitStatus", "GlobalUnitStatus", {
+        "robot_bullets": [],
+        "__present__": frozenset({12}),
+    }, time.perf_counter()))
+    check("empty projectile vector applied", manager.apply_updates(state) == 1)
+    check(
+        "empty projectile vector clears HUD",
+        state.official_robot_bullets == []
+        and state.projectile_allowance_17mm == 0
+        and state.projectile_allowance_42mm == 0,
+    )
 
     # 性能值推导（英雄近战 → shooter=chassis=3）
     registry = build_default_registry()
@@ -780,6 +812,10 @@ def test_backend_frontend_sync() -> None:
     from rm_client.model import RobotState
     state = RobotState()
     manager = BackendManager(state=state, client_id="3", scenario_key="OfficialEvent")
+    check(
+        "official scene clears mock projectile allowance",
+        state.projectile_allowance_17mm == 0 and state.projectile_allowance_42mm == 0,
+    )
     manager.mqtt._decoded.append(("GlobalUnitStatus", "GlobalUnitStatus", {
         "robot_health": [600, 520, 400, 300, 200, 580, 480, 380, 280, 0],
         "robot_bullets": [],
@@ -814,6 +850,48 @@ def test_backend_frontend_sync() -> None:
     check("dead row", dead["hp"] == 0 and dead["state"] == "DEAD")
     check("map_robots real", any(m["id"] == 3 and m["x"] == 8.2 for m in state.map_robots))
     check("buff_rows real", any(b["name"] == "Attack Boost" and b["remaining"] == 12 for b in state.buff_rows))
+    attack_buff, defense_buff, buff_detail = state.buff_indicator_state()
+    check(
+        "authoritative buff drives HUD indicator",
+        attack_buff is True and defense_buff is False and "Attack Boost 12s" in buff_detail,
+    )
+    fallback = RobotState()
+    fallback.small_buff = False
+    fallback.large_buff = True
+    check(
+        "LabDebug buff indicator keeps explicit fallback",
+        fallback.buff_indicator_state() == (False, True, ""),
+    )
+    fallback.official_state_active = True
+    fallback.buff_rows = []
+    check(
+        "official state never reuses mock buff fallback",
+        fallback.buff_indicator_state() == (False, False, ""),
+    )
+    fallback.buff_rows = [{"robot_id": 103, "buff_type": 1, "active": True, "remaining": 9}]
+    check(
+        "other robot buff does not light local indicator",
+        fallback.buff_indicator_state() == (False, False, ""),
+    )
+    fallback.buff_rows = [{"buff_type": 2, "active": False, "remaining": 0}]
+    check(
+        "authoritative inactive buff suppresses mock fallback",
+        fallback.buff_indicator_state() == (False, False, ""),
+    )
+    check("empty module status adds no HUD row", fallback.robot_module_indicator_state() == ())
+    fallback.robot_module_status = {
+        "power_manager": 1,
+        "small_shooter": 0,
+        "big_shooter": 1,
+        "video_transmission": 0,
+        "armor": 1,
+        "main_controller": 0,
+    }
+    check(
+        "official module status maps to stable HUD chips",
+        fallback.robot_module_indicator_state()
+        == (("PWR", True), ("SHT", True), ("CV", False), ("ARM", True), ("MAIN", False)),
+    )
     rows_before = [dict(row) for row in state.robot_rows]
     map_before = [dict(row) for row in state.map_robots]
     buffs_before = [dict(row) for row in state.buff_rows]
@@ -864,6 +942,10 @@ def test_backend_frontend_sync() -> None:
     check(
         "scenario reset preserves monotonic hit revision",
         state.projectile_hit_revision == revision_before,
+    )
+    check(
+        "scenario reset clears authoritative projectile vector",
+        state.official_robot_bullets == [],
     )
     manager.shutdown()
 

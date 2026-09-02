@@ -879,6 +879,14 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                 ("vision.sync", self.sync_tongji_vision_state),
                 ("vision.events", self.process_vision_kill_events),
                 ("registry", lambda: self.registry.tick(self.state, logic_dt)),
+                # 队内 0x5A 链路必须排在最后一环：它的 overlay 要覆盖
+                # `state.tick()` 的桌面仿真值，排在前面会被仿真反向盖掉。
+                (
+                    "polar.link",
+                    lambda: self.backend.tick_polar_link(
+                        self.state, self.registry, self.control
+                    ),
+                ),
             )
             for stage_name, callback in stages:
                 self._run_tick_stage(stage_name, callback, now)
@@ -2470,6 +2478,9 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         draw_map = True if include_map is None else include_map
         if draw_map and tactical_map and tactical_map.enabled:
             self.draw_tactical_map_hud(p, logical_width, logical_height)
+            # BuffTimeline 贴在地图下方那条带上，所以必须跟地图共享同一个
+            # 可见性判断：地图没画时它也不能凭空浮在视频上。
+            self.draw_buff_timeline_hud(p, logical_width, logical_height)
         # ModuleList lives here so OpenZen RGB + row anim tick every frame.
         if minecraft_active and self.setting_bool(hud, "Module List", True):
             self.draw_minecraft_module_list(p, logical_width, logical_height, scale)
@@ -3560,21 +3571,80 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
     # ui/polar/renderers/esp_wireframe.py 的 EspWireframeMixin。
     # 边界保守决策：draw_pill 属 D5 legacy GUI 共享助手（不在 §2 D8 清单）、
     # alliance_side 属 D7 同济桥域，均留在原地。
+    #: 准星样式 -> 绘制图元。以前 `Crosshair / Style` 在界面上能选
+    #: RM Dot / Circle / Cross 三种，但全仓没人读它——不管选哪个，
+    #: 画的都是下面 "RM Dot" 那一组。把它抽成表而不是写在绘制里，
+    #: 是为了能不开 QPainter 直接断言几何，不靠比像素。
+    #: 默认档 "RM Dot" 与接线前逐图元一致（中心点 + 四条带缺口的手臂），
+    #: 所以升级后不会看到准星突变。
+    CROSSHAIR_DEFAULT_STYLE = "RM Dot"
+
+    def crosshair_style(self) -> str:
+        """`Crosshair / Style` 的当前取值。查不到就回落默认，不改变现行外观。"""
+        module = self.registry.get("Crosshair")
+        return self.setting_mode(module, "Style", self.CROSSHAIR_DEFAULT_STYLE)
+
+    def crosshair_primitives(self, style: str, cx: float, cy: float, size: float) -> list[tuple]:
+        """把一种样式展开成有序的绘制图元列表。
+
+        图元形状：("dot", x, y, r) / ("line", x0, y0, x1, y1) / ("ring", x, y, r)。
+        未知样式回落默认，不抛异常——准星画不出来比画得普通严重得多。
+        """
+        gap = 6.0
+        if style == "Circle":
+            # 圆环 + 中心点：不伸手臂，否则圆环会与手臂尖端重叠。
+            return [("dot", cx, cy, 2.4), ("ring", cx, cy, size)]
+        if style == "Cross":
+            # 满长十字：穿过中心，无缺口；不画中心点（会被线盖住）。
+            return [
+                ("line", cx - size, cy, cx + size, cy),
+                ("line", cx, cy - size, cx, cy + size),
+            ]
+        return [
+            ("dot", cx, cy, 2.4),
+            ("line", cx - size, cy, cx - gap, cy),
+            ("line", cx + gap, cy, cx + size, cy),
+            ("line", cx, cy - size, cx, cy - gap),
+            ("line", cx, cy + gap, cx, cy + size),
+        ]
+
     def draw_crosshair(self, p: QPainter, width: int, height: int) -> None:
         module = self.registry.get("Crosshair")
         size_setting = module.get_setting("Size") if module else None
         size = float(size_setting.value if size_setting else 18)
         cx = width / 2
         cy = height / 2
-        heat_ratio = self.state.current_heat / max(1.0, self.state.max_heat)
-        main = self.hud_state_color("heat", heat_ratio)
+        main = self.crosshair_color()
         p.setPen(QPen(main, 1.7))
         p.setBrush(main)
-        p.drawEllipse(QPointF(cx, cy), 2.4, 2.4)
-        p.drawLine(QPointF(cx - size, cy), QPointF(cx - 6, cy))
-        p.drawLine(QPointF(cx + 6, cy), QPointF(cx + size, cy))
-        p.drawLine(QPointF(cx, cy - size), QPointF(cx, cy - 6))
-        p.drawLine(QPointF(cx, cy + 6), QPointF(cx, cy + size))
+        for item in self.crosshair_primitives(self.crosshair_style(), cx, cy, size):
+            kind = item[0]
+            if kind == "dot":
+                p.setBrush(main)
+                p.drawEllipse(QPointF(item[1], item[2]), item[3], item[3])
+            elif kind == "ring":
+                # 圆环不能带填充：画成实心圆就糊住目标了。
+                p.setBrush(Qt.BrushStyle.NoBrush)
+                p.drawEllipse(QPointF(item[1], item[2]), item[3], item[3])
+                p.setBrush(main)
+            else:
+                p.drawLine(QPointF(item[1], item[2]), QPointF(item[3], item[4]))
+
+    def crosshair_color(self) -> QColor:
+        """准星主色。`Crosshair / Heat Color` 决定它跟不跟枪管热量走。
+
+        以前热量色是**无条件**的：关掉这个开关准星照样变红，
+        界面承诺了一个能关的东西但它关不了。
+
+        抽成方法而不是写在 `draw_crosshair` 里：颜色可以在不开 QPainter
+        的情况下直接断言，不必靠比像素。关掉时用 HUD 主色——不发明一套
+        新颜色体系，也不拿白色硬编。
+        """
+        module = self.registry.get("Crosshair")
+        heat_ratio = self.state.current_heat / max(1.0, self.state.max_heat)
+        if self.setting_bool(module, "Heat Color", True):
+            return self.hud_state_color("heat", heat_ratio)
+        return self.hud_accent()
 
     def _gimbal_scratch_image(
         self,

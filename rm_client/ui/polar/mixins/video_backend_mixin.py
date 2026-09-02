@@ -963,6 +963,10 @@ class VideoBackendMixin:
             "kill_feed": self.setting_bool(effect, "Kill Feed", True),
             "score": self.setting_bool(effect, "Score Popup", True),
             "bonus": self.setting_bool(effect, "Bonus Tags", True),
+            # 加分标签行的子项。`kill_fx.trigger()` 早就在读这个键
+            # （`element_toggles.get("locked_target_bonus", True)`），只是这个
+            # 字典从来没给它供值，于是“锁定目标”标签与提示音无法关闭。
+            "locked_target_bonus": self.setting_bool(effect, "Lock Target Bonus", True),
             "combo_subtitle": self.setting_bool(effect, "Combo Subtitle", True),
             "scrolling": self.setting_bool(effect, "Scrolling Icons", True),
             "scrolling_bf5": self.setting_bool(effect, "Scrolling Icons", True),
@@ -1080,6 +1084,18 @@ class VideoBackendMixin:
             and self.state.vision_calibrated
         )
         if not live:
+            return
+        # 单一裁决：队内 0x5A 已拿到云台控制权时，PRM1 不得再发。
+        # 否则机器人会同时收到两套云台角（MQTT 一套、USB 一套），
+        # 互相覆盖表现为云台抖动/乱转；而 0x5A 侧的抢环锁出看不见这条。
+        owner = self.backend.gimbal_egress_owner(self.state, self.registry)
+        if owner == "polar":
+            self.state.backend_stats["vision_control"] = {
+                "published": False,
+                "reason": "gimbal owned by team 0x5A link",
+                "sequence": result.sequence,
+                "fire": False,
+            }
             return
         ok, reason = self.backend.publish_vision_control(
             sequence=result.sequence,

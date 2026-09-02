@@ -1,0 +1,130 @@
+"""机器人 USB 串口的发现与解析。
+
+放在顶层模块而不是 `backend/` 下，是为了让 `model.py`（ClickGUI 设置项）和
+`backend/polar_transport.py`（真正打开端口）都能引用它而不形成循环导入
+（`backend/manager.py` 已经依赖 `..model`）。
+
+实车上的关键约束：StandardRobot++ 的 USB CDC 会被 Windows 枚举成任意
+COM 号（COM7、COM12 都可能），因此选项列表不能写死，必须现场探测；同时要
+支持 "Auto"：车上常常只插了一个 USB 设备，自动挑唯一候选比让人去设备管理器
+查口号可靠得多。
+"""
+
+from __future__ import annotations
+
+import re
+
+# StandardRobot++ / STM32 常见 USB 虚拟串口身份。命中即优先选中。
+PREFERRED_USB_IDS: tuple[tuple[int, int], ...] = (
+    (0x0483, 0x5720),  # STMicroelectronics Virtual COM Port
+    (0x16C0, 0x05DC),  # 通用 Arduino/DFRobot 风格 VID:PID（部分 C 板 bootloader）
+    (0x1EAF, 0x0003),  # Atmel/LPCUSBM 常见 CDC
+)
+PREFERRED_HINTS = ("stm32", "virtual com", "usb serial", "polar", "c-board", "c板")
+# 明显不是机器人的内置设备
+REJECT_HINTS = ("intel", "contee", "bluetooth", "raspblu", "irda", "standard uart")
+
+AUTO_PORT = "Auto"
+STUB_PORT = "Stub"
+# Auto 最低入选分：必须是带 VID/PID 的 USB 设备
+AUTO_MIN_SCORE = 30
+
+
+def list_serial_ports() -> list[dict[str, object]]:
+    """返回系统可用串口；没装 pyserial 或没插设备时返回空列表，绝不抛异常。"""
+
+    try:
+        from serial.tools import list_ports  # type: ignore
+    except Exception:
+        return []
+    ports: list[dict[str, object]] = []
+    try:
+        items = list(list_ports.comports())
+    except Exception:
+        return []
+    for item in items:
+        ports.append(
+            {
+                "device": str(item.device),
+                "name": str(item.device).split("\\")[-1],
+                "description": str(getattr(item, "description", "") or ""),
+                "vid": int(getattr(item, "vid", 0) or 0),
+                "pid": int(getattr(item, "pid", 0) or 0),
+                "serial_number": str(getattr(item, "serial_number", "") or ""),
+            }
+        )
+    ports.sort(key=lambda entry: _com_number(str(entry["device"])))
+    return ports
+
+
+def _com_number(device: str) -> int:
+    match = re.search(r"COM(\d+)$", device.upper())
+    return int(match.group(1)) if match else 1 << 30
+
+
+def score_port(entry: dict[str, object]) -> int:
+    """分值越高越像机器人本体，供 Auto 挑选。
+
+    **只有带 VID/PID 的 USB 设备才有资格被 Auto 选中。**主板自带的
+    传统 COM1/COM2 在中文 Windows 上描述是“通信端口”，不包含任何可识别
+    的英文关键字，如果允许它入选，Auto 会优先挑中这个假目标，车上表现为
+    “连上了但永远收不到数据”。宁缺勿滥，找不到就返回 Stub 让操作员显式选。
+    """
+
+    vid = int(entry.get("vid", 0) or 0)
+    pid = int(entry.get("pid", 0) or 0)
+    description = str(entry.get("description", "")).lower()
+    if any(hint in description for hint in REJECT_HINTS):
+        return -100
+    if not (vid and pid):
+        return -50  # 非 USB（主板传统串口、蓝牙 RFCOMM 等）：不参与 Auto
+    if (vid, pid) in PREFERRED_USB_IDS:
+        return 100
+    if any(hint in description for hint in PREFERRED_HINTS):
+        return 60
+    return 30  # 其他带 VID/PID 的 USB 串口设备
+
+
+def candidate_port_names() -> list[str]:
+    return [str(entry["device"]) for entry in list_serial_ports()]
+
+
+def port_choices() -> list[str]:
+    """ClickGUI 用的选项：固定值 + 当前探测到的口（去重、保持顺序）。"""
+
+    choices = [STUB_PORT, AUTO_PORT, "COM1", "COM3", "COM5"]
+    for device in candidate_port_names():
+        if device not in choices:
+            choices.append(device)
+    return choices
+
+
+def resolve_port(port: str) -> str:
+    """把 "Auto" 解析成具体设备名；显式端口原样返回。"""
+
+    value = str(port or STUB_PORT).strip()
+    if value and value.lower() != AUTO_PORT.lower():
+        return value
+    entries = list_serial_ports()
+    if not entries:
+        return STUB_PORT
+    ranked = sorted(entries, key=lambda entry: score_port(entry), reverse=True)
+    best = score_port(ranked[0])
+    if best < AUTO_MIN_SCORE:
+        return STUB_PORT  # 没有像样的 USB 候选：宁可不连，也不乱开到传统串口
+    if len(ranked) > 1 and score_port(ranked[1]) == best:
+        # 两个同等可疑的口：不猜，交给操作员显式选择
+        return STUB_PORT
+    return str(ranked[0]["device"])
+
+
+def describe_ports(limit: int = 6) -> list[str]:
+    """给 HUD/预检用的人类可读清单。"""
+
+    lines: list[str] = []
+    for entry in list_serial_ports()[:limit]:
+        vid = int(entry.get("vid", 0) or 0)
+        pid = int(entry.get("pid", 0) or 0)
+        tag = f"USB {vid:04X}:{pid:04X}" if vid and pid else "非 USB"
+        lines.append(f"{entry['device']} [{tag}] {entry['description']}"[:120])
+    return lines
