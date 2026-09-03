@@ -18,8 +18,8 @@
 |---|---|---|---|---|
 | 物理 | 电脑 →USB线→ C 板 Type-C（虚拟串口） | 电脑/手 →DT7→ 2.4G → DR16 → C 板 UART3（DMA+IDLE 中断） | 同②，但换的是别家遥控器与接收机 | 别的板 →USART1（板上丝印写 Uart2）／CAN |
 | 帧长 | `0x5A`+id+len+payload+CRC16 | **18 字节**（`RC_FRAME_LENGTH`，`remote_control.h:46`） | **25 字节**（`SBUS_RC_FRAME_LENGTH`，`:47`） | `0xA5` SOF，只搬 Test/Rc/Gimbal 三种包 |
-| 入口 | `usb_task.c` 收 id=0x03 虚拟遥控器 | `remote_control.c:252-263` → `sbus_to_rc()` | `remote_control.c:264-280` → `Et08aSbusToRc()` 等 | `communication.c:221-237`（UART2）／`CAN_receive.c:228-268`（CAN） |
-| 怎么写 `key.v` | `UsbMergeVirtualRcKeys()`：`HOST_RC_HOST_KEYS = drive_keys;` 然后写并集（`usb_task.c`） | `HOST_RC_DRIVER_KEYS = key.v;` 然后写并集（`remote_control.c:382` 之后） | 无键位字段 → 置零宏里 `HOST_RC_DRIVER_KEYS = 0;` | **整份 `RC_ctrl_t` memcpy 覆盖** |
+| 入口 | `usb_task.c` 收 id=0x03 虚拟遥控器 | `remote_control.c:253-264` → `sbus_to_rc()` | `remote_control.c:265-281` → `Et08aSbusToRc()` 等 | `communication.c:221-237`（UART2）／`CAN_receive.c:228-268`（CAN） |
+| 怎么写 `key.v` | `UsbMergeVirtualRcKeys()`：`HOST_RC_HOST_KEYS = drive_keys;` 然后写并集（`usb_task.c`） | `HOST_RC_DRIVER_KEYS = key.v;` 然后写并集（`remote_control.c:383` 之后） | 无键位字段 → 置零宏里 `HOST_RC_DRIVER_KEYS = 0;` | **整份 `RC_ctrl_t` memcpy 覆盖** |
 | 生效条件 | 客户端三条开关：RobotLink enabled + Allow Drive + Client Chassis Drive，且 Drive Channel=`virtual_rc`；硬件侧只放行 `VRC_DRIVE_KEY_MASK`（W/S/A/D/SHIFT） | 编译期 `__RC_TYPE == RC_DT7`（`robot_param.h:42`） | 编译期 `__RC_TYPE` 选中对应解码器 | `__CONTROL_LINK_RC == CL_RC_UART2 / CL_RC_CAN`；当前 `CL_RC_DIRECT`（`robot_param.h:57`）**这段不参与** |
 | 超时 | 150ms 没收到 0x03 → 客户端那份账归零（`VRC_FRESH_TIMEOUT_MS`） | 100ms 没帧 → `receive_count` 断；`GetRcOffline()` 只看"有没有连续收到" | 连续 10 次 `connect_flag` 变化判失联 → `slove_RC_lost()` 重启 DMA | 上层用 `LastReceiveTime.Data_Rc` 判 |
 | 语义 | **叠加**，随时可撤 | **叠加**（打桥之后不再是覆盖） | **叠加**（驾驶员侧恒 0） | **覆盖**，会把①②③的结果一起冲掉 —— 与客户端驾驶**不可混用** |
@@ -30,7 +30,7 @@
 
 | 说法 | 判定 | 依据 |
 |---|---|---|
-| "DT7 硬件配 et08a，驾驶员键位/鼠标就丢了" | **错** | `remote_control.c:252` 是按**帧长**分派：18 字节无条件进 `sbus_to_rc()`，键位 bytes14-15、鼠标 bytes6-13 照解，中值用 DT7 自己的 `RC_CH_VALUE_OFFSET=1024`。**你们以前用 DT7 键鼠开车能开，这条从来没坏过。** |
+| "DT7 硬件配 et08a，驾驶员键位/鼠标就丢了" | **错** | `remote_control.c:253`（干净树 252）是按**帧长**分派：18 字节无条件进 `sbus_to_rc()`，键位 bytes14-15、鼠标 bytes6-13 照解，中值用 DT7 自己的 `RC_CH_VALUE_OFFSET=1024`。**你们以前用 DT7 键鼠开车能开，这条从来没坏过。** |
 | "配错就摇杆中值偏移、车自己漂" | **错（对 DT7 车不成立）** | 那几家中值只在**25 字节解码器**里用到；DT7 帧走的是 `sbus_to_rc()`，与 `__RC_TYPE` 无关 |
 | "配错就车判离线、底盘锁死、警报曲一直响" | **半对，但被说重了** | `GetRcOffline()` 确实恒真（`:577` 非 DT7 分支要看初值即超限、又只有 25 字节路径更新的 `sbus_lost_count`）；可它的下游只有：板间广播 `rc_offline=1`（`communication.c:186`、`CAN_communication.c:75`）、**平衡底盘**置 `DBUS_ERROR_OFFSET`（`chassis_balance.c:272`）。麦轮/全向轮这里走 `chassis_task.c:98` 的 `__weak` 空实现，**不影响本车运动**；离线警报曲默认关（`music_task.c:38` `ENABLE_ALARM_RC_OFFLINE=false`） |
 | "车上是 25 字节遥控器时，`__RC_TYPE` 必须选对那一家" | **对，而且这才是致命的** | `remote_control.c:264-280` 的 `#if` 链选不中 -> 那一帧**一个字段都不解**，摇杆键位全丢，车完全不动 |
@@ -114,7 +114,26 @@ extern volatile uint16_t HOST_RC_HOST_KEYS;           /* usb_task 写 */
 * 相邻的 `0x0302 自定义控制器`同样只进内存：`referee.c:230-231` 收下，
   往上位机转发的代码在 `usb_task.c` 里全是注释。
 
-⇒ 结论不变：**想让上位机经图传/裁判链路控车，得自己把 0x0304 的解析与下游补起来**；
+⇒ **本节结论已在 2026-09-04 被官方文档更新（重要）**：
+> 大疆《RM2026 通信协议 V1.2.0》（2026.02.09）修改日志第 2 条明确写着
+> **"删除命令码 0x0304"**，第 3 条把原 `RemoteControl` 拆成
+> `KeyboardMouseControl`（75Hz）与 `CustomControl`（≤30B，75Hz），方向都是
+> **自定义客户端 → 图传链路 → 机器人**。所以"补 0x0304 解析"这个目标已经作废——
+> 新赛季的裁判系统根本不会再发这个包，补回来也收不到。
+>
+> 2026 赛季真正的活通道是 **0x0311**（30 字节，75Hz 上限，图传链路），
+> 而队内固件**已经在收已经在存**：`referee.c:247`
+> `memcpy(&robot_custom_data_3, frame + index, sizeof(robot_custom_data_3_t));`
+> 这条 case 是活的（不像 0x0304 被注释）。缺的只是**下游消费者**
+> （`usb_task.c:125/181/392/605-609/1216-1219` 全注释，数据躺在内存里没人读）。
+> 客户端这半截也早就有了：`CustomControl` 经 MQTT 发、75Hz 门控，
+> 载荷用队内自己的 `PRM1` 魔数（`rm_client/backend/protocol.py:19-22`，
+> kind: VISION=1 / SPIN=2）。
+>
+> ⇒ 正确的适配点：**给固件写一个 0x0311 的 PRM1 载荷消费者**（键位/鼠标落到
+> §3 的键位账本 + `__CONTROL_LINK_KM` 五档仲裁），而不是复活 0x0304。
+> 详见 `tools/dt7_link/README.md` 第 5 节。
+
 在此之前，能用的就是 §1 的 ①②③。这也是客户端里 `gimbal_egress_owner()`
 那个互锁存在的原因（两条云台出口同时发角会打架）。
 
@@ -128,13 +147,43 @@ extern volatile uint16_t HOST_RC_HOST_KEYS;           /* usb_task 写 */
 
 也就是说：**要客户端开车就必须插 USB 线**；而"比赛时车能被开起来"这件事
 本身不依赖 USB 线，DT7 键鼠链路是完整的一条无线通路。
-要把客户端也变成无线的，只有 §5 的 0x0304（补解析）或车上加 USB↔WiFi 透传
+要把客户端也变成无线的，可选三条：§7 的 **DT7 虚拟控制链路**（官方设计，
+固件零改动，缺 PC↔DT7 报文格式）、§5 更正后的 **0x0311 + PRM1 消费者**
+（2026 正规路，两端都已有代码，只差固件侧一个消费者）、或车上加 USB↔WiFi 透传
 （后者现场不稳，不建议当比赛方案）两条路。
 
 ## 7. 电脑经 DT7 控车（大疆官方客户端那条）——固件侧已经是通的，缺的只有 PC↔DT7 那一段
 
-**队内现场事实**：以前打比赛是**大疆官方客户端 USB 连 DT7**，然后开车打。
-这件事把上一节那个"待验证"直接定成了结论 —— **DT7 的 USB 口就是 PC 键鼠的注入通道**。
+**先认错**：这一节最早的说法（"客户端根本不碰遥控器"）是错的。电控同学说的
+"电脑连 DT7 就能开车"不但属实，而且是**大疆写进自己手册的正式能力**。
+
+**官方原文**（大疆《DT7 & DR16 2.4 GHz 遥控接收系统用户手册》V1.0 2016.09 第 5-7 页；
+本地副本 `D:\rmbuild\DT7_DR16_RM_manual_official.pdf`）：
+
+> "DR16 接收机输出的信号为标准的 DBUS 协议数据……接收机每隔 14ms 通过 DBUS
+>  发送一帧 18 字节数据。**为了满足通过 PC 控制战车的需求，增加了额外的键盘鼠标
+>  控制信息**，控制链路示意如图所示：
+>  `键盘鼠标 → PC主机USB →（虚拟控制链路）→ 遥控器发射机(DT7) → 遥控器接收机(DR16)
+>   →（DBUS）→ 战车`"
+
+而同一本手册第 2 页 DT7 的部件表只有 2 摇杆 / S1 / S2 / 滑杆 / Micro-USB / 电池仓
+—— **DT7 本身没有键盘鼠标**。所以 18 字节里 bytes 6-15 那份键鼠，唯一来源就是电脑
+经那个 USB 口灌进去的。大疆给这条链路起的正式名字是**"虚拟控制链路"**。
+
+**位序对齐不是抄表抄出来的，是跑出来的**：
+`tools/dt7_link/dt7_dbus_frame.py` 按手册位序编帧，
+`tools/dt7_link/test_dbus_frame_vs_firmware.py` 把固件里**真实的** `sbus_to_rc()`
+函数体原样抽出来编成 exe、喂进去、逐字段比对（11 组用例，含 ±32768、0xFFFF、
+通道端点），并守住房件常量（中值 1024 / 帧长 18 / KEY_W..KEY_E 位号）。
+已挂在 `verify_all.py` 里。
+
+**还有一个没定死、但会咬人的坑**：键位 bit4-7 有两套官方定义在打架 ——
+遥控器手册(2016) 是 `Q E Shift Ctrl`，而队内固件 `remote_control.h:103-118`
+（和 2026 协议的 `KeyboardMouseControl` 一致）是 `SHIFT CTRL Q E`。
+**bit0-3 的 W/S/A/D 两套完全相同**，这正好解释了为什么键鼠开车一直好用、
+而 Q/E/Shift 的错位从没被当场抓出来。如果 DT7 按前者打包，
+现场表现就是"驾驶员按 Shift 车去做 Q 的事（摩擦轮），按 Q 车开小陀螺"。
+这一条必须拿真 DT7 现场验一次才能定，别当结论用。
 
 按代码把这条链路一节一节排开：
 
@@ -143,7 +192,7 @@ extern volatile uint16_t HOST_RC_HOST_KEYS;           /* usb_task 写 */
 | 电脑键鼠 → DT7 | 大疆官方客户端（私有协议） | **他们做过、能用车**；协议细节 DJI 私有 |
 | DT7 → 车上 DR16 | 18 字节 SBUS，键位在 bytes14-15、鼠标在 bytes6-13 | 无线，标准 |
 | C 板解 SBUS | `remote_control.c:252` 按**帧长**分派 → `sbus_to_rc()`（与 `__RC_TYPE` 无关） | ✅ 通 |
-| 底盘消费键位 | `chassis_mecanum.c:157-160` 读 `key.v` 的 W/S/A/D | ✅ 通 |
+| 底盘消费键位 | `chassis_mecanum.c:196-199` 读 `key.v` 的 W/S/A/D（干净树是 148-151） | ✅ 通 |
 | 云台消费鼠标 | `gimbal_yaw_pitch_direct.c:331-332` 读 `mouse.x/y` | ✅ 通 |
 | 客户端的键位叠加 | 本次的键位账本：DT7 那侧进 `HOST_RC_DRIVER_KEYS` | ✅ 通，且官方客户端注入的键鼠**天然算"驾驶员侧"**，不会被覆盖、也不会被抹 |
 
@@ -163,8 +212,13 @@ extern volatile uint16_t HOST_RC_HOST_KEYS;           /* usb_task 写 */
 - `--capture`（`pip install hidapi` 之后）：逐个设备读上报报文，把大疆客户端按下 W 时
   发的那一帧记下来 —— 拿到几帧样本，协议基本就能定下来。
 
-先跑 `dt7_hid_probe.py --watch 20`，把输出贴回来，我就能给出下一步：
-是写一条 `dt7_hid_link.py` 出口（HID 那条），还是直接走串口（CDC 那条）。
+先跑 `dt7_hid_probe.py --watch 20`（必须在**电控那台电脑**或现场笔记本上跑——
+本机注册表已确认从来没插过任何 DJI 设备：`HKLM\SYSTEM\CurrentControlSet\Enum`
+整棵树搜 `2ca3|dji|dt7|dr16` 零命中），把输出贴回来就能定下一步：
+写 HID output report 出口，还是直接 pyserial 发。
+
+对照：不接电脑时 bytes 6-15 应该恒 0（DT7 自己没有键鼠源）。
+抓一次官方客户端按键时的真实帧，两套位序之争当场就定死了。
 
 ### 两条并存的注意事项
 

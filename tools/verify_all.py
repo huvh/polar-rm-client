@@ -73,6 +73,11 @@ C_CHECKS = (
     # 编译器一句都不会报。带 --negative 还能证明这些断言抓得住旧写法。
     ("tools/firmware/host_bridge/test_rc_key_ledger.py",
      "驾驶键位账本（DT7 不被抹 / 松键能归零）8 组行为断言"),
+    # DT7/DR16 官方 18 字节帧的位序：把固件里真实的 sbus_to_rc() 编成 exe，
+    # 用 Python 打的帧喂进去逐字段比对。这一项防的是"手册/固件/客户端三方
+    # 位序悄悄错开"——键位错一位就是车上按 Shift 变按 Q 那类现场怪事。
+    ("tools/dt7_link/test_dbus_frame_vs_firmware.py",
+     "DT7 官方 18 字节帧位序 == 固件真实解码（逐字段 + 常量守卫）"),
 )
 
 #: 前后端对齐审计（防倒退闸门）。
