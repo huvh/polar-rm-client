@@ -23,6 +23,7 @@
 | `test_host_bridge.py` | 用固件**真实头文件**编译 + 9 组行为断言 |
 | `GAPS.md` | 本文件 |
 | `../motion_feedback/` | **第 4 节已补好的速度回读桥**（0x1E），同套用法 |
+| `../gimbal_host/` | **第 3 节已补好的云台直控桥**（0x04 param0 bit0），需先套 host_bridge |
 
 ```powershell
 # 看会改哪些文件（不落盘）
@@ -152,7 +153,7 @@ if (!(chassis.rc->key.v & (KEY_PRESSED_OFFSET_W | KEY_PRESSED_OFFSET_S
 
 ---
 
-## 3. 缺口：云台角度控制的前置条件
+## 3. 已补好的：云台直控的进入条件（0x04 param0 bit0）
 
 ### 现象
 
@@ -167,15 +168,26 @@ if (!(chassis.rc->key.v & (KEY_PRESSED_OFFSET_W | KEY_PRESSED_OFFSET_S
 
 **这两个要求在英雄板上是冲突的**：想让客户端控云台就得拨上档，拨上档车就一直自转。
 
-### 补法（待电控确认）
+### 补法（已实现：`tools/firmware/gimbal_host/`，对应上面选项 2）
 
-这不是 bug，是原有的模式设计。三个选项：
+| 文件 | 作用 |
+|---|---|
+| `apply_gimbal_host.py` | 一条命令叠加在 host_bridge 之上（幂等，`POLAR-GIMBAL-HOST` 标记）。`prepare_hero_build.py` 已自动串：驾驶补丁 → 自转桥 → 速度回读桥 → 云台直控桥 |
+| `test_gimbal_host.py` | 结构断言（安全档/上方档原样、ternary 位置）+ 真实头编译 + 两张真值表（请求位新鲜/过期；中间档 0→IMU、1→AUTO_AIM） |
 
-1. **不改**：客户端云台控制只在步兵（全向轮）上用——全向轮 `s[0]` 上档是 `CHASSIS_FOLLOW`（`chassis_omni.c:114-117`），不冲突。
-2. 给 `GIMBAL_AUTO_AIM` 增加一个不依赖 `s[0]` 的进入条件（例如上位机显式请求）。
-3. 麦轮上档改成"由 `spin_flag` 决定"，与中间档统一。
+做法：复用 0x04 里**本来就被固件忽略的 `param0` bit0** 表达"上位机请求云台直控"——
 
-选项 3 会改变现有驾驶员的操作习惯，**我不建议客户端侧替你们决定**。
+- 中间档 + 请求 -> `GIMBAL_AUTO_AIM`（底盘模式仍由 `spin_cmd`/拨杆决定，
+  于是"底盘听 spin_cmd、瞄准听上位机"第一次能同时成立）；
+- 中间档 + 无请求 -> `GIMBAL_IMU`，与打桥前逐位相同；
+- 下方安全档、上方档语义**一字未动**——物理遥控器仍是最终裁决者；
+- 电平 + 150ms 新鲜度（与 spin_cmd 同一条门控）：客户端崩溃/拔线后
+  请求自动撤销，云台控制权回到驾驶员；急停时客户端额外强制发 0。
+
+为什么不新加帧：不改帧长/CRC，老上位机发 `param0=0` 永远不请求，
+新客户端对老固件发它会被忽略——双向兼容，零协议风险。
+
+选项 3（改上档仲裁）依旧**不做**：那会改变驾驶员操作习惯，属于队伍决定。
 
 ---
 
@@ -264,7 +276,8 @@ if (!(chassis.rc->key.v & (KEY_PRESSED_OFFSET_W | KEY_PRESSED_OFFSET_S
 | 固件未打 host_bridge（收不到 0x1F） | 自转状态显示为"指令已发、无法确认"，不是"已开启"。`manager.polar_chassis_state_seen` 为 False 时不声称闭环。 |
 | 无回读时要关自转 | OFF 只发 1 秒（`SPIN_OFF_ASSERT_S`）然后放手为 NONE。**绝不无限压制**——那会永久锁死驾驶员用物理遥控器开自转的能力。 |
 | 0x1E 停发 | 自动切到 0x0A 位移验证，HUD 上标明是位移推算而非实测速度。 |
-| 云台角度被 s[0] 挡住 | readiness 里出告警，说明需要 s[0] 上档。 |
+| 云台角度被 s[0] 挡住 | readiness 里出告警。步兵：s[0] 上档即可；
+ 英雄：打第 3 节的 gimbal_host 桥后用中间档 + 直控请求，不必上档 |
 
 ---
 

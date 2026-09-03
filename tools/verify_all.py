@@ -32,6 +32,7 @@ PYTHON_SUITES = (
     "polar_integration_test", # 端到端回环：官方场景开车、无 0x1E 的 sim2real、急停竞态
     "polar_selftest_test",    # 无头自检本身
     "polar_startup_test",     # 真实窗口：链路 tick、HUD 渲染、改绑持久化
+    "gimbal_host_request_test", # 云台直控请求位：电平语义、急停撤回、三条件闸门
     "autoaim_settings_test",  # 自瞄 Fov/Priority 接线：换算精确、未标定不加门、降级不谎报
     "hud_telemetry_settings_test",  # HUD 遥测面板 Show Bar/Warn/Show Limit 接线与两处一致
     "hud_status_settings_test",     # 战况面板 12 个开关：三个构造器行为必须一致
@@ -65,6 +66,8 @@ C_CHECKS = (
      "自转桥接（0x04/0x1F）编译 + 行为断言"),
     ("tools/firmware/motion_feedback/test_motion_feedback.py",
      "速度回读桥（0x1E）编译 + 运动学往返断言"),
+    ("tools/firmware/gimbal_host/test_gimbal_host.py",
+     "云台直控桥（0x04 param0）结构 + 编译 + 真值表断言"),
 )
 
 #: 前后端对齐审计（防倒退闸门）。

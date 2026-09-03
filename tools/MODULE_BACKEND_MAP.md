@@ -9,7 +9,7 @@
 | 管道 | 代码位置 | 是什么 | 谁用它 |
 |---|---|---|---|
 | A. 官方裁判系统 | `backend/protocol.py` + `backend/manager.py`（解码器：GameStatus、RobotPower、Buff、Position、MapClickInfo…） | 大疆官方裁判 UDP/MQTT 报文 → `RobotState` 字段；客户端回发 CommonCommand/MapClickCmd/空中支援等 | 所有比分/血量/buff/弹药类 HUD |
-| B. 队内上位机链路 | `backend/polar_protocol.json`（唯一真相源）、`polar_spec.py`、`polar_link.py`、`polar_bridge.py`、`polar_transport.py` | 你战队 Gitee（StandardRobotpp）固件的 USB/串口协议：下行 0x01 Debug / 0x02 IMU / 0x0A RobotStatus / 0x0D Buff / 0x1F ChassisState(需 host_bridge 补丁)；上行 0x01 robot_cmd / virtual_rc / chassis_cmd | RobotLink、控车三件套（WASD/小陀螺/受击自转）、真车状态显示 |
+| B. 队内上位机链路 | `backend/polar_protocol.json`（唯一真相源）、`polar_spec.py`、`polar_link.py`、`polar_bridge.py`、`polar_transport.py` | 你战队 Gitee（StandardRobotpp）固件的 USB/串口协议：下行 0x01 Debug / 0x02 IMU / 0x0A RobotStatus / 0x0D Buff / 0x1E 实测速度(需 motion_feedback 桥) / 0x1F ChassisState(需 host_bridge 桥)；上行 0x01 robot_cmd / virtual_rc / chassis_cmd 0x04（含云台直控请求位，需 gimbal_host 桥） | RobotLink、控车三件套（WASD/小陀螺/受击自转）、英雄板云台直控、真车状态显示 |
 | C. 视觉链路 | `vision.py`、`backend/video_backend.py`、`backend/tongji_bridge.py`、`tongji_yolo.py` | 摄像头帧 → 装甲板检测/预测（`ArmorObservation`） | ESP、自瞄、准星热力、目标卡 |
 | D. 本地纯 UI | `ui/polar/**`（渲染器 + Mixin）、`persistence_mixin.py` | 画面、布局、配置存盘 | 外观类模块 |
 
@@ -19,7 +19,7 @@
 
 | 模块 | 后端实现 | 状态 |
 |---|---|---|
-| `ArmorAutoAim` | 选靶在 `esp_wireframe.select_armor_by_priority`（视觉数据），FOV 闸、mock 输出门在 `manager.py:1622`；输出走管道 B 云台字段（需 RC 上档） | ✅ 真实现（mock 档不动车） |
+| `ArmorAutoAim` | 选靶在 `esp_wireframe.select_armor_by_priority`（视觉数据），FOV 闸、mock 输出门在 `manager.py:1622`；输出走管道 B 云台字段：步兵 s[0] 上档即可；英雄板用 gimbal_host 桥（中间档 + 0x04 param0 请求），不再与强制自转死冲突 | ✅ 真实现（mock 档不动车） |
 | `EnergyAutoAim` | **无视觉管线也无发送出口**，`readiness.py` 诚实性闸门作证，故意不接 | ⛔ 按设计空转 |
 | `ArmorLock` | 后端无"锁定点"实现；UI 开关+锁框外观 | ⛔ 占位 |
 | `HeroLob` | 英雄吊射辅助：装填状态读自管道 A/B，按键经 `handle_control_key_event`；策略参数（Mode）无固件出口 | ◑ 显示真、策略占位 |

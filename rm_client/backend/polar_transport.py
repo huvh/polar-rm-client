@@ -28,6 +28,7 @@ from ..serial_ports import describe_ports, resolve_port as resolve_polar_port
 from .polar_link import (
     MAX_RETAINED_BYTES,
     SPIN_CMD_NONE,
+    GIMBAL_HOST_REQUEST_ON,
     SPIN_CMD_OFF,
     SPIN_CMD_ON,
     PolarFrameCodec,
@@ -201,6 +202,9 @@ class PolarLinkTransport:
         #:      不像 0x03 那样有“冻结真实摇杆”的风险，因此无需驾驶授权闸门。
         self._spin_cmd = SPIN_CMD_NONE
         self.spin_frames_sent = 0
+        #: 云台直控请求位（0x04 param0 bit0）。与自转同理走电平语义、随 0x04
+        #: 每 tick 刷新；急停/归零突发强制为 0（控制权还给驾驶员）。
+        self._gimbal_host_request = 0
         #: 实际打开的设备名（"Auto" 解析后的结果）
         self.resolved_port = ""
         #: 收到段后的回调，交给 manager 做状态落库
@@ -309,6 +313,21 @@ class PolarLinkTransport:
         with self._intent_lock:
             return int(self._spin_cmd)
 
+    def set_gimbal_host_request(self, active: bool) -> None:
+        """0x04 param0 bit0：请求云台直控（电平语义，随 0x04 每 tick 刷新）。
+
+        只有打了 gimbal_host 桥的固件才认识这个位（中间档 + 请求 ->
+        GIMBAL_AUTO_AIM）；未打桥的固件忽略该字节，发它不改变老固件行为。
+        新鲜度沿用 spin_cmd 的 150ms 门控：客户端崩溃/拔线后请求自动失效，
+        云台控制权回到驾驶员手里——与自转指令同一条安全逻辑。
+        """
+        with self._intent_lock:
+            self._gimbal_host_request = 1 if active else 0
+
+    def gimbal_host_request(self) -> int:
+        with self._intent_lock:
+            return int(self._gimbal_host_request)
+
     def trigger_estop(self) -> None:
         """急停：立刻归零并停止后续控制输出。
 
@@ -322,6 +341,7 @@ class PolarLinkTransport:
             # 急停必须主动关自转：固件在指令过期时是“保持现状”（防御姿态
             # 不宜因上位机断线而突停），所以光停发不够，得显式发 OFF。
             self._spin_cmd = SPIN_CMD_OFF
+            self._gimbal_host_request = 0  # 急停：云台直控请求一并撤回
         self._zeros_until = time.perf_counter() + ZERO_BURST_S
         self._flush_zero_burst(blocking=False)
 
@@ -403,7 +423,7 @@ class PolarLinkTransport:
             if self.drive_channel in ("virtual_rc", "both"):
                 self._write(self._zero_virtual_rc_frame(), zero_frame=True)
             # 自转也必须显式关（固件指令过期时是保持现状，光停发不会停转）
-            self._write(self._chassis_cmd_frame(SPIN_CMD_OFF), zero_frame=True)
+            self._write(self._chassis_cmd_frame(SPIN_CMD_OFF, gimbal_request=False), zero_frame=True)
             self._drive_was_armed = False
             return
         intent = self._take_intent_locked(now)
@@ -492,9 +512,12 @@ class PolarLinkTransport:
     def _zero_virtual_rc_frame(self) -> bytes:
         return self.codec.encode_virtual_rc(raw_timestamp=self.timestamp.next(), key_value=0)
 
-    def _chassis_cmd_frame(self, spin_cmd: int) -> bytes:
+    def _chassis_cmd_frame(self, spin_cmd: int, *, gimbal_request: bool | None = None) -> bytes:
+        if gimbal_request is None:
+            gimbal_request = bool(self._gimbal_host_request)
         return self.codec.encode_chassis_cmd(
-            raw_timestamp=self.timestamp.next(), spin_cmd=int(spin_cmd))
+            raw_timestamp=self.timestamp.next(), spin_cmd=int(spin_cmd),
+            param0=GIMBAL_HOST_REQUEST_ON if gimbal_request else 0)
 
     def _pump_spin_locked(self) -> None:
         """每 tick 重发当前自转指令（**电平**语义）。调用方需已持 _intent_lock。
@@ -545,7 +568,7 @@ class PolarLinkTransport:
                 self.zero_frames_sent += 1
             # 退出/停发前也要把自转显式关掉：固件没有断流归零，
             # 停发等于“保持最后一次指令永久执行”。
-            self._write(self._chassis_cmd_frame(SPIN_CMD_OFF), zero_frame=True)
+            self._write(self._chassis_cmd_frame(SPIN_CMD_OFF, gimbal_request=False), zero_frame=True)
             if blocking and count > 1:
                 time.sleep(0.005)
 

@@ -77,6 +77,11 @@ CMD_CHASSIS_CMD = 0x04
 SPIN_CMD_NONE = 0x00
 SPIN_CMD_ON = 0x01
 SPIN_CMD_OFF = 0x02
+
+#: 0x04 param0 bit0：上位机请求云台直控（电平语义，与 spin_cmd 同一条 150ms
+#: 新鲜度门控）。只有打了 tools/firmware/gimbal_host/ 桥的固件才认识这个位；
+#: 未打桥的固件该字节本来就被忽略，所以发它不改变老固件的任何行为。
+GIMBAL_HOST_REQUEST_ON = 0x01
 #: 与固件 HOST_SPIN_CMD_VALID_MS 一致：超过该时长没刷新，固件就停止强制、
 #: 把控制权交还物理遥控器。客户端按"电平"方式每 tick 重发当前指令。
 SPIN_CMD_VALID_MS = 150
@@ -678,7 +683,7 @@ class PolarFrameCodec:
         param0: int = 0,
         param1: int = 0,
     ) -> bytes:
-        """编码上行 0x04 底盘指令（当前只有显式自转开/关）。
+        """编码上行 0x04 底盘指令（显式自转开/关 + param0 云台直控请求）。
 
         与 0x03 的关键差别：本帧**不覆盖驾驶员的物理遥控器**，
         它只维护固件里的 `chassis.spin_flag` 一个量，模式仲裁仍然

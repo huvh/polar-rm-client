@@ -731,8 +731,9 @@
         "param1",
         "reserved"
       ],
-      "requires_firmware_patch": "tools/firmware/host_bridge/",
+      "requires_firmware_patch": "tools/firmware/host_bridge/ + tools/firmware/gimbal_host/（param0 位）",
       "implemented_in_client": true,
+      "param0_bit0": "云台直控请求（POLAR-GIMBAL-HOST 桥）：1 = 上位机请求云台直控，固件在 s[0] 中间档据此提档进 GIMBAL_AUTO_AIM；0 或未打桥 = 不请求，行为与打桥前逐位相同。电平语义，随 0x04 每 tick 刷新，150ms 断流自动撤销；急停时客户端强制发 0。",
       "spin_cmd_values": {
         "0": "NONE（不干预，控制权完全留给物理遥控器）",
         "1": "ON（显式开启自转）",

@@ -576,6 +576,17 @@ class BackendManager:
         if spin_reported is None:
             spin_reported = bridge.overlay.get("spin_active")
         spin_cmd = self._update_spin_command(desired=spin_desired, reported=spin_reported)
+        # 云台直控请求（0x04 param0 bit0，电平语义，见 gimbal_host 桥）。
+        # 三个条件缺一不可："Client Gimbal Control" 开着、链路在线、非急停。
+        # 未打桥的固件忽略该字节，所以发它不改变老固件任何行为；打了桥的
+        # 固件也只在 s[0] 中间档才提档进 GIMBAL_AUTO_AIM——下方安全档与
+        # 上方原语义都不受影响。
+        gimbal_setting = settings.get("Client Gimbal Control")
+        gimbal_host_request = bool(
+            gimbal_setting is not None and gimbal_setting.value
+            and bridge.active and not estopped
+        )
+        self.polar.set_gimbal_host_request(gimbal_host_request)
         # 驾驶键位只留 W/S/A/D：SHIFT 已改走 0x04，此处永不再置位。
         key_value = int(getattr(command, "keyboard_value", 0) or 0) if drive_armed else 0
 

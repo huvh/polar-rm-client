@@ -40,6 +40,8 @@ HOST_BRIDGE_DIR = HERE / "host_bridge"
 HOST_BRIDGE_HEADER_REL = "application/typedef/host_chassis_bridge.h"
 # 速度回读桥（下行 0x1E 复活），见 motion_feedback 目录与 GAPS.md 第 4 节。
 MOTION_FEEDBACK_SCRIPT = HERE / "motion_feedback" / "apply_motion_feedback.py"
+# 云台直控桥（0x04 param0 bit0），见 gimbal_host 目录与 GAPS.md 第 3 节。
+GIMBAL_HOST_SCRIPT = HERE / "gimbal_host" / "apply_gimbal_host.py"
 MECA_REL = "application/chassis/chassis_mecanum.c"
 OMNI_REL = "application/chassis/chassis_omni.c"
 
@@ -185,6 +187,18 @@ def apply_patch(repo: Path, step: Step) -> bool:
         step.bad("速度回读桥套用失败", ((res.stderr or res.stdout).strip()[-260:]))
         return False
     step.ok("速度回读桥已装入（两个底盘文件 + usb_task.c 惰性订阅）")
+
+    # 云台直控桥。依赖 host_bridge 的 0x04 帧（上面先装），这里最后叠加。
+    if not GIMBAL_HOST_SCRIPT.exists():
+        step.bad("云台直控桥脚本不存在", str(GIMBAL_HOST_SCRIPT))
+        return False
+    res = subprocess.run(
+        [sys.executable, str(GIMBAL_HOST_SCRIPT), str(repo)],
+        capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if res.returncode != 0:
+        step.bad("云台直控桥套用失败", ((res.stderr or res.stdout).strip()[-260:]))
+        return False
+    step.ok("云台直控桥已装入（桥接头 + usb_task + 云台仲裁）")
     return True
 
 
@@ -257,6 +271,21 @@ def verify_changes(repo: Path, step: Step) -> bool:
          and "chassis.set[" not in meca.split("chassis_update_fdb_speed(void)")[1][:800]),
         ("usb_task 对 0x1E 做了惰性重订阅（摆脱启动顺序）",
          usb.count("Subscribe(CHASSIS_FDB_SPEED_NAME)") >= 2),
+    ]
+
+    # ---- 云台直控桥（0x04 param0 bit0）----
+    gim = read(repo, GIMBAL_REL)
+    checks += [
+        ("桥接头文件带 HOST_GIMBAL_REQ_MASK 定义",
+         "HOST_GIMBAL_REQ_MASK" in header and "HOST_GIMBAL_REQUEST" in header),
+        ("usb_task 维护请求位（新鲜赋值 + 过期撤销）",
+         "HOST_GIMBAL_REQUEST = 0;" in usb
+         and "RECEIVE_CHASSIS_CMD_DATA.data.param0 & HOST_GIMBAL_REQ_MASK" in usb),
+        ("云台中间档按请求提档（无请求 = 打桥前）",
+         "(HOST_GIMBAL_REQUEST != 0) ? GIMBAL_AUTO_AIM : GIMBAL_IMU" in gim),
+        ("中间档提档位置在上方档之前、下方安全档未动",
+         0 <= gim.find("switch_is_mid") < gim.find("HOST_GIMBAL_REQUEST != 0")
+         < gim.find("switch_is_up") and "mode=GIMBAL_ZERO_FORCE;" in gim),
     ]
     for name, passed in checks:
         (step.ok if passed else step.bad)(name)
