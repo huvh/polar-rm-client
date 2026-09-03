@@ -1,0 +1,131 @@
+# armcc_check —— 用真 ARMCC 5.06 给固件工程做编译/链接体检
+
+> 一句话：**不装 Keil、不写注册表、不碰破解工具**，就能拿 Keil 那套
+> `ARMCC 5.06 + C99 + 警告即错误` 把整个 `standard_robot.uvprojx` 过一遍。
+
+## 0. 为什么要有这个工具
+
+`prepare_hero_build.py --gcc-check`（GCC 差分，见 `../host_bridge/GAPS.md` §8.3）
+只能证明"补丁没引入新问题"，证明不了**真实工具链**能不能编过 —— 因为本工程
+`<pCCUsed>5060422::V5.06 update 4::ARMCC</pCCUsed>`，FreeRTOS 用的还是
+`portable/RVDS/ARM_CM4F`（ARMCC 专用内联汇编），换编译器就不等价。
+
+本目录的 `armcc_check.py` 直接读 `.uvprojx` 里工程自己的 include / define /
+`MiscControls`，用真 ARMCC 把 162 个编译单元全过一遍，再做两次链接。
+
+## 1. 本机实测结果（2026-09-03，英雄配置 + 三个桥全装上）
+
+| 阶段 | 命令里的动作 | 结果 |
+|---|---|---|
+| 编译 | `armcc -c` x161 + `armasm` x1 | **162/162 全过，0 error / 0 warning** |
+| 符号解析 | `armlink --partial`（+2 个 ARM 库） | **rc=0，L6218E 未定义符号 0 个** |
+| 完整链接 | `armlink --scatter`（F407 内存布局） | `Fatal error: L6050U: The code size of this image (109628 bytes) exceeds the maximum allowed for this version of the linker.` |
+
+第三条**不是代码问题**：那是 MDK-Lite 免费授权的 32KB 代码上限，本工程镜像
+109,628 字节（约 107KB）。符号、段布局、入口、库全都过了，只差授权放行。
+`armcc_check.py` 把这条单独识别成"只差授权"，不计入失败。
+
+顺带一个必须记住的结论：**这份固件没法用 GCC 出镜像**。
+`components/algorithm/AHRS.lib` 与 `arm_cortexM4lf_math.lib` 是 ARM 目标格式
+（armar/armlink 专用），GNU `ld` 读不了 —— 上板只能用 ARMCC 链接。
+
+## 2. 跑起来
+
+```powershell
+# 依赖两样东西的位置，默认取环境变量（或 --ac5 / --mappings 覆盖）
+$env:ARMCC5_ROOT = "D:\ac5root\PFiles\ARM_Compiler_5.06u7"   # armcc/armasm/armlink
+$env:ARM_MAPPINGS = "D:\keilroot\ARM\sw\mappings"            # 里面有 mdk_lite.elmap
+
+python tools/firmware/armcc_check/armcc_check.py <StandardRobotpp路径> --mode all
+```
+
+如果本机装了 MDK（`%LOCALAPPDATA%\Keil_v5` 或 `C:\Keil_v5`），脚本会自动去
+`ARM\ARMCC` 和 `ARM\sw\mappings` 找，不用设环境变量。中间产物落在
+`%TEMP%\rm_armcc_check\`（含 `armcc_check.log` 全量命令与输出、`map.txt`）。
+
+退出码：0 通过（授权上限只提示）/ 1 有真实编译或链接错误 / 2 环境没凑齐。
+
+## 3. license 这一关是怎么过的
+
+ARMCC 5.06 独立发行版（"ARM Compiler 5.06 update 7"）默认要 `ARMLMD_LICENSE_FILE`
+指的 license 文件；而 **MDK-Lite 不查 license server**，它读一个映射文件
+`<KeilRoot>\ARM\sw\mappings\mdk_lite.elmap`。所以把两个环境变量给对就行：
+
+```powershell
+$env:ARM_PRODUCT_PATH = "D:\keilroot\ARM\sw\mappings"   # 含 mdk_lite.elmap 的目录
+$env:ARM_TOOL_VARIANT = "mdk_lite"
+```
+
+没给对时的两种表现，可用来自查：
+- 只给 `ARM_TOOL_VARIANT` 不给对的 `ARM_PRODUCT_PATH` → `C9511E: Unable to
+  determine the current toolkit`（其实 `ARM_PRODUCT_PATH` 留空让它自己按
+  工具链目录推断反而更稳）。
+- 什么都不给 → `C9555E: Failed to check out a license`。
+
+## 4. 两样东西怎么离线搞到（都不需要管理员）
+
+来源：中科大 RoboWalker 电控培训包的 `robo-electro-control.zip`
+（`http://home.ustc.edu.cn/~yssickjgd/net_disk/robo-electro-control.zip`，
+1,985,488,401 字节，支持 Range）。**别跑包里的 `keygen.exe`**，那是破解器。
+
+### 4.1 ARM Compiler 5.06 update 7（build 960）
+
+zip 里的 `.../ac5 Installer/data/ARMCompiler506_b960.msi`：压缩 84,701,792
+字节，起始偏移（含本地文件头之后的裸 DEFLATE 数据起点）64,883,733，
+解压 86,360,064，CRC32 `1129913143`。
+
+```powershell
+curl.exe -s -r 64883733-149585524 -o ac5.deflate <zipURL>
+# 裸 DEFLATE 还原成 msi（zlib.decompressobj(-15) + CRC32 校验，见 GAPS.md §8.5）
+msiexec /a ARMCompiler506_b960.msi /qn TARGETDIR=D:\ac5root     # 免管理员，只解文件不装
+```
+
+`/a`（admin-image）只把文件铺出来，不写注册表，所以能免提权。得到
+`D:\ac5root\PFiles\ARM_Compiler_5.06u7\{bin,bin64,include,lib,sw}`。
+
+注意 **MDK5.43a 本体已经不带 ARMCC 5**（zip 里只有 `ARM/ARMCLANG`，即 AC6），
+所以本工程这种锁 ARMCC 5 + RVDS 端口的活儿，必须单独装 AC5；uVision 里
+Options → Target → Code Generation → "Use default compiler version 5" 也要有
+AC5 才选得到。
+
+### 4.2 `mdk_lite.elmap`（免 license 的钥匙）
+
+`MDK543a.exe` 本身就是"PE + 尾部 zip"：PE 结构到 2,364,416 字节为止，
+后面 849.8MB 是个普通 zip（7,445 个条目）。所以不用安装就能取文件：
+
+```powershell
+curl.exe -s -r 274800150-1157468696 -o mdk543a.deflate <zipURL>   # 还原成 MDK543a.exe
+# CRC32 2925489275，解压 893,488,656 字节
+python -c "import zipfile;z=zipfile.ZipFile(r'D:\keilpk\MDK543a.exe');[open(r'D:\keilroot'+'\\'+i.filename.replace('/',chr(92)),'wb').write(z.read(i)) for i in z.infolist() if i.filename.startswith('ARM/sw/') and not i.is_dir()]"
+```
+
+`ARM/sw/mappings/` 里一共 16 个 `.elmap`（`mdk_lite` / `mdk_pro` / `mdk_std` /
+`mdk_cm4` / …），这就是 MDK 各授权档位的本地映射，`mdk_lite.elmap` 对应免费
+Lite 档。整包解压是 3.1GB，没必要 —— 拿这 16 个文件就够跑编译器了。
+
+## 5. 还是想要 uVision / 要出 hex 怎么办
+
+1. 装 `MDK543a.exe`（要管理员，UAC 点"是"；`SETUP.INI` 里默认目录是
+   `%LOCALAPPDATA%\Keil_v5`，C 盘紧的话先把 `LOCALAPPDATA` 指到 D 盘再启动安装器）；
+   再装 §4.1 那个 AC5 msi（正常 `/i` 安装，它会把 ARMCC 铺进 Keil 根目录）。
+2. 工程 `PackID` 要的是 `Keil.STM32F4xx_DFP.2.17.1`，官方直链可用：
+   `https://www.keil.com/pack/Keil.STM32F4xx_DFP.2.17.1.pack`（289MB，已验证 200）。
+3. **出 hex 必须有能过 32KB 的授权**（队里/学校那份 MDK License，
+   File → License Management 挂上 `.ulf`）。Lite 档在这份固件上必然 L6050U。
+4. 命令行编译（装好后）：
+   ```powershell
+   & "$env:LOCALAPPDATA\Keil_v5\UV4\UV4.exe" -b <repo>\MDK-ARM\standard_robot.uvprojx -j0 -o build_log.txt
+   ```
+   退出码 0 = 无错，1 = 仅警告，>=2 = 有错误。
+
+## 6. 已修掉的一个真问题（就是本工具抓出来的）
+
+`application/IMU/IMU_solve.c:452` 无条件用 `__GYRO_BIAS_YAW`，但仓库里 11 个
+`robot_param_*.h` 只有 3 个定义了它，**英雄（`robot_param_mecannum_hero.h`）和
+步兵（`robot_param_omni_infantry.h`）两个都没有** → ARMCC：
+`Error: #20: identifier "__GYRO_BIAS_YAW" is undefined`。
+上游基线（步兵配置）同样编不过，不是我们打补丁搞坏的。
+
+现在由 `../prepare_hero_build.py` 的 `switch_to_hero()` 在 `robot_param.h` 里插
+一段 `#ifndef __GYRO_BIAS_YAW` 兜底定义（值先沿用仓库其它机型的
+`0.003096855f`），`--revert` 会一起还原。**换车/换 IMU 记得实车重新标定。**

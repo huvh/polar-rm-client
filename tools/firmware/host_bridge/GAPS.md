@@ -349,7 +349,7 @@ python tools/firmware/prepare_hero_build.py <固件路径> --gcc-check
 **边界必须讲清楚**：GCC 差分 != ARMCC 通过。AC5 独有的坑它看不见，所以
 `verify_changes` 里另加 4 条人工规则当守门（挤行 include、`_Static_assert`、
 两处前置声明）；反过来 GCC 也不会把 AC5 的全部警告类别都报出来。
-真正上板前仍然必须过一次 Keil 编译。
+真正上板前仍然必须过一次 Keil 编译 —— 这一条现在有了不用装 Keil 的做法，见 §8.5。
 
 ### 8.4 测试之间的树状态耦合（已修）
 
@@ -363,3 +363,29 @@ python tools/firmware/prepare_hero_build.py <固件路径> --gcc-check
 > 要回去编译，重新 `prepare_hero_build.py <路径>` 一次即可（幂等，约 20 秒）。
 
 烧完板请把 `field_evidence/polar-selftest-*.json` 带回来，我能据此判断实际哪一环没通。
+
+### 8.5 已经过一次**真 ARMCC 5.06** 全工程体检（`../armcc_check/`）
+
+上一节那句"仍然必须过一次 Keil 编译"已经补上了：`armcc_check/` 用真
+ARMCC 5.06 update 7 + 工程自己的 include/define/`--diag_error=warning`，
+把 162 个编译单元全过了一遍，工具链和 MDK-Lite 的本地映射都是离线取的，
+**没装 Keil、没写注册表、没碰破解工具**。
+
+| 阶段 | 结果 |
+|---|---|
+| `armcc` x161 + `armasm` x1 | 162/162 通过，0 error / 0 warning |
+| `armlink --partial`（含 2 个 ARM 库） | rc=0，L6218E 未定义符号 0 个 |
+| `armlink --scatter`（F407 内存布局） | `L6050U: code size (109628 bytes) exceeds the maximum allowed` —— MDK-Lite 的 32KB 授权上限，不是代码问题 |
+
+这一轮抓出来的**唯一真实编译错误**：`IMU_solve.c:452` 无条件用
+`__GYRO_BIAS_YAW`，而仓库 11 个 `robot_param_*.h` 里只有 3 个定义了它，
+英雄与步兵两个参数文件都没有 -> `Error: #20: identifier ... is undefined`。
+上游基线（步兵配置）同样编不过，**不是打补丁造成的**。现在由
+`prepare_hero_build.py` 的 `switch_to_hero()` 在 `robot_param.h` 插
+`#ifndef __GYRO_BIAS_YAW` 兜底定义（值沿用仓库其它机型），`--revert` 一起还原。
+
+另外记一条硬结论：**这份固件出镜像只能用 ARMCC**。
+`AHRS.lib` / `arm_cortexM4lf_math.lib` 是 ARM 目标格式，GNU `ld` 读不了，
+所以"Lite 卡 32KB 就改用 GCC 链"这条路走不通，要出 hex 就得挂一份能过
+32KB 的 MDK 授权。取工具链 / 过 license / uVision 命令行编译的具体做法，
+见 `../armcc_check/README.md`。

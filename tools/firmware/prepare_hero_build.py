@@ -125,25 +125,60 @@ def check_clean(repo: Path, step: Step) -> bool:
     return True
 
 
+GYRO_BIAS_MARKER = "#ifndef __GYRO_BIAS_YAW"
+GYRO_BIAS_GUARD = (
+    "\n"
+    "// --- prepare_hero_build.py 追加：补齐 __GYRO_BIAS_YAW -------------------\n"
+    "// application/IMU/IMU_solve.c 无条件用到 __GYRO_BIAS_YAW，但仓库里只有\n"
+    "// robot_param_balanced_infantry*.h / robot_param_communicate.h 定义了它，\n"
+    "// 英雄（mecannum_hero）与步兵（omni_infantry）参数文件都没有 -> 直接编不过：\n"
+    "//   Error:  #20: identifier \"__GYRO_BIAS_YAW\" is undefined   (ARMCC 5.06)\n"
+    "// 值先沿用仓库其它机型的标定值。换车/换 IMU 后请实车重新标定并改这一行：\n"
+    "//   车辆静置，读陀螺仪 z 轴输出均值，取相反数填进来（单位 rad/s）。\n"
+    "#ifndef __GYRO_BIAS_YAW\n"
+    "#define __GYRO_BIAS_YAW 0.003096855f\n"
+    "#endif\n"
+    "// --- 追加结束 -----------------------------------------------------------\n"
+)
+
+
 def switch_to_hero(repo: Path, step: Step) -> None:
     print("\n[3/6] 切兵种配置：步兵 -> 英雄")
     path = repo / ROBOT_PARAM_REL
     text = path.read_text(encoding="utf-8")
     if HERO_INCLUDE in text:
         step.ok("已经是英雄配置（幂等跳过）")
-        return
-    if INFANTRY_INCLUDE not in text:
+    elif INFANTRY_INCLUDE in text:
+        # 只替换这一行，保留原行作为注释方便回切
+        text = text.replace(
+            INFANTRY_INCLUDE,
+            f'{HERO_INCLUDE}   // 英雄（麦轮）\n'
+            f'// {INFANTRY_INCLUDE[2:-1]}   // 步兵（全向轮），切回时取消注释',
+            1,
+        )
+        path.write_text(text, encoding="utf-8")
+        step.ok("已改为 robot_param_mecannum_hero.h")
+    else:
         step.bad("既不是步兵也不是英雄配置，不敢自动改", "请手工确认 robot_param.h 第 26 行")
         return
-    # 只替换这一行，保留原行作为注释方便回切
-    new = text.replace(
-        INFANTRY_INCLUDE,
-        f'{HERO_INCLUDE}   // 英雄（麦轮）\n'
-        f'// {INFANTRY_INCLUDE[2:-1]}   // 步兵（全向轮），切回时取消注释',
-        1,
-    )
-    path.write_text(new, encoding="utf-8")
-    step.ok("已改为 robot_param_mecannum_hero.h")
+    ensure_gyro_bias(path, step)
+
+
+def ensure_gyro_bias(path: Path, step: Step) -> None:
+    """ARMCC 5.06 实测：英雄参数文件缺 __GYRO_BIAS_YAW，IMU_solve.c 编不过，这里补兜底定义。"""
+    text = path.read_text(encoding="utf-8")
+    if GYRO_BIAS_MARKER in text:
+        step.ok("__GYRO_BIAS_YAW 兜底定义已存在（幂等跳过）")
+        return
+    lines = text.split("\n")
+    for idx, line in enumerate(lines):
+        if line.strip().startswith(HERO_INCLUDE):
+            lines.insert(idx + 1, GYRO_BIAS_GUARD.rstrip("\n"))
+            path.write_text("\n".join(lines), encoding="utf-8")
+            step.ok("补上 __GYRO_BIAS_YAW 兜底定义（英雄/步兵参数文件都没给）")
+            return
+    step.bad("没找到英雄 include 行，无法插入 __GYRO_BIAS_YAW", "请手工在 robot_param.h 补该宏")
+
 
 
 def apply_patch(repo: Path, step: Step) -> bool:
