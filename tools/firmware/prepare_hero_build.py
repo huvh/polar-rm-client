@@ -42,6 +42,7 @@ HOST_BRIDGE_HEADER_REL = "application/typedef/host_chassis_bridge.h"
 MOTION_FEEDBACK_SCRIPT = HERE / "motion_feedback" / "apply_motion_feedback.py"
 # 云台直控桥（0x04 param0 bit0），见 gimbal_host 目录与 GAPS.md 第 3 节。
 GIMBAL_HOST_SCRIPT = HERE / "gimbal_host" / "apply_gimbal_host.py"
+GIMBAL_REL = "application/gimbal/gimbal_yaw_pitch_direct.c"
 MECA_REL = "application/chassis/chassis_mecanum.c"
 OMNI_REL = "application/chassis/chassis_omni.c"
 
@@ -50,7 +51,7 @@ OMNI_REL = "application/chassis/chassis_omni.c"
 # 否则 check_clean 会把它当成外来改动而拒绝开工。
 OWNED = {
     ROBOT_PARAM_REL, USB_REL, RC_REL,
-    MECA_REL, OMNI_REL, HOST_BRIDGE_HEADER_REL,
+    MECA_REL, OMNI_REL, HOST_BRIDGE_HEADER_REL, GIMBAL_REL,
 }
 
 
