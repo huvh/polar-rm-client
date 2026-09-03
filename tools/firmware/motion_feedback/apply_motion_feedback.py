@@ -47,6 +47,11 @@ USB_REL = "application/communication/usb_task.c"
 INCLUDES = (
     '#include "custom_typedef.h"  /* ' + MARK + ': ChassisSpeedVector_t / CHASSIS_FDB_SPEED_NAME */\n'
     '#include "data_exchange.h"   /* ' + MARK + ': Publish */\n'
+    '\n'
+    '/* ' + MARK + ': ChassisObserver 在下文就会调用它，定义却排在后面，\n'
+    ' * 所以必须先给前置声明；漏了会被 AC5 报 #223-D 隐式声明。\n'
+    ' */\n'
+    'static void chassis_update_fdb_speed(void);\n'
 )
 
 OBSERVER_HOOK = "    chassis_update_fdb_speed();  /* " + MARK + ": 每帧刷新实测机体系速度 */\n"
@@ -128,8 +133,10 @@ def apply_chassis(src, block, rel):
     assert src.count(inc_anchor) == 1, rel + ": include 锚点不唯一"
     hook_anchor = to_eol("    chassis.yaw_delta = GetGimbalDeltaYawMid();", eol)
     assert src.count(hook_anchor) == 1, rel + ": observer 锚点不唯一"
-    src = src.replace(inc_anchor, inc_anchor + to_eol(INCLUDES.rstrip("\n"), eol), 1)
-    src = src.replace(hook_anchor, hook_anchor + to_eol(OBSERVER_HOOK.rstrip("\n"), eol), 1)
+    # 锚点文本本身不含行尾换行，插入必须先补一个 eol，否则会和锚点挤成一行
+    # （踩过：#include "a.h"#include "b.h" 挤在一行后，AC5/GCC 都把第二个 include 吞掉）
+    src = src.replace(inc_anchor, inc_anchor + eol + to_eol(INCLUDES.rstrip("\n"), eol), 1)
+    src = src.replace(hook_anchor, hook_anchor + eol + to_eol(OBSERVER_HOOK.rstrip("\n"), eol), 1)
     # 收尾不假设大括号前有没有空行：从 observer 锚点往后找第一个独立右大括号。
     hook_at = src.find(hook_anchor)
     close_at = src.find("}", hook_at)

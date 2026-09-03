@@ -235,9 +235,16 @@ def main() -> int:
         check(f"{name} 反解读的是实测 feedback（不是指令 set）",
               "chassis.feedback[" in upd and "chassis.set[" not in upd)
     check("麦轮反解带 direction（与其下发式同系数）",
-          extract(meca, r"static void chassis_update_fdb_speed.*?\r?\n\}", "meca update").count(".direction") == 4)
+          extract(meca, r"static void chassis_update_fdb_speed\(void\)\s*\r?\n\{.*?\r?\n\}", "meca update").count(".direction") == 4)
     check("全向轮反解不含 direction（与其下发式一致）",
-          ".direction" not in extract(omni, r"static void chassis_update_fdb_speed.*?\r?\n\}", "omni update"))
+          ".direction" not in extract(omni, r"static void chassis_update_fdb_speed\(void\)\s*\r?\n\{.*?\r?\n\}", "omni update"))
+
+    # 定义之前必须有前置声明：ChassisObserver 先调用、函数体排在后面，
+    # ARMCC 单遍编译漏声明就是 #223-D，而本工程 --diag_error=warning。
+    # 也正因为这句声明的存在，上面的抽取正则必须锁定"定义"而不是子串。
+    check("麦轮/全向轮都给了 chassis_update_fdb_speed 前置声明",
+          "static void chassis_update_fdb_speed(void);" in meca
+          and "static void chassis_update_fdb_speed(void);" in omni)
 
     try:
         inc_dirs = sorted({str(p.parent) for p in REPO.rglob("*.h")})

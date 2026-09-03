@@ -290,9 +290,76 @@ if (!(chassis.rc->key.v & (KEY_PRESSED_OFFSET_W | KEY_PRESSED_OFFSET_S
 | 补丁代码用**固件真实头文件**编译（clang，`-Wall -Wextra`，零警告） | ✅ 已过 |
 | 补丁代码**行为断言**（开→保持→关→再开→掉线→遥控器接管→tick 回绕，9 组） | ✅ 已过 |
 | 客户端端到端断言（SpinMode 模块状态 → 上线字节 → 0x1F 回读 → 收敛） | ✅ 已过 |
-| **Keil（ARMCC）编译** | ❌ 我无硬件无 Keil，未验证 |
+| **整工程编译体检**（arm-none-eabi-gcc 差分，见 8.3） | ✅ 已过（补丁新增诊断 0 条） |
+| **Keil（ARMCC）真实编译** | ❌ 本机装不上：官方 MDK 安装包要走邮箱申请表单或 Arm 账号登录，脚本拿不到 |
 | **烧录后上板实测** | ❌ 未验证 |
 
-`test_host_bridge.py` 用的是 ziglang 提供的 clang，不是 ARMCC。两者的差异主要在 `__packed__`（`attribute_typedef.h` 已把它定义为 `__attribute__((packed))`，clang 原生支持）和 `_Static_assert`（C11，ARMCC 5 需要 `--c99` 或改用编译期数组技巧）。**如果 Keil 报 `_Static_assert` 相关错误，把那 4 行删掉即可，它们只是防呆，不影响功能。**
+原先这一节写的是"Keil 报错就删掉 `host_chassis_bridge.h` 里那 4 行
+`_Static_assert`，纯防呆"。**这句话本身是错的**：那 4 行留着就会当场编译失败，
+不是"可能报错"。2026-09-03 用 GCC 差分把整工程扫了一遍，抓出 4 类真拦路虎，
+全部已在补丁脚本里修掉，记录如下。
+
+### 8.1 该工程的 ARMCC 事实（从 `MDK-ARM/standard_robot.uvprojx` 读出来的）
+
+| 事实 | 出处 | 后果 |
+|---|---|---|
+| 编译器锁 ARMCC 5.06 update 4 | `<pCCUsed>5060422::V5.06 update 4` | 不认 C11 的 `_Static_assert` |
+| 语言是 C99 | `<uC99>1</uC99>` | 只能用 C99 + AC5 扩展 |
+| **警告即错误** | `<MiscControls>--diag_error=warning</MiscControls>` | 隐式声明 #223-D 之类**一律编译失败** |
+| 片型 STM32F407IGHx，需要 DFP pack | `<Device>` / `<PackID>Keil.STM32F4xx_DFP.2.17.1` | 命令行编译前得先装 pack（`https://www.keil.com/pack/Keil.STM32F4xx_DFP.2.17.1.pack` 可直连下载） |
+| FreeRTOS 用 RVDS 端口 | include 路径 `portable/RVDS/ARM_CM4F` | `port.c` 是 ARMCC 内联汇编，**非 ARMCC 编译器编不了**（差分检查已排除它） |
+
+### 8.2 抓出来的 4 个真实编译拦路虎（都已修）
+
+1. **挤行 include**：`apply_motion_feedback.py` 的 `to_eol()` 对"不含换行的锚点"
+   不补换行，插进去的 `#include "custom_typedef.h"` 与上一行的
+   `#include "chassis_power_control.h"` 挤成了同一行。预处理器会把第二条
+   include 当多余 token 吞掉 —— 少的是类型定义，报错的却是八竿子打不着的地方。
+   两个底盘文件都中招。
+2. **`chassis_update_fdb_speed()` 缺前置声明**：函数体排在 `ChassisObserver()`
+   之后、调用在前面。AC5 单遍编译报 #223-D，而本工程的 `--diag_error=warning`
+   把它升级成错误。
+3. **`GetChassisCmdData()` / `UsbSendChassisStateData()` 同样缺前置声明**：
+   定义在 usb_task.c 后段，主循环与 UsbSendData 在前面就要调用。
+4. **`_Static_assert`**：改成只依赖 C89 的 `HOST_BRIDGE_STATIC_ASSERT`
+   （数组尺寸技巧），AC5/AC6/GCC 三家通吃，防呆能力不变。
+
+顺带修掉一个**更阴的坑**：`apply_host_bridge.py` 的幂等探针原本是"子串包含"。
+加了前置声明之后，探针 `static void GetChassisCmdData(void)` 成了声明行
+`static void GetChassisCmdData(void);` 的子串，于是**函数体被误判成"已存在"
+而静默跳过** —— prepare 照样报 GO，实际 usb_task 里只剩一句调用。现在改成
+"整行相等"才算已存在，`test_host_bridge.py` 里留了注释。
+
+### 8.3 没有 Keil 时怎么做整工程体检（`gcc_syntax_check.py`）
+
+思路是**差分**：临时 `git worktree` 出一份未打补丁的 HEAD，两棵树跑同一条 GCC
+命令，只比诊断差集。基线自身噪音（`__packed`、RVDS 的 `__asm {}`、newlib
+`int32_t` 与 `struct_typedef.h` 冲突、`LAST_SEND_TIME.##name` 粘贴）两边相同，
+互相抵消，剩下的一定是补丁造成的。
+
+```bash
+# 一次性准备工具链：xPack 的 GCC。GitHub 直连会被重置，走 gh-proxy 前缀可用
+curl -L -o gcc.zip "https://gh-proxy.com/https://github.com/xpack-dev-tools/arm-none-eabi-gcc-xpack/releases/download/v15.2.1-1.1/xpack-arm-none-eabi-gcc-15.2.1-1.1-win32-x64.zip"
+# 解压后指两个环境变量（shim 目录里放 keil_compat.h 与 portmacro.h 替身）
+set POLAR_GCC=D:\toolchain\gx\xpack-arm-none-eabi-gcc-15.2.1-1.1\bin\arm-none-eabi-gcc.exe
+set POLAR_GCC_SHIM=D:\toolchain\shim
+python tools/firmware/prepare_hero_build.py <固件路径> --gcc-check
+```
+
+**边界必须讲清楚**：GCC 差分 != ARMCC 通过。AC5 独有的坑它看不见，所以
+`verify_changes` 里另加 4 条人工规则当守门（挤行 include、`_Static_assert`、
+两处前置声明）；反过来 GCC 也不会把 AC5 的全部警告类别都报出来。
+真正上板前仍然必须过一次 Keil 编译。
+
+### 8.4 测试之间的树状态耦合（已修）
+
+五个固件测试共用 `tmp_polarbear/StandardRobotpp` 这一份工作树，而
+`test_patch_logic.py` 收尾会 `git checkout -- .` 把 .c 还原，**未跟踪的桥接头文件
+却留在那儿**。另外三个测试原本用"头文件是否存在"判断"桥是否已装"，于是会拿
+"未打桥的 .c + 已存在的 .h" 这种半套状态去校验，报"找不到函数体"。
+现在三处判定全部改成看 usb_task.c 里的标记内容，顺序怎么排都稳。
+
+> 副作用记住一条：跑过这五个测试之后，固件副本会被还原成基线。
+> 要回去编译，重新 `prepare_hero_build.py <路径>` 一次即可（幂等，约 20 秒）。
 
 烧完板请把 `field_evidence/polar-selftest-*.json` 带回来，我能据此判断实际哪一环没通。

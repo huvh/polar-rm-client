@@ -77,7 +77,12 @@ def main() -> int:
         print(f"SKIP: 固件副本不存在（{REPO}）")
         return 0
 
-    already = (REPO / HEADER_REL).exists()
+    # 判"已打桥"要看 .c 内容：头文件是未跟踪文件，兄弟测试 git checkout 之后
+    # .c 已回到基线、头文件却还留着，那时若因为"文件存在"就跳过安装，
+    # 校验对象其实是没打桥的源文件（实测踩过，症状是"找不到函数体"）。
+    usb_probe = ((REPO / USB_REL).read_text(encoding="utf-8", errors="ignore")
+                 if (REPO / USB_REL).exists() else "")
+    already = "POLAR-HOST-BRIDGE" in usb_probe
     owns_revert = False
 
     if already:

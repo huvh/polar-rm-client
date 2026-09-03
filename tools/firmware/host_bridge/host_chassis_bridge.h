@@ -133,13 +133,19 @@ typedef struct
     uint16_t crc;
 } __packed__ SendDataChassisState_s;
 
-/* 尺寸断言：一旦有人改了字段布局，编译就会失败而不是默默发出错帧 */
-_Static_assert(sizeof(ChassisCmd_t) == 4, "ChassisCmd_t must stay 4 bytes");
-_Static_assert(sizeof(ChassisState_t) == 4, "ChassisState_t must stay 4 bytes");
-_Static_assert(
-    sizeof(ReceiveDataChassisCmd_s) == 14, "0x04 frame must stay 14 bytes");
-_Static_assert(
-    sizeof(SendDataChassisState_s) == 14, "0x1F frame must stay 14 bytes");
+/* 尺寸断言：一旦有人改了字段布局，编译就会失败而不是默默发出错帧。
+ *
+ * 刻意不用 C11 的 _Static_assert：本工程用 ARMCC 5.06 + --c99（见
+ * MDK-ARM/standard_robot.uvprojx 里的 <uC99>1</uC99>），AC5 不认 C11 关键字；
+ * 而且工程开着 --diag_error=warning，任何"隐式声明"级别的抱怨都会变成编译错误。
+ * 下面这个数组尺寸写法只依赖 C89，AC5 / AC6 / GCC 三家通吃。 */
+#define HOST_BRIDGE_STATIC_ASSERT(name, cond) \
+    typedef char host_bridge_assert_##name[(cond) ? 1 : -1]
+
+HOST_BRIDGE_STATIC_ASSERT(cmd_4bytes, sizeof(ChassisCmd_t) == 4);
+HOST_BRIDGE_STATIC_ASSERT(state_4bytes, sizeof(ChassisState_t) == 4);
+HOST_BRIDGE_STATIC_ASSERT(rx_frame_14bytes, sizeof(ReceiveDataChassisCmd_s) == 14);
+HOST_BRIDGE_STATIC_ASSERT(tx_frame_14bytes, sizeof(SendDataChassisState_s) == 14);
 
 /*--------------------------- 桥接全局量 ---------------------------*/
 /*

@@ -49,7 +49,7 @@ HERE = Path(__file__).resolve().parent
 USB_INCLUDE = f"""#include "host_chassis_bridge.h"  /* {MARK}: 上位机自转指令桥 */
 """
 
-USB_DURATION = f"""#define SEND_DURATION_ChassisState 50// ms  /* {MARK} */
+USB_DURATION = f"""#define SEND_DURATION_ChassisState 50  // ms  /* {MARK} */
 """
 
 USB_LASTSEND = f"""    uint32_t ChassisState;  /* {MARK} */
@@ -88,6 +88,14 @@ USB_RX_CASE = f"""                    case CHASSIS_CMD_DATA_RECEIVE_ID: {{  /* {
 """
 
 USB_TASK_CALL = f"""        GetChassisCmdData();  /* {MARK} */
+"""
+
+# 新增的两个静态函数定义排在文件后段，主循环与 UsbSendData 在前段就要调用。
+# ARMCC 5.06 是单遍 C99 编译，漏了前置声明就是 #223-D 隐式声明；
+# 本工程还开着 --diag_error=warning，警告即错误，所以必须补。
+USB_PROTOTYPES = f"""/* {MARK}: 前置声明（定义在本文件后段） */
+static void GetChassisCmdData(void);
+static void UsbSendChassisStateData(void);
 """
 
 USB_SEND_FN = f"""
@@ -174,7 +182,12 @@ def _probe(replacement: str) -> str:
 def _sub_once(text: str, pattern: str, replacement: str, what: str, log: list) -> str:
     """在 pattern 匹配处之后插入 replacement；已存在则跳过（幂等）。"""
     probe = _probe(replacement)
-    if probe in text:
+    # 必须按"整行相等"判断，不能用 `probe in text`：
+    # 前置声明 static void GetChassisCmdData(void); 里包含了定义行
+    # static void GetChassisCmdData(void) 这个子串，用子串判断会把
+    # 真正的函数体误判成"已存在"而静默跳过（实测踩过，症状是 usb_task
+    # 里只剩一句调用、函数根本没插进去）。
+    if any(line.strip() == probe for line in text.splitlines()):
         log.append(f"  [skip] {what}（已存在）")
         return text
     new, n = re.subn(pattern, lambda m: m.group(0) + replacement, text, count=1)
@@ -242,6 +255,13 @@ def apply_usb_task(path: Path, log: list) -> str:
         r'([ \t]*)GetVirtualRcCtrlData\(\)\s*;\s*\n',
         USB_TASK_CALL,
         "usb_task.c: 主循环消费底盘指令",
+        log,
+    )
+    text = _sub_once(
+        text,
+        r'static\s+void\s+GetVirtualRcCtrlData\(void\)\s*;\s*\n',
+        USB_PROTOTYPES,
+        "usb_task.c: 新函数前置声明",
         log,
     )
     text = _sub_once(

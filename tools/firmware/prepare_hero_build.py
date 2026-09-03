@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -288,6 +289,27 @@ def verify_changes(repo: Path, step: Step) -> bool:
          0 <= gim.find("switch_is_mid") < gim.find("HOST_GIMBAL_REQUEST != 0")
          < gim.find("switch_is_up") and "mode=GIMBAL_ZERO_FORCE;" in gim),
     ]
+    # ---- 编译可行性（ARMCC 5.06 + --c99 + --diag_error=warning）----
+    # 这四项都是"离线就能撞死、但只有真编译器才肯说"的坑，2026-09-03 全部
+    # 用 tools/firmware/gcc_syntax_check.py 差分实测过：
+    #   * 挤行 include 会被预处理器吞掉第二条（本工程 #include 少一行 = 少一批类型）
+    #   * _Static_assert 是 C11，AC5 不认
+    #   * 静态函数没有前置声明 => #223-D 隐式声明，而警告即错误
+    all_src = "\n".join([header, usb, rc, param, meca, omni, gim])
+    checks += [
+        ("补丁没有把新代码挤进已有行（include 后不得再有代码）",
+         re.search(r'#\s*include\s+"[^"]+"[^\S\r\n]*(?!//|/\*)\S', all_src) is None),
+        ("桥接头不用 C11 的 _Static_assert（AC5 只到 C99）",
+         "_Static_assert(" not in header
+         and "HOST_BRIDGE_STATIC_ASSERT(" in header),
+        ("usb_task 新增静态函数有前置声明（否则 #223-D 直接变错误）",
+         "static void GetChassisCmdData(void);" in usb
+         and "static void UsbSendChassisStateData(void);" in usb),
+        ("底盘新增静态函数有前置声明（ChassisObserver 先调用后定义）",
+         "static void chassis_update_fdb_speed(void);" in meca
+         and "static void chassis_update_fdb_speed(void);" in omni),
+    ]
+
     for name, passed in checks:
         (step.ok if passed else step.bad)(name)
     return all(p for _, p in checks)
@@ -336,7 +358,7 @@ CHECKLIST = """
 def revert(repo: Path, step: Step) -> None:
     print("\n[revert] 撤销本脚本做过的改动")
     res = git(repo, "checkout", "--", ROBOT_PARAM_REL, USB_REL, RC_REL,
-              MECA_REL, OMNI_REL)
+              MECA_REL, OMNI_REL, GIMBAL_REL)
     if res.returncode == 0:
         step.ok("已还原被改动的源文件")
     else:
@@ -350,10 +372,53 @@ def revert(repo: Path, step: Step) -> None:
         step.ok("已删除新增的桥接头文件")
 
 
+def gcc_differential_check(repo: Path, step: Step) -> None:
+    """可选：用 arm-none-eabi-gcc 做"打补丁前后"的诊断差分。
+
+    没有 Keil/ARMCC 时唯一能自动跑起来的整工程编译检查。做法是临时
+    worktree 出一份未打补丁的 HEAD，两棵树跑同一条 GCC 命令，只比对
+    差集 —— 基线本身的噪音（Keil 专有语法、RVDS 端口、newlib int32_t）
+    两边相同，会互相抵消。
+
+    诚实声明：这**不等于** ARMCC 通过。AC5 独有的坑（C11 关键字等）
+    要靠 verify_changes 里那几条人工规则守；反过来 GCC 也不含 AC5 的
+    --diag_error=warning 全部检查。
+    """
+    print("\n[可选] GCC 差分语法体检（非 ARMCC 等价，--gcc-check 触发）")
+    script = HERE / "gcc_syntax_check.py"
+    if not script.exists():
+        step.warn("找不到 gcc_syntax_check.py，跳过差分体检")
+        return
+    base = repo.parent / ".polar-gcc-baseline"
+    if base.exists():
+        step.warn("基线临时目录已存在，先删再用", str(base))
+        shutil.rmtree(base, ignore_errors=True)
+    res = git(repo, "worktree", "add", "--detach", str(base), "HEAD")
+    if res.returncode != 0:
+        step.warn("无法创建基线 worktree，跳过差分体检",
+                  (res.stderr or res.stdout).strip()[:160])
+        return
+    try:
+        chk = subprocess.run(
+            [sys.executable, str(script), str(repo), "--baseline", str(base)],
+            capture_output=True, text=True, encoding="utf-8", errors="replace")
+        out = ((chk.stdout or "") + (chk.stderr or "")).strip().splitlines()
+        if chk.returncode == 0:
+            step.ok("补丁未引入新的 GCC 诊断（" + out[-1][:90] + "）")
+        else:
+            tail = [x.strip()[:150] for x in out if x.strip().startswith("NEW")]
+            step.bad("GCC 差分发现补丁新增诊断",
+                     " | ".join(tail[:6]) or (out[-1] if out else "")[:150])
+    finally:
+        git(repo, "worktree", "remove", "--force", str(base))
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="把固件工程准备成英雄板可驾驶状态")
     ap.add_argument("repo", help="StandardRobotpp 仓库路径")
     ap.add_argument("--revert", action="store_true", help="撤销本脚本的改动")
+    ap.add_argument("--gcc-check", action="store_true",
+                    help="额外跑一次 GCC 差分语法体检（需 arm-none-eabi-gcc）")
     args = ap.parse_args()
 
     repo = Path(args.repo).expanduser().resolve()
@@ -372,6 +437,8 @@ def main() -> int:
         if apply_patch(repo, step):
             verify_changes(repo, step)
             compile_check(repo, step)
+            if args.gcc_check:
+                gcc_differential_check(repo, step)
 
     print("\n" + "=" * 62)
     if step.failures:

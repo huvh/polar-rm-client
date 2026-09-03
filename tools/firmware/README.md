@@ -262,6 +262,31 @@ python tools/firmware/test_patch_logic.py           # 行为断言（含链接/�
   方案 A 的底盘代码**不在这两个测试覆盖范围内**。
 - ⚠️ **未上板**。所有时序结论（断流归零最坏时间）来自静态推算，不是实测。
 
+## 编译可行性：这台机器上没有 Keil 时怎么查
+
+**先记住工程的三条 ARMCC 事实**（都从 `MDK-ARM/standard_robot.uvprojx` 读出来）：
+编译器锁 **ARMCC 5.06 update 4**、语言 **C99**（`<uC99>1</uC99>`）、
+并且 **`--diag_error=warning` —— 警告即错误**。所以"少一句前置声明"这种
+在别的工程里只是警告的问题，在这里直接编不过。细节见
+`host_bridge/GAPS.md` 第 8 节（含 2026-09-03 查出的 4 个真实拦路虎）。
+
+没有 Keil 时的替代方案是**差分体检**：`gcc_syntax_check.py` 临时 worktree 出一份
+未打补丁的 HEAD，两棵树跑同一条 `arm-none-eabi-gcc -fsyntax-only`，只比诊断差集，
+基线自身噪音（`__packed`、RVDS 的 `__asm {}`、newlib `int32_t` 冲突）两边相同自动抵消。
+
+```bash
+# 一次性：装 xPack GCC（GitHub 直连会被重置，加 gh-proxy 前缀可用）
+#         并准备 shim/keil_compat.h + shim/portmacro.h（见 GAPS.md 8.3）
+set POLAR_GCC=D:\toolchain\gx\xpack-arm-none-eabi-gcc-15.2.1-1.1\bin\arm-none-eabi-gcc.exe
+set POLAR_GCC_SHIM=D:\toolchain\shim
+python tools/firmware/prepare_hero_build.py <固件路径> --gcc-check
+```
+
+`prepare_hero_build.py` 的确认清单里另有 4 条专门守 ARMCC 的坑（挤行 include、
+`_Static_assert`、两处前置声明缺失），**不需要工具链就会跑**，是纯文本规则。
+
+> 仍然必须说清楚：GCC 差分 != ARMCC 通过。上板前那一次 Keil 编译省不掉。
+
 ## 上车前必须先确认的三件事（补丁里也标了 TODO）
 
 1. **`vx/vy` 是机体系还是云台系。** `doc/API.md:849-857` 写"底盘坐标系下"，
@@ -283,12 +308,10 @@ python tools/firmware/test_patch_logic.py           # 行为断言（含链接/�
 
 ## 本补丁**不**包含的东西
 
-- **`ChassisPublish()`（0x1E RobotMotion 回读）没有实现。** 全向轮/麦轮底盘没有
-  速度观测器，能拿到的只有电机转速，要换算成机体系速度需要轮式运动学的逆变换。
-  拿"指令值"冒充反馈会让上位机的"车是否响应"检测永远显示正常 —— 那比没有反馈更危险。
-  因此 `rm_custom_client` 已改为在缺 0x1E 时用 `0x0A RobotStatus` 的测速模块坐标做
-  **位移**判定（阈值 0.05 m），缺回读不再等于无法验收。补上真正的速度观测器
-  仍然有价值（2ms 控周期反馈 vs 测速模块低频），但那是独立工作量。
+- **`ChassisPublish()`（0x1E RobotMotion 回读）当时没做，现在由
+  `motion_feedback/` 补上了**（实测轮速 → 机体系速度反解）。保留这段
+  历史记录的理由：结论"拿指令值冒充反馈比没有反馈更危险"仍然成立，
+  所以补的是**测量值**而不是指令值。
 - 摩擦轮 `fric_on` 与 `tracking` 的消费（`GetScCmdFricOn`/`GetSCcmdtracking` 同样
   零调用者）。注意 `fire` 不隐含摩擦轮（`shoot_fric_trigger.c:100-116`），
   只发 `fire` 不会开火。
