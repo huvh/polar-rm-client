@@ -91,6 +91,8 @@ python -m venv .venv
 - `AutoSpinOnHit` 只依据 `RobotInjuryStat` 的新增 17/42 mm 弹丸伤害触发，首个累计样本不触发；提供阈值、持续时间、冷却、比赛/裁判链路/功率门禁和人工 SpinMode 所有权保护。
 - `rm-native-viewer` 的 `PDL1` 遥测和 `0x0310` 固定分块已接入常驻 H.264 解码器；reset、缺包或解码器异常后会停止喂流并等待下一个 Annex-B SPS，再从 SPS 精确恢复，序号回绕/重复/迟到包均有统计，历史码流不会无限驻留内存。UDP H.265 解码异常在接收线程外恢复，并与原生 H.264 使用同一单调解码时间线后再发布到 HUD。
 - 当前实战审查结论为 **NOT READY FOR REAL MATCH**。阻塞项和真车验证清单见 `BACKEND_MATCH_READINESS.md`。
+- 想知道「每个模块的后端到底是谁」：见 `MODULE_BACKEND_MAP.md`（由 
+  `python tools/module_backend_map.py` 从代码里生成，重点模块另有人工核对过的行号）。
 
 ## HUD 模式
 

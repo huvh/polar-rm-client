@@ -14,6 +14,8 @@
   (`RobotLink`)，在 `OfficialEvent` / `CampusSimulation` / `LabDebug` / `TeamBench`
   任何场景下都可以启用。（早期版本犯过这个错，已修正，见
   `BACKEND_MATCH_READINESS.md` 的"架构定位"一节。）
+- 模块与后端的对应关系（谁给这个模块喂数据、上行经过哪几个函数）见 `MODULE_BACKEND_MAP.md`，
+  它是 `python tools/module_backend_map.py` 生成的；改完模块/后端记得重跑，别让文档单飞。
 
 ## 1. 协议真相在哪里：一个 JSON 文件
 
