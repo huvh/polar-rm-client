@@ -389,3 +389,13 @@ ARMCC 5.06 update 7 + 工程自己的 include/define/`--diag_error=warning`，
 所以"Lite 卡 32KB 就改用 GCC 链"这条路走不通，要出 hex 就得挂一份能过
 32KB 的 MDK 授权。取工具链 / 过 license / uVision 命令行编译的具体做法，
 见 `../armcc_check/README.md`。
+
+**并且已经在真 uVision 5.43.1.0 里复现过同一结论**（37 秒全量）：
+`Using Compiler 'V5.06 update 7 (build 960)'` -> 161 个 .c + 1 个 .s 全过 ->
+`linking... L6050U: The code size of this image (140444 bytes) exceeds the maximum
+allowed for this version of the linker.` -> `1 Error(s), 0 Warning(s)`。
+即 IDE 与命令行一致：只有 MDK-Lite 的 32KB 授权上限拦着，代码本身没有编译问题。
+安装三要点（`--batch-install` 有效 / AC5 要写进 TOOLS.INI 的 ARMCCPATH /
+DFP pack 不装会重写掉 `RTE_Components.h` 里的 `CMSIS_device_header`）见
+`../armcc_check/install_keil.ps1` 与 README §7。
+

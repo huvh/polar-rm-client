@@ -129,3 +129,52 @@ Lite 档。整包解压是 3.1GB，没必要 —— 拿这 16 个文件就够跑
 现在由 `../prepare_hero_build.py` 的 `switch_to_hero()` 在 `robot_param.h` 里插
 一段 `#ifndef __GYRO_BIAS_YAW` 兜底定义（值先沿用仓库其它机型的
 `0.003096855f`），`--revert` 会一起还原。**换车/换 IMU 记得实车重新标定。**
+
+
+## 7. 已经真的装上 MDK 了（2026-09-03 补充）
+
+同目录 `install_keil.ps1` 就是一条龙脚本（要管理员，UAC 点"是"），它按顺序做三件事，
+**三件都必须做**，少一件 uVision 就编不了这个工程：
+
+1. `MDK543a.exe --batch-install` —— **实测这个静默参数有效**，不用点向导。
+   装到哪由 `SETUP.INI` 的 `DefaultDir="%LOCALAPPDATA%\Keil_v5"` 决定，所以脚本
+   先把子进程的 `LOCALAPPDATA` 指到 D 盘（C 盘只剩几 GB，3.58GB 装不下）。
+   落地结果：`D:\LocalAppData\Keil_v5`，7908 文件 / 3581MB，注册表
+   `HKLM\SOFTWARE\WOW6432Node\Keil\Products\MDK` 已写入，`TOOLS.INI` 里
+   `TOOL_VARIANT=mdk_lite`、`RTEPATH="D:\LocalAppData\Arm\Packs"`。
+2. **ARM Compiler 5 必须单独注册**：MDK 5.43a 不带 AC5，装完 uVision 会直接
+   `*** Target 'standard_robot' uses ARM-Compiler 'Default Compiler Version 5' which is not available`
+   并 `Build aborted`。脚本把 AC5 铺进 `<KeilRoot>\ARM\ARMCC` 并在 `TOOLS.INI`
+   的 `[ARMADS]` 里加一行 `ARMCCPATH1=".\ARMCC" ("V5.06.7")`（原文件备份成
+   `TOOLS.INI.bak`）。
+3. **DFP pack 也要装**：缺 `Keil.STM32F4xx_DFP` 时编译虽然照过，但 uVision 每次
+   Build 会把 `MDK-ARM/RTE/_standard_robot/RTE_Components.h` 重写，
+   **把 `#define CMSIS_device_header "stm32f4xx.h"` 删掉**（烧录用到的 Flash 算法
+   `STM32F4xx_1024.FLM` 也在这个 pack 里）。pack 是 zip，直接解到
+   `RTEPATH\Keil\STM32F4xx_DFP\2.17.1` 即可（`PackInstaller.exe -i ... -a --skip-touch`
+   实测返回 2 不成功）。装好后 `RTE_Components.h` 会重新带上那行 define。
+
+命令行编译（脚本第 4 步手跑）：
+
+```powershell
+& "D:\LocalAppData\Keil_v5\UV4\UV4.exe" -b "<repo>\MDK-ARM\standard_robot.uvprojx" -j0 -o build_log.txt
+```
+
+uVision 5.43.1.0 全量编译实测（37 秒）：
+
+```
+*** Using Compiler 'V5.06 update 7 (build 960)', folder: 'D:\LocalAppData\Keil_v5\ARM\ARMCC\Bin'
+Build target 'standard_robot'
+assembling startup_stm32f407xx.s...        (1 个)
+compiling ...                              (161 个)
+linking...
+standard_tpye_c\standard_tpye_c.axf: error: L6050U: The code size of this image (140444 bytes)
+    exceeds the maximum allowed for this version of the linker.
+"standard_tpye_c\standard_tpye_c.axf" - 1 Error(s), 0 Warning(s).
+Target not created.
+```
+
+也就是说 IDE 这条路与 §1 的命令行结论完全一致：**编译 162/162 全过、0 warning，
+唯一拦下的是 MDK-Lite 的 32KB 链接上限**。想产出 `.axf/.hex`，只需要一份能过
+32KB 的 MDK 授权（File -> License Management 挂上队里/学校的 `.ulf`），
+不需要改任何代码。
