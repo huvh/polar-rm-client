@@ -188,7 +188,8 @@ def main() -> int:
             cmd = ([os.path.join(base, "bin", "armasm.exe")] + aflags + [p, "-o", obj]
                    if asm else
                    [os.path.join(base, "bin", "armcc.exe")] + cflags + ["-c", p, "-o", obj])
-            r = subprocess.run(cmd, capture_output=True, text=True, env=env)
+            r = subprocess.run(cmd, capture_output=True, text=True, env=env,
+                     encoding="utf-8", errors="replace")
             out = (r.stdout or "") + (r.stderr or "")
             logf.write("$ %s\n%s[rc=%d]\n\n" % (" ".join(cmd), out, r.returncode))
             if r.returncode != 0:
@@ -207,7 +208,8 @@ def main() -> int:
     link0 = [os.path.join(base, "bin", "armlink.exe"), "--cpu", "Cortex-M4.fp"]
     if a.mode in ("partial", "all") and objs:
         r = subprocess.run(link0 + ["--partial", "-o", os.path.join(outdir, "partial-link.out")]
-                           + objs + libs, capture_output=True, text=True, env=env)
+                           + objs + libs, capture_output=True, text=True, env=env,
+         encoding="utf-8", errors="replace")
         out = (r.stdout or "") + (r.stderr or "")
         logf.write("$ partial link\n%s[rc=%d]\n\n" % (out, r.returncode))
         und = len(re.findall(r"L6218E", out))
@@ -223,7 +225,8 @@ def main() -> int:
         r = subprocess.run(link0 + ["--scatter", sct, "--map", "--list",
                                     os.path.join(outdir, "map.txt"), "-o",
                                     os.path.join(outdir, "image.axf")] + objs + libs,
-                           capture_output=True, text=True, env=env)
+                           capture_output=True, text=True, env=env,
+                             encoding="utf-8", errors="replace")
         out = (r.stdout or "") + (r.stderr or "")
         logf.write("$ full link\n%s[rc=%d]\n\n" % (out, r.returncode))
         m = re.search(r"image \((\d+) bytes\)", out)

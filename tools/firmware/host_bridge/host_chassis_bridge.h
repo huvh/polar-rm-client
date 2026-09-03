@@ -187,8 +187,29 @@ extern volatile uint8_t HOST_CHASSIS_SC_FLAG; /* chassis_* 写，usb_task 读 */
 extern volatile uint16_t HOST_RC_DRIVER_KEYS; /* SBUS 解码写；无键盘遥控器恒 0 */
 extern volatile uint16_t HOST_RC_HOST_KEYS;   /* usb_task 写：新鲜度+掩码之后的客户端键位 */
 
-/* 唯一的 key.v 写入表达式：两个写入者都用它，避免"谁覆盖谁" */
-#define HOST_RC_MERGED_KEYS() ((uint16_t)(HOST_RC_DRIVER_KEYS | HOST_RC_HOST_KEYS))
+/*
+ * 第三个来源：裁判/图传链路的键鼠（0x0311 CustomControl，见 host_km_link.h）。
+ * 这两个量由 km_link 那层维护，定义与写入者都在本层，理由有两个：
+ *   1) 装完 host_bridge 没装 km_link 时也必须能链接通过（默认 0 门闸全开，
+ *      行为与只有两本账时逐位相同）；
+ *   2) key.v 的写入表达式只允许有一个，多一处表达式就多一处竞态。
+ * HOST_RC_DRIVER_KEY_GATE：驾驶员键位的门闸。
+ *   0xFFFF = 放行（默认，以及 CL_KM_RC / 混合档）；
+ *   0x0000 = 屏蔽（CL_KM_VT「只认图传」那一档）。
+ *   屏蔽的**只有键位**：摇杆 ch[] 与拨杆 s[] 一律不动，
+ *   所以图传断了驾驶员照样能用摇杆把车停下来，这是底线。
+ */
+#define HOST_RC_KM_KEY_NONE ((uint16_t)0x0000)
+#define HOST_RC_DRIVER_GATE_OPEN ((uint16_t)0xFFFF)
+#define HOST_RC_DRIVER_GATE_SHUT ((uint16_t)0x0000)
+
+extern volatile uint16_t HOST_RC_DRIVER_KEY_GATE;
+extern volatile uint16_t HOST_RC_KM_KEYS;
+
+/* 唯一的 key.v 写入表达式：三个写入者都用它，避免"谁覆盖谁" */
+#define HOST_RC_MERGED_KEYS()                                                                  \
+    ((uint16_t)(((HOST_RC_DRIVER_KEYS) &HOST_RC_DRIVER_KEY_GATE) | HOST_RC_HOST_KEYS |         \
+                HOST_RC_KM_KEYS))
 
 /**
  * @brief 底盘侧统一入口：消费上位机自转指令 + 回填状态

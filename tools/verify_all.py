@@ -78,6 +78,16 @@ C_CHECKS = (
     # 位序悄悄错开"——键位错一位就是车上按 Shift 变按 Q 那类现场怪事。
     ("tools/dt7_link/test_dbus_frame_vs_firmware.py",
      "DT7 官方 18 字节帧位序 == 固件真实解码（逐字段 + 常量守卫）"),
+    # 图传键鼠链路。两项都要，因为它们查的是不同的东西：
+    # layout 查"客户端打的字节"和"C 结构体"是否还对得上（改了任何一端、
+    # 或 __packed__ 没生效都会红）；行为查五档仲裁与三条底线。
+    ("tools/firmware/km_link/test_km_payload_layout.py",
+     "PRM1 键鼠载荷：C 结构体偏移 == 客户端 struct 打包（逐字段）"),
+    ("tools/firmware/km_link/test_km_link.py",
+     "图传键鼠五档仲裁 + 摇杆底线 + 开火权限（喂客户端真字节）"),
+    # 客户端这一半：默认关、关着不多发、松键能清零。
+    ("tools/dt7_link/test_radio_km_client.py",
+     "无线键鼠出口客户端侧（默认关 / 不粘键 / 载荷 26B）"),
 )
 
 #: 前后端对齐审计（防倒退闸门）。

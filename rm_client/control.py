@@ -83,6 +83,12 @@ class KeyboardControlBridge:
     def __init__(self, publisher: Any | None = None, mock_output: bool = True) -> None:
         self.publisher = publisher
         self.mock_output = bool(mock_output)
+        #: 无线键鼠出口（CustomControl -> 图传链路 -> 机器人 0x0311，PRM1 kind=3）。
+        #: 默认关：开着要同时满足"车上固件带 POLAR-KM-LINK"和
+        #: "__CONTROL_LINK_KM 不是 CL_KM_RC"，两端没对齐时白占图传带宽。
+        self.radio_km_enabled = False
+        self.radio_km_sent = 0
+        self.radio_km_last_error = ""
         self.key_state: dict[str, bool] = {key: False for key in CONTROL_KEYS}
         # 协议槽 -> 已绑物理键名；可由前端改绑，默认与旧行为一致。
         self.binds: dict[str, str] = dict(DEFAULT_CONTROL_BINDS)
@@ -299,6 +305,28 @@ class KeyboardControlBridge:
             else:
                 self._dirty = False
                 self._consume_relative_motion()
+            # 无线键鼠第二出口：同一份键鼠再走一遍 CustomControl -> 图传链路
+            # -> 机器人 0x0311（PRM1 kind=3）。默认**关**，因为它要求车上
+            # 固件带 POLAR-KM-LINK 且 __CONTROL_LINK_KM 不是 CL_KM_RC，
+            # 两端没对齐时开着只会白占图传带宽。
+            # 刻意放在 KMC 之后：KMC 是官方通道，成功与否决定 last_error；
+            # 这条只在 KMC 也发不出去时补一条独立错误原因，不覆盖它。
+            if self.radio_km_enabled and ok:
+                rk = getattr(self.publisher, "publish_km_control", None)
+                if rk is None:
+                    self.last_error = "无线键鼠出口不可用：发布器没有 publish_km_control"
+                else:
+                    rok, rreason = rk(
+                        keyboard_value=command.keyboard_value,
+                        mouse_x=command.mouse_x,
+                        mouse_y=command.mouse_y,
+                        mouse_z=command.mouse_z,
+                        left=command.left_button_down,
+                        right=command.right_button_down,
+                        mid=command.mid_button_down,
+                    )
+                    self.radio_km_last_error = "" if rok else str(rreason)
+                    self.radio_km_sent += 1 if rok else 0
         except Exception as exc:
             self.last_error = str(exc)
 

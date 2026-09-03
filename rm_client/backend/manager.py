@@ -1580,6 +1580,54 @@ class BackendManager:
             qualification_token=qualification_token,
         )
 
+    def publish_km_control(
+        self,
+        *,
+        keyboard_value: int = 0,
+        mouse_x: int = 0,
+        mouse_y: int = 0,
+        mouse_z: int = 0,
+        left: bool = False,
+        right: bool = False,
+        mid: bool = False,
+    ) -> tuple[bool, str]:
+        """把键鼠打包成 PRM1 kind=3，经 CustomControl -> 图传链路 -> 机器人 0x0311。
+
+        为什么走 CustomControl 而不是 KeyboardMouseControl：官方
+        《RM2026 通信协议 V1.2.0》修改日志第 2 条**删除了命令码 0x0304**，
+        而 0x0311（自定义客户端->机器人，30 字节，75Hz）的 30 字节内容
+        完全由队伍自己定，所以不依赖大疆对键鼠的任何封装语义；队内固件
+        referee.c:247 已经在收这一条，缺的下游消费者由
+        tools/firmware/km_link/apply_km_link.py 补上。
+
+        刻意**不**在这里做按键掩码：能按哪些键由固件的 KM_KEY_ALLOWED_MASK
+        决定（默认只放 W/S/A/D/SHIFT，开火相关 Q/E 要显式 --km-fire-keys）。
+        上位机放开关火权限的地方只能是固件编译期那一次，不能是这里。
+        """
+        self._km_seq = (getattr(self, "_km_seq", 0) + 1) & 0xFFFF
+        payload = proto.encode_km_control_payload(
+            sequence=self._km_seq,
+            keyboard_value=keyboard_value,
+            mouse_x=mouse_x,
+            mouse_y=mouse_y,
+            mouse_z=mouse_z,
+            left_button=left,
+            right_button=right,
+            middle_button=mid,
+        )
+        return self._publish("CustomControl", proto.encode_custom_control(payload),
+                             intent="core_km_link")
+
+    def publish_km_release(self) -> tuple[bool, str]:
+        """全零一键松开帧：让车上那本图传键位账立刻归零，不等 300ms 超时。
+
+        粘键就是车刹不住，所以释放帧必须能发得出。走 _publish 的普通门控，
+        但故意用**普通按键值 0**——它和"客户端没按键"在线上一模一样，
+        不需要任何特权。
+        """
+        return self.publish_km_control(keyboard_value=0, mouse_x=0, mouse_y=0,
+                                       mouse_z=0)
+
     def publish_custom_control(self, data: bytes, *, intent: str = "control") -> tuple[bool, str]:
         return self._publish("CustomControl", proto.encode_custom_control(data), intent=intent)
 
@@ -1670,6 +1718,13 @@ class BackendManager:
         """先尽力发送全零 KMC，再锁死所有上行；断网时仍立即本地锁止。"""
         zero_result = self.mqtt.publish_estop_zero()
         self._last_estop_zero_ok, self._last_estop_zero_reason = zero_result
+        # 图传键鼠那本账也要同帧清掉。固件侧本来有 300ms 新鲜度超时兜底，
+        # 但"等超时"意味着急停之后最多还有 300ms 车仍带着客户端键位——
+        # 和 0x5A 那条一样，必须在这一刻就发零帧，而不是留给下一帧。
+        # 必须排在 safety.trigger_estop() 之前：门一锁就发不出去了。
+        if getattr(self, "_km_seq", 0) > 0:
+            self._last_km_release_ok, self._last_km_release_reason = (
+                self.publish_km_release())
         self._estop_triggered_at = time.perf_counter()
         self.safety.trigger_estop()
         self.serial.trigger_estop()

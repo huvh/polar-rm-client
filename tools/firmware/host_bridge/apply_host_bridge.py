@@ -357,6 +357,12 @@ RC_GLOBALS = f"""
  * HOST_RC_MERGED_KEYS() 往 key.v 里写最终值。 */
 volatile uint16_t HOST_RC_DRIVER_KEYS = 0;  /* {MARK} */
 volatile uint16_t HOST_RC_HOST_KEYS = 0;    /* {MARK} */
+/* {MARK}: 第三本账与驾驶员键位门闸。没装 km_link 时它们恒为
+ * 「图传无键位 / 门闸全开」，合并值就退化成上面两本账的并集，
+ * 行为与打 km_link 之前逐位相同；装了 km_link 之后由它按
+ * __CONTROL_LINK_KM 刷新这两个量。 */
+volatile uint16_t HOST_RC_DRIVER_KEY_GATE = HOST_RC_DRIVER_GATE_OPEN;
+volatile uint16_t HOST_RC_KM_KEYS = HOST_RC_KM_KEY_NONE;
 """
 
 RC_USB_TASK = f"""    /* {MARK}: 不是 `|=` 而是"记账 + 写合并值"。

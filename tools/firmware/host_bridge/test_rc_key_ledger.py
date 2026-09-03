@@ -102,6 +102,15 @@ def main() -> int:
 /* 两个账量的定义在固件里位于 usb_task.c */
 volatile uint16_t HOST_RC_DRIVER_KEYS = 0;
 volatile uint16_t HOST_RC_HOST_KEYS = 0;
+/* 第三本账 + 驾驶员键位门闸：合并宏现在无条件引用这两个量，
+ * 而它们的真实定义在 usb_task.c（由 apply_host_bridge 写入），
+ * 本测试复刻同一组初值 -> 门闸全开、图传无键位，等价于两本账时代。 */
+volatile uint16_t HOST_RC_DRIVER_KEY_GATE = 0xFFFF;
+volatile uint16_t HOST_RC_KM_KEYS = 0;
+
+/* km_link 给置零宏又加了一句"清驾驶员鼠标账"。本测试只验键位，
+ * 给个空桩即可（真实实现与其行为由 test_km_link.py 单独验）。 */
+static void HostKmClearDriverMouse(void) {{ /* km_link 的空桩 */ }}
 
 RC_ctrl_t rc_ctrl;
 

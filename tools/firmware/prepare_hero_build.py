@@ -43,6 +43,19 @@ HOST_BRIDGE_HEADER_REL = "application/typedef/host_chassis_bridge.h"
 MOTION_FEEDBACK_SCRIPT = HERE / "motion_feedback" / "apply_motion_feedback.py"
 # 云台直控桥（0x04 param0 bit0），见 gimbal_host 目录与 GAPS.md 第 3 节。
 GIMBAL_HOST_SCRIPT = HERE / "gimbal_host" / "apply_gimbal_host.py"
+KM_LINK_SCRIPT = HERE / "km_link" / "apply_km_link.py"
+
+# 图传键鼠链路的五档，取值来自固件自己的 robot_typedef.h:80-84。
+# 刻意不在这里造新档：宏和取值都是队内作者已经写好的，本脚本只是把它接完。
+KM_LINK_NAMES = {
+    "rc": "CL_KM_RC",        # 只认遥控器 = 上游默认 = 现役车行为
+    "none": "CL_KM_NONE",    # 两路键鼠都屏蔽
+    "vt": "CL_KM_VT",        # 只认图传（客户端独占键鼠）
+    "rc_vt": "CL_KM_RC_VT",  # 互补，遥控器优先
+    "vt_rc": "CL_KM_VT_RC",  # 互补，图传优先
+}
+KM_OURS_MARK = "prepare_hero_build.py --km"
+KM_BLOCK_HEAD = "/* POLAR-HERO-BUILD: 键鼠链路档位"
 GIMBAL_REL = "application/gimbal/gimbal_yaw_pitch_direct.c"
 # 遥控器类型（__RC_TYPE）。比赛链路是"DT7 遥控器 <-> 车上 DR16 接收机"，默认写
 # RC_DT7 是为了让配置说实话。
@@ -84,6 +97,11 @@ OMNI_REL = "application/chassis/chassis_omni.c"
 OWNED = {
     ROBOT_PARAM_REL, USB_REL, RC_REL,
     MECA_REL, OMNI_REL, HOST_BRIDGE_HEADER_REL, GIMBAL_REL,
+    # km_link 会改 referee.c（记 0x0311 到达时刻）并新增一个头文件。
+    # 不登记进 OWNED 的话，第二次跑 prepare 会被 check_clean 当成
+    # "别人的改动"而拒绝执行——症状是"第一次成功、第二次 NO-GO"。
+    "application/referee/referee.c",
+    "application/typedef/host_km_link.h",
 }
 
 
@@ -234,6 +252,53 @@ def switch_rc_type(repo: Path, step: Step, want_key: str) -> None:
     step.ok(f"__RC_TYPE: {cur} -> {want}（原始值 {orig} 已记在行尾注释）")
 
 
+def switch_km_link(repo: Path, step: Step, want_key: str,
+                   fire_keys: bool) -> None:
+    """选键鼠链路档位，并按需放开 Q/E 键位掩码。
+
+    为什么要插在 robot_param.h 的 `#ifndef __CONTROL_LINK_KM` **之前**：
+    那个默认块写成 ifndef 守卫，所以只要前面已经定义过，它就会自动跳过，
+    不需要去改动上游那三行（改动越少，回切越干净）。
+    """
+    want = KM_LINK_NAMES[want_key]
+    print(f"\n[3c] 键鼠链路 -> {want}（--km {want_key}"+("，并放开 Q/E 开火键位）"
+          if fire_keys else "）"))
+    path = repo / ROBOT_PARAM_REL
+    text = path.read_text(encoding="utf-8")
+
+    block = (
+        KM_BLOCK_HEAD + "（图传键鼠链路）>\n"
+        + f"/* 固件自己定义的五档键鼠来源在 robot_typedef.h:80-84，但**零消费者**；\n"
+        + f" * tools/firmware/km_link/apply_km_link.py 把那半截接完了。\n"
+        + f" * {KM_OURS_MARK} {want_key}；上游默认值 CL_KM_RC（只认遥控器）。\n"
+        + f" * 这一行必须在下面那个 #ifndef 块之前，靠 ifndef 守卫覆盖默认值。\n"
+        + f"#define __CONTROL_LINK_KM {want}\n"
+        + ("/* 开火相关键位（Q/E 摩擦轮）经图传注入的许可，由 --km-fire-keys 给 */\n"
+           "#define KM_KEY_ALLOWED_MASK (KM_KEY_MASK_DRIVE | KM_KEY_MASK_FIRE)\n"
+           if fire_keys else
+           "/* 没给 --km-fire-keys：图传只能注入 W/S/A/D/SHIFT，开火权限不外送 */\n")
+        + "/* ---- POLAR-HERO-BUILD 键鼠链路块结束 ---- */\n\n"
+    )
+
+    # 幂等：先摘掉旧的块，再按本次参数插回去（一次成型，避免反复叠加）
+    if KM_BLOCK_HEAD in text:
+        head = text.index(KM_BLOCK_HEAD)
+        tail = text.index("键鼠链路块结束", head)
+        tail = text.index("\n", tail) + 2  # 连 "*/" 那一行和它后面的空行
+        text = text[:head] + text[tail:]
+        step.ok("先摘掉旧的键鼠链路块，再按本次参数插回")
+
+    anchor = "#ifndef __CONTROL_LINK_KM"
+    if anchor not in text:
+        step.bad("robot_param.h 里找不到 #ifndef __CONTROL_LINK_KM 默认块",
+                 "上游若改了这个宏的写法，请同步本脚本的插入位置")
+        return
+    text = text.replace(anchor, block + anchor, 1)
+    path.write_text(text, encoding="utf-8")
+    step.ok(f"__CONTROL_LINK_KM = {want}"
+            + ("（含 Q/E 开火键位）" if fire_keys else "（驾驶键位 only）"))
+
+
 def ensure_gyro_bias(path: Path, step: Step) -> None:
     """ARMCC 5.06 实测：英雄参数文件缺 __GYRO_BIAS_YAW，IMU_solve.c 编不过，这里补兜底定义。"""
     text = path.read_text(encoding="utf-8")
@@ -306,6 +371,19 @@ def apply_patch(repo: Path, step: Step) -> bool:
         step.bad("云台直控桥套用失败", ((res.stderr or res.stdout).strip()[-260:]))
         return False
     step.ok("云台直控桥已装入（桥接头 + usb_task + 云台仲裁）")
+
+    # 图传键鼠链路。必须最后装：它要改写 host_bridge 写进 key.v 的那几行，
+    # 而 gimbal_host 又会把 usb_task.c 整体读改写一遍，顺序错了就撞锚点。
+    if not KM_LINK_SCRIPT.exists():
+        step.bad("图传键鼠链路脚本不存在", str(KM_LINK_SCRIPT))
+        return False
+    res = subprocess.run(
+        [sys.executable, str(KM_LINK_SCRIPT), str(repo)],
+        capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if res.returncode != 0:
+        step.bad("图传键鼠链路套用失败", ((res.stderr or res.stdout).strip()[-300:]))
+        return False
+    step.ok("图传键鼠链路已接入（referee.c 到包时刻 + 五档仲裁 + usb_task 周期）")
     return True
 
 
@@ -592,6 +670,13 @@ def main() -> int:
                          "（18 字节 SBUS 帧自带键盘/鼠标位）；上游仓库默认写的是 et08a")
     ap.add_argument("--gcc-check", action="store_true",
                     help="额外跑一次 GCC 差分语法体检（需 arm-none-eabi-gcc）")
+    ap.add_argument("--km", choices=sorted(KM_LINK_NAMES), default="rc",
+                    help="键鼠链路档位（固件自己的 __CONTROL_LINK_KM 五档）。"
+                         "默认 rc = 只认遥控器 = 现役车行为逐位不变；"
+                         "要无线用客户端控键鼠才改成 vt/rc_vt/vt_rc")
+    ap.add_argument("--km-fire-keys", action="store_true",
+                    help="允许图传注入 Q/E（摩擦轮/开火相关）。默认不给，"
+                         "开火权限不偷偷外送")
     args = ap.parse_args()
 
     repo = Path(args.repo).expanduser().resolve()
@@ -608,6 +693,7 @@ def main() -> int:
     elif check_clean(repo, step):
         switch_to_hero(repo, step)
         switch_rc_type(repo, step, args.rc)
+        switch_km_link(repo, step, args.km, args.km_fire_keys)
         if apply_patch(repo, step):
             verify_changes(repo, step, args.rc)
             compile_check(repo, step)

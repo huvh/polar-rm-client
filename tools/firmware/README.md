@@ -13,6 +13,8 @@
 > ```bash
 > python tools/firmware/prepare_hero_build.py <你的 StandardRobotpp 路径>
 > #   遥控器类型不是 DT7 时再加一个开关：--rc et08a | at9s | ht8a（默认 dt7）
+> #   要让客户端经**图传链路**无线控键鼠时再加：--km vt_rc（默认 rc = 现车主行为不变）
+> #   可选 none | rc | vt | rc_vt | vt_rc；开火键位（Q/E）还要额外给 --km-fire-keys
 > ```
 >
 > 它会：切兵种到英雄 → 套补丁（驾驶 + 自转桥接 + **速度回读桥 0x1E** + **云台直控桥 0x04.param0**）→ 逐项确认所有改动都在 → 用固件真实头文件编译校验 → 最后给出 **GO / NO-GO** 结论。
@@ -34,7 +36,9 @@
 
 **2. `__RC_TYPE` 要和车上装的遥控器是同一家**（默认已改成 `RC_DT7`）。
 仓库出厂写的是 `#define __RC_TYPE RC_ET08A`，而车上是 DT7 + DR16，所以
-`prepare_hero_build.py` 默认会改成 `RC_DT7`（`--rc dt7|et08a|at9s|ht8a`），
+`prepare_hero_build.py` 默认会改成 `RC_DT7`（`--rc dt7|et08a|at9s|ht8a`）；
+键鼠链路档位走 `--km`（固件自己定义的 `__CONTROL_LINK_KM` 五档，
+默认 `rc` 与上游一致，详见 `host_bridge/RC_LINKS.md` 第 8 节）。
 原始值记在行尾注释，来回切不丢。
 
 它**真正**管什么（2026-09-03 逐行核过，纠正前一版把后果写重的表述）：

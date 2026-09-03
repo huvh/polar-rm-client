@@ -20,6 +20,13 @@ TEAM_CONTROL_MAGIC = b"PRM1"
 TEAM_CONTROL_VERSION = 1
 TEAM_CONTROL_VISION = 1
 TEAM_CONTROL_SPIN = 2
+# kind=3：图传键鼠（0x0311 的 30 字节里前 26 字节是这条），
+# 与固件 application/typedef/host_km_link.h 的 prm1_km_cmd_t 逐字节对齐。
+# 两边必须一起改，tools/firmware/km_link/test_km_payload_layout.py 会把
+# C 结构体编出来量每个字段的偏移，再和这里的 struct 格式对表。
+TEAM_CONTROL_KM = 3
+TEAM_CONTROL_KM_FORMAT = "<4sBBHHhhhBB8s"
+TEAM_CONTROL_KM_SIZE = 26
 # Compatibility names retained for existing integrations.
 VISION_CONTROL_MAGIC = TEAM_CONTROL_MAGIC
 VISION_CONTROL_VERSION = TEAM_CONTROL_VERSION
@@ -611,6 +618,77 @@ def encode_keyboard_mouse_control(
         encode_uint(6, keyboard_value),
         encode_bool(7, mid_button_down),
     ])
+
+
+def encode_km_control_payload(
+    *,
+    sequence: int,
+    keyboard_value: int = 0,
+    mouse_x: int = 0,
+    mouse_y: int = 0,
+    mouse_z: int = 0,
+    left_button: bool = False,
+    right_button: bool = False,
+    middle_button: bool = False,
+    alive: bool = True,
+) -> bytes:
+    """Encode the team KM payload carried inside CustomControl -> 0x0311.
+
+    Layout ``<4sBBHHhhhBB8s`` (26 bytes): magic, version, kind, sequence,
+    keyboard bitmap, mouse x/y/z deltas, button bits, alive flag, reserved.
+    Field order and semantics mirror the firmware struct in
+    ``application/typedef/host_km_link.h`` and the DBUS key/mouse fields,
+    so a value that arrives as ``rc_ctrl.key.v`` from a DT7 keyboard means
+    the same bit here.
+    """
+
+    def clamp16(value: int) -> int:
+        return max(-32768, min(32767, int(value)))
+
+    buttons = (0x01 if left_button else 0) | (0x02 if right_button else 0) | (
+        0x04 if middle_button else 0)
+
+    return struct.pack(
+        TEAM_CONTROL_KM_FORMAT,
+        TEAM_CONTROL_MAGIC,
+        TEAM_CONTROL_VERSION,
+        TEAM_CONTROL_KM,
+        int(sequence) & 0xFFFF,
+        int(keyboard_value) & 0xFFFF,
+        clamp16(mouse_x),
+        clamp16(mouse_y),
+        clamp16(mouse_z),
+        buttons & 0xFF,
+        0x01 if alive else 0x00,
+        b"\x00" * 8,
+    )
+
+
+def decode_km_control_payload(data: bytes) -> dict | None:
+    """Decode a KM payload; return None when it is not one (magic/kind gate).
+
+    The firmware applies the same gate (magic + version + kind), so this is
+    the client-side mirror used to prove both ends agree on byte order.
+    """
+
+    data = bytes(data)
+    if len(data) < TEAM_CONTROL_KM_SIZE:
+        return None
+    (magic, version, kind, seq, keys, mx, my, mz, buttons, flags,
+     _res) = struct.unpack(TEAM_CONTROL_KM_FORMAT, data[:TEAM_CONTROL_KM_SIZE])
+    if magic != TEAM_CONTROL_MAGIC or version != TEAM_CONTROL_VERSION or kind != TEAM_CONTROL_KM:
+        return None
+    return {
+        "sequence": seq,
+        "keyboard_value": keys,
+        "mouse_x": mx,
+        "mouse_y": my,
+        "mouse_z": mz,
+        "left_button": bool(buttons & 0x01),
+        "right_button": bool(buttons & 0x02),
+        "middle_button": bool(buttons & 0x04),
+        "alive": bool(flags & 0x01),
+    }
 
 
 def encode_custom_control(data: bytes) -> bytes:
