@@ -22,6 +22,7 @@
 | `apply_host_bridge.py` | 一条命令把桥接装进固件树（幂等，带 dry-run） |
 | `test_host_bridge.py` | 用固件**真实头文件**编译 + 9 组行为断言 |
 | `GAPS.md` | 本文件 |
+| `../motion_feedback/` | **第 4 节已补好的速度回读桥**（0x1E），同套用法 |
 
 ```powershell
 # 看会改哪些文件（不落盘）
@@ -178,7 +179,7 @@ if (!(chassis.rc->key.v & (KEY_PRESSED_OFFSET_W | KEY_PRESSED_OFFSET_S
 
 ---
 
-## 4. 缺口：速度反馈停发（0x1E）
+## 4. 已补好的：速度反馈回读（0x1E）
 
 ### 现象
 
@@ -190,25 +191,30 @@ if (!(chassis.rc->key.v & (KEY_PRESSED_OFFSET_W | KEY_PRESSED_OFFSET_S
 `chassis_omni.c` / `chassis_mecanum.c` 都没实现 `ChassisPublish()`，落到 `__weak` 空实现 → `chassis_fdb_speed` 从不 Publish → `UsbSendRobotMotionData()`（`usb_task.c:1184-1198`）里 `FDB_SPEED_VECTOR == NULL` 直接 return。
 只有平衡底盘 build 会发。
 
-### 补法（需现场确认）
+### 补法（已实现，编译+运动学往返已验证）
 
-在两个底盘文件里补 `ChassisPublish()`，参考平衡底盘的实现：
+`tools/firmware/motion_feedback/`：
 
-```c
-void ChassisPublish(void)
-{
-    static ChassisFeedbackSpeed_t chassis_fdb_speed;   /* 名字以平衡底盘实现为准 */
-    chassis_fdb_speed.vx = chassis.feedback[0];        /* 或用解算后的机体速度 */
-    chassis_fdb_speed.vy = chassis.feedback[1];
-    chassis_fdb_speed.wz = chassis.reference.wz;
-    Publish(&chassis_fdb_speed, CHASSIS_FDB_SPEED_NAME);
-}
-```
+| 文件 | 作用 |
+|---|---|
+| `apply_motion_feedback.py` | 一条命令装进固件树（幂等，`POLAR-MOTION-FEEDBACK` 标记，带 --dry-run）。`prepare_hero_build.py` 已自动调用 |
+| `test_motion_feedback.py` | 结构断言 + 真实头编译 + **运动学往返**：用固件自己的 `ChassisConsole` 下发式算四轮指令速度，令实测轮速恰等于它，再跑反解，断言机体系速度还原回输入（麦轮/全向轮各三组）。两个方向都逐字取自同一份源码，符号或系数错一个就红 |
 
-### 客户端已做的降级
+与 GAPS 早期草图的两点差别（都是这轮查实后修正的）：
 
-不补也能跑：客户端用下行 0x0A `RobotStatus` 里的**测速模块坐标**做位移验证（`polar_motion.py`）。
-但位移验证只能回答"车动没动"，回答不了"速度对不对"，而且有 50ms 上报周期的量化误差。
+- 平衡底盘的 `ChassisPublish` 只在任务进循环前被调用一次（`chassis_task.c:58`），
+  它靠 static `CHASSIS.fdb.speed_vector` 控制环每帧刷新。所以桥的设计是
+  **Observer 每帧刷新 static 结构 + Publish 注册地址**，而不是每次调用重算。
+- 反解必须与各自 `ChassisConsole` 同系数：麦轮下发式乘 `direction`，反解要除掉
+  （±1 自逆）；全向轮下发式没有 direction 项，反解也不能有，且 wz 的符号与麦轮相反。
+- `UsbSendRobotMotionData` 的 `FDB_SPEED_VECTOR == NULL` 一次判死改为**惰性重订阅**：
+  底盘任务与 USB 任务的启动先后不再有隐含依赖（平衡底盘同样受益）。
+
+### 客户端行为（零改动即受益）
+
+`PolarMotionVerifier` 本来就优先吃 0x1E 实测速度做交叉校验；没打桥时自动退回
+0x0A 测速模块坐标的位移验证（能回答"车动没动"，回答不了"速度对不对"）。
+打完桥后无需重编译客户端。
 
 ---
 

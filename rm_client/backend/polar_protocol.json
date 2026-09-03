@@ -536,7 +536,7 @@
         "vy",
         "wz"
       ],
-      "availability": "⚠ 全向轮/麦轮 build 下 chassis_omni.c / chassis_mecanum.c 未实现 ChassisPublish()，落到 __weak 空实现 -> chassis_fdb_speed 从不 Publish -> 本段实际停发。只有平衡底盘 build 会发。客户端因此必须有 0x0A 位移兜底。",
+      "availability": "麦轮/全向轮 build 需要 tools/firmware/motion_feedback/ 速度回读桥（prepare_hero_build.py 会自动套）后才会发本段：反解实测轮速发布 chassis_fdb_speed。未打桥且非平衡底盘时本段停发，客户端必须有 0x0A 位移兜底。", "requires_firmware_patch": "tools/firmware/motion_feedback/",
       "outputs": [
         {
           "name": "vx_mps",

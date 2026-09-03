@@ -63,6 +63,8 @@ C_CHECKS = (
     # 会被后一个脚本的 finally 里 git checkout 静默撤销，造成“报 GO 但改动已没了”。
     ("tools/firmware/host_bridge/test_host_bridge.py",
      "自转桥接（0x04/0x1F）编译 + 行为断言"),
+    ("tools/firmware/motion_feedback/test_motion_feedback.py",
+     "速度回读桥（0x1E）编译 + 运动学往返断言"),
 )
 
 #: 前后端对齐审计（防倒退闸门）。

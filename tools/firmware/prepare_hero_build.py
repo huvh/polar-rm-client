@@ -38,6 +38,8 @@ RC_REL = "application/other/remote_control.c"
 # 自转桥接（上行 0x04 / 下行 0x1F），见 host_bridge/GAPS.md 第 1 节。
 HOST_BRIDGE_DIR = HERE / "host_bridge"
 HOST_BRIDGE_HEADER_REL = "application/typedef/host_chassis_bridge.h"
+# 速度回读桥（下行 0x1E 复活），见 motion_feedback 目录与 GAPS.md 第 4 节。
+MOTION_FEEDBACK_SCRIPT = HERE / "motion_feedback" / "apply_motion_feedback.py"
 MECA_REL = "application/chassis/chassis_mecanum.c"
 OMNI_REL = "application/chassis/chassis_omni.c"
 
@@ -170,6 +172,19 @@ def apply_patch(repo: Path, step: Step) -> bool:
         step.bad("自转桥接套用失败", ((res.stderr or res.stdout).strip()[-260:]))
         return False
     step.ok("自转桥接已装入（usb_task.c + 两个底盘文件 + 新头文件）")
+
+    # 底盘速度回读（下行 0x1E）。和桥接一起装：麦轮/全向轮的 ChassisPublish
+    # 本来是 __weak 空实现，0x1E 整段停发，客户端只能拿 0x0A 坐标做位移兜底。
+    if not MOTION_FEEDBACK_SCRIPT.exists():
+        step.bad("速度回读桥脚本不存在", str(MOTION_FEEDBACK_SCRIPT))
+        return False
+    res = subprocess.run(
+        [sys.executable, str(MOTION_FEEDBACK_SCRIPT), str(repo)],
+        capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if res.returncode != 0:
+        step.bad("速度回读桥套用失败", ((res.stderr or res.stdout).strip()[-260:]))
+        return False
+    step.ok("速度回读桥已装入（两个底盘文件 + usb_task.c 惰性订阅）")
     return True
 
 
@@ -228,6 +243,20 @@ def verify_changes(repo: Path, step: Step) -> bool:
          and meca.find("HOST_CHASSIS_BRIDGE_APPLY(&chassis);") >= 0),
         ("原有模式仲裁未被改动（遥控器仍是最终裁决者）",
          "switch_is_up(chassis.rc->rc.s[0])" in meca),
+    ]
+
+    # ---- 速度回读桥（下行 0x1E）----
+    # 少了这几项，客户端的"车是否响应"检测只能退回 0x0A 位移兜底。
+    checks += [
+        ("麦轮速度回读：强符号 ChassisPublish + 每帧刷新",
+         "void ChassisPublish(void)" in meca and "chassis_update_fdb_speed();" in meca),
+        ("全向轮速度回读：强符号 ChassisPublish + 每帧刷新",
+         "void ChassisPublish(void)" in omni and "chassis_update_fdb_speed();" in omni),
+        ("回读发布的是实测 feedback（不是指令 set）",
+         "chassis.feedback[0]" in meca and "chassis.feedback[0]" in omni
+         and "chassis.set[" not in meca.split("chassis_update_fdb_speed(void)")[1][:800]),
+        ("usb_task 对 0x1E 做了惰性重订阅（摆脱启动顺序）",
+         usb.count("Subscribe(CHASSIS_FDB_SPEED_NAME)") >= 2),
     ]
     for name, passed in checks:
         (step.ok if passed else step.bad)(name)
