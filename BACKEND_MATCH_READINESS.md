@@ -161,7 +161,7 @@
 | 无断流归零：`GetCmdData()` 每 1ms 无条件拷贝，`USB_OFFLINE` 分支不清数据 | `usb_task.c:282` / `:285-287` | 客户端崩溃或拔线后**机器人保持最后指令**（安全项，必须修） |
 | `GetScCmdChassisAngle` 只有声明无实现 | `supervisory_computer_cmd.h:29` | 谁调用谁链接失败 |
 | `GetScCmdFricOn` / `GetSCcmdtracking` 零调用者 | `usb_task.c:1333` / `:1343` | 摩擦轮与 tracking 无法由上位机驱动；且 `fire` 不隐含摩擦轮（`shoot_fric_trigger.c:100-116`），**只发 fire 不会开火** |
-| `ChassisPublish()` 仅平衡底盘实现 | `chassis_balance.c:122`；omni/mecanum 落回 `chassis_task.c:86` 空桩 | `0x1E RobotMotion` 回读恒空（`usb_task.c:1186-1188` 直接 return）。**客户端已改用 `0x0A` 测速模块坐标的位移做兜底验收**，因此缺 0x1E 不再等于“无法验证车是否动”，但补上 `ChassisPublish` 仍能让反馈更及时（2ms 控周期 vs 测速模块低频） |
+| `ChassisPublish()` 仅平衡底盘实现 | `chassis_balance.c:122`；omni/mecanum 落回 `chassis_task.c:86` 空桩 | `0x1E RobotMotion` 回读恒空（`usb_task.c:1186-1188` 直接 return）。**客户端已改用 `0x0A` 测速模块坐标的位移做兜底验收**，因此缺 0x1E 不再等于“无法验证车是否动”。**2026-09-03 更新：已可补**——`tools/firmware/motion_feedback/` 速度回读桥用实测轮速反解机体系速度（与下发式同系数，运动学往返已验证），`prepare_hero_build.py` 自动套；打完桥后反馈为 2ms 控周期实测速度，未打桥的固件仍走 0x0A 兜底 |
 | `UsbSendBuffData()` 漏填 `cooling_buff` | `usb_task.c:948-958` | 冷却增益数值不可信（客户端已只记录不驱动 HUD） |
 | `LATEST_RX_TIMESTAMP` 仅在下位机 `UsbInit` 清零，而 `RECEIVE_TIME` 只在帧 `time_stamp` 严格变大时刷新 | `usb_task.c:699-702` | 上位机时间戳回退会**永久判离线，重新插拔不恢复**。客户端已用 epoch 毫秒单调源规避，仍建议固件改为纯 `HAL_GetTick` 判活 |
 
@@ -207,7 +207,7 @@ python main.py --polar-selftest --polar-enable-drive --polar-confirm-motion
    改绑只改变“哪个物理键触发哪个协议槽”，**不改变上位机下发的槽位**，
    因此固件语义与驾驶键掩码都不受影响；绑定会随配置 save/load 存活，
    且有端到端断言看着（`tests/polar_startup_test.py::test_rebind_works_through_real_window_and_persists`）。
-6. 云台：勾 `Client Gimbal Control`；**视觉 NUC 自瞄在跑时请保持 `Vision NUC Occupied` 为开**，客户端会自动让位；若客户端发出角度而云台不收敛，会判为抢环并锁出（`GIM` 灭），需手动清除锁出。
+6. 云台：勾 `Client Gimbal Control`；英雄板需 `tools/firmware/gimbal_host/` 云台直控桥（打好后 s[0] 用**中间档**：底盘听自转指令、瞄准听上位机；没打桥仍是只能上档、且上档强制自转）；**视觉 NUC 自瞄在跑时请保持 `Vision NUC Occupied` 为开**，客户端会自动让位；若客户端发出角度而云台不收敛，会判为抢环并锁出（`GIM` 灭），需手动清除锁出。
 7. 按 W 试车：`MOT` 应在 1.2s 内变绿。若底行出现 `NO_MOTION` / `STUCK`，说明**固件底盘消费者未接线**（见上表）；若出现 `NO_FEEDBACK`，说明 `0x1E` 回读缺失，无法验证车辆响应。`NO_MOTION` 从第一帧就带原因文字，不会只给一个无信息量的黄字。
 8. `fire` 由客户端**恒置 0**（`encode_robot_cmd` 签名不暴露该参数，有不变量测试），开火权始终在驾驶员手上。
 9. 收工：F12 急停或直接关窗，客户端会先发归零突发帧再关闭端口。断线超过 2 秒链路自动判为不活跃并禁止驾驶。
