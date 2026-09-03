@@ -536,7 +536,8 @@
         "vy",
         "wz"
       ],
-      "availability": "麦轮/全向轮 build 需要 tools/firmware/motion_feedback/ 速度回读桥（prepare_hero_build.py 会自动套）后才会发本段：反解实测轮速发布 chassis_fdb_speed。未打桥且非平衡底盘时本段停发，客户端必须有 0x0A 位移兜底。", "requires_firmware_patch": "tools/firmware/motion_feedback/",
+      "availability": "麦轮/全向轮 build 需要 tools/firmware/motion_feedback/ 速度回读桥（prepare_hero_build.py 会自动套）后才会发本段：反解实测轮速发布 chassis_fdb_speed。未打桥且非平衡底盘时本段停发，客户端必须有 0x0A 位移兜底。",
+      "requires_firmware_patch": "tools/firmware/motion_feedback/",
       "outputs": [
         {
           "name": "vx_mps",
@@ -866,7 +867,7 @@
   },
   "firmware_build_switches": {
     "robot_param.h": "所有上场兵种共用同一个 Keil 工程，靠这一行的 #include 切换兵种。当前仓库里是 robot_param_omni_infantry.h（步兵）。烧英雄板必须改成 robot_param_mecannum_hero.h，否则会把全向轮运动学烧进麦轮车。",
-    "__RC_TYPE": "英雄板车上是 DT7 遥控器 + DR16 接收机（比赛时电脑用 USB 插 DT7），所以这里必须是 RC_DT7。三条硬理由：只有 18 字节 DT7 帧带键盘位与鼠标位移（remote_control.c:252-280 按帧长分派）；GetRcOffline() 在 DT7 下不看 sbus_lost_count，而该项初值就是超限、只有 25 字节路径会更新它（remote_control.c:95/:577），配成 RC_ET08A 跑 DT7 硬件会让车永远判\u201c遥控器离线\u201d（底盘保护 + 离线警报曲不停）；各家通道中值不同（DT7/ET08A=1024、AT9S=1000、HT8A=992）配错就摇杆中值偏移、车自己漂。由 prepare_hero_build.py --rc dt7|et08a|at9s|ht8a 管理（默认 dt7，仓库原始值记在行尾注释里，可反复切回）。键位自 2026-09-03 起改为记账合并：HOST_RC_DRIVER_KEYS | HOST_RC_HOST_KEYS，置零宏不再清 key.v，所以\u201c不能拿 key.v 非零当接管判据\u201d这条依然成立，真正该看的是 0x03 的 150ms 新鲜度。",
+    "__RC_TYPE": "英雄板车上是 DT7 遥控器 + DR16 接收机，所以这里写 RC_DT7（默认由 prepare_hero_build.py --rc dt7 管理，原始值记在行尾注释）。准确范围（2026-09-03 逐行核过，纠正早先写重的表述）：DT7 的 18 字节帧是按帧长分派、与本宏无关（remote_control.c:252 无条件进 sbus_to_rc），键位 bytes14-15 与鼠标 bytes6-13 照常解、中值用 DT7 的 1024 —— 所以“用遥控器键鼠开车”一直可用；本宏真正决定 25 字节帧交给哪家解码器（:264-280）以及 GetRcOffline() 要不要看 sbus_lost_count（:577）——非 DT7 时该项恒真，下游是板间广播 rc_offline 与平衡底盘的错误位（麦轮这里是 __weak 空实现、离线警报曲默认关）。**致命的是反向情形**：车上装 25 字节遥控器而本宏选错那一家，#if 链全不成立、整帧不解析、车完全不动。另外：客户端键位能不能和驾驶员共存与本宏无关，靠的是键位记账合并（HOST_RC_DRIVER_KEYS | HOST_RC_HOST_KEYS 写回 key.v；置零宏不再清 key.v，所以“不能拿 key.v 非零当接管判据”依然成立，要看 0x03 的 150ms 新鲜度）。",
     "__RC_TYPE_how_to_switch": "python tools/firmware/prepare_hero_build.py <固件树> --rc dt7  （幂等；配错的三大症状与验证记录见 tools/firmware/host_bridge/RC_LINKS.md 与 GAPS.md 第 9 节）",
     "__CONTROL_LINK_RC": "CL_RC_DIRECT 时只有 USART3(SBUS) 能写 rc_ctrl，虚拟遥控器到不了底盘"
   },

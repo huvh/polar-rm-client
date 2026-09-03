@@ -32,18 +32,26 @@
 烧英雄要改成 `#include "robot_param_mecannum_hero.h"`。**不改会把全向轮
 运动学烧进麦轮车，车会斜着走。**
 
-**2. 遥控器类型 `__RC_TYPE` 必须与车上接收机配套。** 
-仓库出厂写的是 `#define __RC_TYPE RC_ET08A`，而比赛链路是
-**电脑 USB 插 DT7 → 2.4G → 车上 DR16 接收机 → UART3 的 18 字节 SBUS**，
-所以必须是 `RC_DT7`。`prepare_hero_build.py` 默认就会改（`--rc dt7`），
-原始值记在行尾注释里，换遥控器重跑一次即可，不用手改宏。
-配错不是手感差一点，而是三条硬故障：
-① `GetRcOffline()` 恒为 true（`remote_control.c:577` 在 DT7 分支把 
-`sbus_lost_count` 项乘 0，而该项初值就是超限、只有 25 字节路径会更新它）
-→ 车永远判“遥控器离线”，底盘进保护、离线警报曲不停；
-② 18 字节帧只会进 `sbus_to_rc()`，配成 et08a 时驾驶员的 W/S/A/D 与鼠标**无人解析**；
-③ 各家通道中值不同（DT7/ET08A=1024、AT9S=1000、HT8A=992）→ 摇杆中值偏移、车自己漂。
+**2. `__RC_TYPE` 要和车上装的遥控器是同一家**（默认已改成 `RC_DT7`）。
+仓库出厂写的是 `#define __RC_TYPE RC_ET08A`，而车上是 DT7 + DR16，所以
+`prepare_hero_build.py` 默认会改成 `RC_DT7`（`--rc dt7|et08a|at9s|ht8a`），
+原始值记在行尾注释，来回切不丢。
+
+它**真正**管什么（2026-09-03 逐行核过，纠正前一版把后果写重的表述）：
+
+* DT7 的 18 字节帧跟这个宏**无关** —— `remote_control.c:252` 按帧长分派，
+  18 字节无条件进 `sbus_to_rc()`，键位/鼠标/中值照旧。**"用 DT7 键鼠开车"
+  这条一直能用，没坏过。**
+* 宏配成 et08a 的真实损失只有 `GetRcOffline()` 恒真，下游是板间广播
+  `rc_offline=1`（`communication.c:186`、`CAN_communication.c:75`）与
+  **平衡底盘**置 `DBUS_ERROR_OFFSET`（`chassis_balance.c:272`）；麦轮这里是
+  `__weak` 空实现、离线警报曲默认关（`music_task.c:38`），所以这台车看不太出来。
+* **致命的是反过来的情形**：车上是 25 字节遥控器（AT9S/HT8A/ET08A）而宏配错那一家
+  → `remote_control.c:264-280` 的 #if 链全不成立，那一帧一个字段都不解，**车完全不动**。
+* 而"客户端能不能开车"跟这个宏无关，靠的是键位记账合并（见下面第 5 节末尾）。
+
 四条链路的完整对照见 [`host_bridge/RC_LINKS.md`](host_bridge/RC_LINKS.md)。
+
 
 **3. 上电后必须把遥控器三位拨杆 `s[0]` 从下方拨到中间。**
 固件 `ChassisSetMode()` 在 `s[0]` 处于下方时直接进 `CHASSIS_LOCK`，

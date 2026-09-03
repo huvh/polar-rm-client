@@ -44,17 +44,26 @@ MOTION_FEEDBACK_SCRIPT = HERE / "motion_feedback" / "apply_motion_feedback.py"
 # 云台直控桥（0x04 param0 bit0），见 gimbal_host 目录与 GAPS.md 第 3 节。
 GIMBAL_HOST_SCRIPT = HERE / "gimbal_host" / "apply_gimbal_host.py"
 GIMBAL_REL = "application/gimbal/gimbal_yaw_pitch_direct.c"
-# 遥控器类型（__RC_TYPE）。比赛链路是"电脑 USB 插 DT7 -> 无线 -> 车上 DR16
-# 接收机 -> UART3 SBUS"，所以**默认必须是 RC_DT7**。
-# 为什么这是硬性要求（三处实测，见 host_bridge/RC_LINKS.md）：
-#   1) remote_control.c:252 只有 18 字节帧才解出键盘/鼠标位（DT7 帧长 18，
-#      AT9S/HT8A/ET08A 都是 25），配成非 DT7 时驾驶员的 W/S/A/D、鼠标全丢；
-#   2) remote_control.h:46/56 各家通道中值不同（DT7/ET08A=1024、AT9S=1000、
-#      HT8A=992），配错 = 摇杆中值偏移、车自己慢慢漂；
-#   3) remote_control.c:577 GetRcOffline() 里 `#if __RC_TYPE == RC_DT7` 会把
-#      sbus_lost_count 那一项**乘 0**，而 sbus_lost_count 初值是 15、只有 25
-#      字节路径才更新它 -> 用 ET08A 配置跑 DT7 硬件时该项恒真，车永远判"遥控器
-#      离线"（底盘锁定 + 云台不响应 + 离线警报曲一直放）。
+# 遥控器类型（__RC_TYPE）。比赛链路是"DT7 遥控器 <-> 车上 DR16 接收机"，默认写
+# RC_DT7 是为了让配置说实话。
+#
+# 准确的影响范围（2026-09-03 逐行核过；本仓库注释的早先版本在这里写重了，已更正）：
+#   * 18 字节 DT7 帧**与 __RC_TYPE 无关**：remote_control.c:252 是按"帧长"分派，
+#     18 字节无条件进 sbus_to_rc()，键位/鼠标照解、中值用 DT7 自己的
+#     RC_CH_VALUE_OFFSET=1024。所以"DT7 硬件 + ET08A 配置"这台车**照样能开**。
+#   * 这个宏真正决定两件小事：
+#       a) 25 字节帧交给哪家解码器（remote_control.c:264-280 的 #if 链）；
+#       b) GetRcOffline() 要不要看 sbus_lost_count（:577-587）。非 DT7 时那一项
+#          初值就是超限、且只有 25 字节路径会更新它 -> DT7 车上该判据恒真。
+#          后果范围：板间广播 rc_offline 恒 1（communication.c:186、
+#          CAN_communication.c:75）+ 平衡底盘会置 DBUS_ERROR_OFFSET
+#          （chassis_balance.c:272）；麦轮/全向轮这里是 chassis_task.c:98 的
+#          __weak 空实现，所以**不影响本车运动**；离线警报曲 music_task.c:38 的
+#          ENABLE_ALARM_RC_OFFLINE 默认 false，也不放。
+#   * **真正致命的是反向情形**：车上装 25 字节遥控器（AT9S/HT8A/ET08A）而宏配成
+#     dt7 或不匹配的那一家 -> #if 链全不成立，那一帧**一个字段都不解**，车不动。
+# 所以 --rc 的价值 = 让"车上装的是谁"和"固件写的是谁"对齐；而"客户端能不能叠在
+# 驾驶员上面开车"靠的是键位记账合并（host_bridge/RC_LINKS.md 第 3 节）。
 RC_TYPE_NAMES = {
     "dt7": "RC_DT7",
     "at9s": "RC_AT9S_PRO",
@@ -309,7 +318,7 @@ def verify_changes(repo: Path, step: Step, want_rc: str = 'dt7') -> bool:
 
     checks = [
         ("robot_param.h 指向英雄配置", HERO_INCLUDE in param),
-        ("__RC_TYPE 已切到与车上接收机配套的类型（配错三大症状见 RC_LINKS.md）",
+        ("__RC_TYPE 与车上装的遥控器是同一家（真实影响范围见 RC_LINKS.md 第 2 节）",
          RC_LINE_RE.search(param) is not None
          and RC_LINE_RE.search(param).group(1) == RC_TYPE_NAMES[want_rc]),
         ("改 __RC_TYPE 时没把下一行吞进注释（行尾换行完好）",
@@ -473,19 +482,23 @@ def compile_check(repo: Path, step: Step) -> None:
 CHECKLIST = """
 上车前必须知道的六件事
 ------------------------------------------------------------
-1. **遥控器类型必须和车上接收机配套**（这是本次适配的核心，配错=车不动）。
-   本脚本默认 `--rc dt7`：电脑 USB 插 DT7 发射模块，车上是 DR16 接收机，
-   走 18 字节 SBUS 帧。上游仓库出厂写的是 et08a，所以必须被改掉。
-   配错的症状（三条都是实测出来的，不是猜的）：
-     - DT7 硬件 + et08a 固件 -> GetRcOffline() 恒为 true（remote_control.c:579
-       那一支把 sbus_lost_count 项乘 0，而它初值就是"超限"），车判"遥控器一直
-       离线"：底盘不响应 + 离线警报曲不停；
-     - DT7 硬件 + et08a 固件 -> 18 字节帧只会被 sbus_to_rc() 解，走不到
-       Et08aSbusToRc()；反过来 25 字节遥控器配 dt7 也解不出来；
-     - 各家通道中值不同（DT7/ET08A=1024、AT9S=1000、HT8A=992），配错就是
-       摇杆中值偏移、车自己慢慢漂。
-   换遥控器：重跑 `prepare_hero_build.py <固件树> --rc et08a`（dt7/at9s/ht8a
-   同理），不用手工改 robot_param.h。
+1. **`__RC_TYPE` 要和车上装的遥控器是同一家**。本脚本默认 `--rc dt7`
+   （DT7 遥控器 + 车上 DR16），上游出厂写的是 et08a。
+   准确的影响（2026-09-03 逐行核过，别再用"配错就整车瘫痪"这种夸大版本）：
+     - DT7 的 18 字节帧**跟这个宏无关**：`remote_control.c:252` 按帧长分派，
+       18 字节无条件进 `sbus_to_rc()`，键位、鼠标、中值全都照常 ->
+       **你们以前拿 DT7 键鼠开车能开，这条从来没坏过**；
+     - 宏配成 et08a 时真实损失只有一项：`GetRcOffline()` 恒真
+       （`remote_control.c:577` 非 DT7 分支要看那个初值就超限、又只有
+       25 字节路径会更新的 `sbus_lost_count`）。后果是板间广播 `rc_offline`
+       恒 1（`communication.c:186`、`CAN_communication.c:75`）和**平衡底盘**
+       置 `DBUS_ERROR_OFFSET`（`chassis_balance.c:272`）；麦轮/全向轮这里是
+       `__weak` 空实现、离线警报曲默认关（`music_task.c:38`），所以这台英雄车
+       上你几乎看不出差别 —— 但别的板、或换平衡底盘就会出事；
+     - **真正"车完全不动"的是反向情形**：车上装 25 字节遥控器
+       （AT9S / HT8A / ET08A）而宏配成 dt7 或不匹配那一家 ->
+       `remote_control.c:264-280` 的 #if 链全不成立，那一帧一个字段都不解。
+   换遥控器就重跑 `prepare_hero_build.py <固件树> --rc et08a|at9s|ht8a`，别手改宏。
 2. **不插 USB 线也能用车上的遥控器开车**。比赛主链路是
    电脑 --USB--> DT7 --2.4G--> 车上 DR16 --SBUS--> C 板 UART3 -> rc_ctrl；
    DT7 的 18 字节帧本身就带键盘位和鼠标位移，驾驶员按 W/S/A/D 直接生效。

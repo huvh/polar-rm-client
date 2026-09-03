@@ -24,31 +24,29 @@
 | 超时 | 150ms 没收到 0x03 → 客户端那份账归零（`VRC_FRESH_TIMEOUT_MS`） | 100ms 没帧 → `receive_count` 断；`GetRcOffline()` 只看"有没有连续收到" | 连续 10 次 `connect_flag` 变化判失联 → `slove_RC_lost()` 重启 DMA | 上层用 `LastReceiveTime.Data_Rc` 判 |
 | 语义 | **叠加**，随时可撤 | **叠加**（打桥之后不再是覆盖） | **叠加**（驾驶员侧恒 0） | **覆盖**，会把①②③的结果一起冲掉 —— 与客户端驾驶**不可混用** |
 
-## 2. 为什么英雄板必须 `__RC_TYPE = RC_DT7`（配错的三大症状）
+## 2. `__RC_TYPE` 到底管什么（2026-09-03 逐行核过，纠正一版夸大表述）
 
-上游仓库出厂写的是 `RC_ET08A`。车上是 DR16 + DT7 配对，所以必须是 DT7。
-配错不是"手感差一点"，而是三条硬故障：
+上游出厂写 `RC_ET08A`，本脚本默认改成 `RC_DT7`。**但要知道它真正管什么**：
 
-1. **`GetRcOffline()` 恒为 true**（`remote_control.c:577-595`）。
-   `#if __RC_TYPE == RC_DT7` 把 `sbus_lost_count` 那一项乘 0；而
-   `sbus_lost_count` 初值就是 `SBUS_MAX_LOST_NUN + 5 = 15`（`:95`），
-   **只有 25 字节那条路径会更新它**。用 ET08A 配置跑 DT7 硬件 ⇒ 该项永远超限
-   ⇒ 车判定"遥控器一直离线"：`communication.c:186`、`CAN_communication.c:75`、
-   `chassis_balance.c:272`、`music_task.c:194` 全都吃这个判据（底盘保护 +
-   离线警报曲一直放）。
-2. **键位与鼠标全丢**。18 字节帧只会进 `sbus_to_rc()`；`Et08aSbusToRc()` 只在
-   25 字节分支被调用。反过来给 DT7 配 et08a，驾驶员按 W/S/A/D、动鼠标都没人解。
-3. **通道中值不对 ⇒ 车自己漂**。DT7/ET08A 中值 1024、AT9S PRO 1000、HT8A 992
-   （`remote_control.h:51/56/63/78`）。配错就是摇杆中值偏移几十字。
+| 说法 | 判定 | 依据 |
+|---|---|---|
+| "DT7 硬件配 et08a，驾驶员键位/鼠标就丢了" | **错** | `remote_control.c:252` 是按**帧长**分派：18 字节无条件进 `sbus_to_rc()`，键位 bytes14-15、鼠标 bytes6-13 照解，中值用 DT7 自己的 `RC_CH_VALUE_OFFSET=1024`。**你们以前用 DT7 键鼠开车能开，这条从来没坏过。** |
+| "配错就摇杆中值偏移、车自己漂" | **错（对 DT7 车不成立）** | 那几家中值只在**25 字节解码器**里用到；DT7 帧走的是 `sbus_to_rc()`，与 `__RC_TYPE` 无关 |
+| "配错就车判离线、底盘锁死、警报曲一直响" | **半对，但被说重了** | `GetRcOffline()` 确实恒真（`:577` 非 DT7 分支要看初值即超限、又只有 25 字节路径更新的 `sbus_lost_count`）；可它的下游只有：板间广播 `rc_offline=1`（`communication.c:186`、`CAN_communication.c:75`）、**平衡底盘**置 `DBUS_ERROR_OFFSET`（`chassis_balance.c:272`）。麦轮/全向轮这里走 `chassis_task.c:98` 的 `__weak` 空实现，**不影响本车运动**；离线警报曲默认关（`music_task.c:38` `ENABLE_ALARM_RC_OFFLINE=false`） |
+| "车上是 25 字节遥控器时，`__RC_TYPE` 必须选对那一家" | **对，而且这才是致命的** | `remote_control.c:264-280` 的 `#if` 链选不中 -> 那一帧**一个字段都不解**，摇杆键位全丢，车完全不动 |
 
-切换（不要手改宏，重跑准备脚本即可，原始值会记在行尾注释里）：
+所以切 DT7 的意义是：① 让 `GetRcOffline()` 与板间广播恢复正确语义（别的板、换平衡底盘时不会拿到一个恒 1 的离线标志）；② 让配置说实话。
+**"客户端也能叠在驾驶员上面开车"这件事不靠这个宏**，靠的是 §3 的键位记账合并 —— DT7 的 `key.v` 是整字段覆盖，旧的 `|=` 写法在 DT7 车上每帧都被抹掉，那才是客户端控不了车的真正原因。
+
+切换（原始值记在行尾注释里，可反复来回切）：
 
 ```
-python tools/firmware/prepare_hero_build.py <固件树> --rc dt7      # 默认，比赛用
-python tools/firmware/prepare_hero_build.py <固件树> --rc et08a    # 换回上游那种
+python tools/firmware/prepare_hero_build.py <固件树> --rc dt7      # 默认，对应 DT7/DR16
+python tools/firmware/prepare_hero_build.py <固件树> --rc et08a    # 车上换成 ET08A 时用
 ```
 
-两种取值都用 ARMCC 5.06 全量编过：162 个编译单元 0 error 0 warning。
+dt7 与 et08a 两种取值都用 ARMCC 5.06 全量编过：162 个编译单元 0 error 0 warning。
+
 
 ## 3. 键位账本：三个写入者，一本账一个（本次适配的核心）
 

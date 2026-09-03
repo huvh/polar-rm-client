@@ -407,41 +407,46 @@ DFP pack 不装会重写掉 `RTE_Components.h` 里的 `CMSIS_device_header`）�
 
 ## 9. 已补好的：遥控器类型（DT7/DR16）与键位三方写入者
 
-> 这一节是**上场比赛配置**相关的最要紧一条：客户端驾驶与遥控器驾驶能不能同时存在，
-> 全看这里。详细链路表见 `RC_LINKS.md`。
+> 这一节是比赛链路相关最要紧的一条。详细链路表见 `RC_LINKS.md`。
+> **注意**：本节早先一版把 `__RC_TYPE` 的后果写重了（"底盘锁死 + 警报曲不停"），
+> 2026-09-03 逐行核过之后已在下面更正 —— 结论是"键鼠开车本来就能用，
+> 客户端叠加这条路本来不通"。
 
-### 现象（改之前会有的四种表现）
+### 现象（改之前真实存在的缺陷）
 
-1. 英雄板出厂配置 `__RC_TYPE = RC_ET08A`，但车上是 **DT7 遥控器 + DR16 接收机**
-   （比赛时电脑 USB 插 DT7，无线进车）。
-2. 用 ET08A 配置跑 DT7 硬件时，`GetRcOffline()` **恒为 true**：车判"遥控器一直离线"，
-   底盘进保护、`music_rc_offline` 警报曲不停。
-3. 18 字节 DT7 帧根本不会调用 `Et08aSbusToRc()`，所以那套配置下驾驶员的
-   W/S/A/D、SHIFT、鼠标**全部无人解析**。
-4. 客户端用 `rc_ctrl.key.v |= drive_keys` 叠键位：在无键盘遥控器上
-   **一松键就粘住（车刹不住）**；在 DT7 上又被 `key.v =` 整帧抹掉，
-   于是 SHIFT 边沿检测乱翻转（小陀螺自己开关）。
+1. 客户端驾驶键位在 DT7 车上**每帧被抹掉**：`remote_control.c:382` 是
+   `key.v = sbus_buf[14] | (sbus_buf[15] << 8)` 整字段覆盖，而 `usb_task.c`
+   里是 `key.v |= drive_keys` 只置位 —— 两者抢同一个字段。
+2. 换到无键盘遥控器（ET08A 等）时反过来出事：没人清 `key.v`，
+   客户端**一松键位就永久粘住，车刹不住**；当年靠置零宏每帧清 0 掩盖，
+   又与 `|=` 形成 merge-vs-clear 竞态（车速按帧率抖动）。
+3. `chassis_mecanum.c` 的 SHIFT 是边沿检测：键位"抹一下补一下"会让
+   `shift_pressed` 反复翻转 —— 小陀螺开关自己乱跳。
+4. `__RC_TYPE` 出厂是 `RC_ET08A`，车上是 DT7+DR16 —— 配置在说谎，并且
+   `GetRcOffline()` 恒真（后果范围见 `RC_LINKS.md` 第 2 节的更正表：
+   板间广播 `rc_offline` 恒 1、平衡底盘会置错误位；麦轮本车运动不受影响）。
 
 ### 根因（都核到行号）
 
 | 事实 | 位置 |
 |---|---|
-| 18 字节帧无条件进 `sbus_to_rc()`；25 字节才按 `__RC_TYPE` 分派 | `remote_control.c:252-280` |
-| DT7 解出鼠标与键盘位，且 `key.v` 是**整字段覆盖** | `remote_control.c:377-382` |
-| ET08A/AT9S/HT8A 解码只写 `ch[0..3]` 与 `s[0]/s[1]`，鼠标被置零、`key.v` 不写 | `remote_control.c:508-530` + `SPECIAL_CHANNEL_SET_SERO()` |
-| `#if __RC_TYPE == RC_DT7` 把 `sbus_lost_count` 项乘 0，而它初值=超限、只有 25 字节路径更新 | `remote_control.c:95 / :577-595` |
-| 四家通道中值不同：DT7/ET08A=1024、AT9S=1000、HT8A=992 | `remote_control.h:51/56/63/78` |
+| SBUS 按**帧长**分派：18 字节无条件进 `sbus_to_rc()` | `remote_control.c:252-263` |
+| DT7 解出鼠标与键位，且 `key.v` 是**整字段覆盖** | `remote_control.c:377-382` |
+| 25 字节才按 `__RC_TYPE` 选解码器；选不中 = 整帧不解析 | `remote_control.c:264-280` |
+| 非 DT7 解码器不写 `key.v`，还把鼠标置零 | `remote_control.c:508-530` + `SPECIAL_CHANNEL_SET_SERO()` |
+| `#if __RC_TYPE == RC_DT7` 决定 `GetRcOffline()` 看不看 `sbus_lost_count`；后者初值即超限、只有 25 字节路径更新 | `remote_control.c:95 / :577-595` |
+| 离线判据的下游范围（麦轮不锁、警报曲默认关） | `communication.c:186`、`CAN_communication.c:75`、`chassis_balance.c:272`、`chassis_task.c:98`、`music_task.c:38` |
 
-### 补法（已实现，`--rc` 一个开关 + 键位账本）
+### 补法（已实现）
 
-1. **`prepare_hero_build.py --rc dt7|et08a|at9s|ht8a`，默认 `dt7`。**
-   脚本改 `robot_param.h` 那一行，并把**原始值记在行尾注释**里，反复切换不丢；
-   回切：`--rc et08a` 或 `git checkout -- application/robot_param.h`。
+1. **`prepare_hero_build.py --rc dt7|et08a|at9s|ht8a`，默认 `dt7`**：只改
+   `robot_param.h` 那一行，仓库原始值记在行尾注释，可反复来回切。
 2. **键位账本**（`host_chassis_bridge.h` + `apply_host_bridge.py` 三处改写）：
-   `HOST_RC_DRIVER_KEYS`（SBUS 侧写）与 `HOST_RC_HOST_KEYS`（usb_task 写）各记一本账，
-   两个写入者都只通过 `HOST_RC_MERGED_KEYS()` 把并集写进 `key.v`。
-   非 DT7 解码器的置零宏把驾驶员侧记为 0，于是"换遥控器不残留"也成立。
-   这样同时消掉上面第 4 条的两个相反缺陷。
+   `HOST_RC_DRIVER_KEYS`（SBUS 侧写；非 DT7 恒 0）与 `HOST_RC_HOST_KEYS`
+   （usb_task 写，含 150ms 新鲜度门控），两个写入者都只通过
+   `HOST_RC_MERGED_KEYS()` 把并集写回 `key.v`。
+   ⇒ 驾驶员与客户端键位**并存**、谁撤谁归零、换遥控器不残留，三个缺陷一次消掉。
+
 
 ### 验证等级
 
