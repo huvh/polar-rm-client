@@ -160,6 +160,8 @@ Lite 档。整包解压是 3.1GB，没必要 —— 拿这 16 个文件就够跑
 & "D:\LocalAppData\Keil_v5\UV4\UV4.exe" -b "<repo>\MDK-ARM\standard_robot.uvprojx" -j0 -o build_log.txt
 ```
 
+本目录留了两份原始日志：`uvision_build_log_full.txt`（首次全量）与 `uvision_build_log_withpack.txt`（装好 DFP 之后）。都是 `UV4 -b ... -j0 -o` 直接产出的。
+
 uVision 5.43.1.0 全量编译实测（37 秒）：
 
 ```

@@ -91,11 +91,12 @@ if (Test-Path $DfpPack) {
     $dst = Join-Path $packs 'Keil\STM32F4xx_DFP\2.17.1'
     if (-not (Test-Path (Join-Path $dst 'Keil.STM32F4xx_DFP.pdsc'))) {
         L "步骤3: 解包 DFP -> $dst"
-        try {
-            Add-Type -AssemblyName System.IO.Compression.FileSystem
-            [IO.Compression.ZipFile]::ExtractToDirectory($DfpPack, $dst)
-            L ("  DFP pdsc: " + (Test-Path (Join-Path $dst 'Keil.STM32F4xx_DFP.pdsc')))
-        } catch { L "  解包失败：$($_.Exception.Message)（也可以跑 PackInstaller 或界面上 Install）" }
+        # 实测 PackInstaller.exe -i ... -a --skip-touch 返回 2（不认这组参数），
+        # UV4 -f 会弹窗口挂住；而 .pack 本身就是 zip，直接解到 RTEPATH 下 uVision 就认。
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        [IO.Compression.ZipFile]::ExtractToDirectory($DfpPack, $dst)
+        L ("  DFP pdsc: " + (Test-Path (Join-Path $dst 'Keil.STM32F4xx_DFP.pdsc')))
+        L '  注：装了 pack 之后 uVision 重写 RTE_Components.h 才会保留 CMSIS_device_header'
     } else { L '步骤3: DFP 已存在' }
 } else { L "步骤3 WARN: 没找到 $DfpPack" }
 L '=== 完成。编译： ==='
