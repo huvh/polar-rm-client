@@ -158,6 +158,38 @@ extern volatile uint8_t HOST_SPIN_STATE;      /* chassis_* 写，usb_task 读 */
 extern volatile uint8_t HOST_CHASSIS_MODE;    /* chassis_* 写，usb_task 读 */
 extern volatile uint8_t HOST_CHASSIS_SC_FLAG; /* chassis_* 写，usb_task 读 */
 
+/*--------------------------- 键位合并（驾驶键） ---------------------------*/
+/*
+ * 同一份 rc_ctrl.key.v 有三个潜在写入者，必须显式记账，否则会踩两个相反的坑：
+ *
+ *   1) 非 DT7 遥控器（ET08A / AT9S / HT8A）：SBUS 帧里没有键位字段
+ *      （remote_control.c:508-530 的解码只落 ch/s），所以 key.v 只有客户端写。
+ *      原来用 `rc_ctrl.key.v |= drive_keys`（只置位不清位）-> **客户端一松键，
+ *      那几位永远留着，车一直往前跑**。以前是靠每帧 SPECIAL_CHANNEL_SET_SERO()
+ *      清 key.v 掩盖住的，可那样又与 |= 形成 merge-vs-clear 竞态（键位按帧率抖动）。
+ *
+ *   2) DT7（18 字节帧）：remote_control.c:382 每帧 `key.v = sbus_buf[14..15]`
+ *      **整字段覆盖**，客户端刚置的驾驶键位下一帧就被抹掉；而
+ *      chassis_mecanum.c:216 的 SHIFT 是边沿检测，抹一下补一下会让
+ *      shift_pressed 反复翻转，小陀螺开关跟着乱跳。
+ *
+ * 统一办法：两个写入者各记自己的账，谁写都把"合并后的值"写回去：
+ *      key.v = 驾驶员键位 | 客户端键位（后者已含 150ms 新鲜度门控）
+ *   - 驾驶员松手：下一帧 SBUS 自然带 0；
+ *   - 客户端松手/掉线：usb_task 1ms 一轮，很快把 HOST_RC_HOST_KEYS 写成 0；
+ *   - 两边同时按：或起来，仍是"叠加而非接管"。
+ *
+ * 掩码只有 W/S/A/D/SHIFT（bit0-4）。Q/E 是摩擦轮、F 是 sc_flag，
+ * 开火/换弹相关动作刻意不从客户端来。
+ */
+#define HOST_RC_DRIVE_KEY_MASK ((uint16_t)0x001F)
+
+extern volatile uint16_t HOST_RC_DRIVER_KEYS; /* SBUS 解码写；无键盘遥控器恒 0 */
+extern volatile uint16_t HOST_RC_HOST_KEYS;   /* usb_task 写：新鲜度+掩码之后的客户端键位 */
+
+/* 唯一的 key.v 写入表达式：两个写入者都用它，避免"谁覆盖谁" */
+#define HOST_RC_MERGED_KEYS() ((uint16_t)(HOST_RC_DRIVER_KEYS | HOST_RC_HOST_KEYS))
+
 /**
  * @brief 底盘侧统一入口：消费上位机自转指令 + 回填状态
  *

@@ -160,7 +160,9 @@ Lite 档。整包解压是 3.1GB，没必要 —— 拿这 16 个文件就够跑
 & "D:\LocalAppData\Keil_v5\UV4\UV4.exe" -b "<repo>\MDK-ARM\standard_robot.uvprojx" -j0 -o build_log.txt
 ```
 
-本目录留了两份原始日志：`uvision_build_log_full.txt`（首次全量）与 `uvision_build_log_withpack.txt`（装好 DFP 之后）。都是 `UV4 -b ... -j0 -o` 直接产出的。
+本目录留了三份原始日志，都是 `UV4 -b ... -j0 -o` 直接产出的：
+`uvision_build_log_full.txt`（首次全量）、`uvision_build_log_withpack.txt`（装好 DFP 之后）、
+`uvision_build_log_dt7.txt`（**DT7 适配之后**的复测，见下面第 8 节）。
 
 uVision 5.43.1.0 全量编译实测（37 秒）：
 
@@ -180,3 +182,26 @@ Target not created.
 唯一拦下的是 MDK-Lite 的 32KB 链接上限**。想产出 `.axf/.hex`，只需要一份能过
 32KB 的 MDK 授权（File -> License Management 挂上队里/学校的 `.ulf`），
 不需要改任何代码。
+
+---
+
+## 8. DT7（比赛链路）适配后的复测（2026-09-03 晚）
+
+改动：`__RC_TYPE` 由 `RC_ET08A` 切到 `RC_DT7`（`prepare_hero_build.py --rc dt7`），
+外加"驾驶键位记账合并"（`HOST_RC_DRIVER_KEYS | HOST_RC_HOST_KEYS` 写回 `key.v`，
+三处落点见 `../host_bridge/RC_LINKS.md` §3）。
+
+| 工具链 | 命令 | 结果 |
+|---|---|---|
+| ARMCC 5.06 命令行 | `armcc_check.py <树> --mode all --objdir D:\rmbuild\armcc_dt7b` | 162/162 单元 0 error 0 warning；`armlink --partial` rc=0、未定义符号 0；完整链接只差授权：`L6050U`（镜像 109100 字节 > 32768） |
+| 同一套代码换回 et08a | `prepare_hero_build.py <树> --rc et08a` + `--mode compile` | 162/162 通过 —— 两种遥控器配置都能编 |
+| uVision 5.43.1 IDE | `UV4 -b standard_robot.uvprojx -j0 -o ...` | `Using Compiler 'V5.06 update 7 (build 960)'` → 全部 .c/.s 编译通过、**0 Warning(s)** → `L6050U: ... (139824 bytes)` → `1 Error(s), 0 Warning(s)` |
+
+结论没变，只是更硬了：**代码本身在真工具链下干净，挡路的只有 MDK-Lite 的 32KB 授权上限。**
+出 hex 需要一份能过 32KB 的正式授权（不能改用 GCC 绕：`AHRS.lib` 与
+`arm_cortexM4lf_math.lib` 是 ARM armar 格式，GNU ld 读不了）。
+
+uVision 每次 Build 会重写 `MDK-ARM/RTE/_standard_robot/RTE_Components.h` 并生成
+`MDK-ARM/standard_tpye_c/`（约 246MB）与 `MDK-ARM/RTE/Device/`，三者都不在 .gitignore 里；
+跑完务必 `git checkout --` 前者、删掉后两者，否则工作树会被 200 多兆的构建产物污染。
+`RTE/Device` 里的 `.dbgconf.base@0.0.0` 是只读文件，删除要先 `chmod S_IWRITE`。

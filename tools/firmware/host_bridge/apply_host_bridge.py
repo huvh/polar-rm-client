@@ -41,6 +41,10 @@ from pathlib import Path
 MARK = "POLAR-HOST-BRIDGE"
 HEADER_NAME = "host_chassis_bridge.h"
 HERE = Path(__file__).resolve().parent
+# 键位记账要改写的那段合并代码由同级驾驶补丁引入。单独跑本脚本（测试自己
+# bootstrap、或手工准备工程）时必须先把它补上，否则会撞"锚点未找到"。
+DRIVE_KEYS_PATCH = HERE.parent / "polar-virtual-rc-drive-keys.patch"
+USB_REL = "application/communication/usb_task.c"
 
 # ---------------------------------------------------------------------------
 # usb_task.c 的改动点
@@ -197,6 +201,53 @@ def _sub_once(text: str, pattern: str, replacement: str, what: str, log: list) -
     return new
 
 
+def _replace_once(text: str, pattern: str, replacement: str, what: str, log: list) -> str:
+    """把 pattern 匹配到的那一行**整体替换**为 replacement；已替换过则跳过。
+
+    与 _sub_once 的区别很关键：`rc_ctrl.key.v |= drive_keys;` 这种"旧写法"必须
+    被删掉而不是留在原地。否则旧行先 |= 置位、新行再写合并值，虽然最终结果
+    正确，但 |= 那行会一直掩盖"松键粘住"这个真实缺陷（verify_changes 也查不出
+    补丁到底生效了没有）。
+    """
+    probe = _probe(replacement)
+    if any(line.strip() == probe for line in text.splitlines()):
+        log.append(f"  [skip] {what}（已存在）")
+        return text
+    new, n = re.subn(pattern, lambda m: replacement, text, count=1)
+    if n == 0:
+        raise RuntimeError(f"锚点未找到：{what}（探针={probe!r}）")
+    log.append(f"  [ok]   {what}")
+    return new
+
+
+def ensure_drive_keys_patch(root: Path, log: list) -> None:
+    """保证 usb_task.c 里已有 UsbMergeVirtualRcKeys()（驾驶补丁的产物）。
+
+    为什么在这里自动补而不是让调用方负责：本脚本的键位那三步
+    （替换 `|=`、DT7 记账、置零宏清账）都是**改写**补丁带来的代码。少了前置
+    补丁就只有锚点可寻，实测会让所有单独跑本脚本的测试整片报"锚点未找到"。
+    自动补一次，调用顺序就不再是坑。
+    """
+    usb = root / USB_REL
+    if not usb.exists():
+        log.append(f"  [skip] 找不到 {USB_REL}，不自动补驾驶补丁")
+        return
+    if "UsbMergeVirtualRcKeys" in usb.read_text(encoding="utf-8", errors="surrogateescape"):
+        log.append("  [ok]   驾驶补丁（0x03 键位合并）已在树里")
+        return
+    if not DRIVE_KEYS_PATCH.exists():
+        raise RuntimeError(
+            f"缺少驾驶补丁，且 usb_task.c 里没有 UsbMergeVirtualRcKeys：{DRIVE_KEYS_PATCH}")
+    res = subprocess.run(["git", "apply", str(DRIVE_KEYS_PATCH)],
+                         cwd=root, capture_output=True, text=True,
+                         encoding="utf-8", errors="replace")
+    if res.returncode != 0:
+        raise RuntimeError(
+            "自动套用驾驶补丁失败（HEAD 可能不是基线 2722e0d）："
+            + (res.stderr or res.stdout).strip()[:200])
+    log.append("  [ok]   自动套用驾驶补丁 polar-virtual-rc-drive-keys.patch")
+
+
 def apply_usb_task(path: Path, log: list) -> str:
     text = path.read_text(encoding="utf-8", errors="surrogateescape")
     original = text
@@ -234,6 +285,13 @@ def apply_usb_task(path: Path, log: list) -> str:
         r'memset\(&RECEIVE_VIRTUAL_RC_DATA,\s*0,\s*sizeof\(ReceiveDataVirtualRc_s\)\)\s*;\s*\n',
         USB_MEMSET,
         "usb_task.c: UsbInit 清零新缓冲",
+        log,
+    )
+    text = _sub_once(
+        text,
+        r'volatile\s+uint8_t\s+HOST_CHASSIS_SC_FLAG\s*=\s*0;\s*\n',
+        RC_GLOBALS,
+        "usb_task.c: 定义驾驶键位记账量",
         log,
     )
     text = _sub_once(
@@ -278,7 +336,85 @@ def apply_usb_task(path: Path, log: list) -> str:
         "usb_task.c: 新增 GetChassisCmdData()",
         log,
     )
+    text = _replace_once(
+        text,
+        r'[ \t]*rc_ctrl\.key\.v \|= drive_keys;[ \t]*\n',
+        RC_USB_TASK,
+        "usb_task.c: 驾驶键位改为记账合并（修松键粘住）",
+        log,
+    )
     return original if text == original else text
+
+
+# ---------------------------------------------------------------------------
+# 键位记账（DT7 整帧覆盖 / 客户端松键粘住 两个坑的统一解法）
+# ---------------------------------------------------------------------------
+
+RC_GLOBALS = f"""
+/* {MARK}: 驾驶键位的两个记账量。定义仍放 usb_task.c，与上面那组全局量同处，
+ * 但**写入者是两处**：HOST_RC_DRIVER_KEYS 由 remote_control.c 的 DT7 解码写，
+ * HOST_RC_HOST_KEYS 由本文件的 UsbMergeVirtualRcKeys 写；两边都只通过
+ * HOST_RC_MERGED_KEYS() 往 key.v 里写最终值。 */
+volatile uint16_t HOST_RC_DRIVER_KEYS = 0;  /* {MARK} */
+volatile uint16_t HOST_RC_HOST_KEYS = 0;    /* {MARK} */
+"""
+
+RC_USB_TASK = f"""    /* {MARK}: 不是 `|=` 而是"记账 + 写合并值"。
+     * 纯 |= 在无键盘遥控器（ET08A 等）上有个致命问题：没人负责清零，
+     * 客户端按下 W 之后即使松手、即使 0x03 已过期，那一位也一直留在
+     * rc_ctrl.key.v 里 -> 车踩不住刹车。改成写合并值以后，本函数每 1ms
+     * 跑一轮，过期即 drive_keys=0，key.v 立刻回到"只有驾驶员键位"。 */
+    HOST_RC_HOST_KEYS = drive_keys;
+    rc_ctrl.key.v = HOST_RC_MERGED_KEYS();
+"""
+
+RC_DT7_CAPTURE = f"""    /* {MARK}: DT7 上面那行是对 key.v 的**整字段覆盖**（键位来自 SBUS 字节 14-15），
+     * 直接保留它会让 usb_task 注入的客户端驾驶键位在下一帧被抹掉，而
+     * chassis_mecanum.c 的 SHIFT 是边沿检测 -> 抹一下补一下会让 shift_pressed
+     * 反复翻转，小陀螺开关跟着乱跳。所以这里把"驾驶员键位"记到账上，
+     * 再由合并宏写出最终值（驾驶员 | 客户端，双方都不丢）。 */
+    HOST_RC_DRIVER_KEYS = rc_ctrl->key.v;
+    rc_ctrl->key.v = HOST_RC_MERGED_KEYS();
+"""
+
+RC_INCLUDE = f"""#include "host_chassis_bridge.h"  /* {MARK}: DT7 键位要与上位机键位合并 */
+"""
+
+RC_NOKEY_CLEAR = f"""    HOST_RC_DRIVER_KEYS = 0;   /* {MARK}: 本帧来自无键盘遥控器，驾驶员侧无键位 */\\
+"""
+
+
+def apply_remote_control(path: Path, log: list) -> str:
+    """remote_control.c：DT7 解码处记账；顺带 include 桥接头文件。"""
+    text = path.read_text(encoding="utf-8", errors="surrogateescape")
+    original = text
+
+    text = _sub_once(
+        text,
+        r'#include\s+"communication\.h"\s*\n',
+        RC_INCLUDE,
+        "remote_control.c: include 桥接头文件",
+        log,
+    )
+    text = _sub_once(
+        text,
+        r'rc_ctrl->key\.v = sbus_buf\[14\] \| \(sbus_buf\[15\] << 8\);\s*//[^\n]*\n',
+        RC_DT7_CAPTURE,
+        "remote_control.c: DT7 键位记账并写合并值",
+        log,
+    )
+    # 无键盘遥控器（ET08A / AT9S / HT8A）：驾驶员侧键位恒 0，必须显式记这笔账。
+    # 不写这一行的话，一旦车上先收到过 DT7 的 18 字节帧、之后换成了 25 字节帧，
+    # HOST_RC_DRIVER_KEYS 会永远停在 DT7 最后一帧的按键上（车刹不住）。
+    text = _sub_once(
+        text,
+        r'rc_ctrl->mouse\.press_r = 0;[ \t]*\\\n',
+        RC_NOKEY_CLEAR,
+        "remote_control.c: 无键盘遥控器清驾驶键账目",
+        log,
+    )
+    return original if text == original else text
+
 
 
 def apply_chassis(path: Path, header_anchor: str, log: list) -> str:
@@ -327,12 +463,25 @@ def main(argv: list[str] | None = None) -> int:
 
     log: list[str] = []
     print(f"固件树：{root}")
+    try:
+        ensure_drive_keys_patch(root, log)
+    except RuntimeError as exc:
+        print(f"[FAIL] {exc}")
+        return 2
 
+    rcrel = root / "application" / "other" / "remote_control.c"
     changed: list[tuple[Path, str]] = []
 
     new_usb = apply_usb_task(usb, log)
     if new_usb != usb.read_text(encoding="utf-8", errors="surrogateescape"):
         changed.append((usb, new_usb))
+
+    if rcrel.exists():
+        new_rc = apply_remote_control(rcrel, log)
+        if new_rc != rcrel.read_text(encoding="utf-8", errors="surrogateescape"):
+            changed.append((rcrel, new_rc))
+    else:
+        log.append(f"  [skip] remote_control.c（不存在，跳过键位合并）")
 
     for chassis_path, anchor in ((meca, "chassis_mecanum.h"), (omni, "chassis_omni.h")):
         if not chassis_path.exists():

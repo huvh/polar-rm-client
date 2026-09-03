@@ -48,13 +48,15 @@ python tools/firmware/host_bridge/test_host_bridge.py
 
 客户端原来唯一的手段是借用虚拟遥控器（上行 0x03）里的 SHIFT 键位。而固件对 SHIFT 是**边沿翻转**，不是电平：
 
+（下表行号按**打完桥之后**的树；未打桥时麦轮早 11 行、全向轮早 13 行。）
+
 | 位置 | 行为 |
 |---|---|
-| `chassis_mecanum.c:177-183` | FOLLOW 模式下，按下沿 → `spin_flag = 1` |
-| `chassis_mecanum.c:223-229` | SPIN 模式下，按下沿 → `spin_flag = 0` |
-| `chassis_mecanum.c:187` | **松手 → 只重置 `shift_pressed`，不动 `spin_flag`** |
-| `chassis_omni.c:96-106` | 按下沿 → `spin_flag` 取反 |
-| `chassis_omni.c:107` | 松手 → 只记电平，不动 `spin_flag` |
+| `chassis_mecanum.c:218-221` | FOLLOW 模式下，按下沿 → `spin_flag = 1` |
+| `chassis_mecanum.c:264-267` | SPIN 模式下，按下沿 → `spin_flag = 0` |
+| `chassis_mecanum.c:226 / :272` | **松手 → 只重置 `shift_pressed`，不动 `spin_flag`** |
+| `chassis_omni.c:109-118` | 按下沿 → `spin_flag` 取反 |
+| `chassis_omni.c:120` | 松手 → 只记电平（`shift_flag`），不动 `spin_flag` |
 
 所以客户端"松手"永远关不掉自转；下次再"按下"时车已在 SPIN 模式，走的是 `:223` 那条 → 关掉。
 
@@ -87,17 +89,18 @@ HOST_CHASSIS_BRIDGE_APPLY(&chassis);
 
 ### ⚠ 英雄板专属陷阱（已验证）
 
-`chassis_mecanum.c:82-105` 的 `s[0]` 拨杆仲裁：
+`chassis_mecanum.c:96-118` 的 `s[0]` 拨杆仲裁（行号按打完桥之后的树）：
 
 | 拨杆位置 | 结果 |
 |---|---|
-| 下方 | `CHASSIS_LOCK`（`:86`）——**完全不读 spin_flag**，上位机指令毫无反应 |
-| 中间 | `spin_flag ? CHASSIS_SPIN : CHASSIS_FOLLOW`（`:90-97`）——**只有这一档上位机说话算数** |
-| 上方 | 无条件 `CHASSIS_SPIN`（`:102`）——**强制常转**，与 spin_flag 无关 |
+| 下方 | `CHASSIS_LOCK`（`:97-99`）——**完全不读 spin_flag**，上位机指令毫无反应 |
+| 中间 | `spin_flag ? CHASSIS_SPIN : CHASSIS_FOLLOW`（`:101-112`）——**只有这一档上位机说话算数** |
+| 上方 | 无条件 `CHASSIS_SPIN`（`:113`）——**强制常转**，与 spin_flag 无关 |
 
 **所以烧完英雄板必须把 `s[0]` 拨到中间。** 拨上方车会一直转（看起来像"指令生效了"，其实是固件强制的），拨下方车完全不动（看起来像"补丁没打上"）。两种都会误导排查。
 
-全向轮步兵的仲裁不同（`chassis_omni.c:86-118`）：上方是 `CHASSIS_FOLLOW`，中间才处理 SHIFT。
+全向轮步兵的仲裁不同（`chassis_omni.c:101-130`）：上方是 `CHASSIS_FOLLOW`（`:127-129`），
+中间档才处理 SHIFT（`:105-125`），所以不冲突。
 
 ---
 
@@ -399,3 +402,70 @@ allowed for this version of the linker.` -> `1 Error(s), 0 Warning(s)`。
 DFP pack 不装会重写掉 `RTE_Components.h` 里的 `CMSIS_device_header`）见
 `../armcc_check/install_keil.ps1` 与 README §7。
 
+
+---
+
+## 9. 已补好的：遥控器类型（DT7/DR16）与键位三方写入者
+
+> 这一节是**上场比赛配置**相关的最要紧一条：客户端驾驶与遥控器驾驶能不能同时存在，
+> 全看这里。详细链路表见 `RC_LINKS.md`。
+
+### 现象（改之前会有的四种表现）
+
+1. 英雄板出厂配置 `__RC_TYPE = RC_ET08A`，但车上是 **DT7 遥控器 + DR16 接收机**
+   （比赛时电脑 USB 插 DT7，无线进车）。
+2. 用 ET08A 配置跑 DT7 硬件时，`GetRcOffline()` **恒为 true**：车判"遥控器一直离线"，
+   底盘进保护、`music_rc_offline` 警报曲不停。
+3. 18 字节 DT7 帧根本不会调用 `Et08aSbusToRc()`，所以那套配置下驾驶员的
+   W/S/A/D、SHIFT、鼠标**全部无人解析**。
+4. 客户端用 `rc_ctrl.key.v |= drive_keys` 叠键位：在无键盘遥控器上
+   **一松键就粘住（车刹不住）**；在 DT7 上又被 `key.v =` 整帧抹掉，
+   于是 SHIFT 边沿检测乱翻转（小陀螺自己开关）。
+
+### 根因（都核到行号）
+
+| 事实 | 位置 |
+|---|---|
+| 18 字节帧无条件进 `sbus_to_rc()`；25 字节才按 `__RC_TYPE` 分派 | `remote_control.c:252-280` |
+| DT7 解出鼠标与键盘位，且 `key.v` 是**整字段覆盖** | `remote_control.c:377-382` |
+| ET08A/AT9S/HT8A 解码只写 `ch[0..3]` 与 `s[0]/s[1]`，鼠标被置零、`key.v` 不写 | `remote_control.c:508-530` + `SPECIAL_CHANNEL_SET_SERO()` |
+| `#if __RC_TYPE == RC_DT7` 把 `sbus_lost_count` 项乘 0，而它初值=超限、只有 25 字节路径更新 | `remote_control.c:95 / :577-595` |
+| 四家通道中值不同：DT7/ET08A=1024、AT9S=1000、HT8A=992 | `remote_control.h:51/56/63/78` |
+
+### 补法（已实现，`--rc` 一个开关 + 键位账本）
+
+1. **`prepare_hero_build.py --rc dt7|et08a|at9s|ht8a`，默认 `dt7`。**
+   脚本改 `robot_param.h` 那一行，并把**原始值记在行尾注释**里，反复切换不丢；
+   回切：`--rc et08a` 或 `git checkout -- application/robot_param.h`。
+2. **键位账本**（`host_chassis_bridge.h` + `apply_host_bridge.py` 三处改写）：
+   `HOST_RC_DRIVER_KEYS`（SBUS 侧写）与 `HOST_RC_HOST_KEYS`（usb_task 写）各记一本账，
+   两个写入者都只通过 `HOST_RC_MERGED_KEYS()` 把并集写进 `key.v`。
+   非 DT7 解码器的置零宏把驾驶员侧记为 0，于是"换遥控器不残留"也成立。
+   这样同时消掉上面第 4 条的两个相反缺陷。
+
+### 验证等级
+
+| 级别 | 内容 | 结果 |
+|---|---|---|
+| L1 静态 | `verify_changes` 新增 6 条守门（RC 类型、两处写并集、宏清账、掩码、无 `|=`） | 全 OK |
+| L2 编译 | ARMCC 5.06 全工程，**dt7 与 et08a 两种取值各编一遍** | 162/162 单元 0 error 0 warning；partial link 未定义符号 0 |
+| L2b | 真 uVision 5.43.1 命令行 `-b`（dt7 树） | 162 文件全过、0 warning，只剩 `L6050U` MDK-Lite 32KB 上限（镜像 139824 字节）；日志 `../armcc_check/uvision_build_log_dt7.txt` |
+| L3 行为 | 新增 `test_rc_key_ledger.py`：把真实源文件里抽出的代码编成 exe，按 50Hz 遥控帧 + 1ms 主循环跑时序 | 8 组断言全绿；`--negative` 阴性对照下旧写法被抓到 4 处 |
+| L4 回归 | `verify_all.py --firmware` | **GO，34 组全通过**（原 33 组 + 键位账本 1 组） |
+| **未验** | 真车：DT7 与 DR16 实际对频后摇杆方向、中值、拨杆三档 | 需要硬件 |
+
+### 踩过的两个坑（顺手记下来）
+
+* **`apply_host_bridge.py` 现在依赖驾驶补丁先落地**（键位那步是"改写" `|=` 那行）。
+  以前单独跑它会撞"锚点未找到"，把 `test_host_bridge.py`、`test_gimbal_host.py`
+  的自举路径整片带崩。现在脚本自己会先 `git apply` 那个补丁（`ensure_drive_keys_patch`），
+  顺序不再是坑。
+* **`test_rc_key_ledger.py` 一开始写的是"补丁没在树里就 SKIP 并 return 0"**，
+  于是 verify_all 报 GO 却根本没测键位。现在改成：缺就自己装上、测完还原。
+  *一声不响的跳过比失败更危险。*
+
+### 顺带修正一处旧结论
+
+之前在这里写过"车上必须真插一根 USB 线，电脑才能控车"。这句话**只对客户端控车成立**：
+比赛主链路（电脑→DT7→DR16→UART3）本身就是无线控车，不需要 USB 线。
+USB 线带来的是**客户端这条第二入口**（0x5A：0x03 键位、0x04 指令）与回读（0x1E/0x1F）。

@@ -44,6 +44,28 @@ MOTION_FEEDBACK_SCRIPT = HERE / "motion_feedback" / "apply_motion_feedback.py"
 # 云台直控桥（0x04 param0 bit0），见 gimbal_host 目录与 GAPS.md 第 3 节。
 GIMBAL_HOST_SCRIPT = HERE / "gimbal_host" / "apply_gimbal_host.py"
 GIMBAL_REL = "application/gimbal/gimbal_yaw_pitch_direct.c"
+# 遥控器类型（__RC_TYPE）。比赛链路是"电脑 USB 插 DT7 -> 无线 -> 车上 DR16
+# 接收机 -> UART3 SBUS"，所以**默认必须是 RC_DT7**。
+# 为什么这是硬性要求（三处实测，见 host_bridge/RC_LINKS.md）：
+#   1) remote_control.c:252 只有 18 字节帧才解出键盘/鼠标位（DT7 帧长 18，
+#      AT9S/HT8A/ET08A 都是 25），配成非 DT7 时驾驶员的 W/S/A/D、鼠标全丢；
+#   2) remote_control.h:46/56 各家通道中值不同（DT7/ET08A=1024、AT9S=1000、
+#      HT8A=992），配错 = 摇杆中值偏移、车自己慢慢漂；
+#   3) remote_control.c:577 GetRcOffline() 里 `#if __RC_TYPE == RC_DT7` 会把
+#      sbus_lost_count 那一项**乘 0**，而 sbus_lost_count 初值是 15、只有 25
+#      字节路径才更新它 -> 用 ET08A 配置跑 DT7 硬件时该项恒真，车永远判"遥控器
+#      离线"（底盘锁定 + 云台不响应 + 离线警报曲一直放）。
+RC_TYPE_NAMES = {
+    "dt7": "RC_DT7",
+    "at9s": "RC_AT9S_PRO",
+    "ht8a": "RC_HT8A",
+    "et08a": "RC_ET08A",
+}
+RC_LINE_RE = re.compile(r"^[ \t]*#define[ \t]+__RC_TYPE[ \t]+(RC_\w+)", re.M)
+RC_ORIG_RE = re.compile(r"原始值\s+(RC_\w+)")
+RC_OURS_MARK = "prepare_hero_build.py --rc"
+NL = chr(10)  # 本函数内拼行用
+
 MECA_REL = "application/chassis/chassis_mecanum.c"
 OMNI_REL = "application/chassis/chassis_omni.c"
 
@@ -153,7 +175,7 @@ def switch_to_hero(repo: Path, step: Step) -> None:
         text = text.replace(
             INFANTRY_INCLUDE,
             f'{HERO_INCLUDE}   // 英雄（麦轮）\n'
-            f'// {INFANTRY_INCLUDE[2:-1]}   // 步兵（全向轮），切回时取消注释',
+            f'// {INFANTRY_INCLUDE}   // 步兵（全向轮），切回时取消注释',
             1,
         )
         path.write_text(text, encoding="utf-8")
@@ -162,6 +184,45 @@ def switch_to_hero(repo: Path, step: Step) -> None:
         step.bad("既不是步兵也不是英雄配置，不敢自动改", "请手工确认 robot_param.h 第 26 行")
         return
     ensure_gyro_bias(path, step)
+
+
+def switch_rc_type(repo: Path, step: Step, want_key: str) -> None:
+    """把 robot_param.h 的 __RC_TYPE 改成与车上接收机配套的那一种。"""
+    want = RC_TYPE_NAMES[want_key]
+    print(f"\n[3b] 切遥控器类型 -> {want}（--rc {want_key}）")
+    path = repo / ROBOT_PARAM_REL
+    text = path.read_text(encoding="utf-8")
+    m = RC_LINE_RE.search(text)
+    if not m:
+        step.bad("robot_param.h 里找不到 `#define __RC_TYPE RC_xxx`",
+                 "该宏是单行，若被手工改写过多行/注释，请恢复成一行后再跑")
+        return
+    cur = m.group(1)
+    line = text[m.start():text.index(NL, m.start())]
+    # 原始值：第一次改动时记在行尾注释里，之后反复切换都以它为准，
+    # 这样"回切"不会把上游默认值丢掉。
+    om = RC_ORIG_RE.search(line)
+    orig = om.group(1) if om else cur
+
+    if cur == want and RC_OURS_MARK not in line:
+        # 上游默认就是它：加一行标记，不动取值，方便下次切回来时找得到原始值
+        orig = cur
+    elif cur == want:
+        step.ok(f"已经是 {want}（幂等跳过）")
+        return
+
+    new_line = (
+        f"#define __RC_TYPE {want:<12}// 遥控器类型（{RC_OURS_MARK} {want_key}）；"
+        f"原始值 {orig}" + NL
+        + f"// #define __RC_TYPE {orig}   // 回切：跑 --rc "
+        + "/".join(k for k, v in RC_TYPE_NAMES.items() if v == orig)
+        + "，或 git checkout -- " + ROBOT_PARAM_REL + NL
+    # 结尾这个 NL 不能省：早先漏掉它时，回切注释行会把紧随其后的
+    # `#define __DEVELOP 1` 拼成一行，反复运行还会把注释叠好几遍。
+    )
+    path.write_text(text[:m.start()] + new_line + text[text.index(NL, m.start()) + 1:],
+                    encoding="utf-8")
+    step.ok(f"__RC_TYPE: {cur} -> {want}（原始值 {orig} 已记在行尾注释）")
 
 
 def ensure_gyro_bias(path: Path, step: Step) -> None:
@@ -239,17 +300,43 @@ def apply_patch(repo: Path, step: Step) -> bool:
     return True
 
 
-def verify_changes(repo: Path, step: Step) -> bool:
+def verify_changes(repo: Path, step: Step, want_rc: str = 'dt7') -> bool:
     print("\n[5/6] 逐项确认改动存在")
     usb = read(repo, USB_REL)
     rc = read(repo, RC_REL)
     param = read(repo, ROBOT_PARAM_REL)
+    hdr0 = read(repo, HOST_BRIDGE_HEADER_REL)
 
     checks = [
         ("robot_param.h 指向英雄配置", HERO_INCLUDE in param),
+        ("__RC_TYPE 已切到与车上接收机配套的类型（配错三大症状见 RC_LINKS.md）",
+         RC_LINE_RE.search(param) is not None
+         and RC_LINE_RE.search(param).group(1) == RC_TYPE_NAMES[want_rc]),
+        ("改 __RC_TYPE 时没把下一行吞进注释（行尾换行完好）",
+         all("__DEVELOP" not in l and l.count("__RC_TYPE") <= 1
+             for l in param.splitlines() if "回切" in l)),
+        ("robot_param.h 里生效的 __RC_TYPE 只有一条、后续 #define 未被复制",
+         len([l for l in param.splitlines() if RC_LINE_RE.match(l)]) == 1
+         and param.count("#define __DEVELOP") == 1),
         ("补丁自带 extern RC_ctrl_t rc_ctrl（头文件不导出该符号）",
          re.search(r"extern\s+RC_ctrl_t\s+rc_ctrl\s*;", usb) is not None),
-        ("合并函数存在且做按位 OR", "rc_ctrl.key.v |= drive_keys;" in usb),
+        # 键位必须是"记账 + 写合并值"，不能是 |=，也不能让 DT7 整字段覆盖。
+        # 三个取值各对应一个真实故障，缺任一项就会在现场复现：
+        #   旧写法 `|=`  -> 客户端松手后位粘住，车刹不住（非 DT7 时没人清零）
+        #   缺 DT7 记账 -> DT7 每帧 `key.v =` 覆盖，客户端键位按帧率被抹掉，
+        #                  而 SHIFT 是边沿检测 -> 小陀螺开关自己乱跳
+        #   缺宏内置零 -> 车上从 DT7 换成 25 字节遥控器时，驾驶员键位冻在最后一帧
+        ("客户端键位写合并值（已改掉 |= 粘键写法）",
+         "HOST_RC_HOST_KEYS = drive_keys;" in usb
+         and "rc_ctrl.key.v = HOST_RC_MERGED_KEYS();" in usb
+         and "rc_ctrl.key.v |= drive_keys" not in usb),
+        ("DT7 解码先记账再写合并值（客户端键位不被整帧抹掉）",
+         "HOST_RC_DRIVER_KEYS = rc_ctrl->key.v;" in rc
+         and "rc_ctrl->key.v = HOST_RC_MERGED_KEYS();" in rc),
+        ("无键盘遥控器路径把驾驶员键位记为 0",
+         re.search(r"HOST_RC_DRIVER_KEYS\s*=\s*0\s*;", rc) is not None),
+        ("桥接头导出键位账本三件套（掩码/两个账量/合并宏）",
+         "HOST_RC_DRIVE_KEY_MASK" in hdr0 and "HOST_RC_MERGED_KEYS()" in hdr0),
         ("驾驶键掩码含 W/S/A/D + SHIFT（上限），且不含 Q/E/F",
          re.search(r"#define\s+VRC_DRIVE_KEY_MASK\s+\(\(uint16_t\)0x001F\)", usb) is not None),
         ("新鲜度门控存在（150ms）", "VRC_FRESH_TIMEOUT_MS 150" in usb),
@@ -350,41 +437,76 @@ def verify_changes(repo: Path, step: Step) -> bool:
     return all(p for _, p in checks)
 
 
+# 第 6 步要跑的两个真实头文件校验。第二个是**可执行**的行为校验
+# （把抽出来的键位代码编成 exe 跑一遍时序），因为键位合并的缺陷全都
+# 发生在运行时：编译器看不出 `|=` 会粘键，也看不出 DT7 会把客户端键位抹掉。
+COMPILE_CHECKS = (
+    ("补丁新增代码在真实头文件下零错误零警告", "test_patch_real_headers.py", ()),
+    ("驾驶键位三方写入者行为正确（DT7 不被抹 / 松键能归零）",
+     "host_bridge/test_rc_key_ledger.py", ()),
+)
+
+
 def compile_check(repo: Path, step: Step) -> None:
-    print("\n[6/6] 用固件真实头文件编译补丁新增代码")
-    script = HERE / "test_patch_real_headers.py"
-    if not script.exists():
-        step.warn("找不到 test_patch_real_headers.py，跳过编译校验")
-        return
+    print("\n[6/6] 用固件真实头文件编译 + 运行补丁新增代码")
     try:
         import ziglang  # noqa: F401
     except ImportError:
-        step.warn("未安装 ziglang，跳过编译校验",
+        step.warn("未安装 ziglang，跳过编译/行为校验",
                   "装一下即可启用：pip install ziglang")
         return
-    res = subprocess.run([sys.executable, str(script)], capture_output=True,
-                         text=True, encoding="utf-8", errors="replace")
-    if res.returncode == 0:
-        step.ok("补丁新增代码在真实头文件下零错误零警告")
-    else:
-        tail = ((res.stderr or "") + (res.stdout or "")).strip().splitlines()[-6:]
-        step.bad("编译校验未通过", " | ".join(t[:120] for t in tail))
+    for name, rel, extra in COMPILE_CHECKS:
+        script = HERE / rel
+        if not script.exists():
+            step.warn(f"找不到 {rel}，跳过该项校验")
+            continue
+        res = subprocess.run([sys.executable, str(script), *extra],
+                             capture_output=True, text=True,
+                             encoding="utf-8", errors="replace")
+        if res.returncode == 0:
+            step.ok(name)
+        else:
+            tail = ((res.stderr or "") + (res.stdout or "")).strip().splitlines()[-6:]
+            step.bad(name, " | ".join(t[:120] for t in tail))
 
 
 CHECKLIST = """
-上车前必须知道的四件事
+上车前必须知道的六件事
 ------------------------------------------------------------
-1. 遥控器三位拨杆 s[0] 建议拨到 **中间**。
-   停在下方时固件走 CHASSIS_LOCK（chassis_mecanum.c:86），根本不读
+1. **遥控器类型必须和车上接收机配套**（这是本次适配的核心，配错=车不动）。
+   本脚本默认 `--rc dt7`：电脑 USB 插 DT7 发射模块，车上是 DR16 接收机，
+   走 18 字节 SBUS 帧。上游仓库出厂写的是 et08a，所以必须被改掉。
+   配错的症状（三条都是实测出来的，不是猜的）：
+     - DT7 硬件 + et08a 固件 -> GetRcOffline() 恒为 true（remote_control.c:579
+       那一支把 sbus_lost_count 项乘 0，而它初值就是"超限"），车判"遥控器一直
+       离线"：底盘不响应 + 离线警报曲不停；
+     - DT7 硬件 + et08a 固件 -> 18 字节帧只会被 sbus_to_rc() 解，走不到
+       Et08aSbusToRc()；反过来 25 字节遥控器配 dt7 也解不出来；
+     - 各家通道中值不同（DT7/ET08A=1024、AT9S=1000、HT8A=992），配错就是
+       摇杆中值偏移、车自己慢慢漂。
+   换遥控器：重跑 `prepare_hero_build.py <固件树> --rc et08a`（dt7/at9s/ht8a
+   同理），不用手工改 robot_param.h。
+2. **不插 USB 线也能用车上的遥控器开车**。比赛主链路是
+   电脑 --USB--> DT7 --2.4G--> 车上 DR16 --SBUS--> C 板 UART3 -> rc_ctrl；
+   DT7 的 18 字节帧本身就带键盘位和鼠标位移，驾驶员按 W/S/A/D 直接生效。
+   USB 线（0x5A 帧）是**客户端专用的第二条入口**，插上以后客户端才能
+   叠加驾驶键位、发 0x04 自转指令、拿 0x1E 速度 / 0x1F 状态回读。
+3. **键位是"或"进去的，不是接管**。驾驶员键位与客户端键位各记一本账
+   （HOST_RC_DRIVER_KEYS / HOST_RC_HOST_KEYS），谁按谁动、两边都松才停；
+   0x03 超过 150ms 没刷新，客户端那份账立刻归零，控制权自动回到遥控器手里。
+   客户端只可能碰 W/S/A/D（+ 可选 SHIFT），Q/E（摩擦轮）、F（sc_flag）
+   在掩码外，永远只能由遥控器触发。
+4. 遥控器三位拨杆 s[0]（右拨杆）建议拨到 **中间**。
+   停在下方时固件走 CHASSIS_LOCK（chassis_mecanum.c:97），根本不读
    驾驶键位图 —— 补丁打得再对车也不动。
-   上方也能开车，但那是固件**无条件强制常转**（:102），与 spin_flag 无关。
-2. 验小陀螺必须拨中间。上方档下客户端的自转开关看上去"没反应"，
+   上方也能开车，但那是固件**无条件强制常转**（:113），与 spin_flag 无关。
+5. 验小陀螺必须拨中间。上方档下客户端的自转开关看上去"没反应"，
    因为车本来就在转（固件强制的）；拨到中间才能看出 0x04 指令真的生效。
    全向轮步兵不同：上方是 CHASSIS_FOLLOW（chassis_omni.c:114-117），不冲突。
-3. 客户端侧要开：RobotLink 模块 enabled + Allow Drive + Client Chassis Drive，
+6. 客户端侧要开：RobotLink 模块 enabled + Allow Drive + Client Chassis Drive，
    并把 Drive Channel 设为 virtual_rc（驾驶走 0x03 键位图，不走 speed_vector）。
    小陀螺走独立的 0x04，**不需要**驾驶授权也能发；但需开 Allow Spin Key。
-4. 英雄限速 2.0 m/s（步兵是 1.5）。客户端按机器人自报编号取限幅，
+   英雄限速 2.0 m/s（步兵是 1.5），客户端按机器人自报编号取限幅，
    界面选错兵种会告警，不会静默按错的限速发。
 ------------------------------------------------------------
 """
@@ -452,6 +574,9 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="把固件工程准备成英雄板可驾驶状态")
     ap.add_argument("repo", help="StandardRobotpp 仓库路径")
     ap.add_argument("--revert", action="store_true", help="撤销本脚本的改动")
+    ap.add_argument("--rc", choices=sorted(RC_TYPE_NAMES), default="dt7",
+                    help="车上接收机配套的遥控器类型。默认 dt7 = DT7 遥控器 + DR16 接收机"
+                         "（18 字节 SBUS 帧自带键盘/鼠标位）；上游仓库默认写的是 et08a")
     ap.add_argument("--gcc-check", action="store_true",
                     help="额外跑一次 GCC 差分语法体检（需 arm-none-eabi-gcc）")
     args = ap.parse_args()
@@ -469,8 +594,9 @@ def main() -> int:
         revert(repo, step)
     elif check_clean(repo, step):
         switch_to_hero(repo, step)
+        switch_rc_type(repo, step, args.rc)
         if apply_patch(repo, step):
-            verify_changes(repo, step)
+            verify_changes(repo, step, args.rc)
             compile_check(repo, step)
             if args.gcc_check:
                 gcc_differential_check(repo, step)

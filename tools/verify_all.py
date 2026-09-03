@@ -68,6 +68,11 @@ C_CHECKS = (
      "速度回读桥（0x1E）编译 + 运动学往返断言"),
     ("tools/firmware/gimbal_host/test_gimbal_host.py",
      "云台直控桥（0x04 param0）结构 + 编译 + 真值表断言"),
+    # 驾驶键位三方写入者（DT7 解码 / 无键盘遥控器置零宏 / usb_task 合并）。
+    # 这一项必须是**可执行**的行为校验：粘键和整帧覆盖都是运行时语义，
+    # 编译器一句都不会报。带 --negative 还能证明这些断言抓得住旧写法。
+    ("tools/firmware/host_bridge/test_rc_key_ledger.py",
+     "驾驶键位账本（DT7 不被抹 / 松键能归零）8 组行为断言"),
 )
 
 #: 前后端对齐审计（防倒退闸门）。
@@ -189,12 +194,15 @@ def main() -> int:
   1. 提交这些文件，否则发布包里根本没有队内链路
   2. python tools/firmware/prepare_hero_build.py <固件路径>   -> 看到 GO
   3. Keil 编译烧录（工程是"警告即错误"）
-  4. 上电后把遥控器三位拨杆 s[0] 拨到【中间】
+  4. 确认遥控器类型与车上接收机配套：默认 --rc dt7（DT7 遥控器 + DR16 接收机）。
+     配错最典型的表现是"车判遥控器一直离线"（DT7 硬件 + et08a 固件时
+     GetRcOffline() 恒为 true），以及摇杆中值偏移、车自己漂。
+  5. 上电后把遥控器三位拨杆 s[0] 拨到【中间】
      停在下方时固件走 CHASSIS_LOCK，不读驾驶键位图，车绝对不会动。
      上方也能开车，但那是固件**无条件强制常转**（chassis_mecanum.c:102），
      与 spin_flag 无关——此时客户端的小陀螺开关看上去"没反应"，
      排查时极易误判成补丁没打上。**要验小陀螺就必须拨中间。**
-  5. 客户端：开 RobotLink 模块 + Allow Drive + Client Chassis Drive
+  6. 客户端：开 RobotLink 模块 + Allow Drive + Client Chassis Drive
      并把 Drive Channel 设为 virtual_rc
 
 注意：以上全部是离线验证。它证明不了"车真的会动"。

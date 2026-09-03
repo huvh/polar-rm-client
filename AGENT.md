@@ -40,7 +40,7 @@
 | `uplink.robot_cmd` | 上行 0x01 布局 + `never_set`（永不置位的字段）+ **每个字段的固件消费者实况** |
 | `uplink.virtual_rc` | 上行 0x03 布局、键位表、`drive_key_mask`、各键在固件里的真实含义 |
 | `roles[]` / `fallback_role` | 每个兵种的底盘、限速、可否驾驶、可否控云台 |
-| `firmware_build_switches` | 切兵种要改哪个头文件、ET08A 会清 key.v 等陷阱 |
+| `firmware_build_switches` | 切兵种要改哪个头文件、`__RC_TYPE` 必须与车上遥控器配套（比赛用 `--rc dt7`）、键位记账合并等陷阱 |
 
 代码侧只有三个文件承担协议知识：
 

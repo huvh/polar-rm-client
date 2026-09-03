@@ -152,8 +152,14 @@
 > —— 否则全零 0x03 会冻结驾驶员真实摇杆。两方案对比与安全红线见
 > [`tools/firmware/README.md`](tools/firmware/README.md)。
 >
-> 仍需注意：当前 `robot_param.h` 下 `__RC_TYPE=RC_ET08A`，而 ET08A 分支会
-> `rc_ctrl->key.v = 0`（`remote_control.c:426`），所以**不能拿“key.v 非零”当接管判据**。
+> 仍需注意：`__RC_TYPE` 必须与车上接收机配套。比赛配置是 **DT7 遥控器 + DR16 接收机**
+> ⇒ `RC_DT7`（18 字节帧自带键盘位与鼠标位移），由
+> `prepare_hero_build.py --rc dt7`（默认值）负责切；仓库出厂写的 `RC_ET08A`
+> 配 DT7 硬件会让 `GetRcOffline()` 恒真、驾驶员键位鼠标全丢。
+> 键位现在是**记账合并**（`HOST_RC_DRIVER_KEYS | HOST_RC_HOST_KEYS` 写回 `key.v`），
+> 置零宏不再清 `key.v`，所以**依然不能拿“key.v 非零”当接管判据** —— 要看 0x03 的
+> 150ms 新鲜度（`usb_task.c` 的 `VRC_FRESH_TIMEOUT_MS`）。详见
+> [`tools/firmware/host_bridge/RC_LINKS.md`](tools/firmware/host_bridge/RC_LINKS.md)。
 
 | 阻塞项 | 证据 | 影响 |
 |---|---|---|
