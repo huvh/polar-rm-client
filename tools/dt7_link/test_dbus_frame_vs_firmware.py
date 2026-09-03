@@ -103,6 +103,11 @@ volatile uint16_t HOST_RC_HOST_KEYS = 0;
 
 static RC_ctrl_t g_rc;
 
+/* km_link 给 sbus_to_rc() 末尾加了一句"驾驶员鼠标记账并仲裁"。本测试只验
+ * DBUS 位序，给个空桩即可 —— 真实实现与它的行为由 test_km_link.py 验。
+ * 不补这一句就是 call to undeclared function，而根因在另一个补丁里。 */
+static void HostKmApplyDriverFrameMouse(RC_ctrl_t *rc) { (void)rc; }
+
 """
     tu = tu_head + "/* ==== 以下为固件原文，一字未改 ==== */\n" + body + r"""
 int main(int argc, char **argv)
@@ -185,6 +190,27 @@ int main(int argc, char **argv)
         check("W/S/A/D 在两套位序里完全相同（解释错位为何一直没被发现）",
               df.keys_to_bits(["W", "S", "A", "D"], "fw")
               == df.keys_to_bits(["W", "S", "A", "D"], "dji2016"))
+
+    # 顺带钉住往遥控器发东西的那个试探工具：四种候选帧型的字节必须出自
+    # 这个刚被固件验证过的编码器，且键位要落在 DBUS bytes14-15 那一处。
+    # 帧型悄悄错 = 现场白试一晚上。
+    try:
+        import dt7_vcp_probe as vp
+    except Exception as exc:                       # noqa: BLE001
+        check("dt7_vcp_probe 可导入", False, repr(exc))
+    else:
+        for name, want_len in (("dbus18", 18), ("km12", 12), ("km6", 8),
+                               ("keys2", 2)):
+            body = vp.build_candidate(name, df.keys_to_bits(["W", "SHIFT"]),
+                                      (12, -5, 0))
+            check(f"候选帧型 {name} 长度正确", len(body) == want_len,
+                  body.hex(" "))
+        full = vp.build_candidate("dbus18", df.keys_to_bits(["SHIFT"]), (0, 0, 0))
+        check("候选帧键位落在 bytes14-15（与固件解码同一处）",
+              full[14] == 0x10 and full[15] == 0, full[14:16].hex(" "))
+        check("裸键位帧型就是那两字节",
+              vp.build_candidate("keys2", df.keys_to_bits(["SHIFT"]), (0, 0, 0))
+              == full[14:16])
 
     print("\n" + "=" * 62)
     print("有失败项" if FAILED else "官方手册位序 == 固件真实解码结果，逐字段核对通过")

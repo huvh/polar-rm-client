@@ -74,33 +74,83 @@ TTL 电平但**与普通 UART 反相**，MCU 侧要加三极管取反 —— C �
   **驾驶员按 Shift 会被车当成 Q（摩擦轮），按 Q 会被当成 Shift（小陀螺）**。
   W/S/A/D 不受影响。所以这项必须在"客户端往 DT7 灌键鼠"之前定死。
 
-## 4. 那"我们客户端经 DT7 控车"还差什么？
+## 4. 那"我们客户端经 DT7 控车"还差什么？—— 已经查到只剩一件事
 
-只差一件事，而且它**不在固件里**：
+### 4.1 先更正本节上一版的说法
 
-> **PC <-> DT7 那段 USB 报文格式大疆没写在公开手册里。**
-> （手册第 4 页只写了这个口能"装驱动 + 用 RC SYSTEM Assistant 配遥控器/升级固件/
->  选摇杆模式/校准摇杆" —— 要额外装驱动，说明它不是即插即用的标准 HID 手柄。）
+上一版写的是"PC<->DT7 是一段私有 USB 协议，要装驱动说明不是标准 HID，得抓包"。
+**方向对了一半，性质搞错了。** 从大疆官方驱动包里把 INF 解出来看，答案是：
 
-所以要做的是**抓包**，不是改固件。现成工具：`tools/dt7_hid_probe.py`。
-本机注册表已经确认**从来没插过任何 DJI 设备**（`HKLM\SYSTEM\CurrentControlSet\Enum`
-整棵树搜 `2ca3|dji|dt7|dr16` 零命中），所以这一步必须去电控那台电脑或带硬件现场做：
+官方下载地址：`https://rm-static.djicdn.com/tem/RoboMaster 遥控器驱动.7z`（DJI 官方 CDN）
+解包方式：`innoextract -e`，**只解包读文本，没有运行那个安装器**。
+包内 `dji_vcom_driver11.inf` 原文（节选）：
 
 ```
-# 插 DT7 之前先跑一次，记下基线
-python tools/dt7_hid_probe.py
-# 然后开 --watch，边插拔 DT7 / 边开关大疆客户端边看谁出现谁消失
-python tools/dt7_hid_probe.py --watch 20
-# 判出是 HID 之后（pip install hidapi）抓真实报文：按 W 键、推鼠标，把帧记下来
-python tools/dt7_hid_probe.py --capture
+[Version]
+Class=Ports
+ClassGuid={4D36E978-E325-11CE-BFC1-08002BE10318}
+Provider=%DJI%
+DriverVer =12/06/2012, 5.1.2600.5512
+
+[DeviceList]
+%DJIVCOM%  =XP40, USB\VID_FFF0&PID_0008&MI_00
+%DJIVCOM%  =XP40, USB\VID_FFF0&PID_0008
+
+[DriverService]
+ServiceBinary=%12%\usbser.sys
+
+[Strings]
+DJIVCOM    = "DJI USB Virtual COM"
 ```
 
-判读：
-- 出现 `VID_2CA3...` 且 Class=HIDClass -> HID 路线，要仿造 input/output report；
-- 出现新的 COM 口（Class=Ports）-> CDC 路线，`pyserial` 直接写；
-- 两个都没有 -> 那个口只供电/只支持 DJI 私有刷写，这条路当场判死，改走第 5 节。
+三条硬结论：
 
-## 5. 另一条不依赖 DT7 私有协议的无线路（2026 赛季的正规路）
+1. **DT7 那个 USB 口是虚拟串口**（`Class=Ports`），不是 HID 手柄/游戏杆。
+   所以不用仿造 HID 报告、不用 libusb、不用碰 Windows 驱动。
+2. 硬件 ID 是 **`USB\VID_FFF0&PID_0008`**（复合设备的 `MI_00` 那一面），
+   **不是 DJI 消费机的 `VID_2CA3`**。
+   -> 上一版那条"本机注册表搜 `2ca3` 零命中"的门牌号是错的，
+      **不能当证据用**（这台电脑确实没插过 DT7，但要重扫 `FFF0` 之后才算证完；
+      本轮已重扫：`HKLM\SYSTEM\CurrentControlSet\Enum\USB` 下 `FFF0` 也是零命中，
+      所以"这台机器从没插过 DT7"这条结论仍然成立，只是换了正确的依据）。
+3. 驱动服务是 Windows 自带的 `usbser.sys`（标准 USB CDC-ACM）。
+   -> 客户端用 **pyserial 打开那个 COM 口就能直接写**，我们仓库本来就依赖 pyserial。
+
+于是"缺口"从"逆向一套私有 USB 协议"缩小成一件事：**这个串口上的帧格式**。
+大疆确实没公开它（手册只公开了 DR16->车的 DBUS 侧），所以只能黑盒问。
+
+### 4.2 黑盒问法已经写成工具
+
+`tools/dt7_link/dt7_vcp_probe.py`。四种候选帧型（**都是假设，不是官方定义**）：
+
+| 帧型 | 长度 | 内容 | 赌的是什么 |
+|---|---|---|---|
+| `dbus18` | 18B | 与 DR16 出口完全同构的整帧 | DT7 只做透传 |
+| `km12` | 12B | 只给键鼠那 12 字节（DBUS bytes6-17） | 摇杆留给摇杆、只收键鼠 |
+| `km6` | 8B | 鼠标三轴 + 键位，不含左右键 | 精简实现 |
+| `keys2` | 2B | 最裸的 16bit 键位图 | 只支持键盘不支持鼠标 |
+
+```
+# 1) 找口：认的就是 FFF0:0008（官方 INF 里的死值，插上必然匹配得上）
+python tools/dt7_link/dt7_vcp_probe.py --list
+
+# 2) 先看帧型长什么样（这一步不碰硬件）
+python tools/dt7_link/dt7_vcp_probe.py --candidates --keys W,SHIFT --mouse 12,-5,0
+
+# 3) 真发。不给 --confirm-move-car 就只打印字节、一个字节都不发
+python tools/dt7_link/dt7_vcp_probe.py --port COM5 --candidate dbus18 --keys W \\
+       --confirm-move-car
+```
+
+安全上做了两道：发之前必须显式给 `--confirm-move-car`（因为这东西一旦猜对
+**车就会动**），发完自动补一帧等长全零，避免把键粘在车上。
+
+判读：`--list` 能看到 `VID_FFF0&PID_0008` 的口 -> 通路已经通了，剩下纯粹是帧型；
+一种都不动就换下一种；四种都不动，才需要回到"抓官方客户端的报文"这条路
+（届时可以用 com0com 建虚拟串口对，或直接在 USB 层抓）。
+
+
+## 5. 另一条不依赖 DT7 帧格式猜测的无线路（2026 赛季的正规路）
 
 查 RM2026 通信协议 V1.2.0（2026.02.09）修改日志，第 2 条写着
 **"删除命令码 0x0304"**，第 3 条把原来的 RemoteControl 拆成

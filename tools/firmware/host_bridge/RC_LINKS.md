@@ -202,23 +202,44 @@ extern volatile uint16_t HOST_RC_HOST_KEYS;           /* usb_task 写 */
 > **我们自己的 `rm_custom_client` 里没有 PC↔DT7 那段协议**（全仓搜过 dt7/dr16/hid/joystick，
 > 一处实现都没有）。要让我们客户端也能经 DT7 控车，就得先搞清楚那段协议长什么样。
 
-### 怎么把那段协议挖出来（第一步已经写成工具）
+### 那段协议查到什么程度了：是个虚拟串口，只差帧格式
 
-`python tools/dt7_hid_probe.py`（零依赖，不需要管理员）：
+2026-09-04 从大疆官方驱动包（`https://rm-static.djicdn.com/tem/RoboMaster 遥控器驱动.7z`）
+里用 `innoextract -e` **只解包**读出 `dji_vcom_driver11.inf`，原文关键几行：
 
-- 先列出所有 HID / USB 输入设备与虚拟串口，并对 DJI 的 USB VID（`2ca3`）打标；
-- `--watch 20`：边看边插拔 DT7 / 开关大疆客户端 —— **谁出现、谁消失**，一眼定它是
-  HID 设备还是 CDC 虚拟串口（两种打法完全不同：HID 要仿造 report，CDC 直接 pyserial 发）；
-- `--capture`（`pip install hidapi` 之后）：逐个设备读上报报文，把大疆客户端按下 W 时
-  发的那一帧记下来 —— 拿到几帧样本，协议基本就能定下来。
+```
+Class=Ports
+%DJIVCOM% =XP40, USB\VID_FFF0&PID_0008&MI_00
+ServiceBinary=%12%\usbser.sys
+DJIVCOM = "DJI USB Virtual COM"
+```
 
-先跑 `dt7_hid_probe.py --watch 20`（必须在**电控那台电脑**或现场笔记本上跑——
-本机注册表已确认从来没插过任何 DJI 设备：`HKLM\SYSTEM\CurrentControlSet\Enum`
-整棵树搜 `2ca3|dji|dt7|dr16` 零命中），把输出贴回来就能定下一步：
-写 HID output report 出口，还是直接 pyserial 发。
+三条定性结论（把本节上一版"要装驱动说明不是即插即用 HID，得抓包才知道"整段替换掉）：
 
-对照：不接电脑时 bytes 6-15 应该恒 0（DT7 自己没有键鼠源）。
-抓一次官方客户端按键时的真实帧，两套位序之争当场就定死了。
+1. **DT7 的 USB 口 = 虚拟串口**（`Class=Ports`），不是 HID 手柄；
+2. 硬件 ID 是 **`USB\VID_FFF0&PID_0008`**，**不是** DJI 消费机的 `VID_2CA3`
+   —— 所以先前"注册表搜 `2ca3` 零命中"那条取证用错了门牌号；本轮按 `FFF0`
+   重扫仍然零命中，"这台电脑从没插过 DT7"这个结论换对了依据后依然成立；
+3. 驱动服务是 Windows 自带的 `usbser.sys`（标准 USB CDC-ACM），
+   **不需要厂商 DLL、不需要 libusb、不需要仿 HID 报告** -> 用 pyserial 直接读写。
+
+于是缺的东西从"逆向一套私有 USB 协议"缩小成一件：**这个串口上的帧格式**
+（大疆只公开了 DR16->车的 DBUS 侧，没公开 PC->DT7 侧）。
+
+黑盒试探工具已经写好：`tools/dt7_link/dt7_vcp_probe.py`，四种候选帧型
+（`dbus18` 整帧同构 / `km12` 只给键鼠 12 字节 / `km6` 三轴+键位 / `keys2` 裸键位图，
+**都是假设不是官方定义**）：
+
+```
+python tools/dt7_link/dt7_vcp_probe.py --list                    # 认 FFF0:0008 那个口
+python tools/dt7_link/dt7_vcp_probe.py --candidates --keys W,SHIFT --mouse 12,-5,0
+python tools/dt7_link/dt7_vcp_probe.py --port COM5 --candidate dbus18 --keys W \
+       --confirm-move-car                                        # 不给这开关只打印不发
+```
+
+两道安全闸：不给 `--confirm-move-car` 一个字节都不发（猜对了车就会动）；
+发完自动补一帧等长全零，避免把键粘在车上。四种帧型全部无效的兜底办法是用
+com0com 建虚拟串口对，或者直接在 USB 层抓官方客户端的报文。
 
 ### 两条并存的注意事项
 

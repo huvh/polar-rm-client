@@ -29,7 +29,11 @@ import subprocess
 import sys
 import time
 
-DJI_VIDS = {"2ca3"}          # DJI 的 USB VID
+# 2026-09-04 修正：官方 dji_vcom_driver11.inf 里写的是
+#   Class=Ports + USB\VID_FFF0&PID_0008 + ServiceBinary=usbser.sys
+# 也就是说 **DT7 的 USB 口是虚拟串口，硬件 ID 是 FFF0:0008，不是 2CA3**。
+# 原先这里只有 2ca3，等于拿错门牌号找人 —— 插了 DT7 也会报"没看到 DJI 设备"。
+DJI_VIDS = {"fff0", "2ca3"}          # fff0 = DT7 VCP（官方 INF）；2ca3 = DJI 消费机
 KW_INTEREST = ("dji", "dt7", "dr16", "keyboard", "mouse", "键盘", "鼠标",
                "joystick", "game", "controller", "rc", "transmitter", "receiver")
 
