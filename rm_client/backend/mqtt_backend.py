@@ -200,7 +200,12 @@ class RmMqttBackend(OfficialMqttBridge):
             self._emit_event("publish_result", topic=topic, ok=True, reason="mock", intent=intent)
             return True, "mock"
         if self.client is None or not self.connected:
-            self.last_error = "未连接 MQTT 客户端"
+            # 这条错误在现场几乎总是同一个原因：3333 的监听者是**选手端那一侧**
+            # （12.x 裁判端/服务器包里没有任何 MQTT 栈，见
+            # tools/dt7_link/README.md 第 16.2 节），所以先确认选手端在跑、host 填对。
+            self.last_error = ("未连接 MQTT 客户端：3333 由官方选手端那侧监听，"
+                              "先确认选手端已启动、且 host 是选手端那台机器"
+                              "（同机用 127.0.0.1，跨机用它的 192.168.12.x）")
             self._emit_event("publish_result", topic=topic, ok=False, reason=self.last_error, intent=intent)
             return False, self.last_error
         try:
