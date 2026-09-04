@@ -530,6 +530,10 @@ USB 线带来的是**客户端这条第二入口**（0x5A：0x03 键位、0x04 �
    `live↑N` = A 成立、路是通的；`NO-RX!!` = 车上 0 帧、判 B；
    `KM on(?)` = 没插 USB 读不到回读（**不能当没收到**）；`stall@N` = 中途断。
    详见 `tools/dt7_link/README.md` 第 12 节。
+   判成 B（包不在 huart6 上）时的修法也留好了：把真正带着图传链路那一路串口收到的
+   30 字节载荷喂给 `HostKmFeed(payload, len)`（`host_km_link.h`），
+   仲裁/新鲜度/掩码/回读全部照旧，不用改任何逻辑。见 README 第 13 节。
+   现场动作一页纸：仓库根目录 `FIELD_WIRELESS_RUNBOOK.md`。
 4. **键位 bit4-7 两套官方定义打架**（`tools/dt7_link/README.md` 第 3 节）。
    走 0x0311 这条路**不受它影响**（客户端和固件都用固件那套），但走 DT7
    虚拟控制链路时会被它咬 —— 两件事别混。

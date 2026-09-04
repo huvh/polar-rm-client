@@ -317,6 +317,47 @@ int main(void)
     HostKmLinkUpdate();
     eq("两路都松手后键位归零", rc_ctrl.key.v & (K_W | K_S | K_SHIFT), 0);
 
+    /* I0) HostKmFeed：第二条来源能不能进来。
+     *     现场若发现 0x0311 其实不在裁判口上，修法就是把那一路串口收到的载荷
+     *     喂给 HostKmFeed()。这条路必须和 referee.c 那条完全等价，所以这里
+     *     刻意**不**用 put_bytes 直接写收件箱，而是走公开接口。 */
+    driver_frame(0, 0, 0);
+    memset(&robot_custom_data_3, 0, sizeof(robot_custom_data_3));
+    HOST_RC_HOST_KEYS = 0;
+    HOST_RC_DRIVER_KEY_GATE = HOST_RC_DRIVER_GATE_OPEN;
+    {
+        prm1_km_cmd_t via_feed;
+        unsigned rx_before = (unsigned)HOST_KM_RX_COUNT;
+        memset(&via_feed, 0, sizeof(via_feed));
+        via_feed.magic[0] = 'P'; via_feed.magic[1] = 'R';
+        via_feed.magic[2] = 'M'; via_feed.magic[3] = '1';
+        via_feed.version = PRM1_VERSION; via_feed.kind = PRM1_KIND_KM;
+        via_feed.seq = 99; via_feed.keys = (uint16_t)(K_W | K_SHIFT);
+        via_feed.mouse_x = 7; via_feed.mouse_y = -9;
+        HostKmFeed((const uint8_t *)&via_feed, (uint16_t)sizeof(via_feed));
+        eq("HostKmFeed 也记到达计数", (unsigned)HOST_KM_RX_COUNT, rx_before + 1u);
+        HostKmLinkUpdate();
+    }
+#if (__CONTROL_LINK_KM == CL_KM_RC || __CONTROL_LINK_KM == CL_KM_NONE)
+    eq("HostKmFeed 在 rc/none 档同样被忽略", HOST_RC_KM_KEYS, 0);
+#else
+    eq("HostKmFeed 进来的键位能落到 key.v", rc_ctrl.key.v & (K_W | K_SHIFT),
+       K_W | K_SHIFT);
+    eq("HostKmFeed 进来的鼠标也能落地", rc_ctrl.mouse.x, 7);
+#endif
+    /* 越界保护：给一个比收件箱还长的缓冲区，不得溢出 */
+    {
+        uint8_t big[64];
+        memset(big, 0, sizeof(big));
+        memset(&robot_custom_data_3, 0, sizeof(robot_custom_data_3));
+        HostKmFeed(big, (uint16_t)sizeof(big));
+        HostKmLinkUpdate();   /* 喂完必须重新仲裁，否则看到的还是上一轮的账 */
+        eq("喂进没 magic 的垃圾不得接管键位（收件箱不可信）",
+           rc_ctrl.key.v & (K_W | K_SHIFT), 0);
+        HostKmFeed((const uint8_t *)0, 12U);   /* 空指针必须直接返回 */
+        eq("空指针调用不得改变任何账", rc_ctrl.key.v & (K_W | K_SHIFT), 0);
+    }
+
     /* I) 链路回读上行：现场靠它判"0x0311 到没到 C 板"，所以三件事必须钉住：
      *    值真的是计数与合并键位、名字没被截断、以及 1ms 调用被限流了。 */
     driver_frame(0, 0, 0);

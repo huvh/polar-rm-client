@@ -210,6 +210,26 @@ void HostKmApplyDriverFrameMouse(RC_ctrl_t *rc)
 }}
 
 /**
+ * @brief 从别的来源灌一帧 0x0311 载荷（见头文件里那段"为什么必须有这个口"）
+ *
+ * 刻意做越界保护：len 超过载荷大小就截到载荷大小，绝不把外部字节溢出写进收件箱。
+ */
+void HostKmFeed(const uint8_t *payload, uint16_t len)
+{{
+    uint16_t n = len;
+
+    if (payload == 0 || n == 0U) {{   /* 不引 NULL，避免依赖 stddef 的包含顺序 */
+        return;
+    }}
+    if (n > (uint16_t)sizeof(robot_custom_data_3)) {{
+        n = (uint16_t)sizeof(robot_custom_data_3);
+    }}
+    memcpy(&robot_custom_data_3, payload, n);
+    HOST_KM_RX_TIME = HAL_GetTick();
+    HOST_KM_RX_COUNT++;
+}}
+
+/**
  * @brief 把链路到达情况写进 0x5A Debug 上行（限流，默认 200ms 一次）
  *
  * 上报两件事，够现场判定：
