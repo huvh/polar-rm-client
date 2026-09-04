@@ -505,6 +505,44 @@ class BackendManager:
                 and module.enabled
             )
             control.radio_km_enabled = radio_km_live
+            # 车上回读：km_rx = C 板实际收到的 0x0311 帧数，km_key = 合并后的键位。
+            # 只有插着 USB 0x5A 时才拿得到；拔了线就是"不知道"，绝不能当成"没收到"。
+            dbg = bridge.debug_packages or {}
+            rx_raw = dbg.get("km_rx")
+            key_raw = dbg.get("km_key")
+            try:
+                rx_now = int(float(rx_raw)) if rx_raw is not None else None
+            except (TypeError, ValueError):
+                rx_now = None
+            try:
+                control.radio_km_robot_key = (int(float(key_raw))
+                                              if key_raw is not None else -1)
+            except (TypeError, ValueError):
+                control.radio_km_robot_key = -1
+            prev_rx = getattr(self, "_km_rx_prev", None)
+            growing = rx_now is not None and prev_rx is not None and rx_now > prev_rx
+            self._km_rx_prev = rx_now if rx_now is not None else prev_rx
+            control.radio_km_robot_rx = -1 if rx_now is None else rx_now
+            control.radio_km_robot_rx_growing = bool(growing)
+            if not radio_km_wanted:
+                control.radio_km_link_state = "off"
+                control.radio_km_link_note = "未开启"
+            elif not radio_km_live:
+                control.radio_km_link_state = "blocked"
+                control.radio_km_link_note = "闸门未过"
+            elif rx_now is None:
+                control.radio_km_link_state = "no-readback"
+                control.radio_km_link_note = "车上计数读不到（插一下 USB 0x5A 就能看到）"
+            elif growing:
+                control.radio_km_link_state = "live"
+                control.radio_km_link_note = f"车上已收到 {rx_now} 帧 0x0311"
+            elif rx_now == 0:
+                control.radio_km_link_state = "silent"
+                control.radio_km_link_note = ("车上一个 0x0311 都没收到：先查图传发送端那一路"
+                                              "串口是否接到 C 板（官方：图传链路 921600）")
+            else:
+                control.radio_km_link_state = "stalled"
+                control.radio_km_link_note = f"计数停在 {rx_now}，不再增长：链路中途断了"
             if not radio_km_wanted:
                 control.radio_km_gate_reason = ""
             elif radio_km_live:

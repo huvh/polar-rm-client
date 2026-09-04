@@ -101,9 +101,38 @@ def test_manager_gates() -> None:
     manager.safety.estop_active = False
     setting.value = False
     manager.tick_polar_link(state, registry, control)
+    # --- 车上回读（km_rx / km_key）决定"实况"到底是什么 ---
+    setting.value = True
+    drive.value = True
+    module.enabled = True
+    manager.tick_polar_link(state, registry, control)
+    check("开关开了但车上计数读不到 -> no-readback（不当成没收到）",
+          control.radio_km_link_state == "no-readback", control.radio_km_link_state)
+    manager.polar_bridge.debug_packages = {"km_rx": 0.0, "km_key": 0.0}
+    manager.tick_polar_link(state, registry, control)
+    check("车上回了 0 帧 -> silent，并给出口向排查话",
+          control.radio_km_link_state == "silent", control.radio_km_link_state)
+    check("silent 的话里点明图传发送端那一路串口", "921600" in control.radio_km_link_note,
+          control.radio_km_link_note)
+    manager.polar_bridge.debug_packages = {"km_rx": 12.0, "km_key": 17.0}
+    manager.tick_polar_link(state, registry, control)
+    check("计数在涨 -> live", control.radio_km_link_state == "live",
+          control.radio_km_link_state)
+    check("live 时把车上的帧数带出来", control.radio_km_robot_rx == 12,
+          str(control.radio_km_robot_rx))
+    check("车上合并后的键位也回读到了", control.radio_km_robot_key == 17,
+          str(control.radio_km_robot_key))
+    manager.tick_polar_link(state, registry, control)
+    check("计数不再涨 -> stalled（跟 silent 区分开）",
+          control.radio_km_link_state == "stalled", control.radio_km_link_state)
+    # 关掉开关后不得把上一轮的实况留在脸上
+    setting.value = False
+    manager.tick_polar_link(state, registry, control)
     check("关开关后不再尝试发送", control.radio_km_enabled is False)
     check("关开关后闸门原因也清空", control.radio_km_gate_reason == "",
           control.radio_km_gate_reason)
+    check("关开关后实况回到 off", control.radio_km_link_state == "off",
+          control.radio_km_link_state)
 
 
 class FakePub:

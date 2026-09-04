@@ -210,14 +210,42 @@ void HostKmApplyDriverFrameMouse(RC_ctrl_t *rc)
 }}
 
 /**
- * @brief 键鼠链路仲裁主入口
+ * @brief 把链路到达情况写进 0x5A Debug 上行（限流，默认 200ms 一次）
+ *
+ * 上报两件事，够现场判定：
+ *   km_rx  = HOST_KM_RX_COUNT，C 板**实际**收到的 0x0311 帧数
+ *            （计数在 referee 收到那一帧就加，Peep 只决定用不用它，
+ *             所以"计数涨但键位不动"= 到了但载荷不对；"计数不涨"= 根本没到）；
+ *   km_key = 当前合并后的 rc_ctrl.key.v，直接看见三本账现在是什么。
+ * 没开 HOST_KM_DEBUG_UPLINK 时编出空函数，调用点不用改。
+ */
+#if HOST_KM_DEBUG_UPLINK
+static void HostKmReportUplink(void)
+{{
+    static uint32_t host_km_debug_last = 0U;
+    uint32_t now = HAL_GetTick();
+
+    /* 减法比较，tick 回绕不会把限流卡死 */
+    if ((uint32_t)(now - host_km_debug_last) < HOST_KM_DEBUG_PERIOD_MS) {{
+        return;
+    }}
+    host_km_debug_last = now;
+    ModifyDebugDataPackage(HOST_KM_DEBUG_SLOT_RX, (float)HOST_KM_RX_COUNT, "km_rx");
+    ModifyDebugDataPackage(HOST_KM_DEBUG_SLOT_KEY, (float)rc_ctrl.key.v, "km_key");
+}}
+#else
+static void HostKmReportUplink(void) {{}}
+#endif
+
+/**
+ * @brief 键鼠链路仲裁（回读在 HostKmLinkUpdate 里做）
  *
  * 两个调用点，各补对方的盲区：
  *   - usb_task 主循环 1ms 一轮：负责"图传过期就归零"，不依赖遥控器还在发帧
  *     （车上没插 DBUS、或 0x0311 是唯一链路时，全靠这条兜底）；
  *   - SBUS 解码末尾：负责"这一帧的鼠标增量给谁"，鼠标是增量，晚一帧就丢。
  */
-void HostKmLinkUpdate(void)
+static void HostKmLinkArbitrate(void)
 {{
     prm1_km_cmd_t km;
     uint8_t km_ok;
@@ -255,6 +283,15 @@ void HostKmLinkUpdate(void)
                            : HOST_RC_KM_KEY_NONE;
     rc_ctrl.key.v = HOST_RC_MERGED_KEYS();
     HostKmMouseOut(&rc_ctrl);
+}}
+
+/**
+ * @brief 键鼠链路主入口：先仲裁，再把结果回读给上位机
+ */
+void HostKmLinkUpdate(void)
+{{
+    HostKmLinkArbitrate();
+    HostKmReportUplink();
 }}
 /* ==== {MARK} 结束 ==== */
 """

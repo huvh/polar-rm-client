@@ -82,6 +82,38 @@ volatile uint32_t HOST_KM_RX_COUNT = 0;
 static uint32_t g_tick = 1000;
 uint32_t HAL_GetTick(void) { return g_tick; }
 
+/* 0x5A Debug 上行的桩：按槽位记最后一次写入的名字与值，供断言用 */
+typedef struct { uint8_t idx; char name[16]; float val; } dbg_slot_t;
+static dbg_slot_t g_dbg[16];
+static int g_dbg_n = 0;
+void ModifyDebugDataPackage(uint8_t index, float data, const char *name)
+{
+    int i;
+    for (i = 0; i < g_dbg_n; i++) {
+        if (g_dbg[i].idx == index) break;
+    }
+    if (i == g_dbg_n) { g_dbg[i].idx = index; g_dbg[i].name[0] = 0; g_dbg_n++; }
+    strncpy(g_dbg[i].name, name, 15);
+    g_dbg[i].name[15] = 0;
+    g_dbg[i].val = data;
+}
+static float dbg_val(uint8_t index)
+{
+    int i;
+    for (i = 0; i < g_dbg_n; i++) {
+        if (g_dbg[i].idx == index) return g_dbg[i].val;
+    }
+    return -1.0f;
+}
+static const char *dbg_name(uint8_t index)
+{
+    int i;
+    for (i = 0; i < g_dbg_n; i++) {
+        if (g_dbg[i].idx == index) return g_dbg[i].name;
+    }
+    return "";
+}
+
 @@IMPL@@
 
 static int fails = 0;
@@ -285,6 +317,31 @@ int main(void)
     HostKmLinkUpdate();
     eq("两路都松手后键位归零", rc_ctrl.key.v & (K_W | K_S | K_SHIFT), 0);
 
+    /* I) 链路回读上行：现场靠它判"0x0311 到没到 C 板"，所以三件事必须钉住：
+     *    值真的是计数与合并键位、名字没被截断、以及 1ms 调用被限流了。 */
+    driver_frame(0, 0, 0);
+    put_km(K_W | K_SHIFT, 0, 0, 0);
+    g_tick += HOST_KM_DEBUG_PERIOD_MS + 10;      /* 越过限流窗口 */
+    HostKmLinkUpdate();
+    eq("回读写了 km_rx 槽", strcmp(dbg_name(HOST_KM_DEBUG_SLOT_RX), "km_rx"), 0);
+    eq("回读写了 km_key 槽", strcmp(dbg_name(HOST_KM_DEBUG_SLOT_KEY), "km_key"), 0);
+    eq("km_rx 等于实际到达计数",
+       (int)dbg_val(HOST_KM_DEBUG_SLOT_RX), (int)HOST_KM_RX_COUNT);
+    eq("km_key 等于当前合并键位",
+       (int)dbg_val(HOST_KM_DEBUG_SLOT_KEY), (int)rc_ctrl.key.v);
+    /* 限流：不推进时间就再调，计数涨了但上报值不许变（否则 1ms 一次会淹了 USB） */
+    {
+        float held = dbg_val(HOST_KM_DEBUG_SLOT_RX);
+        unsigned before = (unsigned)HOST_KM_RX_COUNT;
+        put_km(K_W, 0, 0, 0);
+        HostKmLinkUpdate();
+        if ((unsigned)HOST_KM_RX_COUNT <= before) {
+            eq("限流测试前提：计数必须已增长", 0, 1);
+        }
+        eq("未到期不得重写回读（限流有效）",
+           (int)dbg_val(HOST_KM_DEBUG_SLOT_RX), (int)held);
+    }
+
     if (fails == 0) {
         printf("POLICY @@POLICY@@@@FIRESUFFIX@@ BEHAVIOR OK\n");
         return 0;
@@ -347,6 +404,14 @@ def main() -> int:
                        r"/\* ==== POLAR-KM-LINK 结束 ==== \*/",
                 "POLAR-KM-LINK 实现段")
     check("从 remote_control.c 抽出仲裁实现段", "HostKmLinkUpdate" in impl)
+    check("仲裁与回读分两层（回读不得挤掉仲裁的提前 return）",
+          "static void HostKmLinkArbitrate(void)" in impl
+          and "HostKmLinkArbitrate();\n    HostKmReportUplink();" in impl)
+    import re as _re
+    _names = _re.findall(r'ModifyDebugDataPackage\(HOST_KM_DEBUG_SLOT_\w+,\s*[^,]+,\s*"([^"]+)"\)', impl)
+    check("回读名字都在 10 字符内（超长会被 usb_task.c:1414 静默截断）",
+          bool(_names) and all(len(n) <= 9 for n in _names), str(_names))
+    check("回读槽位不撞车", len(set(_names)) == len(_names), str(_names))
 
     # 载荷/门限/新鲜度判据全部从真头文件里抽，测试与固件不可能各说各话
     # 每段之间必须补换行：上一段以 `prm1_km_cmd_t;` 结尾且不含换行，
@@ -372,7 +437,14 @@ def main() -> int:
                 r"#define HOST_KM_IS_FRESH\(\)[^\n]*\n(?:[ \t]*[^\n]*\n)*?"
                 r"[ \t]*\([^\n]*KM_LINK_VALID_MS\)\)\n",
                 "HOST_KM_IS_FRESH")
+    hdr += grab(km_src, r"#define HOST_KM_DEBUG_UPLINK[^\n]*\n", "DEBUG_UPLINK")
+    hdr += grab(km_src, r"#define HOST_KM_DEBUG_PERIOD_MS[^\n]*\n", "DEBUG_PERIOD")
+    hdr += grab(km_src, r"#define HOST_KM_DEBUG_SLOT_RX[^\n]*\n", "DEBUG_SLOT_RX")
+    hdr += grab(km_src, r"#define HOST_KM_DEBUG_SLOT_KEY[^\n]*\n", "DEBUG_SLOT_KEY")
+    hdr += grab(km_src, r"extern void ModifyDebugDataPackage[^\n]*\n", "回读原型")
     check("从 host_km_link.h 抽出载荷与新鲜度判据", "prm1_km_cmd_t" in hdr)
+    check("回读宏与原型也从真头文件抽（不另写一份）",
+          "HOST_KM_DEBUG_SLOT_RX" in hdr and "ModifyDebugDataPackage" in hdr)
 
     global BRIDGE_SNIPPET
     BRIDGE_SNIPPET = (

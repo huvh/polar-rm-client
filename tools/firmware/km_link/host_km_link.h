@@ -146,6 +146,36 @@ void HostKmLinkUpdate(void);
  */
 void HostKmApplyDriverFrameMouse(RC_ctrl_t *rc);
 
+/* ------------------------------------------------------------------------
+ * 链路自检回读：把"车上到底收到几个 0x0311"从 USB 0x5A 的 Debug 段报回上位机
+ * ------------------------------------------------------------------------
+ * 为什么值得占上位机的 debug 槽：现场唯一想知道的一件事就是**包到了没有**。
+ * 客户端只能看到自己发了多少（那是自证，说明不了链路），有了这个回读才能把
+ * "MQTT 没连上 / 键鼠来源没切" 和 "921600 那一路没接到 C 板" 当场分开——
+ * 这两件事的处理方式完全不同。
+ *
+ * 槽位为什么是 9/0：本队固件里所有 ModifyDebugDataPackage 调用点
+ * （chassis_omni.c:399-406、chassis_mecanum.c:334-335）**全部是注释状态**，
+ * 且注释里占的是 3..8；9 与 0 连注释都没用过，不会撞车。
+ * 名字必须 <=10 字符：usb_task.c:1414 `while (name[i] != '\0' && i < 10)`。
+ */
+#ifndef HOST_KM_DEBUG_UPLINK
+#define HOST_KM_DEBUG_UPLINK 1        /* 0 = 完全不编进回读，省 flash */
+#endif
+#ifndef HOST_KM_DEBUG_PERIOD_MS
+#define HOST_KM_DEBUG_PERIOD_MS 200U  /* HostKmLinkUpdate 是 1ms 调的，必须限流 */
+#endif
+#ifndef HOST_KM_DEBUG_SLOT_RX
+#define HOST_KM_DEBUG_SLOT_RX ((uint8_t)9)
+#endif
+#ifndef HOST_KM_DEBUG_SLOT_KEY
+#define HOST_KM_DEBUG_SLOT_KEY ((uint8_t)0)
+#endif
+
+/* usb_debug.h:5 的原型。这里按同签名自己声明，是因为各工程的 include 路径
+   不保证能拿到那个头；实现链接到 usb_task.c:1405 那一份。 */
+extern void ModifyDebugDataPackage(uint8_t index, float data, const char *name);
+
 #ifdef __cplusplus
 }
 #endif

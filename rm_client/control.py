@@ -99,6 +99,16 @@ class KeyboardControlBridge:
         #: 根本没走到发送。与 last_error 分开存，否则"没让我发"和
         #: "发了但被拒"会互相覆盖，现场看不出到底该去点哪个开关。
         self.radio_km_gate_reason = ""
+        # ---- 车上回读的实况（来自 0x5A Debug 段的 km_rx / km_key，-1 = 读不到）----
+        #: 我们只能自证"发了多少帧"，那说明不了链路。真正的证据是**C 板自己数到的
+        #: 0x0311 帧数**（固件 POLAR-KM-LINK 的 HostKmReportUplink 报回来）。
+        self.radio_km_robot_rx = -1
+        self.radio_km_robot_key = -1
+        self.radio_km_robot_rx_growing = False
+        #: 一句话实况，直接给界面显示：off / blocked / no-readback / live /
+        #: silent（车上一个包都没收到）/ stalled（收到过但不长了）
+        self.radio_km_link_state = "off"
+        self.radio_km_link_note = "未开启"
         self.key_state: dict[str, bool] = {key: False for key in CONTROL_KEYS}
         # 协议槽 -> 已绑物理键名；可由前端改绑，默认与旧行为一致。
         self.binds: dict[str, str] = dict(DEFAULT_CONTROL_BINDS)

@@ -3504,7 +3504,19 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         # 无线键鼠出口必须在脸上看得见：它决定"插不插 USB 线车动不动"，
         # 出问题时最忌讳的就是界面上找不到任何痕迹。
         # 只放状态、不放计数（计数会每帧变，会打掉这块 4Hz 光栅缓存）。
-        km = "KM on" if self.control.radio_km_enabled else "KM off"
+        # 用"车上回读出来的实况"而不是我们自己猜的开关状态：
+        # silent / stalled 这两种情况必须一眼看见，否则现场会一直以为是
+        # "客户端没发"，而真正的问题是包没到 C 板。
+        km_state = str(getattr(self.control, "radio_km_link_state", "off"))
+        km_rx = int(getattr(self.control, "radio_km_robot_rx", -1))
+        km = {
+            "off": "KM off",
+            "blocked": "KM blocked",
+            "no-readback": "KM on(?)",
+            "live": f"KM live\u2191{km_rx}",
+            "silent": "KM NO-RX!!",
+            "stalled": f"KM stall@{km_rx}",
+        }.get(km_state, "KM ?")
         status_line = f"{status} | {scene} | {match} | {mqtt} | {serial} | {km}"
         static_key = (
             round(raster_scale, 3),

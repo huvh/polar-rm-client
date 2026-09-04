@@ -191,7 +191,12 @@ class ConfigActionsMixin:
             if on and missing:
                 self.toast("无线键鼠出口已开，但还差：" + "、".join(missing))
             elif on:
-                self.toast("无线键鼠出口已开（图传 0x0311）")
+                # 规则级互锁必须在这儿提醒一次：《2026 通信协议》2.2.1 写明
+                # 键鼠控制指令来源只能是"官方选手端"或"自定义客户端"之一。
+                # 两边同时开不会报错，只会有一边白干。
+                self.toast("无线键鼠出口已开（图传 0x0311）；"
+                           "记得把键鼠来源选成\u201c自定义客户端\u201d，"
+                           "官方选手端同时开着时只认一个来源")
             else:
                 self.toast("无线键鼠出口已关")
         self.auto_save_config()

@@ -663,3 +663,37 @@ DT7 那条保留为"抓包才可能推进"的备用方案，工具（含本轮�
 **这一步做完，DT7 注入才算真的能自己实现。** 现在至少已经确定：
 目标协议是 DUPC 族（有开源参考）、走串口（我们有 pyserial）、
 命令结构体名字全在官方程序集里 —— 不再是"完全未知的私有 USB 协议"。
+
+---
+
+## 12. 车上回读通道：让"0x0311 到没到 C 板"在界面上直接看见
+
+上一节把风险定成了"必须先在现场量一次"，但没解决**怎么量**。
+原来只能靠人拿串口助手盯 `HOST_KM_RX_COUNT`，现场没人这么干。本轮把它做成回读：
+
+| 侧 | 改动 |
+|---|---|
+| 固件 | `host_km_link.h` 加 `HOST_KM_DEBUG_UPLINK / _PERIOD_MS / _SLOT_RX(9) / _SLOT_KEY(0)`；`apply_km_link.py` 把 `HostKmLinkUpdate()` 拆成 `HostKmLinkArbitrate()` + `HostKmReportUplink()`，后者用现成的 0x5A Debug 段上报 `km_rx`（C 板实际收到的 0x0311 帧数）与 `km_key`（合并后的键位），**200ms 限流** |
+| 客户端 | `control` 新增 `radio_km_robot_rx / radio_km_robot_key / radio_km_robot_rx_growing / radio_km_link_state / radio_km_link_note`；`manager.tick_polar_link()` 从 `bridge.debug_packages` 里算出实况状态 |
+| 界面 | 水印那截从 `KM on/off` 升级成实况六态 |
+
+六态就是把"现场会误判的几种情况"分开写死：
+
+| 状态 | 脸上 | 含义与动作 |
+|---|---|---|
+| `off` | `KM off` | 没开开关 |
+| `blocked` | `KM blocked` | 开了但闸门没过（看 `radio_km_gate_reason`） |
+| `no-readback` | `KM on(?)` | 发是发了，**车上计数读不到**（USB 没插）→ 不能当"没收到"，插一下线就有答案 |
+| `live` | `KM live↑N` | N 在涨 = 0x0311 真的进了 C 板，路是通的 |
+| `silent` | `KM NO-RX!!` | 车上回了 0 帧 = **包根本没到 C 板**，去查图传发送端那一路串口（官方口径 921600） |
+| `stalled` | `KM stall@N` | 收到过但不长了 = 链路中途断（对频/登录/图传掉了） |
+
+为什么这个回读值得占固件的 debug 槽：客户端自己的 `radio_km_sent`
+**只能自证发了多少**，说明不了链路；`silent` 与 `no-readback` 的区别
+决定现场是去改接线还是去改 MQTT 设置 —— 搞混一次就是一晚上。
+
+测试：`tools/firmware/km_link/test_km_link.py` 加了 I 段（喂真帧 + 推 tick，
+断言 `km_rx` 等于计数、`km_key` 等于合并键位、**未到 200ms 不得重写**），
+并在 Python 侧守卫"回读名字 ≤9 字符"（`usb_task.c:1414` 只抄 10 字节，
+超长会被静默截断）与"槽位不撞车"；五档 + fire-keys 六组全过，
+`--negative` 仍能全部抓到。客户端侧 `test_manager_gates()` 覆盖六态迁移。
