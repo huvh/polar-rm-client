@@ -48,8 +48,10 @@ r"""自定义控制器出口：经**官方选手端**把键鼠灌进 DT7，再�
 """
 from __future__ import annotations
 
+import json
 import struct
 import time
+from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
@@ -77,6 +79,30 @@ HID_USAGE: dict[str, int] = {
     "CTRL": 0xE0, "SHIFT": 0xE1, "ALT": 0xE2, "GUI": 0xE3,
     "SPACE": 0x2C, "ENTER": 0x28, "TAB": 0x2B, "ESC": 0x29,
 }
+
+#: 现场可改的键值表（**不用改代码**）：文档只写"使用通用键值"没附表，
+#: 真值要靠 `cc_probe.py --sweep` 逐键试出来，改 configs/cc_key_usage.json 即可。
+KEY_USAGE_FILE = Path(__file__).resolve().parents[2] / "configs" / "cc_key_usage.json"
+
+
+def load_key_usage(path: str | None = None) -> dict[str, int]:
+    """读键值表；文件不存在或坏值就退回内置 HID 默认，**绝不因为配置坏而发不出键**。"""
+    table = dict(HID_USAGE)
+    fp = Path(path) if path else KEY_USAGE_FILE
+    try:
+        raw = json.loads(fp.read_text(encoding="utf-8-sig"))
+    except FileNotFoundError:
+        return table
+        raw = {}    # unreachable, kept for clarity
+    except Exception:
+        return table
+    for k, v in (raw or {}).items():
+        key = str(k).upper()
+        if key.startswith("_") or not isinstance(v, int) or not 0 <= v <= 0xFF:
+            continue
+        table[key] = v
+    return table
+
 
 #: 选手端使用的屏幕分辨率（表 1-43 备注：赛事客户端 1920x1080，左上角 (0,0)）
 SCREEN_W = 1920
@@ -130,7 +156,7 @@ def encode_keymouse_0306(*, key1: int = 0, key2: int = 0,
     return out
 
 
-def keys_to_two_usages(names) -> tuple[int, int, list[str]]:
+def keys_to_two_usages(names, table=None) -> tuple[int, int, list[str]]:
     """按键名集合 -> (键值1, 键值2, 被挤掉的键)。
 
     2 键无冲是**官方限制**，不是我们的选择；把被挤掉的键报出来，
@@ -139,11 +165,13 @@ def keys_to_two_usages(names) -> tuple[int, int, list[str]]:
     """
     codes: list[int] = []
     dropped: list[str] = []
+    if table is None:
+        table = load_key_usage()
     for name in names:
         key = str(name).upper()
         if not key or key == "NONE":
             continue
-        code = HID_USAGE.get(key)
+        code = table.get(key)
         if code is None or code == 0:
             dropped.append(key)
             continue

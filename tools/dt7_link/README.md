@@ -843,6 +843,12 @@ DT7 那条 USB 口上的报文确实零公开，但**我们根本不需要碰它
 3. **0x0306 的频率上限**：文档没给数字，选手端只说"超频丢弃多余包"，
    所以这里保守取 0x0302 的 30Hz 并在设置里开放调节。
 
+
+⇒ 针对第 2 条已经做了**不用改代码**的处理：键值表放在 `configs/cc_key_usage.json`
+（默认按 USB HID Usage Page 0x07 填），`cc_link.load_key_usage()` 每次取表；现场用
+`--sweep` 试出真值后直接改这个 JSON 即可。文件缺失、JSON 坏、值越界（>0xFF / 非整数）
+**一律退回内置默认** —— 不允许出现「配错一张表，把 W/S/A/D 一起废掉」。
+断言在 `tools/dt7_link/test_cc_link.py::test_key_table_file`。
 ---
 
 ## 15. 选手端"认哪个串口"不用再猜：答案在官方 `DeviceInfo.dll` 里

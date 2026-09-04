@@ -246,6 +246,36 @@ def test_manager_gates() -> None:
     manager.tick_polar_link(state, registry, control)
     check("关开关后立刻不生效", control.cc_enabled is False)
 
+
+def test_key_table_file(tmp: str) -> None:
+    """键值表必须能在**现场直接改文件**生效；表坏了不许把驾驶键一起带崩。"""
+    import json
+    import os
+
+    print("\n--- 外置键值表 ---")
+    check("仓库里带了一张可改的键值表", cc.KEY_USAGE_FILE.exists(), str(cc.KEY_USAGE_FILE))
+    base = cc.load_key_usage()
+    check("默认表 = 内置 HID 值", base.get("W") == cc.HID_USAGE["W"], str(base.get("W")))
+    fp = os.path.join(tmp, "cc_key_usage.json")
+    with open(fp, "w", encoding="utf-8") as fh:
+        json.dump({"w": 119, "_comment": "现场试出来的值"}, fh)
+    one = cc.load_key_usage(fp)
+    check("表里的新值生效（键名大小写无关）", one.get("W") == 0x77, str(one.get("W")))
+    check("表里没写的键保留默认", one.get("A") == cc.HID_USAGE["A"], str(one.get("A")))
+    k1, k2, dropped = cc.keys_to_two_usages(["W"], table=one)
+    check("发出去的键值用表里的数", (k1, dropped) == (0x77, []), f"{k1} {dropped}")
+    with open(fp, "w", encoding="utf-8") as fh:
+        fh.write("{ 这不是 json")
+    check("表坏了退回内置默认", cc.load_key_usage(fp).get("W") == cc.HID_USAGE["W"])
+    with open(fp, "w", encoding="utf-8") as fh:
+        json.dump({"W": 99999, "S": -1, "E": "x"}, fh)
+    weird = cc.load_key_usage(fp)
+    check("越界/非整数表项被丢掉（不会写进帧）",
+          weird.get("W") == cc.HID_USAGE["W"] and weird.get("S") == cc.HID_USAGE["S"]
+          and weird.get("E") == cc.HID_USAGE["E"], str(weird.get("W")))
+    check("表文件不存在也照样能用",
+          cc.load_key_usage(os.path.join(tmp, "nope.json")).get("W") == cc.HID_USAGE["W"])
+
 def main() -> int:
     firmware = Path(sys.argv[1]) if len(sys.argv) > 1 and not sys.argv[1].startswith("-") \
         else DEFAULT_FIRMWARE
@@ -370,6 +400,9 @@ def main() -> int:
     ok5, _ = over.send_robot_interact(b"\x00" * 30, now=over.time_fn() + 5.0)
     check("0x0302 正常帧是 30 字节载荷", ok5 and len(decode_cc_frame(over.last_frame)["data"]) == 30)
     check("超大载荷被 encoder 拦住", raises_value(lambda: encode_cc_frame(0x0306, b"\x00" * 200, 0)))
+    import tempfile as _tf
+    with _tf.TemporaryDirectory() as _td:
+        test_key_table_file(_td)
     test_bridge_side()
     test_manager_gates()
     return finish()
