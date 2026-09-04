@@ -1182,3 +1182,63 @@ public static int CMD_ID_SET_COUNTRY_CODE;   // 0x304
 ⇒ 要拿到 DT7 的键鼠命令号与载荷结构，下一步是**反汇编那个 cctor**
 （`script.json`/`il2cpp.h` 已给出 RVA，配 `capstone` 即可，工具链已就位、不需要硬件、不需要抓包）。
 这条是"我们的客户端直接连 DT7 发"的最后一块，**已经比"只能现场抓包"近了一大步**。
+
+---
+
+## 20. 反编译工具链落点 + DT7 命令号的**确切下一步入口**（含地址）
+
+### 20.1 工具与产物（都在 D 盘，没碰 C 盘）
+
+| 东西 | 位置 |
+|---|---|
+| .NET 8 SDK (8.0.424) | `D:\rmbuild\dotnet`（用官方 `dotnet-install.ps1 -InstallDir` 装的） |
+| ILSpy 命令行 | `D:\rmbuild\tools\ilspycmd.exe`（9.0.0.7889） |
+| Il2CppDumper | `D:\rmbuild\il2d\Il2CppDumper.exe`（6.7.46） |
+| 12.x 选手端 Unity 侧产物 | `D:\rmbuild\dump12\`：`dump.cs`(16MB)、`il2cpp.h`、`script.json`、`stringliteral.json`、`DummyDll\` |
+| 12.x 选手端托管侧反编译 C# | `D:\rmbuild\decomp\`（`CommunicationCompiler.cs`、`RCSerialThread.cs`、`CCSerialThread.cs`、`ProtoManager.cs`、`CRCCheck*.cs`…） |
+
+识别结果：`Metadata Version 29 → Change il2cpp version to 29.1`，
+`CodeRegistration = 0x1817e87f0`，`MetadataRegistration = 0x181a49eb0`。
+
+### 20.2 已经拿到 vs 还差什么（说清楚，别含糊）
+
+**已拿到（厂商二进制里读出来的确定事实）**
+- 帧编码器逻辑：`CommunicationCompiler.Encoder_A5_WithTail`（见 19.3），与我们实现同构；
+- 键位位序：`KeyBoard` / `InputRecord.KeyBoardRC` 枚举值（见 19.1）；
+- 键鼠 protobuf：`CCP.RemoteControl` 字段号（见 19.2）；
+- 图传侧键鼠命令号：`Video2025MsgID.CMD_ID_Keyboard = 17`；
+- 遥控器口/自定义控制器口/图传口的硬件 ID 匹配表（第 17 节）+ 大疆自己要求装 FTDI 驱动的原文。
+
+**还差（DT7 那条 VCOM 的命令号与寻址）**
+`dump.cs:131430-131437` 那一族 `CMD_ID_QUERY_COUNTRY_CODE … CMD_ID_SEND_CUSTOM_DATA` 是
+`public static int`，**不是 const**；它们的 cctor（RVA `0x384000`，文件偏移 `0x382E00`）
+反汇编出来是一串
+```
+lea rcx, [rip + <静态槽>]
+call 0x1801d8ed0        ← “从元数据初始值搬到静态槽”的助手
+```
+⇒ **值不在代码段里，在 il2cpp v1 元数据的 `fieldDefaultValues` 表**
+（表头指针就在上面的 `MetadataRegistration = 0x181a49eb0`，
+`Il2CppMetadataRegistration.fieldDefaultValues / fieldDefaultValuesCount`
++ `Il2CppFieldDefaultValue{ TypeIndex, FieldIndex, ValueIndex }` → `values` blob）。
+
+**所以下一步是纯离线活，不需要硬件、不需要抓包**：
+1. 用 `script.json` 的 RVA→文件偏移映射，读 `0x181a49eb0` 处的
+   `Il2CppMetadataRegistration`（v29.1 布局：三个 int32 计数 + 一串指针，
+   顺序为 genericClasses/genericInsts/genericMethodTables/methodRefRanges/typeDefIndices/
+   …/`fieldDefaultValues`/`fieldDefaultValuesCount`/…，以 `dump.cs` 里字段顺序自校验）；
+2. 按 `TypeIndex/FieldIndex` 对上 `ProtoDef`（就是持有那族 `CMD_ID_*` 的类）；
+3. `ValueIndex` 进 `values` blob 取 4 字节小端 → 命令号；
+4. 同一张表还能顺手把 `special_ctrl`/`CtrlSet`/`DJI_PRO_MOUDLE_T` 的
+   **sender/receiver 模块地址**（DUSS 寻址）一并定下来——这是发帧必需的另外一项。
+风险：v29.1 的 registration 结构体字段顺序我是按 il2cpp 通行布局推的，
+**必须用"解出来的数量与 dump.cs 里 static 字段个数吻合"自校验**，
+对不上就停下重写，不能拿半对的结果去发帧。
+
+### 20.3 与"抓包"的取舍（保留两条，不撤工具）
+
+- 上面这条（解析 v1 元数据）是**离线、可全自动**的，但结构体布局要猜+自校验；
+- 现场抓一次（DT7 插电脑 + 官方选手端 + USBPcap，见 `FIELD_WIRELESS_RUNBOOK.md` 4b）
+  是**一次性拿到真报文**，`tools/dt7_link/dt7_frame_diff.py` 直接算字段与位序；
+- 两条不冲突：抓到包可以**验证**元数据解出来的命令号，解出元数据可以**解释**包里的字段。
+  在拿到交叉验证之前，`cc_link.py` 那套（0x0306 自定义控制器）仍是唯一已闭环可发的路。
