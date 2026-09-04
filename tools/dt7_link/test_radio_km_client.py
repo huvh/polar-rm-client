@@ -192,6 +192,23 @@ def main() -> int:
           "publish_km_control" in br2.radio_km_last_error, br2.radio_km_last_error)
     check("出口缺失不污染主通道 last_error", br2.last_error == "", br2.last_error)
 
+    # --- 位序对表：客户端编码必须等于**大疆自己二进制里**那套键位位序 ---
+    import sys as _sys
+    _sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import dt7_dbus_frame as df
+    from rm_client.control import KEYBOARD_BITS
+    check("客户端 KEYBOARD_BITS == 官方选手端枚举（dump.cs:136133）",
+          all(KEYBOARD_BITS[k] == i for i, k in enumerate(df.KEY_ORDER_VENDOR_2026)),
+          str(KEYBOARD_BITS))
+    check("0x1F 默认掩码 = W/S/A/D + SHIFT（小陀螺），不含 Q/E",
+          (0x1F & (1 << KEYBOARD_BITS["SHIFT"])) != 0
+          and (0x1F & (1 << KEYBOARD_BITS["Q"])) == 0
+          and (0x1F & (1 << KEYBOARD_BITS["E"])) == 0,
+          hex(0x1F))
+    check("2016 手册那套位序确实与现役不同（否则这条守卫没意义）",
+          df.KEY_ORDER_DJI2016[4:8] != df.KEY_ORDER_VENDOR_2026[4:8],
+          str(df.KEY_ORDER_DJI2016[4:8]))
+
     blob = proto.encode_km_control_payload(sequence=1, keyboard_value=0x1F)
     check("载荷 26 字节 = 固件 prm1_km_cmd_t",
           len(blob) == proto.TEAM_CONTROL_KM_SIZE == 26, str(len(blob)))

@@ -69,7 +69,34 @@ KEY_ORDER_FW = ("W", "S", "A", "D", "SHIFT", "CTRL", "Q", "E",
                 "R", "F", "G", "Z", "X", "C", "V", "B")
 # 位序 A：DT7&DR16 遥控器手册(2016) 第 7 页 + 附录示例代码
 KEY_ORDER_DJI2016 = ("W", "S", "A", "D", "Q", "E", "SHIFT", "CTRL") + KEY_ORDER_FW[8:]
-KEY_ORDERS = {"fw": KEY_ORDER_FW, "dji2016": KEY_ORDER_DJI2016}
+KEY_ORDERS = {"fw": KEY_ORDER_FW, "dji2016": KEY_ORDER_DJI2016}# ---------------------------------------------------------------------------
+# 大疆自己心里的键位位序（**从官方选手端 12.x 二进制里抠出来的**，不是手册、不是猜）
+# ---------------------------------------------------------------------------
+# 取法：Il2CppDumper 解 `RoboMasterClient 12.0.0.30_1v1_Student` 的
+# GameAssembly.dll + global-metadata.dat（Metadata Version 29.1），
+# 产物 dump.cs 里两处枚举逐字如下：
+#
+#   dump.cs:136133-136148   public const KeyBoard KEY_PRESSED_OFFSET_W     = 1;      // bit0
+#                           ... S = 2, A = 4, D = 8,
+#                           SHIFT = 16,   -> bit4
+#                           CTRL  = 32,   -> bit5
+#                           Q     = 64,   -> bit6
+#                           E     = 128,  -> bit7
+#                           R=256 F=512 G=1024 Z=2048 X=4096 C=8192 V=16384 B=32768
+#   dump.cs:146776-146791   InputRecord.KeyBoardRC 同一套数值，一字不差
+#
+# ⇒ 第 3 节那个"两套官方定义打架"的悬案**结了**：
+#   现役大疆客户端用的是 `SHIFT=bit4 CTRL=bit5 Q=bit6 E=bit7`，
+#   与队内固件 `remote_control.h:103-118` 完全一致；
+#   《DT7&DR16 遥控器手册 V1.0(2016)》第 7 页那套（Q4 E5 Shift6 Ctrl7）是**过时的**。
+# ⇒ 顺带定死一件事：图传键鼠链路的默认掩码 `KM_KEY_MASK_DRIVE=0x1F`
+#   确实是 W/S/A/D + **SHIFT（小陀螺）**，不含 Q/E。之前这点靠推断，现在有厂商枚举背书。
+KEY_ORDER_VENDOR_2026 = ("W", "S", "A", "D", "SHIFT", "CTRL", "Q", "E",
+                         "R", "F", "G", "Z", "X", "C", "V", "B")
+KEY_VENDOR_2026_BITS = {name: 1 << i for i, name in enumerate(KEY_ORDER_VENDOR_2026)}
+
+KEY_ORDERS["vendor2026"] = KEY_ORDER_VENDOR_2026
+
 
 
 def _set_bits(buf: bytearray, bit_pos: int, n_bits: int, value: int) -> None:

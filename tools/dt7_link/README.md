@@ -54,7 +54,7 @@ TTL 电平但**与普通 UART 反相**，MCU 侧要加三极管取反 —— C �
 四通道拉到端点），并额外钉住固件常量（`RC_CH_VALUE_OFFSET=1024`、
 `RC_FRAME_LENGTH=18`、`KEY_W..KEY_E` 的 bit 号）——电控哪天改了位序，测试先红。
 
-## 3. 一个还没定死、而且会咬人的坑：键位位序有两套官方定义在打架
+## 3. 【已由厂商二进制结案，见第 19.1 节】曾经打架的两套键位位序：2016 手册是过时的，现役=固件那套
 
 | 来源 | bit0-3 | **bit4** | **bit5** | **bit6** | **bit7** |
 |---|---|---|---|---|---|
@@ -1091,3 +1091,94 @@ SendRCInputStatus, KEY_PRESSED_OFFSET_{W,S,A,D,SHIFT,CTRL,Q,E,R,F,G,Z,X,C,V,B}
   没有任何 `CMD_ID_*`/`KEY_PRESSED_*` 常量，值在 Unity 的 IL2CPP 侧）。
   ⇒ 想拿到就是"解 IL2CPP 元数据"的活，成本明显高于现场逐键试 5 分钟，
      所以 `cc_probe.py --sweep` 仍然是推荐路径；**这条列为可选深挖项，不假装已经做完**。
+
+---
+
+## 19. 直接把 12.x 选手端反编译了（Il2CppDumper + ILSpy）——三条结案、一条剩下的未知
+
+工具链（都装在 D 盘，没动 C 盘）：
+`D:\rmbuild\dotnet`(.NET 8 SDK) + `D:\rmbuild\tools\ilspycmd.exe` + `D:\rmbuild\il2d\Il2CppDumper.exe`，
+产物在 `D:\rmbuild\dump12\`（`dump.cs` 16MB、`il2cpp.h`、`script.json`、`DummyDll\`）
+与 `D:\rmbuild\decomp\`（12.x 选手端托管程序集的反编译 C#）。
+metadata 版本识别为 **29.1**，dummy dll 与 dump.cs 生成成功。
+
+### 19.1 结案一：键位位序（第 3 节那个悬案）
+
+`dump.cs` 里两处枚举逐字相同（`:136133-136148` 与 `:146776-146791`）：
+
+```
+KEY_PRESSED_OFFSET_W = 1, S = 2, A = 4, D = 8,
+SHIFT = 16,  CTRL = 32,  Q = 64,  E = 128,
+R = 256, F = 512, G = 1024, Z = 2048, X = 4096, C = 8192, V = 16384, B = 32768
+```
+
+⇒ **大疆现役客户端用的位序 = 我们固件 `remote_control.h:103-118` = 我们客户端 `KEYBOARD_BITS`**；
+《DT7&DR16 遥控器手册 V1.0(2016)》第 7 页那套（Q4/E5/Shift6/Ctrl7）**是过时的**，
+以后别再按它编包。连带背书：图传键鼠默认掩码 `0x1F` 就是 **W/S/A/D + SHIFT(小陀螺)**，不含 Q/E。
+⇒ 已经变成代码里的回归守卫：`tools/dt7_link/dt7_dbus_frame.py::KEY_ORDER_VENDOR_2026`
+（含 dump.cs 行号出处）+ `test_radio_km_client.py` 三条断言（等于厂商枚举 /
+0x1F 语义 / "2016 那套必须仍与现役不同，否则守卫没意义"）。
+⇒ 现场那"十秒位序判定"（3.1）从必做项降级为**可选复核**。
+
+### 19.2 结案二：我们的 KMC protobuf 与官方 proto 逐字段一致
+
+`dump.cs:152075+` 的 `CCP.RemoteControl`（`KeyboardMouseControl` 的 protobuf 消息）：
+
+```
+MouseX=1 int32, MouseY=2 int32, MouseZ=3 int32, LeftButtonDown=4 bool,
+RightButtonDown=5 bool, KeyboardValue=6 uint32, MidButtonDown=7 bool, Data=8 bytes
+```
+
+对照 `rm_client/backend/protocol.py:603-620` 的 `encode_keyboard_mouse_control()`：
+字段号 1..7 与类型**完全一致**（我们没发 field 8，那是可选的自定义 bytes）。
+⇒ 之前这条只是"照文档写的"，现在有厂商编译产物背书。
+
+### 19.3 结案三：帧格式与厂商编码器逐行一致
+
+`D:\rmbuild\decomp\CommunicationCompiler.cs`（12.x 托管程序集反编译）里
+`Encoder_A5_WithTail` 的实际逻辑：
+
+```
+sof = 165(0xA5)；datalen = payload.Length - 2；seq 自增；
+crc8 = CRC8(header 前 4 字节) 写进 header 末位；
+整帧 = header(5) + payload(cmd_id 2 + data n) + crc16(2)；
+crc16 覆盖 header+payload；CRC8_INIT=0xFF、CRC16_INIT=0xFFFF，表驱动
+```
+
+⇒ 与我 `rm_client/backend/cc_link.py::encode_cc_frame` 的实现**同构**
+（`datalen 只算 cmd_id 之后的载荷`这一点我原先是从
+`referee_usart_task.c:124-169` + `REF_HEADER_CRC_CMDID_LEN=9` 反推的，现在厂商源码直接对上）。
+CRC 表也确认是同一族（我们的 `rm_client/protocol.py:crc8/crc16` 已在
+`test_cc_link.py` 里被固件那份官方 CRC 代码验收过）。
+
+### 19.4 顺带发现：12.x 的键鼠还有第二条下行，**根本不经过 DT7**
+
+`dump.cs:135479` 的 `Video2025MsgID` 是一张**带数值**的常量表：
+
+```
+CMD_ID_Keyboard = 17(0x11)   ← 键鼠
+CMD_ID_SELECT_MODE = 57, QUERY_MODE = 33, QUERY_PairingStatus = 85,
+SET_SetFreqNum = 197, PUSH_Linkquality = 117, PUSH_CodecRate = 54,
+SET/QUERY_DEVICE_TIME = 74/75, QueryPackageVersion = 79
+```
+
+⇒ `CMD_ID_Keyboard` 属于**图传模块（Video2025）**的命令表 —— 也就是
+"键鼠走图传接收端下发"（与制作规范 2.1.6 那句"接收端本身具有遥控数据发送功能、
+可替代 DT7 遥控器"、以及第 17 节 `GetNewVideoSerialPort <- VID_2CA3+PID_1020+MI_02` 对上）。
+这条在 2026 是**主推**路（组委会只保障操作间那台接收端稳定）。
+
+### 19.5 剩下的唯一未知（而且不需要硬件）
+
+DT7 那侧（`GetDjiSerialPort` = `VID_FFF0&PID_0008`）的命令号**不是 const**：
+`dump.cs:131430-131437` 是
+
+```
+public static int CMD_ID_QUERY_COUNTRY_CODE; // 0x300   ← 0x300 是静态字段偏移，不是值
+public static int CMD_ID_SET_COUNTRY_CODE;   // 0x304
+... HEART_BEAT / RESTART / RECV_CUSTOM_DATA / SEND_CUSTOM_DATA
+```
+
+`static int`（非 const）的值由运行时 cctor 赋，**不在 dump.cs 里**。
+⇒ 要拿到 DT7 的键鼠命令号与载荷结构，下一步是**反汇编那个 cctor**
+（`script.json`/`il2cpp.h` 已给出 RVA，配 `capstone` 即可，工具链已就位、不需要硬件、不需要抓包）。
+这条是"我们的客户端直接连 DT7 发"的最后一块，**已经比"只能现场抓包"近了一大步**。
