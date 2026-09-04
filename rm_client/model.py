@@ -1642,6 +1642,12 @@ def build_default_registry() -> ModuleRegistry:
                 # 1.5 节"操作手可使用自定义控制器模拟键鼠操作选手端"、表 1-43 的
                 # 8 字节布局。这条路**不走车上图传串口**，所以 0x0311 那条
                 # 量不通时它仍然可用；代价是必须有官方选手端在跑。
+                # 直连 DT7（不跑官方选手端也能发键鼠）。帧结构/位域/CRC 已在厂商
+                # 二进制里核实，但**命令号与载荷字段顺序仍是候选值**
+                # （configs/dt7_profile.json、README 第 20/21 节），
+                # 因此默认关，且没现场确认前不许上正式比赛。
+                bool_setting("Direct DT7 Egress", False),
+                mode_setting("DT7 Port", "Auto", polar_port_choices()),
                 bool_setting("Custom Controller Egress", False),
                 mode_setting("CC Port", "Auto", polar_port_choices()),
                 number_setting("CC Hz", 30, 5, 30, 1),

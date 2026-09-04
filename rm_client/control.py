@@ -141,6 +141,13 @@ class KeyboardControlBridge:
         #: 允许经 0x0306 注入的协议槽位图。默认只有驾驶四键；SHIFT/Q/E 的授权
         #: 与 0x0311 那条走同一套决定，由 manager 下发，这里不自己扩权。
         self.cc_key_mask = 0x0F
+        # ---- 直连 DT7 出口（自己发键鼠给遥控器，不依赖官方选手端在跑）----
+        #: 对象由 manager 注入；命令号仍是**候选值**（configs/dt7_profile.json），
+        #: 所以没注入、没显式打开就一帧都不发。
+        self.dt7_link = None
+        self.dt7_enabled = False
+        self.dt7_sent = 0
+        self.dt7_last_error = ""
         self.key_state: dict[str, bool] = {key: False for key in CONTROL_KEYS}
         # 协议槽 -> 已绑物理键名；可由前端改绑，默认与旧行为一致。
         self.binds: dict[str, str] = dict(DEFAULT_CONTROL_BINDS)
@@ -394,6 +401,43 @@ class KeyboardControlBridge:
             self.cc_sent += 1
         self.cc_dropped_keys = list(getattr(self.cc_link, "dropped_keys", []) or [])
 
+
+    def _send_direct_dt7(self, command: ChassisCommand) -> None:
+        """直连 DT7：把键鼠按 0xA5 帧写进遥控器那条 DJI VCOM。
+
+        鼠标这里用**增量**（不是绝对像素）：DT7 的 mouse_x/y 本身就是
+        「移动速度」语义（2016 手册第 7 页 + 厂商 Input_Device_Status 都是 int16 增量），
+        与 0x0306 那条走选手端绝对坐标的语义不同 —— 两条路的鼠标不能互相借用。
+        键位则直接复用 command.keyboard_value：位序已被厂商枚举核实。
+        """
+        if not self.dt7_enabled or self.dt7_link is None:
+            return
+        try:
+            ok, why = self.dt7_link.send(
+                pressed_bits=command.keyboard_value,
+                mouse_dx=command.mouse_x, mouse_y=command.mouse_y, mouse_z=command.mouse_z,
+                left=command.left_button_down, right=command.right_button_down,
+                mid=command.mid_button_down,
+            )
+        except Exception as exc:
+            self.dt7_last_error = str(exc)
+            return
+        self.dt7_last_error = "" if ok else str(why)
+        if ok:
+            self.dt7_sent += 1
+
+    def release_direct_dt7(self) -> None:
+        """松手一帧（DT7 那侧没有"过期自动清零"的兜底，必须我们主动发）。"""
+        if self.dt7_link is None:
+            return
+        try:
+            ok, why = self.dt7_link.release()
+        except Exception as exc:
+            self.dt7_last_error = str(exc)
+            return
+        if not ok:
+            self.dt7_last_error = str(why)
+
     def release_custom_controller(self) -> None:
         """急停/失去焦点时把选手端那侧的键鼠也归零（0x0306 全零键值）。"""
         if self.cc_link is None:
@@ -416,6 +460,10 @@ class KeyboardControlBridge:
         # 自定义控制器出口同理：它是"经官方选手端进 DT7"的独立一条路，
         # 既不受 KMC 成败影响，也不受 0x5A / 图传链路状态影响。
         self._send_custom_controller(command)
+        # 直连 DT7：键位图可以复用 command.keyboard_value（位序已被厂商 KeyBoard 枚举
+        # 核实，见 README 19.1）；但鼠标这里是**增量**，与 0x0306 那条的绝对像素
+        # 语义不同，两条路的鼠标字段不许互相借用。
+        self._send_direct_dt7(command)
         if self.mock_output:
             self._dirty = False
             self._consume_relative_motion()

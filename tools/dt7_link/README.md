@@ -1242,3 +1242,59 @@ call 0x1801d8ed0        ← “从元数据初始值搬到静态槽”的助手
   是**一次性拿到真报文**，`tools/dt7_link/dt7_frame_diff.py` 直接算字段与位序；
 - 两条不冲突：抓到包可以**验证**元数据解出来的命令号，解出元数据可以**解释**包里的字段。
   在拿到交叉验证之前，`cc_link.py` 那套（0x0306 自定义控制器）仍是唯一已闭环可发的路。
+
+---
+
+## 21. DT7 直连出口已经写进客户端（`rm_client/backend/dt7_link.py`）——能证的都证了，剩两个候选值
+
+### 21.1 这条与 `cc_link`（0x0306）的分工
+
+| | `cc_link.py`（D 路） | `dt7_link.py`（C 路，本轮新增） |
+|---|---|---|
+| 谁把键鼠塞进 DT7 | **大疆官方选手端** | **我们自己的客户端** |
+| 要不要跑官方选手端 | 要 | **不要** |
+| 要什么硬件 | FTDI USB-串口 ×2 + 3 根线 | DT7 用数据线插电脑即可 |
+| 命令号状态 | 0x0306 = 协议文档**明文** | **候选值**（见 21.3） |
+| 鼠标语义 | **绝对像素** 1920×1080 | **增量**（DT7 mouse_x/y 本就是"移动速度"） |
+
+⇒ 两条的鼠标**不能互相借用**；代码里各走各的字段，注释也写明了，防止以后"顺手统一"。
+
+### 21.2 已核实部分（厂商二进制，不是文档不是猜）
+
+- 帧编码器与厂商 `CommunicationCompiler.Encoder_A5_WithTail` 同构：
+  `sof=0xA5`、`datalen = 载荷长度 - 2`（**不含 cmd 那 2 字节**）、`seq` 自增、
+  `crc8` 只覆盖帧头前 4 字节、`crc16` 覆盖 帧头+cmd+载荷、`CRC8_INIT=0xFF/CRC16_INIT=0xFFFF`；
+- 命令号是 16 位两半字节：`DJI_PRO_CMD_T{Cmd_Set=bits0-7, Cmd_Id=bits8-15}`
+  ⇒ `pack_cmd()` 就按这个拼，测试里正面验；
+- 键位位序 = 厂商 `KeyBoard` 枚举（19.1），所以本出口直接复用 `command.keyboard_value`，
+  不用再翻一张表；
+- 载荷字段顺序取自 12.x `dump.cs` 的 `Input_Device_Status`
+  （mouse_x/y/z int16、left、right、keyboard_value uint16、mid_button）。
+
+离线测试（`tools/dt7_link/test_dt7_link.py`，已挂 verify_all）还做了一件关键事：
+**把每帧交给队内固件里那份官方 CRC 代码（`components/support/CRC8_CRC16.c` 编成 exe）验收**，
+CRC8/CRC16 必须通过，改一字节必须被拒。另外覆盖：
+profile 改了立刻生效 / 坏 JSON 与越界值退回默认（不许把链路打瘫）/ 默认 mock 不碰硬件 /
+限流 / 主动松手发全零（DT7 侧没有"过期自动清零"的兜底）/ 写串口失败不涨计数 /
+manager 三道闸与急停顺序 / **默认关**。
+
+### 21.3 两个候选值（写在 `configs/dt7_profile.json`，现场确认，不改代码）
+
+1. **`cmd_set` 与 `cmd_id`**：我取的 `cmd_id=17` 来自厂商 `Video2025MsgID.CMD_ID_Keyboard = 17`，
+   但那张表名字指**图传模块**；DT7 口是不是同一编号体系，**没证实**。
+   DT7 口那族 `CMD_ID_*` 在二进制里是 `static int`（值在 il2cpp v1 元数据
+   `fieldDefaultValues` 表里，cctor 只做"搬进静态槽"，所以反汇编看不到立即数，
+   见 20.2）。
+2. **载荷是否就是 `Input_Device_Status` 那几个字段**（会不会还有 version/seq 前缀）。
+
+⇒ 定案办法两条，都很快：
+   - **抓包**：DT7 插电脑 + 官方选手端 + USBPcap，`dt7_frame_diff.py` 一条命令出字段与位序；
+   - **直接试**：`dt7_link` 发一帧，看车有没有反应；没反应就换 `cmd_id`（改 JSON 即可）。
+   发错命令号的后果只是"被遥控器忽略"，不会让车乱动 —— 这也是我敢先把出口做完的原因。
+
+### 21.4 界面上怎么摆
+
+- 开关：`RobotLink → Direct DT7 Egress`（**默认关**）+ `DT7 Port`；生效仍需
+  非急停 / 模块启用 / `Allow Drive` 三道闸。
+- 开着时水印显示 `DT7*`，星号是故意的：**提醒"这条的命令号还没现场确认"**，
+  没确认之前不要上正式比赛。

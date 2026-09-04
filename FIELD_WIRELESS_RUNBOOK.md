@@ -179,6 +179,15 @@
    `127.0.0.1:3333`**，跨机才填选手端那台机器的 IP。见 README 第 17.2 节。）
 别到现场才发现客户端连了个没人监听的 3333。
 
+## 4d. C 路（直连 DT7）现在能试了：一个开关 + 一个 JSON
+
+`rm_client/backend/dt7_link.py` 已按厂商帧结构实现（0xA5 + datalen(不含 cmd) + seq + crc8 +
+cmd2 + 载荷 + crc16；命令号位域 Cmd_Set 低/Cmd_Id 高）。开 `Direct DT7 Egress` +
+`DT7 Port` 就能发；**命令号仍是候选值**，写在 `configs/dt7_profile.json`，
+试不出来就换数字，不用改代码。发错号的后果只是"被忽略"，不会让车乱动。
+水印出现 `DT7*`（带星号＝未确认）时，不要上正式比赛。
+详见 README 第 21 节。
+
 ## 5. 绝对不要做的事
 
 - 不要拿 `RC_System_Installer_v1.2`（DT7 唯一的官方"调参软件"）去**升级遥控器固件**：

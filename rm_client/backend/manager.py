@@ -21,6 +21,7 @@ from ..native_viewer_telemetry import parse_vehicle_telemetry, parse_video_0310_
 from .. import robot_roles
 from ..scenarios import SCENARIOS
 from . import cc_link
+from . import dt7_link
 from . import protocol as proto
 from .mqtt_backend import RmMqttBackend
 from .polar_bridge import (
@@ -378,6 +379,8 @@ class BackendManager:
                 "Allow Spin Key",
                 "Radio KM Egress",
                 "Custom Controller Egress",
+                "Direct DT7 Egress",
+                "DT7 Port",
                 "CC Port",
                 "CC Hz",
                 "CC Mock Writes",
@@ -566,6 +569,26 @@ class BackendManager:
         # 两条区别要记清：这条**不经过 MQTT、也不经过车上图传串口**，
         # 所以 0x0311 判成 NO-RX 时它依然可用；代价是选手端必须在跑，
         # 且"键鼠来源"只能有一个（2026 协议 2.2.1）。
+        # ---- 直连 DT7 出口：同样三道闸，但不要求选手端在跑、也不要求 0x5A 在线 ----
+        dt7_setting = settings.get("Direct DT7 Egress")
+        if control is not None and dt7_setting is not None and dt7_setting.value:
+            prof = dt7_link.load_profile()
+            port = str(getattr(settings.get("DT7 Port"), "value", "Auto") or "Auto")
+            link = getattr(self, "_dt7_link", None)
+            if link is None or link.port != port or link.profile != prof:
+                link = dt7_link.Dt7KeyMouseLink(port=port, profile=prof)
+                self._dt7_link = link
+            control.dt7_link = link
+            control.dt7_enabled = bool(not estopped and allow_drive
+                                       and module is not None and module.enabled)
+            if estopped and getattr(self, "_dt7_was_enabled", False):
+                # DT7 那侧没有"过期自动清零"的兜底，急停必须主动补一帧全零
+                control.release_direct_dt7()
+            if not control.dt7_enabled:
+                control.dt7_last_error = "直连 DT7 出口未生效（急停/未授权/模块未启用）"
+        elif control is not None:
+            control.dt7_enabled = False
+        self._dt7_was_enabled = bool(control is not None and control.dt7_enabled)
         cc_setting = settings.get("Custom Controller Egress")
         cc_wanted = bool(cc_setting is not None and cc_setting.value)
         if control is not None and cc_wanted:
