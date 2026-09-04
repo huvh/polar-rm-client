@@ -76,6 +76,17 @@
 摩擦轮起转 = 现固件/RM2026 位序（我们编码对）；车切小陀螺 = 2016 手册位序（要改）。
 证据与影响面：`tools/dt7_link/README.md` 第 3.1 节。
 
+## 4b. 要动 DT7 那条路（C 路）之前：先抓一次包，别逆向二进制
+
+1. DT7 用数据线插电脑，开官方选手端（`RoboMasterClient`），按提示连接遥控器；
+2. 同时用 USBPcap/Wireshark 抓那个设备的 **主机→设备** URB；
+3. 依次：什么都不按(3 包) → 按住 W(3 包) → 按住 Q(3 包) → 按住 Shift(3 包) → 动鼠标；
+4. 选中那些 OUT 包，`Edit > Copy > As Hex Stream`，每行粘进 `samples.txt`，
+   行首打上 `NONE / W / Q / SHIFT` 标签；
+5. `python tools/dt7_link/dt7_frame_diff.py samples.txt`
+   → 直接报"键位在第几字节 + 用的是哪套位序"，并明确区分
+   `fw` / `dji2016` / 样本不够判不出来 三种结论。
+
 ## 5. 绝对不要做的事
 
 - 不要拿 `RC_System_Installer_v1.2`（DT7 唯一的官方"调参软件"）去**升级遥控器固件**：
