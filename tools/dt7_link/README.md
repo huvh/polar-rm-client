@@ -588,7 +588,8 @@ DT7 那条保留为"抓包才可能推进"的备用方案，工具（含本轮�
 
 | 符号 | 说明 |
 |---|---|
-| **`_pc2rc` / `_rc2pc`** | **两个方向各一条通道** —— 我们要挖的就是 `_pc2rc` |
+| `_pc2rc` / `_rc2pc` | ~~"两个方向各一条通道"~~ **这条我读错了，11.5 已更正**：\n |  |
+| `SerialPortDataSpeed{tc2pc,pc2tc,ccs2pc,pc2ccs,rc2pc,pc2rc,ccs2pc_error}` | 同名字段在 `DataManager`/`SerialPortDataSpeed` 里成对出现 —— 它们是**每条链路两个方向的速率计数**，不是数据通道 |
 | `OpenUSBPort` / `CloseUSBPort` / `CheckUSBPort` / `GetUSBConnenctStatus` | 遥控器这侧是**按 USB 口**管的（不是只当 COM 口用） |
 | `RC150USBThread` / `RCSerialThread` / `RCSerialLoop` / `OnRCSerialData` | USB 线程 + 串口线程**两套并存** |
 | `ULibUsbDotNet` / `ULibUsbDotNet.Main` + 同目录 `LibUsbDotNet.LibUsbDotNet.dll` | 用的是 **LibUsbDotNet（WinUSB/libusb 托管封装）** |
@@ -651,14 +652,46 @@ DT7 那条保留为"抓包才可能推进"的备用方案，工具（含本轮�
 
 命令号的**具体数值**不在这个程序集里（全 dll 扫下来编译期常量为 0 个，
 说明它们要么是运行时从配置/表里取，要么在 Unity 那侧 `GameAssembly.dll` /
-`RMClientDaemon.dll` 里）。下一步该做的是：
+`RMClientDaemon.dll` 里）。
 
-1. 反编译 `RCSerialThread.WorkerProc` / `OnRCSerialData` 与
-   `SerialPortWrapper.WriteData` 的调用点 —— 拿到**发出去的那串字节的拼法**；
-2. 顺藤到 `GameAssembly.dll`（30 MB，Unity IL2CPP，得用 ilcppifier/VoidDump 那一类工具）
-   找 `DUSS_MB_CMD_HDVT_RACING_PUSH_CHANNEL_INFO` 的编号与载荷；
-3. 或者最省事：DT7 插电脑、跑一次官方选手端，同时 USBPcap 抓那个 CDC 口，
-   拿一份真报文跟上面的帧结构对表。
+#### 11.5.1 我把这条路走到了尽头：**上行帧的组装不在 daemon 里**
+
+接着挖的结果（`dnfile` 全表扫字段名，2026-09-04）：
+
+- `RMClientAssist_RemoteSerialPort.dll` 里 **KeyValue / mouse / keyboard 一个字段都没有**
+  （`PUSH_CHANNEL` 有，但 `DUSS_MB_CMD_HDVT_RACING_PUSH_CHANNEL_INFO` 的字段只有
+  `configuration_id` 一个，载荷是后面变长段，名字里看不出来）。
+- `DataManager` 的字段是 `CMD_ID_SEND_CUSTOM_DATA / CMD_ID_REQUEST_IFRAME /
+  CMD_ID_QUERY_PairingStatus` + `tc2pc/pc2tc/ccs2pc/pc2ccs/**rc2pc/pc2rc**/ccs2pc_error`
+  —— 后面这六个是 `SerialPortDataSpeed`（**每条链路两个方向的速率**）。
+  ⇒ **11.2 里我把 `_pc2rc` 当成"我们要挖的那条数据通道"，读错了**：它只是计数器。
+- 遥控器侧 `RCSerialThread` 只有 `sum/avag/count/isSent/m_synTime` 五个字段 +
+  `SendSerialPortDataSpeed`，即它做的是**收发字节 + 统计速率**，
+  不组装键鼠内容。
+- 顺带挖到两个别的事实：`CCSerialThread` 有 `keybd_Times`、`control_Times`、
+  `recvBytesCnt302`、`recvBytesCnt306` —— 自定义控制器那条 115200 串口上跑的是
+  **0x0302 / 0x0306**；`ThreadType` 枚举把
+  `RemoteControl / CustomController / VideoPort / Video2025Port / Video2025USBPort`
+  分成五种口，与 11.4 的 `DeviceInfo` 四个找口函数对得上。
+- `ProtoManager` 有 `GetPCHeaderLen / GetV3HeaderLen / GetBitValue / SetBitValue /
+  GetBitValueFromUInt16 / FromUInt32 / StructToBytes / BytesToStruct`，
+  `ProtoV3Header{flag,datalen,seqnum,robot,receiver,sender,protoid,crc8}` ——
+  帧头是"struct + 位域"直接 marshalled，`CRCCheck` 三套（默认 / Student 口 / Video 口）
+  各自带 `CRC8_INIT / CRC16_INIT / CRC8_TAB / CRC16_TAB`。
+
+⇒ **结论改口**：键鼠→DT7 的**内容组装在 Unity 那侧**（`GameAssembly.dll`，IL2CPP，30MB，
+没有符号），要在二进制里把它抠出来需要 il2cpp dumper 且成功率不可控。
+**所以 DT7 这条路的唯一省力入口是抓一次包**（十分钟内能做完），
+差分分析已经写成工具：`tools/dt7_link/dt7_frame_diff.py`
+（合成样本断言在 `test_frame_diff.py`，含"样本不够时不许硬判位序"这一条），
+现场步骤在 `FIELD_WIRELESS_RUNBOOK.md` 第 4b 节。
+
+原先列的"下一步 1/2/3"里，1 和 2 已经被这次扫描否掉：
+
+1. ~~反编译 `RCSerialThread`~~ —— 做完发现它不组装键鼠（见上）；
+2. ~~从程序集里找命令号数值~~ —— 编译期常量为 0 个，号在 Unity 侧；
+3. **抓包**：DT7 插电脑 + 官方选手端 + USBPcap，把 OUT 包粘进
+   `dt7_frame_diff.py`。这条仍然是唯一省力路。
 
 **这一步做完，DT7 注入才算真的能自己实现。** 现在至少已经确定：
 目标协议是 DUPC 族（有开源参考）、走串口（我们有 pyserial）、
