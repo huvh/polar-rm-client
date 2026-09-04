@@ -684,7 +684,7 @@ DT7 那条保留为"抓包才可能推进"的备用方案，工具（含本轮�
 **所以 DT7 这条路的唯一省力入口是抓一次包**（十分钟内能做完），
 差分分析已经写成工具：`tools/dt7_link/dt7_frame_diff.py`
 （合成样本断言在 `test_frame_diff.py`，含"样本不够时不许硬判位序"这一条），
-现场步骤在 `FIELD_WIRELESS_RUNBOOK.md` 第 4b 节。
+现场步骤在 `FIELD_WIRELESS_RUNBOOK.md` 第 4b 节；B 路（图传 0x0311）的串口事实与三种可能性在同文件第 3b 节（本工程 .ioc 里只有 USART1/USART3/USART6，**没有第四路、也没有 921600**）。
 
 原先列的"下一步 1/2/3"里，1 和 2 已经被这次扫描否掉：
 
