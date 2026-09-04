@@ -451,3 +451,215 @@ GitHub（repo/code search：DT7、dji dbus、robomaster client、HT-01AX、robow
 在现场量通**（`HOST_KM_RX_COUNT` 涨不涨，判法与两种结果见
 `tools/firmware/host_bridge/GAPS.md` 第 10 节第 3 条）。
 DT7 那条保留为"抓包才可能推进"的备用方案，工具（含本轮新增的零风险旁听）都还在。
+
+---
+
+## 10. 2026-09-04 第三轮补充：大疆官网上"自定义客户端"这件事到底是什么
+
+电控说"用大疆的自定义客户端连接 DT7 就能直接控制"。去官网核完，结论是
+**他说的软件存在、功能也没错，但那个软件不叫"自定义客户端"** —— 名字混了，
+而混的这个名字在规则里恰好指"队伍自己做的东西"。三句官方原文就能把事说清：
+
+### 10.1 官网上能下载的是"赛事引擎**选手端**软件"（RoboMasterClient）
+
+产品页：https://www.robomaster.com/zh-CN/products/components/detail/6145
+（标题 "RoboMaster 2025 机甲大师超级对抗赛赛事引擎"，描述
+"包括赛事服务器、裁判端与选手（操作）端"）。它的"相关下载"里：
+
+| 条目 | 文件 |
+|---|---|
+| 赛事引擎裁判端（含服务器）软件 | `…/tem/70482/RoboMasterEngine 11.0.0.210(Student).7z` |
+| **赛事引擎选手端软件** | `…/tem/70482/RoboMasterClient 11.0.1.128.7z`（475,526,295 字节） |
+| 选手端界面说明手册 | `…/tem/70482/RoboMaster 2025 …选手端界面说明手册-学生版（202507）.pdf` |
+| 联网操作手册 | `…/tem/70482/RoboMaster赛事引擎联网操作手册.pdf` |
+
+⇒ **"大疆的客户端" = RoboMasterClient（选手端）**。发布的历史版本线到 11.0.1.128。
+
+### 10.2 "自定义客户端"在规则里 = 队伍自制，大疆不发这个软件
+
+《RoboMaster 2026 机甲大师高校系列赛 制作规范手册》2.1.9 原文：
+
+> "自定义客户端是**参赛队伍自制**的一套多用途设备，用于接收裁判系统赛事引擎服务器
+>  发送的比赛相关信息与机器人图传画面，并向赛事引擎服务器发送赛事专用交互指令。"（:582-583）
+> "S56 自定义客户端仅可用于RMUC。" / "S62 自定义客户端不得使用无线发射/接收装置。"
+
+⇒ 所以**不存在"大疆的自定义客户端"**；我们仓库 `rm_custom_client` 才是那个自定义客户端。
+
+### 10.3 但"DT7 能传键鼠"是官方明文，而且**只有 DT7 能接选手端**
+
+同一份规范里的两张表/两条注释（本地文本 `rm2026_spec.txt` 行号）：
+
+> 表：`DT7遥控器 —— 键鼠指令、遥控器杆量信息`（:380）
+>       `其他遥控器 —— 遥控器杆量信息`（:381）
+>       `相机图传模块（接收端） —— 键鼠指令、遥控器杆量信息`（:382）
+> "组委会**推荐**参赛队伍使用图传链路或相机图传模块（接收端）控制机器人。"（:390）
+> "相机图传模块（接收端）本身具有遥控数据发送功能（**搭配选手端可同时发送键鼠数据**），
+>  可替代DT7遥控器。"（:392-394）
+> "S18 ……**仅DT7遥控器可以接入选手端**。"（:401）
+
+⇒ 电控的记忆完全对得上：**DT7 插到跑官方选手端的那台电脑上，键鼠和杆量就能进车**
+（这条正是第 1 节手册画的"虚拟控制链路"，官方实现就在选手端里）。
+
+### 10.4 更要紧的一条：键鼠来源**二选一**，这是规则级互锁
+
+《2026 通信协议》2.2.1 KeyboardMouseControl 原文（本地文本 `rm2026_proto.txt`）：
+
+> "该数据将通过**相机图传模块（接收端）**发送给机器人。实际比赛时，操作手需提前
+>  选择**键鼠控制指令来源为官方选手端或自定义客户端**，同时**仅能通过一个来源**
+>  生成发送给机器人的键鼠指令。"（:1732-1735）
+> 表 2-1：`KeyboardMouseControl 自定义客户端→图传链路→机器人 75Hz`（:1559）
+> 表 2-1：`CustomControl 自定义客户端→图传链路→机器人 最大30字节 75Hz`（:1564）
+
+⇒ 三条直接影响我们的决定：
+1. **我们的客户端发 KMC 不是白发的**，它是 2026 明文支持的键鼠通道；
+   但前提是**键鼠来源要被切到"自定义客户端"**，否则车上的键鼠来自官方选手端，
+   我们发的一路会被丢掉。这件事界面里必须显式提示，不能靠记忆。
+2. KMC 与 CustomControl(0x0311) **同属图传链路**，所以第 9 节那条"必须从图传
+   发送端串口(921600)进车"对**两条通道同时成立** —— 不是我们 km_link 独有的毛病，
+   官方通道也一样。**这就把"要不要继续挖 DT7"这个问题变小了**：
+   真正要解决的是"车上有谁在听那一路 921600"。
+3. 图传接收端能替代 DT7（且组委会只保证操作间那台接收端稳定）——
+   这是官方推荐路，DT7 + 官方选手端 反而是"组委会不保障稳定性"的那条。
+
+### 10.5 附录三：官方给的自定义客户端示例代码就在协议里
+
+《2026 通信协议》附录三"自定义客户端示例通信代码"是 **Unity/C# + MQTTnet**：
+
+> `public MyMqttClient(string clientID, string ip = "127.0.0.1", int port = 3333)`
+> `Subscribe("KeyboardMouseControl"); Subscribe("CustomControl");`（:2823-2905）
+> 正文 §2："示例代码，详见附录三，其中 MyMqttClient 的 clientID 需填入所连接…"（:1545）
+> 正文："服务器IP地址为固定IP：**192.168.12.1，端口：3333**。自定义客户端IP地址为192.168.12.2。"（:1539）
+
+⇒ 默认值是 `127.0.0.1:3333`，说明**官方客户端（选手端）进程里就带着这个 broker**；
+正式比赛时自定义客户端连的是**赛事引擎服务器** `192.168.12.1:3333`。
+我们客户端默认连 `127.0.0.1:3333`（`configs/default.json`、
+`rm_client/backend/mqtt_backend.py:31-32`），**语义上等于"和官方选手端在同一台机器上、
+接它的 broker"** —— 现场要按赛事引擎口径改成 192.168.12.1，
+或者本机跑官方选手端当中转。这一点以前从没写进任何文档，很容易在检录当天才被发现。
+
+### 10.6 本轮下载件（只解包分析，**不运行**）
+
+- `D:\rmbuild\rmclient\RoboMasterClient.7z` —— 官方选手端 475MB。
+  价值：PC↔DT7 那套上行报文**只有它实现了**。要做 DT7 注入，正路是
+  在这个包里找那段代码/配置（或用它配合 USBPcap 抓一次包），
+  而不是继续猜 18 字节 DBUS。
+
+---
+
+## 11. 把大疆官方选手端扒开看了一眼：PC↔DT7 那段代码到底在哪
+
+下载件：`RoboMasterClient 11.0.1.128.7z`（475,526,295 字节，
+`https://rm-static.djicdn.com/tem/70482/RoboMasterClient 11.0.1.128.7z`）。
+**只用 py7zr 解包读文本，没有运行任何 exe。**
+解出来的分析件在 `D:\rmbuild\rmclient\x\`（小文件）与 `D:\rmbuild\rmclient\x2\`。
+
+### 11.1 选手端里有一个**专门跟遥控器说话子进程**
+
+`RoboMasterClient_Data\StreamingAssets\Tools\RMClientDaemon\` 下面有四个 assist 子进程，
+其中跟这次问题直接相关的是 `RMClientAssist_RemoteSerialPort.{exe,dll,pdb}`。
+它自带的**真实运行日志**（包里就带着 2025-07-07 那次运行的日志）开头三行：
+
+```
+[Log] [07-07 20:28:55:593] [Game] rc Serial Port Start
+[Log] [07-07 20:28:55:619] [Game] RCSerialPortThread线程ID：66936
+[Log] [07-07 20:28:55:635] [Game] send a heartbeat to daemon
+```
+
+⇒ 官方实现里，"跟 DT7 通信"是**一个独立线程 + 一个独立子进程**，
+跟它并列的还有 `video Serial Port Start` / `video 2025 Serial Port Start` /
+`cc Serial Port Start`（cc = 自定义控制器）与 `RobotUDPThread`（图传 UDP）。
+**电控说的"大疆客户端连 DT7 就能控车"，在这一层是被证实的：官方客户端确实有 RC 口线程。**
+
+### 11.2 PDB 泄露的符号名，直接给出这条链路的形状
+
+`RMClientAssist_RemoteSerialPort.pdb` 里的源文件名（PDB 原文，路径就是大疆内部工程路径）：
+
+```
+...\RMClientAssist\Framework\RC150.cs
+...\RMClientAssist\Framework\RC150USBThread.cs
+...\RMClientAssist\Framework\RCSerialThread.cs
+...\RMClientAssist\Framework\CCSerialThread.cs
+...\RMClientAssist\Framework\SerialPortThread.cs
+...\RMClientAssist\Framework\CRCCheck.cs
+...\RMClientAssist\Framework\ProtoManager.cs
+```
+
+同文件里的符号（挑相关的照抄）：
+
+| 符号 | 说明 |
+|---|---|
+| **`_pc2rc` / `_rc2pc`** | **两个方向各一条通道** —— 我们要挖的就是 `_pc2rc` |
+| `OpenUSBPort` / `CloseUSBPort` / `CheckUSBPort` / `GetUSBConnenctStatus` | 遥控器这侧是**按 USB 口**管的（不是只当 COM 口用） |
+| `RC150USBThread` / `RCSerialThread` / `RCSerialLoop` / `OnRCSerialData` | USB 线程 + 串口线程**两套并存** |
+| `ULibUsbDotNet` / `ULibUsbDotNet.Main` + 同目录 `LibUsbDotNet.LibUsbDotNet.dll` | 用的是 **LibUsbDotNet（WinUSB/libusb 托管封装）** |
+| `DJI_PRO_CMD_T` / `DJI_PRO_CMD_TYPE_T` / `cmd_id` / `GetCMDID` | 有个 DJI 命令码枚举（"pro cmd"） |
+| `GetCRC8` / `GetCRC16` / `CRCCheck_StudentSerialPort` / `CRCCheck_VideoSerialPort` | 帧带 CRC8/CRC16，两种口校验不同 |
+| `SearchHeader` / `SearchPackage` / `FrameHeader` / `FrameTail` | 有头有尾的包结构 |
+| `CMD_ID_QUERY_PairingStatus` / `CMD_ID_REQUEST_IFRAME` / `CMD_ID_SEND_CUSTOM_DATA` | 实际命令码名字（配对状态查询、请求 I 帧、发送自定义数据） |
+| `SendData` / `bysend` / `SendSerialPortDataSpeed` / `SerialPortDataSpeed` | 发送侧还带速率控制 |
+
+注意两点边界，别把这份表读过头：
+1. **`RC150.dll` 不是遥控器驱动** —— 它的导出是 `RC150Init/RC150Release/
+   RegisterRequestIFrame/RegisterRequestCancelIFrame`，导入全是 `avcodec_*`，
+   是**图传视频解码**那块（RC150 是大疆内部代号，和"遥控器"撞名而已）。
+   遥控器那侧的代码在**托管程序集** `RMClientAssist_RemoteSerialPort.dll` 里。
+2. **`_pc2rc` 的字节布局还是没拿到** —— 它在 IL 里，得反编译那个托管 dll
+   （`dnfile`/ilspy 都行，dll 只有 101,376 字节，方法很小）才能读出来。
+   这一步是"要不要继续做 DT7"的关键分叉点，成本比之前估计的低得多。
+
+### 11.3 这条发现把结论改成了什么
+
+- **如果只是想"电脑上按键盘就让车动"**：完全不用自己实现 `_pc2rc` ——
+  跑官方选手端，它已经把键鼠经 `_pc2rc` 灌进 DT7 了；
+  我们的自定义客户端要做的是**把键鼠发到它身边那个 MQTT（`127.0.0.1:3333`）**，
+  并把"键鼠控制指令来源"选成自定义客户端（2.2.1 明文：来源只能一个）。
+- **如果想彻底不依赖官方选手端**：反编译官方实现里那段发送代码就行，代码就在我们手上
+  （比"盲猜 18 字节 DBUS"靠谱得多）。
+  ⚠️ 本小节第一版曾据 `LibUsbDotNet` 猜"DT7 那侧可能走 WinUSB、第 4.1 节的
+  'pyserial 直接写 COM 口'要降级"—— **那个猜是错的，11.4 已把它否掉**：
+  用 LibUsbDotNet 的是 `RC150*`（图传接收端视频），遥控器那侧是
+  `RCSerialThread` + `DeviceInfo.GetDjiSerialPort`，**仍是串口**，
+  所以第 4.1 节的结论不变。
+
+### 11.4 用 dnfile 把托管程序集的元数据剥出来：遥控器和图传是**两个不同的东西**
+
+`RMClientAssist_RemoteSerialPort.dll`（101,376 字节）里 163 个类型的成员表（下面全是大疆自己的命名，逐条来自元数据）：
+
+| 类型 | 成员（原样照抄） | 到底是谁 |
+|---|---|---|
+| `DeviceInfo` | `GetDjiSerialPort` / `GetCCSSerialPort` / `GetVideoSerialPort` / `GetNewVideoSerialPort` | **找串口**的助手：DJI口=遥控器、CCS=自定义控制器、Video=图传，**三种口并列** |
+| `RCSerialThread` | `WorkerProc` `OnRCSerialData` `SendSerialPortDataSpeed` `sum` `avag` `count` `isSent` `m_synTime` | **遥控器（DT7）就是走串口** —— 与第 4.1 节"pyserial 就能写"的推断一致 |
+| `RC150` | `RC150Init` `StartDecodeThread` `OnRecvVideoStream` `RegisterRequestIFrame` | **RC150 是图传接收端（视频）代号，不是遥控器**（11.2 里那句提醒仍然成立，且比先前更确定：方法全是解码/I帧） |
+| `RC150USBThread` | `VendorId` `ProductId` `usbDevice` `reader` `ReadThreadProc` `IsTCVideoDecode` | 图传接收端在 PC 上是 **libusb( LibUsbDotNet ) 视频设备**；上一版我据此猜"DT7 可能也是 WinUSB"——**这个猜测作废**，DT7 那侧是 `RCSerialThread` 串口 |
+| `T_HEADER` | `flag` `length` `seq_num` `robot` `receiver` `sender` **`cmd_Id`** `crc8` | **帧头**：有 sender/receiver 地址、有 seq、头带 crc8 |
+| `T_TAIL` | `checkSum` | **帧尾**：整帧 crc16 |
+| `T_V1_HEADER` | `sof` `crc8` `sender` `receiver` `seqnum` `cmd_type` `cmd_set_id` | 另一版（V1）帧头，`sof` + `cmd_set/cmd_id` 两段式 |
+| `DJI_PRO_CMD_T` | `Cmd_Set` + `Cmd_Id`（位域） | **命令码 = (命令集, 命令号) 两段** |
+| `DJI_PRO_CMD_TYPE_T` | `Encrypt_Type` `Reserve` `Cmd_Ack` `Cmd_Type`（位域） | 帧类型/加密/ACK 标志 |
+| `DJI_PRO_MOUDLE_T` | `Moudle_Type` + `Moudle_Id` | 模块地址（原文件里就拼错成 Moudle） |
+| `FrameHeader`/`FrameTail` | `sof` `datalen` `seq` `crc8` / `crc16` | 又一层轻量帧 |
+| `TCCustomControllerByteData` | `cmd` `controldate` | 自定义控制器字节包 |
+| `RC_PAIRING_STATE` | `PAIRING_STATE_NORMAL/PAIRING/DONE` `NORMAL_STATE` `PAIRING_STATE` `LOST_STATE` `AMT_STATE` `ERROR_STATE` | 对频状态机（**"配对"这件事大疆自己也在管**） |
+| `SET_RC_PAIRING_ACK` / `RESTART_REQ` / `RESTART_ACK` / `SET_COUNTRY_CODE_REQ` / `COUNTRY_CODE_ACK` / `SET_FREEQ_ID_ACK` / `DUSS_MB_CMD_HDVT_SET_CONFIG__INFO{configuration_id,freq_id,camp_freq,freq}` / `..._INFO_CUSTOM_DATA{configuration_id,custom_data}` / **`DUSS_MB_CMD_HDVT_RACING_PUSH_CHANNEL_INFO{configuration_id,...}`** | | 一堆 DJI DUSS/MB 命令的**结构体名字都在这儿**，尤其最后那条 **`RACING_PUSH_CHANNEL_INFO`**：名字直译"竞速-推送通道信息"，是 PC 往遥控器里**塞通道数据**最像的一条 |
+
+⇒ 结论形状：**PC↔DT7 = DJI 那套 (命令集,命令号) + sender/receiver + crc8/crc16 的命令式串口协议**，
+不是"裸写 18 字节 DBUS"。这与第 4.3 节从 Phantom 调参软件里挖到的
+`header/ackid/Command ID/Command Length(Exclude Head)/crc_16/result` **同一族**
+（就是 `o-gs/dji-firmware-tools` 那套 DUPC 家族）。
+
+### 11.5 还差的最后一厘米
+
+命令号的**具体数值**不在这个程序集里（全 dll 扫下来编译期常量为 0 个，
+说明它们要么是运行时从配置/表里取，要么在 Unity 那侧 `GameAssembly.dll` /
+`RMClientDaemon.dll` 里）。下一步该做的是：
+
+1. 反编译 `RCSerialThread.WorkerProc` / `OnRCSerialData` 与
+   `SerialPortWrapper.WriteData` 的调用点 —— 拿到**发出去的那串字节的拼法**；
+2. 顺藤到 `GameAssembly.dll`（30 MB，Unity IL2CPP，得用 ilcppifier/VoidDump 那一类工具）
+   找 `DUSS_MB_CMD_HDVT_RACING_PUSH_CHANNEL_INFO` 的编号与载荷；
+3. 或者最省事：DT7 插电脑、跑一次官方选手端，同时 USBPcap 抓那个 CDC 口，
+   拿一份真报文跟上面的帧结构对表。
+
+**这一步做完，DT7 注入才算真的能自己实现。** 现在至少已经确定：
+目标协议是 DUPC 族（有开源参考）、走串口（我们有 pyserial）、
+命令结构体名字全在官方程序集里 —— 不再是"完全未知的私有 USB 协议"。
