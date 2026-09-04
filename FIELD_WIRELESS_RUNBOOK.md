@@ -38,6 +38,10 @@
 
 1. 官方选手端 `RoboMasterClient` 跑起来并登录本机机器人，DT7 正常连着它；
    **键鼠来源选"官方选手端"**（这条路是选手端在发键鼠，见 2.2.1 的二选一）。
+1a. **硬件前提（最容易白跑的一条）**：选手端那台机器必须真插一个 **FTDI 芯片**
+    的 USB-串口当"自定义控制器"，并与第二个 USB-串口用 TX/RX/GND 三根线交叉相连；
+    客户端往第二个口写。com0com 虚拟口**不算**（选手端 `GetCCSSerialPort` 只认
+    硬件 ID 里的 `FTDI`）。先跑 `python tools/dt7_link/cc_probe.py --list` 自查。
 2. 客户端 `RobotLink` 里勾 **Custom Controller Egress**，`CC Port` 选选手端那个
    自定义控制器串口，先保持 **CC Mock Writes = 开**（只产帧不写串口），
    确认水印出现 `CC on`；再关掉 Mock 真发。

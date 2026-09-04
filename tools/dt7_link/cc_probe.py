@@ -44,6 +44,78 @@ sys.path.insert(0, str(ROOT))
 
 from rm_client.backend import cc_link as cc          # noqa: E402
 
+# ---------------------------------------------------------------------------
+# 官方选手端怎么认"自定义控制器"串口——这条是从它自己的 DeviceInfo.dll 里挖出来的
+# ---------------------------------------------------------------------------
+# `DeviceInfo.dll` 导出四个找口函数，每个函数里 lea 引用的硬件 ID 串各不相同
+# （pefile 扫 .text 的 rip 相对引用得到的对应关系，不是猜的）：
+#
+#   GetCCSSerialPort      <- "FTDI"                         <- **自定义控制器：认 FTDI**
+#   GetDjiSerialPort      <- "VID_FFF0" + "PID_0008"       <- 遥控器 DT7 那条 VCOM
+#   GetVideoSerialPort    <- "VID_2CA3" + "PID_001F" + "MI_04"
+#   GetNewVideoSerialPort <- "VID_2CA3" + "PID_1020" + "MI_02"
+#
+# ⇒ 现场两个直接后果：
+#   1) **com0com 那种虚拟串口对不会被选手端认成自定义控制器**（它不按 COM 号认，
+#      是按硬件 ID 里的 "FTDI" 认）。要做"假自定义控制器"，
+#      选手端那台机器上必须真插一个 FTDI 芯片的 USB-串口。
+#   2) 我们的客户端不占用那个口（口被选手端独占），所以接线是：
+#      选手端机 <-USB-> [FTDI 适配器] <-3 根线 TX/RX/GND 交叉-> [第二个串口适配器] <-USB-> 我们这侧。
+#      两个适配器可以都在选手端机上（我们那侧写另一个 COM 号即可），
+#      只要成对交叉连通；CH340/PL2303 放在选手端那一侧**不行**。
+#
+# `--list` / `--check-port` 就是把这套判定搬到命令行上，接错线时先自己看见。
+MATCHERS = {
+    "自定义控制器（选手端会认）": ("ftdi",),
+    "遥控器 DT7 VCOM": ("vid_fff0", "pid_0008"),
+    "图传接收端（旧）": ("vid_2ca3", "pid_001f", "mi_04"),
+    "图传接收端（新）": ("vid_2ca3", "pid_1020", "mi_02"),
+}
+
+
+def port_rows():
+    try:
+        import serial.tools.list_ports as lp
+    except ImportError:
+        print("[FAIL] 没装 pyserial", file=sys.stderr)
+        return []
+    rows = []
+    for prt in lp.comports():
+        blob = f"{prt.hwid or ''} {getattr(prt, 'device_instance_path', '') or ''} " \
+               f"{prt.description or ''}".lower()
+        match = [name for name, keys in MATCHERS.items() if all(k in blob for k in keys)]
+        rows.append({"port": prt.device, "hwid": prt.hwid or "", "desc": prt.description or "",
+                     "match": match})
+    return rows
+
+
+def do_list() -> int:
+    rows = port_rows()
+    if not rows:
+        print("一个 COM 口都没有。选手端那台机器需要真插一个 **FTDI** USB-串口当自定义控制器。")
+        return 1
+    print(f"{'端口':8} {'选手端会认成':26} 硬件 ID / 描述")
+    for r in rows:
+        print(f"{r['port']:8} {('、'.join(r['match']) or '-'):26} {r['hwid'][:52]} | {r['desc'][:36]}")
+    if not any(r["match"] and "自定义控制器" in m for r in rows for m in r["match"]):
+        print("\n没有硬件 ID 含 FTDI 的口 => 选手端那条自定义控制器口根本不会被打开。"
+              "\n去插一个 FTDI 芯片的 USB-串口（CH340/PL2303 不算）。")
+    return 0
+
+
+def do_check(port_name: str) -> int:
+    hit = next((r for r in port_rows() if r["port"].upper() == port_name.upper()), None)
+    if hit is None:
+        print(f"[FAIL] 找不到 {port_name}；先看 --list")
+        return 2
+    print(f"{hit['port']}  硬件ID {hit['hwid']}\n     描述 {hit['desc']}")
+    ok = any("自定义控制器" in m for m in hit["match"])
+    print("  判定：" + ("**选手端会把它当自定义控制器**（硬件 ID 含 FTDI）" if ok else
+                       "**选手端不会认这个口**（匹配到的是 " + ("、".join(hit["match"]) or "无") +
+                       "；自定义控制器要 FTDI）"))
+    return 0 if ok else 1
+
+
 SWEEP_DEFAULT = ("W", "A", "S", "D", "Q", "E", "SHIFT", "CTRL", "SPACE", "F")
 
 
@@ -78,7 +150,16 @@ def main(argv=None) -> int:
                     help="逐键各发几帧，用来现场把键值表对出来")
     ap.add_argument("--confirm-move-car", action="store_true",
                     help="真的往串口写。不给就只打印字节")
+    ap.add_argument("--list", action="store_true",
+                    help="列端口，并按官方 DeviceInfo.dll 的匹配规则标出选手端会认哪一个")
+    ap.add_argument("--check-port", metavar="COMx",
+                    help="只判定一个口：选手端会不会把它当成自定义控制器")
     args = ap.parse_args(argv)
+
+    if args.list:
+        return do_list()
+    if args.check_port:
+        return do_check(args.check_port)
 
     xy = (960, 540)
     if args.mouse:

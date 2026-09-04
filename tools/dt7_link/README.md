@@ -842,3 +842,52 @@ DT7 那条 USB 口上的报文确实零公开，但**我们根本不需要碰它
    → 必须一个键一个键按一遍确认，错一个就是"按了没反应"。
 3. **0x0306 的频率上限**：文档没给数字，选手端只说"超频丢弃多余包"，
    所以这里保守取 0x0302 的 30Hz 并在设置里开放调节。
+
+---
+
+## 15. 选手端"认哪个串口"不用再猜：答案在官方 `DeviceInfo.dll` 里
+
+`RoboMasterClient_Data\StreamingAssets\Tools\RMClientDaemon\DeviceInfo.dll` 导出四个找口函数，
+用 pefile 扫 `.text` 的 rip 相对引用，把每个函数实际引用的硬件 ID 串对出来（**不是猜的**）：
+
+| 导出函数 | 函数里引用的匹配串 | 对应物理设备 |
+|---|---|---|
+| **`GetCCSSerialPort`** | **`FTDI`** | **自定义控制器口：只认 FTDI 芯片的 USB-串口** |
+| `GetDjiSerialPort` | `VID_FFF0` + `PID_0008` | 遥控器 DT7 那条 DJI USB Virtual COM（与官方驱动 INF 一致） |
+| `GetVideoSerialPort` | `VID_2CA3` + `PID_001F` + `MI_04` | 图传接收端（旧） |
+| `GetNewVideoSerialPort` | `VID_2CA3` + `PID_1020` + `MI_02` | 图传接收端（新，RNDIS 那一面） |
+
+顺带把 4.1 节那条"DT7 是不是虚拟串口"的疑问也钉牢了：`VID_FFF0&PID_0008`
+在官方软件里就是 **DJI 遥控器**那条口，和 `dji_vcom_driver11.inf` 的 `Class=Ports` 对得上。
+
+### 15.1 对现场的直接影响（省掉一次白跑）
+
+1. **com0com 那种虚拟串口对不会被选手端认成自定义控制器** —— 它不按 COM 号找，
+   按硬件 ID 里的 `FTDI` 找。所以"纯软件模拟自定义控制器"这条路走不通。
+2. 但硬件成本几乎为零，接线是这样（**不需要 MCU、不需要写任何固件**）：
+
+   ```
+   选手端那台电脑  <-USB->  [FTDI 芯片的 USB-串口 A]
+                                   |  TX / RX / GND 三根线交叉
+   我们这侧（同一台或另一台）<-USB-> [第二个 USB-串口 B]  <- 客户端 cc_link 写这个口
+   ```
+   选手端独占 A 口做"接收"，我们的客户端往 B 口写 0x0306 帧，
+   字节经交叉线进 A → 选手端 `收到0306数据包` → 它把键鼠塞进 DT7 → 空口 → DR16 → C 板。
+3. **B 口随便什么芯片都行，A 口必须是 FTDI**（CH340/PL2303 放在选手端那侧不会被认）。
+4. 判定不用拔线试：
+   `python tools/dt7_link/cc_probe.py --list`
+   会按同一套规则（`FTDI` / `FFF0:0008` / `2CA3:001F+MI_04` / `2CA3:1020+MI_02`）
+   标出"选手端会认成什么"；`--check-port COM7` 单判一个口。
+   本机现在跑的结果是"只有 COM1、没有任何 FTDI 口"，与注册表里
+   `VID_FFF0` 零命中一致 —— 这台电脑既没插过 DT7 也没插过 FTDI，
+   所以 0x0306 这条**只能到有线下环境实测验**，本机测不了，我不假装测过。
+
+### 15.2 现在整条链的状态
+
+| 环节 | 证据 | 状态 |
+|---|---|---|
+| 我们 → 0x0306 帧 | `cc_link.py` + `test_cc_link.py`（帧被固件那份官方 CRC 代码验收） | 代码 + 离线测试完成 |
+| 帧能被选手端收下 | `GetCCSSerialPort` 认 FTDI；日志有"收到0306数据包" | **待现场插 FTDI 验** |
+| 选手端 → DT7 空口 | 元数据 `Keybd_event/Mouse_event/SetCursorPos` + 日志 `Input_Device_RC Sent ...` | 官方实现自带，我们不用做 |
+| DT7 → DR16 → C 板 | 固件 `remote_control.c` 的 `sbus_to_rc` 已在收键位/鼠标 | 现役在用 |
+| 键位进底盘/云台 | `rc_ctrl.key.v` / `mouse` 被 `chassis_omni.c`、`shoot_fric_trigger.c` 消费 | 现役在用 |
