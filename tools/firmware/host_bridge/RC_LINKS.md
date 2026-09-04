@@ -241,6 +241,17 @@ python tools/dt7_link/dt7_vcp_probe.py --port COM5 --candidate dbus18 --keys W \
 发完自动补一帧等长全零，避免把键粘在车上。四种帧型全部无效的兜底办法是用
 com0com 建虚拟串口对，或者直接在 USB 层抓官方客户端的报文。
 
+### 本轮新增：不用硬件也能判位序的两条办法
+
+1. **看车自己的反应**：`shoot_fric_trigger.c:100` 把 Q（bit6）接在摩擦轮上、
+   `chassis_omni.c:109` 把 SHIFT（bit4）接在小陀螺上。所以"按物理 Q 之后
+   摩擦轮转不转"当场就把位序判完，什么仪器都不需要。
+2. **旁听 DT7 的虚拟串口**：`python tools/dt7_link/dt7_vcp_probe.py --port COMx --listen 8`。
+   只读不写、对车零影响；能旁听到 18 字节帧就说明那口是串口桥（回写有戏），
+   并按跳变直接报"这个键落在 bit 几 + 两套位序各读作什么"。
+
+细节与证据在 `tools/dt7_link/README.md` 第 3.1 / 4.3 / 4.4 / 4.5 节。
+
 ### 两条并存的注意事项
 
 1. **官方客户端和我们客户端不要同时抢 DT7**：同一条 HID/CDC 通道一般只允许一个宿主打开，
@@ -307,3 +318,28 @@ com0com 建虚拟串口对，或者直接在 USB 层抓官方客户端的报文�
 - 未验：真机上 0x0311 是否真的到达 C 板（取决于图传链路怎么接的，
   `huart1` 是 115200 而图传链路文档写 921600 —— 这条**必须在现场量一次**，
   见 `tools/dt7_link/README.md` 第 5 节的注意事项）；键位 bit4-7 位序之争。
+
+## 9. 客户端侧的出口开关（2026-09-04 第二轮）
+
+固件这半截上一轮就有了，但客户端那半截的开关不在界面上 —— 现场等于没有。本轮补上：
+
+| 位置 | 内容 |
+|---|---|
+| `rm_client/model.py` | 新设置项 `RobotLink / Radio KM Egress`，默认关 |
+| `rm_client/backend/manager.py` | `tick_polar_link()` 每帧重算生效：`开关 && 非急停 && Allow Drive && 模块启用`；**不看 0x5A USB 链路是否 active** |
+| `rm_client/control.py` | 出口函数 `_send_radio_km()`，与官方 KMC 完全解耦（不看 `mock_output`、不看 KMC 成没成） |
+| 诊断 | `radio_km_gate_reason`（没让发）与 `radio_km_last_error`（发了被拒）分开；水印行加 `KM on/off` |
+| 测试 | `tools/dt7_link/test_radio_km_client.py`（含 `test_manager_gates()`） |
+
+### 一个容易被"顺手加固"改错的地方
+
+位图这件事在两条路上含义完全不同，**不能互相借用**：
+
+- 走 0x0311（本节）：键位由客户端按**固件位序**编（bit4=SHIFT…），固件按同一套解，
+  所以默认掩码 `0x1F` 就是"W/S/A/D + 小陀螺"，Q/E 要 `--km-fire-keys` 才放开。
+- 走 DT7 虚拟控制链路（第 7 节）：键位得由 DT7 打包再经空口回来，
+  而 2016 手册那套位序是 bit4=**Q**。同一串 `0x1F`，在那条路上意思是
+  "W/S/A/D + 摩擦轮启动"，直接就是开火。
+
+⇒ 所以两条路的键位表各归各的编码，DT7 那条在位序被现场证死之前**不得复用**
+`KEYBOARD_BITS`，也不得给客户端加"一个开关两条路都开"的省事写法。

@@ -375,6 +375,7 @@ class BackendManager:
                 "Allow Drive",
                 "Mock Writes",
                 "Allow Spin Key",
+                "Radio KM Egress",
                 "Client Chassis Drive",
                 "Client Gimbal Control",
                 "Vision NUC Occupied",
@@ -488,6 +489,35 @@ class BackendManager:
             and chassis_setting.value
             and bridge.active
         )
+        # 无线键鼠出口（0x0311）：界面上那个开关只代表"操作员想开"，
+        # 这里补齐另外三道闸——没急停、RobotLink 模块启用、驾驶已授权。
+        # 与 drive_armed 的区别是**不要求 polar bridge.active**：这条出口的
+        # 设计目的就是不插 USB 线也能控车，拿 USB 链路状态当闸门会把它自己
+        # 锁死。（图传那条路自己的频控/门控在 MqttBackend 与车上固件里。）
+        radio_setting = settings.get("Radio KM Egress")
+        radio_km_wanted = bool(radio_setting is not None and radio_setting.value)
+        if control is not None:
+            radio_km_live = bool(
+                radio_km_wanted
+                and not estopped
+                and allow_drive
+                and module is not None
+                and module.enabled
+            )
+            control.radio_km_enabled = radio_km_live
+            if not radio_km_wanted:
+                control.radio_km_gate_reason = ""
+            elif radio_km_live:
+                # 生效了就把旧的"没生效"原因清掉，别让诊断行骗人。
+                control.radio_km_gate_reason = ""
+            else:
+                # 操作员开了开关却一帧都不发，最常见原因就是下面这三条。
+                control.radio_km_gate_reason = (
+                    "无线键鼠出口未生效："
+                    + ("急停激活" if estopped else
+                       ("模块 RobotLink 未启用" if not (module is not None and module.enabled)
+                        else "未授予 Allow Drive"))
+                )
         if drive_armed and command is not None:
             speed_scale = float(settings["Speed Scale %"].value or 100) / 100.0
             yaw_scale = float(settings["Yaw Scale %"].value or 100) / 100.0

@@ -178,6 +178,22 @@ class ConfigActionsMixin:
                 source=f"setting:{setting.name}",
                 force_live_disable=force_disable,
             )
+        if link_module is not None and setting is link_module.get_setting("Radio KM Egress"):
+            # 开关只给"意愿"，三道闸还差两块，这里当场把缺的说出来，
+            # 免得界面勾上了、车不动、只能回去翻代码。
+            on = bool(setting.value)
+            missing = []
+            if not link_module.enabled:
+                missing.append("启用模块 RobotLink")
+            drive = link_module.get_setting("Allow Drive")
+            if drive is None or not bool(drive.value):
+                missing.append("勾选 Allow Drive")
+            if on and missing:
+                self.toast("无线键鼠出口已开，但还差：" + "、".join(missing))
+            elif on:
+                self.toast("无线键鼠出口已开（图传 0x0311）")
+            else:
+                self.toast("无线键鼠出口已关")
         self.auto_save_config()
 
     def handle_config_action(self, action_name: str) -> None:

@@ -3501,7 +3501,11 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         match = self.match_mode_manager.current.title
         mqtt = "MQTT mock" if getattr(self.mqtt, "mock_output", True) else "MQTT live"
         serial = "SERIAL mock" if self.control.mock_output else "SERIAL live"
-        status_line = f"{status} | {scene} | {match} | {mqtt} | {serial}"
+        # 无线键鼠出口必须在脸上看得见：它决定"插不插 USB 线车动不动"，
+        # 出问题时最忌讳的就是界面上找不到任何痕迹。
+        # 只放状态、不放计数（计数会每帧变，会打掉这块 4Hz 光栅缓存）。
+        km = "KM on" if self.control.radio_km_enabled else "KM off"
+        status_line = f"{status} | {scene} | {match} | {mqtt} | {serial} | {km}"
         static_key = (
             round(raster_scale, 3),
             z_font.toString(),

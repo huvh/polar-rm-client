@@ -34,6 +34,9 @@ r"""DT7 虚拟串口（大疆官方"虚拟控制链路"）的枚举与报文试�
 ----
     python tools/dt7_link/dt7_vcp_probe.py --list
     python tools/dt7_link/dt7_vcp_probe.py --candidates --keys W,SHIFT --mouse 12 -5
+
+    # 只读旁听：先看 DT7 自己吐不吐东西（这一步不发包，对车零影响）
+    python tools/dt7_link/dt7_vcp_probe.py --port COM5 --listen 8
     python tools/dt7_link/dt7_vcp_probe.py --port COM5 --candidate dbus18 \
            --keys W --confirm-move-car
     python tools/dt7_link/dt7_vcp_probe.py --port COM5 --send-hex "5A 01 ..." \
@@ -139,6 +142,152 @@ def do_candidates(keys_names: list[str], mouse) -> int:
     return 0
 
 
+# ---------------------------------------------------------------------------
+# 只读旁听：不猜帧型，先让 DT7 自己把话说出来
+# ---------------------------------------------------------------------------
+#
+# 为什么值得先做这一步：大疆那一代 RC 助手软件（Phantom 2 的 "RC System"，
+# 解包见 README 第 4.3 节）里有 "Channel Monitor"/"ch_monitor" 这种**读通道**
+# 功能，用的就是同一类 DJI USB Virtual COM。也就是说"DJI 的遥控器愿意把
+# 自己的通道数据从 USB 串口吐给电脑看"是这一系硬件的既有能力。
+# 只要 DT7 肯吐：
+#   * 吐的是 18 字节 DBUS 同构帧 -> 这个口就是串口桥，PC 反向写同一个格式
+#     成功的概率立刻大得多；
+#   * 顺带就把 README 第 3 节那个"键位 bit4-7 两套官方定义打架"的死结
+#     **当场判掉**：驾驶员按一下 Q，看它落在 bit4 还是 bit6 就完事，
+#     不用猜、不用示波器、不用冒险往车上发包。
+
+GAP_S_DEFAULT = 0.004      # 4ms 静默算一帧结束（帧周期 14ms，帧内字节间隔 <0.2ms）
+
+
+def read_frames(source, seconds: float = 8.0, gap_s: float = GAP_S_DEFAULT,
+                clock=time.perf_counter) -> list[bytes]:
+    """按"空闲线"切帧：连续 gap_s 没有新字节就认为上一帧结束。
+
+    不靠波特率、不靠帧头、不猜长度——DT7 只要在同一格式上吐，长度分布
+    自己会浮出来。source 只要有 read(1) 即可（真 pyserial 对象或假对象都行）。
+    """
+    frames: list[bytes] = []
+    cur = bytearray()
+    last = None
+    t0 = clock()
+    while (clock() - t0) < seconds:
+        byte = source.read(1)
+        now = clock()
+        if not byte:
+            if cur and last is not None and (now - last) > gap_s:
+                frames.append(bytes(cur))
+                cur = bytearray()
+                last = None
+            continue
+        if cur and last is not None and (now - last) > gap_s:
+            frames.append(bytes(cur))
+            cur = bytearray()
+        cur += byte
+        last = now
+    if cur:
+        frames.append(bytes(cur))
+    return frames
+
+
+def analyze_frames(frames: list[bytes]) -> dict:
+    """把一堆字节块变成能读懂的结论（帧长分布 / 18B 帧的通道与键位跳变）。"""
+    lengths: dict[int, int] = {}
+    for f in frames:
+        lengths[len(f)] = lengths.get(len(f), 0) + 1
+    out = {
+        "n_frames": len(frames),
+        "n_bytes": sum(len(f) for f in frames),
+        "lengths": lengths,
+        "dbus": [],
+        "key_events": [],
+        "ch_ranges": [],
+        "ch_moved": False,
+        "mouse_moved": False,
+        "raw_head": [bytes(f) for f in frames[:3]],
+    }
+    dbus = [f for f in frames if len(f) == df.FRAME_LEN]
+    out["dbus"] = dbus
+    if not dbus:
+        return out
+    per_ch = [set() for _ in range(4)]
+    mouse_seen = set()
+    prev_keys = None
+    for f in dbus:
+        d = df.decode_frame(f)
+        for i, value in enumerate(d["ch"]):
+            per_ch[i].add(value)
+        mouse_seen.add((d["mouse"]["x"], d["mouse"]["y"], d["mouse"]["z"]))
+        keys = d["key_v"]
+        if prev_keys is not None and keys != prev_keys:
+            diff = keys ^ prev_keys
+            for bit in range(16):
+                if diff & (1 << bit):
+                    out["key_events"].append({
+                        "bit": bit,
+                        "pressed": bool(keys & (1 << bit)),
+                        "fw": df.KEY_ORDER_FW[bit],
+                        "dji2016": df.KEY_ORDER_DJI2016[bit],
+                    })
+        prev_keys = keys
+    out["ch_ranges"] = [(min(s), max(s)) for s in per_ch]
+    out["ch_moved"] = any(hi > lo for lo, hi in out["ch_ranges"])
+    out["mouse_moved"] = len(mouse_seen) > 1
+    return out
+
+
+def print_analysis(a: dict) -> None:
+    print(f"共读到 {a['n_frames']} 块 / {a['n_bytes']} 字节；长度分布 {a['lengths'] or '（空）'}")
+    if not a["n_frames"]:
+        print("一个字节都没读到。两种可能：① 这个口 DT7 根本不主动吐数据"
+              "（那只能回到发包排除法）；② 口开错了/线是充电线。")
+        return
+    if not a["dbus"]:
+        print(f"没有 {df.FRAME_LEN} 字节的块 -> 这个口上跑的不是 DBUS 同构帧。")
+        print("前几块原样（够判断有没有固定帧头/帧尾/长度规律）：")
+        for i, f in enumerate(a["raw_head"]):
+            print(f"  #{i + 1} ({len(f)}B) {f.hex(' ')}")
+        return
+    print(f"其中 {len(a['dbus'])} 块正好 {df.FRAME_LEN} 字节，按 DBUS 解出来：")
+    print(f"  首帧  {df.describe(a['dbus'][0])}")
+    print(f"  末帧  {df.describe(a['dbus'][-1])}")
+    print(f"  通道范围 {a['ch_ranges']}（中值 {df.CH_MID}）-> "
+          f"{'摇杆一动通道就动，这口在透传 DBUS' if a['ch_moved'] else '通道全程不动'}")
+    if a["mouse_moved"]:
+        print("  鼠标三轴有变化（这帧里的键鼠字段确实有人在写）")
+    if a["key_events"]:
+        print("\n按键跳变（这才是本轮最想要的东西）：")
+        for e in a["key_events"]:
+            print(f"  bit{e['bit']:<2} {'按下' if e['pressed'] else '松开'}"
+                  f"   固件/RM2026 位序 = {e['fw']:<6} 2016 遥控器手册位序 = {e['dji2016']}")
+        bits = sorted({e["bit"] for e in a["key_events"]})
+        print(f"\n判读：你按的那些键落在 bit {bits}。")
+        print("  · 若按的是 Q 而报的是 bit6 -> DT7 用**固件/RM2026 位序**，"
+              "客户端现有编码直接可用。")
+        print("  · 若按的是 Q 而报的是 bit4 -> DT7 用**2016 手册位序**，"
+              "发包时必须 --key-order dji2016（见 dt7_dbus_frame.keys_to_bits）。")
+    else:
+        print("\n没看到键位跳变：旁听期间要有人真的按 DT7 上的键（Q/E/Shift/Ctrl 各按一次）。")
+
+
+def do_listen(port: str, seconds: float, baud: int, parity: str, gap_s: float) -> int:
+    try:
+        import serial
+    except ImportError:
+        print("[FAIL] 没装 pyserial", file=sys.stderr)
+        return 2
+    kwargs = dict(baudrate=baud, bytesize=8,
+                  parity=(serial.PARITY_EVEN if parity == "even" else serial.PARITY_NONE),
+                  stopbits=1, timeout=0.05)
+    print(f"旁听 {port}  {baud} 8{parity[0].upper()}1  {seconds:g}s —— 这一步**只读不写**，"
+          "对车没有任何影响。\n现在请：摇左右摇杆各一次，再把 Q、E、Shift、Ctrl 各按一次。")
+    with serial.Serial(port, **kwargs) as sp:
+        frames = read_frames(sp, seconds=seconds, gap_s=gap_s)
+    print_analysis(analyze_frames(frames))
+    return 0
+
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -151,8 +300,16 @@ def main(argv=None) -> int:
     ap.add_argument("--mouse", default="0,0,0", metavar="DX,DY,DZ",
                     help="鼠标三轴位移，逗号分隔，可为负")
     ap.add_argument("--port")
+    ap.add_argument("--listen", type=float, metavar="SEC", default=None,
+                    help="只读旁听若干秒，看 DT7 自己吐什么（不发包，对车无影响）")
+    ap.add_argument("--gap-ms", type=float, default=GAP_S_DEFAULT * 1000.0,
+                    help="空闲线分帧的静默阈值，毫秒")
+    ap.add_argument("--parity", choices=("even", "none"), default="even",
+                    help="官方 DBUS 是偶校验(8E1)；CDC 桥一般不吃这个，但旁听/回写时"
+                         "若真接的是 UART 桥就必须对，所以默认按手册给 even")
     ap.add_argument("--baud", type=int, default=115200,
-                    help="CDC 通常不吃波特率，但 usbser.sys 要求先设一个")
+                    help="CDC 通常不吃波特率，但 usbser.sys 要求先设一个；"
+                         "若这口是 UART 桥，官方 DBUS 值是 100000")
     ap.add_argument("--frames", type=int, default=1, help="发几帧（14ms 节奏）")
     ap.add_argument("--send-hex", help="直接发这串十六进制（回放抓包样本）")
     ap.add_argument("--confirm-move-car", action="store_true",
@@ -161,6 +318,13 @@ def main(argv=None) -> int:
 
     if args.list or not (args.port or args.candidates):
         return do_list()
+
+    if args.listen is not None:
+        if not args.port:
+            print("[FAIL] --listen 也要给 --port（先 --list 找口）", file=sys.stderr)
+            return 2
+        return do_listen(args.port, max(0.2, args.listen), args.baud,
+                         args.parity, max(0.0005, args.gap_ms / 1000.0))
 
     names = [n.strip().upper() for n in args.keys.split(",") if n.strip()]
     keys = df.keys_to_bits(names) if names and names != ["NONE"] else 0
@@ -184,7 +348,10 @@ def main(argv=None) -> int:
     except ImportError:
         print("[FAIL] 没装 pyserial", file=sys.stderr)
         return 2
-    with serial.Serial(args.port, args.baud, timeout=1) as sp:
+    import serial as _serial  # noqa: F401
+    with serial.Serial(args.port, args.baud, timeout=1, bytesize=8,
+                       parity=(serial.PARITY_EVEN if args.parity == "even"
+                               else serial.PARITY_NONE), stopbits=1) as sp:
         for i in range(max(1, args.frames)):
             sp.write(payload)
             sp.flush()

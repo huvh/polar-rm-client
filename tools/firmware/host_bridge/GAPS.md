@@ -480,10 +480,17 @@ USB 线带来的是**客户端这条第二入口**（0x5A：0x03 键位、0x04 �
 
 实现见 `tools/firmware/host_bridge/RC_LINKS.md` 第 8 节。这里只记**还没做完**的：
 
-1. **客户端 UI 没有开关**。`KeyboardControlBridge.radio_km_enabled` 现在只能由
-   代码/测试置位，界面点不到。刻意没接：接一个开关就要配套设置项、审计基线、
-   真窗口测试，那是完整的一批；而这条链路连"0x0311 能不能到达 C 板"都还没
-   在现场量过，先做个开关只会让人以为它能用。
+1. ~~客户端 UI 没有开关~~ **已补（2026-09-04 第二轮）**。
+   设置项 `RobotLink / Radio KM Egress`（默认关）。生效条件由
+   `manager.tick_polar_link()` 每帧重算：`开关 && 非急停 && Allow Drive && 模块启用`。
+   两条设计决定记在这里，别让后人"顺手加个保险"改回去：
+   * **不要求 0x5A USB 链路 active** —— 这条出口的意义就是不插线控车；
+   * **与官方 KMC 出口解耦**（不看 `control.mock_output`、不看 KMC 成没成），
+     原因是以前那条"先 KMC 成功才发无线"的耦合会让现场看到
+     "开关勾上了却一帧都没有"，而这恰恰是最需要区分"没发"还是"被 mock 吞了"的时刻。
+   状态条上 `KM on/off` 直接可见；"没让发"的原因在 `radio_km_gate_reason`，
+   "发了但被拒"的原因在 `radio_km_last_error`，两者分开存。
+   断言在 `tools/dt7_link/test_radio_km_client.py::test_manager_gates`。
 2. **默认档是 `rc`**（`prepare_hero_build.py --km rc`），也就是**图传键鼠默认不生效**。
    要上车验得显式 `--km vt_rc`（图传优先、过期回落遥控器，五档里最安全的一档）。
 3. **0x0311 走的是 921600 图传链路，而本板裁判口 `huart1` 是 115200**

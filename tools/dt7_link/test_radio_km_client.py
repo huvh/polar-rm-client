@@ -28,6 +28,84 @@ def check(name, ok, detail=""):
         FAILED += 1
 
 
+
+
+def test_manager_gates() -> None:
+    """UI 开关 -> BackendManager 三道闸 -> 桥上的 enabled。
+
+    这一节是"实战能不能无线开车"的真正关口：界面上那个勾只是意愿，
+    manager 每次 tick 都会按 急停 / 模块启用 / Allow Drive 重算。
+    同时钉住一条设计决定：**不要求 0x5A USB 链路活着**，
+    否则"不插线无线开车"这个目标会被自己的闸门锁死。
+    """
+    import tempfile
+
+    from rm_client.backend.manager import BackendManager
+    from rm_client.model import RobotState, build_default_registry
+
+    print("\n--- RobotLink 开关与三道闸 ---")
+    workspace = tempfile.mkdtemp(prefix="radio_km_")
+    manager = BackendManager(workspace=workspace, scenario_key="OfficialEvent", client_id="3")
+    registry = build_default_registry()
+    state = RobotState()
+    manager.state = state
+    manager._apply_config(manager.config)
+
+    module = registry.get("RobotLink")
+    check("RobotLink 有 Radio KM Egress 这个开关",
+          module.get_setting("Radio KM Egress") is not None)
+    check("开关默认关", bool(module.get_setting("Radio KM Egress").value) is False)
+
+    class FakeControl(KeyboardControlBridge):
+        def __init__(self):
+            super().__init__(publisher=None, mock_output=True)
+
+    control = FakeControl()
+    setting = module.get_setting("Radio KM Egress")
+    drive = module.get_setting("Allow Drive")
+
+    # 只开开关：Allow Drive 没给 -> 不得生效
+    setting.value = True
+    drive.value = False
+    module.enabled = True
+    manager.tick_polar_link(state, registry, control)
+    check("只勾开关、没 Allow Drive -> 不生效", control.radio_km_enabled is False,
+          str(control.radio_km_enabled))
+    check("不生效时给得出原因（不让现场猜）", "Allow Drive" in control.radio_km_gate_reason,
+          control.radio_km_gate_reason)
+
+    # 补上 Allow Drive，但模块没启用 -> 不得生效
+    drive.value = True
+    module.enabled = False
+    manager.tick_polar_link(state, registry, control)
+    check("模块未启用 -> 不生效", control.radio_km_enabled is False)
+    check("原因是模块未启用", "RobotLink" in control.radio_km_gate_reason,
+          control.radio_km_gate_reason)
+
+    # 三闸齐开，且 **0x5A USB 链路是死的**（这里从不 feed bridge）-> 必须生效
+    module.enabled = True
+    manager.tick_polar_link(state, registry, control)
+    check("三闸齐开就生效，且不要求插 USB 线", control.radio_km_enabled is True,
+          str(control.radio_km_enabled))
+    check("生效后清掉旧的闸门原因（不留骗人的残留）",
+          control.radio_km_gate_reason == "", control.radio_km_gate_reason)
+
+    # 急停必须一票否决
+    manager.safety.estop_active = True
+    manager.tick_polar_link(state, registry, control)
+    check("急停一票否决", control.radio_km_enabled is False)
+    check("急停时原因写明", "急停" in control.radio_km_gate_reason,
+          control.radio_km_gate_reason)
+
+    # 关掉开关后必须立刻回到"不生效"，且 manager 每 tick 重算（不留残留）
+    manager.safety.estop_active = False
+    setting.value = False
+    manager.tick_polar_link(state, registry, control)
+    check("关开关后不再尝试发送", control.radio_km_enabled is False)
+    check("关开关后闸门原因也清空", control.radio_km_gate_reason == "",
+          control.radio_km_gate_reason)
+
+
 class FakePub:
     def __init__(self):
         self.kmc, self.km = [], []
@@ -81,8 +159,9 @@ def main() -> int:
     br2.radio_km_enabled = True
     br2.send_command(cmd(1))
     check("出口缺失时 KMC 仍然发出去了", len(pub2.kmc) == 1, str(pub2.kmc))
-    check("出口缺失时错误原因写清楚（不静默）",
-          "publish_km_control" in br2.last_error, br2.last_error)
+    check("出口缺失时错误原因写清楚（不静默，也不冒充主通道）",
+          "publish_km_control" in br2.radio_km_last_error, br2.radio_km_last_error)
+    check("出口缺失不污染主通道 last_error", br2.last_error == "", br2.last_error)
 
     blob = proto.encode_km_control_payload(sequence=1, keyboard_value=0x1F)
     check("载荷 26 字节 = 固件 prm1_km_cmd_t",
@@ -93,6 +172,42 @@ def main() -> int:
     check("别的 kind 不会被当键鼠解", proto.decode_km_control_payload(
         proto.encode_vision_control_payload(sequence=1, yaw_deg=1.0,
                                            pitch_deg=2.0) + b"\x00" * 12) is None)
+
+    # --- 独立出口语义：开关就是它的开关，不看主通道脸色 ---
+    pub3 = FakePub()
+    br3 = KeyboardControlBridge(publisher=pub3, mock_output=True)   # mock 模式
+    br3.radio_km_enabled = True
+    br3.send_command(cmd(1 << 0))
+    check("mock 模式下开关打开照样走出口（由 MQTT 层决定上不上网络）",
+          len(pub3.km) == 1, str(pub3.km))
+    check("mock 模式下计数器也照走，现场才分得清'\"没开\"和\"开了但被 mock\"'",
+          br3.radio_km_sent == 1, str(br3.radio_km_sent))
+
+    class KmcFails(FakePub):
+        def publish_keyboard_mouse(self, *a, **k):
+            return False, "官方 MQTT 未连接"
+
+    pub4 = KmcFails()
+    br4 = KeyboardControlBridge(publisher=pub4, mock_output=False)
+    br4.radio_km_enabled = True
+    br4.send_command(cmd(1 << 2))
+    check("KMC 失败不拖累无线键鼠出口", len(pub4.km) == 1, str(pub4.km))
+    check("KMC 的错误仍记在 last_error（主通道诊断不被污染）",
+          br4.last_error == "官方 MQTT 未连接", br4.last_error)
+
+    class KmFails(FakePub):
+        def publish_km_control(self, **kw):
+            return False, "急停激活，禁止发布"
+
+    br5 = KeyboardControlBridge(publisher=KmFails(), mock_output=False)
+    br5.radio_km_enabled = True
+    br5.send_command(cmd(1))
+    check("出口被门控时原因单独记录", br5.radio_km_last_error == "急停激活，禁止发布",
+          br5.radio_km_last_error)
+    check("出口失败不污染主通道 last_error", br5.last_error == "", br5.last_error)
+    check("出口失败不涨计数", br5.radio_km_sent == 0, str(br5.radio_km_sent))
+
+    test_manager_gates()
 
     print("\n" + ("有失败项" if FAILED else "无线键鼠出口客户端侧全部通过"))
     return 1 if FAILED else 0

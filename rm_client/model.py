@@ -1628,6 +1628,13 @@ def build_default_registry() -> ModuleRegistry:
                 # 行为，所以仍要操作员显式授权。“受击后小陀螺”走 0x5A 需要开启。
                 # 无论本项开关如何，Q/E（摩擦轮）与 F（sc_flag）永不下发。
                 bool_setting("Allow Spin Key", False),
+                # 无线键鼠出口：键鼠打包成 PRM1 kind=3，经 CustomControl(0x0302)
+                # -> 图传链路 -> 机器人 0x0311，由车上 host_km_link 落到键位账本。
+                # 默认关：开着要同时满足车上固件带 POLAR-KM-LINK、固件里
+                # __CONTROL_LINK_KM 不是 CL_KM_RC，否则只是白占图传带宽。
+                # 本项只是"意愿"，真正生效还要 模块启用 + Allow Drive + 非急停
+                # （判定在 backend/manager.py 的 RobotLink 应用处）。
+                bool_setting("Radio KM Egress", False),
                 # 意图位：由操作员控，两个都要开才会真的发。
                 bool_setting("Client Chassis Drive", False),
                 bool_setting("Client Gimbal Control", False),

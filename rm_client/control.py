@@ -76,8 +76,13 @@ class ChassisCommand:
 class KeyboardControlBridge:
     """采集键鼠并经 BackendManager 的官方 MQTT 上行发送。
 
+    两条上行出口：
+      * 官方 KMC（MQTT KeyboardMouseControl）——本队固件没有它的接收方，
+        留着只是为兼容官方裁判链路；
+      * 无线键鼠（PRM1 kind=3 走 CustomControl/0x0311）——见 _send_radio_km()，
+        由 RobotLink."Radio KM Egress" 开关驱动，默认关。
     0x0311 属于图传链路；这里绝不直接写 115200 串口。BackendManager
-    会编码 KeyboardMouseControl，MQTT/图传模块再转发给机器人。
+    会编码两路载荷，MQTT/图传模块再转发给机器人。
     """
 
     def __init__(self, publisher: Any | None = None, mock_output: bool = True) -> None:
@@ -88,7 +93,12 @@ class KeyboardControlBridge:
         #: "__CONTROL_LINK_KM 不是 CL_KM_RC"，两端没对齐时白占图传带宽。
         self.radio_km_enabled = False
         self.radio_km_sent = 0
+        #: 发送层结果：真的尝试发了、但被 MQTT/门控拒了的原因。
         self.radio_km_last_error = ""
+        #: 闸门层原因：三道闸（急停 / 模块启用 / Allow Drive）没过，
+        #: 根本没走到发送。与 last_error 分开存，否则"没让我发"和
+        #: "发了但被拒"会互相覆盖，现场看不出到底该去点哪个开关。
+        self.radio_km_gate_reason = ""
         self.key_state: dict[str, bool] = {key: False for key in CONTROL_KEYS}
         # 协议槽 -> 已绑物理键名；可由前端改绑，默认与旧行为一致。
         self.binds: dict[str, str] = dict(DEFAULT_CONTROL_BINDS)
@@ -276,12 +286,54 @@ class KeyboardControlBridge:
             mid_button_down=self.mid_button_down,
         )
 
+    def _send_radio_km(self, command: ChassisCommand) -> None:
+        """无线键鼠出口（PRM1 kind=3 -> CustomControl -> 图传 -> 机器人 0x0311）。
+
+        它与官方 KMC 出口**刻意互不隶属**，理由有两条，都是以前踩过的坑：
+
+        1. 不看 ``self.mock_output``。真决定"上不上网络"的是 BackendManager 里
+           ``MqttBackend.publish_topic()`` 的 mock 分支和 ``safety.can_publish()``
+           门控；这里再挡一层的结果是"开关明明打开了却一帧都看不到"，
+           现场没法区分"没发"和"发了但被 mock 吞了"。
+        2. 不看 KMC 成不成功。两条出口在车上是两套不同消费者
+           （KMC 那条在本队固件里根本没有接收方），一条失败不构成
+           另一条不发 reasons，也不许把自己的错误写进 ``last_error`` 冒充主通道。
+
+        所以本函数只可能改这三个量：radio_km_sent / radio_km_last_error，
+        绝不改 last_error、last_payload 与重试标志。
+        """
+        if not self.radio_km_enabled:
+            return
+        publish = getattr(self.publisher, "publish_km_control", None)
+        if not callable(publish):
+            self.radio_km_last_error = "无线键鼠出口不可用：发布器没有 publish_km_control"
+            return
+        try:
+            ok, reason = publish(
+                keyboard_value=command.keyboard_value,
+                mouse_x=command.mouse_x,
+                mouse_y=command.mouse_y,
+                mouse_z=command.mouse_z,
+                left=command.left_button_down,
+                right=command.right_button_down,
+                mid=command.mid_button_down,
+            )
+        except Exception as exc:  # 出口异常不得影响主通道
+            self.radio_km_last_error = str(exc)
+            return
+        self.radio_km_last_error = "" if ok else str(reason)
+        if ok:
+            self.radio_km_sent += 1
+
     def send_command(self, command: ChassisCommand) -> None:
         self.last_command = command
         self.last_payload = command.to_payload()
         self.last_error = ""
         now = time.perf_counter()
         self.last_send_at = now
+        # 无线键鼠出口放在最前面，且不受下面的 mock 短路影响：
+        # 它是独立的一条上行路（0x0311），开关就是它的开关。
+        self._send_radio_km(command)
         if self.mock_output:
             self._dirty = False
             self._consume_relative_motion()
@@ -305,28 +357,6 @@ class KeyboardControlBridge:
             else:
                 self._dirty = False
                 self._consume_relative_motion()
-            # 无线键鼠第二出口：同一份键鼠再走一遍 CustomControl -> 图传链路
-            # -> 机器人 0x0311（PRM1 kind=3）。默认**关**，因为它要求车上
-            # 固件带 POLAR-KM-LINK 且 __CONTROL_LINK_KM 不是 CL_KM_RC，
-            # 两端没对齐时开着只会白占图传带宽。
-            # 刻意放在 KMC 之后：KMC 是官方通道，成功与否决定 last_error；
-            # 这条只在 KMC 也发不出去时补一条独立错误原因，不覆盖它。
-            if self.radio_km_enabled and ok:
-                rk = getattr(self.publisher, "publish_km_control", None)
-                if rk is None:
-                    self.last_error = "无线键鼠出口不可用：发布器没有 publish_km_control"
-                else:
-                    rok, rreason = rk(
-                        keyboard_value=command.keyboard_value,
-                        mouse_x=command.mouse_x,
-                        mouse_y=command.mouse_y,
-                        mouse_z=command.mouse_z,
-                        left=command.left_button_down,
-                        right=command.right_button_down,
-                        mid=command.mid_button_down,
-                    )
-                    self.radio_km_last_error = "" if rok else str(rreason)
-                    self.radio_km_sent += 1 if rok else 0
         except Exception as exc:
             self.last_error = str(exc)
 
