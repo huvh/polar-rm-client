@@ -1033,3 +1033,55 @@ CustomClientThread / OnMqttSubProto / OnMqttPublishProto / SendRobotInputInitDat
 2. **装 `Tools\Windows_CDM21228_Setup.exe`（FTDI 驱动）**，然后插 FTDI USB-串口当自定义控制器（第 3 条）；
 3. 我们的客户端与选手端同机 → `MQTT host` 用默认 `127.0.0.1:3333` 即可；跨机才填选手端那台机器的 IP；
 4. `cc_probe.py --list` 确认那个口被认成"自定义控制器（选手端会认）"，再 `--keys W --confirm-move-car`。
+
+---
+
+## 18. 12.x 与 11.x 的两处**版本差异**（会在现场决定成败）+ 一处必须诚实的边界
+
+### 18.1 差异一：MQTT/自定义客户端这条能力是 12.x 才有的
+
+同一套关键词在两个版本的 `global-metadata.dat` 里计数对比：
+
+| 关键词 | 11.x 选手端（11.0.1.128，7,119,880B） | 12.x 选手端（12.0.0.30，8,089,024B） |
+|---|---|---|
+| `Mqtt` | **0** | **221** |
+| `MQTT` | 0 | 60 |
+| `CustomClientThread` | **0** | **4** |
+| `CustomControl` | 9 | 9 |
+
+⇒ **11.x 选手端里根本没有 MQTT 栈，也没有伺候自定义客户端的那条线程。**
+所以"我们的客户端发 MQTT → 选手端/图传 → 车（0x0302/0x0311）"这条 B 路，
+**前提是现场跑 12.x 选手端**；拿 11.x 去试必然连不上 3333，
+而且现象跟"我们代码写错了"长得一模一样。这条已经写进 `FIELD_WIRELESS_RUNBOOK.md` 的前提里。
+
+### 18.2 差异二：12.x 里能读到 DT7 上行的命令名与 16 个键位宏名
+
+12.x 元数据的标识符里出现了一整套（11.x 的托管 assist 程序集里也有 `CMD_ID_*` 一族名字）：
+
+```
+CMD_ID_Keyboard, CMD_ID_SEND_CUSTOM_DATA, CMD_ID_RECV_CUSTOM_DATA,
+CMD_ID_QUERY_PairingStatus, CMD_ID_QUERY_MODE / SELECT_MODE, CMD_ID_RESTART,
+CMD_ID_SET_COUNTRY_CODE / QUERY_COUNTRY_CODE, CMD_ID_SET_FREQ_ID / QUERY_FREQ_ID,
+CMD_ID_PUSH_CodecRate, CMD_ID_PUSH_Linkquality, CMD_ID_QueryPackageVersion,
+CMD_ID_HEART_BEAT, CMD_ID_SET_DEVICE_TIME / QUERY_DEVICE_TIME
+KeyBoardRC, KeyboardValue, RobotInput, Proto_RobotInput, SendRobotInput,
+SendRCInputStatus, KEY_PRESSED_OFFSET_{W,S,A,D,SHIFT,CTRL,Q,E,R,F,G,Z,X,C,V,B}
+```
+
+⇒ 两件事被证实：
+1. **PC→DT7 确实有一套官方命令表，键鼠是其中的 `CMD_ID_Keyboard`**（第 11 节我说"上行零公开"，
+   准确说法应该是"零文档、但实现就在官方二进制里"）。
+2. 官方客户端用的键名集合与我们固件 `remote_control.h:103-118` 的 16 个键**完全同一套**
+   （W/S/A/D/SHIFT/CTRL/Q/E/R/F/G/Z/X/C/V/B）。
+
+### 18.3 必须诚实的边界：这些**名字**证明不了**数值**
+
+- 我上面列的 `KEY_PRESSED_OFFSET_*` 是按字符串**排序后**输出的，
+  **不代表声明顺序**，所以它**不能**用来判 bit4 到底是 Q 还是 SHIFT ——
+  第 3.1 节那个位序问题仍然只能靠现场（看摩擦轮还是小陀螺，或旁听 DT7 口）。
+- `CMD_ID_Keyboard` 的**数值**也不在元数据的字符串堆里；IL2CPP 的常量值在
+  `global-metadata.dat` v29 的 `fieldDefaultValues` + blob 区里，要正经解析头部数组才能取到
+  （托管侧那三个 dll 我扫了常量表：`RMClientAssist_*.dll`/`RMClientDaemon.dll` 里
+  没有任何 `CMD_ID_*`/`KEY_PRESSED_*` 常量，值在 Unity 的 IL2CPP 侧）。
+  ⇒ 想拿到就是"解 IL2CPP 元数据"的活，成本明显高于现场逐键试 5 分钟，
+     所以 `cc_probe.py --sweep` 仍然是推荐路径；**这条列为可选深挖项，不假装已经做完**。
