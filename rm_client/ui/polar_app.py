@@ -3517,7 +3517,10 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             "silent": "KM NO-RX!!",
             "stalled": f"KM stall@{km_rx}",
         }.get(km_state, "KM ?")
-        status_line = f"{status} | {scene} | {match} | {mqtt} | {serial} | {km}"
+        # 自定义控制器出口也要同屏可见：它是"选手端在跑才有意义"的一条路，
+        # 关掉选手端后界面上必须立刻看出来，否则会被当成链路故障。
+        cc = "CC on" if getattr(self.control, "cc_enabled", False) else "CC off"
+        status_line = f"{status} | {scene} | {match} | {mqtt} | {serial} | {km} | {cc}"
         static_key = (
             round(raster_scale, 3),
             z_font.toString(),

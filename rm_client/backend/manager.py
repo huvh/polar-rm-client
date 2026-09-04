@@ -20,6 +20,7 @@ from ..model import RobotState
 from ..native_viewer_telemetry import parse_vehicle_telemetry, parse_video_0310_chunk
 from .. import robot_roles
 from ..scenarios import SCENARIOS
+from . import cc_link
 from . import protocol as proto
 from .mqtt_backend import RmMqttBackend
 from .polar_bridge import (
@@ -376,6 +377,10 @@ class BackendManager:
                 "Mock Writes",
                 "Allow Spin Key",
                 "Radio KM Egress",
+                "Custom Controller Egress",
+                "CC Port",
+                "CC Hz",
+                "CC Mock Writes",
                 "Client Chassis Drive",
                 "Client Gimbal Control",
                 "Vision NUC Occupied",
@@ -556,6 +561,33 @@ class BackendManager:
                        ("模块 RobotLink 未启用" if not (module is not None and module.enabled)
                         else "未授予 Allow Drive"))
                 )
+        # ---- 自定义控制器出口（0x0306 -> 选手端 -> DT7 空口）----
+        # 三道闸与 0x0311 那条一致（非急停 / 模块启用 / Allow Drive），
+        # 两条区别要记清：这条**不经过 MQTT、也不经过车上图传串口**，
+        # 所以 0x0311 判成 NO-RX 时它依然可用；代价是选手端必须在跑，
+        # 且"键鼠来源"只能有一个（2026 协议 2.2.1）。
+        cc_setting = settings.get("Custom Controller Egress")
+        cc_wanted = bool(cc_setting is not None and cc_setting.value)
+        if control is not None and cc_wanted:
+            link_obj = self._cc_link_for(settings)
+            control.cc_link = link_obj
+            control.cc_enabled = bool(not estopped and allow_drive
+                                      and module is not None and module.enabled)
+            spin = settings.get("Allow Spin Key")
+            control.cc_key_mask = 0x0F | (0x10 if (spin is not None and bool(spin.value)) else 0)
+            if estopped and getattr(self, "_cc_was_enabled", False):
+                # 急停必须把选手端那侧的键鼠也归零。放在写原因**之前**：
+                # release 成功时会清 cc_last_error，先写原因就被它抹掉了。
+                control.release_custom_controller()
+            if not control.cc_enabled:
+                control.cc_last_error = (
+                    "自定义控制器出口未生效："
+                    + ("急停激活" if estopped else
+                       ("模块 RobotLink 未启用" if not (module is not None and module.enabled)
+                        else "未授予 Allow Drive")))
+        elif control is not None:
+            control.cc_enabled = False
+        self._cc_was_enabled = bool(control is not None and control.cc_enabled)
         if drive_armed and command is not None:
             speed_scale = float(settings["Speed Scale %"].value or 100) / 100.0
             yaw_scale = float(settings["Yaw Scale %"].value or 100) / 100.0
@@ -1647,6 +1679,23 @@ class BackendManager:
             intent="core_kmc",
             qualification_token=qualification_token,
         )
+
+    def _cc_link_for(self, settings: dict) -> "cc_link.CustomControllerLink":
+        """按 RobotLink 的设置拿（并按需重建）自定义控制器发送器。
+
+        端口/速率/mock 变化时才重建对象：串口句柄不能每帧开关一次。
+        """
+        port_s = settings.get("CC Port")
+        hz_s = settings.get("CC Hz")
+        mock_s = settings.get("CC Mock Writes")
+        port = str(getattr(port_s, "value", "Auto") or "Auto")
+        hz = float(getattr(hz_s, "value", 30) or 30)
+        mock = bool(getattr(mock_s, "value", True))
+        link = getattr(self, "_cc_link", None)
+        if link is None or (link.port, float(link.max_hz), bool(link.mock_output)) != (port, hz, mock):
+            link = cc_link.CustomControllerLink(port=port, max_hz=hz, mock_output=mock)
+            self._cc_link = link
+        return link
 
     def publish_km_control(
         self,

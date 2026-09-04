@@ -1637,6 +1637,16 @@ def build_default_registry() -> ModuleRegistry:
                 bool_setting("Radio KM Egress", False),
                 # 端到端自检：观察 2.5 秒车上回读的 0x0311 到达计数涨不涨。
                 # 自检本身不注入任何按键，所以车不会因为这个动作而动。
+                # ---- 自定义控制器出口（0x0306 -> 官方选手端 -> DT7）----
+                # 依据：《2026 通信协议》表 1-1 "自定义控制器←→选手端 115200"、
+                # 1.5 节"操作手可使用自定义控制器模拟键鼠操作选手端"、表 1-43 的
+                # 8 字节布局。这条路**不走车上图传串口**，所以 0x0311 那条
+                # 量不通时它仍然可用；代价是必须有官方选手端在跑。
+                bool_setting("Custom Controller Egress", False),
+                mode_setting("CC Port", "Auto", polar_port_choices()),
+                number_setting("CC Hz", 30, 5, 30, 1),
+                # 默认 mock：没确认选手端挑口规则之前，绝不写真串口。
+                bool_setting("CC Mock Writes", True),
                 action_setting(
                     "Run Wireless KM Selftest",
                     "观察 2.5 秒车上回读的 0x0311 到达计数（km_rx）是否增长；"
