@@ -727,6 +727,13 @@ void HostKmFeed(const uint8_t *payload, uint16_t len);
 `armcc_check` 真实工具链体检：**162 单元 0 失败**，partial 链接未定义符号 0 个；
 完整链接只差授权（镜像 109,376 字节 > MDK-Lite 32KB 上限，L6050U）。
 
+### 13.1 一键自检（把"要不要继续"变成 30 秒的决定）
+
+`RobotLink → Run Wireless KM Selftest`：记 `km_rx` → 等 2.5s → 比 `km_rx` 涨没涨。
+判据抽成纯函数 `rm_client/control.py::evaluate_radio_km_selftest()`（四态都有断言：
+涨了=PASS；读不到回读=不通过；一帧没发出=客户端侧 FAIL；**发了但车上没涨=链路 FAIL**）。
+自检不注入任何按键，所以车不会因为自检而动。
+
 > 顺带把现场动作整理成一页纸：**`FIELD_WIRELESS_RUNBOOK.md`**（仓库根目录）。
 > 三条路各自的状态、KM 六态对照表、`NO-RX!!` 的四级排查顺序、
 > 十秒位序判定、以及"绝对不要做的事"（别拿调参软件刷 DT7 固件等）都在那页。

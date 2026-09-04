@@ -60,6 +60,11 @@
       "sig": "'Both'",
       "type": "str"
     },
+    "RADIO_KM_SELFTEST_MS": {
+      "kind": "plain-attribute",
+      "sig": "2500",
+      "type": "int"
+    },
     "RM_INDICATOR_SETTING": {
       "kind": "plain-attribute",
       "sig": "dict",
@@ -4396,6 +4401,11 @@
     "robot_overlay_id_suffix": {
       "kind": "bound-method",
       "sig": "EspWireframeMixin.robot_overlay_id_suffix",
+      "type": "method"
+    },
+    "run_radio_km_selftest": {
+      "kind": "bound-method",
+      "sig": "ConfigActionsMixin.run_radio_km_selftest",
       "type": "method"
     },
     "saveGeometry": {

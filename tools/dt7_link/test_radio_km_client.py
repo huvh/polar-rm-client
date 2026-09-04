@@ -238,6 +238,21 @@ def main() -> int:
 
     test_manager_gates()
 
+    # --- 自检判据：必须看车上计数，不能看客户端自己发了多少 ---
+    from rm_client.control import evaluate_radio_km_selftest as ev
+
+    ok, why = ev(100, 180, 10, 90)
+    check("车上计数在涨 -> PASS", ok and "100->180" in why, why)
+    ok, why = ev(-1, -1, 10, 90)
+    check("读不到回读 -> 不能算通过（要插 USB）", not ok and "USB" in why, why)
+    ok, why = ev(100, -1, 10, 90)
+    check("自检中途回读断了 -> FAIL 而不是崩溃", not ok and "USB" in why, why)
+    ok, why = ev(100, 100, 10, 10)
+    check("一帧都没发出去 -> FAIL 说是客户端侧", not ok and "没发出去" in why, why)
+    ok, why = ev(100, 100, 10, 190)
+    check("**发了但车上没涨 -> FAIL**（这正是自证与实证的差别）",
+          not ok and "921600" in why, why)
+
     print("\n" + ("有失败项" if FAILED else "无线键鼠出口客户端侧全部通过"))
     return 1 if FAILED else 0
 

@@ -1635,6 +1635,13 @@ def build_default_registry() -> ModuleRegistry:
                 # 本项只是"意愿"，真正生效还要 模块启用 + Allow Drive + 非急停
                 # （判定在 backend/manager.py 的 RobotLink 应用处）。
                 bool_setting("Radio KM Egress", False),
+                # 端到端自检：观察 2.5 秒车上回读的 0x0311 到达计数涨不涨。
+                # 自检本身不注入任何按键，所以车不会因为这个动作而动。
+                action_setting(
+                    "Run Wireless KM Selftest",
+                    "观察 2.5 秒车上回读的 0x0311 到达计数（km_rx）是否增长；"
+                    "判据来自车那一侧，不是客户端自证。需插着 USB 0x5A 才能读回读。",
+                ),
                 # 意图位：由操作员控，两个都要开才会真的发。
                 bool_setting("Client Chassis Drive", False),
                 bool_setting("Client Gimbal Control", False),

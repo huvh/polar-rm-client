@@ -76,6 +76,7 @@ from PySide6.QtWidgets import QFileDialog, QInputDialog
 
 # 相对导入层级：rm_client/ui/polar/mixins/ → ... = rm_client.ui、.... = rm_client
 from ....combat_events import CombatEvent
+from ....control import evaluate_radio_km_selftest
 from ....hero_lob import HeroLobPlanner
 from ....model import PRIMARY_GUI_MODE, Module, Setting
 from ...overlay_coordinator import OverlayKind
@@ -236,6 +237,8 @@ class ConfigActionsMixin:
         elif action_name == "Release E-Stop":
             self.backend.release_estop()
             self.toast("E-STOP RELEASED — verify robot before control")
+        elif action_name == "Run Wireless KM Selftest":
+            self.run_radio_km_selftest()
         elif action_name == "Save Current":
             self.save_current_config()
         elif action_name == "Reload Profile":
@@ -647,6 +650,50 @@ class ConfigActionsMixin:
             self.toast(f"Qualification blocked: {exc}")
         self.update_backend_readiness(force=True)
         self.frame_scheduler.force()
+
+    RADIO_KM_SELFTEST_MS = 2500
+
+    def run_radio_km_selftest(self) -> None:
+        """端到端自检：看**车上**的 0x0311 到达计数涨不涨，不是客户端自证。
+
+        刻意不发任何按键、也不新造帧：出口本来就以 75Hz 在流，
+        自检只做"记两个时刻的车上计数"这件事，所以车不会因为自检而动。
+        判据抽成 control.evaluate_radio_km_selftest()，那边有独立断言。
+        """
+        control = self.control
+        link = self.registry.get("RobotLink")
+        setting = link.get_setting("Radio KM Egress") if link is not None else None
+        if setting is None:
+            self.toast("没有 Radio KM Egress 开关，自检无从做起")
+            return
+        if not bool(setting.value):
+            self.toast("自检前请先打开 Radio KM Egress（开关本身要参与）")
+            return
+        if not control.radio_km_enabled:
+            self.toast(f"出口未生效：{control.radio_km_gate_reason or '闸门未过'}")
+            return
+        if getattr(self, "_radio_km_selftest_running", False):
+            self.toast("无线自检已在进行中")
+            return
+        rx0 = int(getattr(control, "radio_km_robot_rx", -1))
+        if rx0 < 0:
+            self.toast("读不到车上计数：插一下 C 板 USB(0x5A) 才能做这个自检")
+            return
+        self._radio_km_selftest_running = True
+        sent0 = int(control.radio_km_sent)
+        self.toast(f"无线自检开始：车上已计 {rx0} 帧，观察 2.5 秒")
+
+        def finish() -> None:
+            self._radio_km_selftest_running = False
+            ok, detail = evaluate_radio_km_selftest(
+                rx0,
+                int(getattr(control, "radio_km_robot_rx", -1)),
+                sent0,
+                int(control.radio_km_sent),
+            )
+            self.toast(("无线自检 PASS · " if ok else "无线自检 FAIL · ") + detail)
+
+        QTimer.singleShot(self.RADIO_KM_SELFTEST_MS, finish)
 
     def start_kmc_qualification_test(self) -> None:
         """Schedule 750 neutral KMC frames without blocking the render thread."""

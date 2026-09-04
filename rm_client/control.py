@@ -73,6 +73,26 @@ class ChassisCommand:
         return json.dumps(asdict(self), separators=(",", ":"), ensure_ascii=True).encode("utf-8")
 
 
+def evaluate_radio_km_selftest(
+    rx0: int, rx1: int, sent0: int, sent1: int
+) -> tuple[bool, str]:
+    """判"客户端 -> 图传链路 -> C 板"这一程通没通（纯函数，好测）。
+
+    判据**只看车上回读的到达计数**：客户端自己发了多少只能自证，
+    说明不了链路，所以"发了但车上没涨"必须是 FAIL。
+    rx < 0 表示回读读不到（没插 0x5A），那是"无法判定"，不能算通过。
+    """
+    rx0 = int(rx0); rx1 = int(rx1)
+    if rx0 < 0 or rx1 < 0:
+        return False, "读不到车上计数：先插 C 板 USB(0x5A) 才能做这个自检"
+    if rx1 > rx0:
+        return True, f"车上计数 {rx0}->{rx1} 帧，客户端同期发出 {max(0, sent1 - sent0)} 帧"
+    if int(sent1) <= int(sent0):
+        return False, "客户端一帧都没发出去（看 radio_km_last_error / 闸门原因）"
+    return False, ("发了但车上收到 0 增量：查图传发送端那一路串口是否接到 C 板"
+                   "（官方：图传链路 921600），见 FIELD_WIRELESS_RUNBOOK.md 第 3 步")
+
+
 class KeyboardControlBridge:
     """采集键鼠并经 BackendManager 的官方 MQTT 上行发送。
 
