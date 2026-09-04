@@ -891,3 +891,72 @@ DT7 那条 USB 口上的报文确实零公开，但**我们根本不需要碰它
 | 选手端 → DT7 空口 | 元数据 `Keybd_event/Mouse_event/SetCursorPos` + 日志 `Input_Device_RC Sent ...` | 官方实现自带，我们不用做 |
 | DT7 → DR16 → C 板 | 固件 `remote_control.c` 的 `sbus_to_rc` 已在收键位/鼠标 | 现役在用 |
 | 键位进底盘/云台 | `rc_ctrl.key.v` / `mouse` 被 `chassis_omni.c`、`shoot_fric_trigger.c` 消费 | 现役在用 |
+
+---
+
+## 16. 12.x 官方包（`RoboMasterEngine 12.0.0.137_Student.zip`）核完：这**不是选手端**，而且里面没有 MQTT
+
+用户给的这个包按名字像是"官方客户端"，实测结构不是：
+
+- 顶层是 `RoboMasterEngine.exe` + `RoboMasterEngine_Data\Managed\Assembly-CSharp.dll`（**Mono 后端**，可直接读元数据）
+  + `StreamingAssets\RMServer\{Server, AdapterSvr, RMServerMap, RMServerLogClient}`（`RMServer.exe`、Redis、InfluxDB、Lua 配置）。
+- ⇒ 它是**裁判端 + 赛事引擎服务器**，**不含选手端**（没有 `RoboMasterClient.exe`），
+  因此**不含 `DeviceInfo.dll`** —— 第 15 节那套"选手端只认 FTDI"的匹配表在这个包里查不到，
+  2026 版有没有变必须拿到**选手端 12.x 包**再核。
+
+### 16.1 从这个包里确实挖到的新事实（读托管元数据，不是猜）
+
+服务器/选手端之间的内部命令表 `StuComEventID`（枚举常量，Mono 的 Constant 表直读）：
+
+| 成员 | 值 |
+|---|---|
+| `communication` | 769 = 0x0301 |
+| **`CUSTOM_CONTROLLER_DATA`** | **770 = 0x0302** |
+| `map_data` | 771 = 0x0303 |
+| **`key_mouse_data`** | **772 = 0x0304** |
+| `RADER_DATA_TO_CLIENT` | 773 = 0x0305 |
+
+配套的载荷结构（都是 `ValueType`，字段顺序即打包顺序）：
+
+```
+ClientCustomControlData { robotid, datalen, data }
+StuCustomControlData    { cmd, data }
+ClientSendCMD           { cmd, target_pos_x, target_pos_y, target_pos_z, cmd_keyboard, target_robot_id }
+S1ClientTransferRobotProto : S1ProtoBase { dataLen, data }   // Pack/UnPack/GetSize
+```
+
+⇒ 两件事值得记：
+1. **键鼠在 12.x 的内部协议里是 0x0304（`key_mouse_data`），而裁判系统对机器人的 0x0304 已被 V1.3.0 删除**
+   —— 两个 0x0304 不是一回事，别把"0x0304 被删了"误读成"键鼠通道没了"。
+   客户端↔服务器之间键鼠一直在，走的正是 `ClientSendCMD.cmd_keyboard` 这类字段。
+2. `ClientSendCMD` 里键鼠与"目标位置/目标机器人 id"在同一个包内 ——
+   说明 12.x 把"客户端发的控制意图"统一按一条命令转发给机器人（`S1ClientTransferRobotProto`），
+   与我在 5 节里说的"0x0311 30 字节内容由队伍自定"不冲突，但**我们的 0x0311 载荷能不能原样穿过去，
+   要看选手端/网关这一层怎么转发**，这是下一节要拿选手端包核对的重点。
+
+### 16.2 一个把假设纠正过来的发现：这套 12.x 服务器里**没有 MQTT**
+
+对 `Assembly-CSharp.dll`、`RMServer.exe` 和 RMServer 目录下 167 个二进制统计
+`mqtt/Mqtt/MQTT/WithTcpServer/MqttFactory/KeyboardMouseControl/192.168.12` 出现次数：
+
+| 文件 | MQTT 相关串 | KeyboardMouseControl |
+|---|---|---|
+| `Assembly-CSharp.dll`（服务器 Unity 侧） | **0** | **0**（`CustomControl` 有 11 次，全是内部 S1 协议名） |
+| `RMServer.exe` | **0** | **0** |
+| RMServer 目录下全部 exe/dll | 只有 redis/cef 之类的噪声命中，无 MQTT 栈 | — |
+
+服务器内部走的是 **Redis 发布订阅 + Google.Protobuf（`ToGateSvr_RedisPublish` 等）**。
+⇒ 所以《通信协议》里"服务器IP 192.168.12.1:3333 / 自定义客户端 192.168.12.2"那个
+**监听 3333 的进程不在这个服务器包里**，只能是**选手端那一侧**
+（附录三示例默认 `127.0.0.1:3333` 也是同一结论：它连的是本机跑的官方客户端）。
+这条对现场的直接影响：**B 路和 D 路都以"官方选手端在跑"为前提**，
+我们的客户端不能指望"只连服务器就能发"。之前文档措辞里的"赛事引擎服务器"太含糊，
+现在按二进制证据改成"选手端那一侧"。
+
+### 16.3 还缺的一块（要用户帮忙拿）
+
+要把 2026 版彻底钉死，需要 **选手端 12.x 包**（裁判端页面上的"赛事引擎选手端软件"，
+11.x 对应文件是 `RoboMasterClient 11.0.1.128.7z`）。拿到后用同一套方法核三件事：
+1. `DeviceInfo.dll` 的匹配表在 12.x 里还是不是 `FTDI` / `FFF0:0008` / `2CA3:001F+MI_04` / `2CA3:1020+MI_02`；
+2. 选手端有没有 MQTT 栈、监听哪个端口、`KeyboardMouseControl`/`CustomControl` 的 protobuf 定义变没变；
+3. 0x0306 的 8 字节布局与"仅响应选手端开放的按键"那份白名单（有没有可读的表）。
