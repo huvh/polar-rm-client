@@ -38,7 +38,11 @@
 
 1. 官方选手端 `RoboMasterClient` 跑起来并登录本机机器人，DT7 正常连着它；
    **键鼠来源选"官方选手端"**（这条路是选手端在发键鼠，见 2.2.1 的二选一）。
-1a. **硬件前提（最容易白跑的一条）**：选手端那台机器必须真插一个 **FTDI 芯片**
+1a. **硬件前提（最容易白跑的一条，且有官方原文）**：选手端包里的 `ReadMe.txt` 第 3 条
+    原话"**如需连接自定义控制器，必须安装专用驱动程序**"，那个驱动就是包内的
+    `StreamingAssets\Tools\Windows_CDM21228_Setup.exe`（**FTDI 的 VCP 驱动**）。
+    选手端 `DeviceInfo.dll` 的 `GetCCSSerialPort` 也只匹配硬件 ID 里的 `FTDI`
+    （11.x 与 12.x 实测一致，见 README 第 17.1 节）。
     的 USB-串口当"自定义控制器"，并与第二个 USB-串口用 TX/RX/GND 三根线交叉相连；
     客户端往第二个口写。com0com 虚拟口**不算**（选手端 `GetCCSSerialPort` 只认
     硬件 ID 里的 `FTDI`）。先跑 `python tools/dt7_link/cc_probe.py --list` 自查。
@@ -146,7 +150,10 @@
 它的 `Assembly-CSharp.dll`、`RMServer.exe` 以及 RMServer 目录下 167 个二进制里
 **没有任何 MQTT 栈、也没有 `KeyboardMouseControl` 字样**（服务器内部走 Redis + protobuf）。
 ⇒ 官方文档写的"服务器 192.168.12.1:3333"那个监听者只能是**选手端那一侧**；
-所以 B 路（0x0311）和 D 路（0x0306）**都以"官方选手端在跑"为前提**。
+所以 B 路（0x0311）和 D 路（0x0306）**都以"官方选手端在跑"为前提**。（已核实：12.x 选手端进程自己开着 MQTT broker
+   —— 元数据里有 `MqttServer/MqttTcpServerListener/MyMqttServer.StartMqttServer` 与专门的
+   `CustomClientThread`；而 12.x 裁判端/服务器包里没有任何 MQTT。⇒ **同机就用默认
+   `127.0.0.1:3333`**，跨机才填选手端那台机器的 IP。见 README 第 17.2 节。）
 别到现场才发现客户端连了个没人监听的 3333。
 
 ## 5. 绝对不要做的事

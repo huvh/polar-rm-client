@@ -960,3 +960,76 @@ S1ClientTransferRobotProto : S1ProtoBase { dataLen, data }   // Pack/UnPack/GetS
 1. `DeviceInfo.dll` 的匹配表在 12.x 里还是不是 `FTDI` / `FFF0:0008` / `2CA3:001F+MI_04` / `2CA3:1020+MI_02`；
 2. 选手端有没有 MQTT 栈、监听哪个端口、`KeyboardMouseControl`/`CustomControl` 的 protobuf 定义变没变；
 3. 0x0306 的 8 字节布局与"仅响应选手端开放的按键"那份白名单（有没有可读的表）。
+
+---
+
+## 17. 12.x 选手端核完：三条全部落实（含大疆自己写的"必须装 FTDI 驱动"）
+
+拿用户给的两个包（`RoboMasterClient 12.0.0.30_1v1_Student.7z` / `..._3v3_Student.7z`，
+两者结构相同，只差 1v1/3v3 场景）核了 16.3 列的三件事。**只解包读文件，没运行任何 exe。**
+
+### 17.1 Q1：匹配表 12.x 一字未变，而且大疆自己就把话说白了
+
+12.x 的 `DeviceInfo.dll`（128,512 字节，比 11.x 的 112,128 大）导出
+`GetCCSSerialPort / GetDjiSerialPort / GetNewVideoSerialPort / GetVideoSerialPort` **+ `IsSerialPortReady`（新增）**，
+rip 相对引用归属结果与 11.x **完全一致**：
+
+```
+GetCCSSerialPort      <- FTDI
+GetDjiSerialPort      <- VID_FFF0 + PID_0008
+GetVideoSerialPort    <- VID_2CA3 + PID_001F + MI_04
+GetNewVideoSerialPort <- VID_2CA3 + PID_1020 + MI_02
+```
+
+更硬的证据是包里的 `ReadMe.txt`，原文照抄：
+
+> "3. **如需连接自定义控制器，必须安装专用驱动程序。**
+>  路径为："选手端根目录\...\StreamingAssets\Tools\**Windows_CDM21228_Setup.exe**""
+
+`CDM 2.12.28` 就是 **FTDI 的 VCP 驱动**。⇒ 第 15 节"选手端只认 FTDI"这条推断
+现在有两个独立来源（二进制匹配表 + 大疆自己的 README），可以当事实用了。
+
+### 17.2 Q2：**MQTT broker 就在选手端进程里**（我们客户端默认 127.0.0.1:3333 是对的）
+
+12.x 的 `global-metadata.dat`（8,089,024 字节）里 `Mqtt` 出现 221 次、`MQTT` 60 次，
+并且是**服务器侧**的类，不是客户端库：
+
+```
+MqttServer / MqttTcpServerListener / MqttServerKeepAliveMonitor / MqttClientSessionsManager
+MqttRetainedMessagesManager / MqttPacketInspector / MqttFactory / ClientSubscribedTopic
+MyMqttServer.StartMqttServer / StopMqttServer / GetMqttServerState
+CustomClientThread / OnMqttSubProto / OnMqttPublishProto / SendRobotInputInitData
+```
+
+⇒ **选手端自己开着一个 MQTT broker，还专门有一条 `CustomClientThread` 处理自定义客户端。**
+所以：客户端与选手端同机时 `127.0.0.1:3333` 就是正确默认值；
+文档里"服务器 192.168.12.1:3333"读作"跑选手端那台机器"。
+第 16.2 节那条纠正（12.x 服务器包里没有 MQTT）由此闭环：**B 路的对端是选手端，不是 RMServer**。
+
+### 17.3 Q3：0x0306 的格式串在 12.x 里与 11.x 一字不差；按键白名单仍然没有可读表文件
+
+12.x 元数据里逐字命中：
+
+```
+[{0}] 0306数据为KeyValue1:{1},KeyValue2:{2},x:{3},y:{4},LB:{5},RB:{6},reserved:{7}
+[{0}] Input_Device_RC Sent x:{1}, y:{2}, z:{3}, LB:{4}, RB:{5}, KeyValue:{6}, SerialPortIsConnected:{7}
+[{0}] 收到0306数据包 / 自定义控制器0306收包长度不为8字节，丢弃！ / 0306收包超频，丢弃多余包！
+```
+
+配套符号（同一段元数据里紧挨着）：`CCSPortThread`、`bvk`、`bScan`、`dwExtraInfo`、
+**`Keybd_event`、`Mouse_event`、`SetCursorPos`、`GetCurrentThreadId`** ——
+即 0x0306 落到 Win32 合成输入，再由选手端送进 DT7。
+另外 `SerialPortDataSpeed{tc2pc,pc2tc,ccs2pc,pc2ccs,rc2pc,pc2rc,ccs2pc_error}` 与
+`rcStatus/RCStatus` 也在 12.x 里，15.1 那条"pc2rc 只是速率计数"的更正继续成立。
+
+**没找到的**：可读的按键白名单表。搜 `开放的按键`、`白名单` 在元数据里 0 命中
+（协议文档里那句"仅响应选手端开放的按键"是行为描述，不附表）。
+⇒ 结论不变但更精确了：**键值→是否被响应，只能现场逐键试**（`cc_probe.py --sweep` 就是干这个的）；
+若非要提前拿到，唯一入口是解 IL2CPP 的 `fieldDefaultValues`（能做，但成本明显高于现场试 5 分钟）。
+
+### 17.4 现场清单因此更短了
+
+1. 选手端根目录跑 `Start.bat`（ReadMe 第 1 条），依赖 .NET 7 与 VC++ 运行库（第 2 条，包内自带安装包）；
+2. **装 `Tools\Windows_CDM21228_Setup.exe`（FTDI 驱动）**，然后插 FTDI USB-串口当自定义控制器（第 3 条）；
+3. 我们的客户端与选手端同机 → `MQTT host` 用默认 `127.0.0.1:3333` 即可；跨机才填选手端那台机器的 IP；
+4. `cc_probe.py --list` 确认那个口被认成"自定义控制器（选手端会认）"，再 `--keys W --confirm-move-car`。
