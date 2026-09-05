@@ -585,8 +585,12 @@ class BackendManager:
                 control.radio_km_link_note = f"车上已收到 {rx_now} 帧 0x0311"
             elif rx_now == 0:
                 control.radio_km_link_state = "silent"
-                control.radio_km_link_note = ("车上一个 0x0311 都没收到：先查图传发送端那一路"
-                                              "串口是否接到 C 板（官方：图传链路 921600）")
+                control.radio_km_link_note = (
+                    "车上一个 0x0311 都没收到。注意：官方要求图传发送端串口 921600"
+                    "（规程表 1-1），而本固件只配了 USART1/USART3/USART6，"
+                    "全仓没有 921600 那一路 —— 所以光把线接到 C 板也不会收到。"
+                    "两条可行做法：① 用 C 路（直连 DT7，不依赖图传接线）；"
+                    "② 车载电脑收 0x0311 后经 HostKmFeed 喂进 C 板。")
             else:
                 control.radio_km_link_state = "stalled"
                 control.radio_km_link_note = f"计数停在 {rx_now}，不再增长：链路中途断了"

@@ -114,6 +114,13 @@ def test_manager_gates() -> None:
           control.radio_km_link_state == "silent", control.radio_km_link_state)
     check("silent 的话里点明图传发送端那一路串口", "921600" in control.radio_km_link_note,
           control.radio_km_link_note)
+    # 光说"921600"会把人带去接一根根本没用的线：本固件没有那一路 UART。
+    # 所以提示必须同时给出两条真能走的做法，缺任何一条都算提示退化。
+    note = control.radio_km_link_note
+    check("提示要说清[本固件没有 921600 那一路]（否则操作员会去接线白等）",
+          "没有" in note and "USART" in note, note[:70])
+    check("提示要给出两条可行做法（C 路 / 车载电脑喂 HostKmFeed）",
+          "C 路" in note and "HostKmFeed" in note, note[-80:])
     manager.polar_bridge.debug_packages = {"km_rx": 12.0, "km_key": 17.0}
     manager.tick_polar_link(state, registry, control)
     check("计数在涨 -> live", control.radio_km_link_state == "live",
