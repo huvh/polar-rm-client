@@ -115,6 +115,25 @@ class RmMqttBackend(OfficialMqttBridge):
         self.disconnected_at = time.perf_counter()
         self._emit_event("mqtt_disconnect", reason="stop")
 
+    def set_address(self, host: str, port: int) -> bool:
+        """改 broker 地址。已经连着就断开重连，返回是否真的换了。
+
+        以前 host/port 只在场景切换时被**赋值**（``manager._apply_config``），
+        赋值不会重连：进程已经连着 127.0.0.1 时把字段改成 192.168.12.1，
+        实际还在往老地址发 —— 检录当天这就会把"键鼠出口开着但赛事引擎收不到"
+        演成一条查不出原因的故障。
+        """
+        host = str(host).strip()
+        port = int(port)
+        if (host, port) == (str(self.host), int(self.port)):
+            return False
+        self.host = host
+        self.port = port
+        if self._started:
+            self.stop(publish_status=False)
+            self.start()
+        return True
+
     # ------------------------------------------------------------------
     # paho 回调
     # ------------------------------------------------------------------

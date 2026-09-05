@@ -881,6 +881,9 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                 ("registry", lambda: self.registry.tick(self.state, logic_dt)),
                 # 队内 0x5A 链路必须排在最后一环：它的 overlay 要覆盖
                 # `state.tick()` 的桌面仿真值，排在前面会被仿真反向盖掉。
+                # broker 地址要在 tick 里读：操作员在二级界面改了 Host/Port，
+                # 得下一拍就落到真实连接上（不然界面显示的是一个没在用的地址）
+                ("mqtt.link", lambda: self.backend.sync_mqtt_link(self.registry)),
                 (
                     "polar.link",
                     lambda: self.backend.tick_polar_link(

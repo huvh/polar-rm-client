@@ -166,8 +166,8 @@ class BackendManager:
     def _apply_config(self, config: Any) -> None:
         self.config = config
         self.safety.from_scenario(config)
-        self.mqtt.host = config.connection.mqtt_host
-        self.mqtt.port = int(config.connection.mqtt_port)
+        # 走 set_address 而不是直接赋值：赋值不会重连（见 mqtt_backend.set_address）
+        self.mqtt.set_address(config.connection.mqtt_host, config.connection.mqtt_port)
         self.mqtt.mock_output = not bool(config.safety.allow_mqtt_publish)
         self.udp.host = config.connection.udp_host
         self.udp.port = int(config.connection.udp_port)
@@ -188,6 +188,44 @@ class BackendManager:
             if config.key != "LabDebug" and not self.state.official_state_active:
                 self._clear_mock_frontend_state(self.state)
         self.set_active_video_source(config.connection.video_source)
+
+    def sync_mqtt_link(self, registry: Any) -> str:
+        """让 MQTTLink 的 Host/Port **真的决定**连到哪个 broker。
+
+        以前这两个设置项只有人写、没有人读：``scenarios.py`` 把场景值抄到界面上，
+        操作员改了以后后端一行都不动，屏幕上留下的地址是假的。
+        非法输入退回当前有效值，并且把有效值写回设置项 —— 宁可覆盖你的手误，
+        也不让界面显示一个根本没在用的地址。
+        """
+        module = registry.get("MQTTLink") if registry is not None else None
+        if module is None:
+            return ""
+        host_setting = module.get_setting("Host")
+        port_setting = module.get_setting("Port")
+        if host_setting is None or port_setting is None:
+            return ""
+        want_host = str(host_setting.value or "").strip()
+        note = ""
+        try:
+            want_port = int(port_setting.value)
+        except (TypeError, ValueError):
+            want_port = -1
+        if not want_host or " " in want_host:
+            note = "MQTT 地址为空或含空格，沿用 " + str(self.mqtt.host)
+            want_host = str(self.mqtt.host)
+        if not 1000 <= want_port <= 9999:
+            note = (note + "；" if note else "") + "MQTT 端口非法，沿用 " + str(self.mqtt.port)
+            want_port = int(self.mqtt.port)
+        changed = self.mqtt.set_address(want_host, want_port)
+        # 设置项永远等于真正在用的地址：UI 不骗人
+        if str(host_setting.value) != self.mqtt.host:
+            host_setting.value = str(self.mqtt.host)
+        if int(port_setting.value or 0) != int(self.mqtt.port):
+            port_setting.value = int(self.mqtt.port)
+        self.mqtt.last_error = note
+        if changed:
+            print(f"[mqtt] broker 改为 {self.mqtt.host}:{self.mqtt.port}")
+        return note
 
     @staticmethod
     def _clear_mock_frontend_state(state: RobotState) -> None:

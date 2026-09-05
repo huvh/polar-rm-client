@@ -607,3 +607,33 @@ AMBIGUOUS 那 51 项**不计入也不计减**基线，原因见上面那节。
 这一轮不再自己往下推了：上面每一项都能写代码，但写下去要么新增比赛行为、
 要么替你们定一个语义。这两种都不是“修修补补”，而是改东西。
 不改动比赛行为、只差给字典供值的那一类，已经全部做完，并由 23 项检查锁定。
+
+
+## 本轮（C 路定案那一批）新查出来的一类假接线：**"有人写"不等于"有人读"**
+
+`tools/audit_settings.py` 判"这个设置项接没接"的办法是看设置名在代码里被不被引用。
+`MQTTLink / Host`、`MQTTLink / Port` 就这样被判成已接线 —— 因为
+`rm_client/scenarios.py:134-135` 把场景值抄到界面上（**写**），于是审计看见名字出现在文件里。
+但**没有任何地方反向读它**：`BackendManager` 只在 `_apply_config` 里按场景赋值
+（老代码 `manager.py:169`），`ScenarioManager.apply_to_runtime`（老 `scenarios.py:155-156`）也是纯赋值。
+
+后果是现场最难查的那种：
+
+1. 操作员在二级界面把 broker 从 `127.0.0.1` 改成 `192.168.12.1`，**屏幕上留下了新地址**，
+   后端一个字节都没改 —— 键鼠还在往本机发。
+2. 更狠的一条：MQTT 客户端**已经连着**的时候赋值 `host` 字段**不会重连**。
+   所以"从实验室切到正式赛"这个动作，地址改了、连接还挂在老的 broker 上。
+
+本轮的修法（都带断言，落在 `tools/test_mqtt_link_settings.py`，已进 `verify_all`）：
+
+- `RmMqttBackend.set_address(host, port)`：换地址 + 已连接则 `stop(publish_status=False)` 后 `start()`。
+- `ScenarioManager.apply_to_runtime` 与 `BackendManager._apply_config` 都改走 `set_address`
+  （老替身没有该方法时退回赋值，向后兼容）。
+- `BackendManager.sync_mqtt_link(registry)` 挂进主循环 tick（`polar_app.py` 的 `mqtt.link` 一环）：
+  界面设置项 → 后端真地址；非法输入（空主机名/含空格/端口越界）沿用当前有效值，
+  并且**把真正在用的地址回写进设置项** —— 界面显示的东西必须是真的。
+
+给下一个人的提醒：**审计工具看不见不等于不存在，反之也一样**。
+"设置项出现在源码里"只证明有人**写**它；要证明它有用，得有一条断言是
+"改了设置 → 后端行为变了"。本轮两个真 bug（`DT7 Real TX` 没进 `settings` 白名单、
+`MQTTLink/Host` 只有人写）都是靠这种断言才抓住的，而它们此前都"看起来接好了"。

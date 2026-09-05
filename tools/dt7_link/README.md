@@ -1434,3 +1434,12 @@ manager 三道闸与急停顺序 / **默认关**。
 5. **DT7 插着 USB 灌键鼠的同时，摇杆还能不能正常带车**：未知，上车第一件事就是量这个。
 6. 手册与 V1.4 协议文档对 DBUS 周期一个写 14ms 一个写 7ms：**矛盾未解**，但对我们无影响
    （C 板只是被动收字节；C 路只影响"多久该重发一帧"，`max_hz=30` 两边都盖得住）。
+
+### 22.6 一条命令验证（本轮新增，不用大疆客户端、不用抓包）
+
+`tools/dt7_link/dt7_wireless_selftest.py`：一边往 DT7 写已知键位，一边读 C 板回读的
+`km_key`（固件合并后的最终值），直接给 `PASS / PARTIAL / NO-CHANGE / NO-READBACK / BLOCKED`。
+判据的证据链在 `tools/dt7_link/test_wireless_selftest.py`：里面有一个 `SimRobot`
+（DT7 收到帧才让车上键位变），用它把三种失败形态各演一遍，
+**包括"基线里已经有目标位就不许判 PASS"这条假阳性防线**。
+`--dry-run / --dry-run --sim-reject / --dry-run --sim-shift 3` 就是这三幕的现场彩排。

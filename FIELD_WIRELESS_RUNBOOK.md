@@ -226,3 +226,36 @@ cmd2 + 载荷 + crc16；命令号位域 Cmd_Set 低/Cmd_Id 高）。开 `Direct 
 
 合规提示：DT7 必须在场且能正常开车（检录 S17 要现场展示发射/底盘/云台），
 C 路并不免除这条；规程没有禁止第三方程序写 DT7 的 VCOM，但也**没有明文允许**——赛前报备一次更稳。
+
+
+---
+
+## 15. 一条命令的闭环自检（现场先跑这个，别靠"车好像动了"）
+
+```
+python tools/dt7_link/dt7_wireless_selftest.py --dt7-port COM9 --board-port COM3 --keys W
+```
+
+两根线都要插：DT7 插电脑（我们往它写键鼠帧）、C 板 Type-C 插电脑（**只读**车上回读，
+一个字节都不往下写，所以不抢驾驶权）。工具做的事：先采 0.6 秒 `km_key` 基线，
+再按 30Hz 发已知键位，同时盯 `km_key` 有没有长出我们发的那几个位。
+
+判读（这五种结果的含义是互斥的，别自己猜）：
+
+| 结论 | 意思 | 下一步 |
+|---|---|---|
+| `PASS` | **C 路整条通了**：PC→DT7→空口→DR16→UART3→`rc_ctrl.key.v` | 可以直接开车；再逐键验 SHIFT/Q/E/左右键 |
+| `PARTIAL` | 帧被 DT7 吃了，但键位漂了 ⇒ 载荷错位（字段顺序/偏移） | 抓一次 USBPcap 对比：`dt7_frame_diff.py` |
+| `NO-CHANGE` | DT7 完全不理这帧 | 换帧型：`dt7_vcp_probe.py --candidate dbus18/km12/keys2` |
+| `NO-READBACK` | 读不到 C 板 Debug 上行 ⇒ **判定不成立**，不能当成"没通" | 先查 `--board-port` 是不是那个 CDC 串口、`__USB_SEND_DEBUG` 是否为 1 |
+| `BLOCKED` | profile 未定案/自相矛盾，**一个字节都没写** | 按提示改 `configs/dt7_profile.json` |
+
+不碰硬件就能先看工具本身有没有问题：
+
+```
+python tools/dt7_link/dt7_wireless_selftest.py --dry-run                     # 假车应当判 PASS
+python tools/dt7_link/dt7_wireless_selftest.py --dry-run --sim-reject         # 应当判 NO-CHANGE
+python tools/dt7_link/dt7_wireless_selftest.py --dry-run --sim-shift 3        # 应当判 PARTIAL
+```
+
+安全：跑之前**架空驱动轮**（`W` 会让车往前顶，`SHIFT` 会切小陀螺）；工具结束一定补松手帧。

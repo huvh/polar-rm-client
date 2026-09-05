@@ -152,8 +152,15 @@ class ScenarioManager:
 
     def apply_to_runtime(self, mqtt: Any, udp: Any, control: Any) -> None:
         config = self.current
-        mqtt.host = config.connection.mqtt_host
-        mqtt.port = config.connection.mqtt_port
+        # 用 set_address 而不是赋值：切场景时 MQTT 往往**已经连着**上一个 broker，
+        # 光改字段不会重连，于是"切到正式赛"之后键鼠还在往 127.0.0.1 发。
+        # 老测试替身可能没有这个方法，所以保留赋值作为退路。
+        setter = getattr(mqtt, "set_address", None)
+        if callable(setter):
+            setter(config.connection.mqtt_host, config.connection.mqtt_port)
+        else:
+            mqtt.host = config.connection.mqtt_host
+            mqtt.port = config.connection.mqtt_port
         if hasattr(mqtt, "mock_output"):
             mqtt.mock_output = not config.safety.allow_mqtt_publish
         udp.host = config.connection.udp_host
