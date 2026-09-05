@@ -93,6 +93,10 @@ KEY_ORDERS = {"fw": KEY_ORDER_FW, "dji2016": KEY_ORDER_DJI2016}# ---------------
 #   确实是 W/S/A/D + **SHIFT（小陀螺）**，不含 Q/E。之前这点靠推断，现在有厂商枚举背书。
 KEY_ORDER_VENDOR_2026 = ("W", "S", "A", "D", "SHIFT", "CTRL", "Q", "E",
                          "R", "F", "G", "Z", "X", "C", "V", "B")
+# 注意两个映射的**值类型不同**，混用就会静默算出别人家的键：
+#   KEYBOARD_BITS（客户端 control 里）  -> 位序号（W=0）   用之前要 1 << 它
+#   KEY_VENDOR_2026_BITS（这里）        -> 已经是位值（W=1）再移一次就错
+# 本轮端到端测试第一次就栽在这个上面（断言当场红，才算没漏出去）。
 KEY_VENDOR_2026_BITS = {name: 1 << i for i, name in enumerate(KEY_ORDER_VENDOR_2026)}
 
 KEY_ORDERS["vendor2026"] = KEY_ORDER_VENDOR_2026
