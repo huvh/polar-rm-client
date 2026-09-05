@@ -183,6 +183,14 @@ def build_dt7_selftest_report(*, keys, forced_bits: int, baseline, verdict: str,
     }
 
 
+# C 路（DT7）默认允许的键位：只有驾驶四键。与 0x5A 侧 VRC_DRIVE_KEY_MASK、
+# 0x0311 侧 KM_KEY_ALLOWED_MASK 同口径 —— 三条出口里任何一条都不许"顺手"
+# 把开火前置执行器（Q/E）带出去。
+DT7_DEFAULT_KEY_MASK = ((1 << KEYBOARD_BITS["W"]) | (1 << KEYBOARD_BITS["S"])
+                        | (1 << KEYBOARD_BITS["A"]) | (1 << KEYBOARD_BITS["D"]))
+DT7_SPIN_KEY_MASK = 1 << KEYBOARD_BITS["SHIFT"]        # 防御性底盘模式，显式开关放行
+DT7_FIRE_KEY_MASK = ((1 << KEYBOARD_BITS["Q"]) | (1 << KEYBOARD_BITS["E"]))
+
 class KeyboardControlBridge:
     """采集键鼠并经 BackendManager 的官方 MQTT 上行发送。
 
@@ -248,6 +256,12 @@ class KeyboardControlBridge:
         #: True 时**一帧都不写 DT7**，也不补松手 —— 用来模拟"进程被杀"，
         #: 从而量出 DT7 会不会把最后一帧的键位一直重复（粘键）。
         self.dt7_send_paused = False
+        #: C 路允许到达固件的键位掩码。DT7 那侧的键位被固件当作驾驶员按键记账
+        #: （remote_control.c:629-630），完全不过 KM_KEY_ALLOWED_MASK，
+        #: 所以客户端这道掩码是唯一的闸，不能不设防。
+        self.dt7_key_mask = DT7_DEFAULT_KEY_MASK
+        #: 被掩码挡掉的键名（要显示出来，不许静默丢键）
+        self.dt7_dropped_keys: list[str] = []
         self.key_state: dict[str, bool] = {key: False for key in CONTROL_KEYS}
         # 协议槽 -> 已绑物理键名；可由前端改绑，默认与旧行为一致。
         self.binds: dict[str, str] = dict(DEFAULT_CONTROL_BINDS)
@@ -521,6 +535,14 @@ class KeyboardControlBridge:
             return
         if self.dt7_forced_keys is not None:
             command = replace(command, keyboard_value=int(self.dt7_forced_keys))
+        else:
+            # 上游键位表可能带着 SHIFT/Q/E 过来，出口这里再收一次
+            masked = int(command.keyboard_value) & int(self.dt7_key_mask) & 0xFFFF
+            self.dt7_dropped_keys = sorted(
+                name for name, bit in KEYBOARD_BITS.items()
+                if (int(command.keyboard_value) >> bit) & 1 and not ((masked >> bit) & 1))
+            if masked != int(command.keyboard_value):
+                command = replace(command, keyboard_value=masked)
         try:
             ok, why = self.dt7_link.send(
                 pressed_bits=command.keyboard_value,

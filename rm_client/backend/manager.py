@@ -59,6 +59,10 @@ SENTRY_SEMI_AUTO = 1
 
 # 队内链路未连上时的重连间隔（秒）。Auto 重连会重新枚举串口。
 POLAR_RETRY_S = 2.0
+# RobotLink 里这两个控件的"没动过"长什么样：拿它们当哨兵，
+# 默认值时让场景配置继续说话（见 tick_polar_link 里的 precedence 注释）
+PORT_DEFAULT = "Auto"
+BAUD_DEFAULT = 115200
 
 _RUNE_PHASE = {1: "INACTIVE", 2: "ACTIVATING", 3: "ACTIVE"}
 # ??? ID ? ?????? 1-9 / ?? 101-109??? = ?? + 100?
@@ -423,6 +427,7 @@ class BackendManager:
                 "Direct DT7 Egress",
                 "DT7 Port",
                 "DT7 Real TX",
+                "DT7 Allow Fire Keys",
                 "CC Port",
                 "CC Hz",
                 "CC Mock Writes",
@@ -434,8 +439,43 @@ class BackendManager:
                 "Gimbal Slew",
                 "Drive Channel",
                 "Send Hz",
+                "Port",
+                "Baud",
             )
         }
+        # RobotLink 的 Port / Baud 要落到传输层：以前只有场景初值
+        # （config.connection.polar_port）被用过一次，界面上选口/改波特率**一点作用都没有**,
+        # 而出错提示还写着"在 RobotLink.Port 里显式选口"，等于指了一条不起作用的路。
+        #
+        #  precedence 规则（明确写死，别让两个来源打架）：
+        #   * 模块设置保持默认（Auto / 115200）=> 场景配置说了算，行为与接线前逐位相同
+        #   * 操作员显式改过 => 以模块设置为准（"我在界面上选了 COM7 就得是 COM7"）
+        #   * 显式清空 Port 不回退到"猜一个口"，保持上一次的确定值
+        # 之所以不无脑让模块赢：默认值是 Auto，官方场景下会突然去自动找串口，
+        # 选错口的后果比"没生效"严重得多。
+        port_setting = settings.get("Port")
+        if port_setting is not None:
+            want_port = str(port_setting.value or "").strip()
+            if want_port and want_port != PORT_DEFAULT:
+                if want_port != str(self.polar.port or ""):
+                    self.polar.port = want_port
+                    if self.polar.connected:
+                        self.polar.stop()
+                    self.polar.last_error = ""
+                    self.polar.last_error_code = ""
+        baud_setting = settings.get("Baud")
+        if baud_setting is not None:
+            try:
+                want_baud = int(baud_setting.value)
+            except (TypeError, ValueError):
+                want_baud = 0
+            # C 板那条是 USB CDC，固件不看波特率；但换成 UART 桥一类接法时它就是有效参数。
+            # 界面既然给了这个框，后端就得读它 —— 但同样只在被显式改过时才覆盖场景。
+            if want_baud != BAUD_DEFAULT and 1200 <= want_baud <= 3_000_000 \
+                    and want_baud != int(self.polar.baud):
+                self.polar.baud = want_baud
+                if self.polar.connected:
+                    self.polar.stop()
         # 驾驶授权与队内写入开关都属于模块自己，**不能**取场景标志：
         # 大疆官方场景的 allow_polar_drive=False 只表示“本场景不自动授权”，
         # 开不了“操作员手动开了”的情形。早期版本拿它当闸门，导致官方场景下
@@ -678,6 +718,18 @@ class BackendManager:
             # 过期自动清零，键会粘在车上继续控。
             if getattr(self, "_dt7_was_enabled", False) and not dt7_live:
                 control.release_direct_dt7()
+            # 键位掩码按显式开关拼：默认只有驾驶四键；SHIFT 要 Allow Spin Key，
+            # Q/E 要单独的 DT7 Allow Fire Keys（默认关，开火权限不偷偷外送）
+            from ..control import (DT7_DEFAULT_KEY_MASK, DT7_FIRE_KEY_MASK,
+                                   DT7_SPIN_KEY_MASK)
+            mask = int(DT7_DEFAULT_KEY_MASK)
+            spin_setting = settings.get("Allow Spin Key")
+            if spin_setting is not None and bool(spin_setting.value):
+                mask |= int(DT7_SPIN_KEY_MASK)
+            fire_setting = settings.get("DT7 Allow Fire Keys")
+            if fire_setting is not None and bool(fire_setting.value):
+                mask |= int(DT7_FIRE_KEY_MASK)
+            control.dt7_key_mask = mask
             control.dt7_enabled = dt7_live
             if not dt7_live:
                 control.dt7_last_error = "直连 DT7 出口未生效（急停/未授权/模块未启用）"

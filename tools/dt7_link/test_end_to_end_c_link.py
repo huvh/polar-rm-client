@@ -178,6 +178,47 @@ def main() -> int:
           (sim2.keys & df.KEY_VENDOR_2026_BITS["W"]) == df.KEY_VENDOR_2026_BITS["W"],
           hex(sim2.keys))
 
+    print("\n--- 8) 开火前置执行器不许经 C 路悄悄出去（客户端是唯一那道闸）---")
+    sim3 = ws.SimRobot()
+    m3, reg3, st3, br3, mod3, link3 = build(sim3)
+    m3.tick_polar_link(st3, reg3, br3)
+    import struct as _s3
+    for name in ("W", "E", "Q"):
+        if name in br3.key_state:
+            br3.key_state[name] = True
+    link3._next_due = 0.0
+    br3.send_from_state(st3, reg3)
+    dec3 = dl.decode_dt7_frame(sim3.frames_in[-1])
+    bits3 = _s3.unpack_from("<H", dec3["payload"], 8)[0]
+    w = df.KEY_VENDOR_2026_BITS["W"]
+    check("默认掩码下 Q/E 被挡在客户端，只有驾驶键出去",
+          bits3 == w, hex(bits3))
+    check("被挡掉的键要报名字（静默丢键是最难查的一种）",
+          set(br3.dt7_dropped_keys) >= {"Q", "E"}, str(br3.dt7_dropped_keys))
+    mod3.get_setting("DT7 Allow Fire Keys").value = True
+    m3.tick_polar_link(st3, reg3, br3)
+    link3._next_due = 0.0
+    br3.send_from_state(st3, reg3)
+    dec4 = dl.decode_dt7_frame(sim3.frames_in[-1])
+    bits4 = _s3.unpack_from("<H", dec4["payload"], 8)[0]
+    check("显式勾了 DT7 Allow Fire Keys 才允许 Q/E",
+          bits4 == (w | df.KEY_VENDOR_2026_BITS["Q"] | df.KEY_VENDOR_2026_BITS["E"]),
+          hex(bits4))
+    check("放行之后不该再报 dropped", br3.dt7_dropped_keys == [], str(br3.dt7_dropped_keys))
+    mod3.get_setting("DT7 Allow Fire Keys").value = False
+    link3._next_due = 0.0
+    link3._gate = lambda: ""
+    br3.dt7_forced_keys = df.KEY_VENDOR_2026_BITS["X"]
+    br3.send_from_state(st3, reg3)
+    dec5 = dl.decode_dt7_frame(sim3.frames_in[-1])
+    check("自检探针键走的是把手，不受驾驶掩码影响（否则自检自己就发不出去）",
+          _s3.unpack_from("<H", dec5["payload"], 8)[0] == df.KEY_VENDOR_2026_BITS["X"],
+          hex(_s3.unpack_from("<H", dec5["payload"], 8)[0]))
+    br3.dt7_forced_keys = None
+    for name in ("W", "E", "Q"):
+        if name in br3.key_state:
+            br3.key_state[name] = False
+
     print("\n" + ("有失败项" if FAILED else "C 路端到端（离线）全部通过"))
     return 1 if FAILED else 0
 

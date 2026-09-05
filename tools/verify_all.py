@@ -117,6 +117,8 @@ C_CHECKS = (
     # 挑口：认错口的代价不是"连不上"，而是产出假结论 ——
     # 把遥控器帧写进 C 板的 CDC，再拿同一块板的 km_key 判读，永远得到 NO-CHANGE，
     # 于是我们以为"DT7 不认这一帧"，白换一整轮帧型。
+    ("tools/test_settings_are_read.py",
+     "设置项接线审计（每个 RobotLink 项都被取用 + Port/Baud 优先级规则）"),
     ("tools/test_port_picking.py",
      "Auto 挑口（DT7 只认 DJI VCOM / CC 只认 FTDI / 车的口一律判负）"),
     # C 路闭环自检工具的判据本身也要有证据：说 PASS 必须真是"我们发的位到了车上合并键位"，

@@ -1651,6 +1651,9 @@ def build_default_registry() -> ModuleRegistry:
                 mode_setting("DT7 Port", "Auto", dt7_port_choices()),
                 # 真发闸：勾了才往 DT7 那个 DJI VCOM 写字节。不勾 = 只产帧不碰硬件。
                 bool_setting("DT7 Real TX", False),
+                # 开火前置执行器（摩擦轮 Q/E）默认不许经客户端注入，
+                # 与 0x0311 侧的 KM_KEY_ALLOWED_MASK 同一条纪律；勾了才发。
+                bool_setting("DT7 Allow Fire Keys", False),
                 bool_setting("Custom Controller Egress", False),
                 mode_setting("CC Port", "Auto", polar_port_choices()),
                 number_setting("CC Hz", 30, 5, 30, 1),

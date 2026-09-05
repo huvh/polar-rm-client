@@ -28,6 +28,9 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(HERE))
 
 from rm_client.backend import dt7_link as dl          # noqa: E402
+from rm_client.control import (ChassisCommand, KeyboardControlBridge,
+                           DT7_DEFAULT_KEY_MASK as C_DT7_DEFAULT_KEY_MASK,
+                           DT7_SPIN_KEY_MASK as C_DT7_SPIN_KEY_MASK)  # noqa: E402
 from rm_client.protocol import crc16, crc8            # noqa: E402
 
 FAILED = 0
@@ -312,7 +315,9 @@ def test_bridge_gates_mutex() -> None:
     import tempfile
     import rm_client.backend.manager as mgr_mod
     from rm_client.backend.manager import BackendManager
-    from rm_client.control import ChassisCommand, KeyboardControlBridge
+    from rm_client.control import (ChassisCommand, KeyboardControlBridge,
+                           DT7_DEFAULT_KEY_MASK as C_DT7_DEFAULT_KEY_MASK,
+                           DT7_SPIN_KEY_MASK as C_DT7_SPIN_KEY_MASK)
     from rm_client.model import RobotState, build_default_registry
 
     def cmd(seq=1, keys=0x11, mid=True):
@@ -331,9 +336,16 @@ def test_bridge_gates_mutex() -> None:
     br.dt7_enabled = True
     br.send_command(cmd())
     got = fake.calls[-1]
-    check("用的就是 command 的键位图与增量鼠标",
-          got["pressed_bits"] == 0x11 and (got["mouse_dx"], got["mouse_y"]) == (-45, 120),
+    check("默认掩码下只把驾驶键送出去（0x11 -> 0x01，SHIFT 要显式放行）",
+          got["pressed_bits"] == 0x01 and (got["mouse_dx"], got["mouse_y"]) == (-45, 120),
           str(got))
+    check("被挡掉的键要报名字", got["pressed_bits"] == 0x01
+          and br.dt7_dropped_keys == ["SHIFT"], str(br.dt7_dropped_keys))
+    br.dt7_key_mask = C_DT7_DEFAULT_KEY_MASK | C_DT7_SPIN_KEY_MASK
+    br.send_command(cmd())
+    check("显式放行 SHIFT 之后 0x11 原样透传（掩码不是死路，是可开关）",
+          fake.calls[-1]["pressed_bits"] == 0x11, str(fake.calls[-1]))
+    br.dt7_key_mask = C_DT7_DEFAULT_KEY_MASK
     br.release_direct_dt7()
     check("主动松手会发全零帧（DT7 没有过期兜底）", fake.released == 1, str(fake.released))
 
