@@ -343,3 +343,32 @@ python tools/dt7_link/dt7_wireless_selftest.py --dry-run --sim-shift 3        # 
 ```
 
 安全：跑之前**架空驱动轮**（`W` 会让车往前顶，`SHIFT` 会切小陀螺）；工具结束一定补松手帧。
+
+
+---
+
+## 16. D 路（备用）：车端 USB↔WiFi 桥 —— 万一 DT7 不吃我们写的帧，这条还能无线控车
+
+**它是什么**：车载小电脑上跑一个裸管道，把 C 板那个 0x5A 虚拟串口搬到 TCP 上；
+客户端把 `RobotLink.Link Mode` 从 `serial` 改成 `tcp`，填桥的地址即可。
+**不动固件一行、不依赖大疆客户端**，用的就是已经跑过比赛的 0x5A 驾驶协议（0x03/0x04）。
+
+```
+# 车上小电脑（Linux）
+python bridge_server.py --serial auto --listen 0.0.0.0 --port 50570
+# 开机自启：tools/car_bridge/rm-usb-bridge.service（客户端一断就停止写串口，靠固件 150ms 看门狗撤销键位）
+
+# 操作手笔记本
+RobotLink → Link Mode = tcp → Bridge Host = 10.50.0.10 → Bridge Port = 50570
+→ 勾 Allow Drive + Client Chassis Drive → Drive Channel = virtual_rc
+```
+
+**为什么可以裸转字节**：车端收包是逐字节重同步的（`usb_task.c:779-793`：CRC 不过就前进一个
+字节继续找 0x5A；跨次残留还会搬回缓冲区头部），所以 TCP 把一条帧剁成两段完全没问题
+——这条不是推测，`tools/test_car_bridge_transport.py` 就是按"分三段到达"验的。
+
+**已知代价（必须知道再决定用不用）**：
+- WiFi 重传尖峰（2.4G 同场干扰下 RTO 可以到 200ms~1s）会超过固件 150ms 新鲜度窗口，
+  表现是键位反复被撤销、车一顿一顿；所以**比赛优先用 C 路**，D 路当训练/台架/后备
+- 车上的自瞄电脑是否也占 C 板那个 Type-C：占的话这条直接作废（单口不能两宿主），上车前先量
+- 只服务一个客户端（第二个连接直接拒），避免两个宿主往同一个口写把帧搅乱

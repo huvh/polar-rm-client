@@ -158,6 +158,26 @@ def main() -> int:
     check("模块停用后也不写", len(sim.frames_in) == n0, f"{n0}->{len(sim.frames_in)}")
     module.enabled = True
 
+    print("\n--- 7) 不插 C 板 USB 也必须能控车（这条链路存在的意义就是无线）---")
+    sim2 = ws.SimRobot()
+    m2, reg2, st2, br2, mod2, link2 = build(sim2)
+    m2.polar.port = "Stub"          # 队内 0x5A 那条线没插：C 路不该依赖它
+    m2.polar_bridge.reset()
+    check("前置确认：队内链路确实没活跃（否则这条测试什么都没测）",
+          bool(m2.polar_bridge.active) is False and bool(st2.polar_link_active) is False,
+          f"{m2.polar_bridge.active} {st2.polar_link_active}")
+    m2.tick_polar_link(st2, reg2, br2)
+    check("没有 USB 也照样判定 C 路生效", br2.dt7_enabled is True, br2.dt7_last_error)
+    n0 = len(sim2.frames_in)
+    br2.set_key("W", True, st2, reg2)
+    link2._next_due = 0.0
+    br2.send_from_state(st2, reg2)
+    check("没有 USB 也真的把帧写进了 DT7", len(sim2.frames_in) > n0,
+          f"{n0} -> {len(sim2.frames_in)}")
+    check("假车收到的键位就是 W（等价于车上 km_key）",
+          (sim2.keys & df.KEY_VENDOR_2026_BITS["W"]) == df.KEY_VENDOR_2026_BITS["W"],
+          hex(sim2.keys))
+
     print("\n" + ("有失败项" if FAILED else "C 路端到端（离线）全部通过"))
     return 1 if FAILED else 0
 

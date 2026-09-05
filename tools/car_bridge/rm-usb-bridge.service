@@ -1,0 +1,18 @@
+# 装到车上小电脑：cp bridge_server.py /usr/local/bin/rm_usb_bridge.py
+#                    cp rm-usb-bridge.service /etc/systemd/system/
+#                    systemctl daemon-reload && systemctl enable --now rm-usb-bridge
+# 为什么用 systemd 而不是 screen：车一重启桥就得上，靠人记不住。
+# 只允许一个客户端（Bridge 自己实现），所以多开一个终端不会把帧搅乱。
+[Unit]
+Description=RM C-board 0x5A serial to WiFi bridge
+After=multi-user.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /usr/local/bin/rm_usb_bridge.py --serial auto --listen 0.0.0.0 --port 50570
+Restart=always
+RestartSec=2
+# 客户端断了就停止写串口；固件 150ms 看门狗自己撤销上位机键位，交还驾驶员
+
+[Install]
+WantedBy=multi-user.target

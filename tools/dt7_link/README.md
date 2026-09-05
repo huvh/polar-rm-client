@@ -1634,3 +1634,27 @@ python tools/dt7_link/dt7_sweep.py --dry-run --sim-accept keys2   # 离线彩排
 - 退避只是"暂时不重试"，窗口一过就重新尝试，不是一辈子放弃
 - 断言在 `test_dt7_link.py` 第 14 节：写炸→句柄被关且置空→下一帧确实**重开了一个新句柄**、
   并且那一帧写成功；退避窗口内不再砸端口；窗口过后又试；注入 `write_bytes` 时不许冒充真口
+
+## 25. D 路（车端 USB↔WiFi 桥）落地了：不依赖大疆客户端的无线后备
+
+动机：C 路的字节层已经和厂商逐字节对齐，但"这台 DT7 认不认"仍然只能上车证明。
+万一不认，**唯一还能无线控车**的现成路径就是把已跑过比赛的 0x03/0x04 协议搬到 WiFi 上。
+
+| 文件 | 作用 |
+|---|---|
+| `tools/car_bridge/bridge_server.py` | 车端裸管道：TCP ↔ 串口，单客户端，断链即停止写串口 |
+| `tools/car_bridge/rm-usb-bridge.service` | systemd 单元（车一重启桥就在，不靠人记） |
+| `rm_client/backend/serial_stream.py` | 串口/TCP 统一出口：传输层可换，协议层一个字没动 |
+| `rm_client/backend/polar_transport.py` | 新增 `transport/host/tcp_port`，错误码 `NO_BRIDGE_HOST`、`BRIDGE_UNREACHABLE` |
+| `RobotLink` 设置项 | `Link Mode`(serial/tcp) + `Bridge Host` + `Bridge Port` |
+
+两条离线测试（`tools/test_car_bridge_loopback.py`、`tools/test_car_bridge_transport.py`）钉住：
+分三段到达的字节在串口侧仍是同一条自洽帧（SOF/长度/crc8/crc16 全过）；上行帧能拼回来并解出
+`km_key`；**客户端断开后桥不再向串口写任何字节**（把驾驶权交回固件 150ms 看门狗，
+而不是最后塞一帧赌运气）；`Port=Stub` 不再挡住 tcp 模式（以前就是这么死的）。
+
+写测试时又踩到一次"红的是测试不是实现"，值得记：我以为 0x03 帧里 SHIFT 会跟着
+`allow_spin_key=True` 过去，实测只有 0x01 —— 因为
+`RC_MAX_ALLOWED_KEY_MASK = RC_DRIVE_KEY_MASK` 把 SHIFT 做成**结构上不可达**
+（自转走 0x04 设定 + 0x1F 回读）。断言于是改成"把这个挡法来自常量、而不是来自某个调用点
+有没有传对参数"钉住：漏传参数也不该能漏出去。

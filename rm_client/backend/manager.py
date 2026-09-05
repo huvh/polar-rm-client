@@ -413,6 +413,9 @@ class BackendManager:
             name: (module.get_setting(name) if module is not None else None)
             for name in (
                 "Allow Drive",
+                "Link Mode",
+                "Bridge Host",
+                "Bridge Port",
                 "Mock Writes",
                 "Allow Spin Key",
                 "Radio KM Egress",
@@ -449,6 +452,32 @@ class BackendManager:
         # （config.connection.polar_send_hz）读一次，界面上的 “Send Hz” 滑块
         # 根本没人读——拖了、存了、重启也还在，但频率一点没变。
         # 场景配置仍作为初值（见 __init__），模块设置是运行期的唯一真相。
+        # D 路：把"字节从哪儿来"这一层切到车端桥上。协议层不动一个字节。
+        mode_setting_obj = settings.get("Link Mode")
+        if mode_setting_obj is not None:
+            want_mode = str(mode_setting_obj.value or "serial").strip().lower()
+            want_mode = want_mode if want_mode in ("serial", "tcp") else "serial"
+            host_obj = settings.get("Bridge Host")
+            port_obj = settings.get("Bridge Port")
+            want_host = str(getattr(host_obj, "value", "") or "").strip()
+            try:
+                want_port = int(getattr(port_obj, "value", 50570) or 50570)
+            except (TypeError, ValueError):
+                want_port = 50570
+            if (self.polar.transport, self.polar.host, self.polar.tcp_port) != (
+                    want_mode, want_host, want_port):
+                # 换链路等于换一条连接：旧句柄必须关，否则还在往老地方写
+                if want_mode == "tcp" and not want_host:
+                    self.polar.last_error = "TCP 模式要先填桥接主机地址"
+                    self.polar.last_error_code = "NO_BRIDGE_HOST"
+                else:
+                    was_running = bool(self.polar.connected or self.polar._running)
+                    self.polar.stop()
+                    self.polar.transport = want_mode
+                    self.polar.host = want_host
+                    self.polar.tcp_port = want_port
+                    if was_running:
+                        self.polar.start()
         hz_setting = settings.get("Send Hz")
         if hz_setting is not None:
             try:

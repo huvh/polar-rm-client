@@ -170,6 +170,13 @@ class PolarLinkTransport:
         self.last_segment_at = 0.0
 
         self._serial: Any = None
+        # ---- D 路（车端 USB<->WiFi 桥）：只有"字节从哪儿来"这一层受影响 ----
+        #: "serial" 直插 C 板；"tcp" 走车上小电脑上的 bridge_server 裸管道
+        self.transport = "serial"
+        self.host = ""
+        self.tcp_port = 50570
+        #: 只给测试注入假串口用；生产为 None
+        self.stream_opener = None
         self._thread: threading.Thread | None = None
         self._running = False
         self._stop = threading.Event()
@@ -228,27 +235,48 @@ class PolarLinkTransport:
         if self._running:
             return
         # "Auto" 在每次尝试连接时重新解析：操作员常常是先启动客户端、后插机器人。
-        resolved = resolve_polar_port(self.port)
-        if resolved in ("", "Stub", "stub", "None", "none"):
-            self.connected = False
-            self.resolved_port = ""
-            if str(self.port).strip().lower() == "auto":
-                self.last_error = "未找到机器人 USB 串口（可重试，或在 RobotLink.Port 里显式选口）"
-                self.last_error_code = "NO_ROBOT_USB"
-            else:
-                self.last_error = "未配置真实机器人串口（Stub）"
-                self.last_error_code = "PORT_STUB"
-            return
+        mode = str(self.transport or "serial").strip().lower()
+        if mode in ("tcp", "wifi", "bridge"):
+            # TCP 模式下"没配串口端口"不是错误：地址才是它的路。
+            # 以前这里会被上面的 Stub 判断直接挡掉，于是 D 路永远连不上。
+            if not str(self.host or "").strip():
+                self.connected = False
+                self.resolved_port = ""
+                self.last_error = "TCP 模式要填桥接主机地址（车上小电脑的 IP）"
+                self.last_error_code = "NO_BRIDGE_HOST"
+                return
+            resolved = f"tcp://{self.host}:{self.tcp_port}"
+        else:
+            resolved = resolve_polar_port(self.port)
+            if resolved in ("", "Stub", "stub", "None", "none"):
+                self.connected = False
+                self.resolved_port = ""
+                if str(self.port).strip().lower() == "auto":
+                    self.last_error = "未找到机器人 USB 串口（可重试，或在 RobotLink.Port 里显式选口）"
+                    self.last_error_code = "NO_ROBOT_USB"
+                else:
+                    self.last_error = "未配置真实机器人串口（Stub）"
+                    self.last_error_code = "PORT_STUB"
+                return
         self.resolved_port = resolved
         try:
-            import serial  # type: ignore
-
-            self._serial = serial.Serial(
-                port=resolved, baudrate=self.baud, timeout=0.02, write_timeout=0.2
-            )
-            self.connected = bool(self._serial and self._serial.is_open)
+            from . import serial_stream as stream
+            try:
+                self._serial = stream.open_stream(
+                    mode, port=resolved, baud=self.baud, host=self.host,
+                    tcp_port=self.tcp_port, serial_opener=self.stream_opener)
+            except Exception as exc:
+                if mode in ("tcp", "wifi", "bridge"):
+                    self.last_error = f"连不上车端桥 {resolved}：{exc}"
+                    self.last_error_code = "BRIDGE_UNREACHABLE"
+                else:
+                    self.last_error = f"{resolved}: {exc}"
+                    self.last_error_code = "PORT_BUSY"
+                self.connected = False
+                return
+            self.connected = bool(self._serial and getattr(self._serial, "is_open", False))
             if not self.connected:
-                self.last_error = f"机器人串口 {resolved} 打开失败"
+                self.last_error = f"链路 {resolved} 打开失败"
                 self.last_error_code = "PORT_OPEN_FAILED"
                 return
             self.last_error = ""

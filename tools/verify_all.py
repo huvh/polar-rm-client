@@ -12,6 +12,11 @@
     python tools/verify_all.py --firmware <StandardRobotpp 路径>   # 附带固件准备自检
 
 注意：这里全部是**离线**检查。它证明不了"车真的会动" —— 那需要硬件。
+
+并行跑两个 verify_all 会出现"假红"：固件自检共享同一棵工作树，
+其中一个会 git checkout 还原别人刚装的桥。已加文件锁拒绝第二个实例
+（实测：同一份代码一次报 3/51 红、一次 51 全绿，红的那次不是代码坏）。
+因此这份清单的红色结果只有在"只有一个实例在跑"时才可作为证据。
 """
 
 from __future__ import annotations
@@ -116,6 +121,12 @@ C_CHECKS = (
      "Auto 挑口（DT7 只认 DJI VCOM / CC 只认 FTDI / 车的口一律判负）"),
     # C 路闭环自检工具的判据本身也要有证据：说 PASS 必须真是"我们发的位到了车上合并键位"，
     # 而且三种失败形态（DT7 不理帧 / 载荷错位 / 读不到回读）都不许误判成通。
+    # D 路（车端 USB<->WiFi 桥）两条：桥本身是裸管道（不改字节、断链不再写串口），
+    # 以及接到客户端传输层之后"提交意图 -> 字节原样落到 C 板、上行帧能拼回来"。
+    ("tools/test_car_bridge_loopback.py",
+     "车端桥裸管道（分片到达不改字节 / 上行拼回帧 / 断开后不再写串口）"),
+    ("tools/test_car_bridge_transport.py",
+     "D 路接进传输层（tcp 模式不被 Stub 端口挡住 / 意图落到串口 / 连不上报错清楚）"),
     # 端到端（离线）：闸门 -> 控制层 -> 运行期 DT7 出口 -> 假 DT7 -> "车上那本键位账"。
     # 分层各自绿不等于接起来能用，所以这条链要单独钉住。
     ("tools/dt7_link/test_end_to_end_c_link.py",
@@ -182,6 +193,35 @@ def run(label: str, argv: list[str]) -> tuple[bool, str]:
     return True, f"{count} 项通过" if count else "通过"
 
 
+_LOCK = None
+
+
+def acquire_lock() -> bool:
+    """同一时刻只允许一个 verify_all：固件自检共享同一棵工作树，并行跑会互相还原。
+
+    用文件锁而不是 pid 文件：进程被杀也不会留下假的占用者（锁随句柄关闭自动释放）。
+    """
+    global _LOCK
+    path = Path(tempfile.gettempdir()) / "rm_verify_all.lock"
+    try:
+        handle = open(path, "a+", encoding="utf-8")
+        if os.name == "nt":
+            import msvcrt
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        return False
+    handle.seek(0)
+    handle.truncate()
+    handle.write(str(os.getpid()))
+    handle.flush()
+    _LOCK = handle
+    return True
+
+
 def main() -> int:
     py = sys.executable
     firmware = None
@@ -193,6 +233,11 @@ def main() -> int:
     failures: list[str] = []
     total_checks = 0
 
+    if not acquire_lock():
+        print("[NO-GO] 已经有一个 verify_all 在跑：固件自检共享同一棵工作树，\n"
+              "        并行会互相 git checkout，结果不可信。等它跑完再来。",
+              file=sys.stderr)
+        return 2
     print("=" * 66)
     print("客户端侧就绪验证（离线）")
     print("=" * 66)

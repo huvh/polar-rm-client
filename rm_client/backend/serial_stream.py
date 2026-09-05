@@ -1,0 +1,99 @@
+# -*- coding: utf-8 -*-
+"""串口 / TCP 两种字节流的统一入口。
+
+为什么要有这一层：队内那条 0x5A 链路的编解码与传输本来就是分开的
+（polar_link 只认 bytes 进 bytes 出），但 polar_transport 直接把
+serial.Serial 写在 4 个地方，于是"想无线"就得改协议层——白担心的事。
+现在只有这一层负责"字节从哪儿来到哪儿去"，协议层一个字都不用动。
+
+安全上刻意保守：TCP 断开后不再向串口写任何字节，让固件自己的 150ms
+新鲜度看门狗撤销键位（usb_task.c:1383-1392），而不是我们最后塞一帧过去赌运气。
+"""
+from __future__ import annotations
+
+import socket
+from typing import Any
+
+
+class TcpByteStream:
+    """长得像 pyserial 对象的 TCP 字节流（polar_transport 只用到这几个成员）。"""
+
+    def __init__(self, host: str, port: int, timeout_s: float = 0.2,
+                 connect_timeout_s: float = 1.5) -> None:
+        self.port = "tcp://{0}:{1}".format(host, port)
+        self.host = str(host)
+        self.tcp_port = int(port)
+        self.timeout = float(timeout_s)
+        self.connect_timeout = float(connect_timeout_s)
+        self._sock = None
+        self.is_open = False
+
+    def open(self) -> None:
+        sock = socket.create_connection((self.host, self.tcp_port),
+                                        timeout=self.connect_timeout)
+        sock.settimeout(self.timeout)
+        try:
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        except OSError:
+            pass
+        self._sock = sock
+        self.is_open = True
+
+    def read(self, size: int = 512) -> bytes:
+        if self._sock is None:
+            return b""
+        try:
+            return self._sock.recv(int(size))
+        except socket.timeout:
+            return b""
+        except OSError:
+            self.is_open = False
+            return b""
+
+    def write(self, data: bytes) -> int:
+        if self._sock is None:
+            raise RuntimeError("TCP 未连接")
+        payload = bytes(data)
+        try:
+            self._sock.sendall(payload)
+        except OSError as exc:
+            self.is_open = False
+            raise RuntimeError("TCP 写入失败（链路已断）：{0}".format(exc)) from exc
+        return len(payload)
+
+    def close(self) -> None:
+        sock, self._sock = self._sock, None
+        self.is_open = False
+        if sock is None:
+            return
+        for act in (lambda: sock.shutdown(socket.SHUT_RDWR), lambda: sock.close()):
+            try:
+                act()
+            except OSError:
+                pass
+
+
+def open_serial(port: str, baud: int) -> Any:
+    import serial                                  # 延迟导入：没硬件也能 import 本模块
+    return serial.Serial(port=port, baudrate=int(baud), timeout=0.02, write_timeout=0.2)
+
+
+def open_stream(transport: str, *, port: str = "", baud: int = 115200,
+                host: str = "", tcp_port: int = 50570, serial_opener=None) -> Any:
+    """按模式打开一条字节流；两种模式返回的对象接口一致。
+
+    serial_opener 只给测试用（注入假串口），生产路径走 pyserial。
+    """
+    mode = str(transport or "serial").strip().lower()
+    if mode in ("tcp", "wifi", "bridge"):
+        target = str(host or "").strip()
+        if not target:
+            raise RuntimeError("TCP 模式要填桥接主机地址（车上小电脑的 IP）")
+        stream = TcpByteStream(target, int(tcp_port))
+        stream.open()
+        return stream
+    if str(port or "").strip().lower() in ("", "stub", "none"):
+        raise RuntimeError("没配置真实机器人串口（Port 还是 Stub）")
+    if serial_opener is not None:
+        return serial_opener(str(port).strip(), int(baud))
+    return open_serial(str(port).strip(), int(baud))

@@ -1668,6 +1668,13 @@ def build_default_registry() -> ModuleRegistry:
                     "判据来自车那一侧，不是客户端自证。需插着 USB 0x5A 才能读回读。",
                 ),
                 # 意图位：由操作员控，两个都要开才会真的发。
+                # ---- D 路：车端 USB<->WiFi 桥（不依赖大疆客户端、不动固件）----
+                # 默认仍是直插串口；换 tcp 就是把"字节从哪儿来"换掉，
+                # 协议层 polar_link 一个字都不动。
+                mode_setting("Link Mode", "serial", ["serial", "tcp"]),
+                mode_setting("Bridge Host", "", ["", "10.50.0.10", "192.168.12.10"],
+                             description="车端 bridge_server 所在小电脑的 IP（Link Mode=tcp 才用）"),
+                number_setting("Bridge Port", 50570, 1024, 65535, 1),
                 bool_setting("Client Chassis Drive", False),
                 bool_setting("Client Gimbal Control", False),
                 # 现场约定：视觉 NUC 自瞄优先级最高，默认占用，客户端让位。
