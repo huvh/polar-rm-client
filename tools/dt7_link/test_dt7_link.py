@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import json
+import re
 import struct
 import sys
 import types
@@ -487,6 +488,83 @@ def test_probe_and_runtime_agree() -> None:
     check("金向量与探针产物也一致", probe == GOLDEN, runtime.hex(" ").upper())
 
 
+def test_range_clamping() -> None:
+    print("\n--- 10) 越界值：截进位宽并说明，而不是抛错把整帧废掉 ---")
+    lk = dl.Dt7KeyMouseLink(port="COM9", profile=prof_of())
+    lk._gate = lambda: ""
+    frame = lk.encode({"mouse_x": 999999, "mouse_y": -999999, "mouse_z": 0,
+                       "left": False, "right": False, "keyboard_value": 0x1FFFF})
+    dec = dl.decode_dt7_frame(frame)
+    x, y, _z, _lb, _rb, key, _r = struct.unpack("<hhhBBHH", dec["payload"])
+    check("鼠标越界被截到 int16 边界（不是抛错）",
+          (x, y) == (32767, -32768), f"{x} {y}")
+    check("键位超 16 位时按位截断", key == 0xFFFF, hex(key))
+    check("被截过哪几个字段要记下来", "mouse_x" in lk.clipped_fields, str(lk.clipped_fields))
+    ok, _ = lk.send(mouse_dx=99999, pressed_bits=0x11)
+    check("越界那一帧照样发得出去（WASD 不能被鼠标值连坐）", ok, lk.last_error)
+    check("发完之后 last_note 说清楚截了什么", "截断" in lk.last_note, lk.last_note)
+    normal = dl.Dt7KeyMouseLink(port="COM9", profile=prof_of())
+    normal._gate = lambda: ""
+    normal.send(mouse_dx=12, mouse_y=-7, pressed_bits=3)
+    check("正常范围内的值不受影响、也不误报截断",
+          normal.clipped_fields == [] and normal.last_note == "",
+          f"{normal.clipped_fields} {normal.last_note!r}")
+    check("clamp_field 对 bool 化的左右键不会越界",
+          dl.clamp_field("left", "B", 1) == (1, False))
+
+
+VENDOR_DUMP = Path(r"D:\rmbuild\dump12\dump.cs")
+
+
+def _vendor_struct_fields(text: str, name: str) -> list:
+    """从 dump.cs 里取某个类型的字段顺序（声明顺序 + // 0x 偏移）。"""
+    m = re.search("public (?:struct|class) " + name + "\\b.*?\\n\\}", text, re.S)
+    if not m:
+        return []
+    fields = []
+    for line in m.group(0).splitlines():
+        fm = re.match(r"\s*public\s+\S+\s+(\w+)\s*;\s*//\s*0x([0-9a-fA-F]+)", line)
+        if fm:
+            fields.append((fm.group(1), int(fm.group(2), 16)))
+    return fields
+
+
+def test_vendor_type_layout_anchor() -> None:
+    print("\n--- 11) 厂商类型定义 == 我们的字节（外部锚点，不是自洽断言）---")
+    if not VENDOR_DUMP.exists():
+        SKIPPED.append("没有 dump.cs：厂商类型锚点未跑")
+        print(f"[SKIP] 找不到 {VENDOR_DUMP}")
+        return
+    text = VENDOR_DUMP.read_text(encoding="utf-8", errors="replace")
+    prof = dl.load_profile()
+    m = re.search(r"class Proto_Prefix[^}]*?CONTROL_PC_ROBOT\s*=\s*(\d+)", text, re.S)
+    check("厂商常量 Proto_Prefix.CONTROL_PC_ROBOT 找得到", m is not None)
+    if m:
+        check("profile 的 cmd_wire == CONTROL_PC_ROBOT（0x2000 语义由厂商命名结案）",
+              int(m.group(1)) == int(prof["cmd_wire"]), f"{m.group(1)} vs {prof['cmd_wire']}")
+    hdr = _vendor_struct_fields(text, "CommonHeader_V1")
+    check("CommonHeader_V1 字段顺序 == 我们的 4 字节头",
+          [n for n, _ in hdr] == ["hdr_flag", "length", "protocol_version", "crc8"]
+          and [o for _, o in hdr] == [0, 1, 2, 3], str(hdr))
+    pre = _vendor_struct_fields(text, "Data_Body_Prefix")
+    check("Data_Body_Prefix = sequence_number 在前、cmd_id 在后（写反就全废）",
+          [n for n, _ in pre] == ["sequence_number", "cmd_id"] and [o for _, o in pre] == [0, 2],
+          str(pre))
+    body = _vendor_struct_fields(text, "Input_Device_Status_RC")
+    names = [n for n, _ in body]
+    check("厂商 RC 载荷字段顺序 == profile 的 payload_fields（逐字段）",
+          names == ["mouse_x", "mouse_y", "mouse_z", "left", "right", "keyboard_value",
+                    "reserved"]
+          or names == ["mouse_x", "mouse_y", "mouse_z", "left_button_down",
+                       "right_button_down", "keyboard_value", "reserved"], str(names))
+    check("厂商 RC 载荷偏移 == 我们 struct 打包的偏移，且总长 12",
+          [o for _, o in body] == [0, 2, 4, 6, 7, 8, 10]
+          and dl.validate_layout(prof["payload_layout"], prof["payload_fields"]) == 12,
+          str([o for _, o in body]))
+    check("厂商 RC 载荷里没有中键字段（所以 mid 必须没有落点）",
+          not any("mid" in n.lower() for n in names), str(names))
+
+
 def main() -> int:
     test_dt7_frame()
     test_frame_and_crc_families()
@@ -497,6 +575,8 @@ def main() -> int:
     test_bridge_gates_mutex()
     test_crc_vs_firmware()
     test_probe_and_runtime_agree()
+    test_range_clamping()
+    test_vendor_type_layout_anchor()
     print("\n" + ("有失败项" if FAILED else "DT7 直连出口（帧型/CRC/载荷/闸门/互斥/松手）全部通过"))
     if SKIPPED:
         print("跳过项（别当已验）：" + "；".join(SKIPPED))

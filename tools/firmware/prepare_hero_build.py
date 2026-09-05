@@ -503,6 +503,17 @@ def verify_changes(repo: Path, step: Step, want_rc: str = 'dt7') -> bool:
         ("__CONTROL_LINK_KM 的 #define 在注释外（真的生效）",
          re.search(r"^\s*#define\s+__CONTROL_LINK_KM\s+CL_KM_\w+",
                    strip_c_comments(param), re.M) is not None),
+        # 鼠标灵敏度：英雄配置出厂是 100000.0f，等于把鼠标整条废掉
+        # （云台参考角增量 = mouse / SENSITIVITY，gimbal_yaw_pitch_direct.c:331-332）。
+        # 走 C 路要用鼠标控云台就必须知道现在这个值是多少，所以体检必须报出来。
+        ("英雄参数里的 MOUSE_SENSITIVITY 是可用量级（不是屏蔽值 100000）",
+         (lambda hero_param: (
+             (m := re.search(r"#define\s+MOUSE_SENSITIVITY\s+\(\s*([0-9.]+)f?\s*\)",
+                             hero_param)) is not None
+             and float(m.group(1)) < 1000.0)
+             or step.warn("MOUSE_SENSITIVITY 仍是屏蔽量级（鼠标不控云台）",
+                          "跑 --mouse-sens 0.5；见 FIELD_WIRELESS_RUNBOOK.md 第 15 节")
+         )(read(repo, HERO_PARAM_REL) if (repo / HERO_PARAM_REL).exists() else "")),
         ("KM_KEY_ALLOWED_MASK 若被覆盖也必须落在注释外",
          ("KM_KEY_ALLOWED_MASK" not in param)
          or re.search(r"^\s*#define\s+KM_KEY_ALLOWED_MASK",
@@ -736,6 +747,9 @@ def gcc_differential_check(repo: Path, step: Step) -> None:
 
 
 HERO_PARAM_REL = "application/robot_param_mecannum_hero.h"
+# 与仓库另一份英雄以外配置 robot_param_mecannum.h:87 同值；
+# 出厂的 100000.0f 是"暂时屏蔽鼠标"的写法，不是标定结果。
+DEFAULT_MOUSE_SENS = "0.5"
 
 
 def main() -> int:
@@ -754,11 +768,13 @@ def main() -> int:
     ap.add_argument("--km-fire-keys", action="store_true",
                     help="允许图传注入 Q/E（摩擦轮/开火相关）。默认不给，"
                          "开火权限不偷偷外送")
-    ap.add_argument("--mouse-sens", default=None,
-                    help="改英雄参数的 MOUSE_SENSITIVITY。出厂 100000.0f = 鼠标被屏蔽"
-                         "（robot_param_mecannum_hero.h:91 + gimbal_yaw_pitch_direct.c"
-                         ":328-330 的自注）；要用 C 路的鼠标控云台就填可用量级"
-                         "（非英雄板那份是 0.5f），方向仍需实车标定")
+    ap.add_argument("--mouse-sens", default=DEFAULT_MOUSE_SENS,
+                    help="英雄参数的 MOUSE_SENSITIVITY。仓库出厂值是 100000.0f，"
+                         "等于**把鼠标整条废掉**（云台增量 = mouse / 该值，"
+                         "gimbal_yaw_pitch_direct.c:331-332；那两行上面的自注写着"
+                         "\"暂时先屏蔽一下鼠标功能\"）。走 C 路要用鼠标控云台，所以这里"
+                         "默认给一个可用量级（与非英雄板那份 0.5f 一致）；"
+                         "想恢复出厂的屏蔽行为就 --mouse-sens 100000")
     args = ap.parse_args()
 
     repo = Path(args.repo).expanduser().resolve()

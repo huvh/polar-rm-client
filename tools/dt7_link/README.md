@@ -1371,8 +1371,14 @@ manager 三道闸与急停顺序 / **默认关**。
 **唯一的车端卡点**（Hume 审计出来的）：`robot_param_mecannum_hero.h:91` 的
 `MOUSE_SENSITIVITY (100000.0f)` —— 云台参考角增量 = `mouse / SENSITIVITY`
 （`gimbal_yaw_pitch_direct.c:331-332`），除以十万等于**把鼠标屏蔽了**（那两行上面的自注就写着"暂时先屏蔽一下鼠标功能"）。
-所以 C 路的**键位**（W/S/A/D/SHIFT/Q/E/左右键）现在就能用，**鼠标控云台**要先把这个宏改成可用量级
-（非英雄板那份是 `0.5f`）。`prepare_hero_build.py` 已加 `--mouse-sens` 用来改它。
+所以 C 路的**键位**（W/S/A/D/SHIFT/Q/E/左右键）本来就能用，**鼠标控云台**要先把这个宏改成可用量级。
+
+本轮起 `prepare_hero_build.py` **默认就把它改成 0.5**（与仓库另一份 `robot_param_mecannum.h:87` 同值，
+`--mouse-sens 100000` 可恢复出厂的"屏蔽鼠标"）。
+为什么交给脚本而不是手工改：其它固件自检会 `git checkout` 工作树，
+手工改的值会被冲回出厂值 —— 本轮实际就这么翻车过一次（我手工改成 0.5，
+下一轮 `verify_all` 里某个自检把它 revert 回 100000，于是新加的体检报 FAIL）。
+"**值的来源必须和体检断言的是同一处**"，这条比那个 bug 值钱。
 另外：`s[0]`、`s[1]` 必须都在**中档**（底盘 FOLLOW / 云台 IMU / 键鼠射击档），键鼠才有意义；
 这两个拨杆 PC **改不了**（来自 DBUS byte5 的物理通道），只能驾驶员手拨。
 
@@ -1407,9 +1413,19 @@ manager 三道闸与急停顺序 / **默认关**。
 
 ### 22.5 还剩什么不知道（照实说）
 
-1. **`0x2000` 的语义归属**：字节值是反汇编逐条读出来的（确凿），但把它读成"命令号"还是
-   "sender/receiver 模块号"属**结构吻合的候选**——全库没有第二个 0x5A 帧的构造者或解析者可对照。
-   这不影响发送：我们发的就是厂商发的那 22 个字节。
+1. ~~`0x2000` 的语义归属~~ **已结案**（本轮最后一条离线不确定性关掉）：
+   厂商自己给这个常量起了名字 —— `dump.cs:136032-136035`
+   ```csharp
+   public class Proto_Prefix { public const int CONTROL_PC_ROBOT = 8192; }   // 8192 = 0x2000
+   ```
+   `Proto_Prefix` 里**只有这一个**常量，名字直译就是"PC 控机器人"。
+   另外三个类型定义把我们的字节布局逐字段钉死（测试第 11 节拿 `dump.cs` 当外部锚点断言，
+   不是自洽断言）：
+   - `CommonHeader_V1{hdr_flag@0,length@1,protocol_version@2,crc8@3}`（`dump.cs:136044-136050`）
+   - `Data_Body_Prefix{sequence_number@0,cmd_id@2}`（`:136054-136058`）⇒ 顺序不能写反
+   - `Input_Device_Status_RC{mouse_x@0,mouse_y@2,mouse_z@4,left_button_down@6,
+     right_button_down@7,keyboard_value@8,reserved@A}`（`:136075-136085`）⇒ 12 字节、**无中键**
+   ⇒ 现在离线能证的都证完了；**只剩一件**：这台 DT7 的现行固件认不认这 22 字节（只能上机）。
 2. ~~CRC 表本体~~ **已经逐字节取出并端到端复算命中（不再是推断）**：
    - `CRC8_TAB`（256B）在 `global-metadata.dat` 绝对偏移 `0x438A30`，与标准反射表
      （poly 0x07 → 反射 0x8C）**逐字节 256/256 一致**；负对照（MSB-first 0x07 / 0xD5 / 0x8C-MSB）0 命中。

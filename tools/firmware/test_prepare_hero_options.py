@@ -1,0 +1,77 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+# prepare_hero_build.py 新增的两条能力要有离线证据：改鼠标灵敏度、以及"注释吞 define"能被体检抓住。
+from __future__ import annotations
+
+import importlib.util as ilu
+import shutil
+import sys
+import tempfile
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+ROOT = HERE.parents[2]
+sys.path.insert(0, str(ROOT / "rm_custom_client")) if not (ROOT / "rm_client").exists() else None
+sys.path.insert(0, str(HERE))
+
+_SPEC = ilu.spec_from_file_location("phb", HERE / "prepare_hero_build.py")
+phb = ilu.module_from_spec(_SPEC)
+_SPEC.loader.exec_module(phb)
+
+FAILED = 0
+
+
+def check(name, ok, detail=""):
+    global FAILED
+    print(f"{'[ OK ]' if ok else '[FAIL]'} {name}" + (f"  {detail}" if detail else ""))
+    FAILED += 0 if ok else 1
+
+
+def main() -> int:
+    print("\n--- prepare_hero_build 新增选项 ---")
+    step = phb.Step()
+
+    # 1) 注释剥离器：证明"躺在注释里的 #define"再也骗不过体检
+    src = ("/* 说明\n#define __CONTROL_LINK_KM CL_KM_VT\n*/\n"
+           "#ifndef X\n#define X 1\n#endif\n"
+           "// #define Y 2\n#define Z 3\n")
+    stripped = phb.strip_c_comments(src)
+    check("块注释里的 #define 被剥掉", "CL_KM_VT" not in stripped, stripped.replace(chr(10), "|"))
+    check("注释外的 #define 留着", "Z 3" in stripped and "Y 2" not in stripped)
+    check("字符串里的 // 不会被当注释", "http://x" in phb.strip_c_comments('a="http://x";'))
+    check("剥注释后还能看见 ifndef", "#ifndef X" in stripped)
+
+    # 2) --mouse-sens 在临时副本上真的改得动，且幂等
+    with tempfile.TemporaryDirectory() as td:
+        repo = Path(td)
+        (repo / "application").mkdir()
+        hero = repo / phb.HERO_PARAM_REL
+        hero.write_text('#define MOUSE_SENSITIVITY (100000.0f)\n#define OTHER 1\n',
+                        encoding="utf-8")
+        phb.switch_mouse_sensitivity(repo, step, "0.5")
+        t1 = hero.read_text(encoding="utf-8")
+        check("英雄参数被改成可用量级", "#define MOUSE_SENSITIVITY (0.5f)" in t1, t1.splitlines()[0])
+        check("旁边的宏不受影响", "#define OTHER 1" in t1)
+        phb.switch_mouse_sensitivity(repo, step, "1.2")
+        t2 = hero.read_text(encoding="utf-8")
+        check("再改一次是替换不是叠加（只有一行定义）",
+              t2.count("#define MOUSE_SENSITIVITY") == 1 and "1.2f" in t2, t2.splitlines()[0])
+        phb.switch_mouse_sensitivity(repo, step, "0.5f")
+        check("带 f 后缀的输入也不会变成 0.5ff",
+              "#define MOUSE_SENSITIVITY (0.5f)" in hero.read_text(encoding="utf-8"))
+        n_before = len(step.failures)
+        phb.switch_mouse_sensitivity(Path(td) / "missing", step, "0.5")
+        check("找不到文件时记一条失败，不是静默返回",
+              len(step.failures) == n_before + 1, str(step.failures[-1:]))
+        hero.write_text("#define SOMETHING_ELSE 1\n", encoding="utf-8")
+        n_before = len(step.failures)
+        phb.switch_mouse_sensitivity(repo, step, "0.5")
+        check("文件在但宏写法变了也要报错（上游改了不能装看不见）",
+              len(step.failures) == n_before + 1, str(step.failures[-1:]))
+        shutil.rmtree(td, ignore_errors=True)
+    print("\n" + ("有失败项" if FAILED else "prepare_hero_build 新选项全部通过"))
+    return 1 if FAILED else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

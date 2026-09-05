@@ -33,9 +33,14 @@ PC→DT7 那一帧长什么样（从大疆 12.x 选手端二进制里逐条反�
   载荷 12 字节 ``<hhhBBHH``：mouse_x/y/z int16、左键、右键、keyboard_value u16、reserved u16
   —— **没有中键**（厂商日志字面量 ``Input_Device_RC Sent x,y,z,LB,RB,KeyValue`` 也只有这些）。
 
-  仍要留一句老实话：字节的**值**是反汇编逐条读出来的（确凿），而 ``0x2000`` 到底该读成
-  "命令号"还是"模块号"属**结构吻合的候选**（全库没有第二个 0x5A 帧可对照）。
-  这不影响发送：我们发的就是厂商发的那 22 个字节。
+  ``0x2000`` 的语义也结案了：厂商自己给它起了名字 ——
+  ``public class Proto_Prefix { public const int CONTROL_PC_ROBOT = 8192; }``
+  （``dump.cs:136032-136035``；8192 = 0x2000，是这条前缀里**唯一**的常量）
+  ⇒ 这个 cmd_id 的含义就是「PC 控机器人」，正是我们在做的事。
+  帧头/前缀/载荷三个厂商类型（``CommonHeader_V1`` / ``Data_Body_Prefix`` /
+  ``Input_Device_Status_RC``）的字段顺序与偏移也和我们的字节一一对上
+  （``tools/dt7_link/test_dt7_link.py`` 第 11 节拿 dump.cs 当外部锚点逐字段断言）。
+  ⇒ 剩下**唯一**没证明的只有一件事：这台 DT7 的现行固件认不认我们写的这 22 字节 —— 只能上机。
 
 与另两条链路的区别（别混）
 --------------------------
@@ -47,7 +52,8 @@ PC→DT7 那一帧长什么样（从大疆 12.x 选手端二进制里逐条反�
 安全约定
 --------
 - 默认 ``mock_output=True``（只产帧不碰硬件）；真发要 manager 显式传 ``mock_output=False``
-  且界面勾 "DT7 Real TX"。第一次上车请**架空轮**。
+  且界面勾 "DT7 Real TX"。第一次上车请**架空驱动轮**，并跑
+  ``tools/dt7_link/dt7_wireless_selftest.py`` 判 PASS 再谈别的。
 - 串口句柄长持：每帧 open/close 会被 DTR/RTS 抖动与端口独占拖死。
 - DT7 那侧没有"过期自动清零"的兜底 ⇒ 任何降级路径都必须补一帧全零（``release``）。
 - profile 自相矛盾（布局/字段/CRC 族对不上）一律**拒发并写明原因**，不静默改语义。
@@ -124,6 +130,24 @@ def _crc16_init(data: bytes, init: int) -> int:
         for _ in range(8):
             crc = (crc >> 1) ^ 0x8408 if crc & 1 else crc >> 1
     return crc & 0xFFFF
+
+
+def clamp_field(name: str, fmt: str, value: int) -> tuple[int, bool]:
+    """把值截进该字段真正的位宽，返回 (值, 是否被截)。
+
+    不截的后果很难看：``struct.pack("<h", 40000)`` 直接抛错，于是**整帧**（包括 W/S/A/D）
+    一个都发不出去，现场表现为"动一下鼠标车就不认键子了"。越界截断 + 记一笔，
+    比整帧作废安全得多。
+    """
+    lo, hi = {"h": (-32768, 32767), "H": (0, 65535), "B": (0, 255)}.get(fmt, (-32768, 32767))
+    v = int(value)
+    if v < lo or v > hi:
+        return (max(lo, min(hi, v)) if fmt == "h" else v & (0xFFFF if fmt == "H" else 0xFF)), True
+    return v, False
+
+
+def layout_letters(layout: str) -> list:
+    return [c for c in str(layout)[1:] if not c.isdigit()]
 
 
 def validate_layout(layout: str, fields: list) -> int:
@@ -328,6 +352,7 @@ class Dt7KeyMouseLink:
     last_frame: bytes = b""
     last_payload: bytes = b""
     mid_dropped: bool = False
+    clipped_fields: list = field(default_factory=list)
     _next_due: float = 0.0
     _handle: object | None = None
     time_fn: object = time.perf_counter
@@ -361,14 +386,21 @@ class Dt7KeyMouseLink:
         layout = str(prof["payload_layout"])
         fields = list(prof["payload_fields"])
         args = []
-        for name in fields:
+        clipped: list[str] = []
+        letters = layout_letters(layout)
+        for idx, name in enumerate(fields):
             if name == "reserved":
                 args.append(0)
                 continue
             if name not in values:
                 raise Dt7ConfigError(f"载荷缺字段值：{name}")
             v = values[name]
-            args.append(int(bool(v)) if isinstance(v, bool) else int(v))
+            v = int(bool(v)) if isinstance(v, bool) else int(v)
+            v, was_clipped = clamp_field(str(name), letters[idx] if idx < len(letters) else "h", v)
+            if was_clipped:
+                clipped.append(str(name))
+            args.append(v)
+        self.clipped_fields = clipped
         payload = struct.pack(layout, *args)
         frame = build_frame(int(cmd_wire_of(prof) or 0), payload, self.seq,
                             frame_variant=str(prof.get("frame_variant", "dji_rc_v1")),
@@ -417,6 +449,8 @@ class Dt7KeyMouseLink:
         notes = [] if bool(prof.get("cmd_confirmed")) else ["实验命令号，别当已定案"]
         if getattr(self, "mid_dropped", False):
             notes.append("中键未表达（载荷无 mid 位）")
+        if getattr(self, "clipped_fields", None):
+            notes.append("越界截断：" + "/".join(self.clipped_fields))
         self.last_note = "；".join(notes)
         if not self.mock_output:
             try:

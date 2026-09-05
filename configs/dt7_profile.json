@@ -1,7 +1,7 @@
 {
   "_comment": "DT7 直连出口（C 路）的运行参数。这一帧是从小客户端二进制里逐条反汇编复原的，不是猜出来的。",
-  "_evidence": "DT7 键鼠发送现场唯一构造点 GameAssembly.dll SerialPortThread.OnSendInputStatus RVA 0x27B2A0-0x27BAE0：5A|len=0x10|ver=1|crc8(0x77)|seq u16=0|cmd u16=0x2000|12B 载荷|crc16(0x1862) LE，总长 22。CRC 族 CRCCheck..cctor 0x1802FAB75/0x1802FAB86；波特率 961200 出自 decomp/SerialPortThread.cs:92-95；载荷结构 dump.cs:136075-136085 Input_Device_Status_RC（12 字节、无中键）。",
-  "_caveat": "cmd 字段的字节值确凿；把它读成 命令号 还是 模块号 属结构吻合的候选（全库无第二个 0x5A 帧可对照）。第一次上车请架空轮，用客户端水印 + 车上 km_key 回读确认。",
+  "_evidence": "帧结构由厂商类型定义逐字对上：CommonHeader_V1{hdr_flag,length,protocol_version,crc8}（dump.cs:136044-136050）+ Data_Body_Prefix{sequence_number,cmd_id}（:136054-136058）+ Input_Device_Status_RC 12 字节（:136075-136085）+ 尾 crc16 小端。发送现场 GameAssembly.dll SerialPortThread.OnSendInputStatus RVA 0x27B2A0-0x27BAE0：0x18027B486 置 0x5A、0x18027B522 写前缀 00 00 00 20、CRC 族 CRCCheck 0x77/0x1862（表本体在 global-metadata.dat 0x438A30/0x442C10，与标准反射表逐字节一致）。波特率 961200 出自 decomp/SerialPortThread.cs:92-95。",
+  "_caveat": "命令号的语义已由厂商常量名结案：CONTROL_PC_ROBOT 就是 PC 控机器人这条通道。仍未上机证明的只有一件事：这台 DT7 的现行固件认不认我们写的这 22 字节。第一次上车请架空驱动轮，并用 dt7_wireless_selftest.py 判 PASS。",
   "cmd_wire": 8192,
   "cmd_set": 0,
   "cmd_id_keyboard": null,
@@ -23,5 +23,6 @@
   "protocol_version": 1,
   "seq_increments": false,
   "baudrate": 961200,
-  "max_hz": 30.0
+  "max_hz": 30.0,
+  "_cmd_name": "Proto_Prefix.CONTROL_PC_ROBOT = 8192 = 0x2000（dump.cs:136032-136035）"
 }

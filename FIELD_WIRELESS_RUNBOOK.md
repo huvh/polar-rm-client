@@ -216,10 +216,15 @@ cmd2 + 载荷 + crc16；命令号位域 Cmd_Set 低/Cmd_Id 高）。开 `Direct 
 5. 看水印：`DT7:real` = 真在发；带 `(!原因)` = 没发并写明为什么；`KM冲突(!…)` = 键鼠出口开重了，
    关到只剩一条。想同时看车上的键位在谁手里，就再插 C 板 USB 读 `km_key`（A 路回读，不影响 C 路）。
 6. 按 `W` → 车应当前进；`SHIFT` → 小陀螺开/关；`Q/E` → 摩擦轮；左键 → 单发/连发。
-   **鼠标不转云台是正常的**：英雄配置里 `MOUSE_SENSITIVITY=100000.0f` 等于屏蔽鼠标
-   （`robot_param_mecannum_hero.h:91`），要用鼠标就
-   `python tools/firmware/prepare_hero_build.py <固件> --rc dt7 --km rc --mouse-sens 0.5`
-   重新出一份固件，方向与手感仍需实车标定。
+   **鼠标现在应该能转云台**：`prepare_hero_build.py` 默认就把 `MOUSE_SENSITIVITY`
+   从出厂的 `100000.0f`（等于屏蔽鼠标）改成 `0.5`：
+
+   ```
+   python tools/firmware/prepare_hero_build.py <固件路径> --rc dt7 --km rc
+   ```
+
+   手上那版固件如果是更早准备的、鼠标不动，重跑上面这条再烧一次就行；
+   想回到出厂的"屏蔽鼠标"行为就加 `--mouse-sens 100000`。方向与手感仍需实车标定。
 7. 若第 6 步**完全没反应**：按顺序换帧型试（探针一条命令一种，车动不动当场就有答案）
    `--candidate vendor5a` → `dbus18` → `km12` → `keys2`，并可 `--send-hex` 回放抓包样本。
    这时才需要 USBPcap 抓一次 DT7 口（工具 `dt7_frame_diff.py`）。

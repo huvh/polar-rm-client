@@ -106,6 +106,8 @@ C_CHECKS = (
      "DT7 直连出口（5A/22B 帧对厂商反汇编 + 两族 CRC 互不认 + 真发闸/互斥/松手）"),
     # C 路闭环自检工具的判据本身也要有证据：说 PASS 必须真是"我们发的位到了车上合并键位"，
     # 而且三种失败形态（DT7 不理帧 / 载荷错位 / 读不到回读）都不许误判成通。
+    ("tools/firmware/test_prepare_hero_options.py",
+     "prepare_hero_build 新选项（--mouse-sens 改得动且幂等 / 注释吞 define 能被体检抓住）"),
     ("tools/dt7_link/test_wireless_selftest.py",
      "C 路闭环自检（假车真回环 / NO-CHANGE 与 PARTIAL 不误判 / 假阳性防线）"),
     # broker 地址：正式赛的键鼠要发到赛事引擎那台 192.168.12.1，
