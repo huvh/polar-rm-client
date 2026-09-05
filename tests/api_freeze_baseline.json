@@ -25,6 +25,21 @@
       "sig": "'RM Dot'",
       "type": "str"
     },
+    "DT7_SELFTEST_HOLD_MS": {
+      "kind": "plain-attribute",
+      "sig": "1600",
+      "type": "int"
+    },
+    "DT7_SELFTEST_PRESS_MS": {
+      "kind": "plain-attribute",
+      "sig": "900",
+      "type": "int"
+    },
+    "DT7_SELFTEST_TICK_MS": {
+      "kind": "plain-attribute",
+      "sig": "40",
+      "type": "int"
+    },
     "HEAT_WARN_RATIO_FLOOR": {
       "kind": "plain-attribute",
       "sig": "float",
@@ -4401,6 +4416,11 @@
     "robot_overlay_id_suffix": {
       "kind": "bound-method",
       "sig": "EspWireframeMixin.robot_overlay_id_suffix",
+      "type": "method"
+    },
+    "run_dt7_link_selftest": {
+      "kind": "bound-method",
+      "sig": "ConfigActionsMixin.run_dt7_link_selftest",
       "type": "method"
     },
     "run_radio_km_selftest": {

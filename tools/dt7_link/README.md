@@ -1524,3 +1524,19 @@ python tools/firmware/prepare_hero_build.py <固件> --rc dt7 --km vt
 ⇒ **次选路（0x0311 到 C 板的接收路径）在软件侧是站得住的**，车端只差"图传发送端那根串口
 到底接在哪、波特率对不对"这一件现场事实（`km_rx` 回读能当场告诉你收没收到）。
 默认推荐仍然是 C 路（`--km rc`：DT7 键鼠直接进 `rc_ctrl`，不依赖图传接线）。
+
+### 22.9 界面按钮版自检（`Run DT7 Link Selftest`）
+
+命令行版要开终端、还要独占 DT7 那个 VCOM；现场真正会被用的是客户端里的按钮。
+本轮把它接上了，并且刻意做得比命令行版更安全：**探针选 X 键**。
+
+- 为什么 X：全固件对 `R/G/Z/X/C/V/B` 零消费（测试直接 grep 固件源码钉住这条），
+  所以连通性判定不要求先架空驱动轮 —— 少一个"忘了架空轮"的事故面。
+- 不发新串口：只拨 `control.dt7_forced_keys` / `dt7_send_paused` 两个把手，
+  发送仍走主循环那条出口；避免两个程序抢同一个 DJI VCOM（选手端也是独占口）。
+- 两阶段：press 判通不通（PASS/PARTIAL/NO-CHANGE/NO-READBACK），
+  pause 判粘不粘键（STUCK/EXPIRES）—— 后者就是 DT7 机内策略的那条未知。
+- 判据抽成纯函数 `evaluate_dt7_selftest` / `evaluate_dt7_hold`（`rm_client/control.py`），
+  与命令行版 `dt7_wireless_selftest` 同一套规则，测试里含
+  "前一段仍停着但最后掉回必须判 EXPIRES"这条判据纠错、以及"基线已含目标位不许判 PASS"。
+- 证据写 `field_evidence/dt7-selftest-*.json`（含 profile 关键项）；写失败也照样把结论弹出来。

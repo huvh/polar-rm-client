@@ -273,6 +273,22 @@ python tools/firmware/prepare_hero_build.py <固件路径> --robot infantry --rc
 > 是同一条云台的**两个主人**，只能有一个生效。界面上看得见：C 路开着且请求被占着时，
 > 水印会挂 `(鼠标被上位机云台顶掉)`。这不是故障，是仲裁——别去改固件。
 
+## 14b. 更省事的办法：客户端界面里的 `Run DT7 Link Selftest` 按钮
+
+在 `RobotLink` 面板最下面（`Run Wireless KM Selftest` 旁边）。它跟命令行版做同一件事，
+但**不新开串口**（两个程序抢同一个 DJI VCOM 会互相占死，是最难查的故障），也不阻塞界面。
+
+关键区别：**探针用的是 X 键**。全固件对 R/G/Z/X/C/V/B 零消费（测试里直接 grep 固件源码钉住），
+所以"链路通不通"和"车会不会动"完全解耦——**不架空轮子也能做连通性判定**。
+（要验小陀螺/驾驶键的实际效果时，仍然必须架空轮子。）
+
+两阶段：① 强制发 X 0.9 秒 → 判 `PASS/PARTIAL/NO-CHANGE/NO-READBACK`；
+② **一帧都不发** 1.6 秒（模拟进程被杀，不补松手）→ 判 `STUCK/EXPIRES`，就是第 6b 步那条粘键问题。
+结论连当时用的 profile 一起写进 `field_evidence/dt7-selftest-*.json`。
+
+前置：`Direct DT7 Egress` 开着且出口真生效、C 板 USB 0x5A 插着（回读靠它）。
+不满足时按钮会把原因写在 toast 上，不会闷着不响。
+
 ## 15. 一条命令的闭环自检（现场先跑这个，别靠"车好像动了"）
 
 ```

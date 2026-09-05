@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 import json
 import math
 import time
@@ -93,6 +93,68 @@ def evaluate_radio_km_selftest(
                    "（官方：图传链路 921600），见 FIELD_WIRELESS_RUNBOOK.md 第 3 步")
 
 
+def evaluate_dt7_selftest(samples, forced_bits: int, baseline: int):
+    """判"客户端 -> DT7 -> 空口 -> C 板"这一程通没通（纯函数，好测）。
+
+    证据只认**车上合并后的最终键位** `km_key`（固件 remote_control.c:629-630 那本账）；
+    客户端自己发了多少帧说明不了链路。与终端版 `dt7_wireless_selftest` 同一套判据，
+    两边由同一条测试盯着，不许跑偏。
+    """
+    vals = [int(s) for s in samples if s is not None and int(s) >= 0]
+    forced = int(forced_bits)
+    if not vals:
+        return ("NO-READBACK",
+                "一个 km_key 样本都没读到（要插着 C 板 USB 0x5A 才有回读），判定不成立")
+    if any((s & forced) == forced and (int(baseline) & forced) != forced for s in vals):
+        return ("PASS", f"{len(vals)} 个回读样本里出现目标键位 0b{forced:016b}")
+    if any(s != int(baseline) for s in vals):
+        return ("PARTIAL", "键位动了但不是我们发的那些位：帧被吃了、载荷错位（字段顺序/偏移）")
+    return ("NO-CHANGE", "DT7 完全没理这一帧：换帧型再试 tools/dt7_link/dt7_vcp_probe.py")
+
+
+def evaluate_dt7_hold(tail_samples, forced_bits: int):
+    """停发之后键位还在不在 = DT7 会不会粘键。
+
+    看**最后四分之一**的稳态，不看"有没有样本仍停在按住位"——超时清零的实现前一段
+    必然还停着，那样会把安全侧误判成危险侧（本队踩过一次，判据就是那么写崩的）。
+    """
+    tail = [int(s) for s in tail_samples if s is not None and int(s) >= 0]
+    if not tail:
+        return ("NO-READBACK", "停发后没有回读样本，粘键判定不成立（不许当成安全）")
+    quarter = max(1, len(tail) // 4)
+    still = [s for s in tail[-quarter:] if (s & int(forced_bits)) == int(forced_bits)]
+    if still:
+        return ("STUCK", "停发后仍停在按住位 = DT7 粘键：客户端进程一没，"
+                         "驾驶员立刻把 s[0] 拨下档锁底盘")
+    return ("EXPIRES", "停发后键位自己掉回基线 = DT7 会过期清零（安全侧）")
+
+
+def build_dt7_selftest_report(*, keys, forced_bits: int, baseline, verdict: str, detail: str,
+                              hold_verdict: str = "", hold_detail: str = "",
+                              samples: int = 0, tail_samples: int = 0,
+                              link_profile=None) -> dict:
+    """把一次按钮式自检压成可复核的证据（跑完不只剩一句话）。"""
+    prof = dict(link_profile or {})
+    return {
+        "tool": "dt7_link_selftest(ui)",
+        "link": "C (PC -> DT7 VCOM -> DR16 -> UART3 -> rc_ctrl.key.v)",
+        "keys": list(keys),
+        "sent_bits": int(forced_bits),
+        "baseline_km_key": baseline,
+        "samples": int(samples),
+        "tail_samples": int(tail_samples),
+        "verdict": verdict,
+        "detail": detail,
+        "hold_verdict": hold_verdict,
+        "hold_detail": hold_detail,
+        "passed": verdict == "PASS",
+        "safe_when_dying": hold_verdict == "EXPIRES",
+        "profile": {k: prof.get(k) for k in
+                    ("frame_variant", "crc_variant", "cmd_wire", "payload_layout",
+                     "baudrate", "mouse_limit")},
+    }
+
+
 class KeyboardControlBridge:
     """采集键鼠并经 BackendManager 的官方 MQTT 上行发送。
 
@@ -150,6 +212,12 @@ class KeyboardControlBridge:
         self.dt7_mouse_note = ""
         self.km_source_conflict = ""
         self.dt7_last_error = ""
+        # ---- C 路自检的两个把手（界面那个按钮用；平时都是"不干预"）----
+        #: 不为 None 时，DT7 这一帧起一律发这个键位图（覆盖键盘当前值）。
+        self.dt7_forced_keys = None
+        #: True 时**一帧都不写 DT7**，也不补松手 —— 用来模拟"进程被杀"，
+        #: 从而量出 DT7 会不会把最后一帧的键位一直重复（粘键）。
+        self.dt7_send_paused = False
         self.key_state: dict[str, bool] = {key: False for key in CONTROL_KEYS}
         # 协议槽 -> 已绑物理键名；可由前端改绑，默认与旧行为一致。
         self.binds: dict[str, str] = dict(DEFAULT_CONTROL_BINDS)
@@ -405,15 +473,21 @@ class KeyboardControlBridge:
 
 
     def _send_direct_dt7(self, command: ChassisCommand) -> None:
-        """直连 DT7：把键鼠按 0xA5 帧写进遥控器那条 DJI VCOM。
+        """直连 DT7：把键鼠按厂商那 22 字节（0x5A 头）写进 DJI VCOM。
 
-        鼠标这里用**增量**（不是绝对像素）：DT7 的 mouse_x/y 本身就是
-        「移动速度」语义（2016 手册第 7 页 + 厂商 Input_Device_Status 都是 int16 增量），
-        与 0x0306 那条走选手端绝对坐标的语义不同 —— 两条路的鼠标不能互相借用。
-        键位则直接复用 command.keyboard_value：位序已被厂商枚举核实。
+        鼠标用**增量**（不是绝对像素）：DT7 的 mouse_x/y 本身就是"移动速度"语义
+        （接收机 DBUS 第 6-11 字节 + 厂商 Input_Device_Status_RC 都是 int16 增量），
+        与 0x0306 那条走选手端绝对坐标的语义不同 —— 两条路的鼠标字段不许互相借用。
+        键位直接复用 command.keyboard_value：位序已被厂商枚举核实。
         """
         if not self.dt7_enabled or self.dt7_link is None:
             return
+        if self.dt7_send_paused:
+            # 粘键测试的第二阶段：故意什么都不写。这里**不能**补松手帧，否则量的
+            # 就不是"进程没了以后 DT7 怎么办"，而是"我们主动松手以后怎么办"。
+            return
+        if self.dt7_forced_keys is not None:
+            command = replace(command, keyboard_value=int(self.dt7_forced_keys))
         try:
             ok, why = self.dt7_link.send(
                 pressed_bits=command.keyboard_value,

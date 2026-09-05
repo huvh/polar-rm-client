@@ -113,6 +113,10 @@ C_CHECKS = (
     # 而且三种失败形态（DT7 不理帧 / 载荷错位 / 读不到回读）都不许误判成通。
     ("tools/firmware/test_prepare_hero_options.py",
      "prepare_hero_build 新选项（--mouse-sens 改得动且幂等 / 注释吞 define 能被体检抓住）"),
+    # 界面上那个"Run DT7 Link Selftest"按钮的可测部分：判据、两个把手，
+    # 以及"设置项/分派/处理函数"三处必须成对（防按钮变成空壳）。
+    ("tools/dt7_link/test_dt7_ui_selftest.py",
+     "C 路界面自检（X 探针无消费者 / 把手作用到发送 / 按钮不是空壳）"),
     ("tools/dt7_link/test_wireless_selftest.py",
      "C 路闭环自检（假车真回环 / NO-CHANGE 与 PARTIAL 不误判 / 假阳性防线）"),
     # broker 地址：正式赛的键鼠要发到赛事引擎那台 192.168.12.1，

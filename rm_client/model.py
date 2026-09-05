@@ -1656,6 +1656,12 @@ def build_default_registry() -> ModuleRegistry:
                 # 默认 mock：没确认选手端挑口规则之前，绝不写真串口。
                 bool_setting("CC Mock Writes", True),
                 action_setting(
+                    "Run DT7 Link Selftest",
+                    "一键验证 C 路（PC→DT7→DR16→C 板）通不通 + DT7 会不会粘键。"
+                    "刻意用固件**没有任何消费者**的 X 键当探针：链路再通也不会让车动一下。"
+                    "判据只认车上合并后的最终键位 km_key（需插着 C 板 USB 0x5A 读回读）。",
+                ),
+                action_setting(
                     "Run Wireless KM Selftest",
                     "观察 2.5 秒车上回读的 0x0311 到达计数（km_rx）是否增长；"
                     "判据来自车那一侧，不是客户端自证。需插着 USB 0x5A 才能读回读。",

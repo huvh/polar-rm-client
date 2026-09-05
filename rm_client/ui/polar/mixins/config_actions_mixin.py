@@ -67,6 +67,7 @@ polar_app.py 4093–4843）：
 
 from __future__ import annotations
 
+import json
 import time
 from pathlib import Path
 from typing import Any
@@ -76,7 +77,9 @@ from PySide6.QtWidgets import QFileDialog, QInputDialog
 
 # 相对导入层级：rm_client/ui/polar/mixins/ → ... = rm_client.ui、.... = rm_client
 from ....combat_events import CombatEvent
-from ....control import evaluate_radio_km_selftest
+from ....control import (build_dt7_selftest_report, evaluate_dt7_hold,
+                         evaluate_dt7_selftest, evaluate_radio_km_selftest,
+                         KEYBOARD_BITS)
 from ....hero_lob import HeroLobPlanner
 from ....model import PRIMARY_GUI_MODE, Module, Setting
 from ...overlay_coordinator import OverlayKind
@@ -237,6 +240,8 @@ class ConfigActionsMixin:
         elif action_name == "Release E-Stop":
             self.backend.release_estop()
             self.toast("E-STOP RELEASED — verify robot before control")
+        elif action_name == "Run DT7 Link Selftest":
+            self.run_dt7_link_selftest()
         elif action_name == "Run Wireless KM Selftest":
             self.run_radio_km_selftest()
         elif action_name == "Save Current":
@@ -694,6 +699,97 @@ class ConfigActionsMixin:
             self.toast(("无线自检 PASS · " if ok else "无线自检 FAIL · ") + detail)
 
         QTimer.singleShot(self.RADIO_KM_SELFTEST_MS, finish)
+
+    DT7_SELFTEST_PRESS_MS = 900
+    DT7_SELFTEST_HOLD_MS = 1600
+    DT7_SELFTEST_TICK_MS = 40
+
+    def run_dt7_link_selftest(self) -> None:
+        """按钮式 C 路自检：用客户端自己那条 DT7 出口 + 车上 km_key 回读。
+
+        为什么不新开一个串口去测：现场能同时开着客户端，两个程序抢同一个 DJI VCOM
+        只会互相把口占死（选手端也是独占口）。所以这里只拨控制层的两个把手，
+        发送仍走主循环那条路；渲染线程一次都不阻塞。
+
+        探针刻意选 **X 键**：全固件对 R/G/Z/X/C/V/B 零消费（逐字 grep 无命中），
+        所以"链路通了"和"车动了"完全解耦——没架空轮子也不会因为按一下就往前窜。
+        两阶段：① 强制发 X 若干秒 -> 判通不通；② **一帧都不发**再若干秒 -> 判 DT7
+        会不会把最后一帧粘住（那是客户端崩掉时车会不会自己往前顶的关键）。
+        """
+        control = self.control
+        link = self.registry.get("RobotLink")
+        on = link.get_setting("Direct DT7 Egress") if link is not None else None
+        if on is None:
+            self.toast("没有 Direct DT7 Egress 开关，自检无从做起")
+            return
+        if not bool(on.value):
+            self.toast("自检前请先打开 Direct DT7 Egress（开关本身要参与）")
+            return
+        if not getattr(control, "dt7_enabled", False):
+            self.toast(f"C 路出口未生效：{control.dt7_last_error or '闸门未过'}")
+            return
+        if getattr(self, "_dt7_selftest_running", False):
+            self.toast("C 路自检已在进行中")
+            return
+        probe = int(1 << KEYBOARD_BITS["X"])
+        control.dt7_send_paused = False
+        control.dt7_forced_keys = probe
+        base: list = []
+        tail: list = []
+        self._dt7_selftest_running = True
+        state = {"phase": "press"}
+
+        def read_key():
+            value = int(getattr(control, "radio_km_robot_key", -1))
+            return value if value >= 0 else None
+
+        def poll() -> None:
+            if not getattr(self, "_dt7_selftest_running", False):
+                return
+            value = read_key()
+            if value is not None:
+                (base if state["phase"] == "press" else tail).append(value)
+            QTimer.singleShot(self.DT7_SELFTEST_TICK_MS, poll)
+
+        def to_hold() -> None:
+            # 进入"模拟进程被杀"阶段：把手复位成"暂停写"，不是"松手"
+            control.dt7_forced_keys = None
+            control.dt7_send_paused = True
+            state["phase"] = "hold"
+
+        def finish() -> None:
+            self._dt7_selftest_running = False
+            control.dt7_send_paused = False
+            control.dt7_forced_keys = None
+            baseline = 0
+            if base:
+                counts: dict = {}
+                for s in base:
+                    counts[s] = counts.get(s, 0) + 1
+                baseline = max(counts.items(), key=lambda kv: kv[1])[0]
+            verdict, detail = evaluate_dt7_selftest(base, probe, baseline)
+            hv, hd = evaluate_dt7_hold(tail, probe)
+            self.toast(f"C 路自检 {verdict} · {detail}")
+            self.toast(f"粘键测试 {hv} · {hd}")
+            try:
+                from rm_client.backend.dt7_link import load_profile
+                report = build_dt7_selftest_report(
+                    keys=["X"], forced_bits=probe, baseline=baseline,
+                    verdict=verdict, detail=detail, hold_verdict=hv, hold_detail=hd,
+                    samples=len(base), tail_samples=len(tail), link_profile=load_profile())
+                root = self.backend.paths.evidence_root
+                root.mkdir(parents=True, exist_ok=True)
+                out = root / f"dt7-selftest-{int(time.time())}.json"
+                out.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n",
+                               encoding="utf-8")
+                self.toast(f"证据已写入 {out.name}")
+            except Exception as exc:            # 写证据失败不许把结论一起吞掉
+                self.toast(f"证据写入失败：{exc}")
+
+        self.toast("C 路自检开始（探针=X 键，不会让车动）：观察车上 km_key")
+        poll()
+        QTimer.singleShot(self.DT7_SELFTEST_PRESS_MS, to_hold)
+        QTimer.singleShot(self.DT7_SELFTEST_PRESS_MS + self.DT7_SELFTEST_HOLD_MS, finish)
 
     def start_kmc_qualification_test(self) -> None:
         """Schedule 750 neutral KMC frames without blocking the render thread."""
