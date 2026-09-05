@@ -32,13 +32,17 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import struct
 import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parents[1]))      # 仓库根：让 rm_client 能被导入
 import dt7_dbus_frame as df  # noqa: E402
+from rm_client.backend import dt7_link as dl  # noqa: E402
 
 HEX_RE = re.compile(r"(?:[0-9a-fA-F]{2}[ \t:-]?)+")
 
@@ -93,6 +97,40 @@ def _bits_that_toggle(samples: list[bytes], base: bytes) -> list[int]:
     return sorted(toggles)
 
 
+def known_spec(data: bytes) -> dict:
+    """用**已经定案的帧定义**去解这一包。
+
+    为什么必须有：README 以前写"抓一次包就能把候选值对出来"，可当时工具根本没有
+    帧定义的概念，那句是愿望不是能力。现在厂商那 22 字节是从二进制逐条复原的，
+    抓到官方选手端真发过的包，就应当能当场回答"和我们打的是不是同一串"。
+    """
+    prof = dl.load_profile()
+    want = int(dl.cmd_wire_of(prof) or -1)
+    for variant, crc, inc in (("dji_rc_v1", "rc_check", True), ("a5_tail", "student", False)):
+        dec = dl.decode_dt7_frame(data, crc_variant=crc, datalen_includes_cmd=inc)
+        if dec is None:
+            continue
+        payload = dec.get("payload", b"")
+        fields = {}
+        if len(payload) >= 12:
+            u = struct.unpack("<hhhBBHH", payload[:12])
+            fields = {"mouse_x": u[0], "mouse_y": u[1], "mouse_z": u[2],
+                      "left": u[3], "right": u[4], "keyboard_value": u[5], "reserved": u[6]}
+        mine = dl.build_frame(int(dec["cmd_wire"]), payload[:12], int(dec["seq"]),
+                              frame_variant=variant, crc_variant=crc,
+                              datalen_includes_cmd=inc)
+        return {
+            "variant": variant, "cmd_wire": int(dec["cmd_wire"]),
+            "cmd_id": int(dec["cmd_id"]), "cmd_set": int(dec["cmd_set"]),
+            "seq": int(dec["seq"]), "payload_len": len(payload), "fields": fields,
+            "cmd_matches_profile": int(dec["cmd_wire"]) == want,
+            "byte_identical_to_ours": data == mine,
+        }
+    return {"variant": None, "cmd_matches_profile": False,
+            "byte_identical_to_ours": False,
+            "reason": "既不是 DT7 的 5A/22B，也不是裁判那族 A5"}
+
+
 def analyze(rows: list[tuple[str, bytes]]) -> dict:
     """按长度分组 -> 找固定帧头/变化字节 -> 用标签把键位字节与位序算出来。"""
     out: dict = {"n_rows": len(rows), "groups": [], "warnings": []}
@@ -110,6 +148,7 @@ def analyze(rows: list[tuple[str, bytes]]) -> dict:
         # 每字节取值集合，用来区分"计数器/校验"与"字段"
         per_byte = {i: sorted({p[i] for p in packets}) for i in range(length)}
         entry = {
+            "known_spec": known_spec(packets[0]),
             "length": length,
             "count": len(packets),
             "head": packets[0][:8].hex(" "),
@@ -126,10 +165,22 @@ def analyze(rows: list[tuple[str, bytes]]) -> dict:
             if entry["key_field"]:
                 entry["bit_order"] = _bit_order_of(entry["key_field"]["bit_map"])
         out["groups"].append(entry)
+    hit = [g for g in out["groups"] if g["known_spec"].get("variant")]
+    if hit:
+        spec = hit[0]["known_spec"]
+        out["verdict"] = (
+            f"抓到的是已定案的 {spec['variant']} 帧（命令号 0x{spec['cmd_wire']:04X}）；"
+            + ("与 profile 一致，不用再改。" if spec["cmd_matches_profile"]
+               else "与 profile 不一致：改 configs/dt7_profile.json 的 cmd_wire。")
+            + (" 与我们打的字节完全相同。" if spec["byte_identical_to_ours"]
+               else " 注意：与我们打的并不逐字节相同，先比载荷。"))
+    elif out["groups"]:
+        out["verdict"] = ("没有任何一组能被已定案的帧定义解释 —— 继续用统计结果定字段，"
+                          "或换帧型扫一遍：dt7_sweep.py")
     if len(out["groups"]) == 1 and out["groups"][0]["length"] != df.FRAME_LEN:
         out["warnings"].append(
-            f"只有一组、长度 {out['groups'][0]['length']} 字节，不是 DBUS 的 18 字节；"
-            "说明 PC->DT7 与 空口 DBUS 不是同一种帧（与 README 第 11 节判断一致）")
+            f"只有一组、长度 {out['groups'][0]['length']} 字节，不是空口 DBUS 的 18 字节；"
+            "PC->DT7 与空口 DBUS 不是同一种帧（已由二进制复原证实，不是推测）")
     return out
 
 
@@ -230,10 +281,12 @@ def emit(out: dict, style: str) -> str:
     if style == "json":
         return json.dumps(out, ensure_ascii=False, indent=1)
     lines = ["# 由 dt7_frame_diff.py 从抓包样本生成，字段仍待人工确认后再用",
+             f"# 结论：{out.get('verdict', '无')}",
              "GROUPS = ["]
     for g in out["groups"]:
         lines.append("    {")
-        for k in ("length", "count", "head", "fixed_prefix_len", "changed_bytes"):
+        for k in ("length", "count", "head", "fixed_prefix_len", "changed_bytes",
+                  "known_spec"):
             lines.append(f"        {k!r}: {g[k]!r},")
         if g.get("key_field"):
             lines.append(f"        'key_byte': {g['key_field']['byte']},")
@@ -246,8 +299,22 @@ def emit(out: dict, style: str) -> str:
 
 def report(out: dict) -> None:
     print(f"解析到 {out['n_rows']} 包")
+    if out.get("verdict"):
+        print(f"结论：{out['verdict']}")
     for g in out["groups"]:
+        spec = g.get("known_spec") or {}
         print(f"\n[{g['length']} 字节 x {g['count']} 包]  首包 {g['head']}")
+        if spec.get("variant"):
+            print(f"  **已知帧型：{spec['variant']}，命令号 0x{spec['cmd_wire']:04X}"
+                  f"（Cmd_Id=0x{spec['cmd_id']:02X} / Cmd_Set=0x{spec['cmd_set']:02X}）**")
+            print(f"  与 profile 的命令号{'一致' if spec.get('cmd_matches_profile') else '不一致'}；"
+                  f"与我们打的字节{'完全相同' if spec.get('byte_identical_to_ours') else '不相同'}")
+            if spec.get("fields"):
+                fl = spec["fields"]
+                print(f"  载荷字段：mouse=({fl['mouse_x']},{fl['mouse_y']},{fl['mouse_z']}) "
+                      f"键位=0b{fl['keyboard_value']:016b} 左/右={fl['left']}/{fl['right']}")
+        else:
+            print(f"  不属于任何已定案帧型：{spec.get('reason', '未判定')}")
         print(f"  前 {g['fixed_prefix_len']} 字节完全不变（疑似帧头/地址/命令号）")
         print(f"  会变的字节: {g['changed_bytes']}   各自取值种数: {g['byte_cardinality']}")
         if g.get("key_field"):
