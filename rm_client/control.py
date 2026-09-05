@@ -147,6 +147,7 @@ class KeyboardControlBridge:
         self.dt7_link = None
         self.dt7_enabled = False
         self.dt7_sent = 0
+        self.dt7_mouse_note = ""
         self.km_source_conflict = ""
         self.dt7_last_error = ""
         self.key_state: dict[str, bool] = {key: False for key in CONTROL_KEYS}

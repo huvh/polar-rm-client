@@ -3533,6 +3533,10 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             why = str(getattr(self.control, "dt7_last_error", "") or "")
             if why:
                 dt7 += "(!" + why[:40] + ")"
+            gm = str(getattr(self.control, "dt7_mouse_note", "") or "")
+            if gm:
+                # 不是故障，是固件仲裁：鼠标这条路被上位机云台请求顶掉了
+                dt7 += "(鼠标被上位机云台顶掉)"
         else:
             dt7 = ""
         conflict = str(getattr(self.control, "km_source_conflict", "") or "")

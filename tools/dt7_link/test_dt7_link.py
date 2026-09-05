@@ -565,6 +565,70 @@ def test_mouse_limit() -> None:
 
 def main() -> int:
     test_dt7_frame()
+def _host_gimbal_request(manager) -> int:
+    """读 polar transport 的云台直控请求位（它是方法，不是属性——写错就会静默拿到 0）。"""
+    req = getattr(manager.polar, "gimbal_host_request", 0)
+    if callable(req):
+        req = req()
+    try:
+        return int(req or 0)
+    except (TypeError, ValueError):
+        return -1
+
+
+def test_gimbal_request_note() -> None:
+    print("\n--- 13) 云台直控请求会顶掉 C 路鼠标（固件仲裁要看得见）---")
+    import tempfile
+    import rm_client.backend.manager as mgr_mod
+    from rm_client.backend.manager import BackendManager
+    from rm_client.control import KeyboardControlBridge
+    from rm_client.model import RobotState, build_default_registry
+    orig = mgr_mod.dt7_link.load_profile
+    mgr_mod.dt7_link.load_profile = lambda path=None: prof_of()
+    try:
+        manager = BackendManager(workspace=tempfile.mkdtemp(prefix="dt7_gm_"),
+                                scenario_key="OfficialEvent", client_id="3")
+        registry = build_default_registry()
+        state = RobotState()
+        manager.state = state
+        manager._apply_config(manager.config)
+        module = registry.get("RobotLink")
+        module.enabled = True
+        module.get_setting("Direct DT7 Egress").value = True
+        module.get_setting("Allow Drive").value = True
+        br = KeyboardControlBridge(publisher=None, mock_output=True)
+        manager.tick_polar_link(state, registry, br)
+        check("C 路生效且没有云台请求时，不该冒出误导提示",
+              br.dt7_enabled is True and br.dt7_mouse_note == "", repr(br.dt7_mouse_note))
+        # 请求位是每拍重算的（客户端想要云台 + 链路活跃 + 没急停），
+        # 所以测试要把这三个条件真造出来，而不是手动塞一个 1 进去（那是自欺）
+        module.get_setting("Client Gimbal Control").value = True
+        # bridge.active 不是开关，是"链路新鲜 + 收到过段"算出来的（polar_bridge.py:151-152），
+        # 所以要造的是这两个事实，而不是硬塞一个 True
+        bridge = manager.polar_bridge
+        bridge.last_segment_at = bridge.clock()
+        bridge.segment_counts[0x1F] = 1      # 键是**整数段号**，写字符串会把 manager 噎住
+        manager.tick_polar_link(state, registry, br)
+        check("造的条件真的让请求位立起来了（否则这条测试什么都没测）",
+              _host_gimbal_request(manager) == 1, str(_host_gimbal_request(manager)))
+        manager.tick_polar_link(state, registry, br)
+        check("上位机云台直控请求占着 -> 明确说鼠标这条路被顶掉",
+              "AUTO_AIM" in br.dt7_mouse_note or "顶掉" in br.dt7_mouse_note,
+              br.dt7_mouse_note)
+        module.get_setting("Client Gimbal Control").value = False
+        manager.tick_polar_link(state, registry, br)
+        check("撤回请求后提示要跟着消失（不许留残影）",
+              br.dt7_mouse_note == "", repr(br.dt7_mouse_note))
+        drive = module.get_setting("Allow Drive")
+        drive.value = False
+        manager.tick_polar_link(state, registry, br)
+        check("C 路本身没生效时不该给这条提示（闸门没过别吓操作手）",
+              br.dt7_mouse_note == "", repr(br.dt7_mouse_note))
+    finally:
+        mgr_mod.dt7_link.load_profile = orig
+
+
+
 VENDOR_DUMP = Path(r"D:\rmbuild\dump12\dump.cs")
 
 
@@ -629,6 +693,7 @@ def main() -> int:
     test_probe_and_runtime_agree()
     test_range_clamping()
     test_mouse_limit()
+    test_gimbal_request_note()
     test_vendor_type_layout_anchor()
     print("\n" + ("有失败项" if FAILED else "DT7 直连出口（帧型/CRC/载荷/闸门/互斥/松手）全部通过"))
     if SKIPPED:

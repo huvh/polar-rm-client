@@ -774,6 +774,16 @@ class BackendManager:
             and bridge.active and not estopped
         )
         self.polar.set_gimbal_host_request(gimbal_host_request)
+        # C 路鼠标与"上位机云台直控请求"在固件里是有先后的：中间档一旦收到
+        # 0x04 param0 bit0 就进 GIMBAL_AUTO_AIM，那时 DT7 的鼠标增量不参与云台
+        # （gimbal_yaw_pitch_direct.c:236-243）。这不是 bug，是固件仲裁；
+        # 但必须**在这一拍算出请求位之后**再写提示，读上一拍的旧值会留残影
+        # （就是这么被测试抓到的）。
+        if control is not None:
+            control.dt7_mouse_note = (
+                "云台直控请求占着（0x04 param0 bit0）："
+                "固件中间档走 AUTO_AIM，DT7 鼠标不控云台"
+                if (getattr(control, "dt7_enabled", False) and gimbal_host_request) else "")
         # 驾驶键位只留 W/S/A/D：SHIFT 已改走 0x04，此处永不再置位。
         key_value = int(getattr(command, "keyboard_value", 0) or 0) if drive_armed else 0
 
