@@ -245,7 +245,16 @@ cmd2 + 载荷 + crc16；命令号位域 Cmd_Set 低/Cmd_Id 高）。开 `Direct 
    为什么这条值得单独量：手册、驱动包、选手端二进制全都翻过，**没有任何一处写** ——
    它是 DT7 机内行为，只能上车测。
 
-7. 若第 6 步**完全没反应**：按顺序换帧型试（探针一条命令一种，车动不动当场就有答案）
+7. 若第 6 步**完全没反应**：别一种一种手敲，用扫帧型工具一条命令扫完（读车上 `km_key` 判，
+   探针是 X 键所以不会因为扫描把车开走）：
+
+   ```
+   python tools/dt7_link/dt7_sweep.py --dt7-port COM9 --board-port COM3 --report field_evidence/sweep.json
+   ```
+
+   `PASS` 的那一行就是要写进 `configs/dt7_profile.json` 的帧型；
+   出现 `PARTIAL` 说明**帧型对了、载荷错了**，别再换帧型，去改 `payload_layout`。
+   （手工逐种试仍然是这条：）
    `--candidate vendor5a` → `dbus18` → `km12` → `keys2`，并可 `--send-hex` 回放抓包样本。
    这时才需要 USBPcap 抓一次 DT7 口（工具 `dt7_frame_diff.py`）。
 

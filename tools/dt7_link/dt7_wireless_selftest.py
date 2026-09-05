@@ -291,6 +291,7 @@ class SimRobot:
         self.frames_in = []
         self._buf = bytearray()
         self._ts = 0
+        self._pub_keys = -1
 
     # ---- DT7 那一侧 ----
     def write(self, data: bytes) -> int:
@@ -308,16 +309,25 @@ class SimRobot:
 
     # ---- C 板那一侧（只被读） ----
     def read(self, n: int) -> bytes:
+        """按当下键位产 Debug 帧，但要保住两件事：
+          1) 半帧可以跨次读取拼完（真车也是流），所以**只返回整字节前缀**、余下留在缓冲；
+          2) 状态一变（收到新帧 / 过期清零）就丢掉还没发出去的旧字节 ——
+             不然缓冲里全是过去的键位，比真车宽松，测试就会假绿。
+        """
         if not self.reply:
             return b""
         if not self.hold and self.last_write_at and (
                 time.perf_counter() - self.last_write_at > 0.25):
             self.keys = 0        # 模拟"DT7 自己把键位过期清零"
-        while len(self._buf) < n * 2:
+        if self.keys != self._pub_keys:
+            self._buf.clear()     # 丢弃尚未发出的旧内容，只保留当前状态的字节
+        while len(self._buf) < n:
             self._buf.extend(debug_frame(self._ts, {"km_key": float(self.keys),
-                                                    "km_rx": float(len(self.frames_in))}))
+                                                     "km_rx": float(len(self.frames_in))}))
             self._ts += 1
-        out, self._buf[:] = bytes(self._buf[:n]), self._buf[n:]
+            self._pub_keys = self.keys
+        out = bytes(self._buf[:n])
+        del self._buf[:n]
         return out
 
     def close(self) -> None:

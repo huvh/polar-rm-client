@@ -111,6 +111,10 @@ C_CHECKS = (
      "DT7 直连出口（5A/22B 帧对厂商反汇编 + 两族 CRC 互不认 + 真发闸/互斥/松手）"),
     # C 路闭环自检工具的判据本身也要有证据：说 PASS 必须真是"我们发的位到了车上合并键位"，
     # 而且三种失败形态（DT7 不理帧 / 载荷错位 / 读不到回读）都不许误判成通。
+    # 扫帧型工具：必须"只认出那一种"。它自己就被两条断言抓出过 bug
+    # （假车攒陈旧帧 => 六种全 PASS；循环里发的是运行期那一种 => 六种其实是同一种）
+    ("tools/dt7_link/test_dt7_sweep.py",
+     "C 路扫帧型（只认得出那一种 / 清零帧 / 无回读不结论 / 未定案不写字节）"),
     ("tools/firmware/test_prepare_hero_options.py",
      "prepare_hero_build 新选项（--mouse-sens 改得动且幂等 / 注释吞 define 能被体检抓住）"),
     # 界面上那个"Run DT7 Link Selftest"按钮的可测部分：判据、两个把手，

@@ -1570,3 +1570,34 @@ python tools/firmware/prepare_hero_build.py <固件> --rc dt7 --km vt
 **模板改了、树里还是旧代码**，日志一片 [ok]、上游照样报 GO —— 本轮 `HostKmFeedBytes`
 就是这么装不上、由测试报 undeclared 才暴露。现在加了 `refresh_marked_block()`：
 标记块与模板不一致时**替换成新版**（真踩过的同类事故还有当年的 `--km` 空转）。
+
+## 24. `dt7_sweep.py`：判成 NO-CHANGE 之后，用一条命令找出到底是哪种帧
+
+自检工具只会说"通/不通"；不通的时候还得一种一种手动试帧型。`dt7_sweep.py` 把那串
+试错变成机械步骤：**每一种候选各发一小段，同时读车上 `km_key`**，谁让键位动起来谁就是答案。
+
+```
+python tools/dt7_link/dt7_sweep.py --dt7-port COM9 --board-port COM3 --report field_evidence/sweep.json
+python tools/dt7_link/dt7_sweep.py --list                    # 看候选表
+python tools/dt7_link/dt7_sweep.py --dry-run --sim-accept keys2   # 离线彩排（假车只认 keys2）
+```
+
+候选：`vendor5a`（厂商那 22 字节，最可能）/ `a5_tail`（图传那族，留作对照）/
+`dbus18`（整帧 18 字节，DT7 若纯透传就吃这个）/ `km12`（只有键鼠 12 字节）/ `keys2`（2 字节键位图）。
+探针默认 **X 键**（全固件无消费者），所以扫帧型本身不会把车开走。
+
+结论怎么读：`PASS`=就是这种；`PARTIAL`=帧被接受但键位漂了（**帧型对了、载荷错了**，
+下一步该修载荷而不是换帧型）；`NO-CHANGE`=这种不吃；`NO-READBACK`/`NOT-SENT`/`BLOCKED`
+都是"本轮不算数"，不许拿来当"DT7 不认"的结论。
+
+这个工具是自己把两个假绿喂出来的，都留下了断言：
+1. **假车攒陈旧帧**：Sim 每读一次产 156 字节、消费端每次取 64 字节，队列越攒越长，
+   于是"基线/停发后"读到的全是过去的键位 ⇒ 六种候选**全部 PASS**。
+   现在状态一变就丢掉未发的旧字节（同时保住半帧跨次续读），并钉住
+   "只认 keys2 时答案必须是 keys2、不是 vendor5a"。
+2. **循环里发的是运行期那一种帧**：`link.send()` 只会按 profile 造 vendor5a，
+   所以"扫了六种"其实六种是同一段字节。现在每种**原样写字节**，并钉住
+   `vendor5a` 与运行期实现打出的字节完全一致（两份实现不许跑偏）。
+
+另外删掉了 `raw12` 候选：它与 `km12` 打出来是同一串 12 字节（`Input_Device_Status_RC`
+就是 DBUS 帧的 bytes6-17），一起扫只是白耗轮次 —— 现在有断言卡住"候选之间字节长度不许撞车"。
