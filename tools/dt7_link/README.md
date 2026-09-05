@@ -1620,3 +1620,17 @@ python tools/dt7_link/dt7_sweep.py --dry-run --sim-accept keys2   # 离线彩排
   （选手端 `DeviceInfo.dll` 的 `GetCCSSerialPort` 就是按 FTDI 挑口，见第 16 节）
 
 断言在 `tools/test_port_picking.py`（13 项，已进 verify_all）。
+
+### 22.11 DT7 口被拔掉/睡过去之后，C 路要能自己回来
+
+旧写法里句柄是懒开长持的，但**写失败时句柄留着**：下一帧 `handle.port == target` 仍然成立，
+于是继续往一个已经死掉的句柄写 —— 从此每一帧都失败，除非重启客户端。
+车上「拔一次 USB / 遥控器睡着」就是永久失效，而且现象是"开关都开着、口也认对了，就是没反应"。
+
+现在：
+- 写失败 ⇒ 立刻 `_drop_handle()`（关掉并置空）+ 清空 `resolved_port`，下一帧重新解析、重新打开
+- 打不开 ⇒ 退避 0.5s（`open_retry_s` 可调）再试；30Hz 一直砸一个不存在的口会刷满日志，
+  也可能让 Windows 的串口枚举恢复得更慢
+- 退避只是"暂时不重试"，窗口一过就重新尝试，不是一辈子放弃
+- 断言在 `test_dt7_link.py` 第 14 节：写炸→句柄被关且置空→下一帧确实**重开了一个新句柄**、
+  并且那一帧写成功；退避窗口内不再砸端口；窗口过后又试；注入 `write_bytes` 时不许冒充真口

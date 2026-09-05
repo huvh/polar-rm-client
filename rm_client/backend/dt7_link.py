@@ -387,6 +387,8 @@ class Dt7KeyMouseLink:
     last_frame: bytes = b""
     last_payload: bytes = b""
     resolved_port: str = ""      # 真在写的设备名（Auto 解析后的结果）
+    _open_backoff_until: float = 0.0
+    _open_last_error: str = ""
     mid_dropped: bool = False
     clipped_fields: list = field(default_factory=list)
     _next_due: float = 0.0
@@ -522,21 +524,50 @@ class Dt7KeyMouseLink:
                         "不是遥控器；往那儿写只会得到假的 NO-CHANGE 结论，已拒发")
         return resolved, ""
 
+    def _drop_handle(self) -> None:
+        """丢掉当前句柄，下一帧重新解析 + 重新打开（掉线恢复的唯一通路）。"""
+        handle = self._handle
+        self._handle = None
+        self.resolved_port = ""
+        try:
+            if handle is not None:
+                handle.close()
+        except Exception:
+            pass
+
     def _emit(self, frame: bytes) -> None:
         if self.write_bytes is not None:
             self.write_bytes(frame)
             return
         target, why = self._open_target()
         if not target:
+            self.resolved_port = ""
             raise RuntimeError(why)
-        self.resolved_port = target
+        now = float(self.time_fn())
+        if now < self._open_backoff_until:
+            raise RuntimeError(f"端口暂时不重试（{self._open_backoff_until - now:.1f}s 后），"
+                               f"上次原因：{self._open_last_error}")
         handle = self._handle
         if handle is None or getattr(handle, "port", None) != target:
+            self._drop_handle()
             import serial
-            handle = serial.Serial(target, int(self.profile.get("baudrate", 961200)),
-                                   timeout=0.2, write_timeout=1.0)
+            try:
+                handle = serial.Serial(target, int(self.profile.get("baudrate", 961200)),
+                                       timeout=0.2, write_timeout=1.0)
+            except Exception as exc:
+                # 打不开就退避一会儿再试：30Hz 一直砸同一个不存在的口会把日志刷满，
+                # 也可能让 Windows 的串口枚举更慢恢复
+                self._open_backoff_until = now + float(self.profile.get("open_retry_s", 0.5))
+                self._open_last_error = str(exc)
+                raise
             self._handle = handle
-        handle.write(frame)
+        self.resolved_port = target
+        self._open_last_error = ""
+        try:
+            handle.write(frame)
+        except Exception as exc:
+            self._drop_handle()          # 关键：死句柄必须扔，否则从此永久失效
+            raise RuntimeError(f"{target} 写入失败（句柄已丢弃，下一帧重开）：{exc}")
 
     def release(self, now: float | None = None) -> tuple[bool, str]:
         """全零一帧：DT7 没有"过期自动清零"的兜底，松手必须我们主动发。"""

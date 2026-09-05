@@ -488,6 +488,87 @@ def test_probe_and_runtime_agree() -> None:
     check("金向量与探针产物也一致", probe == GOLDEN, runtime.hex(" ").upper())
 
 
+def test_link_recovery() -> None:
+    print("\n--- 14) DT7 口掉线恢复（车上拔一次线就会撞）---")
+    import types
+
+    made = []
+
+    class DeadAfter:
+        def __init__(self, port, baud, **kw):
+            self.port, self.baud, self.writes, self.closed = port, baud, 0, False
+            made.append(self)
+
+        def write(self, data):
+            self.writes += 1
+            if self.writes >= 2:
+                raise OSError("设备已移除")
+            self.last = bytes(data)
+
+        def close(self):
+            self.closed = True
+
+    fake = types.ModuleType("serial")
+    fake.Serial = DeadAfter
+    saved = sys.modules.get("serial")
+    sys.modules["serial"] = fake
+    try:
+        lk = dl.Dt7KeyMouseLink(port="COM9", profile=prof_of(), mock_output=False)
+        lk._gate = lambda: ""
+        ok1, _ = lk.send(pressed_bits=1)          # 第 1 次写：成功
+        check("第一帧正常写出去、并记住真在用的口",
+              ok1 and lk.resolved_port == "COM9", f"{ok1} {lk.resolved_port}")
+        dead = made[0]
+        lk._next_due = 0.0
+        ok2, why2 = lk.send(pressed_bits=1)       # 第 2 次写：假驱动在这里炸
+        check("写失败这一帧报失败并说清原因", not ok2 and "丢弃" in why2, why2[:70])
+        check("死句柄必须被丢掉并关掉（留着就会永久失效）",
+              lk._handle is None and dead.closed is True, f"{lk._handle} {dead.closed}")
+        check("resolved_port 清空，水印不会显示一个已经不存在的口",
+              lk.resolved_port == "", lk.resolved_port)
+        lk._next_due = 0.0
+        ok4, why4 = lk.send(pressed_bits=1)
+        check("下一帧自动重开并恢复发送",
+              ok4 and len(made) == 2 and lk.resolved_port == "COM9"
+              and made[1].writes == 1, f"{ok4} {why4} opens={len(made)}")
+
+        boom = types.ModuleType("serial")
+
+        class AlwaysFail:
+            def __init__(self, *a, **k):
+                raise OSError("拒绝访问")
+
+        boom.Serial = AlwaysFail
+        sys.modules["serial"] = boom
+        bad = dl.Dt7KeyMouseLink(port="COM8", profile=prof_of(), mock_output=False,
+                                 time_fn=lambda: 100.0)
+        bad._gate = lambda: ""
+        first_ok, first_why = bad.send(pressed_bits=1)
+        bad._next_due = 0.0
+        bad._open_backoff_until = 100.5
+        second_ok, second_why = bad.send(pressed_bits=1)
+        check("打开失败要退避：退避窗口内不再砸端口", not second_ok and "不重试" in second_why,
+              second_why[:60])
+        check("退避不改变'失败就是失败'的返回", first_ok is False and second_ok is False,
+              f"{first_ok}/{second_ok}")
+        bad.time_fn = lambda: 101.0
+        bad._next_due = 0.0
+        third_ok, third_why = bad.send(pressed_bits=1)
+        check("退避窗口过后要重新尝试（不是一辈子放弃）",
+              not third_ok and "拒绝访问" in third_why, third_why[:60])
+    finally:
+        if saved is not None:
+            sys.modules["serial"] = saved
+        else:
+            sys.modules.pop("serial", None)
+    prof_bad = prof_of()
+    lk2 = dl.Dt7KeyMouseLink(port="COM9", profile=prof_bad, mock_output=False)
+    lk2.write_bytes = lambda b: None
+    lk2.send(pressed_bits=1)
+    check("注入 write_bytes 时 resolved_port 不该冒充真口",
+          lk2.resolved_port == "", lk2.resolved_port)
+
+
 def test_range_clamping() -> None:
     print("\n--- 10) 越界值：截进位宽并说明，而不是抛错把整帧废掉 ---")
     lk = dl.Dt7KeyMouseLink(port="COM9", profile=prof_of())
@@ -693,6 +774,7 @@ def main() -> int:
     test_probe_and_runtime_agree()
     test_range_clamping()
     test_mouse_limit()
+    test_link_recovery()
     test_gimbal_request_note()
     test_vendor_type_layout_anchor()
     print("\n" + ("有失败项" if FAILED else "DT7 直连出口（帧型/CRC/载荷/闸门/互斥/松手）全部通过"))
