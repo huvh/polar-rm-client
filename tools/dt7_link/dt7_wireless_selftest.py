@@ -168,6 +168,94 @@ def run_selftest(*, dt7_port: str, board_port: str, keys=("W", "SHIFT"),
                 pass
 
 
+def run_hold_test(*, dt7_port: str, board_port: str, keys=("W",), seconds: float = 2.0,
+                  profile: dict | None = None, open_serial=None,
+                  press_s: float = 0.6) -> dict:
+    """**停发之后键位还在不在？** 这决定 C 路掉线时会不会粘键。
+
+    做法：先按住若干秒 -> **完全停止写 DT7**（不补松手帧，故意模拟进程被杀）
+    -> 继续读车上 `km_key`。键位掉回基线 = DT7 自己过期清零（安全）；
+    一直停在按住的那些位 = **粘键**，必须配现场规矩（客户端一没，驾驶员立刻 s[0] 拨下档）。
+    """
+    prof = profile if profile is not None else dl.load_profile()
+    bits = df.keys_to_bits([k.upper() for k in keys], order="vendor2026")
+    out: dict = {"keys": [k.upper() for k in keys], "bits": bits, "press_frames": 0,
+                 "held_after_stop": None, "dropped_after_stop": False, "verdict": "",
+                 "note": ""}
+    opener = open_serial
+    if opener is None:
+        import serial
+
+        def opener(port: str, baud: int):
+            return serial.Serial(port, baud, timeout=0.05)
+
+    board = opener(board_port, int(prof.get("baudrate", 961200)))
+    codec = pl.PolarFrameCodec()
+    buf = bytearray()
+    dt7 = None
+    try:
+        link = dl.Dt7KeyMouseLink(port=dt7_port, profile=prof, mock_output=False)
+        gate = link._gate()
+        if gate:
+            out["verdict"] = "BLOCKED"
+            out["note"] = gate
+            return out
+        dt7 = opener(dt7_port, int(prof.get("baudrate", 961200)))
+        link.write_bytes = lambda b: dt7.write(b)
+        base: list[int] = []
+        _collect(lambda n: board.read(n), codec, buf, BASELINE_S, base)
+        baseline = mode(base) or 0
+        if not base:
+            out["verdict"] = "NO-READBACK"
+            out["note"] = "读不到车上回读，粘键测试不成立（别当成安全）"
+            return out
+        end = time.perf_counter() + press_s
+        while time.perf_counter() < end:
+            if link.send(pressed_bits=bits)[0]:
+                out["press_frames"] += 1
+            _collect(lambda n: board.read(n), codec, buf, 0.02, [])
+        # 故意**不** release：这一步模拟的就是进程被杀
+        stop_at = time.perf_counter()
+        tail: list[int] = []
+        stamps: list[tuple[float, int]] = []
+        while time.perf_counter() - stop_at < seconds:
+            batch: list[int] = []
+            _collect(lambda n: board.read(n), codec, buf, 0.05, batch)
+            now = time.perf_counter()
+            for value in batch:
+                stamps.append((now, value))
+            tail.extend(batch)
+        # 看**稳态**而不是"有没有过按住位"：超时清零的实现前一段必然还停在按住位，
+        # 拿"任意样本仍按住"当判据会把安全侧误判成粘键（现场就会白加一条规矩）。
+        tail = [s for s in tail if s is not None]
+        out["tail_samples"] = len(tail)
+        if not tail:
+            out["verdict"] = "NO-READBACK"
+            out["note"] = "停发之后一个回读样本都没有，判定不成立（不许当成安全）"
+            return out
+        quarter = max(1, len(tail) // 4)
+        last = tail[-quarter:]
+        still = [s for s in last if (s & bits) == bits and (baseline & bits) != bits]
+        out["held_tail"] = sum(1 for s in tail if (s & bits) == bits)
+        out["dropped_after_stop"] = len(still) == 0
+        out["verdict"] = "STUCK" if still else "EXPIRES"
+        out["note"] = (
+            "停发后最后一段回读仍停在按住的那些位 = 粘键" if out["verdict"] == "STUCK"
+            else "停发后键位自己掉回基线 = DT7 会过期清零（安全侧）")
+        # "多久才清零"要用真实时间戳量，不能拿采样个数乘一个猜出来的周期
+        cleared = next(((ts, v) for ts, v in stamps if (v & bits) != bits), None)
+        out["clear_after_s"] = round(cleared[0] - stop_at, 3) if cleared else None
+        out["tail_span_s"] = round(stamps[-1][0] - stop_at, 3) if stamps else None
+        return out
+    finally:
+        for handle in (board, dt7):
+            try:
+                if handle is not None:
+                    handle.close()
+            except Exception:
+                pass
+
+
 VERDICT_HELP = {
     "PASS": "通了。键位从 PC 经 DT7 真的落到 rc_ctrl.key.v（车端合并后的最终值）。",
     "PARTIAL": "键位变了但**不是**我们发的位 —— 帧被接受了、载荷错位（字段顺序/偏移/位序）。"
@@ -186,13 +274,19 @@ class SimRobot:
     （键位漂了几位）；`reply=False` 模拟"C 板一个 Debug 都不回"。
     这不是为了好看：判据本身也需要一个已知行为的东西来验，否则"能判 PASS"
     这句话没有证据。
+    `hold=False` 模拟"PC 停发后 DT7 自己把键位过期清零"（安全侧）；默认 True =
+    永远重复最后一帧（粘键）。厂商到底怎么做没人知道（手册/驱动包/选手端二进制
+    全查过），只能上车实测——`run_hold_test` 就是把这件"只能看"的事变成有结论的测量，
+    这两个开关让那条测试能先离线彩排。
     """
-
-    def __init__(self, *, accept: bool = True, shift: int = 0, reply: bool = True):
+    def __init__(self, *, accept: bool = True, shift: int = 0, reply: bool = True,
+                 hold: bool = True):
         self.accept = accept
         self.shift = shift
         self.reply = reply
+        self.hold = hold          # False = 停发后自动清零（安全侧）
         self.keys = 0
+        self.last_write_at = 0.0
         self.frames_in = []
         self._buf = bytearray()
         self._ts = 0
@@ -201,6 +295,7 @@ class SimRobot:
     def write(self, data: bytes) -> int:
         frame = bytes(data)
         self.frames_in.append(frame)
+        self.last_write_at = time.perf_counter()
         decoded = dl.decode_dt7_frame(frame)
         if decoded is None or not self.accept:
             return len(frame)
@@ -214,6 +309,9 @@ class SimRobot:
     def read(self, n: int) -> bytes:
         if not self.reply:
             return b""
+        if not self.hold and self.last_write_at and (
+                time.perf_counter() - self.last_write_at > 0.25):
+            self.keys = 0        # 模拟"DT7 自己把键位过期清零"
         while len(self._buf) < n * 2:
             self._buf.extend(debug_frame(self._ts, {"km_key": float(self.keys),
                                                     "km_rx": float(len(self.frames_in))}))
@@ -267,6 +365,9 @@ def main(argv=None) -> int:
     ap.add_argument("--dry-run", action="store_true", help="不碰硬件，用假车走一遍流程")
     ap.add_argument("--sim-reject", action="store_true", help="配合 --dry-run：假车不理帧")
     ap.add_argument("--sim-shift", type=int, default=0, help="配合 --dry-run：键位漂移几位")
+    ap.add_argument("--hold-test", action="store_true",
+                    help="粘键测试：按住 -> 完全停发（模拟进程被杀）-> 看车上键位掉不掉")
+    ap.add_argument("--hold-seconds", type=float, default=2.0, help="停发后观察多久")
     ap.add_argument("--report", default=None, metavar="PATH",
                     help="把这次结论写成 JSON 证据（默认不写）")
     args = ap.parse_args(argv)
@@ -275,6 +376,11 @@ def main(argv=None) -> int:
         sim = SimRobot(accept=not args.sim_reject, shift=args.sim_shift)
         res = run_selftest(dt7_port="DT7", board_port="BOARD", keys=names,
                            seconds=0.3, open_serial=sim.opener)
+        if args.hold_test:
+            hold = run_hold_test(dt7_port="DT7", board_port="BOARD", keys=names,
+                                 seconds=max(0.4, args.hold_seconds), press_s=0.3,
+                                 open_serial=sim.opener)
+            print(f"[dry-run] 粘键测试 {hold['verdict']} —— {hold['note']}")
         print(f"[dry-run] 结论 {res['verdict']}；DT7 收到 {len(sim.frames_in)} 帧，"
               f"每帧 {len(sim.frames_in[0]) if sim.frames_in else 0} 字节；"
               f"假车最终键位 0b{sim.keys:016b}")
@@ -289,15 +395,26 @@ def main(argv=None) -> int:
         return 2
     res = run_selftest(dt7_port=args.dt7_port, board_port=args.board_port,
                        keys=names, seconds=max(1.0, args.seconds))
+    hold = None
+    if args.hold_test:
+        hold = run_hold_test(dt7_port=args.dt7_port, board_port=args.board_port,
+                             keys=names, seconds=max(0.5, args.hold_seconds))
+        print(f"粘键测试：**{hold['verdict']}** —— {hold['note']}"
+              f"（按住 {hold['press_frames']} 帧，停发后仍有 {hold.get('held_tail', 0)} 个样本停在按住位）")
+        if hold["verdict"] == "STUCK":
+            print("现场规矩：客户端进程一旦没了，驾驶员立刻把 s[0] 拨到下档锁底盘。")
     if args.report:
         prof = dl.load_profile()
-        written = write_report(args.report, build_report(res, dt7_port=args.dt7_port,
-                                                         board_port=args.board_port,
-                                                         profile=prof))
+        rep = build_report(res, dt7_port=args.dt7_port, board_port=args.board_port,
+                           profile=prof)
+        rep["hold_test"] = hold
+        written = write_report(args.report, rep)
         print(f"证据已写入：{written}")
     print(f"注入键位 {res['keys']} = 0b{res['sent_bits']:016b}，实际发出 {res['frames_sent']} 帧")
     print(f"基线 km_key={res['baseline']}，回读样本 {len(res['observed'])} 个")
     print(f"结论：**{res['verdict']}** —— {VERDICT_HELP.get(res['verdict'], '')}")
+    if hold is not None and hold["verdict"] not in ("STUCK", "EXPIRES"):
+        print(f"粘键测试判定不成立（{hold['verdict']}）：不能据此认为安全")
     if res["note"]:
         print(f"补充：{res['note']}")
     return 0 if res["verdict"] == "PASS" else 1

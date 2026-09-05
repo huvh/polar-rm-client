@@ -112,6 +112,45 @@ def main() -> int:
               and loaded["profile"]["cmd_wire"] == 0x2000, str(loaded["profile"]))
         check("目录不存在时自动建（现场不会因为你少建一层文件夹就没证据）",
               rp.exists(), str(rp))
+    # 10) 粘键测试：两种厂商行为都要判对（这才值得上车测）
+    stuck = ws.SimRobot()                      # 默认 hold=True：停发后保持最后一帧
+    hs = ws.run_hold_test(dt7_port="DT7", board_port="BOARD", keys=("W",),
+                          seconds=0.4, press_s=0.25, open_serial=stuck.opener)
+    check("DT7 保持最后一帧时判 STUCK（粘键，需要现场规矩）",
+          hs["verdict"] == "STUCK", f"{hs['verdict']} held={hs.get('held_tail')}")
+    check("粘键判定必须建立在停发之后的样本上（不是停发之前）",
+          hs["press_frames"] > 0 and hs.get("held_tail", 0) > 0, str(hs.get("held_tail")))
+    exp = ws.SimRobot(hold=False)              # 停发后 DT7 自己过期清零
+    he = ws.run_hold_test(dt7_port="DT7", board_port="BOARD", keys=("W",),
+                          seconds=0.6, press_s=0.25, open_serial=exp.opener)
+    check("DT7 会过期清零时判 EXPIRES（安全侧）",
+          he["verdict"] == "EXPIRES", f"{he['verdict']} {he['note']}")
+    check("清零这一支必须真的先按住过再掉回（防止空判）",
+          he["press_frames"] > 0 and he["dropped_after_stop"] is True, str(he))
+    hnr = ws.run_hold_test(dt7_port="DT7", board_port="BOARD", keys=("W",),
+                           seconds=0.2, press_s=0.1,
+                           open_serial=ws.SimRobot(reply=False).opener)
+    check("读不到回读时粘键测试判不成立（不许当成安全）",
+          hnr["verdict"] == "NO-READBACK", hnr["verdict"])
+    blocked = ws.SimRobot()
+    p_un = dict(dl.DEFAULT_PROFILE)
+    p_un["cmd_confirmed"] = False
+    p_un["allow_experimental_cmd"] = False
+    p_un["_profile_error"] = ""
+    hb = ws.run_hold_test(dt7_port="DT7", board_port="BOARD", keys=("W",),
+                          seconds=0.2, press_s=0.1, profile=p_un,
+                          open_serial=blocked.opener)
+    check("profile 没定案时粘键测试也不碰 DT7",
+          hb["verdict"] == "BLOCKED" and blocked.frames_in == [],
+          f"{hb['verdict']} frames={len(blocked.frames_in)}")
+    check("清零延时是量出来的（有界且落在停发窗口内，不是拿采样数乘猜的周期）",
+          he["clear_after_s"] is not None and 0.0 < he["clear_after_s"] <= he["tail_span_s"],
+          f"{he['clear_after_s']}s / 窗口 {he['tail_span_s']}s")
+    check("判成粘键时不许有一个假的清零延时",
+          hs["clear_after_s"] is None, str(hs["clear_after_s"]))
+    check("粘键测试的报告字段齐（结论要能进 --report）",
+          {"keys", "bits", "press_frames", "verdict", "note"} <= set(he.keys()), str(sorted(he)))
+
     print("\n" + ("有失败项" if FAILED else "闭环自检工具判据全部通过"))
     return 1 if FAILED else 0
 
