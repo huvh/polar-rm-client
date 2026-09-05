@@ -73,6 +73,37 @@ def main() -> int:
     v, _ = C.evaluate_dt7_selftest([x, x], x, x)
     check("基线里本来就有这些位时不许判 PASS（假阳性防线）", v != "PASS", v)
 
+    v, d = C.evaluate_dt7_selftest([], x, 0, frames_sent=0)
+    check("自己一帧都没发 -> 必须先判 NOT-SENT（不许说成 DT7 没理这一帧）",
+          v == "NOT-SENT" and "闸门" in d, f"{v} {d}")
+    v, _ = C.evaluate_dt7_selftest([x, x], x, 0, frames_sent=0)
+    check("发了 0 帧时哪怕看起来像 PASS 也不算通（防止按钮自己骗自己）",
+          v == "NOT-SENT", v)
+    v, _ = C.evaluate_dt7_selftest([], x, 0)
+    check("没给 frames_sent 时保持原判据（不臆造结论）", v == "NO-READBACK", v)
+    idle = KeyboardControlBridge(publisher=None, mock_output=False)
+    idle.dt7_link = Spy()
+    idle.dt7_enabled = True
+    calls = []
+    idle.send_from_state = lambda *a, **k: calls.append(1)
+    idle.tick(None, None, now=10.0)
+    n_idle = len(calls)
+    idle.dt7_forced_keys = x
+    idle.last_send_at = 0.0
+    idle.tick(None, None, now=90.0)
+    check("按住探针键位期间算活跃：空闲不授权也该持续发（否则自检测的是空气）",
+          len(calls) > n_idle, f"{n_idle} -> {len(calls)}")
+    idle.dt7_forced_keys = None
+    idle.dt7_send_paused = True
+    n2 = len(calls)
+    idle.last_send_at = 0.0
+    br0 = idle
+    br0.send_command(cmd(keys=1))
+    check("暂停把手生效：一帧都不写，也不补松手",
+          len(idle.dt7_link.calls) == 0 and idle.dt7_link.released == 0,
+          f"{len(idle.dt7_link.calls)} {idle.dt7_link.released}")
+    del br0
+
     print("\n--- 2) 粘键判据：超时清零的形态不许被误判成粘键 ---")
     stuck = [x] * 40
     v, _ = C.evaluate_dt7_hold(stuck, x)

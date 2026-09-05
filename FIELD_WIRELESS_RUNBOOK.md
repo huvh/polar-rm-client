@@ -314,6 +314,7 @@ python tools/dt7_link/dt7_wireless_selftest.py --dt7-port COM9 --board-port COM3
 > 而这两种的处理方式完全不同。
 > 字节流接收器 `HostKmFeedBytes()` 已装进固件（实现与断言见 README 第 23 节）。
 | `BLOCKED` | profile 未定案/自相矛盾，**一个字节都没写** | 按提示改 `configs/dt7_profile.json` |
+| `NOT-SENT` | **客户端自己一帧都没写出去**（不是遥控器的锅） | 先查 `DT7 Real TX` 有没有勾、闸门原因（水印上的 `(!…)` 就是它）、`dt7_last_error`。这条排最前面，是为了不让人去怀疑 DT7 |
 
 跑的时候带上 `--report`，结论会连当时用的帧型设置一起落成 JSON（换 profile 之后还能追溯）：
 

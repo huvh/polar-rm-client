@@ -264,6 +264,7 @@ VERDICT_HELP = {
                  "dt7_vcp_probe.py --candidate dbus18/km12/keys2，或 --send-hex 回放抓包。",
     "NO-READBACK": "读不到车上回读，本判定不成立 —— 先修 A 路的 Debug 上行，再谈结论。",
     "BLOCKED": "profile 未定案或自相矛盾，本工具没往 DT7 写任何东西。",
+    "NOT-SENT": "客户端自己一帧都没写出去：查闸门 / DT7 Real TX / dt7_last_error，与遥控器无关。",
 }
 
 
@@ -411,6 +412,10 @@ def main(argv=None) -> int:
         written = write_report(args.report, rep)
         print(f"证据已写入：{written}")
     print(f"注入键位 {res['keys']} = 0b{res['sent_bits']:016b}，实际发出 {res['frames_sent']} 帧")
+    if res["verdict"] in ("NO-CHANGE", "NO-READBACK") and not res.get("frames_sent"):
+        # 客户端一帧都没写出去时，"DT7 没理这一帧"是假结论，会逼人换帧型/怀疑遥控器
+        res["verdict"] = "NOT-SENT"
+        res["note"] = "客户端一帧都没写出去：查闸门 / DT7 Real TX / dt7_last_error"
     print(f"基线 km_key={res['baseline']}，回读样本 {len(res['observed'])} 个")
     print(f"结论：**{res['verdict']}** —— {VERDICT_HELP.get(res['verdict'], '')}")
     if hold is not None and hold["verdict"] not in ("STUCK", "EXPIRES"):

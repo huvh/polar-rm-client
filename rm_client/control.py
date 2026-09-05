@@ -93,7 +93,8 @@ def evaluate_radio_km_selftest(
                    "（官方：图传链路 921600），见 FIELD_WIRELESS_RUNBOOK.md 第 3 步")
 
 
-def evaluate_dt7_selftest(samples, forced_bits: int, baseline: int):
+def evaluate_dt7_selftest(samples, forced_bits: int, baseline: int,
+                          frames_sent=None):
     """判"客户端 -> DT7 -> 空口 -> C 板"这一程通没通（纯函数，好测）。
 
     证据只认**车上合并后的最终键位** `km_key`（固件 remote_control.c:629-630 那本账）；
@@ -102,6 +103,10 @@ def evaluate_dt7_selftest(samples, forced_bits: int, baseline: int):
     """
     vals = [int(s) for s in samples if s is not None and int(s) >= 0]
     forced = int(forced_bits)
+    if frames_sent is not None and int(frames_sent) <= 0:
+        # 优先于其它结论：自己一帧都没发的时候，说"DT7 没理这一帧"是假结论
+        return ("NOT-SENT", "客户端自己一帧都没写 DT7：查出口闸门 / DT7 Real TX / "
+                           "dt7_last_error，别去怀疑遥控器")
     if not vals:
         return ("NO-READBACK",
                 "一个 km_key 样本都没读到（要插着 C 板 USB 0x5A 才有回读），判定不成立")
@@ -351,6 +356,9 @@ class KeyboardControlBridge:
             or self.mouse_x != 0
             or self.mouse_y != 0
             or self.mouse_z != 0
+            # 自检按住探针键位时也算活跃：空闲档只有 4Hz，而未授权时压根不发，
+            # 那时按钮测出来的"DT7 没理这一帧"是假结论——其实客户端一帧都没出去
+            or self.dt7_forced_keys is not None
         )
         if not active and not self._dirty and not self._idle_zero_authorized():
             return None

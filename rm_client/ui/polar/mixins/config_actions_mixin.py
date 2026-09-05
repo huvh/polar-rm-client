@@ -735,6 +735,7 @@ class ConfigActionsMixin:
         control.dt7_send_paused = False
         control.dt7_forced_keys = probe
         base: list = []
+        sent0 = int(getattr(control, "dt7_sent", 0))
         tail: list = []
         self._dt7_selftest_running = True
         state = {"phase": "press"}
@@ -767,7 +768,9 @@ class ConfigActionsMixin:
                 for s in base:
                     counts[s] = counts.get(s, 0) + 1
                 baseline = max(counts.items(), key=lambda kv: kv[1])[0]
-            verdict, detail = evaluate_dt7_selftest(base, probe, baseline)
+            sent_now = int(getattr(control, "dt7_sent", 0))
+            verdict, detail = evaluate_dt7_selftest(base, probe, baseline,
+                                                    frames_sent=max(0, sent_now - sent0))
             hv, hd = evaluate_dt7_hold(tail, probe)
             self.toast(f"C 路自检 {verdict} · {detail}")
             self.toast(f"粘键测试 {hv} · {hd}")
