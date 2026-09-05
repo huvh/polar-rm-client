@@ -43,6 +43,28 @@ def robotlink_settings(model_src: str) -> list:
     raise AssertionError("model.py 里找不到 RobotLink 模块块")
 
 
+def _module_settings(model_src: str) -> dict:
+    """每个模块声明了哪些设置项（按 8 空格缩进的 Module( 切块）。"""
+    lines = model_src.split("\n")
+    starts = [n for n, l in enumerate(lines) if re.match(r"^\s{8}Module\($", l)]
+    out: dict = {}
+    Q = chr(34)
+    for a, b in zip(starts, starts[1:] + [len(lines)]):
+        named = lines[a + 1] if a + 1 < len(lines) else ""
+        m = re.search(Q + r"([^" + Q + r"]+)" + Q, named)
+        if not m:
+            continue
+        block = "\n".join(lines[a:b])
+        out[m.group(1)] = re.findall(
+            r"(?:bool_setting|number_setting|mode_setting|action_setting)\(\s*" + Q +
+            r"([^" + Q + r"]+)" + Q, block)
+    return out
+
+
+# 这些是"按设计只在界面/其它层用"的模块项；每条都要能解释，新增必须写理由。
+KNOWN_UI_ONLY = {}
+
+
 def functions_mentioning(src: str, module_name: str) -> list:
     """把源码按 `def ...` 切块，返回提到了某个模块名的那些函数体。
 
@@ -138,6 +160,21 @@ def main() -> int:
     manager.tick_polar_link(state, registry, None)
     check("Baud 同理：默认值不覆盖场景/桥接配置", int(manager.polar.baud) == 230400,
           str(manager.polar.baud))
+
+    # ---- Tier B（保守、零误报）：设置名除了 model.py 的声明外，整个包一次都没出现 ----
+    # 上一版把 Tier A 的判据（"提到模块名的函数里取用"）套到所有模块，结果把
+    # 通过参数取用的 Limit / Fade 之类全报成没人读 —— 那种噪声会让下一个人直接删掉这条测试。
+    texts = [p.read_text(encoding="utf-8", errors="ignore") for p in files]
+    blob = "\n".join(texts)
+    all_declared = _module_settings(model)
+    dead = sorted({(m, n) for m, names in all_declared.items() for n in names
+                   if n and n not in blob})
+    print(f"     （Tier B 仅供参考：整包零引用的设置 {len(dead)} 项 —— "
+          f"判据太粗，不当红色闸门：{str(dead)[:150]}）")
+    # Tier A 只对"走 manager 白名单那套写法"的模块严格（目前就是 RobotLink）：
+    # 别的模块的取法太多样，用一条判据硬套只会产噪声。
+    print(f"     （Tier B 扫了 {len(all_declared)} 个模块、"
+          f"{sum(len(v) for v in all_declared.values())} 个设置项）")
 
     print("\n" + ("有失败项" if FAILED else "设置项接线审计通过"))
     return 1 if FAILED else 0
