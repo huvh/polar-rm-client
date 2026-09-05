@@ -69,6 +69,39 @@ def main() -> int:
         check("文件在但宏写法变了也要报错（上游改了不能装看不见）",
               len(step.failures) == n_before + 1, str(step.failures[-1:]))
         shutil.rmtree(td, ignore_errors=True)
+    # 3) 最关键的一条：--km 与 --km-fire-keys 必须真的生效（历史上是静默空转）
+    import re
+    with tempfile.TemporaryDirectory() as td2:
+        repo2 = Path(td2)
+        (repo2 / "application").mkdir()
+        param = repo2 / "application" / "robot_param.h"
+        param.write_text(
+            "#define __RC_TYPE RC_ET08A\n"
+            "#ifndef __CONTROL_LINK_KM\n#define __CONTROL_LINK_KM CL_KM_RC\n#endif\n",
+            encoding="utf-8")
+        st = phb.Step()
+        phb.switch_km_link(repo2, st, "vt", False)
+        text = param.read_text(encoding="utf-8")
+        stripped = phb.strip_c_comments(text)
+        hit = re.search(r"^\s*#define\s+__CONTROL_LINK_KM\s+(CL_KM_\w+)", stripped, re.M)
+        check("--km vt 把宏写在**注释外**（编译器真看得见，不是靠 ifndef 兜底）",
+              hit is not None and hit.group(1) == "CL_KM_VT",
+              str(hit.group(1)) if hit else "注释外没有这个 define")
+        check("ifndef 兜底块还在（幂等重跑不会叠出两份）",
+              text.count("#define __CONTROL_LINK_KM") == 2, str(text.count("#define __CONTROL_LINK_KM")))
+        phb.switch_km_link(repo2, st, "rc", True)
+        stripped2 = phb.strip_c_comments(param.read_text(encoding="utf-8"))
+        check("--km rc 换档也真的生效（切回来同样要有效）",
+              re.search(r"^\s*#define\s+__CONTROL_LINK_KM\s+CL_KM_RC\b", stripped2, re.M) is not None)
+        check("--km-fire-keys 的 KM_KEY_ALLOWED_MASK 也在注释外（开火键位不再静默失效）",
+              re.search(r"^\s*#define\s+KM_KEY_ALLOWED_MASK", stripped2, re.M) is not None)
+        phb.switch_km_link(repo2, st, "vt", False)
+        stripped3 = phb.strip_c_comments(param.read_text(encoding="utf-8"))
+        check("不给 --km-fire-keys 时必须**没有**开火掩码（不偷偷扩权）",
+              re.search(r"^\s*#define\s+KM_KEY_ALLOWED_MASK", stripped3, re.M) is None)
+        check("重跑不会把块叠成两份",
+              param.read_text(encoding="utf-8").count(phb.KM_BLOCK_HEAD) == 1)
+
     print("\n" + ("有失败项" if FAILED else "prepare_hero_build 新选项全部通过"))
     return 1 if FAILED else 0
 

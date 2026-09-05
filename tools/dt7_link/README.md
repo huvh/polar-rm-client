@@ -1407,7 +1407,15 @@ manager 三道闸与急停顺序 / **默认关**。
   于是从下一行的 `/*` 一路吞到 `#define __CONTROL_LINK_KM` 和 `#define KM_KEY_ALLOWED_MASK` 两行：
   **`--km vt` 与 `--km-fire-keys` 都是空转**（值恰好被下面的 `#ifndef` 兜底成 `CL_KM_RC`，开火键位则根本没打开）。
   现在注释逐条自己闭合，并且 `verify_changes` 加了 `strip_c_comments()`——**剥掉注释之后**再断言宏真的存在，
-  这样"躺在注释里的 #define"再也骗不过体检。
+  这样"躺在注释里的 #define"再也骗不过体检。回归断言在
+  `tools/firmware/test_prepare_hero_options.py`（临时副本上跑 `--km vt/rc + --km-fire-keys`，
+  剥完注释逐条验，含"不给开关就必须没有开火掩码"与"重跑不叠两份"）。
+
+  **一条对队里的历史更正**：在这个 bug 修掉之前，`--km` 换档**从来没生效过**——
+  所有以为"已经切到图传键鼠档"的工程，实际都还是出厂档 `CL_KM_RC`（键鼠只认遥控器，
+  `remote_control.c:400-404` 让 0x0311 那本账整个不参与）。
+  也就是说：**B 路（0x0311 图传键鼠）从今天起才真的可选**；
+  之前它在车上是"看着接了线其实不通"的状态，跟硬件无关。
 - `tools/dt7_link/test_dt7_link.py`：重写成 90+ 项，含金向量、两族互不认、拒发路径、句柄长持、
   限流不吞时隙、seq 回绕、profile 容错、闸门/互斥/松手、探针同构。
 
