@@ -3527,9 +3527,12 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         # 所以状态与原因必须同屏可见（命令号没定案时是故意不发，不是坏了）。
         dt7_link_obj = getattr(self.control, "dt7_link", None)
         if getattr(self.control, "dt7_enabled", False):
-            dt7 = "DT7:" + ("real" if (dt7_link_obj is not None and not
-                                           bool(getattr(dt7_link_obj, "mock_output", True)))
-                            else "mock")
+            real = bool(dt7_link_obj is not None and not
+                        bool(getattr(dt7_link_obj, "mock_output", True)))
+            # 把"真在往哪个口写"显示出来：写错口是"能发但永远不通"的头号原因，
+            # 光看开关状态看不出来我们其实把遥控器帧发给了车的 CDC 口
+            where = str(getattr(dt7_link_obj, "resolved_port", "") or "")
+            dt7 = "DT7:" + ("real" if real else "mock") + (("@" + where) if (real and where) else "")
             why = str(getattr(self.control, "dt7_last_error", "") or "")
             if why:
                 dt7 += "(!" + why[:40] + ")"

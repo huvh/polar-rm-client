@@ -128,3 +128,96 @@ def describe_ports(limit: int = 6) -> list[str]:
         tag = f"USB {vid:04X}:{pid:04X}" if vid and pid else "非 USB"
         lines.append(f"{entry['device']} [{tag}] {entry['description']}"[:120])
     return lines
+
+
+# ---------------------------------------------------------------------------
+# DT7 遥控器那条 DJI USB Virtual COM
+# ---------------------------------------------------------------------------
+# 出处：大疆官方驱动 INF 把 `USB\VID_FFF0&PID_0008`（接口 MI_00）绑到微软
+# `usbser.sys`，描述串是 "DJI USB Virtual COM"（逐字见 tools/dt7_link/dt7_vcp_probe.py 顶部，
+# 载荷是从 DJI_WIN_Driver_Installer.exe 里解出来的 INF 正文）。
+DJI_RC_USB_IDS: tuple[tuple[int, int], ...] = ((0xFFF0, 0x0008),)
+DJI_RC_HINTS = ("dji",)
+
+
+def is_robot_port(entry: dict) -> bool:
+    """这一看就是机器人本体的 CDC（StandardRobot++ / STM32），不是遥控器。"""
+    vid = int(entry.get("vid", 0) or 0)
+    pid = int(entry.get("pid", 0) or 0)
+    return bool(vid and pid) and (vid, pid) in PREFERRED_USB_IDS
+
+
+def score_rc_port(entry: dict) -> int:
+    """给"像不像 DT7 遥控器口"打分。认错的代价比认不出大，所以机器人口直接判负。"""
+    vid = int(entry.get("vid", 0) or 0)
+    pid = int(entry.get("pid", 0) or 0)
+    description = str(entry.get("description", "")).lower()
+    if is_robot_port(entry):
+        return -200                     # 这是车：把遥控器帧写进去会得到一个假结论
+    if any(hint in description for hint in REJECT_HINTS):
+        return -100
+    if vid and pid and (vid, pid) in DJI_RC_USB_IDS:
+        return 100
+    if any(hint in description for hint in DJI_RC_HINTS):
+        return 70                       # 描述里有 DJI 但 VID 不同（驱动版本差异）
+    return -1                           # 其它 USB 串口一律不猜：遥控器口必须可辨认
+
+
+def resolve_rc_port(port: str) -> str:
+    """把 "Auto" 解析成 DT7 那个口；显式端口原样返回；认不出来返回 Stub。"""
+    value = str(port or STUB_PORT).strip()
+    if value and value.lower() != AUTO_PORT.lower():
+        return value
+    ranked = sorted(list_serial_ports(), key=score_rc_port, reverse=True)
+    if not ranked or score_rc_port(ranked[0]) < 70:
+        return STUB_PORT
+    if len(ranked) > 1 and score_rc_port(ranked[1]) == score_rc_port(ranked[0]):
+        return STUB_PORT                # 两个一样的 DJI 口（双遥控器）：不猜，让人显式选
+    return str(ranked[0]["device"])
+
+
+def rc_port_choices() -> list[str]:
+    """DT7 专用下拉：Auto + 明确认得出的 DJI 口（不把机器人的口混进来）。"""
+    choices = [AUTO_PORT]
+    for entry in list_serial_ports():
+        if score_rc_port(entry) >= 70:
+            device = str(entry["device"])
+            if device not in choices:
+                choices.append(device)
+    return choices
+
+
+# 自定义控制器（0x0306）必须走 FTDI：官方选手端 DeviceInfo.dll 的 GetCCSSerialPort
+# 就是按 FTDI 挑口的（取证见 tools/dt7_link/README.md 第 16 节）
+FTDI_USB_IDS: tuple[tuple[int, int], ...] = ((0x0403, 0x6001), (0x0403, 0x6015))
+
+
+def score_cc_port(entry: dict) -> int:
+    vid = int(entry.get("vid", 0) or 0)
+    pid = int(entry.get("pid", 0) or 0)
+    if vid and pid and (vid, pid) in FTDI_USB_IDS:
+        return 100
+    if is_robot_port(entry):
+        return -200
+    return -1
+
+
+def resolve_cc_port(port: str) -> str:
+    """CC Port 的 Auto：只认 FTDI；多个并列或一个都没有都返回 Stub（宁缺勿滥）。"""
+    value = str(port or STUB_PORT).strip()
+    if value and value.lower() != AUTO_PORT.lower():
+        return value
+    ranked = sorted(list_serial_ports(), key=score_cc_port, reverse=True)
+    if not ranked or score_cc_port(ranked[0]) < 100:
+        return STUB_PORT
+    if len(ranked) > 1 and score_cc_port(ranked[1]) == score_cc_port(ranked[0]):
+        return STUB_PORT
+    return str(ranked[0]["device"])
+
+
+def port_identity(device: str) -> dict:
+    """某个口现在挂着谁（用于"你选的这个其实是车的口"这种拦截）。"""
+    for entry in list_serial_ports():
+        if str(entry["device"]).upper() == str(device).upper():
+            return entry
+    return {}

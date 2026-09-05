@@ -224,6 +224,7 @@ class CustomControllerLink:
 
     seq: int = 0
     sent: int = 0
+    resolved_port: str = ""
     dropped_rate: int = 0
     last_error: str = ""
     last_frame: bytes = b""
@@ -257,7 +258,14 @@ class CustomControllerLink:
                     self.write_bytes(frame)
                 else:
                     import serial
-                    with serial.Serial(self.port, self.baudrate, timeout=0.2) as sp:
+                    from .. import serial_ports as ports
+                    target = ports.resolve_cc_port(self.port)
+                    if target == ports.STUB_PORT:
+                        raise RuntimeError(
+                            "没找到自定义控制器该用的 FTDI 口（选手端只认它）："
+                            "插好线或在 CC Port 里显式选口")
+                    self.resolved_port = target
+                    with serial.Serial(target, self.baudrate, timeout=0.2) as sp:
                         sp.write(frame)
             except Exception as exc:
                 self.last_error = str(exc)

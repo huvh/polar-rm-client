@@ -66,6 +66,8 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .. import serial_ports as ports
+
 ROOT = Path(__file__).resolve().parents[2]
 PROFILE_FILE = ROOT / "configs" / "dt7_profile.json"
 
@@ -97,6 +99,9 @@ DEFAULT_PROFILE = {
     "cmd_id_keyboard": None,
     "cmd_confirmed": True,            # 字节层面确凿；归属仍是候选（见模块文档）
     "allow_experimental_cmd": False,
+    # 默认拒绝把 DT7 帧写进"机器人本体的 CDC 口"（认错口会产出假的 NO-CHANGE）。
+    # 真有非标准 VID/PID 的遥控器时，把它设 true 并自己在 DT7 Port 里指定。
+    "allow_robot_port": False,
     "payload_layout": "<hhhBBHH",
     "payload_fields": ["mouse_x", "mouse_y", "mouse_z", "left", "right",
                        "keyboard_value", "reserved"],
@@ -233,7 +238,7 @@ def load_profile(path: str | None = None) -> dict:
             continue
         prof[key] = v
     for key in ("cmd_confirmed", "allow_experimental_cmd", "datalen_includes_cmd",
-                "seq_increments"):
+                "seq_increments", "allow_robot_port"):
         if isinstance(raw.get(key), bool):
             prof[key] = raw[key]
     for key in ("frame_variant", "crc_variant"):
@@ -381,6 +386,7 @@ class Dt7KeyMouseLink:
     last_note: str = ""
     last_frame: bytes = b""
     last_payload: bytes = b""
+    resolved_port: str = ""      # 真在写的设备名（Auto 解析后的结果）
     mid_dropped: bool = False
     clipped_fields: list = field(default_factory=list)
     _next_due: float = 0.0
@@ -494,14 +500,40 @@ class Dt7KeyMouseLink:
         self.sent += 1
         return True, "mock" if self.mock_output else "ok"
 
+    def _open_target(self) -> tuple[str, str]:
+        """该往哪个口写。返回 (设备名, 错误说明)，二者只有一个非空。
+
+        `DT7 Port` 默认是 "Auto"：拿字符串 Auto 去 open 必然失败，第一次上车就卡在这。
+        但也不能借用给机器人本体写的那套 Auto 打分——那会挑中 C 板的 CDC(0483:5720)，
+        于是我们把遥控器帧写进车、又拿同一块板的 km_key 回读判"DT7 不认这一帧"，
+        得到一个彻底的假结论。所以这里只认得出的 DJI VCOM，认不出就明说。
+        """
+        want = str(self.port or "").strip()
+        resolved = ports.resolve_rc_port(want or ports.AUTO_PORT)
+        if resolved == ports.STUB_PORT:
+            return "", ("没找到 DT7 的 DJI USB Virtual COM（VID_FFF0&PID_0008）。"
+                        "请把遥控器 USB 插好，或在 DT7 Port 里显式选口")
+        entry = ports.port_identity(resolved)
+        vid = int(entry.get("vid", 0) or 0)
+        pid = int(entry.get("pid", 0) or 0)
+        looks_robot = bool(entry) and ports.is_robot_port(entry)
+        if looks_robot and not bool(self.profile.get("allow_robot_port")):
+            return "", (f"{resolved} 是机器人本体的 CDC 串口（USB {vid:04X}:{pid:04X}），"
+                        "不是遥控器；往那儿写只会得到假的 NO-CHANGE 结论，已拒发")
+        return resolved, ""
+
     def _emit(self, frame: bytes) -> None:
         if self.write_bytes is not None:
             self.write_bytes(frame)
             return
+        target, why = self._open_target()
+        if not target:
+            raise RuntimeError(why)
+        self.resolved_port = target
         handle = self._handle
-        if handle is None or getattr(handle, "port", None) != self.port:
+        if handle is None or getattr(handle, "port", None) != target:
             import serial
-            handle = serial.Serial(self.port, int(self.profile.get("baudrate", 961200)),
+            handle = serial.Serial(target, int(self.profile.get("baudrate", 961200)),
                                    timeout=0.2, write_timeout=1.0)
             self._handle = handle
         handle.write(frame)

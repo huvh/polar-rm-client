@@ -10,6 +10,7 @@ from .match_modes import MATCH_MODE_KEYS
 from .robot_profiles import RMUC_ROBOTS
 from .scenarios import SCENARIO_MODES
 from .serial_ports import port_choices as polar_port_choices
+from .serial_ports import rc_port_choices as dt7_port_choices
 
 
 CATEGORIES = ["Combat", "Movement", "Vision", "Strategy", "System", "Render"]
@@ -1647,7 +1648,7 @@ def build_default_registry() -> ModuleRegistry:
                 # （configs/dt7_profile.json、README 第 20/21 节），
                 # 因此默认关，且没现场确认前不许上正式比赛。
                 bool_setting("Direct DT7 Egress", False),
-                mode_setting("DT7 Port", "Auto", polar_port_choices()),
+                mode_setting("DT7 Port", "Auto", dt7_port_choices()),
                 # 真发闸：勾了才往 DT7 那个 DJI VCOM 写字节。不勾 = 只产帧不碰硬件。
                 bool_setting("DT7 Real TX", False),
                 bool_setting("Custom Controller Egress", False),

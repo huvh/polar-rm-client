@@ -1601,3 +1601,22 @@ python tools/dt7_link/dt7_sweep.py --dry-run --sim-accept keys2   # 离线彩排
 
 另外删掉了 `raw12` 候选：它与 `km12` 打出来是同一串 12 字节（`Input_Device_Status_RC`
 就是 DBUS 帧的 bytes6-17），一起扫只是白耗轮次 —— 现在有断言卡住"候选之间字节长度不许撞车"。
+
+### 22.10 一个会让第一次上车直接卡住的默认值：`DT7 Port = Auto`
+
+`DT7 Port` 默认是 `Auto`，而运行期实现以前是 `serial.Serial(self.port)` —— 拿字符串
+`Auto` 去开端口必然失败（报错还是 `could not open port 'Auto'`，看不出根因）。
+现在 Auto 会被解析，而且**只认得出是 DJI 遥控器的口**：
+
+* 依据是官方驱动 INF：`USB\VID_FFF0&PID_0008` → `usbser.sys`，描述串 `DJI USB Virtual COM`
+  （逐字取证见本文件引用 `dt7_vcp_probe.py` 顶部，载荷从 `DJI_WIN_Driver_Installer.exe` 解出）
+* **绝不借用给机器人本体写的那套 Auto 打分**：那套是给 C 板 CDC（`0483:5720`）设计的，
+  借过来就会把遥控器帧写进车，然后又拿同一块板的 `km_key` 判读 ⇒ 永远 `NO-CHANGE`
+  ⇒ 我们以为"DT7 不认这一帧"，白扫一整轮帧型。认错口比认不出更坏。
+* 车的口被显式拒发并说明原因；真要这么接就 `allow_robot_port: true` 并自己指定端口
+* 两个同分 DJI 口（双遥控器）不猜，返回 Stub 让人显式选；水印现在会显示
+  `DT7:real@COM9` —— 看得见到底在往哪个口写
+* `CC Port`（0x0306 那条）同样的毛病一并修：Auto 只认 FTDI
+  （选手端 `DeviceInfo.dll` 的 `GetCCSSerialPort` 就是按 FTDI 挑口，见第 16 节）
+
+断言在 `tools/test_port_picking.py`（13 项，已进 verify_all）。
