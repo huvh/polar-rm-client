@@ -307,6 +307,12 @@ python tools/dt7_link/dt7_wireless_selftest.py --dt7-port COM9 --board-port COM3
 | `PARTIAL` | 帧被 DT7 吃了，但键位漂了 ⇒ 载荷错位（字段顺序/偏移） | 抓一次 USBPcap 对比：`dt7_frame_diff.py` |
 | `NO-CHANGE` | DT7 完全不理这帧 | 换帧型：`dt7_vcp_probe.py --candidate dbus18/km12/keys2` |
 | `NO-READBACK` | 读不到 C 板 Debug 上行 ⇒ **判定不成立**，不能当成"没通" | 先查 `--board-port` 是不是那个 CDC 串口、`__USB_SEND_DEBUG` 是否为 1 |
+
+> B 路（0x0311）现场排查现在有四个数可以分清了：`km_rx`（0x0311 键鼠帧到达）、
+> `km_ok`（拆出的好帧，含别的命令号）、`km_bad`（crc/长度不对被丢掉的帧），
+> 再加上客户端自己发出的帧数。只盯 `km_rx` 分不清【根本没接线】和【线有了但帧全废】，
+> 而这两种的处理方式完全不同。
+> 字节流接收器 `HostKmFeedBytes()` 已装进固件（实现与断言见 README 第 23 节）。
 | `BLOCKED` | profile 未定案/自相矛盾，**一个字节都没写** | 按提示改 `configs/dt7_profile.json` |
 
 跑的时候带上 `--report`，结论会连当时用的帧型设置一起落成 JSON（换 profile 之后还能追溯）：

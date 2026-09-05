@@ -34,6 +34,7 @@ HERE = Path(__file__).resolve().parent
 FIRM_TOOL_DIR = HERE.parent
 sys.path.insert(0, str(FIRM_TOOL_DIR / "host_bridge"))
 from apply_host_bridge import (_replace_once, _sub_once,  # noqa: E402
+                               refresh_marked_block,
                                ensure_drive_keys_patch, MARK as BRIDGE_MARK,
                                USB_REL)
 
@@ -229,6 +230,80 @@ void HostKmFeed(const uint8_t *payload, uint16_t len)
     HOST_KM_RX_COUNT++;
 }}
 
+/* ---- 字节流接收器：状态机的暂存与计数 ---- */
+volatile uint32_t HOST_KM_BYTES_IN = 0;
+volatile uint32_t HOST_KM_FRAME_OK = 0;
+volatile uint32_t HOST_KM_FRAME_BAD = 0;
+
+/**
+ * @brief 拆 0xA5 裁判帧并把 0x0311 的载荷交给 HostKmFeed()
+ *
+ * 与 referee_usart_task.c 的官方拆帧同一套字段与校验：
+ *   verify_CRC8_check_sum(帧头 4 字节)
+ *   verify_CRC16_check_sum(整帧，长度 = REF_HEADER_CRC_CMDID_LEN + data_length)
+ * 任何一级不对就丢掉重找帧头，绝不把坏帧往收件箱里塞。
+ */
+void HostKmFeedBytes(const uint8_t *bytes, uint16_t len)
+{{
+    /* 必须是 static：这是**流式**解析，半帧留在缓冲里等下一次调用。
+       写成自动存储期的话，一帧被拆成两次调用就永远拼不起来。 */
+    static uint8_t buf[REF_PROTOCOL_FRAME_MAX_SIZE];
+    static uint16_t host_km_fill = 0;
+    uint16_t i;
+    uint16_t data_len;
+    uint16_t total;
+    uint16_t cmd_id;
+
+    if (bytes == 0) {{
+        return;
+    }}
+    for (i = 0; i < len; i++) {{
+        HOST_KM_BYTES_IN++;
+        if (host_km_fill == 0U && bytes[i] != HEADER_SOF) {{
+            continue;                       /* 还没到帧头，扔掉 */
+        }}
+        if (host_km_fill >= (uint16_t)REF_PROTOCOL_FRAME_MAX_SIZE) {{
+            host_km_fill = 0;               /* 一条帧长到不可能，重开 */
+            HOST_KM_FRAME_BAD++;
+            continue;
+        }}
+        buf[host_km_fill++] = bytes[i];
+        if (host_km_fill < (uint16_t)REF_PROTOCOL_HEADER_SIZE) {{
+            continue;
+        }}
+        if (verify_CRC8_check_sum(buf, (unsigned int)REF_PROTOCOL_HEADER_SIZE) == 0U) {{
+            /* 帧头校验不过：可能只是撞上半个头，退一字节继续找头 */
+            host_km_fill = 0U;
+            HOST_KM_FRAME_BAD++;
+            continue;
+        }}
+        data_len = (uint16_t)((uint16_t)buf[1] | ((uint16_t)buf[2] << 8));
+        total = (uint16_t)((uint16_t)REF_PROTOCOL_HEADER_SIZE + (uint16_t)REF_PROTOCOL_CMD_SIZE
+                           + data_len + (uint16_t)REF_PROTOCOL_CRC16_SIZE);
+        if (total > (uint16_t)REF_PROTOCOL_FRAME_MAX_SIZE) {{
+            host_km_fill = 0U;
+            HOST_KM_FRAME_BAD++;
+            continue;
+        }}
+        if (host_km_fill < total) {{
+            continue;                       /* 还没收满，等下一批字节 */
+        }}
+        if (verify_CRC16_check_sum(buf, (unsigned int)total) == 0U) {{
+            host_km_fill = 0U;
+            HOST_KM_FRAME_BAD++;
+            continue;
+        }}
+        HOST_KM_FRAME_OK++;
+        cmd_id = (uint16_t)((uint16_t)buf[REF_PROTOCOL_HEADER_SIZE]
+                            | ((uint16_t)buf[REF_PROTOCOL_HEADER_SIZE + 1] << 8));
+        if (cmd_id == (uint16_t)ROBOT_CUSTOM_DATA_3_CMD_ID
+                && data_len == (uint16_t)sizeof(robot_custom_data_3)) {{
+            HostKmFeed(&buf[REF_PROTOCOL_HEADER_SIZE + REF_PROTOCOL_CMD_SIZE], data_len);
+        }}
+        host_km_fill = 0U;
+    }}
+}}
+
 /**
  * @brief 把链路到达情况写进 0x5A Debug 上行（限流，默认 200ms 一次）
  *
@@ -250,6 +325,8 @@ static void HostKmReportUplink(void)
         return;
     }}
     host_km_debug_last = now;
+    ModifyDebugDataPackage(HOST_KM_DEBUG_SLOT_FRAME_OK, (float)HOST_KM_FRAME_OK, "km_ok");
+    ModifyDebugDataPackage(HOST_KM_DEBUG_SLOT_FRAME_BAD, (float)HOST_KM_FRAME_BAD, "km_bad");
     ModifyDebugDataPackage(HOST_KM_DEBUG_SLOT_RX, (float)HOST_KM_RX_COUNT, "km_rx");
     ModifyDebugDataPackage(HOST_KM_DEBUG_SLOT_KEY, (float)rc_ctrl.key.v, "km_key");
 }}
@@ -367,6 +444,10 @@ def apply_remote_control(path: Path, log: list) -> str:
         text,
         r'[ \t]*HOST_RC_DRIVER_KEYS = 0;\s*/\* ' + BRIDGE_MARK + r'[^\n]*\\\n',
         RC_NOKEY_MOUSE, "remote_control.c: 无鼠标遥控器清鼠标账", log)
+    # 先收敛：模板更新必须落进树里（否则会出现"日志说装了、树里还是旧的"）
+    text = refresh_marked_block(text, f"/* ==== {MARK}: 图传键鼠链路",
+                                f"/* ==== {MARK} 结束 ==== */", RC_IMPL,
+                                "remote_control.c: 仲裁实现段", log)
     text = _sub_once(text, r'// clang-format on\s*\n',
                      RC_IMPL + "\n// clang-format on\n",
                      "remote_control.c: 仲裁函数实现", log)

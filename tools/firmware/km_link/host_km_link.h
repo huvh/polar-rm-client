@@ -163,6 +163,27 @@ void HostKmApplyDriverFrameMouse(RC_ctrl_t *rc);
  */
 void HostKmFeed(const uint8_t *payload, uint16_t len);
 
+/**
+ * @brief 字节流级接收：把"任何来源交给我的原始字节"喂进来，自己拆 0xA5 裁判帧。
+ *
+ * 为什么必须有：0x0311 这条路目前只能靠 HostKmFeed() 由调用方把 30 字节载荷抠出来，
+ * 那等于"谁喂谁负责校验"。而真实物化方式（新配一路 921600 UART，或车载电脑把
+ * 图传收到的字节原样转过来）交出来的都是**字节流**，所以拆帧、验 crc8/crc16、
+ * 认命令号 0x0311、按长度取载荷这些事必须在 C 板这边做完。
+ *
+ * 帧布局与官方裁判协议一致（protocol.h / referee_usart_task.c:144-173）：
+ *   0xA5 | data_length(u16) | seq | crc8 | cmd_id(u16) | data[data_length] | crc16(u16)
+ * 校验用的就是固件里那份 CRC8_CRC16.c，不另写一套（另写一套就是两个真相）。
+ * 可以任意粒度调用（一次一字节、一次一整包都行），内部是流式状态机。
+ */
+void HostKmFeedBytes(const uint8_t *bytes, uint16_t len);
+
+/* 字节流接收的自观测：现场只靠"计数涨不涨"分不清"没线"还是"线有了但帧全废" */
+extern volatile uint32_t HOST_KM_BYTES_IN;     /* 收到的总字节数 */
+extern volatile uint32_t HOST_KM_FRAME_OK;     /* 拆出并验过的完整帧数 */
+extern volatile uint32_t HOST_KM_FRAME_BAD;    /* crc/长度/命令号不对而丢掉的帧数 */
+
+
 /* ------------------------------------------------------------------------
  * 链路自检回读：把"车上到底收到几个 0x0311"从 USB 0x5A 的 Debug 段报回上位机
  * ------------------------------------------------------------------------
@@ -187,6 +208,19 @@ void HostKmFeed(const uint8_t *payload, uint16_t len);
 #endif
 #ifndef HOST_KM_DEBUG_SLOT_KEY
 #define HOST_KM_DEBUG_SLOT_KEY ((uint8_t)0)
+#endif
+/* 字节流接收器的自观测两个槽（见 HostKmFeedBytes）：
+ *   km_ok  = 拆出并验过 crc 的完整帧数（不论命令号是不是 0x0311）
+ *   km_bad = 因 crc/长度/超长而被丢掉的次数
+ * 为什么值得多占两个槽：光看 km_rx 分不清三种完全不同的故障——
+ *   "线根本没接" (bytes=0)、"线有了但波特率/接线错" (bytes 涨、ok=0、bad 涨)、
+ *   "帧都对但命令号不是 0x0311" (ok 涨、rx 不涨)。三者的处理方式互不相同。
+ * 槽位选 1/2：上面说过 3..8 出现在被注释掉的调用里，0/9 已用，1/2 谁都没碰。 */
+#ifndef HOST_KM_DEBUG_SLOT_FRAME_OK
+#define HOST_KM_DEBUG_SLOT_FRAME_OK ((uint8_t)1)
+#endif
+#ifndef HOST_KM_DEBUG_SLOT_FRAME_BAD
+#define HOST_KM_DEBUG_SLOT_FRAME_BAD ((uint8_t)2)
 #endif
 
 /* usb_debug.h:5 的原型。这里按同签名自己声明，是因为各工程的 include 路径

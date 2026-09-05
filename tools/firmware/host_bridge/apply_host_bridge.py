@@ -183,6 +183,33 @@ def _probe(replacement: str) -> str:
     raise RuntimeError("插入块里没有可用于幂等判断的有效代码行")
 
 
+def refresh_marked_block(text: str, head: str, tail: str, fresh: str,
+                         label: str, log: list) -> str:
+    """把树里那段"带标记的实现块"收敛成模板的最新版。
+
+    为什么必须有：安装器的幂等一直是"标记已存在就 skip"，于是**模板改了、
+    树里还是旧代码**，而日志一片 [ok]、上游照样报 GO（本轮真实踩到：
+    新加的函数装不上，测试报"undeclared identifier"才暴露）。
+    head/tail 定不出位或内容本来就一样时，原样返回，交给 _sub_once 去插入。
+    """
+    if head not in text or tail not in text or head not in fresh or tail not in fresh:
+        return text
+    i = text.index(head)
+    j = text.index(tail, i)
+    if j < 0:
+        return text
+    j += len(tail)
+    old_block = text[i:j]
+    k = fresh.index(head)
+    m = fresh.index(tail, k) + len(tail)
+    new_block = fresh[k:m]
+    if old_block == new_block:
+        return text
+    log.append(f"  [ok]   {label}：模板已更新，用新版替换旧实现块"
+               f"（{len(old_block)} -> {len(new_block)} 字节）")
+    return text[:i] + new_block + text[j:]
+
+
 def _sub_once(text: str, pattern: str, replacement: str, what: str, log: list) -> str:
     """在 pattern 匹配处之后插入 replacement；已存在则跳过（幂等）。"""
     probe = _probe(replacement)

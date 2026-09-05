@@ -57,6 +57,10 @@ TU = r"""
 #include <string.h>
 
 #include "remote_control.h"          /* RC_ctrl_t 的真实定义 */
+/* 官方 CRC 的实现直接抽进来（它自己就是声明）：那个头文件在这个 TU 里会带出别的诊断，
+   而本测试把任何编译器输出都当失败 */
+#include "protocol.h"                    /* 帧头/命令号常量与 frame_header_struct_t */
+@@CRC@@
 
 /* 五档取值取自固件自己的 robot_typedef.h:80-84（这里同值内联，
  * 免得把 robot_param.h 那一整棵机型配置拖进主机测试） */
@@ -358,6 +362,97 @@ int main(void)
         eq("空指针调用不得改变任何账", rc_ctrl.key.v & (K_W | K_SHIFT), 0);
     }
 
+    /* I0b) 字节流接收器 HostKmFeedBytes()。
+     *      0x0311 真要落到车上，交到我们手里的永远是**字节流**（新配一路 UART、
+     *      或车载电脑原样转发图传收到的字节），所以拆帧、验 crc8/crc16、认命令号、
+     *      按长度取载荷这些事必须在 C 板这边做完。
+     *      帧用官方 CRC8_CRC16.c 现算现append：造的和验的是同一份实现，
+     *      这样"我以为的帧格式"就不是自说自话。 */
+    {
+        uint8_t frame[REF_PROTOCOL_FRAME_MAX_SIZE];
+        const uint16_t dlen = (uint16_t)sizeof(robot_custom_data_3);
+        const uint16_t total = (uint16_t)(REF_PROTOCOL_HEADER_SIZE + REF_PROTOCOL_CMD_SIZE
+                                           + dlen + REF_PROTOCOL_CRC16_SIZE);
+        unsigned ok_before, bad_before, rx_before, rx_time_before;
+        unsigned i2;
+        memset(frame, 0, sizeof(frame));
+        frame[0] = HEADER_SOF;
+        frame[1] = (uint8_t)(dlen & 0xFF);
+        frame[2] = (uint8_t)((dlen >> 8) & 0xFF);
+        frame[3] = 7;                                   /* seq */
+        frame[REF_PROTOCOL_HEADER_SIZE] = (uint8_t)(ROBOT_CUSTOM_DATA_3_CMD_ID & 0xFF);
+        frame[REF_PROTOCOL_HEADER_SIZE + 1] = (uint8_t)(ROBOT_CUSTOM_DATA_3_CMD_ID >> 8);
+        frame[REF_PROTOCOL_HEADER_SIZE + REF_PROTOCOL_CMD_SIZE] = 'P';
+        frame[REF_PROTOCOL_HEADER_SIZE + REF_PROTOCOL_CMD_SIZE + 1] = 'R';
+        frame[REF_PROTOCOL_HEADER_SIZE + REF_PROTOCOL_CMD_SIZE + 2] = 'M';
+        frame[REF_PROTOCOL_HEADER_SIZE + REF_PROTOCOL_CMD_SIZE + 3] = '1';
+        append_CRC8_check_sum(frame, (unsigned int)REF_PROTOCOL_HEADER_SIZE);
+        append_CRC16_check_sum(frame, (uint32_t)total);
+
+        ok_before = (unsigned)HOST_KM_FRAME_OK;
+        rx_before = (unsigned)HOST_KM_RX_COUNT;
+        memset(&robot_custom_data_3, 0, sizeof(robot_custom_data_3));
+        HostKmFeedBytes(frame, total);
+        eq("一整帧被接受并认出 0x0311", (unsigned)HOST_KM_FRAME_OK, ok_before + 1u);
+        eq("认出来就计入到达计数（与 referee 那条同一个账）",
+           (unsigned)HOST_KM_RX_COUNT, rx_before + 1u);
+        eq("载荷真的落进收件箱", robot_custom_data_3.data[0], (uint8_t)'P');
+
+        /* 逐字节喂：证明缓冲是流式的（半帧留得下来），不是一次必须给一整包 */
+        ok_before = (unsigned)HOST_KM_FRAME_OK;
+        rx_before = (unsigned)HOST_KM_RX_COUNT;
+        for (i2 = 0; i2 < (unsigned)total; i2++) {
+            HostKmFeedBytes(&frame[i2], 1U);
+        }
+        eq("一次一字节也要能拼出同一帧", (unsigned)HOST_KM_FRAME_OK, ok_before + 1u);
+        eq("拼出来照样记账", (unsigned)HOST_KM_RX_COUNT, rx_before + 1u);
+
+        /* 噪声：垃圾字节 + 一个**自己就会失败掉**的坏帧头（crc8 不对）。
+         * 注意不能拿"以 0xA5 结尾的噪声"当用例：那会吃掉随后真帧的帧头，
+         * 而这是所有不回填的流式重同步的固有行为（官方 referee 接收机同样如此），
+         * 不是本实现的缺陷。坏头自己消化完，真帧才应该对齐。 */
+        {
+            static const uint8_t noise[13] = {'j', 'u', 'n', 'k', 'j', 'u', 'n', 'k',
+                                              0xA5, 0x01, 0x02, 0x03, 0x04};
+            ok_before = (unsigned)HOST_KM_FRAME_OK;
+            bad_before = (unsigned)HOST_KM_FRAME_BAD;
+            HostKmFeedBytes(noise, (uint16_t)sizeof(noise));
+            eq("坏帧头要在自己这一段就被判坏（不拖累后面）",
+               (unsigned)HOST_KM_FRAME_BAD, bad_before + 1u);
+            HostKmFeedBytes(frame, total);
+            eq("噪声之后照样能对齐真帧头", (unsigned)HOST_KM_FRAME_OK, ok_before + 1u);
+        }
+
+        /* 坏帧：只改数据字节、**不重算尾校验** —— 这才是"线上抖了一个位"的样子。
+         * （上一版在这里顺手 append 了一次 crc16，等于把帧重新做合法了，
+         *   于是"必须被拒"当然不成立：断言测的是自己的错，不是实现的错。） */
+        bad_before = (unsigned)HOST_KM_FRAME_BAD;
+        rx_before = (unsigned)HOST_KM_RX_COUNT;
+        rx_time_before = (unsigned)HOST_KM_RX_TIME;
+        robot_custom_data_3.data[4] = 0;
+        frame[REF_PROTOCOL_HEADER_SIZE + REF_PROTOCOL_CMD_SIZE + 4] = 0xEE;
+        HostKmFeedBytes(frame, total);
+        eq("改过一字节的帧必须被拒", (unsigned)HOST_KM_FRAME_BAD, bad_before + 1u);
+        eq("被拒的帧不得推进到达计数", (unsigned)HOST_KM_RX_COUNT, rx_before);
+        eq("被拒的帧也不得写进收件箱", robot_custom_data_3.data[4], 0);
+        eq("被拒的帧同样不许推进到达时刻（新鲜度门控不能被坏帧喂新）",
+           (unsigned)HOST_KM_RX_TIME, (unsigned)rx_time_before);
+
+        /* 合法但别的命令号：算"收到好帧"，不算"0x0311 到达" */
+        ok_before = (unsigned)HOST_KM_FRAME_OK;
+        rx_before = (unsigned)HOST_KM_RX_COUNT;
+        frame[REF_PROTOCOL_HEADER_SIZE] = 0x09;
+        frame[REF_PROTOCOL_HEADER_SIZE + 1] = 0x03;
+        append_CRC16_check_sum(frame, (uint32_t)total);
+        HostKmFeedBytes(frame, total);
+        eq("别的命令号的合法帧也算收到帧", (unsigned)HOST_KM_FRAME_OK, ok_before + 1u);
+        eq("但不许当成 0x0311 到达（否则现场会被计数骗）",
+           (unsigned)HOST_KM_RX_COUNT, rx_before);
+        HostKmFeedBytes((const uint8_t *)0, 8U);
+        eq("空指针调用不得崩，也不许假装收到", (unsigned)HOST_KM_FRAME_OK,
+           (unsigned)HOST_KM_FRAME_OK);
+    }
+
     /* I) 链路回读上行：现场靠它判"0x0311 到没到 C 板"，所以三件事必须钉住：
      *    值真的是计数与合并键位、名字没被截断、以及 1ms 调用被限流了。 */
     driver_frame(0, 0, 0);
@@ -370,6 +465,17 @@ int main(void)
        (int)dbg_val(HOST_KM_DEBUG_SLOT_RX), (int)HOST_KM_RX_COUNT);
     eq("km_key 等于当前合并键位",
        (int)dbg_val(HOST_KM_DEBUG_SLOT_KEY), (int)rc_ctrl.key.v);
+    eq("回读写了 km_ok 槽（分清没线、和线有了但帧全废）",
+       strcmp(dbg_name(HOST_KM_DEBUG_SLOT_FRAME_OK), "km_ok"), 0);
+    eq("回读写了 km_bad 槽",
+       strcmp(dbg_name(HOST_KM_DEBUG_SLOT_FRAME_BAD), "km_bad"), 0);
+    eq("km_ok 等于实际拆出的好帧数",
+       (int)dbg_val(HOST_KM_DEBUG_SLOT_FRAME_OK), (int)HOST_KM_FRAME_OK);
+    eq("km_bad 等于实际丢掉的坏帧数",
+       (int)dbg_val(HOST_KM_DEBUG_SLOT_FRAME_BAD), (int)HOST_KM_FRAME_BAD);
+    eq("槽位不许撞车（0/1/2/9 各不重叠）",
+       (HOST_KM_DEBUG_SLOT_KEY == 0U && HOST_KM_DEBUG_SLOT_FRAME_OK == 1U
+        && HOST_KM_DEBUG_SLOT_FRAME_BAD == 2U && HOST_KM_DEBUG_SLOT_RX == 9U) ? 0 : 1, 0);
     /* 限流：不推进时间就再调，计数涨了但上报值不许变（否则 1ms 一次会淹了 USB） */
     {
         float held = dbg_val(HOST_KM_DEBUG_SLOT_RX);
@@ -393,7 +499,23 @@ int main(void)
 """
 
 
-def build_tu(impl: str, hdr_defs: str, policy: str, fire: bool, negative: bool) -> str:
+def extract_official_crc(firmware: Path) -> str:
+    """把固件里那份官方 CRC 实现**原样**抽出来（从 CRC8_INIT 到最后一个函数收尾）。
+
+    为什么要它：字节流接收器与测试都要算/验裁判协议的 crc8/crc16。自己另写一份
+    就成了"两个真相"——测试会绿而车上不认。抽官方实现进来，造帧和验帧用的是同一份代码。
+    """
+    src = (firmware / "components" / "support" / "CRC8_CRC16.c").read_text(
+        encoding="utf-8", errors="ignore")
+    i = src.index("const uint8_t CRC8_INIT")
+    j = src.rindex("}")
+    body = src[i:j + 1]
+    assert "get_CRC8_check_sum" in body and "wCRC_table" in body, "CRC 代码抽取越界"
+    return body
+
+
+def build_tu(impl: str, hdr_defs: str, policy: str, fire: bool, negative: bool,
+             crc_src: str = "") -> str:
     body = impl
     if negative:
         # 退回朴素写法：图传直接覆盖 key.v（没有门闸也没有或），并去掉新鲜度门控。
@@ -418,6 +540,7 @@ def build_tu(impl: str, hdr_defs: str, policy: str, fire: bool, negative: bool) 
     blob_c = ", ".join(str(b) for b in blob)
 
     return (TU.replace("@@CLIENT_BLOB@@", blob_c)
+              .replace("@@CRC@@", crc_src)
               .replace("@@BRIDGE@@", BRIDGE_SNIPPET)
               .replace("@@HDRDEFS@@", hdr_defs)
               .replace("@@IMPL@@", body)
@@ -482,10 +605,16 @@ def main() -> int:
     hdr += grab(km_src, r"#define HOST_KM_DEBUG_PERIOD_MS[^\n]*\n", "DEBUG_PERIOD")
     hdr += grab(km_src, r"#define HOST_KM_DEBUG_SLOT_RX[^\n]*\n", "DEBUG_SLOT_RX")
     hdr += grab(km_src, r"#define HOST_KM_DEBUG_SLOT_KEY[^\n]*\n", "DEBUG_SLOT_KEY")
+    hdr += grab(km_src, r"#define HOST_KM_DEBUG_SLOT_FRAME_OK[^\n]*\n", "SLOT_FRAME_OK")
+    hdr += grab(km_src, r"#define HOST_KM_DEBUG_SLOT_FRAME_BAD[^\n]*\n", "SLOT_FRAME_BAD")
     hdr += grab(km_src, r"extern void ModifyDebugDataPackage[^\n]*\n", "回读原型")
     check("从 host_km_link.h 抽出载荷与新鲜度判据", "prm1_km_cmd_t" in hdr)
     check("回读宏与原型也从真头文件抽（不另写一份）",
           "HOST_KM_DEBUG_SLOT_RX" in hdr and "ModifyDebugDataPackage" in hdr)
+    # 新增两个槽同样从真头文件抽：抄数字就会出现"测试绿、车上槽位撞车"
+    check("km_ok/km_bad 的槽号也从真头文件抽（不许在测试里抄数字）",
+          "HOST_KM_DEBUG_SLOT_FRAME_OK" in hdr
+          and "HOST_KM_DEBUG_SLOT_FRAME_BAD" in hdr)
 
     global BRIDGE_SNIPPET
     BRIDGE_SNIPPET = (
@@ -512,7 +641,7 @@ def main() -> int:
     with tempfile.TemporaryDirectory() as td:
         for policy, fire in runs:
             label = f"{policy}{' +fire-keys' if fire else ''}"
-            tu = build_tu(impl, hdr, policy, fire, negative)
+            tu = build_tu(impl, hdr, policy, fire, negative, extract_official_crc(root))
             if fire:
                 tu = "#define KM_TEST_FIRE_KEYS 1\n" + tu
             stem = f"km_{policy}{'_fire' if fire else ''}"
@@ -528,6 +657,9 @@ def main() -> int:
             build = subprocess.run(
                 [sys.executable, "-m", "ziglang", "cc", "-O0", "-Wall",
                  "-Wno-unused-parameter", "-Wno-comment", "-Wno-unused-variable",
+                 # 官方 CRC8_CRC16.c 里的 include 大小写与文件名不一致（Windows 无妨），
+                 # 但 -Wall 会报 non-portable-path，而本测试把任何输出都当失败
+                 "-Wno-nonportable-include-path",
                  "-o", str(epath), str(cpath)] + [f"-I{d}" for d in inc_dirs],
                 capture_output=True, text=True, encoding="utf-8", errors="replace")
             raw = (build.stderr or "") + (build.stdout or "")
