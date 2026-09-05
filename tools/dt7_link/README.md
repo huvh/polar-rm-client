@@ -1476,6 +1476,31 @@ manager 三道闸与急停顺序 / **默认关**。
 **包括"基线里已经有目标位就不许判 PASS"这条假阳性防线**。
 `--dry-run / --dry-run --sim-reject / --dry-run --sim-shift 3` 就是这三幕的现场彩排。
 
+### 22.8 步兵也能走同一条路（`--robot infantry`），并修掉一个"自检互踩"的老 bug
+
+**为什么 C 路与兵种无关**：`__RC_TYPE` 是 `robot_param.h` 里的全局宏，DT7 那 18 字节解码
+（`remote_control.c:611-634`）与键位三本账也不分兵种。差别只有一处：
+**该改哪个参数文件的 `MOUSE_SENSITIVITY`**。所以 `prepare_hero_build.py` 现在能选兵种：
+
+```
+python tools/firmware/prepare_hero_build.py <固件> --robot infantry --rc dt7 --km rc   # 步兵
+python tools/firmware/prepare_hero_build.py <固件> --robot hero     --rc dt7 --km rc   # 英雄
+```
+
+实测：`--robot infantry` 全跑 GO，且 **补丁新增代码在真实头文件下零错误零警告**
+⇒ 步兵工程接 C 路不需要改一行固件逻辑。
+顺带纠正一个数值：步兵参数文件的出厂值是 `40000.0f`（`robot_param_omni_infantry.h:99`），
+同样是屏蔽量级，不是"已标定"。
+
+**修掉的自检互踩**（这个坑比看上去大）：`test_host_bridge` / `test_rc_key_ledger` /
+`test_patch_real_headers` / `test_patch_logic` 收尾都用 `git checkout -- .` 想撤掉自己装的桥,
+实际把**整棵树所有改动**一起冲掉——包括准备脚本刚写好的兵种 include 与 `MOUSE_SENSITIVITY`。
+本轮就是这么翻的车：我手工把英雄参数改成可用量级，跑一次 `verify_all` 之后它被某个兄弟测试
+冲回 `100000.0f`，而新加的体检随即 NO-GO。现在四个脚本统一改用
+`tools/firmware/bridge_fixture.py`：**装之前按字节快照（含"原本不存在的文件"），收尾原样放回**，
+别人的改动一个字节都不碰。修完实测：跑完整条 `prepare(infantry) → prepare(hero) → verify_all`
+之后，两份参数文件仍然都是 `1000f`、`robot_param.h` 仍指向英雄 —— 这就是以前会被偷偷吃掉的东西。
+
 ### 22.7 附带成果：`--km vt`（0x0311 图传键鼠档）今天才第一次真正编译过
 
 `--km` 一直是空转的（见 22.4），意味着固件里那套**五档键鼠来源仲裁**在英雄工程里

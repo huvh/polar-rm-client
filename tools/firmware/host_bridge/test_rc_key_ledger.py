@@ -30,6 +30,13 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[3] / "tmp_polarbear" / "StandardRobotpp"
 USB_REL = "application/communication/usb_task.c"
 RC_REL = "application/other/remote_control.c"
+MECA_REL = "application/chassis/chassis_mecanum.c"
+OMNI_REL = "application/chassis/chassis_omni.c"
+HEADER_REL = "application/typedef/host_chassis_bridge.h"
+# 临时打桥要按字节快照还原，不能用 git checkout -- .（会把别的脚本写好的东西一起冲掉）
+sys.path.insert(0, str(HERE.parent))
+import bridge_fixture as bf  # noqa: E402
+SNAPSHOT: dict = {}
 
 FAILED: list[str] = []
 
@@ -65,7 +72,10 @@ def main() -> int:
     if not patched():
         # 以前这里直接 SKIP 并 return 0：兄弟测试把树还原过，本项就一声不响地
         # 变成"通过"，verify_all 报 GO 却压根没测键位。现在改成自己装上再测。
-        git("checkout", "--", ".")
+        # 但"装"与"撤"都必须只在自己拍过快照的那几个文件里发生：
+        # checkout -- . 会连 prepare_hero_build 写的兵种 include / 鼠标灵敏度一起冲掉。
+        SNAPSHOT = bf.stage(REPO, [USB_REL, RC_REL, MECA_REL, OMNI_REL, HEADER_REL])
+        git("checkout", "--", USB_REL, RC_REL, MECA_REL, OMNI_REL)
         owns_revert = True
         res = subprocess.run([sys.executable, str(HERE / "apply_host_bridge.py"), str(REPO)],
                              capture_output=True, text=True,
@@ -73,8 +83,7 @@ def main() -> int:
         check("键位记账可套用到固件副本", res.returncode == 0,
               (res.stderr or res.stdout)[-260:])
         if res.returncode != 0 or not patched():
-            git("checkout", "--", ".")
-            git("clean", "-fd", "application/typedef/host_chassis_bridge.h")
+            bf.restore(SNAPSHOT, REPO)
             return 1
     usb = (REPO / USB_REL).read_text(encoding="utf-8", errors="ignore")
     rc = (REPO / RC_REL).read_text(encoding="utf-8", errors="ignore")
@@ -332,8 +341,7 @@ int main(void)
                 print("   ", body)
 
     if owns_revert:
-        git("checkout", "--", ".")
-        git("clean", "-fd", "application/typedef/host_chassis_bridge.h")
+        bf.restore(SNAPSHOT, REPO)      # 原本没有的头文件会被删掉，不留孤儿
 
     print("\n" + "=" * 62)
     if FAILED:

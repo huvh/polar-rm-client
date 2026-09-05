@@ -33,6 +33,14 @@ BASELINE_COMMIT = "2722e0d"
 ROBOT_PARAM_REL = "application/robot_param.h"
 HERO_INCLUDE = '#include "robot_param_mecannum_hero.h"'
 INFANTRY_INCLUDE = '#include "robot_param_omni_infantry.h"'
+INFANTRY_PARAM_REL = "application/robot_param_omni_infantry.h"
+# 两个兵种的参数文件。C 路（DT7 键鼠）对两者都成立：__RC_TYPE 是 robot_param.h
+# 里的全局宏、DT7 的 18 字节解码在 remote_control.c 里也不分兵种；
+# 差别只在"该改哪个参数文件的 MOUSE_SENSITIVITY"，所以兵种必须能选。
+ROBOT_PROFILES = {
+    "hero": {"include": HERO_INCLUDE, "param": "application/robot_param_mecannum_hero.h"},
+    "infantry": {"include": INFANTRY_INCLUDE, "param": "application/robot_param_omni_infantry.h"},
+}
 USB_REL = "application/communication/usb_task.c"
 RC_REL = "application/other/remote_control.c"
 
@@ -117,6 +125,7 @@ OWNED = {
     # check_clean 当成"别人的改动"而 NO-GO —— 这个坑本文件注释里已经记过一次
     # （referee.c），加 --mouse-sens 时又踩了一遍。凡脚本会写的文件都必须进 OWNED。
     HERO_PARAM_REL,
+    INFANTRY_PARAM_REL,      # --robot infantry 时会改它，同样必须登记
 }
 
 
@@ -206,8 +215,78 @@ GYRO_BIAS_GUARD = (
 )
 
 
-def switch_to_hero(repo: Path, step: Step) -> None:
-    print("\n[3/6] 切兵种配置：步兵 -> 英雄")
+def normalize_includes(lines: list, want: str, prof: dict, other: dict) -> list:
+    """保证兵种 include 永远只有两行，并且**放回原位**：
+    一行生效（所选兵种）+ 一行注释掉的备选。
+
+    两个坑都踩过：
+      1. 每次切换追加一行 `// #include ...` ⇒ 来回切几遍能攒出三行，读的人分不清哪条是真的；
+      2. 用"找某条注释锚点，找不到就 append 到文件尾"来决定插哪儿 ⇒ 换一种
+         robot_param.h 写法就会把 include 挤到 #define 后面（甚至落到 include guard 外面）。
+    所以这里记住第一条兵种 include 原本排在第几个"非 include 行"之后，原位插回去。
+    """
+    def is_include(line: str) -> bool:
+        s = line.strip()
+        return ("robot_param_" in s
+                and (s.startswith("#include") or s.startswith("// #include")))
+    keep_before = 0
+    for line in lines:
+        if is_include(line):
+            break
+        if not line.strip():          # 空行不算"内容行"，不影响定位
+            continue
+        keep_before += 1
+    body = [l for l in lines if not is_include(l)]
+    live = f'{prof["include"]}   // {want}（prepare_hero_build.py --robot {want}）'
+    alt = f'// {other["include"]}   // 另一个兵种，切回时取消注释'
+    idx = 0
+    seen = 0
+    for i, line in enumerate(body):
+        if seen == keep_before:
+            idx = i
+            break
+        if line.strip():
+            seen += 1
+    body[idx:idx] = [live, alt]
+    return body
+
+
+def switch_robot(repo: Path, step: Step, want: str = "hero") -> None:
+    """把 robot_param.h 指向所选兵种的参数文件（两个方向都支持、可反复跑）。"""
+    prof = ROBOT_PROFILES[want]
+    other = ROBOT_PROFILES["infantry" if want == "hero" else "hero"]
+    print(f"\n[3/6] 切兵种配置 -> {want}（{prof['param']}）")
+    path = repo / ROBOT_PARAM_REL
+    text = path.read_text(encoding="utf-8")
+    lines = text.split("\n")
+    hit = None
+    for idx, line in enumerate(lines):
+        s = line.strip()
+        if s.startswith(prof["include"]) or s.startswith("// " + prof["include"]) \
+                or s.startswith(other["include"]) or s.startswith("// " + other["include"]):
+            hit = idx
+            break
+    if hit is None:
+        step.bad("robot_param.h 里找不到英雄/步兵任一条 include",
+                 "上游改了写法，请同步本脚本")
+        return
+    fixed = normalize_includes(lines, want, prof, other)
+    changed = fixed != lines
+    if changed:
+        path.write_text("\n".join(fixed), encoding="utf-8")
+    if lines[hit].strip().startswith(prof["include"]) and not changed:
+        step.ok(f"已经是 {want} 配置（幂等跳过）")
+    elif changed and lines[hit].strip().startswith(prof["include"]):
+        step.ok(f"已经是 {want} 配置，顺手把 include 区收成两行（原先攒了重复注释）")
+    else:
+        step.ok(f"include 已指向 {prof['param']}")
+
+
+def switch_to_hero(repo: Path, step: Step) -> None:      # 兼容旧调用
+    switch_robot(repo, step, "hero")
+
+
+def _switch_to_hero_old(repo: Path, step: Step) -> None:
     path = repo / ROBOT_PARAM_REL
     text = path.read_text(encoding="utf-8")
     if HERO_INCLUDE in text:
@@ -352,7 +431,8 @@ def strip_c_comments(text: str) -> str:
     return "".join(out)
 
 
-def switch_mouse_sensitivity(repo: Path, step: Step, value: str) -> None:
+def switch_mouse_sensitivity(repo: Path, step: Step, value: str,
+                             param_rel: str = HERO_PARAM_REL) -> None:
     """改英雄参数里的 MOUSE_SENSITIVITY。
 
     出厂值 100000.0f（application/robot_param_mecannum_hero.h:91）等于**把鼠标屏蔽掉**：
@@ -361,8 +441,8 @@ def switch_mouse_sensitivity(repo: Path, step: Step, value: str) -> None:
     走 C 路（键鼠进 DT7）要用鼠标控云台，就得给一个可用量级（非英雄板那份是 0.5f），
     方向与手感仍须实车标定。
     """
-    print(f"\n[3d] MOUSE_SENSITIVITY -> {value}")
-    path = repo / HERO_PARAM_REL
+    print(f"\n[3d] MOUSE_SENSITIVITY -> {value}（{param_rel}）")
+    path = repo / param_rel
     if not path.exists():
         step.bad("找不到英雄参数文件", str(path))
         return
@@ -387,7 +467,7 @@ def ensure_gyro_bias(path: Path, step: Step) -> None:
         return
     lines = text.split("\n")
     for idx, line in enumerate(lines):
-        if line.strip().startswith(HERO_INCLUDE):
+        if any(line.strip().startswith(p["include"]) for p in ROBOT_PROFILES.values()):
             lines.insert(idx + 1, GYRO_BIAS_GUARD.rstrip("\n"))
             path.write_text("\n".join(lines), encoding="utf-8")
             step.ok("补上 __GYRO_BIAS_YAW 兜底定义（英雄/步兵参数文件都没给）")
@@ -467,15 +547,18 @@ def apply_patch(repo: Path, step: Step) -> bool:
     return True
 
 
-def verify_changes(repo: Path, step: Step, want_rc: str = 'dt7') -> bool:
+def verify_changes(repo: Path, step: Step, want_rc: str = 'dt7',
+                   want_robot: str = "hero") -> bool:
     print("\n[5/6] 逐项确认改动存在")
     usb = read(repo, USB_REL)
     rc = read(repo, RC_REL)
     param = read(repo, ROBOT_PARAM_REL)
     hdr0 = read(repo, HOST_BRIDGE_HEADER_REL)
 
+    want_include = ROBOT_PROFILES[want_robot]["include"]
     checks = [
-        ("robot_param.h 指向英雄配置", HERO_INCLUDE in param),
+        (f"robot_param.h 指向所选兵种配置（{want_robot}）",
+         want_include in param and param.count("#include \"robot_param_") >= 1),
         ("__RC_TYPE 与车上装的遥控器是同一家（真实影响范围见 RC_LINKS.md 第 2 节）",
          RC_LINE_RE.search(param) is not None
          and RC_LINE_RE.search(param).group(1) == RC_TYPE_NAMES[want_rc]),
@@ -518,18 +601,20 @@ def verify_changes(repo: Path, step: Step, want_rc: str = 'dt7') -> bool:
         ("__CONTROL_LINK_KM 的 #define 在注释外（真的生效）",
          re.search(r"^\s*#define\s+__CONTROL_LINK_KM\s+CL_KM_\w+",
                    strip_c_comments(param), re.M) is not None),
-        # 鼠标灵敏度：英雄配置出厂是 100000.0f，等于把鼠标整条废掉
-        # （云台参考角增量 = mouse / SENSITIVITY，gimbal_yaw_pitch_direct.c:331-332）。
-        # 走 C 路要用鼠标控云台就必须知道现在这个值是多少，所以体检必须报出来。
-        ("英雄参数里的 MOUSE_SENSITIVITY 是可用量级（不是屏蔽值 100000）",
+        # 鼠标灵敏度：出厂值等于把鼠标整条废掉（英雄 100000.0f、步兵 40000.0f），
+        # 云台参考角增量 = mouse / SENSITIVITY（gimbal_yaw_pitch_direct.c:331-332）。
+        # 走 C 路要用鼠标控云台，就必须知道**当前兵种这份文件**里它等于多少 ——
+        # 所以体检读的是 --robot 选中的那份参数文件，不是写死的英雄。
+        (f"{want_robot} 参数里的 MOUSE_SENSITIVITY 是可用量级",
          (lambda hero_param: (
              (m := re.search(r"#define\s+MOUSE_SENSITIVITY\s+\(\s*([0-9.]+)f?\s*\)",
                              hero_param)) is not None
              and 10.0 <= float(m.group(1)) <= 10000.0)
              or step.warn("MOUSE_SENSITIVITY 不在可用量级",
-                          "1000 = 1px≈1mrad；100000 是屏蔽，<10 会一帧甩到限位。"
-                          "用 --mouse-sens 给值，实车再标定手感")
-         )(read(repo, HERO_PARAM_REL) if (repo / HERO_PARAM_REL).exists() else "")),
+                          "1000 = 1px≈1mrad；100000/40000 都是屏蔽量级，"
+                          "<10 会一帧甩到限位。用 --mouse-sens 给值，实车再标定手感")
+         )(read(repo, ROBOT_PROFILES[want_robot]["param"])
+           if (repo / ROBOT_PROFILES[want_robot]["param"]).exists() else "")),
         ("KM_KEY_ALLOWED_MASK 若被覆盖也必须落在注释外",
          ("KM_KEY_ALLOWED_MASK" not in param)
          or re.search(r"^\s*#define\s+KM_KEY_ALLOWED_MASK",
@@ -766,6 +851,11 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="把固件工程准备成英雄板可驾驶状态")
     ap.add_argument("repo", help="StandardRobotpp 仓库路径")
     ap.add_argument("--revert", action="store_true", help="撤销本脚本的改动")
+    ap.add_argument("--robot", choices=sorted(ROBOT_PROFILES), default="hero",
+                    help="准备哪个兵种的工程。C 路（DT7 键鼠）两个兵种都成立："
+                         "__RC_TYPE 与 DT7 解码都在 robot_param.h/remote_control.c 里不分兵种，"
+                         "差别只是改哪个参数文件的 MOUSE_SENSITIVITY。"
+                         "默认 hero = 英雄（麦轮）；步兵用 --robot infantry")
     ap.add_argument("--rc", choices=sorted(RC_TYPE_NAMES), default="dt7",
                     help="车上接收机配套的遥控器类型。默认 dt7 = DT7 遥控器 + DR16 接收机"
                          "（18 字节 SBUS 帧自带键盘/鼠标位）；上游仓库默认写的是 et08a")
@@ -801,13 +891,14 @@ def main() -> int:
     if args.revert:
         revert(repo, step)
     elif check_clean(repo, step):
-        switch_to_hero(repo, step)
+        switch_robot(repo, step, args.robot)
         switch_rc_type(repo, step, args.rc)
         switch_km_link(repo, step, args.km, args.km_fire_keys)
         if args.mouse_sens:
-            switch_mouse_sensitivity(repo, step, args.mouse_sens)
+            switch_mouse_sensitivity(repo, step, args.mouse_sens,
+                                     ROBOT_PROFILES[args.robot]["param"])
         if apply_patch(repo, step):
-            verify_changes(repo, step, args.rc)
+            verify_changes(repo, step, args.rc, args.robot)
             compile_check(repo, step)
             if args.gcc_check:
                 gcc_differential_check(repo, step)

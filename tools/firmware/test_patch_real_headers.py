@@ -28,6 +28,13 @@ PATCH = HERE / "polar-virtual-rc-drive-keys.patch"
 REPO = HERE.parents[2] / "tmp_polarbear" / "StandardRobotpp"
 USB_REL = "application/communication/usb_task.c"
 RC_REL = "application/other/remote_control.c"
+MECA_REL = "application/chassis/chassis_mecanum.c"
+OMNI_REL = "application/chassis/chassis_omni.c"
+HEADER_REL = "application/typedef/host_chassis_bridge.h"
+# 临时打桥要按字节快照还原，不能用 git checkout -- .（会把别的脚本写好的东西一起冲掉）
+sys.path.insert(0, str(HERE.parent))
+import bridge_fixture as bf  # noqa: E402
+SNAPSHOT: dict = {}
 
 FAILED: list[str] = []
 
@@ -73,7 +80,9 @@ def main() -> int:
     if already:
         print("[info] 补丁已存在于工作树，直接编译当前内容（不动 git，不做撤销）")
     else:
-        git("checkout", "--", ".")
+        # 先拍快照再定向 checkout；收尾只按快照还原（见 bridge_fixture 的说明）
+        SNAPSHOT = bf.stage(REPO, [USB_REL, RC_REL, MECA_REL, OMNI_REL, HEADER_REL])
+        git("checkout", "--", USB_REL, RC_REL, MECA_REL, OMNI_REL)
         owns_revert = True
         # 必须走 apply_host_bridge.py：它会先自动补上驾驶补丁，再装键位记账。
         # 早期版本在这里只 `git apply PATCH`，于是 DT7 记账那两行永远抽不到，
@@ -85,8 +94,7 @@ def main() -> int:
         check("补丁 + 桥接可套用到固件副本", apply.returncode == 0,
               (apply.stderr or apply.stdout)[-260:])
         if apply.returncode != 0:
-            git("checkout", "--", ".")
-            git("clean", "-fd", "application/typedef/host_chassis_bridge.h")
+            bf.restore(SNAPSHOT, REPO)
             return 1
 
     try:
@@ -228,10 +236,7 @@ int probe(void)
 
     finally:
         if owns_revert:
-            git("checkout", "--", ".")
-            # 头文件是新增的未跟踪文件，checkout 删不掉；不清的话下一次
-            # already 判断虽然仍会走 .c 内容，但仓库里会留下孤儿文件。
-            git("clean", "-fd", "application/typedef/host_chassis_bridge.h")
+            bf.restore(SNAPSHOT, REPO)   # 原本没有的头文件会被删掉，不留孤儿
 
     print("\n" + "=" * 62)
     if FAILED:

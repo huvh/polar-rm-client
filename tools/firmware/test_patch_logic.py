@@ -47,6 +47,9 @@ def extract_block(text: str, start_pat: str, end_pat: str) -> str:
 
 
 REPO = HERE.parents[2] / "tmp_polarbear" / "StandardRobotpp"
+# 临时打桥要按字节快照还原，不能用 git checkout -- .（会把别的脚本写好的东西一起冲掉）
+sys.path.insert(0, str(HERE.parent))
+import bridge_fixture as bf  # noqa: E402
 USB_REL = "application/communication/usb_task.c"
 RC_REL = "application/other/remote_control.c"
 
@@ -61,15 +64,21 @@ def patched_sources() -> tuple[str, str]:
 
     if not REPO.exists():
         raise AssertionError(f"固件副本不存在：{REPO}")
-    subprocess.run(["git", "checkout", "--", "."], cwd=REPO, capture_output=True)
+    # 这个补丁只碰 usb_task.c / remote_control.c，所以快照与还原都只在这两个文件里发生。
+    # 以前这里是 git checkout -- . ：测完之后，prepare_hero_build 写好的兵种 include 与
+    # MOUSE_SENSITIVITY 会被一起冲掉，而且再也没人装回来（本轮就是这么翻车的）。
+    snap = bf.stage(REPO, [USB_REL, RC_REL])
+    subprocess.run(["git", "checkout", "--", USB_REL, RC_REL],
+                   cwd=REPO, capture_output=True)
     apply = subprocess.run(["git", "apply", str(PATCH)], cwd=REPO, capture_output=True, text=True)
     if apply.returncode != 0:
+        bf.restore(snap, REPO)
         raise AssertionError("补丁无法套用到固件副本：" + (apply.stderr or apply.stdout)[:200])
     try:
         usb = (REPO / USB_REL).read_text(encoding="utf-8")
         rc = (REPO / RC_REL).read_text(encoding="utf-8")
     finally:
-        subprocess.run(["git", "checkout", "--", "."], cwd=REPO, capture_output=True)
+        bf.restore(snap, REPO)
     return usb, rc
 
 

@@ -255,6 +255,18 @@ C 路并不免除这条；规程没有禁止第三方程序写 DT7 的 VCOM，�
 
 ---
 
+## 15a. 步兵车：同一条路，换 `--robot infantry`
+
+C 路不分工兵/英雄：`__RC_TYPE`、DT7 的 18 字节解码、键位三本账都不分兵种，
+唯一差别是改哪个参数文件的鼠标灵敏度。准备步兵工程：
+
+```
+python tools/firmware/prepare_hero_build.py <固件路径> --robot infantry --rc dt7 --km rc
+```
+
+已实测：步兵工程全跑 GO，补丁代码在固件真实头文件下零错误零警告 ⇒ **步兵接 C 路不用改固件逻辑**。
+注意步兵出厂 `MOUSE_SENSITIVITY` 是 `40000.0f`（`robot_param_omni_infantry.h:99`），同样是屏蔽量级。
+
 ## 15. 一条命令的闭环自检（现场先跑这个，别靠"车好像动了"）
 
 ```

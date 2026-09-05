@@ -30,6 +30,10 @@ USB_REL = "application/communication/usb_task.c"
 MECA_REL = "application/chassis/chassis_mecanum.c"
 OMNI_REL = "application/chassis/chassis_omni.c"
 HEADER_REL = "application/typedef/host_chassis_bridge.h"
+# 临时打桥要按字节快照还原，不能用 git checkout -- .（会冲掉别人的改动）
+sys.path.insert(0, str(HERE.parent))
+import bridge_fixture as bf  # noqa: E402
+SNAPSHOT: dict = {}
 
 FAILED: list[str] = []
 
@@ -88,8 +92,11 @@ def main() -> int:
     if already:
         print("[info] 桥接已存在于工作树，直接校验当前内容（不动 git）")
     else:
-        # 先确保树是干净的，避免把上一次遗留的改动算成本次结果
-        git("checkout", "--", ".")
+        # 顺序很重要：**先拍快照**，再把要改的文件放回干净状态。
+        # 反过来做的话 checkout 丢掉的东西（prepare_hero_build 写的桥、别的自检装的补丁）
+        # 就再也 restore 不回来了。收尾只认这份快照，绝不用 git checkout -- .
+        SNAPSHOT = bf.stage(REPO, [USB_REL, MECA_REL, OMNI_REL, HEADER_REL])
+        git("checkout", "--", USB_REL, MECA_REL, OMNI_REL)
         owns_revert = True
         apply = subprocess.run(
             [sys.executable, str(HERE / "apply_host_bridge.py"), str(REPO)],
@@ -97,8 +104,7 @@ def main() -> int:
         check("桥接可套用到固件副本", apply.returncode == 0,
               (apply.stderr or apply.stdout)[-300:])
         if apply.returncode != 0:
-            git("checkout", "--", ".")
-            git("clean", "-fd", "application/typedef/host_chassis_bridge.h")
+            bf.restore(SNAPSHOT, REPO)
             return 1
 
     try:
@@ -335,10 +341,8 @@ int main(void)
 
     finally:
         if owns_revert:
-            git("checkout", "--", ".")
-            # 新装的头文件是未跟踪文件，checkout 不会删它；显式清掉，
-            # 否则下一次 already=True 会跳过安装、测到的是陈旧副本
-            git("clean", "-fd", HEADER_REL)
+            # 按字节还原：原本没有的头文件会被删掉，所以不会留下"陈旧副本"
+            bf.restore(SNAPSHOT, REPO)
 
     print("\n" + "=" * 62)
     if FAILED:

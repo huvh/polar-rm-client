@@ -139,6 +139,67 @@ def main() -> int:
     finally:
         phb.git = real_git
 
+    # 5) 兵种可切换（目标写的是"英雄/步兵"，以前只有英雄一条路）
+    with tempfile.TemporaryDirectory() as td5:
+        repo5 = Path(td5)
+        (repo5 / "application").mkdir()
+        p5 = repo5 / "application" / "robot_param.h"
+        p5.write_text('#include "robot_param_omni_infantry.h"\n#define __DEVELOP 1\n',
+                      encoding="utf-8")
+        st5 = phb.Step()
+        phb.switch_robot(repo5, st5, "hero")
+        txt = p5.read_text(encoding="utf-8")
+        check("步兵 -> 英雄切得动", phb.HERO_INCLUDE in txt and phb.INFANTRY_INCLUDE not in txt.split("\n")[0], txt.splitlines()[0])
+        check("切过去时把另一条留成注释（现场能一眼回切）",
+              "// " + phb.INFANTRY_INCLUDE in txt)
+        phb.switch_robot(repo5, st5, "hero")
+        check("重复切同一兵种是幂等（不会叠出两行 include）",
+              p5.read_text(encoding="utf-8").count("robot_param_mecannum_hero.h") == 1)
+        phb.switch_robot(repo5, st5, "infantry")
+        txt2 = p5.read_text(encoding="utf-8")
+        check("英雄 -> 步兵也切得回来（认得出被注释掉的那行）",
+              p5.read_text(encoding="utf-8").split("\n")[0].strip().startswith(phb.INFANTRY_INCLUDE),
+              txt2.splitlines()[0])
+        phb.switch_robot(repo5, st5, "hero")
+        check("来回切三次仍然只有一行生效 include",
+              sum(1 for l in p5.read_text(encoding="utf-8").splitlines()
+                  if l.strip().startswith("#include")) == 1,
+              p5.read_text(encoding="utf-8").splitlines()[0])
+        # 来回切 6 次，文件里也只能有"一行生效 + 一行备选"（曾经能攒到 3 行）
+        for want in ("hero", "infantry") * 3:
+            phb.switch_robot(repo5, st5, want)
+        incs = [l for l in p5.read_text(encoding="utf-8").splitlines()
+                if "robot_param_" in l and l.strip().startswith(("#include", "// #include"))]
+        check("来回切 6 次后 include 只有两条（1 生效 + 1 备选），不攒重复注释行",
+              len(incs) == 2 and incs[0].startswith("#include"), str(incs))
+        check("切换兵种不许动文件里别的内容", "__DEVELOP" in p5.read_text(encoding="utf-8"))
+        other = repo5 / "application" / "nope.h"
+        p5.write_text("#define NOTHING_HERE 1\n", encoding="utf-8")
+        st6 = phb.Step()
+        phb.switch_robot(repo5, st6, "hero")
+        check("找不到任何兵种 include 时报错而不是乱插", bool(st6.failures), str(st6.failures))
+        check("步兵参数文件也在 OWNED 里", phb.INFANTRY_PARAM_REL in phb.OWNED)
+        check("ROBOT_PROFILES 两个兵种的参数文件都在 OWNED 里",
+              all(v["param"] in phb.OWNED for v in phb.ROBOT_PROFILES.values()))
+
+    # 6) --mouse-sens 必须改到**所选兵种**那份文件，不能永远改英雄
+    with tempfile.TemporaryDirectory() as td6:
+        repo6 = Path(td6)
+        (repo6 / "application").mkdir()
+        (repo6 / phb.HERO_PARAM_REL).write_text(
+            "#define MOUSE_SENSITIVITY (100000.0f)\n", encoding="utf-8")
+        (repo6 / phb.INFANTRY_PARAM_REL).write_text(
+            "#define MOUSE_SENSITIVITY (40000.0f)\n", encoding="utf-8")
+        st7 = phb.Step()
+        phb.switch_mouse_sensitivity(repo6, st7, "1000", phb.INFANTRY_PARAM_REL)
+        check("步兵档改的是步兵参数文件",
+              "MOUSE_SENSITIVITY (1000f)" in
+              (repo6 / phb.INFANTRY_PARAM_REL).read_text(encoding="utf-8"))
+        check("改步兵时不许顺手动英雄的文件",
+              "100000.0f" in (repo6 / phb.HERO_PARAM_REL).read_text(encoding="utf-8"))
+        check("ROBOT_PROFILES 两个兵种的参数文件都在 OWNED 里",
+              all(v["param"] in phb.OWNED for v in phb.ROBOT_PROFILES.values()))
+
     print("\n" + ("有失败项" if FAILED else "prepare_hero_build 新选项全部通过"))
     return 1 if FAILED else 0
 

@@ -62,6 +62,11 @@ C_CHECKS = (
     # 与上面两项的相互干扰已处理：三个脚本都会先判断“目标改动是不是已经在
     # 树里”，在就不动 git。否则 prepare_hero_build.py 刚准备好的工作树
     # 会被后一个脚本的 finally 里 git checkout 静默撤销，造成“报 GO 但改动已没了”。
+    # 2026-09-05 补严：光"已在树里就不动"还不够——那几个脚本收尾用的是
+    # `git checkout -- .`（想把**自己**装的桥撤掉，实际把**整棵树**所有改动一起冲掉，
+    # 包括 prepare 写好的兵种 include 与 MOUSE_SENSITIVITY；本轮真的复现过一次：
+    # 英雄参数被冲回 100000.0f，紧接着新加的体检就 NO-GO）。
+    # 现在统一走 tools/firmware/bridge_fixture.py：装之前按字节快照，收尾原样放回。
     ("tools/firmware/host_bridge/test_host_bridge.py",
      "自转桥接（0x04/0x1F）编译 + 行为断言"),
     ("tools/firmware/motion_feedback/test_motion_feedback.py",
