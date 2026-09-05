@@ -223,6 +223,34 @@ extern volatile uint32_t HOST_KM_FRAME_BAD;    /* crc/长度/命令号不对而�
 #define HOST_KM_DEBUG_SLOT_FRAME_BAD ((uint8_t)2)
 #endif
 
+/* 车上当前的键鼠来源档位（编译期常量的值，运行时零开销）：
+ *   0=none 1=rc 2=vt 3=rc_vt 4=vt_rc
+ * 为什么值得多占一个槽：`km_rx` 只证明"帧到了"，不证明"这档会用它的键位"。
+ * 默认档 CL_KM_RC 下 0x0311 整个不参与，但到达计数照涨——
+ * 那时"车上已收到 N 帧"会被读成"能控车了"，白跑一趟。 */
+#ifndef HOST_KM_DEBUG_SLOT_POLICY
+#define HOST_KM_DEBUG_SLOT_POLICY ((uint8_t)3)
+#endif
+
+/* 档位编号（给上位机用的稳定映射，别拿宏的原始数值当枚举用） */
+#define HOST_KM_POL_NONE 0U
+#define HOST_KM_POL_RC 1U
+#define HOST_KM_POL_VT 2U
+#define HOST_KM_POL_RC_VT 3U
+#define HOST_KM_POL_VT_RC 4U
+
+#if (__CONTROL_LINK_KM == CL_KM_NONE)
+#define HOST_KM_POL_ID HOST_KM_POL_NONE
+#elif (__CONTROL_LINK_KM == CL_KM_RC)
+#define HOST_KM_POL_ID HOST_KM_POL_RC
+#elif (__CONTROL_LINK_KM == CL_KM_VT)
+#define HOST_KM_POL_ID HOST_KM_POL_VT
+#elif (__CONTROL_LINK_KM == CL_KM_RC_VT)
+#define HOST_KM_POL_ID HOST_KM_POL_RC_VT
+#else
+#define HOST_KM_POL_ID HOST_KM_POL_VT_RC
+#endif
+
 /* usb_debug.h:5 的原型。这里按同签名自己声明，是因为各工程的 include 路径
    不保证能拿到那个头；实现链接到 usb_task.c:1405 那一份。 */
 extern void ModifyDebugDataPackage(uint8_t index, float data, const char *name);

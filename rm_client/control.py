@@ -134,6 +134,29 @@ def evaluate_dt7_hold(tail_samples, forced_bits: int):
     return ("EXPIRES", "停发后键位自己掉回基线 = DT7 会过期清零（安全侧）")
 
 
+def describe_km_policy(pol) -> tuple:
+    """把车上报回来的键鼠档位编号翻成人话，并回答"图传键鼠在这一档会不会参与"。
+
+    编号来自固件 `host_km_link.h` 的 HOST_KM_POL_*（0 none / 1 rc / 2 vt / 3 rc_vt / 4 vt_rc）。
+    为什么非要知道它：`km_rx` 在 referee **收到帧**时就涨，档位是之后才裁决用不用；
+    默认档 CL_KM_RC 下 0x0311 整个不参与，但计数照涨 —— 只报"已收到 N 帧"
+    会被读成"能控车了"。这条把两件事分开。
+    """
+    try:
+        value = int(pol) if pol is not None else -1
+    except (TypeError, ValueError):
+        value = -1
+    table = {0: ("none", False, "两路键鼠都被屏蔽（连驾驶员键位也屏蔽）"),
+             1: ("rc", False, "图传键鼠不参与：要用 0x0311 就跑 --km rc_vt / vt / vt_rc"),
+             2: ("vt", True, "只认图传：驾驶员键位门闸被关"),
+             3: ("rc_vt", True, "互补、遥控器优先（图传可用）"),
+             4: ("vt_rc", True, "互补、图传优先")}
+    if value not in table:
+        return ("?", None, "车上没报档位（固件没打 POLAR-KM-LINK，或 debug 槽被占）")
+    name, participates, hint = table[value]
+    return (name, participates, hint)
+
+
 def build_dt7_selftest_report(*, keys, forced_bits: int, baseline, verdict: str, detail: str,
                               hold_verdict: str = "", hold_detail: str = "",
                               samples: int = 0, tail_samples: int = 0,
@@ -190,6 +213,8 @@ class KeyboardControlBridge:
         #: 我们只能自证"发了多少帧"，那说明不了链路。真正的证据是**C 板自己数到的
         #: 0x0311 帧数**（固件 POLAR-KM-LINK 的 HostKmReportUplink 报回来）。
         self.radio_km_robot_rx = -1
+        self.radio_km_policy = "?"      # 车上报回来的键鼠档位名
+        self.radio_km_policy_hint = ""
         self.radio_km_robot_key = -1
         self.radio_km_robot_rx_growing = False
         #: 一句话实况，直接给界面显示：off / blocked / no-readback / live /

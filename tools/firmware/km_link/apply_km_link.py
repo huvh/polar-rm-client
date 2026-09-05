@@ -327,6 +327,7 @@ static void HostKmReportUplink(void)
     host_km_debug_last = now;
     ModifyDebugDataPackage(HOST_KM_DEBUG_SLOT_FRAME_OK, (float)HOST_KM_FRAME_OK, "km_ok");
     ModifyDebugDataPackage(HOST_KM_DEBUG_SLOT_FRAME_BAD, (float)HOST_KM_FRAME_BAD, "km_bad");
+    ModifyDebugDataPackage(HOST_KM_DEBUG_SLOT_POLICY, (float)HOST_KM_POL_ID, "km_pol");
     ModifyDebugDataPackage(HOST_KM_DEBUG_SLOT_RX, (float)HOST_KM_RX_COUNT, "km_rx");
     ModifyDebugDataPackage(HOST_KM_DEBUG_SLOT_KEY, (float)rc_ctrl.key.v, "km_key");
 }}

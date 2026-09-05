@@ -69,12 +69,17 @@ TU = r"""
 #define CL_KM_VT       0x202
 #define CL_KM_RC_VT    0x203
 #define CL_KM_VT_RC    0x204
+#define EXPECTED_POL   @@POL_ID@@
+
+/* 档位宏必须排在头文件切片之前：那段头里有一条按档位选编号的条件链，
+ * 定义晚一步就会让所有 policy 都落到 else 分支，报出一个永远相同的假值。
+ * （注释里不要写模板占位符本身 —— 会被替换成整段内容，把注释撑爆。） */
+#define __CONTROL_LINK_KM @@POLICY@@
 
 @@BRIDGE@@
 
 @@HDRDEFS@@
 
-#define __CONTROL_LINK_KM @@POLICY@@
 #define KM_KEY_ALLOWED_MASK @@MASK@@
 
 /* ---- 被测代码要的最小环境：rc_ctrl、0x0311 收件箱、可推进的时间 ---- */
@@ -473,9 +478,15 @@ int main(void)
        (int)dbg_val(HOST_KM_DEBUG_SLOT_FRAME_OK), (int)HOST_KM_FRAME_OK);
     eq("km_bad 等于实际丢掉的坏帧数",
        (int)dbg_val(HOST_KM_DEBUG_SLOT_FRAME_BAD), (int)HOST_KM_FRAME_BAD);
-    eq("槽位不许撞车（0/1/2/9 各不重叠）",
+    /* 档位必须报出来：km_rx 只证明"帧到了"，不证明"这一档会用它的键位"。
+     * 默认档 CL_KM_RC 下 0x0311 整个不参与但计数照涨 —— 那时"已收到 N 帧"
+     * 会被读成"能控车了"，白跑一趟。*/
+    eq("km_pol 报的就是本次编译进去的那一档",
+       (int)dbg_val(HOST_KM_DEBUG_SLOT_POLICY), (int)EXPECTED_POL);
+    eq("槽位不许撞车（0/1/2/3/9 各自独立）",
        (HOST_KM_DEBUG_SLOT_KEY == 0U && HOST_KM_DEBUG_SLOT_FRAME_OK == 1U
-        && HOST_KM_DEBUG_SLOT_FRAME_BAD == 2U && HOST_KM_DEBUG_SLOT_RX == 9U) ? 0 : 1, 0);
+        && HOST_KM_DEBUG_SLOT_FRAME_BAD == 2U && HOST_KM_DEBUG_SLOT_POLICY == 3U
+        && HOST_KM_DEBUG_SLOT_RX == 9U) ? 0 : 1, 0);
     /* 限流：不推进时间就再调，计数涨了但上报值不许变（否则 1ms 一次会淹了 USB） */
     {
         float held = dbg_val(HOST_KM_DEBUG_SLOT_RX);
@@ -514,8 +525,13 @@ def extract_official_crc(firmware: Path) -> str:
     return body
 
 
+# POLICIES 里是宏全名，编号表也按全名建（用短名会 KeyError）
+POLICY_ID = {"CL_KM_NONE": 0, "CL_KM_RC": 1, "CL_KM_VT": 2,
+             "CL_KM_RC_VT": 3, "CL_KM_VT_RC": 4}
+
+
 def build_tu(impl: str, hdr_defs: str, policy: str, fire: bool, negative: bool,
-             crc_src: str = "") -> str:
+             crc_src: str = "", pol_id: int = 1) -> str:
     body = impl
     if negative:
         # 退回朴素写法：图传直接覆盖 key.v（没有门闸也没有或），并去掉新鲜度门控。
@@ -540,6 +556,7 @@ def build_tu(impl: str, hdr_defs: str, policy: str, fire: bool, negative: bool,
     blob_c = ", ".join(str(b) for b in blob)
 
     return (TU.replace("@@CLIENT_BLOB@@", blob_c)
+              .replace("@@POL_ID@@", str(pol_id))
               .replace("@@CRC@@", crc_src)
               .replace("@@BRIDGE@@", BRIDGE_SNIPPET)
               .replace("@@HDRDEFS@@", hdr_defs)
@@ -607,6 +624,13 @@ def main() -> int:
     hdr += grab(km_src, r"#define HOST_KM_DEBUG_SLOT_KEY[^\n]*\n", "DEBUG_SLOT_KEY")
     hdr += grab(km_src, r"#define HOST_KM_DEBUG_SLOT_FRAME_OK[^\n]*\n", "SLOT_FRAME_OK")
     hdr += grab(km_src, r"#define HOST_KM_DEBUG_SLOT_FRAME_BAD[^\n]*\n", "SLOT_FRAME_BAD")
+    hdr += grab(km_src, r"#define HOST_KM_DEBUG_SLOT_POLICY[^\n]*\n", "SLOT_POLICY")
+    # 必须一路取到收尾的 #endif：只取到 HOST_KM_POL_ID 那行会留下没闭合的 #if，
+    # 六个 policy 全挂在 "unterminated conditional directive" 上
+    hdr += grab(km_src, r"#define HOST_KM_POL_NONE[^\n]*\n"
+                       r"(?:[^\n]*\n)*?#define HOST_KM_POL_ID HOST_KM_POL_\w+\n"
+                       r"(?:[^\n]*\n)*?#endif[ \t]*\n",
+                "档位编号与选择（含 #endif）")
     hdr += grab(km_src, r"extern void ModifyDebugDataPackage[^\n]*\n", "回读原型")
     check("从 host_km_link.h 抽出载荷与新鲜度判据", "prm1_km_cmd_t" in hdr)
     check("回读宏与原型也从真头文件抽（不另写一份）",
@@ -615,6 +639,22 @@ def main() -> int:
     check("km_ok/km_bad 的槽号也从真头文件抽（不许在测试里抄数字）",
           "HOST_KM_DEBUG_SLOT_FRAME_OK" in hdr
           and "HOST_KM_DEBUG_SLOT_FRAME_BAD" in hdr)
+
+    # 槽位是 10 格的共享数组，谁都可能撞上。这里扫固件树里**真正生效**的调用
+    # （以 // 开头的注释行不算），要求与本层四个槽 + 键位槽互不重叠。
+    import re as _re2
+    ours = {0, 1, 2, 3, 9}
+    used_by_others = set()
+    for path in sorted((root / "application").rglob("*.c")):
+        for line in path.read_text(encoding="utf-8", errors="ignore").splitlines():
+            s = line.strip()
+            if s.startswith("//") or "ModifyDebugDataPackage" not in s:
+                continue
+            m = _re2.search(r"ModifyDebugDataPackage\(\s*(\d+)", s)
+            if m:
+                used_by_others.add(int(m.group(1)))
+    check("本层占用的 debug 槽与固件里生效的其它调用不重叠",
+          not (ours & used_by_others), f"我们={sorted(ours)} 别人={sorted(used_by_others)}")
 
     global BRIDGE_SNIPPET
     BRIDGE_SNIPPET = (
@@ -641,7 +681,8 @@ def main() -> int:
     with tempfile.TemporaryDirectory() as td:
         for policy, fire in runs:
             label = f"{policy}{' +fire-keys' if fire else ''}"
-            tu = build_tu(impl, hdr, policy, fire, negative, extract_official_crc(root))
+            tu = build_tu(impl, hdr, policy, fire, negative, extract_official_crc(root),
+                          POLICY_ID[policy])
             if fire:
                 tu = "#define KM_TEST_FIRE_KEYS 1\n" + tu
             stem = f"km_{policy}{'_fire' if fire else ''}"

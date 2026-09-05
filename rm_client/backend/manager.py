@@ -586,6 +586,10 @@ class BackendManager:
             dbg = bridge.debug_packages or {}
             rx_raw = dbg.get("km_rx")
             key_raw = dbg.get("km_key")
+            from ..control import describe_km_policy
+            pol_name, pol_uses, pol_hint = describe_km_policy(dbg.get("km_pol"))
+            control.radio_km_policy = pol_name
+            control.radio_km_policy_hint = pol_hint
             try:
                 rx_now = int(float(rx_raw)) if rx_raw is not None else None
             except (TypeError, ValueError):
@@ -611,7 +615,12 @@ class BackendManager:
                 control.radio_km_link_note = "车上计数读不到（插一下 USB 0x5A 就能看到）"
             elif growing:
                 control.radio_km_link_state = "live"
-                control.radio_km_link_note = f"车上已收到 {rx_now} 帧 0x0311"
+                # "帧到了"和"这一档会用它的键位"是两件事，必须分开说：
+                # 默认档 CL_KM_RC 下计数照涨但键位永远不会参与，只报"已收到"会骗人
+                control.radio_km_link_note = (
+                    f"车上已收到 {rx_now} 帧 0x0311，但档位 {pol_name} 不参与"
+                    if pol_uses is False
+                    else f"车上已收到 {rx_now} 帧 0x0311（档位 {pol_name}）")
             elif rx_now == 0:
                 control.radio_km_link_state = "silent"
                 control.radio_km_link_note = (

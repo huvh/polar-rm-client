@@ -129,6 +129,31 @@ def test_manager_gates() -> None:
           str(control.radio_km_robot_rx))
     check("车上合并后的键位也回读到了", control.radio_km_robot_key == 17,
           str(control.radio_km_robot_key))
+    # 「帧到了」和「这一档会用它的键位」是两件事：默认档 CL_KM_RC 下 0x0311 整个
+    # 不参与，但到达计数在 referee 收到那一帧就涨 —— 只报「已收到 N 帧」会被读成「能控车了」
+    manager.polar_bridge.debug_packages = {"km_rx": 240.0, "km_key": 0.0, "km_pol": 1.0}
+    manager.tick_polar_link(state, registry, control)
+    check("车上是 rc 档时把[不参与]写进提示（默认档最容易被误读）",
+          control.radio_km_policy == "rc" and "不参与" in control.radio_km_link_note,
+          control.radio_km_link_note)
+    manager.polar_bridge.debug_packages = {"km_rx": 280.0, "km_key": 0.0, "km_pol": 3.0}
+    manager.tick_polar_link(state, registry, control)
+    check("rc_vt 档时提示里说得出档位", control.radio_km_policy == "rc_vt"
+          and "rc_vt" in control.radio_km_link_note, control.radio_km_link_note)
+    manager.polar_bridge.debug_packages = {"km_rx": 320.0, "km_key": 0.0}
+    manager.tick_polar_link(state, registry, control)
+    check("车上没报档位要明说，不许当成[能用了]",
+          control.radio_km_policy == "?" and "没报档位" in control.radio_km_policy_hint,
+          control.radio_km_policy_hint)
+    from rm_client.control import describe_km_policy as dkp
+    check("五档编号都翻对名字",
+          [dkp(i)[0] for i in range(5)] == ["none", "rc", "vt", "rc_vt", "vt_rc"],
+          str([dkp(i)[0] for i in range(5)]))
+    check("只有 none/rc 两档被标成图传不参与",
+          [dkp(i)[1] for i in range(5)] == [False, False, True, True, True],
+          str([dkp(i)[1] for i in range(5)]))
+    check("垃圾值归到[没报档位]，不许随便猜一档",
+          dkp(None)[0] == "?" and dkp("x")[0] == "?" and dkp(77)[0] == "?")
     manager.tick_polar_link(state, registry, control)
     check("计数不再涨 -> stalled（跟 silent 区分开）",
           control.radio_km_link_state == "stalled", control.radio_km_link_state)
