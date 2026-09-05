@@ -85,6 +85,42 @@ def main() -> int:
     finally:
         sp.list_serial_ports = real
 
+    print("\n--- 3b) 两条链路绝不能互相抢口 ---")
+    real2 = with_ports([ROBOT, DT7, FTDI])
+    try:
+        check("车与遥控器同时插着：A 路的 Auto 选车，不选遥控器",
+              sp.resolve_port("Auto") == "COM3", sp.resolve_port("Auto"))
+        check("同一套设备下 DT7 的 Auto 选遥控器", sp.resolve_rc_port("Auto") == "COM9",
+              sp.resolve_rc_port("Auto"))
+        pc = sp.port_choices()
+        rc = sp.rc_port_choices()
+        # 车的候选**故意**把所有探测到的口都列出来（人工兜底要用）；
+        # 保证不在下拉列表里，而在：① Auto 绝不选对方 ② DT7 侧对车的口拒发
+        check("车的候选保留人工兜底（含所有检出的口）", {"Stub", "Auto", "COM3", "COM9"} <= set(pc),
+              str(pc))
+        check("遥控器的候选只列 DJI 的口（少一个选错的机会）", rc == ["Auto", "COM9"], str(rc))
+        refuse = dl.Dt7KeyMouseLink(port="COM3")
+        target, why = refuse._open_target()
+        check("真把 DT7 指到车的口时：拒发并说清原因",
+              target == "" and "机器人本体" in why, why[:60])
+    finally:
+        sp.list_serial_ports = real2
+    chinese = dict(ROBOT, description="USB 串行设备")      # 中文 Windows 上 C 板就这样
+    real3 = with_ports([chinese, DT7])
+    try:
+        check("中文描述让车只剩 30 分时，A 路也不许退而选遥控器（DT7 判负）",
+              sp.resolve_port("Auto") == "COM3", sp.resolve_port("Auto"))
+        check("此时 DT7 仍要选到遥控器", sp.resolve_rc_port("Auto") == "COM9",
+              sp.resolve_rc_port("Auto"))
+    finally:
+        sp.list_serial_ports = real3
+    real4 = with_ports([DT7])
+    try:
+        check("只插了遥控器时 A 路必须 Stub，而不是抓一个能用的口凑数",
+              sp.resolve_port("Auto") == sp.STUB_PORT, sp.resolve_port("Auto"))
+    finally:
+        sp.list_serial_ports = real4
+
     print("\n--- 4) 显式端口一律原样 ---")
     check("DT7 显式 COM7 不重解析", sp.resolve_rc_port("COM7") == "COM7")
     check("CC 显式 COM8 不重解析", sp.resolve_cc_port("COM8") == "COM8")

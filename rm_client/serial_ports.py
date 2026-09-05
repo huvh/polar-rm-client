@@ -23,6 +23,9 @@ PREFERRED_USB_IDS: tuple[tuple[int, int], ...] = (
 PREFERRED_HINTS = ("stm32", "virtual com", "usb serial", "polar", "c-board", "c板")
 # 明显不是机器人的内置设备
 REJECT_HINTS = ("intel", "contee", "bluetooth", "raspblu", "irda", "standard uart")
+# 官方驱动 INF：USB\\VID_FFF0&PID_0008 -> usbser.sys，描述 "DJI USB Virtual COM"。
+# 一条事实两处用：A 路要避开它，DT7 出口只认它。
+DJI_RC_USB_IDS: tuple[tuple[int, int], ...] = ((0xFFF0, 0x0008),)
 
 AUTO_PORT = "Auto"
 STUB_PORT = "Stub"
@@ -76,6 +79,11 @@ def score_port(entry: dict[str, object]) -> int:
     description = str(entry.get("description", "")).lower()
     if any(hint in description for hint in REJECT_HINTS):
         return -100
+    # 遥控器那条 DJI VCOM **绝不能**被 A 路的 Auto 选中：中文 Windows 上 C 板的描述是
+    # 「USB 串行设备」（不含英文关键字，只有 30 分），而 DT7 有 60 分 —— 不判负就会
+    # 把 0x5A 帧写进遥控器、并且让闭环自检读不到 km_key，整场调试被带偏。
+    if (vid and pid and (vid, pid) in DJI_RC_USB_IDS) or "dji" in description:
+        return -200
     if not (vid and pid):
         return -50  # 非 USB（主板传统串口、蓝牙 RFCOMM 等）：不参与 Auto
     if (vid, pid) in PREFERRED_USB_IDS:
@@ -136,7 +144,6 @@ def describe_ports(limit: int = 6) -> list[str]:
 # 出处：大疆官方驱动 INF 把 `USB\VID_FFF0&PID_0008`（接口 MI_00）绑到微软
 # `usbser.sys`，描述串是 "DJI USB Virtual COM"（逐字见 tools/dt7_link/dt7_vcp_probe.py 顶部，
 # 载荷是从 DJI_WIN_Driver_Installer.exe 里解出来的 INF 正文）。
-DJI_RC_USB_IDS: tuple[tuple[int, int], ...] = ((0xFFF0, 0x0008),)
 DJI_RC_HINTS = ("dji",)
 
 
