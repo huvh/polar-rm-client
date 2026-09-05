@@ -94,6 +94,17 @@ OMNI_REL = "application/chassis/chassis_omni.c"
 # 本脚本允许触碰的唯一文件（其余一律视为"别人的改动"）。
 # 桥接头文件是**新增**的未跟踪文件，也必须列进来，
 # 否则 check_clean 会把它当成外来改动而拒绝开工。
+# 英雄（麦轮）参数文件：本脚本用 --mouse-sens 改它，所以它属于本脚本拥有的文件
+HERO_PARAM_REL = "application/robot_param_mecannum_hero.h"
+# MOUSE_SENSITIVITY 的取值要有出处，不能抄一个"看起来像"的数：
+#   云台参考角增量 = mouse / MOUSE_SENSITIVITY（弧度），gimbal_yaw_pitch_direct.c:331-332
+#   ⇒ 取 1000 就是「1 像素 = 1 毫弧度 ≈ 0.057°」：手速 1000 px/s 对应云台 1 rad/s。
+# 出厂的 100000.0f 是"暂时先屏蔽一下鼠标功能"（同文件上面的自注），
+# 而 robot_param_mecannum.h:87 那个 0.5f 是**死配置**：那份配置配套的是 ET08A/AT9S/HT8A
+# 这类没有键盘鼠标的遥控器，鼠标量在 remote_control.c:678-682 就被整帧清 0 了，
+# 0.5 从来没被真实鼠标值除过。拿它当"可用量级"会让云台一帧就到限位。
+DEFAULT_MOUSE_SENS = "1000"
+
 OWNED = {
     ROBOT_PARAM_REL, USB_REL, RC_REL,
     MECA_REL, OMNI_REL, HOST_BRIDGE_HEADER_REL, GIMBAL_REL,
@@ -102,6 +113,10 @@ OWNED = {
     # "别人的改动"而拒绝执行——症状是"第一次成功、第二次 NO-GO"。
     "application/referee/referee.c",
     "application/typedef/host_km_link.h",
+    # 同上：--mouse-sens 会改这个文件。不登记的话第二次跑 prepare 会被
+    # check_clean 当成"别人的改动"而 NO-GO —— 这个坑本文件注释里已经记过一次
+    # （referee.c），加 --mouse-sens 时又踩了一遍。凡脚本会写的文件都必须进 OWNED。
+    HERO_PARAM_REL,
 }
 
 
@@ -510,9 +525,10 @@ def verify_changes(repo: Path, step: Step, want_rc: str = 'dt7') -> bool:
          (lambda hero_param: (
              (m := re.search(r"#define\s+MOUSE_SENSITIVITY\s+\(\s*([0-9.]+)f?\s*\)",
                              hero_param)) is not None
-             and float(m.group(1)) < 1000.0)
-             or step.warn("MOUSE_SENSITIVITY 仍是屏蔽量级（鼠标不控云台）",
-                          "跑 --mouse-sens 0.5；见 FIELD_WIRELESS_RUNBOOK.md 第 15 节")
+             and 10.0 <= float(m.group(1)) <= 10000.0)
+             or step.warn("MOUSE_SENSITIVITY 不在可用量级",
+                          "1000 = 1px≈1mrad；100000 是屏蔽，<10 会一帧甩到限位。"
+                          "用 --mouse-sens 给值，实车再标定手感")
          )(read(repo, HERO_PARAM_REL) if (repo / HERO_PARAM_REL).exists() else "")),
         ("KM_KEY_ALLOWED_MASK 若被覆盖也必须落在注释外",
          ("KM_KEY_ALLOWED_MASK" not in param)
@@ -746,12 +762,6 @@ def gcc_differential_check(repo: Path, step: Step) -> None:
         git(repo, "worktree", "remove", "--force", str(base))
 
 
-HERO_PARAM_REL = "application/robot_param_mecannum_hero.h"
-# 与仓库另一份英雄以外配置 robot_param_mecannum.h:87 同值；
-# 出厂的 100000.0f 是"暂时屏蔽鼠标"的写法，不是标定结果。
-DEFAULT_MOUSE_SENS = "0.5"
-
-
 def main() -> int:
     ap = argparse.ArgumentParser(description="把固件工程准备成英雄板可驾驶状态")
     ap.add_argument("repo", help="StandardRobotpp 仓库路径")
@@ -773,8 +783,10 @@ def main() -> int:
                          "等于**把鼠标整条废掉**（云台增量 = mouse / 该值，"
                          "gimbal_yaw_pitch_direct.c:331-332；那两行上面的自注写着"
                          "\"暂时先屏蔽一下鼠标功能\"）。走 C 路要用鼠标控云台，所以这里"
-                         "默认给一个可用量级（与非英雄板那份 0.5f 一致）；"
-                         "想恢复出厂的屏蔽行为就 --mouse-sens 100000")
+                         "默认给 1000（= 1 像素 1 毫弧度，手速 1000px/s 对应 1rad/s）；"
+                         "想恢复出厂的屏蔽行为就 --mouse-sens 100000。"
+                         "注意仓库另一份配置里的 0.5f 是死配置（配套遥控器没有鼠标），"
+                         "不要照抄")
     args = ap.parse_args()
 
     repo = Path(args.repo).expanduser().resolve()

@@ -69,6 +69,12 @@ def main() -> int:
         check("文件在但宏写法变了也要报错（上游改了不能装看不见）",
               len(step.failures) == n_before + 1, str(step.failures[-1:]))
         shutil.rmtree(td, ignore_errors=True)
+    # 2b) 默认值本身要有物理含义，不能是抄来的"看起来像"的数
+    check("默认 MOUSE_SENSITIVITY 是有物理含义的量级（1px≈1mrad 那一档）",
+          phb.DEFAULT_MOUSE_SENS == "1000", str(phb.DEFAULT_MOUSE_SENS))
+    check("默认值不是死配置 0.5（那是配套没有鼠标的遥控器的）",
+          float(phb.DEFAULT_MOUSE_SENS) > 10.0, str(phb.DEFAULT_MOUSE_SENS))
+
     # 3) 最关键的一条：--km 与 --km-fire-keys 必须真的生效（历史上是静默空转）
     import re
     with tempfile.TemporaryDirectory() as td2:
@@ -101,6 +107,37 @@ def main() -> int:
               re.search(r"^\s*#define\s+KM_KEY_ALLOWED_MASK", stripped3, re.M) is None)
         check("重跑不会把块叠成两份",
               param.read_text(encoding="utf-8").count(phb.KM_BLOCK_HEAD) == 1)
+
+    # 4) 脚本会写的文件必须登记在 OWNED：否则第二次跑 prepare 会被 check_clean 拒
+    #    （referee.c 踩过一次，--mouse-sens 又踩一次，所以这条要变成断言）
+    check("英雄参数文件在 OWNED 名单里（第二次 prepare 不会被拒）",
+          phb.HERO_PARAM_REL in phb.OWNED)
+    check("robot_param.h 也在 OWNED 里", phb.ROBOT_PARAM_REL in phb.OWNED)
+    import subprocess
+    real_git = phb.git
+
+    def fake_git(owned_only):
+        def _f(repo, *args):
+            if args and args[0] == "status":
+                out = (" M " + phb.HERO_PARAM_REL + "\n"
+                       + (" M application/typedef/host_km_link.h\n" if owned_only else
+                          " M application/somebody_else.c\n"))
+                return subprocess.CompletedProcess(["git"], 0, out, "")
+            return real_git(repo, *args)
+        return _f
+
+    try:
+        with tempfile.TemporaryDirectory() as td3:
+            phb.git = fake_git(True)
+            st = phb.Step()
+            check("只有本脚本碰过的改动时 check_clean 放行（幂等重跑）",
+                  phb.check_clean(Path(td3), st) is True and not st.failures)
+            st2 = phb.Step()
+            phb.git = fake_git(False)
+            check("别人改的文件仍然要拒绝（不能为了幂等把闸门拆了）",
+                  phb.check_clean(Path(td3), st2) is False and bool(st2.failures))
+    finally:
+        phb.git = real_git
 
     print("\n" + ("有失败项" if FAILED else "prepare_hero_build 新选项全部通过"))
     return 1 if FAILED else 0

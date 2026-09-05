@@ -107,6 +107,10 @@ DEFAULT_PROFILE = {
     "seq_increments": False,          # 厂商这条恒 0；改 True 需要现场证据
     "baudrate": 961200,               # 厂商对 RC 口的设置（SerialPortThread.cs:92-95）
     "max_hz": 30.0,
+    # 每帧鼠标增量的上限（像素）。客户端按 tick 累加位移：一旦界面卡到 5Hz 或桌面被拖窗，
+    # 一帧攒出几千像素是完全可能的，而云台增量 = mouse / SENSITIVITY，会一帧甩到限位。
+    # 截断是安全侧，越界值同时记在 clipped_fields 里，不静默。
+    "mouse_limit": 200,
 }
 
 
@@ -174,6 +178,26 @@ def validate_layout(layout: str, fields: list) -> int:
     return size
 
 
+def _clamp_mouse(values: dict, prof: dict) -> tuple[dict, list]:
+    """把三轴鼠标增量截进 ±mouse_limit（0 = 不限制），返回 (新值, 被截字段)。"""
+    try:
+        limit = abs(int(prof.get("mouse_limit", 200)))
+    except (TypeError, ValueError):
+        return values, []
+    if limit <= 0:
+        return values, []
+    out = dict(values)
+    clipped = []
+    for key in ("mouse_x", "mouse_y", "mouse_z"):
+        if key not in out:
+            continue
+        v = int(out[key])
+        if v > limit or v < -limit:
+            out[key] = max(-limit, min(limit, v))
+            clipped.append(key)
+    return out, clipped
+
+
 def load_profile(path: str | None = None) -> dict:
     """读 profile。**配置有问题不再静默退回默认**：错误带在 ``_profile_error`` 里，
     让上层能显示到人眼看得见的地方（现场最怕"开着、没反应、没原因"）。"""
@@ -239,6 +263,12 @@ def load_profile(path: str | None = None) -> dict:
     hz = raw.get("max_hz")
     if isinstance(hz, (int, float)) and not isinstance(hz, bool) and 1 <= float(hz) <= 200:
         prof["max_hz"] = float(hz)
+    limit = raw.get("mouse_limit")
+    if limit is not None:
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 0 <= limit <= 32767:
+            prof["_profile_error"] = f"mouse_limit 要取 0..32767：{limit!r}"
+        else:
+            prof["mouse_limit"] = limit
     return prof
 
 
@@ -438,6 +468,7 @@ class Dt7KeyMouseLink:
                   "left": left, "right": right, "keyboard_value": pressed_bits}
         if mid is not None and "mid" in fields:
             values["mid"] = bool(mid)
+        values, mouse_clipped = _clamp_mouse(values, prof)
         try:
             frame = self.encode(values)
         except (struct.error, Dt7ConfigError) as exc:
@@ -449,8 +480,9 @@ class Dt7KeyMouseLink:
         notes = [] if bool(prof.get("cmd_confirmed")) else ["实验命令号，别当已定案"]
         if getattr(self, "mid_dropped", False):
             notes.append("中键未表达（载荷无 mid 位）")
-        if getattr(self, "clipped_fields", None):
-            notes.append("越界截断：" + "/".join(self.clipped_fields))
+        clipped = list(getattr(self, "clipped_fields", None) or []) + mouse_clipped
+        if clipped:
+            notes.append("越界截断：" + "/".join(sorted(set(clipped))))
         self.last_note = "；".join(notes)
         if not self.mock_output:
             try:

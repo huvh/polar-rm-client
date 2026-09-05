@@ -513,6 +513,58 @@ def test_range_clamping() -> None:
           dl.clamp_field("left", "B", 1) == (1, False))
 
 
+def test_mouse_limit() -> None:
+    print("\n--- 12) 每帧鼠标增量上限（防一帧甩到云台限位）---")
+    base = dl.load_profile()
+    check("仓库 profile 带了 mouse_limit 且是有限值",
+          isinstance(base.get("mouse_limit"), int) and 0 < base["mouse_limit"] <= 2000,
+          str(base.get("mouse_limit")))
+    lk = dl.Dt7KeyMouseLink(port="COM9", profile=prof_of())
+    lk._gate = lambda: ""
+    ok, _ = lk.send(mouse_dx=9000, mouse_y=-9000, pressed_bits=0x11)
+    dec = dl.decode_dt7_frame(lk.last_frame)
+    x, y = struct.unpack_from("<hh", dec["payload"], 0)
+    check("界面掉帧攒出来的巨大位移被截到 ±mouse_limit",
+          ok and (x, y) == (200, -200), f"{x} {y}")
+    check("截断要写在 note 里，不静默", "截断" in lk.last_note, lk.last_note)
+    unlimited = prof_of(mouse_limit=0)
+    lk2 = dl.Dt7KeyMouseLink(port="COM9", profile=unlimited)
+    lk2._gate = lambda: ""
+    lk2.send(mouse_dx=30000)
+    check("mouse_limit=0 表示不额外限制（仍受 int16 截断保护）",
+          struct.unpack_from("<h", dl.decode_dt7_frame(lk2.last_frame)["payload"], 0)[0] == 30000,
+          lk2.last_note)
+    lk3 = dl.Dt7KeyMouseLink(port="COM9", profile=prof_of(mouse_limit=32767))
+    lk3._gate = lambda: ""
+    lk3.send(mouse_dx=-40000)
+    # 32767 本身就是上限，截到 -32767（不是 -32768：int16 的不对称不该被测试猜错）
+    check("上限设成 int16 边界时按该边界截断",
+          struct.unpack_from("<h", dl.decode_dt7_frame(lk3.last_frame)["payload"], 0)[0] == -32767,
+          struct.unpack_from("<h", dl.decode_dt7_frame(lk3.last_frame)["payload"], 0))
+    tmp = ROOT / "configs" / "_t_limit.json"
+    try:
+        tmp.write_text(json.dumps({"mouse_limit": "很多"}), encoding="utf-8")
+        check("mouse_limit 写错类型要报错（不能静默当成不限制）",
+              "mouse_limit" in dl.load_profile(str(tmp))["_profile_error"])
+        tmp.write_text(json.dumps({"mouse_limit": -5}), encoding="utf-8")
+        check("负上限也要报错", "mouse_limit" in dl.load_profile(str(tmp))["_profile_error"])
+    finally:
+        tmp.unlink(missing_ok=True)
+    bad = prof_of(mouse_limit=0)
+    bad["_profile_error"] = ""
+    lk4 = dl.Dt7KeyMouseLink(port="COM9", profile=bad)
+    lk4._gate = lambda: ""
+    bad2 = prof_of()
+    bad2["mouse_limit"] = "乱"
+    lk5 = dl.Dt7KeyMouseLink(port="COM9", profile=bad2)
+    lk5._gate = lambda: ""
+    lk5.send(mouse_dx=1234)
+    check("运行期拿到垃圾 mouse_limit 时按不限制走，但值仍受 int16 保护",
+          struct.unpack_from("<h", dl.decode_dt7_frame(lk5.last_frame)["payload"], 0)[0] == 1234)
+
+
+def main() -> int:
+    test_dt7_frame()
 VENDOR_DUMP = Path(r"D:\rmbuild\dump12\dump.cs")
 
 
@@ -576,6 +628,7 @@ def main() -> int:
     test_crc_vs_firmware()
     test_probe_and_runtime_agree()
     test_range_clamping()
+    test_mouse_limit()
     test_vendor_type_layout_anchor()
     print("\n" + ("有失败项" if FAILED else "DT7 直连出口（帧型/CRC/载荷/闸门/互斥/松手）全部通过"))
     if SKIPPED:

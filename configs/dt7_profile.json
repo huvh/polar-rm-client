@@ -24,5 +24,7 @@
   "seq_increments": false,
   "baudrate": 961200,
   "max_hz": 30.0,
-  "_cmd_name": "Proto_Prefix.CONTROL_PC_ROBOT = 8192 = 0x2000（dump.cs:136032-136035）"
+  "_cmd_name": "Proto_Prefix.CONTROL_PC_ROBOT = 8192 = 0x2000（dump.cs:136032-136035）",
+  "mouse_limit": 200,
+  "_mouse_limit": "每帧鼠标增量上限（像素），0=不限。云台增量=mouse/MOUSE_SENSITIVITY，界面掉帧时一帧能攒几千像素，不截就会一帧甩到限位。"
 }
