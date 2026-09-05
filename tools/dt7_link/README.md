@@ -1298,3 +1298,127 @@ manager 三道闸与急停顺序 / **默认关**。
   非急停 / 模块启用 / `Allow Drive` 三道闸。
 - 开着时水印显示 `DT7*`，星号是故意的：**提醒"这条的命令号还没现场确认"**，
   没确认之前不要上正式比赛。
+
+
+---
+
+## 22. DT7 口那帧**到底是什么**：命令号、CRC 族、字节布局全部落定（反汇编现场）
+
+### 22.1 结论先说
+
+**C 路（我们自己的客户端直连 DT7 发键鼠）方向是对的，帧型也定了。**
+大疆选手端往 DT7 那个虚拟串口写的**不是** `0xA5` 帧，而是另一族 **`0x5A` 头、22 字节**的帧：
+
+| 偏移 | 字节 | 含义 | 出处（GameAssembly.dll，函数 `SerialPortThread.OnSendInputStatus` RVA 0x27B2A0–0x27BAE0） |
+|---|---|---|---|
+| 0 | `5A` | hdr_flag | `0x18027B486  c6456f5a  mov byte ptr [rbp+0x6f],0x5a`（**全库唯一**的 `mov byte [mem+disp8],0x5a` 构造点） |
+| 1 | `10` | length = 前缀4 + 载荷12（**含** cmd 那 2 字节，**不含**尾 CRC16） | `0x18027B48A  lea ecx,[rax+rbx]`（两个 `Marshal.SizeOf` 之和）→ `0x18027B491 mov [rbp+0x70],cl` |
+| 2 | `01` | protocol_version | `0x18027B48D  c6457101` |
+| 3 | xx | crc8，只覆盖 out[0..2] | `0x18027B4D8 call CRCCheck::GetCRC8(hdr,0,len-1)` → `0x18027B4F5 mov [rcx+rdi+0x20],al` |
+| 4-5 | `00 00` | sequence_number u16，**不递增**（恒 0） | 同一个立即数 `0x20000000` 的低半（`m_curSeq` 只在 `CCSPortThread` 有，RC 侧没有 seq 字段） |
+| 6-7 | `00 20` | cmd u16 线值 = **0x2000** | `0x18027B522  c7456f00000020  mov dword ptr [rbp+0x6f],0x20000000` |
+| 8-19 | … | 载荷 12 字节 | `0x18027B57D/582` 拷 8+4 字节；`Array.Copy(input -> out, dstIndex=8, len=12)` |
+| 20-21 | xx xx | crc16 覆盖 out[0..19]，小端 | `0x18027B5D8 GetCRC16(out,0,len-2)` → `mov [out+20],al / shr ax,8 / mov [out+21],al` |
+
+期望帧长这样（我们的实现实测输出，也是测试里的金向量）：
+
+```
+5A 10 01 36 00 00 00 20 D3 FF 78 00 07 00 01 00 11 00 00 00 CB 50
+键位0x11 / 鼠标(-45,120,7) / 左键=1
+```
+
+**载荷结构 = `Input_Device_Status_RC`（12 字节，`<hhhBBHH`）**：
+`mouse_x i16@0, mouse_y i16@2, mouse_z i16@4, LB u8@6, RB u8@7, keyboard_value u16@8, reserved u16@A`。
+**没有中键**——厂商自己的日志字面量也只有 `x,y,z,LB,RB,KeyValue`。
+
+**CRC 用的是第三族 `CRCCheck`：`CRC8_INIT=0x77 / CRC16_INIT=0x1862`**
+（`decomp/CRCCheck.cs:5-6` = 119/6242；`.cctor` 现场 `0x1802FAB75 mov byte ptr [rcx],0x77`、
+`0x1802FAB86 mov word ptr [rcx+2],0x1862`）。裁判/图传那族是 0xFF/0xFFFF，**别互相冒充**。
+
+### 22.2 这一节把前面三处结论作废（别照抄旧段落）
+
+1. **`CMD_ID_Keyboard=17` 借错了族**：17 属 2025 图传那族（`T_V1_HEADER`/sof `0x55`，发帧函数
+   `decomp/Video2025SerialPortThread.cs:217-256`；现场 `0x180295C76 c7471c11000000 mov [rdi+0x1c],0x11`），
+   与 A5/5A 都不是一套寻址。**第 20/21 节里"先借 17 试号"的说法作废。**
+2. **`dump.cs:131430-131437` 那族 `static int CMD_ID_*` 不是 DT7 命令号**：所在类是
+   `dump.cs:131235 public static class ProtoDef`（同类有 `MAX_PROTOID=1000`、`typeArr`、`GetType/DefType`），
+   是**协议注册表 protoid**。所以"值藏在 il2cpp `fieldDefaultValues`、离线可定案"这个前提本身就不成立 ⇒
+   **第 20.2 节承诺的纯离线定案路线否证**（实际定案靠的是反汇编发送现场，见 22.1）。
+   旁证：`ProtoDef..cctor` 里是 `lea ecx,[r8+imm] → call DefType → mov [slot],eax`，立即数就在代码段，
+   根本不需要 fieldDefaultValues。
+3. **载荷不是 `Input_Device_Status`（带 mid 那个）**：那是**图传**事件用的类
+   （`dump.cs:146916-146931`）。RC/DT7 用的是 `Input_Device_Status_RC`（`dump.cs:136075-136085`，12 字节无 mid）。
+   旁证还有 2025 图传那份 `Input_Device_Status_RC151`（**有 mid**，`dump.cs:136088-136099`）——三族各有各的载荷。
+4. **波特率**：选手端对 RC 口设的是 **961200**（`decomp/SerialPortThread.cs:92-95`），
+   115200 只是 CustomController 那个口的（同文件 `:100-101`）。旧 profile 写 115200 是错的。
+5. **第 21 节末尾说"开着时水印显示 `DT7*`"**：现在水印是 `DT7:mock` / `DT7:real`，
+   有原因时后面直接跟 `(!原因)`，键鼠出口打架时显示 `KM冲突(!…)`。
+
+### 22.3 车端为什么是零改动（这次的独立取证）
+
+- 《2026 竞赛规程》表 2-2 原文：**「DT7遥控器 —— 键鼠指令、遥控器杆量信息」**
+  （`rm2026_spec.txt:380`）；`:401`「仅 DT7 遥控器可以接入选手端」——**只写"能连选手端"，没写"只能连选手端"**。
+- 《遥控器手册》第 6 页链路图：`键盘鼠标 → PC主机 —USB→ DT7发射机 →（虚拟控制链路）→ DR16接收机 —DBUS→ 战车`，
+  手册里**没有任何"要拨开关/进某种模式"的步骤**；DT7 的 USB 在 Windows 上就是普通 VCP
+  （官方 INF：`USB\VID_FFF0&PID_0008` → 微软 `usbser.sys`），**任何程序都能打开写字节**。
+- 接收机那 18 字节 DBUS 帧里 `bytes6-15` 就是 mouse/keyboard，我们固件一直在解：
+  `application/other/remote_control.c:611-634`（`__RC_TYPE == RC_DT7`），键位还进了三本账合并（`:629-630`）。
+  ⇒ **C 路不改固件一行就能把键鼠灌进 `rc_ctrl`。**
+- **合规**：规程全文 `USB`/`数据线` 出现 0 次；S20 只管"无线射频部分"的改装，S21 允许遥控器；
+  2.2.1 那条"键鼠来源只能有一个"写在**图传**路名下，**不适用于 DT7 DBUS**。
+  我们照规程精神在客户端里做了互斥（见 22.4）。
+
+**唯一的车端卡点**（Hume 审计出来的）：`robot_param_mecannum_hero.h:91` 的
+`MOUSE_SENSITIVITY (100000.0f)` —— 云台参考角增量 = `mouse / SENSITIVITY`
+（`gimbal_yaw_pitch_direct.c:331-332`），除以十万等于**把鼠标屏蔽了**（那两行上面的自注就写着"暂时先屏蔽一下鼠标功能"）。
+所以 C 路的**键位**（W/S/A/D/SHIFT/Q/E/左右键）现在就能用，**鼠标控云台**要先把这个宏改成可用量级
+（非英雄板那份是 `0.5f`）。`prepare_hero_build.py` 已加 `--mouse-sens` 用来改它。
+另外：`s[0]`、`s[1]` 必须都在**中档**（底盘 FOLLOW / 云台 IMU / 键鼠射击档），键鼠才有意义；
+这两个拨杆 PC **改不了**（来自 DBUS byte5 的物理通道），只能驾驶员手拨。
+
+### 22.4 代码落地（本轮改了什么）
+
+- `rm_client/backend/dt7_link.py` **重写**：三族帧型可切（`dji_rc_v1` 默认 / `a5_tail` / `a5_no_tail`）、
+  三套 CRC 初值可切（`rc_check`/`student`/`video`）、载荷改为**字段名驱动**（`payload_fields` + 布局一致性自检）、
+  **串口句柄长持**（旧版每帧 `with serial.Serial` 开关一次，30Hz 下必被 DTR/RTS 抖动与端口独占拖死）、
+  限流不吞时隙、seq 语义可切（厂商恒 0）、`_profile_error` 一路带到界面。
+- `configs/dt7_profile.json`：按 22.1 定案（`cmd_wire=0x2000`、`frame_variant=dji_rc_v1`、`crc_variant=rc_check`、
+  `baudrate=961200`、12 字节载荷）。
+- **真发闸**：`RobotLink` 新增设置项 `DT7 Real TX`（默认关）。不勾 = 只产帧不碰硬件；
+  顺手修了一个**会让闸变成摆设**的坑：`manager.py` 里 `settings` 是按**固定名单**建的，
+  新设置项不登记进去就永远读不到（第一次就是这样，靠测试才抓住）。
+- **键鼠来源互斥**（`control.py`）：`0x0311 无线键鼠` / `直连 DT7` / `0x0306 自定义控制器`
+  至多开一条，同开就**谁都不发**并把冲突显示到水印。理由不只是规程：DT7 直连与 0x0306 在车上
+  灌的是**同一个** `HOST_RC_DRIVER_KEYS` 字段。
+- **每条降级路径都补松手帧**（`manager.py`）：旧代码只在急停时补；现在关开关、撤 `Allow Drive`、
+  模块停用也都补（DT7 那侧没有"过期自动清零"，粘键会一直控着车）。
+- **中键语义**：载荷没有 mid 位 ⇒ 丢中键但**照发驾驶键**，并在 `last_note` 里写明；
+  不会因为按了中键就把 WASD 一起拒了（那是更危险的失败模式）。
+- `tools/dt7_link/dt7_vcp_probe.py`：新增首选帧型 `vendor5a`（自带一份同构实现，测试 `--- 9)` 把它和运行期实现钉在一起）、
+  默认波特率改 961200。
+- `tools/firmware/prepare_hero_build.py`：修掉一个**静默空转**——原来插入的
+  `/* POLAR-HERO-BUILD: 键鼠链路档位（图传键鼠链路）>` 少了 `*/`，
+  于是从下一行的 `/*` 一路吞到 `#define __CONTROL_LINK_KM` 和 `#define KM_KEY_ALLOWED_MASK` 两行：
+  **`--km vt` 与 `--km-fire-keys` 都是空转**（值恰好被下面的 `#ifndef` 兜底成 `CL_KM_RC`，开火键位则根本没打开）。
+  现在注释逐条自己闭合，并且 `verify_changes` 加了 `strip_c_comments()`——**剥掉注释之后**再断言宏真的存在，
+  这样"躺在注释里的 #define"再也骗不过体检。
+- `tools/dt7_link/test_dt7_link.py`：重写成 90+ 项，含金向量、两族互不认、拒发路径、句柄长持、
+  限流不吞时隙、seq 回绕、profile 容错、闸门/互斥/松手、探针同构。
+
+### 22.5 还剩什么不知道（照实说）
+
+1. **`0x2000` 的语义归属**：字节值是反汇编逐条读出来的（确凿），但把它读成"命令号"还是
+   "sender/receiver 模块号"属**结构吻合的候选**——全库没有第二个 0x5A 帧的构造者或解析者可对照。
+   这不影响发送：我们发的就是厂商发的那 22 个字节。
+2. **CRC 表本体**：三族都是 `InitializeArray` 从 RVA 静态数据加载的 256+256 表。
+   student 族已用队内固件 `components/support/CRC8_CRC16.c` 交叉验收（⇒ 标准反射表，poly 0x07/0x1021）；
+   `CRCCheck`(0x77/0x1862) 与它代码形状完全一致，**推断共用同一套表只差初值**，但**表本体尚未逐字节取出**。
+   若推断错，症状是"DT7 完全不认帧"（帧被 CRC 拒掉），现场一次就能看出来；
+   profile 里 `crc_variant` 可切，探针也能换号重试。
+3. **DT7 会不会把我们发的键鼠当成"遥控器自己的键鼠"往上打**：手册只画链路不给 PC 侧协议，
+   调参软件包里 0 条上行帧资料 ⇒ 只能上车验。
+4. **DT7 的"键鼠过期/保持"策略**（PC 停止灌帧后 DT7 是发零帧还是重复最后状态）：未知，
+   所以我们**主动**每降级路径补松手帧（22.4）。
+5. **DT7 插着 USB 灌键鼠的同时，摇杆还能不能正常带车**：未知，上车第一件事就是量这个。
+6. 手册与 V1.4 协议文档对 DBUS 周期一个写 14ms 一个写 7ms：**矛盾未解**，但对我们无影响
+   （C 板只是被动收字节；C 路只影响"多久该重发一帧"，`max_hz=30` 两边都盖得住）。

@@ -63,6 +63,9 @@ DJI_USB_IDS = (
 )
 
 CANDIDATE_DOC = {
+    "vendor5a": "**首选**：大疆选手端实际写进 DT7 口的那 22 字节"
+                "（5A|len|ver|crc8|seq|cmd|12B 载荷|crc16）。"
+                "从 12.x 选手端反汇编现场复原，详见 rm_client/backend/dt7_link.py 顶部。",
     "dbus18": "整帧 18 字节，与 DR16 出口完全同构。DT7 若只做透传，最可能是这个。",
     "km12": "只给键鼠那 12 字节（DBUS bytes6-17）。DT7 若把摇杆留给摇杆、只收键鼠，是这个。",
     "km6": "鼠标三轴 + 键位共 8 字节，不含左右键。精简实现常见。",
@@ -70,8 +73,43 @@ CANDIDATE_DOC = {
 }
 
 
+def _crc8_77(data: bytes, init: int = 0x77) -> int:
+    crc = init
+    for b in data:
+        crc ^= b
+        for _ in range(8):
+            crc = (crc >> 1) ^ 0x8C if crc & 1 else crc >> 1
+    return crc & 0xFF
+
+
+def _crc16_1862(data: bytes, init: int = 0x1862) -> int:
+    crc = init
+    for b in data:
+        crc ^= b
+        for _ in range(8):
+            crc = (crc >> 1) ^ 0x8408 if crc & 1 else crc >> 1
+    return crc & 0xFFFF
+
+
+def vendor_frame(keys: int, mouse, left: int = 0, right: int = 0,
+                 cmd: int = 0x2000, seq: int = 0) -> bytes:
+    """厂商那 22 字节：5A | len(=4+12) | ver(1) | crc8(0x77) | seq u16 | cmd u16 | 12B | crc16(0x1862)。
+
+    与运行期实现 ``rm_client/backend/dt7_link.build_frame`` 同构；测试
+    （tools/dt7_link/test_dt7_link.py）会把两边钉在一起，防跑偏。
+    """
+    body = struct.pack("<HH", seq & 0xFFFF, cmd & 0xFFFF) + struct.pack(
+        "<hhhBBHH", int(mouse[0]), int(mouse[1]), int(mouse[2]),
+        1 if left else 0, 1 if right else 0, keys & 0xFFFF, 0)
+    head = bytes([0x5A, len(body) & 0xFF, 1])
+    frame = head + bytes([_crc8_77(head)]) + body
+    return frame + struct.pack("<H", _crc16_1862(frame))
+
+
 def build_candidate(name: str, keys: int, mouse) -> bytes:
     """按候选帧型打包。帧型来自官方手册第 6-7 页的 DBUS 位序（已用固件真解码器验过）。"""
+    if name == "vendor5a":
+        return vendor_frame(keys, mouse)
     full = df.encode_frame(mouse=mouse, keys=keys)
     if name == "dbus18":
         return full
@@ -293,7 +331,7 @@ def main(argv=None) -> int:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--list", action="store_true", help="列出 COM 口并标出 DJI VCP")
     ap.add_argument("--candidates", action="store_true", help="打印四种候选帧（不发送）")
-    ap.add_argument("--candidate", choices=sorted(CANDIDATE_DOC), default="dbus18")
+    ap.add_argument("--candidate", choices=sorted(CANDIDATE_DOC), default="vendor5a")
     ap.add_argument("--keys", default="W", help="按键名，逗号分隔；NONE=松键")
     # 用逗号串而不是 nargs=3：argparse 会把 `-5` 当成选项名，
     # 而鼠标位移**经常是负的**，nargs=3 等于把最有用的用例堵死了。
@@ -307,9 +345,10 @@ def main(argv=None) -> int:
     ap.add_argument("--parity", choices=("even", "none"), default="even",
                     help="官方 DBUS 是偶校验(8E1)；CDC 桥一般不吃这个，但旁听/回写时"
                          "若真接的是 UART 桥就必须对，所以默认按手册给 even")
-    ap.add_argument("--baud", type=int, default=115200,
-                    help="CDC 通常不吃波特率，但 usbser.sys 要求先设一个；"
-                         "若这口是 UART 桥，官方 DBUS 值是 100000")
+    ap.add_argument("--baud", type=int, default=961200,
+                    help="选手端对 RC 口设的就是 961200（decomp/SerialPortThread.cs:92-95）。"
+                         "CDC 通常不吃波特率，但 usbser.sys 要求先设一个；"
+                         "若这口其实是 UART 桥，官方 DBUS 值是 100000")
     ap.add_argument("--frames", type=int, default=1, help="发几帧（14ms 节奏）")
     ap.add_argument("--send-hex", help="直接发这串十六进制（回放抓包样本）")
     ap.add_argument("--confirm-move-car", action="store_true",

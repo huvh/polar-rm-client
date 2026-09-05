@@ -381,6 +381,7 @@ class BackendManager:
                 "Custom Controller Egress",
                 "Direct DT7 Egress",
                 "DT7 Port",
+                "DT7 Real TX",
                 "CC Port",
                 "CC Hz",
                 "CC Mock Writes",
@@ -571,22 +572,43 @@ class BackendManager:
         # 且"键鼠来源"只能有一个（2026 协议 2.2.1）。
         # ---- 直连 DT7 出口：同样三道闸，但不要求选手端在跑、也不要求 0x5A 在线 ----
         dt7_setting = settings.get("Direct DT7 Egress")
-        if control is not None and dt7_setting is not None and dt7_setting.value:
+        dt7_wanted = bool(dt7_setting is not None and dt7_setting.value)
+        if control is not None and dt7_wanted:
             prof = dt7_link.load_profile()
             port = str(getattr(settings.get("DT7 Port"), "value", "Auto") or "Auto")
+            # "DT7 Real TX" 是显式硬件闸：不勾就只产帧不碰串口。原来这里连
+            # mock_output 都不传，等于 C 路在客户端里根本发不出一个字节。
+            real_tx = bool(getattr(settings.get("DT7 Real TX"), "value", False))
             link = getattr(self, "_dt7_link", None)
-            if link is None or link.port != port or link.profile != prof:
-                link = dt7_link.Dt7KeyMouseLink(port=port, profile=prof)
+            if (link is None or link.port != port or link.profile != prof
+                    or link.mock_output == real_tx):
+                if link is not None:
+                    try:
+                        link.close()
+                    except Exception:
+                        pass
+                link = dt7_link.Dt7KeyMouseLink(port=port, profile=prof,
+                                                mock_output=not real_tx)
                 self._dt7_link = link
             control.dt7_link = link
-            control.dt7_enabled = bool(not estopped and allow_drive
-                                       and module is not None and module.enabled)
-            if estopped and getattr(self, "_dt7_was_enabled", False):
-                # DT7 那侧没有"过期自动清零"的兜底，急停必须主动补一帧全零
+            dt7_live = bool(not estopped and allow_drive
+                            and module is not None and module.enabled)
+            # 松手帧要覆盖**每一条**降级路径：急停、撤 Allow Drive、模块停用。
+            # 旧代码只在急停时补，另外两条路是"直接停发" —— 而 DT7 那侧没有
+            # 过期自动清零，键会粘在车上继续控。
+            if getattr(self, "_dt7_was_enabled", False) and not dt7_live:
                 control.release_direct_dt7()
-            if not control.dt7_enabled:
+            control.dt7_enabled = dt7_live
+            if not dt7_live:
                 control.dt7_last_error = "直连 DT7 出口未生效（急停/未授权/模块未启用）"
+            elif str(prof.get("_profile_error") or ""):
+                control.dt7_last_error = "DT7 配置不可用：" + str(prof["_profile_error"])
+            else:
+                control.dt7_last_error = ""
         elif control is not None:
+            if getattr(self, "_dt7_was_enabled", False):
+                # 开关被关掉：同样要松手，别让最后一次按键留在车上
+                control.release_direct_dt7()
             control.dt7_enabled = False
         self._dt7_was_enabled = bool(control is not None and control.dt7_enabled)
         cc_setting = settings.get("Custom Controller Egress")

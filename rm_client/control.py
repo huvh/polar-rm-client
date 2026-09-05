@@ -147,6 +147,7 @@ class KeyboardControlBridge:
         self.dt7_link = None
         self.dt7_enabled = False
         self.dt7_sent = 0
+        self.km_source_conflict = ""
         self.dt7_last_error = ""
         self.key_state: dict[str, bool] = {key: False for key in CONTROL_KEYS}
         # 协议槽 -> 已绑物理键名；可由前端改绑，默认与旧行为一致。
@@ -456,14 +457,28 @@ class KeyboardControlBridge:
         self.last_send_at = now
         # 无线键鼠出口放在最前面，且不受下面的 mock 短路影响：
         # 它是独立的一条上行路（0x0311），开关就是它的开关。
-        self._send_radio_km(command)
+        # 键鼠来源互斥：《2026 通信协议》2.2.1 明确"同时仅能通过一个来源生成发送给
+        # 机器人的键鼠指令"。更硬的理由在车上：直连 DT7 与 0x0306 经选手端，最终灌进的是
+        # **同一个** DT7 键鼠字段（固件 application/other/remote_control.c:623-630 的
+        # HOST_RC_DRIVER_KEYS），两条同开 = 两个写者抢一条口，键位互相覆盖、帧还会撕裂。
+        km_live = [name for name, on in (
+            ("0x0311 无线键鼠", bool(getattr(self, "radio_km_enabled", False))),
+            ("直连 DT7", bool(self.dt7_enabled)),
+            ("0x0306 自定义控制器", bool(getattr(self, "cc_enabled", False))),
+        ) if on]
+        self.km_source_conflict = ("键鼠来源只能有一个，当前同时开着："
+                                   + "、".join(km_live)) if len(km_live) > 1 else ""
+        if not self.km_source_conflict:
+            self._send_radio_km(command)
         # 自定义控制器出口同理：它是"经官方选手端进 DT7"的独立一条路，
         # 既不受 KMC 成败影响，也不受 0x5A / 图传链路状态影响。
-        self._send_custom_controller(command)
+        if not self.km_source_conflict:
+            self._send_custom_controller(command)
         # 直连 DT7：键位图可以复用 command.keyboard_value（位序已被厂商 KeyBoard 枚举
         # 核实，见 README 19.1）；但鼠标这里是**增量**，与 0x0306 那条的绝对像素
         # 语义不同，两条路的鼠标字段不许互相借用。
-        self._send_direct_dt7(command)
+        if not self.km_source_conflict:
+            self._send_direct_dt7(command)
         if self.mock_output:
             self._dirty = False
             self._consume_relative_motion()

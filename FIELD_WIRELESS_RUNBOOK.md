@@ -196,3 +196,33 @@ cmd2 + 载荷 + crc16；命令号位域 Cmd_Set 低/Cmd_Id 高）。开 `Direct 
 - 不要给车加任何无线发射/接收装置（S62 明确禁止自定义客户端这么做）。
 - 不要为了"看着能用"把 `KM_KEY_ALLOWED_MASK` 打开 Q/E——开火权限走
   `prepare_hero_build.py --km-fire-keys`，那是显式决定。
+
+
+---
+
+## 14. C 路（直连 DT7）上车顺序 —— 本轮定案后的最短流程
+
+前提：**不用开大疆客户端**。这条路的帧已经从大疆 12.x 选手端二进制里逐条反汇编复原
+（见 `tools/dt7_link/README.md` 第 22 节），车端固件**零改动**。
+
+1. **接线**：DT7 用 USB 线插笔记本；车上 DR16 正常连 C 板 UART3（原样，不动）。
+   先 `python tools/dt7_link/dt7_vcp_probe.py --list` 找那个 `VID_FFF0&PID_0008` 的
+   "DJI USB Virtual COM"口（驱动装过就有；它是普通 COM 口，不需要任何大疆程序）。
+2. **架空驱动轮**（第一次必做；这一步不是仪式，是因为命令号的语义归属还没上机验证过）。
+3. 客户端：开 `RobotLink` 模块 → 勾 `Allow Drive` → 勾 `Direct DT7 Egress` →
+   选对 `DT7 Port` → 最后才勾 **`DT7 Real TX`**（不勾只产帧，不碰硬件）。
+4. 车上 `s[0]`、`s[1]` **都拨中档**（底盘 FOLLOW / 云台 IMU / 键鼠射击档），云台已校准。
+   这两个拨杆 PC 改不了，必须驾驶员手拨。
+5. 看水印：`DT7:real` = 真在发；带 `(!原因)` = 没发并写明为什么；`KM冲突(!…)` = 键鼠出口开重了，
+   关到只剩一条。想同时看车上的键位在谁手里，就再插 C 板 USB 读 `km_key`（A 路回读，不影响 C 路）。
+6. 按 `W` → 车应当前进；`SHIFT` → 小陀螺开/关；`Q/E` → 摩擦轮；左键 → 单发/连发。
+   **鼠标不转云台是正常的**：英雄配置里 `MOUSE_SENSITIVITY=100000.0f` 等于屏蔽鼠标
+   （`robot_param_mecannum_hero.h:91`），要用鼠标就
+   `python tools/firmware/prepare_hero_build.py <固件> --rc dt7 --km rc --mouse-sens 0.5`
+   重新出一份固件，方向与手感仍需实车标定。
+7. 若第 6 步**完全没反应**：按顺序换帧型试（探针一条命令一种，车动不动当场就有答案）
+   `--candidate vendor5a` → `dbus18` → `km12` → `keys2`，并可 `--send-hex` 回放抓包样本。
+   这时才需要 USBPcap 抓一次 DT7 口（工具 `dt7_frame_diff.py`）。
+
+合规提示：DT7 必须在场且能正常开车（检录 S17 要现场展示发射/底盘/云台），
+C 路并不免除这条；规程没有禁止第三方程序写 DT7 的 VCOM，但也**没有明文允许**——赛前报备一次更稳。

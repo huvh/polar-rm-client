@@ -266,12 +266,15 @@ def switch_km_link(repo: Path, step: Step, want_key: str,
     path = repo / ROBOT_PARAM_REL
     text = path.read_text(encoding="utf-8")
 
+    # 注意：这里的注释必须**逐条自己闭合**。上一版把第一行写成了 "...链路）>"
+    # （少了 "*/"），于是从下一行的 /* 开始一路吞到 "#define __CONTROL_LINK_KM"
+    # 和 "#define KM_KEY_ALLOWED_MASK" 两行 —— 结果 "--km vt" 与 "--km-fire-keys"
+    # 都是**静默空转**：值靠下面那个 #ifndef 兜底恰好还是 CL_KM_RC，开火键位则根本没打开。
     block = (
-        KM_BLOCK_HEAD + "（图传键鼠链路）>\n"
-        + f"/* 固件自己定义的五档键鼠来源在 robot_typedef.h:80-84，但**零消费者**；\n"
-        + f" * tools/firmware/km_link/apply_km_link.py 把那半截接完了。\n"
-        + f" * {KM_OURS_MARK} {want_key}；上游默认值 CL_KM_RC（只认遥控器）。\n"
-        + f" * 这一行必须在下面那个 #ifndef 块之前，靠 ifndef 守卫覆盖默认值。\n"
+        KM_BLOCK_HEAD + "（图传键鼠链路） */\n"
+        + "/* 固件自己定义的五档键鼠来源在 robot_typedef.h:80-84。\n"
+        + " * tools/firmware/km_link/apply_km_link.py 是那半截的消费者接线。\n"
+        + f" * {KM_OURS_MARK} {want_key}；上游默认值 CL_KM_RC（只认遥控器）。 */\n"
         + f"#define __CONTROL_LINK_KM {want}\n"
         + ("/* 开火相关键位（Q/E 摩擦轮）经图传注入的许可，由 --km-fire-keys 给 */\n"
            "#define KM_KEY_ALLOWED_MASK (KM_KEY_MASK_DRIVE | KM_KEY_MASK_FIRE)\n"
@@ -297,6 +300,68 @@ def switch_km_link(repo: Path, step: Step, want_key: str,
     path.write_text(text, encoding="utf-8")
     step.ok(f"__CONTROL_LINK_KM = {want}"
             + ("（含 Q/E 开火键位）" if fire_keys else "（驾驶键位 only）"))
+
+
+def strip_c_comments(text: str) -> str:
+    """剥掉 C 的 // 与 /* */ 注释（含字符串字面量保护），用来证明某个 #define
+    是**真的生效**而不是躺在注释里。verify_changes 光 grep 字符串会被注释骗到。"""
+    out = []
+    i, n = 0, len(text)
+    while i < n:
+        ch = text[i]
+        if ch == '"' or ch == "'":
+            quote = ch
+            out.append(ch)
+            i += 1
+            while i < n:
+                out.append(text[i])
+                if text[i] == "\\" and i + 1 < n:
+                    out.append(text[i + 1])
+                    i += 2
+                    continue
+                if text[i] == quote:
+                    i += 1
+                    break
+                i += 1
+            continue
+        if ch == "/" and i + 1 < n and text[i + 1] == "/":
+            j = text.find("\n", i)
+            i = n if j < 0 else j
+            continue
+        if ch == "/" and i + 1 < n and text[i + 1] == "*":
+            j = text.find("*/", i + 2)
+            i = n if j < 0 else j + 2
+            continue
+        out.append(ch)
+        i += 1
+    return "".join(out)
+
+
+def switch_mouse_sensitivity(repo: Path, step: Step, value: str) -> None:
+    """改英雄参数里的 MOUSE_SENSITIVITY。
+
+    出厂值 100000.0f（application/robot_param_mecannum_hero.h:91）等于**把鼠标屏蔽掉**：
+    云台参考角增量 = mouse / SENSITIVITY（gimbal_yaw_pitch_direct.c:331-332），
+    除以十万后增量为 0；那两处代码上方的自注也写着"暂时先屏蔽一下鼠标功能"。
+    走 C 路（键鼠进 DT7）要用鼠标控云台，就得给一个可用量级（非英雄板那份是 0.5f），
+    方向与手感仍须实车标定。
+    """
+    print(f"\n[3d] MOUSE_SENSITIVITY -> {value}")
+    path = repo / HERO_PARAM_REL
+    if not path.exists():
+        step.bad("找不到英雄参数文件", str(path))
+        return
+    text = path.read_text(encoding="utf-8")
+    pat = re.compile(r"(#define\s+MOUSE_SENSITIVITY\s+)\(\s*[0-9.]+f?\s*\)")
+    m = pat.search(text)
+    if not m:
+        step.bad("英雄参数里找不到 MOUSE_SENSITIVITY 定义", "上游改了写法，请同步本脚本")
+        return
+    old = m.group(0)
+    literal = value if value.endswith("f") else value + "f"
+    new = m.group(1) + "(" + literal + ")"
+    path.write_text(text.replace(old, new, 1), encoding="utf-8", newline="\n")
+    step.ok(f"MOUSE_SENSITIVITY：{old}  ->  {new}")
 
 
 def ensure_gyro_bias(path: Path, step: Step) -> None:
@@ -433,6 +498,15 @@ def verify_changes(repo: Path, step: Step, want_rc: str = 'dt7') -> bool:
         ("ET08A 置零宏不再抹 key.v（竞态修复）",
          re.search(r"#define\s+SPECIAL_CHANNEL_SET_SERO\(\)[^#]*?key\.v\s*=\s*0", rc, re.S) is None),
         ("同一宏仍保留鼠标置零", "rc_ctrl->mouse.press_r = 0;" in rc),
+        # 下面两条是防"注释吞 define"。历史上 --km vt / --km-fire-keys 就是这样
+        # 静默空转的：值在文件里、grep 得到，但在注释里，编译器根本没看见。
+        ("__CONTROL_LINK_KM 的 #define 在注释外（真的生效）",
+         re.search(r"^\s*#define\s+__CONTROL_LINK_KM\s+CL_KM_\w+",
+                   strip_c_comments(param), re.M) is not None),
+        ("KM_KEY_ALLOWED_MASK 若被覆盖也必须落在注释外",
+         ("KM_KEY_ALLOWED_MASK" not in param)
+         or re.search(r"^\s*#define\s+KM_KEY_ALLOWED_MASK",
+                      strip_c_comments(param), re.M) is not None),
     ]
 
     # ---- 自转桥接（上行 0x04 / 下行 0x1F）----
@@ -661,6 +735,9 @@ def gcc_differential_check(repo: Path, step: Step) -> None:
         git(repo, "worktree", "remove", "--force", str(base))
 
 
+HERO_PARAM_REL = "application/robot_param_mecannum_hero.h"
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="把固件工程准备成英雄板可驾驶状态")
     ap.add_argument("repo", help="StandardRobotpp 仓库路径")
@@ -677,6 +754,11 @@ def main() -> int:
     ap.add_argument("--km-fire-keys", action="store_true",
                     help="允许图传注入 Q/E（摩擦轮/开火相关）。默认不给，"
                          "开火权限不偷偷外送")
+    ap.add_argument("--mouse-sens", default=None,
+                    help="改英雄参数的 MOUSE_SENSITIVITY。出厂 100000.0f = 鼠标被屏蔽"
+                         "（robot_param_mecannum_hero.h:91 + gimbal_yaw_pitch_direct.c"
+                         ":328-330 的自注）；要用 C 路的鼠标控云台就填可用量级"
+                         "（非英雄板那份是 0.5f），方向仍需实车标定")
     args = ap.parse_args()
 
     repo = Path(args.repo).expanduser().resolve()
@@ -694,6 +776,8 @@ def main() -> int:
         switch_to_hero(repo, step)
         switch_rc_type(repo, step, args.rc)
         switch_km_link(repo, step, args.km, args.km_fire_keys)
+        if args.mouse_sens:
+            switch_mouse_sensitivity(repo, step, args.mouse_sens)
         if apply_patch(repo, step):
             verify_changes(repo, step, args.rc)
             compile_check(repo, step)

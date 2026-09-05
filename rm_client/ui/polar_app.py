@@ -3520,8 +3520,21 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         # 自定义控制器出口也要同屏可见：它是"选手端在跑才有意义"的一条路，
         # 关掉选手端后界面上必须立刻看出来，否则会被当成链路故障。
         cc = "CC on" if getattr(self.control, "cc_enabled", False) else "CC off"
-        # 直连 DT7 用的命令号仍是**候选值**，所以必须在脸上，不允许"悄悄开着"。
-        dt7 = "DT7*" if getattr(self.control, "dt7_enabled", False) else ""
+        # 直连 DT7：开着但一帧都没发出去，是现场最难查的一种"看起来没问题"。
+        # 所以状态与原因必须同屏可见（命令号没定案时是故意不发，不是坏了）。
+        dt7_link_obj = getattr(self.control, "dt7_link", None)
+        if getattr(self.control, "dt7_enabled", False):
+            dt7 = "DT7:" + ("real" if (dt7_link_obj is not None and not
+                                           bool(getattr(dt7_link_obj, "mock_output", True)))
+                            else "mock")
+            why = str(getattr(self.control, "dt7_last_error", "") or "")
+            if why:
+                dt7 += "(!" + why[:40] + ")"
+        else:
+            dt7 = ""
+        conflict = str(getattr(self.control, "km_source_conflict", "") or "")
+        if conflict:
+            dt7 = "KM冲突(!)" + conflict[:40]
         status_line = (f"{status} | {scene} | {match} | {mqtt} | {serial} | {km} | {cc}"
                        + ((" | " + dt7) if dt7 else ""))
         static_key = (

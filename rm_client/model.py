@@ -1648,6 +1648,8 @@ def build_default_registry() -> ModuleRegistry:
                 # 因此默认关，且没现场确认前不许上正式比赛。
                 bool_setting("Direct DT7 Egress", False),
                 mode_setting("DT7 Port", "Auto", polar_port_choices()),
+                # 真发闸：勾了才往 DT7 那个 DJI VCOM 写字节。不勾 = 只产帧不碰硬件。
+                bool_setting("DT7 Real TX", False),
                 bool_setting("Custom Controller Egress", False),
                 mode_setting("CC Port", "Auto", polar_port_choices()),
                 number_setting("CC Hz", 30, 5, 30, 1),

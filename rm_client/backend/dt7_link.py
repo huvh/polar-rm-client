@@ -1,35 +1,56 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-r"""DT7 直连出口：把键鼠直接写进遥控器那条 DJI USB Virtual COM（`VID_FFF0&PID_0008`）。
+r"""DT7 直连出口（C 路）：我们自己把键鼠写进遥控器那条 DJI USB Virtual COM。
 
-与 `cc_link.py`（0x0306 走官方选手端）的区别
---------------------------------------------
-`cc_link` 是"借大疆客户端的手"；本模块是我们**自己当那个发键鼠的人**，
-不依赖官方选手端在跑 —— 这才是自定义客户端该有的形态。
+链路（官方明文，不是推测）
+--------------------------
+《2026 竞赛规程》表 2-2「DT7遥控器 —— **键鼠指令**、遥控器杆量信息」（rm2026_spec.txt:380），
+《遥控器手册》第 6 页链路图：键盘鼠标 → PC主机 —USB→ DT7发射机 —(虚拟控制链路)→ DR16接收机
+—DBUS→ 战车。DT7 的 USB 口在 Windows 上就是一个普通虚拟串口
+（官方 INF：``USB\VID_FFF0&PID_0008`` → 微软 ``usbser.sys``，见 tools/dt7_link/dt7_vcp_probe.py 顶部），
+所以任何程序都能打开它写字节。
+车端 **零改动**：接收机那 18 字节 DBUS 帧里的 mouse/key 字段，我们固件一直在解
+（``application/other/remote_control.c:611-634``，``__RC_TYPE == RC_DT7`` 分支）。
 
-已经核实 vs 仍是候选（这个区分很重要，别当全懂）
-------------------------------------------------
-**已核实（来自大疆 12.x 选手端二进制，工具链与地址见 README 第 20 节）**：
-  1. 帧编解码逻辑就是厂商 `CommunicationCompiler.Encoder_A5_WithTail`
-     （`D:\rmbuild\decomp\CommunicationCompiler.cs`）：
-     `sof=165(0xA5)`、`datalen = payload.Length - 2`（**不含 cmd 那 2 字节**）、
-     `seq` 自增、`crc8` 覆盖帧头前 4 字节、`crc16` 覆盖 帧头+cmd+data、
-     CRC 初值 `CRC8_INIT=0xFF / CRC16_INIT=0xFFFF`、表驱动；
-  2. `FrameHeader{sof:1, datalen:2, seq:1, crc8:1}`（Pack=1）；
-  3. 命令号是 **16 位两半字节**：`DJI_PRO_CMD_T` 位域
-     `Cmd_Set = bits0-7、Cmd_Id = bits8-15`（小端 ushort ⇒ `cmd = (Cmd_Id<<8)|Cmd_Set`）；
-  4. 键位位序 `KeyBoard` 枚举（W=1…SHIFT=16 CTRL=32 Q=64 E=128 …B=32768）
-     —— 与我们固件/`KEYBOARD_BITS` 一致；
-  5. 键鼠内容对象的字段顺序（12.x `dump.cs` 的 `Input_Device_Status`：
-     mouse_x/y/z int16、left、right、keyboard_value uint16、mid_button）。
+PC→DT7 那一帧长什么样（从大疆 12.x 选手端二进制里逐条反汇编复原）
+------------------------------------------------------------------
+唯一的 0x5A 头构造点在 ``SerialPortThread.OnSendInputStatus``
+（GameAssembly.dll ``0x18027B2A0``~``0x18027BAE0``，全库扫描只有这一处 ``mov byte [mem],0x5a``）：
 
-**仍是候选（必须现场确认，profile 里可改）**：
-  a. 键鼠那条命令的 `Cmd_Set` 值；`Cmd_Id` 我取 17，因为它在厂商的
-     `Video2025MsgID` 里就是 `CMD_ID_Keyboard = 17`，但那张表名字指的是**图传模块**，
-     DT7 口是否同一编号体系未经证实；
-  b. 载荷是否就是 `Input_Device_Status` 那几个字段（会不会还带 seq/version 前缀）。
-⇒ 所以本模块**默认关闭**、写串口要显式确认，并提供 `decode_dt7_frame()`：
-   现场抓一次包就能把候选值直接对出来，不用改代码。
+    偏移  字节  含义
+    0     0x5A  hdr_flag
+    1     0x10  length = 之后"前缀+载荷"的字节数（= 4 + 12；**含** cmd 那 2 字节，不含尾 CRC16）
+    2     0x01  protocol_version
+    3     xx    crc8，覆盖 out[0..2]
+    4-5   0000  sequence_number（厂商这条**不递增**，恒 0）
+    6-7   0020  cmd_id（小端 u16 线值 = 0x2000）
+    8-19  ...   载荷 12 字节 = ``Input_Device_Status_RC``
+    20-21 xx    crc16 覆盖 out[0..19]，小端
+
+    ⇒ 期望帧：``5A 10 01 <crc8> 00 00 00 20 <12B 载荷> <crc16 LE>``，总长 22。
+  CRC 用的是 ``CRCCheck`` 那族（``CRC8_INIT=0x77 / CRC16_INIT=0x1862``，
+  ``..cctor`` 里 ``0x1802FAB75`` / ``0x1802FAB86``），**不是**裁判系统那族 0xFF/0xFFFF。
+  载荷 12 字节 ``<hhhBBHH``：mouse_x/y/z int16、左键、右键、keyboard_value u16、reserved u16
+  —— **没有中键**（厂商日志字面量 ``Input_Device_RC Sent x,y,z,LB,RB,KeyValue`` 也只有这些）。
+
+  仍要留一句老实话：字节的**值**是反汇编逐条读出来的（确凿），而 ``0x2000`` 到底该读成
+  "命令号"还是"模块号"属**结构吻合的候选**（全库没有第二个 0x5A 帧可对照）。
+  这不影响发送：我们发的就是厂商发的那 22 个字节。
+
+与另两条链路的区别（别混）
+--------------------------
+- 图传/裁判那族是 ``0xA5`` 头 + ``datalen 不含 cmd`` + ``CRCCheck_StudentSerialPort``(0xFF/0xFFFF)，
+  键鼠在 2025 图传上的命令号是 ``CMD_ID_Keyboard=17``、在 ``VideoSerialPortThread`` 上又是 ``0x0304``
+  —— 那些**不是** DT7 的号，早期把这 17 借过来当默认值是错的。
+- ``cc_link.py``（0x0306）是"借大疆选手端的手"，必须有官方选手端在跑；本模块不依赖它。
+
+安全约定
+--------
+- 默认 ``mock_output=True``（只产帧不碰硬件）；真发要 manager 显式传 ``mock_output=False``
+  且界面勾 "DT7 Real TX"。第一次上车请**架空轮**。
+- 串口句柄长持：每帧 open/close 会被 DTR/RTS 抖动与端口独占拖死。
+- DT7 那侧没有"过期自动清零"的兜底 ⇒ 任何降级路径都必须补一帧全零（``release``）。
+- profile 自相矛盾（布局/字段/CRC 族对不上）一律**拒发并写明原因**，不静默改语义。
 """
 from __future__ import annotations
 
@@ -39,102 +60,260 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from ..protocol import crc16, crc8
-
 ROOT = Path(__file__).resolve().parents[2]
 PROFILE_FILE = ROOT / "configs" / "dt7_profile.json"
 
-SOF = 0xA5
-HEADER_SIZE = 5           # sof + datalen(2) + seq + crc8
+SOF_RC = 0x5A             # DT7 那条 VCOM 上的帧头（厂商 OnSendInputStatus 现场）
+SOF_A5 = 0xA5             # 图传/裁判那族（本模块只作对照用）
+RC_HEADER_SIZE = 4        # flag + length + version + crc8
+A5_HEADER_SIZE = 5        # sof + datalen(2) + seq + crc8
 CRC16_SIZE = 2
 CMD_SIZE = 2
-DEFAULT_KEYS = {"cmd_set": 0, "cmd_id_keyboard": 17,
-                "payload_layout": "<hhhBBHB", "baudrate": 115200, "max_hz": 30.0}
+
+# 载荷字段名 -> 允许的 struct 字符（宽度必须一致，否则配置就是写错了）
+FIELD_FMTS: dict[str, tuple[str, ...]] = {
+    "mouse_x": ("h",), "mouse_y": ("h",), "mouse_z": ("h",),
+    "left": ("B",), "right": ("B",), "mid": ("B",),
+    "keyboard_value": ("H", "h"), "reserved": ("B", "H"),
+    "version": ("B",), "sdr": ("B",), "seq": ("B",),
+}
+
+CRC_VARIANTS = {                          # 名字 -> (crc8 初值, crc16 初值)
+    "rc_check": (0x77, 0x1862),           # CRCCheck（DT7/RC 口）——本路的默认
+    "student": (0xFF, 0xFFFF),            # CRCCheck_StudentSerialPort（图传/裁判那族）
+    "video": (0x77, 0x3692),              # CRCCheck_VideoSerialPort（2025 图传）
+}
+FRAME_VARIANTS = ("dji_rc_v1", "a5_tail", "a5_no_tail")
+
+DEFAULT_PROFILE = {
+    "cmd_wire": 0x2000,               # 厂商现场读出的 16 位线值（out[6..7] 小端 = 00 20）
+    "cmd_set": 0,
+    "cmd_id_keyboard": None,
+    "cmd_confirmed": True,            # 字节层面确凿；归属仍是候选（见模块文档）
+    "allow_experimental_cmd": False,
+    "payload_layout": "<hhhBBHH",
+    "payload_fields": ["mouse_x", "mouse_y", "mouse_z", "left", "right",
+                       "keyboard_value", "reserved"],
+    "frame_variant": "dji_rc_v1",
+    "datalen_includes_cmd": True,
+    "crc_variant": "rc_check",
+    "protocol_version": 1,
+    "seq_increments": False,          # 厂商这条恒 0；改 True 需要现场证据
+    "baudrate": 961200,               # 厂商对 RC 口的设置（SerialPortThread.cs:92-95）
+    "max_hz": 30.0,
+}
+
+
+class Dt7ConfigError(RuntimeError):
+    """profile 自相矛盾 —— 宁可拒发也不静默改语义。"""
+
+
+def _crc8_init(data: bytes, init: int) -> int:
+    crc = init & 0xFF
+    for byte in data:
+        crc ^= byte
+        for _ in range(8):
+            crc = (crc >> 1) ^ 0x8C if crc & 1 else crc >> 1
+    return crc & 0xFF
+
+
+def _crc16_init(data: bytes, init: int) -> int:
+    crc = init & 0xFFFF
+    for byte in data:
+        crc ^= byte
+        for _ in range(8):
+            crc = (crc >> 1) ^ 0x8408 if crc & 1 else crc >> 1
+    return crc & 0xFFFF
+
+
+def validate_layout(layout: str, fields: list) -> int:
+    """校验 payload_layout 与 payload_fields 一一对应；返回字节数。不一致就抛。"""
+    if not isinstance(layout, str) or not layout.startswith("<"):
+        raise Dt7ConfigError(f"payload_layout 必须是小端 '<...'：{layout!r}")
+    if not isinstance(fields, (list, tuple)) or not fields:
+        raise Dt7ConfigError("payload_fields 必须是非空列表")
+    letters = [c for c in layout[1:] if not c.isdigit()]
+    if len(letters) != len(fields):
+        raise Dt7ConfigError(f"字段数不匹配：layout {len(letters)} 个 vs fields {len(fields)} 个")
+    for name, ch in zip(fields, letters):
+        allowed = FIELD_FMTS.get(str(name))
+        if allowed is None:
+            raise Dt7ConfigError(f"未知载荷字段 {name!r}（可用：{sorted(FIELD_FMTS)}）")
+        if ch not in allowed:
+            raise Dt7ConfigError(f"字段 {name!r} 要 {allowed}，layout 给的是 {ch!r}")
+    try:
+        size = struct.calcsize(layout)
+    except Exception as exc:                       # noqa: BLE001
+        raise Dt7ConfigError(f"payload_layout 无法 calcsize：{exc}") from exc
+    if not 0 < size <= 24:
+        raise Dt7ConfigError(f"载荷尺寸离谱：{size}")
+    return size
 
 
 def load_profile(path: str | None = None) -> dict:
-    """读 profile；缺失/坏/字段非法一律退回默认，**不许因为配置把链路打瘫**。"""
-    prof = dict(DEFAULT_KEYS)
+    """读 profile。**配置有问题不再静默退回默认**：错误带在 ``_profile_error`` 里，
+    让上层能显示到人眼看得见的地方（现场最怕"开着、没反应、没原因"）。"""
+    prof = dict(DEFAULT_PROFILE)
+    prof["payload_fields"] = list(DEFAULT_PROFILE["payload_fields"])
+    prof["_profile_error"] = ""
+    prof["_profile_path"] = str(path or PROFILE_FILE)
     fp = Path(path) if path else PROFILE_FILE
     try:
         raw = json.loads(fp.read_text(encoding="utf-8-sig"))
-    except OSError:
+    except FileNotFoundError:
         return prof
-    except Exception:
+    except Exception as exc:                       # noqa: BLE001
+        prof["_profile_error"] = f"profile 读失败，按默认（不发）：{exc}"
+        prof["cmd_wire"] = None
+        prof["cmd_confirmed"] = False
         return prof
     if not isinstance(raw, dict):
+        prof["_profile_error"] = "profile 不是对象，按默认（不发）"
         return prof
-    for key in ("cmd_set", "cmd_id_keyboard"):
+    for key in ("cmd_wire", "cmd_set", "cmd_id_keyboard"):
         v = raw.get(key)
-        if isinstance(v, int) and 0 <= v <= 0xFF:
+        if v is None:
+            if key in raw:
+                prof[key] = None
+            continue
+        if isinstance(v, bool) or not isinstance(v, int):
+            prof["_profile_error"] = f"{key} 不是整数：{v!r}"
+            continue
+        hi = 0xFFFF if key == "cmd_wire" else 0xFF
+        if not 0 <= v <= hi:
+            prof["_profile_error"] = f"{key} 超 {'16' if hi == 0xFFFF else '8'} 位：{v!r}"
+            continue
+        prof[key] = v
+    for key in ("cmd_confirmed", "allow_experimental_cmd", "datalen_includes_cmd",
+                "seq_increments"):
+        if isinstance(raw.get(key), bool):
+            prof[key] = raw[key]
+    for key in ("frame_variant", "crc_variant"):
+        v = raw.get(key)
+        if isinstance(v, str) and v:
             prof[key] = v
-    layout = raw.get("payload_layout")
+    if str(prof["crc_variant"]) not in CRC_VARIANTS:
+        prof["_profile_error"] = f"crc_variant 未知：{prof['crc_variant']!r}"
+    if str(prof["frame_variant"]) not in FRAME_VARIANTS:
+        prof["_profile_error"] = f"frame_variant 未知：{prof['frame_variant']!r}"
+    ver = raw.get("protocol_version")
+    if isinstance(ver, int) and not isinstance(ver, bool) and 0 <= ver <= 255:
+        prof["protocol_version"] = ver
+    layout, fields = raw.get("payload_layout"), raw.get("payload_fields")
     if isinstance(layout, str):
-        try:
-            struct.calcsize(layout)          # 能算 size 才敢收
-            size = struct.calcsize(layout)
-            if 0 < size <= 24:
-                prof["payload_layout"] = layout
-        except Exception:
-            pass
+        prof["payload_layout"] = layout
+    if isinstance(fields, list) and all(isinstance(x, str) for x in fields):
+        prof["payload_fields"] = fields
+    try:
+        prof["_payload_size"] = validate_layout(prof["payload_layout"], prof["payload_fields"])
+    except Dt7ConfigError as exc:
+        prof["_profile_error"] = str(exc)
+        prof["_payload_size"] = -1
     baud = raw.get("baudrate")
-    if isinstance(baud, int) and 9600 <= baud <= 921600:
+    if isinstance(baud, int) and 9600 <= baud <= 2_000_000:
         prof["baudrate"] = baud
     hz = raw.get("max_hz")
-    if isinstance(hz, (int, float)) and 1 <= float(hz) <= 200:
+    if isinstance(hz, (int, float)) and not isinstance(hz, bool) and 1 <= float(hz) <= 200:
         prof["max_hz"] = float(hz)
     return prof
 
 
+def cmd_wire_of(prof: dict) -> int | None:
+    """命令号折成 16 位线值。``cmd_wire`` 优先（直接给线值，绕开位域方向争议）。"""
+    wire = prof.get("cmd_wire")
+    if isinstance(wire, int) and not isinstance(wire, bool):
+        return wire & 0xFFFF
+    cid, cset = prof.get("cmd_id_keyboard"), prof.get("cmd_set", 0)
+    if (isinstance(cid, int) and not isinstance(cid, bool)
+            and isinstance(cset, int) and 0 <= cid <= 0xFF and 0 <= cset <= 0xFF):
+        return (cset | (cid << 8)) & 0xFFFF
+    return None
+
+
 def pack_cmd(cmd_set: int, cmd_id: int) -> bytes:
-    """DJI_PRO_CMD_T：Cmd_Set 占低字节、Cmd_Id 占高字节（位域已核实）。"""
+    """A5 族的 DJI_PRO_CMD_T：Cmd_Set 占低字节、Cmd_Id 占高字节。"""
     if not (0 <= cmd_set <= 0xFF and 0 <= cmd_id <= 0xFF):
         raise ValueError(f"cmd_set/cmd_id 都要是 1 字节：{cmd_set!r} {cmd_id!r}")
     return struct.pack("<H", cmd_set | (cmd_id << 8))
 
 
-def build_frame(cmd_set: int, cmd_id: int, payload: bytes, seq: int) -> bytes:
-    """跟厂商 Encoder_A5_WithTail 同构的一帧。
-
-    `datalen` 只算 cmd 之后的载荷（厂商写法是 `payload.Length - 2`），
-    `crc8` 覆盖帧头前 4 字节，`crc16` 覆盖 帧头+cmd+载荷。
-    """
+def build_frame(cmd_wire: int, payload: bytes, seq: int, *,
+                frame_variant: str = "dji_rc_v1",
+                datalen_includes_cmd: bool = True,
+                crc_variant: str = "rc_check",
+                protocol_version: int = 1) -> bytes:
+    """按厂商那一族的现场字节编一帧。三种帧型都能出，现场定案不用改代码。"""
     payload = bytes(payload)
-    if len(payload) > 0xFFFF:
-        raise ValueError("载荷过长")
-    header = bytearray()
-    header.append(SOF)
-    header += struct.pack("<H", len(payload))
+    if crc_variant not in CRC_VARIANTS:
+        raise Dt7ConfigError(f"crc_variant 未知：{crc_variant!r}")
+    if frame_variant not in FRAME_VARIANTS:
+        raise Dt7ConfigError(f"frame_variant 未知：{frame_variant!r}")
+    crc8_init, crc16_init = CRC_VARIANTS[crc_variant]
+    if frame_variant == "dji_rc_v1":
+        # 厂商现场：hdr = 5A | length | version | crc8(hdr[0..2])
+        #             body = seq(u16) | cmd(u16) | payload
+        body = struct.pack("<HH", seq & 0xFFFF, cmd_wire & 0xFFFF) + payload
+        header = bytearray([SOF_RC, len(body) & 0xFF, protocol_version & 0xFF])
+        header.append(_crc8_init(bytes(header), crc8_init))
+        frame = bytes(header) + body
+        return frame + struct.pack("<H", _crc16_init(frame, crc16_init))
+    datalen = len(payload) + (CMD_SIZE if datalen_includes_cmd else 0)
+    header = bytearray([SOF_A5])
+    header += struct.pack("<H", datalen & 0xFFFF)
     header.append(seq & 0xFF)
-    header.append(crc8(bytes(header)))
-    frame = bytes(header) + pack_cmd(cmd_set, cmd_id) + payload
-    frame += struct.pack("<H", crc16(frame))
+    header.append(_crc8_init(bytes(header), crc8_init))
+    frame = bytes(header) + struct.pack("<H", cmd_wire & 0xFFFF) + payload
+    if frame_variant == "a5_tail":
+        frame += struct.pack("<H", _crc16_init(frame, crc16_init))
     return frame
 
 
-def decode_dt7_frame(frame: bytes) -> dict | None:
-    """解一帧（抓包核对用）；任何校验不过都返回 None，不猜。"""
-    if len(frame) < HEADER_SIZE + CMD_SIZE + CRC16_SIZE or frame[0] != SOF:
+def decode_dt7_frame(frame: bytes, *, crc_variant: str = "rc_check",
+                     datalen_includes_cmd: bool = True) -> dict | None:
+    """解一帧（抓包核对用）：按帧头自动分族；任何校验不过都返回 None，不猜。"""
+    if crc_variant not in CRC_VARIANTS:
+        return None
+    crc8_init, crc16_init = CRC_VARIANTS[crc_variant]
+    if len(frame) < 4:
+        return None
+    if frame[0] == SOF_RC:
+        length = frame[1]
+        total = RC_HEADER_SIZE + length + CRC16_SIZE
+        if len(frame) != total:
+            return None
+        if _crc8_init(frame[:3], crc8_init) != frame[3]:
+            return None
+        if _crc16_init(frame[:total - CRC16_SIZE], crc16_init) != struct.unpack_from(
+                "<H", frame, total - 2)[0]:
+            return None
+        (seq, cmd) = struct.unpack_from("<HH", frame, RC_HEADER_SIZE)
+        return {"variant": "dji_rc_v1", "seq": seq, "cmd_wire": cmd,
+                "cmd_set": cmd & 0xFF, "cmd_id": cmd >> 8,
+                "protocol_version": frame[2],
+                "payload": frame[RC_HEADER_SIZE + 2 * CMD_SIZE: total - CRC16_SIZE]}
+    if frame[0] != SOF_A5:
         return None
     (datalen,) = struct.unpack_from("<H", frame, 1)
-    if crc8(frame[:4]) != frame[4]:
+    if _crc8_init(frame[:4], crc8_init) != frame[4]:
         return None
-    total = HEADER_SIZE + CMD_SIZE + datalen + CRC16_SIZE
+    body = datalen - (CMD_SIZE if datalen_includes_cmd else 0)
+    if body < 0:
+        return None
+    total = A5_HEADER_SIZE + CMD_SIZE + body + CRC16_SIZE
     if len(frame) != total:
         return None
-    (cmd,) = struct.unpack_from("<H", frame, HEADER_SIZE)
-    if crc16(frame[:total - CRC16_SIZE]) != struct.unpack_from("<H", frame, total - 2)[0]:
+    (cmd,) = struct.unpack_from("<H", frame, A5_HEADER_SIZE)
+    if _crc16_init(frame[:total - CRC16_SIZE], crc16_init) != struct.unpack_from(
+            "<H", frame, total - 2)[0]:
         return None
-    return {"seq": frame[3], "cmd_set": cmd & 0xFF, "cmd_id": cmd >> 8,
-            "payload": frame[HEADER_SIZE + CMD_SIZE: HEADER_SIZE + CMD_SIZE + datalen]}
+    return {"variant": "a5_tail", "seq": frame[3], "cmd_wire": cmd,
+            "cmd_set": cmd & 0xFF, "cmd_id": cmd >> 8,
+            "payload": frame[A5_HEADER_SIZE + CMD_SIZE: A5_HEADER_SIZE + CMD_SIZE + body]}
 
 
 @dataclass
 class Dt7KeyMouseLink:
-    """把键鼠按 profile 编成帧、写进 DT7 那个虚拟串口。
-
-    默认 `mock_output=True`：只产帧不碰硬件。`write_bytes` 给测试注入假串口。
-    """
+    """把键鼠按 profile 编成帧、写进 DT7 那个 DJI VCOM（长持句柄）。"""
 
     port: str = "COM3"
     profile: dict = field(default_factory=load_profile)
@@ -143,56 +322,136 @@ class Dt7KeyMouseLink:
     seq: int = 0
     sent: int = 0
     dropped_rate: int = 0
+    refused: int = 0
     last_error: str = ""
+    last_note: str = ""
     last_frame: bytes = b""
     last_payload: bytes = b""
+    mid_dropped: bool = False
     _next_due: float = 0.0
+    _handle: object | None = None
     time_fn: object = time.perf_counter
 
-    def encode(self, *, mouse_x: int = 0, mouse_y: int = 0, mouse_z: int = 0,
-               left: bool = False, right: bool = False,
-               keyboard_value: int = 0, mid: bool = False) -> bytes:
+    def _gate(self) -> str:
+        """能不能发。任何一条不满足就返回原因，调用方据此拒发。"""
         prof = self.profile
-        payload = struct.pack(prof["payload_layout"],
-                              int(mouse_x), int(mouse_y), int(mouse_z),
-                              1 if left else 0, 1 if right else 0,
-                              int(keyboard_value) & 0xFFFF, 1 if mid else 0)
-        self.seq = (self.seq + 1) & 0xFF
+        err = str(prof.get("_profile_error") or "")
+        if err:
+            return f"profile 有问题：{err}"
+        try:
+            validate_layout(str(prof["payload_layout"]), list(prof["payload_fields"]))
+        except Dt7ConfigError as exc:
+            return str(exc)
+        if cmd_wire_of(prof) is None:
+            return "DT7 命令号未定案（profile 里 cmd_wire / cmd_id_keyboard 都是空），拒绝发包"
+        if not bool(prof.get("cmd_confirmed")):
+            if not bool(prof.get("allow_experimental_cmd")):
+                return ("命令号未确认（cmd_confirmed=false）：先定案再真发；"
+                        "工具试号请显式置 allow_experimental_cmd")
+        if str(prof.get("frame_variant")) not in FRAME_VARIANTS:
+            return f"frame_variant 未知：{prof.get('frame_variant')!r}"
+        if str(prof.get("crc_variant")) not in CRC_VARIANTS:
+            # 未知族若静默退回默认初值，CRC 就会一路算错而"看起来在发"
+            return f"crc_variant 未知：{prof.get('crc_variant')!r}"
+        return ""
+
+    def encode(self, values: dict) -> bytes:
+        """按 payload_fields 取值打包（字段名驱动，profile 换布局不用改代码）。"""
+        prof = self.profile
+        layout = str(prof["payload_layout"])
+        fields = list(prof["payload_fields"])
+        args = []
+        for name in fields:
+            if name == "reserved":
+                args.append(0)
+                continue
+            if name not in values:
+                raise Dt7ConfigError(f"载荷缺字段值：{name}")
+            v = values[name]
+            args.append(int(bool(v)) if isinstance(v, bool) else int(v))
+        payload = struct.pack(layout, *args)
+        frame = build_frame(int(cmd_wire_of(prof) or 0), payload, self.seq,
+                            frame_variant=str(prof.get("frame_variant", "dji_rc_v1")),
+                            datalen_includes_cmd=bool(prof.get("datalen_includes_cmd", True)),
+                            crc_variant=str(prof.get("crc_variant", "rc_check")),
+                            protocol_version=int(prof.get("protocol_version", 1)))
         self.last_payload = payload
-        return build_frame(int(prof["cmd_set"]), int(prof["cmd_id_keyboard"]),
-                           payload, self.seq)
+        if bool(prof.get("seq_increments")):
+            self.seq = (self.seq + 1) & 0xFFFF
+        return frame
 
     def send(self, *, pressed_bits: int = 0, mouse_dx: int = 0, mouse_y: int = 0,
              mouse_z: int = 0, left: bool = False, right: bool = False,
-             mid: bool = False, now: float | None = None) -> tuple[bool, str]:
+             mid: bool | None = None, now: float | None = None) -> tuple[bool, str]:
         now = float(self.time_fn()) if now is None else float(now)
-        interval = 1.0 / max(1.0, float(self.profile.get("max_hz", 30)))
+        gate = self._gate()
+        if gate:
+            self.refused += 1
+            self.last_error = gate
+            return False, gate
+        prof = self.profile
+        interval = 1.0 / max(1.0, float(prof.get("max_hz", 30)))
         if now + 1e-9 < self._next_due:
             self.dropped_rate += 1
-            self.last_error = f"超过 {self.profile.get('max_hz'):g}Hz 上限，本帧未发"
+            self.last_error = f"超过 {float(prof.get('max_hz', 30)):g}Hz 上限，本帧未发"
+            return False, self.last_error          # 被限流不消耗时隙（旧版白吃一帧）
+        fields = list(prof["payload_fields"])
+        self.mid_dropped = bool(mid and "mid" not in fields)
+        if self.mid_dropped:
+            # 这套载荷（Input_Device_Status_RC）根本没有中键位。丢掉中键是安全的
+            # （固件只有 press_l/press_r 两个消费者），但**不能因此把 WASD 一起拒发**，
+            # 所以这里只记账并在 last_note 里说清楚，不静默假装一切正常。
+            self.last_note = "载荷无 mid 位：本帧中键未表达"
+        values = {"mouse_x": mouse_dx, "mouse_y": mouse_y, "mouse_z": mouse_z,
+                  "left": left, "right": right, "keyboard_value": pressed_bits}
+        if mid is not None and "mid" in fields:
+            values["mid"] = bool(mid)
+        try:
+            frame = self.encode(values)
+        except (struct.error, Dt7ConfigError) as exc:
+            self.refused += 1
+            self.last_error = f"打包失败：{exc}"
             return False, self.last_error
         self._next_due = now + interval
-        frame = self.encode(mouse_x=mouse_dx, mouse_y=mouse_y, mouse_z=mouse_z,
-                            left=left, right=right, keyboard_value=pressed_bits, mid=mid)
         self.last_frame = frame
+        notes = [] if bool(prof.get("cmd_confirmed")) else ["实验命令号，别当已定案"]
+        if getattr(self, "mid_dropped", False):
+            notes.append("中键未表达（载荷无 mid 位）")
+        self.last_note = "；".join(notes)
         if not self.mock_output:
             try:
-                if self.write_bytes is not None:
-                    self.write_bytes(frame)
-                else:
-                    import serial
-                    with serial.Serial(self.port, int(self.profile.get("baudrate", 115200)),
-                                       timeout=0.2) as sp:
-                        sp.write(frame)
-            except Exception as exc:
-                self.last_error = str(exc)
-                return False, str(exc)
+                self._emit(frame)
+            except Exception as exc:               # noqa: BLE001
+                self.last_error = f"写 DT7 口失败：{exc}"
+                return False, self.last_error
         self.last_error = ""
         self.sent += 1
         return True, "mock" if self.mock_output else "ok"
 
+    def _emit(self, frame: bytes) -> None:
+        if self.write_bytes is not None:
+            self.write_bytes(frame)
+            return
+        handle = self._handle
+        if handle is None or getattr(handle, "port", None) != self.port:
+            import serial
+            handle = serial.Serial(self.port, int(self.profile.get("baudrate", 961200)),
+                                   timeout=0.2, write_timeout=1.0)
+            self._handle = handle
+        handle.write(frame)
+
     def release(self, now: float | None = None) -> tuple[bool, str]:
-        """全零键值一帧：把 DT7 里的键位松开（它没有"保持上一帧"的保护给我们兜底）。"""
-        now = float(self.time_fn()) if now is None else float(now)
+        """全零一帧：DT7 没有"过期自动清零"的兜底，松手必须我们主动发。"""
+        now = float(self.time_fn()) if now is None else now
         self._next_due = 0.0
-        return self.send(pressed_bits=0, now=now)
+        return self.send(pressed_bits=0, mouse_dx=0, mouse_y=0, mouse_z=0,
+                         left=False, right=False, mid=None, now=now)
+
+    def close(self) -> None:
+        handle = self._handle
+        self._handle = None
+        try:
+            if handle is not None:
+                handle.close()
+        except Exception:                          # noqa: BLE001
+            pass
