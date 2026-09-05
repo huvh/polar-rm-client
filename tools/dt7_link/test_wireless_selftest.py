@@ -3,6 +3,7 @@
 # 闭环自检工具本身要有证据：它说 PASS 的时候，必须真的是"我们发的位出现在车上合并键位里"。
 from __future__ import annotations
 
+import json
 import struct
 import sys
 import time
@@ -94,6 +95,23 @@ def main() -> int:
     # 8) 换一个键位组合也要能判（不是把 W|SHIFT 写死了）
     res, _ = run(ws.SimRobot(), keys=("D",))
     check("换单键 D 也判 PASS", res["verdict"] == "PASS", res["verdict"])
+    # 9) 现场证据：跑完要留下可复核的 JSON（结论 + 当时用的 profile）
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        sim = ws.SimRobot()
+        res, _ = run(sim)
+        rp = Path(td) / "evidence" / "dt7.json"
+        rep = ws.build_report(res, dt7_port="COM9", board_port="COM3",
+                              profile=dl.load_profile())
+        got = ws.write_report(rp, rep)
+        loaded = json.loads(got.read_text(encoding="utf-8"))
+        check("证据文件真的落盘且能读回", loaded["verdict"] == "PASS"
+              and loaded["passed"] is True and loaded["dt7_port"] == "COM9", str(loaded)[:80])
+        check("证据里记录了当时用的帧型设置（换 profile 后结论才可追溯）",
+              loaded["profile"]["frame_variant"] == "dji_rc_v1"
+              and loaded["profile"]["cmd_wire"] == 0x2000, str(loaded["profile"]))
+        check("目录不存在时自动建（现场不会因为你少建一层文件夹就没证据）",
+              rp.exists(), str(rp))
     print("\n" + ("有失败项" if FAILED else "闭环自检工具判据全部通过"))
     return 1 if FAILED else 0
 

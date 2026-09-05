@@ -25,6 +25,7 @@ r"""一条命令回答：「自定义客户端经 DT7 到底控不控得动车�
 from __future__ import annotations
 
 import argparse
+import json
 import struct
 import sys
 import time
@@ -227,6 +228,36 @@ class SimRobot:
         return self
 
 
+def build_report(res: dict, *, dt7_port: str, board_port: str,
+                 profile: dict) -> dict:
+    """把一次自检压成可复核的证据：结论 + 当时用的那套 profile 关键项。"""
+    return {
+        "tool": "dt7_wireless_selftest",
+        "link": "C (PC -> DT7 VCOM -> DR16 -> UART3 -> rc_ctrl.key.v)",
+        "verdict": res.get("verdict", ""),
+        "note": res.get("note", ""),
+        "keys": res.get("keys", []),
+        "sent_bits": res.get("sent_bits"),
+        "baseline_km_key": res.get("baseline"),
+        "readback_samples": len(res.get("observed") or []),
+        "frames_sent": res.get("frames_sent"),
+        "dt7_port": dt7_port,
+        "board_port": board_port,
+        "profile": {k: profile.get(k) for k in
+                    ("frame_variant", "crc_variant", "cmd_wire", "cmd_confirmed",
+                     "payload_layout", "baudrate", "max_hz")},
+        "passed": res.get("verdict") == "PASS",
+    }
+
+
+def write_report(path: str | Path, report: dict) -> Path:
+    """写 JSON 证据；目录不存在就建。现场证据丢了等于没跑。"""
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(report, ensure_ascii=False, indent=2) + chr(10), encoding="utf-8")
+    return p
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="C 路（PC→DT7→DR16→C 板）闭环自检")
     ap.add_argument("--dt7-port", default=None, help="DT7 那个 DJI USB Virtual COM")
@@ -236,6 +267,8 @@ def main(argv=None) -> int:
     ap.add_argument("--dry-run", action="store_true", help="不碰硬件，用假车走一遍流程")
     ap.add_argument("--sim-reject", action="store_true", help="配合 --dry-run：假车不理帧")
     ap.add_argument("--sim-shift", type=int, default=0, help="配合 --dry-run：键位漂移几位")
+    ap.add_argument("--report", default=None, metavar="PATH",
+                    help="把这次结论写成 JSON 证据（默认不写）")
     args = ap.parse_args(argv)
     names = [k.strip().upper() for k in str(args.keys).split(",") if k.strip()]
     if args.dry_run:
@@ -245,6 +278,10 @@ def main(argv=None) -> int:
         print(f"[dry-run] 结论 {res['verdict']}；DT7 收到 {len(sim.frames_in)} 帧，"
               f"每帧 {len(sim.frames_in[0]) if sim.frames_in else 0} 字节；"
               f"假车最终键位 0b{sim.keys:016b}")
+        if args.report:      # 彩排也允许留证据：现场有时要先确认"记录链路"本身能用
+            written = write_report(args.report, build_report(
+                res, dt7_port="DRY-RUN", board_port="DRY-RUN", profile=dl.load_profile()))
+            print(f"[dry-run] 证据已写入：{written}")
         return 0
     if not args.dt7_port or not args.board_port:
         print("[FAIL] 要同时给 --dt7-port 与 --board-port（先 dt7_vcp_probe.py --list 找口）",
@@ -252,6 +289,12 @@ def main(argv=None) -> int:
         return 2
     res = run_selftest(dt7_port=args.dt7_port, board_port=args.board_port,
                        keys=names, seconds=max(1.0, args.seconds))
+    if args.report:
+        prof = dl.load_profile()
+        written = write_report(args.report, build_report(res, dt7_port=args.dt7_port,
+                                                         board_port=args.board_port,
+                                                         profile=prof))
+        print(f"证据已写入：{written}")
     print(f"注入键位 {res['keys']} = 0b{res['sent_bits']:016b}，实际发出 {res['frames_sent']} 帧")
     print(f"基线 km_key={res['baseline']}，回读样本 {len(res['observed'])} 个")
     print(f"结论：**{res['verdict']}** —— {VERDICT_HELP.get(res['verdict'], '')}")

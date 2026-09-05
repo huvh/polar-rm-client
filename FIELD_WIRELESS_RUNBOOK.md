@@ -250,6 +250,12 @@ python tools/dt7_link/dt7_wireless_selftest.py --dt7-port COM9 --board-port COM3
 | `NO-READBACK` | 读不到 C 板 Debug 上行 ⇒ **判定不成立**，不能当成"没通" | 先查 `--board-port` 是不是那个 CDC 串口、`__USB_SEND_DEBUG` 是否为 1 |
 | `BLOCKED` | profile 未定案/自相矛盾，**一个字节都没写** | 按提示改 `configs/dt7_profile.json` |
 
+跑的时候带上 `--report`，结论会连当时用的帧型设置一起落成 JSON（换 profile 之后还能追溯）：
+
+```
+python tools/dt7_link/dt7_wireless_selftest.py --dt7-port COM9 --board-port COM3 --report field_evidence/dt7-selftest.json
+```
+
 不碰硬件就能先看工具本身有没有问题：
 
 ```
