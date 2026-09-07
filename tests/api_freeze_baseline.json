@@ -4333,6 +4333,11 @@
       "sig": "PolarRMWindow.repaint",
       "type": "builtin_function_or_method"
     },
+    "rescan_serial_ports": {
+      "kind": "bound-method",
+      "sig": "ConfigActionsMixin.rescan_serial_ports",
+      "type": "method"
+    },
     "reset_startup_page_animation": {
       "kind": "bound-method",
       "sig": "PolarRMWindow.reset_startup_page_animation",

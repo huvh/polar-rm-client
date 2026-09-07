@@ -242,6 +242,8 @@ class ConfigActionsMixin:
             self.toast("E-STOP RELEASED — verify robot before control")
         elif action_name == "Run DT7 Link Selftest":
             self.run_dt7_link_selftest()
+        elif action_name == "Rescan Serial Ports":
+            self.rescan_serial_ports()
         elif action_name == "Run Wireless KM Selftest":
             self.run_radio_km_selftest()
         elif action_name == "Save Current":
@@ -703,6 +705,25 @@ class ConfigActionsMixin:
     DT7_SELFTEST_PRESS_MS = 900
     DT7_SELFTEST_HOLD_MS = 1600
     DT7_SELFTEST_TICK_MS = 40
+
+    def rescan_serial_ports(self) -> None:
+        """重扫三个串口下拉的候选口（不重启程序也能认出新插上的 DT7）。
+
+        真正的逻辑在 rm_client/serial_ports.refresh_port_options()：那边是纯逻辑、
+        可离线测；这里只负责提示与落盘。
+        """
+        from rm_client.serial_ports import refresh_port_options
+
+        module = self.registry.get("RobotLink")
+        diffs = refresh_port_options(self.registry)
+        # 重扫完必须当场告诉他"DT7 现在到底认没认出来"，不然他还得自己去猜：
+        # Auto 只认 DJI 那对 VID/PID，认不出是**故意拒发**而不是乱开别人的口。
+        setting = module.get_setting("DT7 Port") if module is not None else None
+        seen = [str(x) for x in (getattr(setting, "options", None) or [])
+                if str(x) and str(x) != "Auto"]
+        self.toast("串口已重扫：" + ("；".join(diffs) if diffs else "候选口没有变化")
+                   + "｜DT7 可选 " + (", ".join(seen) if seen else "（没认出 DJI 口）"))
+        self.auto_save_config()
 
     def run_dt7_link_selftest(self) -> None:
         """按钮式 C 路自检：用客户端自己那条 DT7 出口 + 车上 km_key 回读。

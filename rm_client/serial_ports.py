@@ -228,3 +228,45 @@ def port_identity(device: str) -> dict:
         if str(entry["device"]).upper() == str(device).upper():
             return entry
     return {}
+
+def refresh_port_options(registry) -> list[str]:
+    """重扫串口，把三个口下拉的 options 换成当前真值；返回人话形式的差异。
+
+    为什么要专门做这件事：串口清单是 `build_default_registry()` 那一次算出来的
+    （`model.py:1618` 的 Port、`:1653` 的 DT7 Port、`:1660` 的 CC Port），
+    之后再没人刷新。而现场十有八九是**先开客户端、后插 DT7** —— 那时下拉里
+    只有 Auto，Auto 又只认 DJI 那对 VID/PID，认不出就宁可拒发（这是故意的，
+    不许乱开别人的口），于是操作员只剩"重启程序"一条路。比赛场上这一下就是几十秒。
+
+    规矩：
+      * 当前值**永远保住**。用户手填的 COM9 就算现在不在了也要留在列表里，
+        否则一次重扫会把已配置的口吞掉，变成"越刷新越坏"。
+      * 只换 options，不碰 value：刷新不该改变行为。
+    """
+
+    diffs: list[str] = []
+    module = registry.get("RobotLink") if hasattr(registry, "get") else None
+    if module is None:
+        return diffs
+    wanted = {"Port": port_choices(), "DT7 Port": rc_port_choices(),
+              "CC Port": port_choices()}
+    for name, opts in wanted.items():
+        setting = module.get_setting(name)
+        if setting is None:
+            continue
+        choices = [str(x) for x in opts]
+        current = str(getattr(setting, "value", "") or "")
+        if current and current not in choices:
+            choices.append(current)
+        before = [str(x) for x in (setting.options or [])]
+        if before == choices:
+            continue
+        setting.options = choices
+        gone = [x for x in before if x not in choices and x != "Auto"]
+        added = [x for x in choices if x not in before]
+        piece = name + ": " + (", ".join(added) if added else "无新增")
+        if gone:
+            piece += "（消失 " + ", ".join(gone) + "）"
+        diffs.append(piece)
+    return diffs
+

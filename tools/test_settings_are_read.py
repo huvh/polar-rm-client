@@ -95,6 +95,11 @@ UI_ONLY = {
     # 每条都要写理由；空着最严格，但也最容易让人直接删掉这条测试
     "Run DT7 Link Selftest": "按钮：由 ui 的 action_name 分派，见 config_actions_mixin",
     "Run Wireless KM Selftest": "按钮：同上",
+    # 按钮类设置项天生不在 manager 的白名单里读，它们由 ui 按 action_name 分派；
+    # 登记进白名单必须同时指出分派点与实现点，否则白名单就是下一个漏网点。
+    "Rescan Serial Ports": "按钮：config_actions_mixin.handle_config_action 分派到 "
+                           "rescan_serial_ports，实现是 serial_ports.refresh_port_options，"
+                           "行为由 tools/test_port_picking.py 第 5 节测",
 }
 
 

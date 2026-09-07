@@ -128,6 +128,57 @@ def main() -> int:
           sp.resolve_rc_port("") == sp.STUB_PORT and sp.resolve_cc_port(None) == sp.STUB_PORT)
     check("profile 里默认值不是 Auto 时也不会被改口", dl.DEFAULT_PROFILE.get("baudrate") == 961200)
 
+    print("\n--- 5) DT7 比客户端晚插上：不许逼操作员重启程序 ---")
+    # options 是启动那一刻一次性算的（model.py 里三处 port_choices()），
+    # 之前没有任何刷新入口：先开客户端再插 DT7，下拉里就只有 Auto，
+    # 而 Auto 认不出 DJI 口时是**故意拒发**的（不乱开别人的口），于是只剩重启。
+    class _S:
+        def __init__(self, value, options):
+            self.value, self.options = value, list(options)
+
+    class _M:
+        def __init__(self, settings):
+            self._s = settings
+
+        def get_setting(self, name):
+            return self._s.get(name)
+
+    class _R:
+        def __init__(self, module):
+            self._m = module
+
+        def get(self, _name):
+            return self._m
+
+    real = with_ports([ROBOT, DT7])
+    try:
+        mod = _M({"Port": _S("Auto", ["Auto"]), "DT7 Port": _S("Auto", ["Auto"]),
+                  "CC Port": _S("Auto", ["Auto"])})
+        reg = _R(mod)
+        d1 = sp.refresh_port_options(reg)
+        check("重扫把 DT7 那个口塞进候选", "COM9" in mod.get_setting("DT7 Port").options,
+              str(mod.get_setting("DT7 Port").options))
+        check("车的口不许混进 DT7 候选（DT7 只认 DJI）",
+              "COM3" not in mod.get_setting("DT7 Port").options,
+              str(mod.get_setting("DT7 Port").options))
+        check("车的口仍然在 A 路候选里", "COM3" in mod.get_setting("Port").options,
+              str(mod.get_setting("Port").options))
+        check("重扫报出人话差异（不是返回 None 让人猜）", bool(d1), "；".join(d1))
+        check("再扫一次是幂等的（没有变化就不报）", sp.refresh_port_options(reg) == [])
+        # 拔掉 DT7 之后重扫：已经配好的显式口不许从下拉里消失，否则越刷新越坏
+        mod2 = _M({"Port": _S("Auto", ["Auto"]), "DT7 Port": _S("COM9", ["COM9"]),
+                   "CC Port": _S("Auto", ["Auto"])})
+        sp.list_serial_ports = lambda: [dict(ROBOT)]
+        mod2.get_setting("DT7 Port").options = ["Auto"]
+        sp.refresh_port_options(_R(mod2))
+        check("口现在不在，但它是当前值 —— 必须保住",
+              "COM9" in mod2.get_setting("DT7 Port").options,
+              str(mod2.get_setting("DT7 Port").options))
+        check("重扫不改当前值（刷新候选不该改变行为）",
+              mod2.get_setting("DT7 Port").value == "COM9")
+    finally:
+        sp.list_serial_ports = real
+
     print("\n" + ("有失败项" if FAILED else "挑口识别全部通过"))
     return 1 if FAILED else 0
 

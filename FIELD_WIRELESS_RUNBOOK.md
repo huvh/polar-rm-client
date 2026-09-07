@@ -421,6 +421,12 @@ RobotLink → Link Mode = tcp → Bridge Host = 10.50.0.10 → Bridge Port = 505
   纯 C 路（DT7）带不动它。看到这句就去读日志/`field_log` 的 `spin_command_blocked`，
   里面有三条办法（插 C 板 USB / `Link Mode=tcp` 走 D 路 / 驾驶员自己按 SHIFT）。
   客户端故意不替驾驶员翻 SHIFT：没有 0x1F 回读就不知道车现在转不转，翻一次就反。
+* **DT7 比客户端晚插上，不用重启程序**：RobotLink 里点 `Rescan Serial Ports`。
+  以前三个口下拉的候选是**启动那一刻**算完就不再刷新的（`model.py` 里三处 `port_choices()`），
+  所以"先开客户端、后插 DT7"时下拉里只有 `Auto`；而 `Auto` 认不出 DJI 那对 VID/PID 时
+  是**故意拒发**（不乱开别人的口），操作员只剩重启一条路。重扫只换候选、不改当前值，
+  并且当前值即使暂时不在列表里也会被保住（不许越刷新越坏）；按钮会把"DT7 现在能选哪几个口"
+  直接打在提示里。
 * **鼠标手感先小后大。** 第一次让鼠标动车之前，把 `mouse_limit` 从 200 降到 10~20，
   云台动方向对了再一格一格加。一次只动一个变量（S 或 `mouse_limit`）。
 

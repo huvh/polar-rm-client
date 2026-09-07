@@ -1651,6 +1651,14 @@ def build_default_registry() -> ModuleRegistry:
                 # 因此默认关，且没现场确认前不许上正式比赛。
                 bool_setting("Direct DT7 Egress", False),
                 mode_setting("DT7 Port", "Auto", dt7_port_choices()),
+                # 串口清单是启动那一刻算出来的，而现场十有八九"先开客户端、后插 DT7"：
+                # 那时下拉里只有 Auto，Auto 认不出 DJI 口就宁可拒发（不许乱开别人的口），
+                # 于是只剩"重启程序"一条路 —— 场上一抖就是几十秒。给一个手动重扫。
+                action_setting(
+                    "Rescan Serial Ports",
+                    "重新枚举 Port / DT7 Port / CC Port 三个下拉的候选口。"
+                    "只换候选、不改当前值；当前值即使暂时不在列表里也会被保住。",
+                ),
                 # 真发闸：勾了才往 DT7 那个 DJI VCOM 写字节。不勾 = 只产帧不碰硬件。
                 bool_setting("DT7 Real TX", False),
                 # 开火前置执行器（摩擦轮 Q/E）默认不许经客户端注入，
