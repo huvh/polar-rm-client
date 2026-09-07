@@ -527,14 +527,22 @@ class InputDispatchMixin:
     """D15 输入 / hotspot / dispatch（Qt 事件族 + 键盘辅助族 + action 路由）。"""
 
     def _clear_control_inputs_for_lock(self, _reason: str = "") -> None:
-        """Drop every local key/button/relative-mouse sample without sending.
+        """清空本地键鼠样本，并给"没有过期兜底"的出口补一帧中立的松手帧。
 
-        The neutral wire frame is sent by the caller when a link still exists;
-        this hook only guarantees that a reconnect can never replay stale host
-        input or resume motion automatically.
+        以前这个钩子只清本地、把补帧推给"调用方"，但调用方从来没补过：
+        DT7/选手端会把最后一帧重复到永远，锁定比赛控制反而成了踩油门。
+        0x5A 与 0x0311 那两条自己有新鲜度超时（150ms），不需要这里操心。
         """
 
         self.control.reset_inputs()
+        # 清空本地不等于车上松手。DT7 与官方选手端那两侧都**没有**"过期自动清零"
+        # 的兜底：把最后一帧原样重复到永远。而下面 clear_pending() 正好取消掉
+        # reset_inputs() 立起来的 _dirty，于是心跳从此一帧都不发。
+        # 实测（按着 W 触发本钩子）：帧数 1 -> 1，再空跑 8 个 tick 也是 0 帧
+        # —— 车会带着那个 W 一直开下去。急停那条路径在 backend/manager.py 里
+        # 已经补过松手帧，这里补的是"锁定比赛控制 / 授权换 epoch / 启动即锁定"这一类。
+        self.control.release_direct_dt7()
+        self.control.release_custom_controller()
         self.control.clear_pending()
         # Qualification privileges are process-memory capabilities, not UI
         # flags. Any lock/scene/focus/disconnect epoch destroys the economy

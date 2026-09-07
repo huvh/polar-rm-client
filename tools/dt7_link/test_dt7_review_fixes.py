@@ -181,5 +181,45 @@ ok_d, why_d = link5.send(pressed_bits=0, mouse_dx=10)
 check("闸门拒绝不许被当成限流（否则增量会被错误滚存）",
       (not ok_d) and link5.last_send_rate_limited is False, why_d)
 
-print("\n" + ("五个复查坑全部钉住" if FAILED == 0 else str(FAILED) + " 条失败"))
+print("\n--- 6) 锁定比赛控制必须给 DT7 补一帧松手，否则车带着 W 自己跑 ---")
+# _clear_control_inputs_for_lock 由 safety.lock_control / 授权换 epoch / 启动即锁定
+# 触发。它以前只清本地 + clear_pending()，而 clear_pending 恰好把 reset_inputs()
+# 立起来的 _dirty 取消掉 —— 心跳从此一帧都不发。DT7 没有过期兜底，会把收到的
+# 最后一帧（W 按着）重复到永远。实测就是这个形状：帧数 1 -> 1。
+from rm_client.model import RobotState as _RS, build_default_registry as _bdr   # noqa: E402
+from rm_client.ui.polar.mixins.input_dispatch_mixin import InputDispatchMixin    # noqa: E402
+
+bus3 = []
+prof6 = dict(dl.load_profile())
+prof6["max_hz"] = 10000.0                       # 别用限流掩盖"根本没发"
+link6 = dl.Dt7KeyMouseLink(port="DT7", profile=prof6, mock_output=False,
+                           write_bytes=bus3.append)
+ctl6 = KeyboardControlBridge(publisher=None, mock_output=False)
+ctl6.dt7_enabled = True
+ctl6.dt7_link = link6
+ctl6.dt7_key_mask = 0xFFFF
+st6, reg6 = _RS(), _bdr()
+ctl6.set_key("W", True, st6, reg6)
+n_w = len(bus3)
+check("按 W 确实发过一帧（前置条件）", n_w == 1, str(n_w))
+keys_w = struct.unpack_from("<H", dl.decode_dt7_frame(bus3[-1])["payload"], 8)[0]
+check("那一帧里 W 位是立着的", keys_w == 1, hex(keys_w))
+
+
+class _FakeUI:
+    pass
+
+
+ui6 = _FakeUI()
+ui6.control = ctl6
+ui6._economy_qualification_token = object()
+ui6._control_mouse_point = object()
+ui6._combat_input_was_allowed = True
+InputDispatchMixin._clear_control_inputs_for_lock(ui6, "match control armed")
+check("锁定清零时补发了（帧数 +1）", len(bus3) == n_w + 1, f"{n_w} -> {len(bus3)}")
+keys_after = struct.unpack_from("<H", dl.decode_dt7_frame(bus3[-1])["payload"], 8)[0]
+check("补的那一帧键位是 0（车上那本键位账真的被清）", keys_after == 0, hex(keys_after))
+check("本地键位也清了", ctl6.key_state["W"] is False)
+
+print("\n" + ("六个复查坑全部钉住" if FAILED == 0 else str(FAILED) + " 条失败"))
 sys.exit(1 if FAILED else 0)
