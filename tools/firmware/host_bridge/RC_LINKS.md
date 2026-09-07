@@ -18,9 +18,9 @@
 |---|---|---|---|---|
 | 物理 | 电脑 →USB线→ C 板 Type-C（虚拟串口） | 电脑/手 →DT7→ 2.4G → DR16 → C 板 UART3（DMA+IDLE 中断） | 同②，但换的是别家遥控器与接收机 | 别的板 →USART1（板上丝印写 Uart2）／CAN |
 | 帧长 | `0x5A`+id+len+payload+CRC16 | **18 字节**（`RC_FRAME_LENGTH`，`remote_control.h:46`） | **25 字节**（`SBUS_RC_FRAME_LENGTH`，`:47`） | `0xA5` SOF，只搬 Test/Rc/Gimbal 三种包 |
-| 入口 | `usb_task.c` 收 id=0x03 虚拟遥控器 | `remote_control.c:253-264` → `sbus_to_rc()` | `remote_control.c:265-281` → `Et08aSbusToRc()` 等 | `communication.c:221-237`（UART2）／`CAN_receive.c:228-268`（CAN） |
-| 怎么写 `key.v` | `UsbMergeVirtualRcKeys()`：`HOST_RC_HOST_KEYS = drive_keys;` 然后写并集（`usb_task.c`） | `HOST_RC_DRIVER_KEYS = key.v;` 然后写并集（`remote_control.c:383` 之后） | 无键位字段 → 置零宏里 `HOST_RC_DRIVER_KEYS = 0;` | **整份 `RC_ctrl_t` memcpy 覆盖** |
-| 生效条件 | 客户端三条开关：RobotLink enabled + Allow Drive + Client Chassis Drive，且 Drive Channel=`virtual_rc`；硬件侧只放行 `VRC_DRIVE_KEY_MASK`（W/S/A/D/SHIFT） | 编译期 `__RC_TYPE == RC_DT7`（`robot_param.h:42`） | 编译期 `__RC_TYPE` 选中对应解码器 | `__CONTROL_LINK_RC == CL_RC_UART2 / CL_RC_CAN`；当前 `CL_RC_DIRECT`（`robot_param.h:57`）**这段不参与** |
+| 入口 | `usb_task.c` 收 id=0x03 虚拟遥控器 | `remote_control.c:570` 与 `:623`（帧长 ==18 就交给 `:681 sbus_to_rc()`） | `remote_control.c:582` 与 `:635`（帧长 ==25）→ `Et08aSbusToRc()` 等，函数体 `:763-861` | `communication.c:221-237`（UART2）／`CAN_receive.c:228-268`（CAN） |
+| 怎么写 `key.v` | `UsbMergeVirtualRcKeys()`：`HOST_RC_HOST_KEYS = drive_keys;` 然后写并集（`usb_task.c`） | `HOST_RC_DRIVER_KEYS = key.v;` 然后写并集（`remote_control.c:706-707`） | 无键位字段 → 置零宏里 `HOST_RC_DRIVER_KEYS = 0;` | **整份 `RC_ctrl_t` memcpy 覆盖** |
+| 生效条件 | 客户端三条开关：RobotLink enabled + Allow Drive + Client Chassis Drive，且 Drive Channel=`virtual_rc`；硬件侧只放行 `VRC_DRIVE_KEY_MASK`（W/S/A/D/SHIFT） | **没有编译期前提**：18 字节 DBUS 无条件解（`remote_control.c:570/623`）。`__RC_TYPE`（现值 `RC_DT7`，`robot_param.h:30`）只管 25 字节那三家第三方接收机 | 编译期 `__RC_TYPE` 选中对应解码器 | `__CONTROL_LINK_RC == CL_RC_UART2 / CL_RC_CAN`；当前 `CL_RC_DIRECT`（`robot_param.h:59`）**这段不参与** |
 | 超时 | 150ms 没收到 0x03 → 客户端那份账归零（`VRC_FRESH_TIMEOUT_MS`） | 100ms 没帧 → `receive_count` 断；`GetRcOffline()` 只看"有没有连续收到" | 连续 10 次 `connect_flag` 变化判失联 → `slove_RC_lost()` 重启 DMA | 上层用 `LastReceiveTime.Data_Rc` 判 |
 | 语义 | **叠加**，随时可撤 | **叠加**（打桥之后不再是覆盖） | **叠加**（驾驶员侧恒 0） | **覆盖**，会把①②③的结果一起冲掉 —— 与客户端驾驶**不可混用** |
 
@@ -351,9 +351,7 @@ com0com 建虚拟串口对，或者直接在 USB 层抓官方客户端的报文�
 
 - 走 0x0311（本节）：键位由客户端按**固件位序**编（bit4=SHIFT…），固件按同一套解，
   所以默认掩码 `0x1F` 就是"W/S/A/D + 小陀螺"，Q/E 要 `--km-fire-keys` 才放开。
-- 走 DT7 虚拟控制链路（第 7 节）：键位得由 DT7 打包再经空口回来，
-  而 2016 手册那套位序是 bit4=**Q**。同一串 `0x1F`，在那条路上意思是
-  "W/S/A/D + 摩擦轮启动"，直接就是开火。
+- 走 DT7 虚拟控制链路（第 7 节）：键位同样由 DT7 打包经空口回来，但**位序与 0x0311 那条完全相同**（上面 2026-09-05 已结案：厂商 12.x `dump.cs` 的 `KeyBoardRC` 与固件 `remote_control.h:103-118` 逐位一致，bit4=SHIFT）。2016 手册那套 bit4=Q 是**过时文档**；以前拿它当“两条路不得复用位图”的理由，是错的。
 
 ⇒ 所以两条路的键位表各归各的编码，DT7 那条在位序被现场证死之前**不得复用**
 `KEYBOARD_BITS`，也不得给客户端加"一个开关两条路都开"的省事写法。

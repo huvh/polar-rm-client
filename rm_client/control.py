@@ -217,6 +217,9 @@ class KeyboardControlBridge:
         #: 根本没走到发送。与 last_error 分开存，否则"没让我发"和
         #: "发了但被拒"会互相覆盖，现场看不出到底该去点哪个开关。
         self.radio_km_gate_reason = ""
+        #: C 路这一帧被 max_hz 挡下时置 True：_consume_relative_motion
+        #: 据此保留鼠标增量，别把操作手 2/3 的意图清零丢掉。
+        self._dt7_keep_motion = False
         # ---- 车上回读的实况（来自 0x5A Debug 段的 km_rx / km_key，-1 = 读不到）----
         #: 我们只能自证"发了多少帧"，那说明不了链路。真正的证据是**C 板自己数到的
         #: 0x0311 帧数**（固件 POLAR-KM-LINK 的 HostKmReportUplink 报回来）。
@@ -556,6 +559,10 @@ class KeyboardControlBridge:
         self.dt7_last_error = "" if ok else str(why)
         if ok:
             self.dt7_sent += 1
+        elif getattr(self.dt7_link, "last_send_rate_limited", False):
+            # 只有"被 max_hz 挡了"这一种失败要留增量；闸门拒绝/写串口失败
+            # 一律照旧清零，否则解除锁定的一瞬间会甩出一大段陈旧位移。
+            self._dt7_keep_motion = True
 
     def release_direct_dt7(self) -> None:
         """松手一帧（DT7 那侧没有"过期自动清零"的兜底，必须我们主动发）。"""
@@ -607,6 +614,8 @@ class KeyboardControlBridge:
         # 直连 DT7：键位图可以复用 command.keyboard_value（位序已被厂商 KeyBoard 枚举
         # 核实，见 README 19.1）；但鼠标这里是**增量**，与 0x0306 那条的绝对像素
         # 语义不同，两条路的鼠标字段不许互相借用。
+        # C 路被限流挡下时，鼠标增量要滚存到下一帧（见 _consume_relative_motion）。
+        self._dt7_keep_motion = False
         if not self.km_source_conflict:
             self._send_direct_dt7(command)
         if self.mock_output:
@@ -631,11 +640,20 @@ class KeyboardControlBridge:
                 self.last_error = str(reason)
             else:
                 self._dirty = False
-                self._consume_relative_motion()
         except Exception as exc:
             self.last_error = str(exc)
+        # 发没发出去都要消费这一栏。它是**相对量**：不清零就每个 tick 把同一份
+        # 陈旧位移重发一遍，而现场 MQTT 十有八九一直是 LOCKED（没裁判/没 arm），
+        # C 路于是拿到一个恒定的 mouse_x —— 云台按 mouse/S 每 1ms 积分，
+        # 表现就是"手早就停了，云台还在自己转"。实测见 test_dt7_review_fixes.py。
+        # 唯一例外是 C 路被 max_hz 挡下，那由 _dt7_keep_motion 在内部跳过。
+        self._consume_relative_motion()
 
     def _consume_relative_motion(self) -> None:
+        # 心跳 75Hz、DT7 出口 max_hz=30Hz：不滚存的话每 tick 攒下的位移有约 2/3
+        # 被无条件清零，云台只能实现操作手意图的三分之一 —— 表现是"推了不动"。
+        if getattr(self, "_dt7_keep_motion", False):
+            return
         self.mouse_x = self.mouse_y = self.mouse_z = 0
 
     @staticmethod

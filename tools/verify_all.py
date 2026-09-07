@@ -147,6 +147,10 @@ C_CHECKS = (
      "C 路闭环自检（假车真回环 / NO-CHANGE 与 PARTIAL 不误判 / 假阳性防线）"),
     # broker 地址：正式赛的键鼠要发到赛事引擎那台 192.168.12.1，
     # 界面上那个地址以前是摆设（改了没人读），现在必须有断言钉住。
+    # 三个子代理复查抓出来的坑（reserved 落在 ch[4]、限流吃掉鼠标增量、
+    # MOUSE_SENSITIVITY 量级）：钉成断言，防止下一轮又把默认值改回去
+    ("tools/dt7_link/test_dt7_review_fixes.py",
+     "C 路复查三个坑（reserved=通道中值 / 限流不吃鼠标 / 镜头灵敏度量级）"),
     ("tools/test_mqtt_link_settings.py",
      "MQTT broker 地址接线（改设置就换地址 / 已连接会重连 / 非法值回写不骗人）"),
 )

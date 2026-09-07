@@ -137,8 +137,10 @@ def test_payload_layout() -> None:
     payload = dl.decode_dt7_frame(frame)["payload"]
     check("载荷 12 字节", len(payload) == 12, str(len(payload)))
     x, y, z, lb, rb, key, resv = struct.unpack("<hhhBBHH", payload)
-    check("字段顺序/位宽对得上（含 reserved 恒 0）",
-          (x, y, z, lb, rb, key, resv) == (-45, 120, 7, 1, 0, 0x11, 0), payload.hex(" "))
+    # reserved 不再填 0：它在 DBUS 里落在 bytes16-17，固件当 ch[4] 解（减中值 1024），
+    # 填 0 = 左上角滚轮满偏。所以载荷里这两位必须是通道中值 1024。
+    check("字段顺序/位宽对得上（含 reserved=通道中值 1024）",
+          (x, y, z, lb, rb, key, resv) == (-45, 120, 7, 1, 0, 0x11, 1024), payload.hex(" "))
     check("键位是 uint16（16 个键，不是老八键）", key == 0x11)
     check("鼠标是有符号增量（int16 负值正常落进载荷）", x == -45)
     check("默认 profile 里就没有 mid 字段", "mid" not in dl.DEFAULT_PROFILE["payload_fields"])
@@ -422,7 +424,8 @@ def test_bridge_gates_mutex() -> None:
         br3.dt7_enabled = True
         manager.tick_polar_link(state, registry, br3)
         check("急停一票否决", br3.dt7_enabled is False)
-        check("急停补松手帧", live.sent == z + 1 and set(live.last_payload) == {0},
+        # 松手帧只看前 10 字节（鼠标/左右键/键位）；末尾 reserved 恒为中值 1024
+        check("急停补松手帧", live.sent == z + 1 and set(live.last_payload[:10]) == {0},
               live.last_payload.hex(" "))
         manager.safety.estop_active = False
         manager.tick_polar_link(state, registry, br3)        # 恢复一次，把 was_enabled 记成 True
@@ -431,7 +434,7 @@ def test_bridge_gates_mutex() -> None:
         drive.value = False
         manager.tick_polar_link(state, registry, br3)
         check("撤 Allow Drive 也要补松手帧（旧代码这里只停发）",
-              br3.dt7_enabled is False and live.sent >= z + 2 and set(live.last_payload) == {0},
+              br3.dt7_enabled is False and live.sent >= z + 2 and set(live.last_payload[:10]) == {0},
               str(live.sent))
         on.value = False
         drive.value = True

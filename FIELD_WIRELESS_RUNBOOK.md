@@ -216,17 +216,26 @@ cmd2 + 载荷 + crc16；命令号位域 Cmd_Set 低/Cmd_Id 高）。开 `Direct 
 5. 看水印：`DT7:real` = 真在发；带 `(!原因)` = 没发并写明为什么；`KM冲突(!…)` = 键鼠出口开重了，
    关到只剩一条。想同时看车上的键位在谁手里，就再插 C 板 USB 读 `km_key`（A 路回读，不影响 C 路）。
 6. 按 `W` → 车应当前进；`SHIFT` → 小陀螺开/关；`Q/E` → 摩擦轮；左键 → 单发/连发。
-   **鼠标现在应该能转云台**：`prepare_hero_build.py` 默认把 `MOUSE_SENSITIVITY`
-   从出厂的 `100000.0f`（等于屏蔽鼠标）改成 `1000`
-   （物理含义：1 像素 ≈ 1 毫弧度，手速 1000 px/s 对应云台约 1 rad/s；
-   客户端另有每帧上限 `mouse_limit=200` 防一帧甩到限位）：
+   **推鼠标应该能转云台**：`prepare_hero_build.py` 默认把英雄参数的
+   `MOUSE_SENSITIVITY` 从出厂 `100000.0f` 改成 `20000f`。为什么是 20000 ——
+   云台参考角是**每 1ms 积一次** `mouse / S`（`gimbal_yaw_pitch_direct.c:331-332`
+   跑在 `vTaskDelay(GIMBAL_CONTROL_TIME=1)` 的 1kHz 循环里：`gimbal_task.c:31-32/76`
+   + `FreeRTOSConfig.h:61`），而一个 mouse 值会被保持约 14ms 才被下一帧盖掉，所以
+
+   > 云台角速度 ≈ 1000 × (每帧像素) / S（rad/s），每帧像素 = 手速 / 出口帧率(30Hz)
+
+   * S=20000、手速 1000px/s ⇒ 约 **1.7 rad/s**：够瞄，也不至于一推就飞。
+   * 出厂 100000 ⇒ 0.33 rad/s，慢得像没接上。但**它不是"屏蔽"**：摇杆走的是另一个
+     常数 `REMOTE_CONTROLLER_SENSITIVITY`（`robot_param_mecannum_hero.h:93`，出厂 100000
+     对应满偏 660 ⇒ 6.6 rad/s，合理），所以别拿"出厂值一定是给鼠标用的"当依据。
+   * 上一版取的 1000 ⇒ **33 rad/s**，手一动就顶到 ±π 限位，表现是"云台乱甩"而不是"没反应"。
+
+   标定纪律：一次只动一个变量（S 或 `mouse_limit`），从保守值往快调，**手感必须实车标定**。
+   客户端每帧还会把增量截到 `mouse_limit=200`（`configs/dt7_profile.json`）。
 
    ```
    python tools/firmware/prepare_hero_build.py <固件路径> --rc dt7 --km rc
    ```
-
-   手上那版固件如果是更早准备的、鼠标不动，重跑上面这条再烧一次就行；
-   想回到出厂的"屏蔽鼠标"行为就加 `--mouse-sens 100000`。**方向与手感必须实车标定**：
 
    **中途拔掉 DT7 的 USB 不用重启客户端**：写失败会丢掉那个死句柄、下一帧重新解析再打开
    （打不开就退避 0.5 秒再试，不是一辈子放弃）。水印会先变空，恢复后重新出现 `DT7:real@COMx`。

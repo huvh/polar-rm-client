@@ -70,8 +70,11 @@ def main() -> int:
               len(step.failures) == n_before + 1, str(step.failures[-1:]))
         shutil.rmtree(td, ignore_errors=True)
     # 2b) 默认值本身要有物理含义，不能是抄来的"看起来像"的数
-    check("默认 MOUSE_SENSITIVITY 是有物理含义的量级（1px≈1mrad 那一档）",
-          phb.DEFAULT_MOUSE_SENS == "1000", str(phb.DEFAULT_MOUSE_SENS))
+    # 1px=1mrad 那一档是错的：云台每 1ms 积一次 mouse/S，一个值还会被 DR16 保持约
+    # 14ms，所以 1000 实际约 33rad/s（一推就顶限位）。可用区间见 prepare 的体检。
+    check("默认 MOUSE_SENSITIVITY 在可用量级（角速度=1000*(每帧像素)/S）",
+          5000.0 <= float(phb.DEFAULT_MOUSE_SENS) <= 50000.0,
+          str(phb.DEFAULT_MOUSE_SENS))
     check("默认值不是死配置 0.5（那是配套没有鼠标的遥控器的）",
           float(phb.DEFAULT_MOUSE_SENS) > 10.0, str(phb.DEFAULT_MOUSE_SENS))
 

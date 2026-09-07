@@ -428,7 +428,14 @@ class Dt7KeyMouseLink:
         letters = layout_letters(layout)
         for idx, name in enumerate(fields):
             if name == "reserved":
-                args.append(0)
+                # 这个 2 字节不是"惰性"的：DBUS 里它就落在 bytes 16-17，而固件把
+                # 16-17 当第 5 通道解（remote_control.c:711 ch[4] = buf[16]|buf[17]<<8，
+                # :717 再减中值 1024）。写 0 ⇒ ch[4] = -1024 = 左上角滚轮满偏。
+                # 英雄机没有机械臂消费者，但它还会经 CAN 转发给另一块板
+                # （CAN_communication.c:81/87），工程/企鹅一开就翻车。
+                # 所以默认填**通道中值**：DT7 若原样搬走 ⇒ 读到 0（中立）；
+                # 若不搬 ⇒ 我们这一位本来就没意义。两种情况都不比 0 坏。
+                args.append(int(prof.get("reserved_value", 1024)) & 0xFFFF)
                 continue
             if name not in values:
                 raise Dt7ConfigError(f"载荷缺字段值：{name}")
@@ -454,6 +461,7 @@ class Dt7KeyMouseLink:
              mouse_z: int = 0, left: bool = False, right: bool = False,
              mid: bool | None = None, now: float | None = None) -> tuple[bool, str]:
         now = float(self.time_fn()) if now is None else float(now)
+        self.last_send_rate_limited = False
         gate = self._gate()
         if gate:
             self.refused += 1
@@ -463,6 +471,8 @@ class Dt7KeyMouseLink:
         interval = 1.0 / max(1.0, float(prof.get("max_hz", 30)))
         if now + 1e-9 < self._next_due:
             self.dropped_rate += 1
+            # 告诉调用方"这帧没走，鼠标增量请滚存到下一帧"（见 control.py）
+            self.last_send_rate_limited = True
             self.last_error = f"超过 {float(prof.get('max_hz', 30)):g}Hz 上限，本帧未发"
             return False, self.last_error          # 被限流不消耗时隙（旧版白吃一帧）
         fields = list(prof["payload_fields"])

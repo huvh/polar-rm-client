@@ -105,13 +105,19 @@ OMNI_REL = "application/chassis/chassis_omni.c"
 # 英雄（麦轮）参数文件：本脚本用 --mouse-sens 改它，所以它属于本脚本拥有的文件
 HERO_PARAM_REL = "application/robot_param_mecannum_hero.h"
 # MOUSE_SENSITIVITY 的取值要有出处，不能抄一个"看起来像"的数：
-#   云台参考角增量 = mouse / MOUSE_SENSITIVITY（弧度），gimbal_yaw_pitch_direct.c:331-332
-#   ⇒ 取 1000 就是「1 像素 = 1 毫弧度 ≈ 0.057°」：手速 1000 px/s 对应云台 1 rad/s。
-# 出厂的 100000.0f 是"暂时先屏蔽一下鼠标功能"（同文件上面的自注），
-# 而 robot_param_mecannum.h:87 那个 0.5f 是**死配置**：那份配置配套的是 ET08A/AT9S/HT8A
-# 这类没有键盘鼠标的遥控器，鼠标量在 remote_control.c:678-682 就被整帧清 0 了，
-# 0.5 从来没被真实鼠标值除过。拿它当"可用量级"会让云台一帧就到限位。
-DEFAULT_MOUSE_SENS = "1000"
+#   云台参考角每 1ms 积一次 mouse / MOUSE_SENSITIVITY（弧度），
+#   gimbal_yaw_pitch_direct.c:331-332，任务周期 vTaskDelay(GIMBAL_CONTROL_TIME=1)
+#   而 configTICK_RATE_HZ=1000（gimbal_task.c:31-32/76、FreeRTOSConfig.h:61）。
+#   一个 mouse 值会被 DT7/DR16 保持约 14ms（DBUS 每 14ms 一帧，手册第 5 页），
+#   期间固件积 14 次；客户端出口 max_hz=30，一帧的位移只代表 1/30 秒。
+#   => 云台角速度 ≈ 1000 * (每帧像素) / S（rad/s）。
+#   以前按"1px=1mrad"取的 1000，实际约等于 1000*(1000/30)/1000 = 33 rad/s，
+#   手一动就顶到 ±π 限位 —— 表现是"云台乱甩"，不是"没反应"。
+#   出厂的 100000 是另一头：同样 1000px/s 只有 0.33 rad/s，慢到像没接上，
+#   但它不是"屏蔽"（摇杆用的是另一个常数 REMOTE_CONTROLLER_SENSITIVITY，
+#   robot_param_mecannum_hero.h:93，出厂 100000 ⇒ 满偏 660 时 6.6rad/s，合理）。
+#   取中值 20000：1000px/s 手速 ⇒ 1.7rad/s，够快也不至于甩飞；手感上车再标。
+DEFAULT_MOUSE_SENS = "20000"
 
 OWNED = {
     ROBOT_PARAM_REL, USB_REL, RC_REL,
@@ -609,10 +615,9 @@ def verify_changes(repo: Path, step: Step, want_rc: str = 'dt7',
          (lambda hero_param: (
              (m := re.search(r"#define\s+MOUSE_SENSITIVITY\s+\(\s*([0-9.]+)f?\s*\)",
                              hero_param)) is not None
-             and 10.0 <= float(m.group(1)) <= 10000.0)
+             and 5000.0 <= float(m.group(1)) <= 50000.0)
              or step.warn("MOUSE_SENSITIVITY 不在可用量级",
-                          "1000 = 1px≈1mrad；100000/40000 都是屏蔽量级，"
-                          "<10 会一帧甩到限位。用 --mouse-sens 给值，实车再标定手感")
+                          "云台每 1ms 积一次 mouse/S，一个值会被保持约 14ms，所以角速度≈1000*(每帧像素)/S；出厂 100000 慢到像没接上，上一版误取的 1000 会一帧甩到限位。用 --mouse-sens 给值，实车再标定手感")
          )(read(repo, ROBOT_PROFILES[want_robot]["param"])
            if (repo / ROBOT_PROFILES[want_robot]["param"]).exists() else "")),
         ("KM_KEY_ALLOWED_MASK 若被覆盖也必须落在注释外",
@@ -869,14 +874,7 @@ def main() -> int:
                     help="允许图传注入 Q/E（摩擦轮/开火相关）。默认不给，"
                          "开火权限不偷偷外送")
     ap.add_argument("--mouse-sens", default=DEFAULT_MOUSE_SENS,
-                    help="英雄参数的 MOUSE_SENSITIVITY。仓库出厂值是 100000.0f，"
-                         "等于**把鼠标整条废掉**（云台增量 = mouse / 该值，"
-                         "gimbal_yaw_pitch_direct.c:331-332；那两行上面的自注写着"
-                         "\"暂时先屏蔽一下鼠标功能\"）。走 C 路要用鼠标控云台，所以这里"
-                         "默认给 1000（= 1 像素 1 毫弧度，手速 1000px/s 对应 1rad/s）；"
-                         "想恢复出厂的屏蔽行为就 --mouse-sens 100000。"
-                         "注意仓库另一份配置里的 0.5f 是死配置（配套遥控器没有鼠标），"
-                         "不要照抄")
+                    help="英雄参数的 MOUSE_SENSITIVITY。云台每 1ms 积一次 mouse/该值，一个鼠标值会被保持约 14ms ⇒ 角速度≈1000*(每帧像素)/该值 rad/s。默认 20000（1000px/s 手速约 1.7rad/s）；仓库出厂 100000 慢到像没接上，想按出厂行为就 --mouse-sens 100000。注意这只管鼠标，摇杆是另一个常数 REMOTE_CONTROLLER_SENSITIVITY。")
     args = ap.parse_args()
 
     repo = Path(args.repo).expanduser().resolve()
