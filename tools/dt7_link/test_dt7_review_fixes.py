@@ -157,5 +157,29 @@ check("第一帧要带走这 120 像素", bool(sent) and sent[0] == 120, str(sen
 check("手停了之后不许再发非零 mouse_x（云台不能自转）",
       all(v == 0 for v in sent[1:]), str(sent))
 
-print("\n" + ("四个复查坑全部钉住" if FAILED == 0 else str(FAILED) + " 条失败"))
+print("\n--- 5) 真出口自己被限流时，也要能报出\"限流\"这个原因 ---")
+# 第 2 节用的是假出口；这里换成真的 Dt7KeyMouseLink + 真 max_hz 闸，
+# 否则"标记立起来了"只证明了我自己写的假对象。
+bus2 = []
+prof5 = dict(dl.load_profile())
+prof5["max_hz"] = 30.0
+clock = [1000.0]
+link5 = dl.Dt7KeyMouseLink(port="DT7", profile=prof5, mock_output=False,
+                           write_bytes=bus2.append, time_fn=lambda: clock[0])
+link5._next_due = 0.0
+ok_a, _ = link5.send(pressed_bits=0, mouse_dx=10)
+ok_b, why_b = link5.send(pressed_bits=0, mouse_dx=10)     # 同一个时隙里的第二帧
+check("第一帧写成、第二帧被 30Hz 闸挡下", ok_a and not ok_b, why_b)
+check("被挡下那次要明确是限流（不是闸门、不是写失败）",
+      link5.last_send_rate_limited is True, str(link5.last_send_rate_limited))
+clock[0] += 1.0                                           # 时隙到了
+ok_c, why_c = link5.send(pressed_bits=0, mouse_dx=10)
+check("过了一个周期就恢复发送，且限流标记要落回去",
+      ok_c and link5.last_send_rate_limited is False, why_c)
+link5._gate = lambda: "没勾 Allow Drive"        # 与 test_dt7_link.py 同一套打法
+ok_d, why_d = link5.send(pressed_bits=0, mouse_dx=10)
+check("闸门拒绝不许被当成限流（否则增量会被错误滚存）",
+      (not ok_d) and link5.last_send_rate_limited is False, why_d)
+
+print("\n" + ("五个复查坑全部钉住" if FAILED == 0 else str(FAILED) + " 条失败"))
 sys.exit(1 if FAILED else 0)
