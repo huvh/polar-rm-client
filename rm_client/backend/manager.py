@@ -1333,6 +1333,15 @@ class BackendManager:
         self.polar.stop()
         self.native_decoder.stop()
         self._native_recovery.reset()
+        # DT7 那个 DJI VCOM 是**独占**口：不关句柄，选手端和下一轮调试都得等本进程
+        # 真的退出才拿得到它。放在最后关，顺序不能提前——上面 trigger_estop 触发的
+        # 清零钩子要先把松手帧写出去，写完才允许关口。
+        dt7_handle = getattr(self, "_dt7_link", None)
+        if dt7_handle is not None:
+            try:
+                dt7_handle.close()
+            except Exception:                          # noqa: BLE001
+                pass
         self.field_log.emit("backend_shutdown", restart=restart)
 
     def apply_readiness(

@@ -37,6 +37,7 @@ from PySide6.QtGui import (
 from PySide6.QtOpenGLWidgets import QOpenGLWidget
 from PySide6.QtWidgets import QApplication, QFileDialog, QInputDialog, QWidget
 
+from ..backend.dt7_link import status_token as _dt7_status_token
 from ..calibration import CameraCalibrationManager
 from ..auto_spin import ProjectileHitSpinController
 from ..combat_hud import CombatHudAnimator, VALID_COMBAT_HUD_VISUALS, ring_end
@@ -3527,15 +3528,16 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         # 所以状态与原因必须同屏可见（命令号没定案时是故意不发，不是坏了）。
         dt7_link_obj = getattr(self.control, "dt7_link", None)
         if getattr(self.control, "dt7_enabled", False):
-            real = bool(dt7_link_obj is not None and not
-                        bool(getattr(dt7_link_obj, "mock_output", True)))
             # 把"真在往哪个口写"显示出来：写错口是"能发但永远不通"的头号原因，
-            # 光看开关状态看不出来我们其实把遥控器帧发给了车的 CDC 口
-            where = str(getattr(dt7_link_obj, "resolved_port", "") or "")
-            dt7 = "DT7:" + ("real" if real else "mock") + (("@" + where) if (real and where) else "")
-            why = str(getattr(self.control, "dt7_last_error", "") or "")
-            if why:
-                dt7 += "(!" + why[:40] + ")"
+            # 光看开关状态看不出来我们其实把遥控器帧发给了车的 CDC 口。
+            # 整段文字由 dt7_link.status_token 统一生成，理由是它得能被离线断言
+            # 钉住（"勾了真发 = 显示 real"这个假象骗过一次现场判断）。
+            dt7 = _dt7_status_token(
+                mock_output=bool(getattr(dt7_link_obj, "mock_output", True)),
+                resolved_port=str(getattr(dt7_link_obj, "resolved_port", "") or ""),
+                wire_neutral=bool(getattr(dt7_link_obj, "wire_neutral", True)),
+                release_pending=bool(getattr(self.control, "dt7_release_pending", False)),
+                last_error=str(getattr(self.control, "dt7_last_error", "") or ""))
             gm = str(getattr(self.control, "dt7_mouse_note", "") or "")
             if gm:
                 # 不是故障，是固件仲裁：鼠标这条路被上位机云台请求顶掉了

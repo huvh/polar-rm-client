@@ -151,6 +151,11 @@ C_CHECKS = (
     # MOUSE_SENSITIVITY 量级）：钉成断言，防止下一轮又把默认值改回去
     ("tools/dt7_link/test_dt7_review_fixes.py",
      "C 路复查三个坑（reserved=通道中值 / 限流不吃鼠标 / 镜头灵敏度量级）"),
+    # 松手帧必须落地：DT7/DR16 没有过期自动清零，被 max_hz 挡下的中立帧就是
+    # "手松了车还在走"。这一坑是假时钟 24 个相位扫出来的（旧代码 24/24 全被挡，
+    # 最好情况 253ms 才补上），所以断言也必须按相位扫，不能只测一个 lucky case。
+    ("tools/dt7_link/test_dt7_release_flush.py",
+     "C 路松手帧（限流不许吃掉零键 / 写失败要补发 / 暂停与关出口不许空转 / 水印说实话）"),
     ("tools/test_mqtt_link_settings.py",
      "MQTT broker 地址接线（改设置就换地址 / 已连接会重连 / 非法值回写不骗人）"),
 )

@@ -220,6 +220,10 @@ class KeyboardControlBridge:
         #: C 路这一帧被 max_hz 挡下时置 True：_consume_relative_motion
         #: 据此保留鼠标增量，别把操作手 2/3 的意图清零丢掉。
         self._dt7_keep_motion = False
+        #: 松手中立帧"还没落到线上"。DT7/DR16 没有过期自动清零，这一位为 True
+        #: 期间车上的键位仍是我们上一帧的；tick 会按心跳节奏一直补发直到落地。
+        #: 它是"限流挡下松手帧"和"写口失败"两种情况的兜底，界面也读它。
+        self.dt7_release_pending = False
         # ---- 车上回读的实况（来自 0x5A Debug 段的 km_rx / km_key，-1 = 读不到）----
         #: 我们只能自证"发了多少帧"，那说明不了链路。真正的证据是**C 板自己数到的
         #: 0x0311 帧数**（固件 POLAR-KM-LINK 的 HostKmReportUplink 报回来）。
@@ -259,6 +263,11 @@ class KeyboardControlBridge:
         #: True 时**一帧都不写 DT7**，也不补松手 —— 用来模拟"进程被杀"，
         #: 从而量出 DT7 会不会把最后一帧的键位一直重复（粘键）。
         self.dt7_send_paused = False
+        #: 暂停的到期时刻（假时钟友好：用 perf_counter）。默认无穷大 = "布尔位说了算"，
+        #: 老的调用点/测试只设布尔位时行为不变；界面自检会写一个有限值，于是
+        #: "自检中途出事、finish 没跑成"这种最阴的失效模式会自己恢复，而不是
+        #: 让 C 路从此一帧都不发。
+        self.dt7_paused_until = float("inf")
         #: C 路允许到达固件的键位掩码。DT7 那侧的键位被固件当作驾驶员按键记账
         #: （remote_control.c:629-630），完全不过 KM_KEY_ALLOWED_MASK，
         #: 所以客户端这道掩码是唯一的闸，不能不设防。
@@ -377,7 +386,14 @@ class KeyboardControlBridge:
         """Clear local input and immediately publish one neutral KMC snapshot."""
 
         self.reset_inputs()
-        return self.send_from_state(state, registry)
+        command = self.send_from_state(state, registry)
+        # 上面那一帧走的是普通出口：它可能被闸门拒了、也可能被 max_hz 挡了。
+        # 而关窗口 / 失去焦点这两条路调的就是本函数，只清本地等于"手松了、
+        # 线上还按着"——DT7 与选手端那两侧都没有过期自动清零。所以这里再各补
+        # 一帧强制中立（release_* 自己会抢时隙，多一帧零键无害）。
+        self.release_direct_dt7()
+        self.release_custom_controller()
+        return command
 
     def clear_pending(self) -> None:
         """急停已走专用零帧后清除普通发送重试。"""
@@ -402,9 +418,13 @@ class KeyboardControlBridge:
             # 那时按钮测出来的"DT7 没理这一帧"是假结论——其实客户端一帧都没出去
             or self.dt7_forced_keys is not None
         )
-        if not active and not self._dirty and not self._idle_zero_authorized():
+        # 松手帧没落地时，即使本地看着"全空闲"也必须继续按心跳发：这是
+        # "驾驶员手都抬了车还在往前顶"的唯一兜底，不能受 MQTT/空闲零帧授权影响。
+        must_flush = bool(getattr(self, "dt7_release_pending", False))
+        if not active and not self._dirty and not must_flush and not self._idle_zero_authorized():
             return None
-        interval = 1.0 / self.heartbeat_hz if active or self._dirty else self.idle_zero_interval_s
+        interval = (1.0 / self.heartbeat_hz
+                    if (active or self._dirty or must_flush) else self.idle_zero_interval_s)
         if now - self.last_send_at < interval:
             return None
         return self.send_from_state(state, registry)
@@ -531,11 +551,18 @@ class KeyboardControlBridge:
         键位直接复用 command.keyboard_value：位序已被厂商枚举核实。
         """
         if not self.dt7_enabled or self.dt7_link is None:
+            # 出口本来就没开：线上不可能有我们按住的键（关出口那一下 manager 已经
+            # 补过松手帧）。这里必须把 pending 清掉，否则心跳会被它钉在 75Hz 空转。
+            self.dt7_release_pending = False
             return
         if self.dt7_send_paused:
-            # 粘键测试的第二阶段：故意什么都不写。这里**不能**补松手帧，否则量的
-            # 就不是"进程没了以后 DT7 怎么办"，而是"我们主动松手以后怎么办"。
-            return
+            if time.perf_counter() < self.dt7_paused_until:
+                # 粘键测试的第二阶段：故意什么都不写。这里**不能**补松手帧，否则量的
+                # 就不是"进程没了以后 DT7 怎么办"，而是"我们主动松手以后怎么办"。
+                self.dt7_release_pending = False
+                return
+            # 到期自愈：暂停是自检借用的把手，不是永久开关。
+            self.dt7_send_paused = False
         if self.dt7_forced_keys is not None:
             command = replace(command, keyboard_value=int(self.dt7_forced_keys))
         else:
@@ -546,6 +573,11 @@ class KeyboardControlBridge:
                 if (int(command.keyboard_value) >> bit) & 1 and not ((masked >> bit) & 1))
             if masked != int(command.keyboard_value):
                 command = replace(command, keyboard_value=masked)
+        neutral_now = (int(command.keyboard_value) == 0
+                       and int(command.mouse_x) == 0 and int(command.mouse_y) == 0
+                       and int(command.mouse_z) == 0
+                       and not command.left_button_down and not command.right_button_down
+                       and not command.mid_button_down)
         try:
             ok, why = self.dt7_link.send(
                 pressed_bits=command.keyboard_value,
@@ -555,14 +587,23 @@ class KeyboardControlBridge:
             )
         except Exception as exc:
             self.dt7_last_error = str(exc)
+            # 异常时无法判断这一帧到底进没进口，按最坏情况处理：中立帧要补发。
+            self.dt7_release_pending = bool(neutral_now)
             return
         self.dt7_last_error = "" if ok else str(why)
         if ok:
             self.dt7_sent += 1
-        elif getattr(self.dt7_link, "last_send_rate_limited", False):
-            # 只有"被 max_hz 挡了"这一种失败要留增量；闸门拒绝/写串口失败
-            # 一律照旧清零，否则解除锁定的一瞬间会甩出一大段陈旧位移。
-            self._dt7_keep_motion = True
+            self.dt7_release_pending = False
+        else:
+            # "内容合法但没落地"（被 max_hz 挡 / 写口失败）的中立帧要一直补发；
+            # 闸门拒绝（profile 不对、命令号没定案）不补，那属于配置问题，
+            # 补发只会在日志里刷同一句原因。
+            self.dt7_release_pending = bool(
+                neutral_now and getattr(self.dt7_link, "last_send_dropped", False))
+            if getattr(self.dt7_link, "last_send_rate_limited", False):
+                # 只有"被 max_hz 挡了"这一种失败要留增量；闸门拒绝/写串口失败
+                # 一律照旧清零，否则解除锁定的一瞬间会甩出一大段陈旧位移。
+                self._dt7_keep_motion = True
 
     def release_direct_dt7(self) -> None:
         """松手一帧（DT7 那侧没有"过期自动清零"的兜底，必须我们主动发）。"""

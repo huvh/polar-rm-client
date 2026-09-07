@@ -777,6 +777,10 @@ class ConfigActionsMixin:
             # 进入"模拟进程被杀"阶段：把手复位成"暂停写"，不是"松手"
             control.dt7_forced_keys = None
             control.dt7_send_paused = True
+            # 暂停必须带到期：finish() 万一没跑成（事件循环里抛异常、热重载、
+            # 场景切换把回调链打断），C 路会从此一帧都不发，而界面看着一切正常。
+            control.dt7_paused_until = (time.perf_counter()
+                                        + (self.DT7_SELFTEST_HOLD_MS / 1000.0) * 3.0 + 5.0)
             state["phase"] = "hold"
 
         def finish() -> None:

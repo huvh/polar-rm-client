@@ -119,6 +119,34 @@ DEFAULT_PROFILE = {
 }
 
 
+def status_token(*, mock_output: bool, resolved_port: str = "", last_error: str = "",
+                 wire_neutral: bool = True, release_pending: bool = False,
+                 enabled: bool = True) -> str:
+    """C 路状态的**唯一**成文处：开着但没发过 = 必须看得出来。
+
+    单独成函数（而不是留在 paint 里）只有一个理由：这里最容易犯的错是
+    "开关都勾了 => 显示 DT7:real"，而真发闸开了、口却从没成功打开过，是完全
+    不同的两件事。实测过这个假象（mock_output=False、resolved_port=''、
+    last_error=''），所以它现在是一条断言而不是一句口头保证。
+    """
+    if not enabled:
+        return ""
+    real = not bool(mock_output)
+    port = str(resolved_port or "")
+    if real and not port:
+        text = "DT7:real(口未开)"
+    else:
+        text = "DT7:" + ("real" if real else "mock") + (("@" + port) if (real and port) else "")
+    if not wire_neutral:
+        # 线上还挂着我们上一帧的按键：这比任何计数器都重要，必须上脸
+        text += "(线上仍带按键)"
+    if release_pending:
+        text += "(松手帧未送达!)"
+    if last_error:
+        text += "(!" + str(last_error)[:40] + ")"
+    return text
+
+
 class Dt7ConfigError(RuntimeError):
     """profile 自相矛盾 —— 宁可拒发也不静默改语义。"""
 
@@ -392,6 +420,14 @@ class Dt7KeyMouseLink:
     mid_dropped: bool = False
     clipped_fields: list = field(default_factory=list)
     _next_due: float = 0.0
+    #: 我们最后**真正写上线**的那一帧是不是全中立。DT7/DR16 那侧没有过期兜底，
+    #: 只要这里还是 False，线上就还挂着我们按下的键。
+    wire_neutral: bool = True
+    #: 为了松手而破例提前发的帧数（限流统计之外，自检/现场要看这个）
+    forced_releases: int = 0
+    #: 上一帧"内容合法但没落地"（被限流挡下 / 写口失败）——调用方要补发。
+    #: 与 last_send_rate_limited 的区别：写口失败也置位，而闸门拒绝**不**置位。
+    last_send_dropped: bool = False
     _handle: object | None = None
     time_fn: object = time.perf_counter
 
@@ -462,6 +498,7 @@ class Dt7KeyMouseLink:
              mid: bool | None = None, now: float | None = None) -> tuple[bool, str]:
         now = float(self.time_fn()) if now is None else float(now)
         self.last_send_rate_limited = False
+        self.last_send_dropped = False
         gate = self._gate()
         if gate:
             self.refused += 1
@@ -469,10 +506,24 @@ class Dt7KeyMouseLink:
             return False, gate
         prof = self.profile
         interval = 1.0 / max(1.0, float(prof.get("max_hz", 30)))
-        if now + 1e-9 < self._next_due:
+        # 松手帧必须落地：DT7/DR16 那侧**没有**"过期自动清零"，接收机会把最后
+        # 一帧的键位一直重复到下一帧为止。所以只要线上还挂着我们发出去的按键，
+        # 这一帧全中立的松手帧就**不许**被 max_hz 挡下。
+        # 实测（心跳 75Hz、出口闸 30Hz，按 24 个相位松手）：旧代码松手帧 24/24
+        # 全被挡；最好情况也要等 4Hz 空闲零帧补，也就是 **253ms** 之后车才真的
+        # 松手——3.5m/s 下将近一米过冲。离线复现见 tools/dt7_link/test_dt7_release_flush.py。
+        neutral = (int(pressed_bits) == 0 and not left and not right and not mid
+                   and int(mouse_dx) == 0 and int(mouse_y) == 0 and int(mouse_z) == 0)
+        must_land = bool(neutral and not self.wire_neutral)
+        # 破例的额度是**结构上**有界的，不需要再加时间下限：连续两帧都走 must_land
+        # 是不可能的（must_land 成功后 wire_neutral 立刻变 True），所以"破例"最多
+        # 和"正常发送"一样频繁 —— 线上速率上限 2*max_hz = 60Hz，22 字节 @961200
+        # 的线容量是 ~4.3kHz，差两个数量级。
+        if not must_land and now + 1e-9 < self._next_due:
             self.dropped_rate += 1
             # 告诉调用方"这帧没走，鼠标增量请滚存到下一帧"（见 control.py）
             self.last_send_rate_limited = True
+            self.last_send_dropped = True
             self.last_error = f"超过 {float(prof.get('max_hz', 30)):g}Hz 上限，本帧未发"
             return False, self.last_error          # 被限流不消耗时隙（旧版白吃一帧）
         fields = list(prof["payload_fields"])
@@ -507,9 +558,17 @@ class Dt7KeyMouseLink:
                 self._emit(frame)
             except Exception as exc:               # noqa: BLE001
                 self.last_error = f"写 DT7 口失败：{exc}"
+                self.last_send_dropped = True      # 线**没**变，调用方必须补发
                 return False, self.last_error
         self.last_error = ""
         self.sent += 1
+        self.last_send_dropped = False
+        # 只有真写出去（或 mock 里等价于写出去）才允许改变"线上状态"的记账。
+        # 写失败时上面直接 return 了，wire_neutral 会一直停在 False，
+        # 于是下一次松手帧仍然是 must_land —— 端口恢复的那一刻它就插队出去。
+        self.wire_neutral = neutral
+        if must_land:
+            self.forced_releases += 1
         return True, "mock" if self.mock_output else "ok"
 
     def _open_target(self) -> tuple[str, str]:
@@ -585,6 +644,16 @@ class Dt7KeyMouseLink:
         self._next_due = 0.0
         return self.send(pressed_bits=0, mouse_dx=0, mouse_y=0, mouse_z=0,
                          left=False, right=False, mid=None, now=now)
+
+    def watermark_token(self) -> str:
+        """本出口能自证的那半句水印（真函数在模块级，那里才拿得到 control 的 pending）。
+
+        方法刻意不叫 status_token：同名不同参会让人以为它和模块函数是一回事。
+        """
+
+        return status_token(mock_output=self.mock_output,
+                            resolved_port=self.resolved_port,
+                            wire_neutral=self.wire_neutral)
 
     def close(self) -> None:
         handle = self._handle
