@@ -104,6 +104,28 @@ def main() -> int:
           f"{len(idle.dt7_link.calls)} {idle.dt7_link.released}")
     del br0
 
+    # 无线时点自转"没反应"是必然会被问到的事：原因必须能程序化拿到
+    from rm_client.backend.manager import spin_block_reason as sbr
+    blocked = sbr(allow_spin=True, link_active=False, estop=False, module_on=True)
+    check("0x5A 不在线时说出原因与三条办法",
+          "0x04" in blocked and "tcp" in blocked and "SHIFT" in blocked, blocked[:60])
+    check("链路在线时不许弹这个提示",
+          sbr(allow_spin=True, link_active=True, estop=False, module_on=True) == "")
+    check("没要求自转时不许弹（别把没做的事说成问题）",
+          sbr(allow_spin=False, link_active=False, estop=False, module_on=True) == "")
+    check("急停时也不弹（那是另一件事，已有急停显示）",
+          sbr(allow_spin=True, link_active=False, estop=True, module_on=True) == "")
+    check("SpinMode 模块关着时不弹",
+          sbr(allow_spin=True, link_active=False, estop=False, module_on=False) == "")
+    no_fb = sbr(allow_spin=True, link_active=False, estop=False, module_on=True,
+                    reported=None)
+    got_fb = sbr(allow_spin=True, link_active=False, estop=False, module_on=True,
+                   reported=0)
+    check("车上从没回读过 0x1F 时，要说清楚是 host_bridge 桥没打",
+          "未打 host_bridge 桥" in no_fb and "无法确认" in no_fb, no_fb[-48:])
+    check("有回读但链路断了时，理由要引用那个回读值（两种情形不许同一句话）",
+          "回读是 0" in got_fb and got_fb != no_fb, got_fb[-48:])
+
     print("\n--- 2) 粘键判据：超时清零的形态不许被误判成粘键 ---")
     stuck = [x] * 40
     v, _ = C.evaluate_dt7_hold(stuck, x)

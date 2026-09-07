@@ -515,6 +515,8 @@ class RobotState:
     # 不受「仿真先跑还是数据段先到」的顺序影响。
     polar_overlay: dict[str, Any] = field(default_factory=dict)
     polar_link_active: bool = False
+    #: 自转没发出去时的人话原因（空字符串=没有阻碍）
+    polar_spin_note: str = ""
     polar_link_age_s: float = float("inf")
     # 驾驶/云台授权与仲裁结果：上车时操作员必须能直接看到“现在指令能不能生效”
     polar_drive_armed: bool = False

@@ -154,6 +154,7 @@ class BackendManager:
         self.input_clear_hook: Callable[[str], None] | None = None
         self._last_logged_stage = ""
         self.field_log = RotatingJsonlLogger(self.paths.logs_root)
+        self._last_spin_note = ''
         self.safety.input_clear_hook = self._request_input_clear
         self.mqtt.event_hook = self._log_backend_event
         self.udp.event_hook = self._log_backend_event
@@ -853,6 +854,23 @@ class BackendManager:
         if spin_reported is None:
             spin_reported = bridge.overlay.get("spin_active")
         spin_cmd = self._update_spin_command(desired=spin_desired, reported=spin_reported)
+        # 无线时点了自转却"没反应"，以前界面一句解释都没有：0x04 要有 0x5A 链路才走得出去。
+        # 这里把"为什么没发"与"怎么才能发"一次说清，省掉一次白跑。
+        target.polar_spin_note = spin_block_reason(
+            allow_spin=allow_spin_cmd, link_active=bool(bridge.active),
+            estop=bool(estopped), module_on=bool(spin_module is not None and spin_module.enabled),
+            reported=spin_reported)
+        # 这句理由以前只存进 state 就没人读了：界面只挂一个短标记，操作员看不到办法。
+        # 所以在"第一次出现/内容变了"时把全文打到日志和 field_log（50Hz 重算，
+        # 不做边沿触发的话一秒刷 50 行，等于没有）。
+        note = str(target.polar_spin_note or "")
+        if note != self._last_spin_note:
+            self._last_spin_note = note
+            if note:
+                _LOG.warning("spin command not sent: %s", note)
+                self.field_log.emit("spin_command_blocked", reason=note,
+                                    link_active=bool(bridge.active),
+                                    reported=spin_reported)
         # 云台直控请求（0x04 param0 bit0，电平语义，见 gimbal_host 桥）。
         # 三个条件缺一不可："Client Gimbal Control" 开着、链路在线、非急停。
         # 未打桥的固件忽略该字节，所以发它不改变老固件任何行为；打了桥的
@@ -2292,3 +2310,27 @@ class BackendManager:
                 "updates": self._official_state_updates_count,
             },
         }
+
+
+
+def spin_block_reason(*, allow_spin: bool, link_active: bool, estop: bool,
+                      module_on: bool, reported: Any = None) -> str:
+    """给出「自转为什么没发出去」的人话原因 + 三条可执行办法。
+
+    客户端的自转走上行 0x04 的**设定**语义（不是 SHIFT 边沿翻转）：
+    用 SHIFT 只能开、关不掉，再开一次反而关掉。所以在拿不到 0x1F 回读时
+    客户端去替驾驶员翻 SHIFT 是**故意不做**的，不是漏实现。
+    """
+
+    if estop or not allow_spin or not module_on:
+        return ""                      # 没要求过，就不该弹提示
+    if link_active:
+        return ""                      # 0x5A 在线，0x04 真发出去了，没资格弹
+    if reported is None:
+        detail = ("车上从没回读过 0x1F（固件未打 host_bridge 桥），"
+                  "客户端连它在不在转都无法确认")
+    else:
+        detail = f"最后一次 0x1F 回读是 {reported}，此刻 0x5A 断了，客户端改不动它"
+    return ("自转要走 0x5A 的 0x04 设定指令，现在 0x5A 链路没在线，所以没发出去。"
+            "三条办法：① 插 C 板 USB；② 把 Link Mode 改成 tcp 走车端桥（D 路）；"
+            f"③ 让驾驶员自己按遥控器上的 SHIFT。客户端不替驾驶员翻 SHIFT：{detail}")

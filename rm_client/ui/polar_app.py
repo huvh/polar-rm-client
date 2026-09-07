@@ -3542,6 +3542,10 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                 dt7 += "(鼠标被上位机云台顶掉)"
         else:
             dt7 = ""
+        spin_note = str(getattr(self.state, "polar_spin_note", "") or "")
+        if spin_note:
+            # 自转没发出去时不能只让 KM/DT7 灯亮着，得说出为什么 + 怎么办
+            dt7 = (dt7 + " " if dt7 else "") + "(自转没发·详见日志)"
         conflict = str(getattr(self.control, "km_source_conflict", "") or "")
         if conflict:
             dt7 = "KM冲突(!)" + conflict[:40]
