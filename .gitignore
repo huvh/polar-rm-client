@@ -39,6 +39,10 @@ Desktop.ini
 tmp_render_checks/
 tmp_selfcheck/
 tmp_*/
+# 本机跑 golden / 编译体检时留下的抓帧日志与源码快照，别让 git add -A 顺手带走
+_golden_out.txt
+kernel.errors.txt
+tmp_*.zip
 tmp_*.json
 _backup_*/
 
