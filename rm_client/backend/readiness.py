@@ -320,4 +320,34 @@ def audit_backend(
             required=False,
         ),
     )
+    dt7_module = registry.get("RobotLink") if registry is not None else None
+    dt7_setting = dt7_module.get_setting("Direct DT7 Egress") if dt7_module else None
+    selected_dt7 = bool(dt7_module and dt7_module.enabled
+        and dt7_setting and dt7_setting.value)
+    gates += (ReadinessGate("dt7_control", not selected_dt7 or bool(qualification and
+        "dt7_control" in qualification.capabilities()),
+        "selected DT7 route requires its own fresh link/physical safety evidence and sign-off",
+        True, required=selected_dt7),)
+    dt7_route_ok, dt7_detail = True, "DT7 route not selected"
+    if selected_dt7:
+        def enabled(name):
+            setting = dt7_module.get_setting(name)
+            return bool(setting and setting.value)
+        writer = getattr(manager, "_dt7_link", None)
+        control = getattr(manager, "_dt7_control_ref", None)
+        dt7_route_ok = bool(enabled("DT7 Real TX") and enabled("Allow Drive")
+            and not enabled("Radio KM Egress") and not enabled("Custom Controller Egress")
+            and writer is not None and not writer.mock_output
+            and control is not None and control.dt7_enabled)
+        dt7_detail = "DT7 real route, explicit drive grant, exclusive input source and qualified profile"
+        if dt7_route_ok:
+            try:
+                dt7_route_ok, reason = manager._dt7_evidence_gate(writer.profile)
+                dt7_route_ok = bool(dt7_route_ok and not writer._gate())
+                if not dt7_route_ok:
+                    dt7_detail += ": " + str(reason)
+            except Exception as exc:
+                dt7_route_ok, dt7_detail = False, f"DT7 route verification failed: {exc}"
+    gates += (ReadinessGate("dt7_runtime_route", dt7_route_ok, dt7_detail,
+        True, required=selected_dt7),)
     return BackendReadinessReport(gates)

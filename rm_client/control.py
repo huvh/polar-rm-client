@@ -231,6 +231,8 @@ class KeyboardControlBridge:
         self.radio_km_policy = "?"      # 车上报回来的键鼠档位名
         self.radio_km_policy_hint = ""
         self.radio_km_robot_key = -1
+        self.radio_km_robot_key_at = 0.0
+        self.radio_km_robot_key_sequence = 0
         self.radio_km_robot_rx_growing = False
         #: 一句话实况，直接给界面显示：off / blocked / no-readback / live /
         #: silent（车上一个包都没收到）/ stalled（收到过但不长了）
@@ -253,6 +255,7 @@ class KeyboardControlBridge:
         #: 所以没注入、没显式打开就一帧都不发。
         self.dt7_link = None
         self.dt7_enabled = False
+        self.dt7_selected = False
         self.dt7_sent = 0
         self.dt7_mouse_note = ""
         self.km_source_conflict = ""
@@ -272,6 +275,8 @@ class KeyboardControlBridge:
         #: （remote_control.c:629-630），完全不过 KM_KEY_ALLOWED_MASK，
         #: 所以客户端这道掩码是唯一的闸，不能不设防。
         self.dt7_key_mask = DT7_DEFAULT_KEY_MASK
+        self.dt7_allow_fire = False
+        self.dt7_qualification_token = None
         #: 被掩码挡掉的键名（要显示出来，不许静默丢键）
         self.dt7_dropped_keys: list[str] = []
         self.key_state: dict[str, bool] = {key: False for key in CONTROL_KEYS}
@@ -551,9 +556,12 @@ class KeyboardControlBridge:
         键位直接复用 command.keyboard_value：位序已被厂商枚举核实。
         """
         if not self.dt7_enabled or self.dt7_link is None:
-            # 出口本来就没开：线上不可能有我们按住的键（关出口那一下 manager 已经
-            # 补过松手帧）。这里必须把 pending 清掉，否则心跳会被它钉在 75Hz 空转。
-            self.dt7_release_pending = False
+            # Disabled/locked is not proof that neutral landed. A failed
+            # release stays pending until the old writer accepts a zero frame.
+            if self.dt7_link is not None and self.dt7_release_pending:
+                self.release_direct_dt7()
+            elif self.dt7_link is None:
+                self.dt7_release_pending = False
             return
         if self.dt7_send_paused:
             if time.perf_counter() < self.dt7_paused_until:
@@ -564,7 +572,10 @@ class KeyboardControlBridge:
             # 到期自愈：暂停是自检借用的把手，不是永久开关。
             self.dt7_send_paused = False
         if self.dt7_forced_keys is not None:
-            command = replace(command, keyboard_value=int(self.dt7_forced_keys))
+            command = replace(command, keyboard_value=int(self.dt7_forced_keys),
+                              mouse_x=0, mouse_y=0, mouse_z=0,
+                              left_button_down=False, right_button_down=False,
+                              mid_button_down=False)
         else:
             # 上游键位表可能带着 SHIFT/Q/E 过来，出口这里再收一次
             masked = int(command.keyboard_value) & int(self.dt7_key_mask) & 0xFFFF
@@ -573,6 +584,9 @@ class KeyboardControlBridge:
                 if (int(command.keyboard_value) >> bit) & 1 and not ((masked >> bit) & 1))
             if masked != int(command.keyboard_value):
                 command = replace(command, keyboard_value=masked)
+            if not self.dt7_allow_fire:
+                command = replace(command, left_button_down=False, right_button_down=False,
+                                  mid_button_down=False)
         neutral_now = (int(command.keyboard_value) == 0
                        and int(command.mouse_x) == 0 and int(command.mouse_y) == 0
                        and int(command.mouse_z) == 0
@@ -584,11 +598,12 @@ class KeyboardControlBridge:
                 mouse_dx=command.mouse_x, mouse_y=command.mouse_y, mouse_z=command.mouse_z,
                 left=command.left_button_down, right=command.right_button_down,
                 mid=command.mid_button_down,
+                qualification_token=self.dt7_qualification_token,
             )
         except Exception as exc:
             self.dt7_last_error = str(exc)
             # 异常时无法判断这一帧到底进没进口，按最坏情况处理：中立帧要补发。
-            self.dt7_release_pending = bool(neutral_now)
+            self.dt7_release_pending = True  # uncertain write: attempt neutral, never replay motion
             return
         self.dt7_last_error = "" if ok else str(why)
         if ok:
@@ -598,8 +613,9 @@ class KeyboardControlBridge:
             # "内容合法但没落地"（被 max_hz 挡 / 写口失败）的中立帧要一直补发；
             # 闸门拒绝（profile 不对、命令号没定案）不补，那属于配置问题，
             # 补发只会在日志里刷同一句原因。
-            self.dt7_release_pending = bool(
-                neutral_now and getattr(self.dt7_link, "last_send_dropped", False))
+            self.dt7_release_pending = bool(self.dt7_release_pending or
+                (neutral_now and getattr(self.dt7_link, "last_send_dropped", False)) or
+                (not self.dt7_enabled and not getattr(self.dt7_link, "wire_neutral", True)))
             if getattr(self.dt7_link, "last_send_rate_limited", False):
                 # 只有"被 max_hz 挡了"这一种失败要留增量；闸门拒绝/写串口失败
                 # 一律照旧清零，否则解除锁定的一瞬间会甩出一大段陈旧位移。
@@ -613,9 +629,10 @@ class KeyboardControlBridge:
             ok, why = self.dt7_link.release()
         except Exception as exc:
             self.dt7_last_error = str(exc)
+            self.dt7_release_pending = True
             return
-        if not ok:
-            self.dt7_last_error = str(why)
+        self.dt7_last_error = "" if ok else str(why)
+        self.dt7_release_pending = not ok
 
     def release_custom_controller(self) -> None:
         """急停/失去焦点时把选手端那侧的键鼠也归零（0x0306 全零键值）。"""
@@ -659,7 +676,7 @@ class KeyboardControlBridge:
         self._dt7_keep_motion = False
         if not self.km_source_conflict:
             self._send_direct_dt7(command)
-        if self.mock_output:
+        if self.mock_output or self.dt7_selected or self.dt7_qualification_token is not None:
             self._dirty = False
             self._consume_relative_motion()
             return

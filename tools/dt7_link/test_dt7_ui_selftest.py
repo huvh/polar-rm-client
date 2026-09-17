@@ -169,7 +169,7 @@ def main() -> int:
     check("按钮不阻塞渲染线程（用 QTimer，不用 sleep）",
           "time.sleep" not in mix.split("def run_dt7_link_selftest")[1].split("def start_kmc")[0])
     check("探针键位走的是 control 的两个把手，不是绕过去直写",
-          "dt7_forced_keys = probe" in mix and "dt7_send_paused = True" in mix)
+          "dt7_forced_keys = PROBE_BITS" in mix and "dt7_send_paused = phase == \"hold\"" in mix)
     rep = C.build_dt7_selftest_report(keys=["X"], forced_bits=x, baseline=0,
                                       verdict="PASS", detail="d", hold_verdict="EXPIRES",
                                       hold_detail="h", samples=10, tail_samples=8)

@@ -21,6 +21,7 @@ for _p in (str(ROOT), str(HERE)):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
+from offline_policy import OfflineDt7Safety
 from rm_client.backend import dt7_link as dl                        # noqa: E402
 from rm_client.control import ChassisCommand, KeyboardControlBridge  # noqa: E402
 
@@ -66,7 +67,7 @@ def new_ctl(link):
 
 
 print("--- 1) reserved 落点 ---")
-link = dl.Dt7KeyMouseLink(port="DT7", profile=dl.load_profile(), mock_output=True)
+link = dl.Dt7KeyMouseLink(safety=OfflineDt7Safety(), port="DT7", profile=dl.load_profile(), mock_output=True)
 frame = link.encode({"mouse_x": 0, "mouse_y": 0, "mouse_z": 0, "left": False,
                      "right": False, "keyboard_value": 0})
 dec = dl.decode_dt7_frame(frame)
@@ -75,7 +76,7 @@ reserved = struct.unpack_from("<H", dec["payload"], 10)[0]
 check("reserved 默认=通道中值 1024（写 0 会让车上 ch[4] 满偏）",
       reserved == 1024, "reserved=" + str(reserved))
 p0 = {**dl.load_profile(), "reserved_value": 0}
-again = dl.Dt7KeyMouseLink(port="DT7", profile=p0, mock_output=True).encode(
+again = dl.Dt7KeyMouseLink(safety=OfflineDt7Safety(), port="DT7", profile=p0, mock_output=True).encode(
     {"mouse_x": 0, "mouse_y": 0, "mouse_z": 0, "left": False, "right": False,
      "keyboard_value": 0})
 check("profile 里能显式改回 0（说明这是配置不是玄学）",
@@ -133,7 +134,7 @@ from rm_client.model import RobotState, build_default_registry  # noqa: E402
 bus = []
 prof2 = dict(dl.load_profile())
 prof2["max_hz"] = 10000.0                     # 关掉限流，只看消费行为
-link2 = dl.Dt7KeyMouseLink(port="DT7", profile=prof2, mock_output=False,
+link2 = dl.Dt7KeyMouseLink(safety=OfflineDt7Safety(), port="DT7", profile=prof2, mock_output=False,
                            write_bytes=lambda b: bus.append(bytes(b)))
 
 
@@ -164,7 +165,7 @@ bus2 = []
 prof5 = dict(dl.load_profile())
 prof5["max_hz"] = 30.0
 clock = [1000.0]
-link5 = dl.Dt7KeyMouseLink(port="DT7", profile=prof5, mock_output=False,
+link5 = dl.Dt7KeyMouseLink(safety=OfflineDt7Safety(), port="DT7", profile=prof5, mock_output=False,
                            write_bytes=bus2.append, time_fn=lambda: clock[0])
 link5._next_due = 0.0
 ok_a, _ = link5.send(pressed_bits=0, mouse_dx=10)
@@ -192,7 +193,7 @@ from rm_client.ui.polar.mixins.input_dispatch_mixin import InputDispatchMixin   
 bus3 = []
 prof6 = dict(dl.load_profile())
 prof6["max_hz"] = 10000.0                       # 别用限流掩盖"根本没发"
-link6 = dl.Dt7KeyMouseLink(port="DT7", profile=prof6, mock_output=False,
+link6 = dl.Dt7KeyMouseLink(safety=OfflineDt7Safety(), port="DT7", profile=prof6, mock_output=False,
                            write_bytes=bus3.append)
 ctl6 = KeyboardControlBridge(publisher=None, mock_output=False)
 ctl6.dt7_enabled = True

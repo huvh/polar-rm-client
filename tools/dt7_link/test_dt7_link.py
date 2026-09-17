@@ -27,6 +27,7 @@ ROOT = HERE.parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(HERE))
 
+from offline_policy import OfflineDt7Safety
 from rm_client.backend import dt7_link as dl          # noqa: E402
 from rm_client.control import (ChassisCommand, KeyboardControlBridge,
                            DT7_DEFAULT_KEY_MASK as C_DT7_DEFAULT_KEY_MASK,
@@ -130,7 +131,7 @@ def test_frame_and_crc_families() -> None:
 # ================================================= 3) 载荷结构
 def test_payload_layout() -> None:
     print("\n--- 3) 载荷 = Input_Device_Status_RC（12 字节、无中键）---")
-    lk = dl.Dt7KeyMouseLink(port="COM9", profile=prof_of())
+    lk = dl.Dt7KeyMouseLink(safety=OfflineDt7Safety(), port="COM9", profile=prof_of())
     lk._gate = lambda: ""
     frame = lk.encode({"mouse_x": -45, "mouse_y": 120, "mouse_z": 7,
                        "left": True, "right": False, "keyboard_value": 0x11})
@@ -149,14 +150,14 @@ def test_payload_layout() -> None:
 # ================================================= 4) 拒发闸门
 def test_refusals() -> None:
     print("\n--- 4) 配置说不通就拒发（宁可不动，也不骗人）---")
-    lk = dl.Dt7KeyMouseLink(port="COM9", profile=prof_of(cmd_wire=None))
+    lk = dl.Dt7KeyMouseLink(safety=OfflineDt7Safety(), port="COM9", profile=prof_of(cmd_wire=None))
     ok, why = lk.send(pressed_bits=1)
     check("命令号空 -> 拒发并写明", not ok and "未定案" in why, f"{ok} {why}")
-    lk = dl.Dt7KeyMouseLink(port="COM9", profile=prof_of(cmd_wire=0x2000, cmd_confirmed=False))
+    lk = dl.Dt7KeyMouseLink(safety=OfflineDt7Safety(), port="COM9", profile=prof_of(cmd_wire=0x2000, cmd_confirmed=False))
     ok, why = lk.send(pressed_bits=1)
     check("有值但未确认 -> 依然拒发", not ok and "未确认" in why, f"{ok} {why}")
     check("拒发的帧不计入 sent", lk.sent == 0 and lk.refused >= 1, f"{lk.sent}/{lk.refused}")
-    lk = dl.Dt7KeyMouseLink(port="COM9", profile=prof_of(cmd_wire=0x2000, cmd_confirmed=False,
+    lk = dl.Dt7KeyMouseLink(safety=OfflineDt7Safety(), port="COM9", profile=prof_of(cmd_wire=0x2000, cmd_confirmed=False,
                                                         allow_experimental_cmd=True))
     check("试号工具显式放行时才肯发", lk.send(pressed_bits=1)[0] and "实验" in lk.last_note,
           lk.last_note)
@@ -164,17 +165,17 @@ def test_refusals() -> None:
                   payload_fields=["mouse_x", "mouse_y", "mouse_z", "left", "right",
                                  "keyboard_value"])
     bad["_profile_error"] = ""
-    lk = dl.Dt7KeyMouseLink(port="COM9", profile=bad)
+    lk = dl.Dt7KeyMouseLink(safety=OfflineDt7Safety(), port="COM9", profile=bad)
     ok, why = lk.send(pressed_bits=1, mouse_dx=1)
     check("字段数与格式符对不上 -> 拒发", (not ok) and "不匹配" in why, f"{ok} {why}")
-    lk = dl.Dt7KeyMouseLink(port="COM9", profile=prof_of(
+    lk = dl.Dt7KeyMouseLink(safety=OfflineDt7Safety(), port="COM9", profile=prof_of(
         payload_fields=["mouse_x", "mouse_y", "mouse_z", "left", "right", "keyboard_value",
                         "nonsense"]))
     check("未知字段名也要被拒", "未知载荷字段" in str(lk._gate()), lk._gate())
-    lk = dl.Dt7KeyMouseLink(port="COM9", profile=prof_of(crc_variant="magic"))
+    lk = dl.Dt7KeyMouseLink(safety=OfflineDt7Safety(), port="COM9", profile=prof_of(crc_variant="magic"))
     check("未知 crc 族名要带错误出场（不是静默退回）",
           "crc_variant" in str(lk._gate()), lk._gate())
-    lk = dl.Dt7KeyMouseLink(port="COM9", profile=prof_of())
+    lk = dl.Dt7KeyMouseLink(safety=OfflineDt7Safety(), port="COM9", profile=prof_of())
     ok, _ = lk.send(pressed_bits=1, mid=True)
     check("中键没有落点：照发其它字段但把话说清楚（不能因中键把 WASD 拒了）",
           ok and "中键" in lk.last_note, f"{ok} {lk.last_note}")
@@ -184,7 +185,7 @@ def test_refusals() -> None:
 def test_rate_seq_handle() -> None:
     print("\n--- 5) 限流不吞时隙、seq 语义、串口句柄长持 ---")
     clock = {"t": 1000.0}
-    lk = dl.Dt7KeyMouseLink(port="COM9", profile=prof_of(max_hz=30.0),
+    lk = dl.Dt7KeyMouseLink(safety=OfflineDt7Safety(), port="COM9", profile=prof_of(max_hz=30.0),
                             time_fn=lambda: clock["t"])
     lk._gate = lambda: ""
     ok1, _ = lk.send(pressed_bits=1)
@@ -196,7 +197,7 @@ def test_rate_seq_handle() -> None:
     check("被限流那帧不消耗时隙：过了一个周期照发", ok3 and lk.sent == 2, f"{ok3} {lk.sent}")
     check("厂商这条 seq 恒 0（seq_increments=false）", lk.seq == 0, str(lk.seq))
     inc = prof_of(seq_increments=True)
-    lk2 = dl.Dt7KeyMouseLink(port="COM9", profile=inc)
+    lk2 = dl.Dt7KeyMouseLink(safety=OfflineDt7Safety(), port="COM9", profile=inc)
     lk2._gate = lambda: ""
     f0 = lk2.encode({"mouse_x": 0, "mouse_y": 0, "mouse_z": 0, "left": False,
                      "right": False, "keyboard_value": 0})
@@ -214,6 +215,7 @@ def test_rate_seq_handle() -> None:
 
         def write(self, data):
             self.written.append(bytes(data))
+            return len(data)
 
         def close(self):
             self.closed = True
@@ -222,7 +224,7 @@ def test_rate_seq_handle() -> None:
     sys.modules["serial"] = types.ModuleType("serial")
     sys.modules["serial"].Serial = FakeSerial
     try:
-        live = dl.Dt7KeyMouseLink(port="COM9", profile=prof_of(max_hz=200.0), mock_output=False,
+        live = dl.Dt7KeyMouseLink(safety=OfflineDt7Safety(), port="COM9", profile=prof_of(max_hz=200.0), mock_output=False,
                                   time_fn=lambda: clock["t"])
         live._gate = lambda: ""
         for i in range(3):
@@ -413,6 +415,7 @@ def test_bridge_gates_mutex() -> None:
               live.sent == n0 + 1 and len(live.last_frame) == 22, f"{live.sent} {live.last_error}")
         n1 = live.sent
         live._next_due = 0.0                      # 别被 30Hz 限流误判成"没发"
+        br3.dt7_allow_fire = True  # test unsupported mid rather than fire authorization
         br3.send_command(cmd(mid=True))
         check("按中键时只丢中键、驾驶键照发",
               live.sent == n1 + 1 and "中键" in live.last_note, live.last_note)
@@ -519,6 +522,7 @@ def test_link_recovery() -> None:
             if self.writes >= 2:
                 raise OSError("设备已移除")
             self.last = bytes(data)
+            return len(data)
 
         def close(self):
             self.closed = True
@@ -528,7 +532,7 @@ def test_link_recovery() -> None:
     saved = sys.modules.get("serial")
     sys.modules["serial"] = fake
     try:
-        lk = dl.Dt7KeyMouseLink(port="COM9", profile=prof_of(), mock_output=False)
+        lk = dl.Dt7KeyMouseLink(safety=OfflineDt7Safety(), port="COM9", profile=prof_of(), mock_output=False)
         lk._gate = lambda: ""
         ok1, _ = lk.send(pressed_bits=1)          # 第 1 次写：成功
         check("第一帧正常写出去、并记住真在用的口",
@@ -542,6 +546,7 @@ def test_link_recovery() -> None:
         check("resolved_port 清空，水印不会显示一个已经不存在的口",
               lk.resolved_port == "", lk.resolved_port)
         lk._next_due = 0.0
+        lk._open_backoff_until = 0.0  # isolate recovery after backoff
         ok4, why4 = lk.send(pressed_bits=1)
         check("下一帧自动重开并恢复发送",
               ok4 and len(made) == 2 and lk.resolved_port == "COM9"
@@ -555,7 +560,7 @@ def test_link_recovery() -> None:
 
         boom.Serial = AlwaysFail
         sys.modules["serial"] = boom
-        bad = dl.Dt7KeyMouseLink(port="COM8", profile=prof_of(), mock_output=False,
+        bad = dl.Dt7KeyMouseLink(safety=OfflineDt7Safety(), port="COM8", profile=prof_of(), mock_output=False,
                                  time_fn=lambda: 100.0)
         bad._gate = lambda: ""
         first_ok, first_why = bad.send(pressed_bits=1)
@@ -577,7 +582,7 @@ def test_link_recovery() -> None:
         else:
             sys.modules.pop("serial", None)
     prof_bad = prof_of()
-    lk2 = dl.Dt7KeyMouseLink(port="COM9", profile=prof_bad, mock_output=False)
+    lk2 = dl.Dt7KeyMouseLink(safety=OfflineDt7Safety(), port="COM9", profile=prof_bad, mock_output=False)
     lk2.write_bytes = lambda b: None
     lk2.send(pressed_bits=1)
     check("注入 write_bytes 时 resolved_port 不该冒充真口",
@@ -586,7 +591,7 @@ def test_link_recovery() -> None:
 
 def test_range_clamping() -> None:
     print("\n--- 10) 越界值：截进位宽并说明，而不是抛错把整帧废掉 ---")
-    lk = dl.Dt7KeyMouseLink(port="COM9", profile=prof_of())
+    lk = dl.Dt7KeyMouseLink(safety=OfflineDt7Safety(), port="COM9", profile=prof_of())
     lk._gate = lambda: ""
     frame = lk.encode({"mouse_x": 999999, "mouse_y": -999999, "mouse_z": 0,
                        "left": False, "right": False, "keyboard_value": 0x1FFFF})
@@ -599,7 +604,7 @@ def test_range_clamping() -> None:
     ok, _ = lk.send(mouse_dx=99999, pressed_bits=0x11)
     check("越界那一帧照样发得出去（WASD 不能被鼠标值连坐）", ok, lk.last_error)
     check("发完之后 last_note 说清楚截了什么", "截断" in lk.last_note, lk.last_note)
-    normal = dl.Dt7KeyMouseLink(port="COM9", profile=prof_of())
+    normal = dl.Dt7KeyMouseLink(safety=OfflineDt7Safety(), port="COM9", profile=prof_of())
     normal._gate = lambda: ""
     normal.send(mouse_dx=12, mouse_y=-7, pressed_bits=3)
     check("正常范围内的值不受影响、也不误报截断",
@@ -615,7 +620,7 @@ def test_mouse_limit() -> None:
     check("仓库 profile 带了 mouse_limit 且是有限值",
           isinstance(base.get("mouse_limit"), int) and 0 < base["mouse_limit"] <= 2000,
           str(base.get("mouse_limit")))
-    lk = dl.Dt7KeyMouseLink(port="COM9", profile=prof_of())
+    lk = dl.Dt7KeyMouseLink(safety=OfflineDt7Safety(), port="COM9", profile=prof_of())
     lk._gate = lambda: ""
     ok, _ = lk.send(mouse_dx=9000, mouse_y=-9000, pressed_bits=0x11)
     dec = dl.decode_dt7_frame(lk.last_frame)
@@ -624,13 +629,13 @@ def test_mouse_limit() -> None:
           ok and (x, y) == (200, -200), f"{x} {y}")
     check("截断要写在 note 里，不静默", "截断" in lk.last_note, lk.last_note)
     unlimited = prof_of(mouse_limit=0)
-    lk2 = dl.Dt7KeyMouseLink(port="COM9", profile=unlimited)
+    lk2 = dl.Dt7KeyMouseLink(safety=OfflineDt7Safety(), port="COM9", profile=unlimited)
     lk2._gate = lambda: ""
     lk2.send(mouse_dx=30000)
     check("mouse_limit=0 表示不额外限制（仍受 int16 截断保护）",
           struct.unpack_from("<h", dl.decode_dt7_frame(lk2.last_frame)["payload"], 0)[0] == 30000,
           lk2.last_note)
-    lk3 = dl.Dt7KeyMouseLink(port="COM9", profile=prof_of(mouse_limit=32767))
+    lk3 = dl.Dt7KeyMouseLink(safety=OfflineDt7Safety(), port="COM9", profile=prof_of(mouse_limit=32767))
     lk3._gate = lambda: ""
     lk3.send(mouse_dx=-40000)
     # 32767 本身就是上限，截到 -32767（不是 -32768：int16 的不对称不该被测试猜错）
@@ -648,11 +653,11 @@ def test_mouse_limit() -> None:
         tmp.unlink(missing_ok=True)
     bad = prof_of(mouse_limit=0)
     bad["_profile_error"] = ""
-    lk4 = dl.Dt7KeyMouseLink(port="COM9", profile=bad)
+    lk4 = dl.Dt7KeyMouseLink(safety=OfflineDt7Safety(), port="COM9", profile=bad)
     lk4._gate = lambda: ""
     bad2 = prof_of()
     bad2["mouse_limit"] = "乱"
-    lk5 = dl.Dt7KeyMouseLink(port="COM9", profile=bad2)
+    lk5 = dl.Dt7KeyMouseLink(safety=OfflineDt7Safety(), port="COM9", profile=bad2)
     lk5._gate = lambda: ""
     lk5.send(mouse_dx=1234)
     check("运行期拿到垃圾 mouse_limit 时按不限制走，但值仍受 int16 保护",

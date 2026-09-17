@@ -28,7 +28,7 @@ def check(name, ok, detail=""):
         FAILED += 0 if ok else 1
 
 
-def run(sim, *, keys=("W", "SHIFT"), profile=None):
+def run(sim, *, keys=("X",), profile=None):
     t0 = time.perf_counter()
     res = ws.run_selftest(dt7_port="DT7", board_port="BOARD", keys=keys,
                           seconds=0.15, baseline_s=0.12, profile=profile,
@@ -38,7 +38,7 @@ def run(sim, *, keys=("W", "SHIFT"), profile=None):
 
 def main() -> int:
     print("\n--- C 路闭环自检工具的判据 ---")
-    bits = df.keys_to_bits(["W", "SHIFT"], order="vendor2026")
+    bits = df.keys_to_bits(["X"], order="vendor2026")
 
     # 1) Debug 帧能被真解码器认出来（否则一切判定都是空中楼阁）
     buf, sink = bytearray(), []
@@ -94,7 +94,7 @@ def main() -> int:
 
     # 8) 换一个键位组合也要能判（不是把 W|SHIFT 写死了）
     res, _ = run(ws.SimRobot(), keys=("D",))
-    check("换单键 D 也判 PASS", res["verdict"] == "PASS", res["verdict"])
+    check("运动键 D 拒绝且不打开硬件", res["verdict"] == "BLOCKED", res["verdict"])
     # 9) 现场证据：跑完要留下可复核的 JSON（结论 + 当时用的 profile）
     import tempfile
     with tempfile.TemporaryDirectory() as td:
@@ -114,20 +114,20 @@ def main() -> int:
               rp.exists(), str(rp))
     # 10) 粘键测试：两种厂商行为都要判对（这才值得上车测）
     stuck = ws.SimRobot()                      # 默认 hold=True：停发后保持最后一帧
-    hs = ws.run_hold_test(dt7_port="DT7", board_port="BOARD", keys=("W",),
+    hs = ws.run_hold_test(dt7_port="DT7", board_port="BOARD", keys=("X",),
                           seconds=0.4, press_s=0.25, open_serial=stuck.opener)
     check("DT7 保持最后一帧时判 STUCK（粘键，需要现场规矩）",
           hs["verdict"] == "STUCK", f"{hs['verdict']} held={hs.get('held_tail')}")
     check("粘键判定必须建立在停发之后的样本上（不是停发之前）",
           hs["press_frames"] > 0 and hs.get("held_tail", 0) > 0, str(hs.get("held_tail")))
     exp = ws.SimRobot(hold=False)              # 停发后 DT7 自己过期清零
-    he = ws.run_hold_test(dt7_port="DT7", board_port="BOARD", keys=("W",),
+    he = ws.run_hold_test(dt7_port="DT7", board_port="BOARD", keys=("X",),
                           seconds=0.6, press_s=0.25, open_serial=exp.opener)
     check("DT7 会过期清零时判 EXPIRES（安全侧）",
           he["verdict"] == "EXPIRES", f"{he['verdict']} {he['note']}")
     check("清零这一支必须真的先按住过再掉回（防止空判）",
           he["press_frames"] > 0 and he["dropped_after_stop"] is True, str(he))
-    hnr = ws.run_hold_test(dt7_port="DT7", board_port="BOARD", keys=("W",),
+    hnr = ws.run_hold_test(dt7_port="DT7", board_port="BOARD", keys=("X",),
                            seconds=0.2, press_s=0.1,
                            open_serial=ws.SimRobot(reply=False).opener)
     check("读不到回读时粘键测试判不成立（不许当成安全）",
@@ -137,7 +137,7 @@ def main() -> int:
     p_un["cmd_confirmed"] = False
     p_un["allow_experimental_cmd"] = False
     p_un["_profile_error"] = ""
-    hb = ws.run_hold_test(dt7_port="DT7", board_port="BOARD", keys=("W",),
+    hb = ws.run_hold_test(dt7_port="DT7", board_port="BOARD", keys=("X",),
                           seconds=0.2, press_s=0.1, profile=p_un,
                           open_serial=blocked.opener)
     check("profile 没定案时粘键测试也不碰 DT7",

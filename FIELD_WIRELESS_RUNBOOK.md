@@ -1,5 +1,9 @@
 # 客户端无线控车 · 现场一页纸
 
+> DT7 路径最新安全流程见 [DT7_BACKEND_ALIGNMENT.md](DT7_BACKEND_ALIGNMENT.md)。
+> 以下旧记录不能替代资格证据；现在 DT7 自检仅允许 X 专用令牌，不能照旧注入
+> W/SHIFT。普通真发必须独立 DT7 资格 + 核心技术门 + 双人签字 + 人工 Arm。
+
 给上车的人看的。三分钟内能走完。**证据与原理都在
 `tools/dt7_link/README.md`（第 5/8/10/11/12 节）和
 `tools/firmware/host_bridge/GAPS.md` 第 10 节，这里只写动作。**

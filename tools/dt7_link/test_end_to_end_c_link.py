@@ -59,6 +59,11 @@ def build(sim):
     link = dl.Dt7KeyMouseLink(port="DT7", profile=prof, mock_output=False,
                               write_bytes=sim.write)
     manager._dt7_link = link
+    # This legacy test isolates endpoint wiring; dt7_alignment_test separately
+    # verifies real evidence, expiry, locks and disconnect re-arm behavior.
+    manager.safety.update_stage("4")
+    manager.safety.arm_match({"core_kmc", "dt7_control"})
+    manager._dt7_evidence_gate = lambda profile: (True, "offline endpoint fixture")
     br = KeyboardControlBridge(publisher=None, mock_output=True)
     return manager, registry, state, br, module, link
 

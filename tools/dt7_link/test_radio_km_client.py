@@ -121,7 +121,7 @@ def test_manager_gates() -> None:
           "没有" in note and "USART" in note, note[:70])
     check("提示要给出两条可行做法（C 路 / 车载电脑喂 HostKmFeed）",
           "C 路" in note and "HostKmFeed" in note, note[-80:])
-    manager.polar_bridge.debug_packages = {"km_rx": 12.0, "km_key": 17.0}
+    manager.polar_bridge._handle_debug({"packages": {"km_rx": 12.0, "km_key": 17.0}})
     manager.tick_polar_link(state, registry, control)
     check("计数在涨 -> live", control.radio_km_link_state == "live",
           control.radio_km_link_state)

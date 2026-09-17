@@ -387,6 +387,8 @@ class BackendManager:
         target = state if state is not None else self.state
         if target is None:
             return {"active": False}
+        if control is not None:
+            self._dt7_control_ref = control
         self._retry_polar_connect()
         for segment in self.polar.drain_segments():
             self.polar_bridge.apply(segment)
@@ -640,6 +642,10 @@ class BackendManager:
                                               if key_raw is not None else -1)
             except (TypeError, ValueError):
                 control.radio_km_robot_key = -1
+            control.radio_km_robot_key_at = bridge.debug_key_at
+            control.radio_km_robot_key_sequence = bridge.debug_key_sequence
+            if not (bridge.debug_key_at > 0 and 0 <= time.perf_counter() - bridge.debug_key_at <= 0.75):
+                control.radio_km_robot_key = -1
             prev_rx = getattr(self, "_km_rx_prev", None)
             growing = rx_now is not None and prev_rx is not None and rx_now > prev_rx
             self._km_rx_prev = rx_now if rx_now is not None else prev_rx
@@ -694,6 +700,9 @@ class BackendManager:
         # ---- 直连 DT7 出口：同样三道闸，但不要求选手端在跑、也不要求 0x5A 在线 ----
         dt7_setting = settings.get("Direct DT7 Egress")
         dt7_wanted = bool(dt7_setting is not None and dt7_setting.value)
+        if control is not None:
+            control.dt7_selected = dt7_wanted
+        self._dt7_selected = bool(dt7_wanted and module is not None and module.enabled)
         if control is not None and dt7_wanted:
             prof = dt7_link.load_profile()
             port = str(getattr(settings.get("DT7 Port"), "value", "Auto") or "Auto")
@@ -704,16 +713,31 @@ class BackendManager:
             if (link is None or link.port != port or link.profile != prof
                     or link.mock_output == real_tx):
                 if link is not None:
+                    self.safety.lock_control("DT7 transport/profile/mode changed; requalification/re-arm required")
+                    # Never discard a non-neutral writer just because the UI
+                    # changed port, profile or mock mode.
+                    if not link.wire_neutral:
+                        ok, why = link.release()
+                        if not ok:
+                            self.safety.lock_control("DT7 previous writer did not release: " + str(why))
+                            control.dt7_link = link
+                            control.dt7_enabled = False
+                            control.dt7_release_pending = True
+                            return {"active": bridge.active, "dt7_error": str(why)}
                     try:
                         link.close()
                     except Exception:
                         pass
                 link = dt7_link.Dt7KeyMouseLink(port=port, profile=prof,
-                                                mock_output=not real_tx)
+                                                mock_output=not real_tx, safety=self.safety)
                 self._dt7_link = link
             control.dt7_link = link
+            link.safety = self.safety
+            link.authorization_guard = self._dt7_evidence_gate
+            policy_ok, policy_reason = (True, "mock") if link.mock_output else self.safety.can_transmit_dt7(
+                qualification_token=getattr(control, "dt7_qualification_token", None))
             dt7_live = bool(not estopped and allow_drive
-                            and module is not None and module.enabled)
+                            and module is not None and module.enabled and policy_ok)
             # 松手帧要覆盖**每一条**降级路径：急停、撤 Allow Drive、模块停用。
             # 旧代码只在急停时补，另外两条路是"直接停发" —— 而 DT7 那侧没有
             # 过期自动清零，键会粘在车上继续控。
@@ -730,10 +754,12 @@ class BackendManager:
             fire_setting = settings.get("DT7 Allow Fire Keys")
             if fire_setting is not None and bool(fire_setting.value):
                 mask |= int(DT7_FIRE_KEY_MASK)
+            control.dt7_allow_fire = bool(fire_setting is not None and fire_setting.value)
             control.dt7_key_mask = mask
             control.dt7_enabled = dt7_live
             if not dt7_live:
-                control.dt7_last_error = "直连 DT7 出口未生效（急停/未授权/模块未启用）"
+                control.dt7_last_error = (str(policy_reason) if not policy_ok else
+                    "直连 DT7 出口未生效（急停/未授权/模块未启用）")
             elif str(prof.get("_profile_error") or ""):
                 control.dt7_last_error = "DT7 配置不可用：" + str(prof["_profile_error"])
             else:
@@ -1128,6 +1154,24 @@ class BackendManager:
             return
         self.field_log.emit(event, **payload)
 
+    def _dt7_evidence_gate(self, profile: dict) -> tuple[bool, str]:
+        if "dt7_control" not in self.qualification.capabilities():
+            return False, "DT7 evidence missing/expired or human sign-off invalid"
+        session = self.qualification.session
+        identity_ok, reason = self.qualification.identity_matches(
+            robot_id=str(getattr(self.state, "robot_id", session.robot_id)),
+            firmware_hash=session.firmware_hash,
+            match_mode=getattr(self.state, "match_mode", session.match_mode),
+            video_source=self._canonical_readiness_video_source())
+        if not identity_ok:
+            return False, reason
+        digest = dt7_link.profile_digest(profile)
+        for key in ("dt7_link_test", "dt7_robot_safety_test"):
+            result = session.tests.get(key) if session is not None else None
+            if not result or not isinstance(result.measured, dict) or result.measured.get("profile_sha256") != digest:
+                return False, "DT7 profile differs from qualified evidence"
+        return True, "DT7 evidence matched"
+
     def _request_input_clear(self, reason: str) -> None:
         """Clear host input whenever a control authorization epoch ends.
 
@@ -1138,6 +1182,21 @@ class BackendManager:
         """
 
         self._input_clear_generation += 1
+        control = getattr(self, "_dt7_control_ref", None)
+        if control is not None:
+            control.dt7_qualification_token = None
+            control.dt7_forced_keys = None
+            control.dt7_send_paused = False
+            control.dt7_enabled = False
+            control.reset_inputs()
+        link = getattr(self, "_dt7_link", None)
+        if link is not None and not link.wire_neutral:
+            try:
+                ok, _ = link.release()
+            except Exception:
+                ok = False
+            if control is not None:
+                control.dt7_release_pending = not ok
         hook = self.input_clear_hook
         if hook is not None:
             try:
@@ -2111,6 +2170,8 @@ class BackendManager:
         match_mode: str | None = None,
         video_source: str | None = None,
     ) -> tuple[bool, str]:
+        if self.safety.estop_active:
+            return False, "release E-stop explicitly before arming"
         # Evidence must be minted over the real transport. A mock bridge
         # reports every publish as OK, so a LabDebug/mock session could
         # otherwise produce valid-looking KMC/E-stop evidence without a
@@ -2143,6 +2204,15 @@ class BackendManager:
             self.safety.lock_control(identity_reason)
             return False, identity_reason
         capabilities = self.qualification.capabilities()
+        dt7_writer = getattr(self, "_dt7_link", None)
+        if getattr(self, "_dt7_selected", False) and dt7_writer is not None and not dt7_writer.mock_output:
+            if "dt7_control" not in capabilities:
+                self.safety.lock_control("DT7 link and robot safety evidence missing/expired")
+                return False, self.safety.last_reason
+            dt7_ready, dt7_reason = self._dt7_evidence_gate(dt7_writer.profile)
+            if not dt7_ready:
+                self.safety.lock_control(dt7_reason)
+                return False, self.safety.last_reason
         try:
             self.safety.arm_match(capabilities)
         except ValueError as exc:

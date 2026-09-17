@@ -288,6 +288,7 @@ print('polar spec OK: %d segments, %d roles, %d warnings'
         Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\polar_startup_test.py") "polar_startup" 240 $testLogRoot
         Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\api_freeze_test.py") "api_freeze" 180 $testLogRoot
         Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\field_candidate_test.py") "field_candidate" 240 $testLogRoot
+        Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\dt7_alignment_test.py") "dt7_alignment" 180 $testLogRoot
         Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\smoke_test.py") "ui_backend_regression" 300 $testLogRoot
         Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\gpu_compositor_test.py") "gpu_compositor" 180 $testLogRoot
         # QOpenGLWidget runtime smokes require a real desktop/WGL surface. A
@@ -352,6 +353,7 @@ print('polar spec OK: %d segments, %d roles, %d warnings'
     Copy-Item -LiteralPath $TexasWallpaperPath -Destination (Join-Path $wallpaperRoot "texas.mp4") -Force
     Copy-Item -LiteralPath $VendingWallpaperPath -Destination (Join-Path $wallpaperRoot "vending-machine.mp4") -Force
     Copy-Item -LiteralPath (Join-Path $sourceRoot "configs\default.json") -Destination (Join-Path $portable "defaults\default.json") -Force
+    Copy-Item -LiteralPath (Join-Path $sourceRoot "configs\dt7_profile.json") -Destination (Join-Path $portable "defaults\dt7_profile.json") -Force
     Get-ChildItem -LiteralPath (Join-Path $sourceRoot "licenses") -Force |
         Copy-Item -Destination (Join-Path $portable "licenses") -Recurse -Force
     Copy-Item -LiteralPath (Join-Path $sourceRoot "THIRD_PARTY_NOTICES.md") -Destination (Join-Path $portable "licenses\THIRD_PARTY_NOTICES.md") -Force
@@ -381,6 +383,7 @@ exit /b %errorlevel%
     $criticalFiles = [ordered]@{
         "bin/ffmpeg.exe" = $expectedFfmpeg
         "defaults/default.json" = (Get-FileHash (Join-Path $portable "defaults\default.json") -Algorithm SHA256).Hash
+        "defaults/dt7_profile.json" = (Get-FileHash (Join-Path $portable "defaults\dt7_profile.json") -Algorithm SHA256).Hash
         "resources/assets/wallpapers/builtin/texas.mp4" = $expectedTexas
         "resources/assets/wallpapers/builtin/vending-machine.mp4" = $expectedVending
         "licenses/FFMPEG-GPLv3.txt" = (Get-FileHash (Join-Path $portable "licenses\FFMPEG-GPLv3.txt") -Algorithm SHA256).Hash
@@ -418,6 +421,7 @@ exit /b %errorlevel%
         tests = [ordered]@{
             backend_protocol = "PASS"
             field_candidate = "PASS"
+            dt7_alignment = "PASS"
             ui_backend_regression = "PASS"
             gpu_compositor = "PASS"
             gpu_renderer_runtime = "PASS"

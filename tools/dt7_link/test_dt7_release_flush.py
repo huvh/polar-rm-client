@@ -23,6 +23,7 @@ for _p in (str(ROOT), str(HERE)):
         sys.path.insert(0, _p)
 
 import rm_client.control as C                                   # noqa: E402
+from offline_policy import OfflineDt7Safety
 from rm_client.backend import dt7_link as dl                    # noqa: E402
 from rm_client.model import RobotState, build_default_registry   # noqa: E402
 
@@ -71,7 +72,7 @@ def make_link(sink=None, max_hz=30.0):
     prof = dict(dl.load_profile())
     prof["max_hz"] = max_hz
     seen: list = []
-    link = dl.Dt7KeyMouseLink(port="DT7", profile=prof, mock_output=False,
+    link = dl.Dt7KeyMouseLink(safety=OfflineDt7Safety(), port="DT7", profile=prof, mock_output=False,
                               write_bytes=(sink if sink is not None else seen.append),
                               time_fn=CLOCK.perf_counter)
     return link, seen
@@ -128,7 +129,7 @@ def flaky(frame):
 
 
 bus2: list = []
-link2 = dl.Dt7KeyMouseLink(port="DT7", profile=dict(dl.load_profile(), max_hz=30.0),
+link2 = dl.Dt7KeyMouseLink(safety=OfflineDt7Safety(), port="DT7", profile=dict(dl.load_profile(), max_hz=30.0),
                            mock_output=False, write_bytes=flaky,
                            time_fn=CLOCK.perf_counter)
 CLOCK.t = 0.0

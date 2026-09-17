@@ -52,8 +52,8 @@ PC→DT7 那一帧长什么样（从大疆 12.x 选手端二进制里逐条反�
 安全约定
 --------
 - 默认 ``mock_output=True``（只产帧不碰硬件）；真发要 manager 显式传 ``mock_output=False``
-  且界面勾 "DT7 Real TX"。第一次上车请**架空驱动轮**，并跑
-  ``tools/dt7_link/dt7_wireless_selftest.py`` 判 PASS 再谈别的。
+  且界面勾 "DT7 Real TX"。正常真发还必须 MATCH_ARMED + 独立 DT7 能力；
+  自检使用短期资格令牌，仅允许全零/X。探针 PASS 不能代替车辆安全证据。
 - 串口句柄长持：每帧 open/close 会被 DTR/RTS 抖动与端口独占拖死。
 - DT7 那侧没有"过期自动清零"的兜底 ⇒ 任何降级路径都必须补一帧全零（``release``）。
 - profile 自相矛盾（布局/字段/CRC 族对不上）一律**拒发并写明原因**，不静默改语义。
@@ -61,15 +61,18 @@ PC→DT7 那一帧长什么样（从大疆 12.x 选手端二进制里逐条反�
 from __future__ import annotations
 
 import json
+import hashlib
+import math
 import struct
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from .. import serial_ports as ports
+from ..runtime_paths import RuntimePaths
 
 ROOT = Path(__file__).resolve().parents[2]
-PROFILE_FILE = ROOT / "configs" / "dt7_profile.json"
+PROFILE_FILE = RuntimePaths.discover().defaults_root / "dt7_profile.json"
 
 SOF_RC = 0x5A             # DT7 那条 VCOM 上的帧头（厂商 OnSendInputStatus 现场）
 SOF_A5 = 0xA5             # 图传/裁判那族（本模块只作对照用）
@@ -116,7 +119,15 @@ DEFAULT_PROFILE = {
     # 一帧攒出几千像素是完全可能的，而云台增量 = mouse / SENSITIVITY，会一帧甩到限位。
     # 截断是安全侧，越界值同时记在 clipped_fields 里，不静默。
     "mouse_limit": 200,
+    "reserved_value": 1024,          # DBUS channel 5 neutral; part of qualified wire identity
+    "open_retry_s": 0.5,
 }
+
+
+def profile_digest(profile: dict) -> str:
+    semantic = {key: profile.get(key, value) for key, value in DEFAULT_PROFILE.items()}
+    return hashlib.sha256(json.dumps(semantic, sort_keys=True, separators=(",", ":"),
+                                    ensure_ascii=False).encode("utf-8")).hexdigest().upper()
 
 
 def status_token(*, mock_output: bool, resolved_port: str = "", last_error: str = "",
@@ -242,6 +253,8 @@ def load_profile(path: str | None = None) -> dict:
     try:
         raw = json.loads(fp.read_text(encoding="utf-8-sig"))
     except FileNotFoundError:
+        prof["_profile_error"] = f"DT7 profile missing: {fp}; real TX is locked"
+        prof["cmd_confirmed"] = False
         return prof
     except Exception as exc:                       # noqa: BLE001
         prof["_profile_error"] = f"profile 读失败，按默认（不发）：{exc}"
@@ -302,6 +315,17 @@ def load_profile(path: str | None = None) -> dict:
             prof["_profile_error"] = f"mouse_limit 要取 0..32767：{limit!r}"
         else:
             prof["mouse_limit"] = limit
+    for key, low, high in (("reserved_value", 0, 65535), ("open_retry_s", 0.1, 5.0)):
+        if key in raw:
+            value = raw[key]
+            valid = (not isinstance(value, bool) and isinstance(value, (int, float))
+                     and math.isfinite(value) and low <= value <= high)
+            if key == "reserved_value":
+                valid = valid and isinstance(value, int)
+            if valid:
+                prof[key] = value
+            else:
+                prof["_profile_error"] = f"invalid {key}: {value!r}"
     return prof
 
 
@@ -430,6 +454,8 @@ class Dt7KeyMouseLink:
     last_send_dropped: bool = False
     _handle: object | None = None
     time_fn: object = time.perf_counter
+    safety: object | None = None
+    authorization_guard: object | None = None
 
     def _gate(self) -> str:
         """能不能发。任何一条不满足就返回原因，调用方据此拒发。"""
@@ -495,7 +521,9 @@ class Dt7KeyMouseLink:
 
     def send(self, *, pressed_bits: int = 0, mouse_dx: int = 0, mouse_y: int = 0,
              mouse_z: int = 0, left: bool = False, right: bool = False,
-             mid: bool | None = None, now: float | None = None) -> tuple[bool, str]:
+             mid: bool | None = None, now: float | None = None,
+             qualification_token: str | None = None,
+             _neutral_release: bool = False) -> tuple[bool, str]:
         now = float(self.time_fn()) if now is None else float(now)
         self.last_send_rate_limited = False
         self.last_send_dropped = False
@@ -514,6 +542,32 @@ class Dt7KeyMouseLink:
         # 松手——3.5m/s 下将近一米过冲。离线复现见 tools/dt7_link/test_dt7_release_flush.py。
         neutral = (int(pressed_bits) == 0 and not left and not right and not mid
                    and int(mouse_dx) == 0 and int(mouse_y) == 0 and int(mouse_z) == 0)
+        if not self.mock_output:
+            if _neutral_release and not neutral:
+                self.last_error = "neutral release cannot contain control input"
+                return False, self.last_error
+            if not _neutral_release:
+                if self.safety is None:
+                    self.last_error = "DT7 has no bound safety policy; real TX is LOCKED"
+                    return False, self.last_error
+                allowed, reason = self.safety.can_transmit_dt7(
+                    qualification_token=qualification_token, now=now)
+                if not allowed:
+                    self.last_error = str(reason)
+                    return False, self.last_error
+                if not qualification_token and self.authorization_guard is not None:
+                    try:
+                        allowed, reason = self.authorization_guard(self.profile)
+                    except Exception as exc:
+                        allowed, reason = False, f"DT7 evidence verification failed: {exc}"
+                    if not allowed:
+                        self.safety.lock_control(str(reason))
+                        self.last_error = str(reason)
+                        return False, self.last_error
+                if qualification_token and (int(pressed_bits) not in (0, 1 << 12)
+                        or mouse_dx or mouse_y or mouse_z or left or right or mid):
+                    self.last_error = "DT7 qualification permits only neutral/X probe, never driving or firing"
+                    return False, self.last_error
         must_land = bool(neutral and not self.wire_neutral)
         # 破例的额度是**结构上**有界的，不需要再加时间下限：连续两帧都走 must_land
         # 是不可能的（must_land 成功后 wire_neutral 立刻变 True），所以"破例"最多
@@ -554,11 +608,17 @@ class Dt7KeyMouseLink:
             notes.append("越界截断：" + "/".join(sorted(set(clipped))))
         self.last_note = "；".join(notes)
         if not self.mock_output:
+            # A failed/partial write cannot prove the receiver stayed neutral.
+            if not neutral:
+                self.wire_neutral = False
             try:
                 self._emit(frame)
             except Exception as exc:               # noqa: BLE001
-                self.last_error = f"写 DT7 口失败：{exc}"
+                reason = f"写 DT7 口失败：{exc}"
                 self.last_send_dropped = True      # 线**没**变，调用方必须补发
+                if not _neutral_release and self.safety is not None:
+                    self.safety.lock_control("DT7 disconnected/write failed; explicit re-arm required")
+                self.last_error = reason
                 return False, self.last_error
         self.last_error = ""
         self.sent += 1
@@ -567,6 +627,8 @@ class Dt7KeyMouseLink:
         # 写失败时上面直接 return 了，wire_neutral 会一直停在 False，
         # 于是下一次松手帧仍然是 must_land —— 端口恢复的那一刻它就插队出去。
         self.wire_neutral = neutral
+        if not self.mock_output and not _neutral_release and self.safety is not None:
+            self.safety.mark_published("DT7KeyboardMouseControl", now=now)
         if must_land:
             self.forced_releases += 1
         return True, "mock" if self.mock_output else "ok"
@@ -606,7 +668,9 @@ class Dt7KeyMouseLink:
 
     def _emit(self, frame: bytes) -> None:
         if self.write_bytes is not None:
-            self.write_bytes(frame)
+            written = self.write_bytes(frame)
+            if written is not None and written != len(frame):
+                raise RuntimeError(f"short write {written}/{len(frame)}")
             return
         target, why = self._open_target()
         if not target:
@@ -633,9 +697,12 @@ class Dt7KeyMouseLink:
         self.resolved_port = target
         self._open_last_error = ""
         try:
-            handle.write(frame)
+            written = handle.write(frame)
+            if written != len(frame):
+                raise RuntimeError(f"short write {written}/{len(frame)}")
         except Exception as exc:
             self._drop_handle()          # 关键：死句柄必须扔，否则从此永久失效
+            self._open_backoff_until = now + float(self.profile.get("open_retry_s", 0.5))
             raise RuntimeError(f"{target} 写入失败（句柄已丢弃，下一帧重开）：{exc}")
 
     def release(self, now: float | None = None) -> tuple[bool, str]:
@@ -643,7 +710,7 @@ class Dt7KeyMouseLink:
         now = float(self.time_fn()) if now is None else now
         self._next_due = 0.0
         return self.send(pressed_bits=0, mouse_dx=0, mouse_y=0, mouse_z=0,
-                         left=False, right=False, mid=None, now=now)
+                         left=False, right=False, mid=None, now=now, _neutral_release=True)
 
     def watermark_token(self) -> str:
         """本出口能自证的那半句水印（真函数在模块级，那里才拿得到 control 的 pending）。

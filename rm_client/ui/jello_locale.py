@@ -99,6 +99,7 @@ MODULE_ZH = {
 # Phrases whose natural Chinese order cannot be produced by token joining.
 SETTING_ZH = {
     "Language": "界面语言",
+    "Record DT7 Safety Test": "记录DT7物理安全测试",
     "Open Injury Statistics": "打开伤害计分板",
     "Open Settlement": "打开比赛结算",
     "Open Dart Panel": "打开飞镖面板",

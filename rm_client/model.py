@@ -990,6 +990,7 @@ def build_default_registry() -> ModuleRegistry:
                         "Run Preflight",
                         "Run Video Test",
                         "Run KMC Test",
+                        "Record DT7 Safety Test",
                         "Run Economy Send Test",
                         "Record E-Stop Test",
                         "Observe Firmware Zero",

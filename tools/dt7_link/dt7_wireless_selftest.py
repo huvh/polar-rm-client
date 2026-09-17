@@ -16,16 +16,18 @@ r"""一条命令回答：「自定义客户端经 DT7 到底控不控得动车�
 
 用法：
     python tools/dt7_link/dt7_wireless_selftest.py --dt7-port COM9 --board-port COM3
-    python tools/dt7_link/dt7_wireless_selftest.py --dt7-port COM9 --board-port COM3 --keys W --seconds 4
+    python tools/dt7_link/dt7_wireless_selftest.py --dt7-port COM9 --board-port COM3 --keys X --seconds 4
     python tools/dt7_link/dt7_wireless_selftest.py --dry-run     # 不碰硬件，假车走一遍
 
-安全：**先架空驱动轮**。本工具真的往 DT7 写键鼠，`SHIFT` 是小陀螺开关，车会自己切自转。
-无论如何结束都补松手帧（DT7 那侧没有过期自动清零）。
+安全：先停用发射、架空驱动轮并核实当前固件 X 无动作。本工具只允许全零/X，
+持短期 DT7 专用资格令牌，不允许 WASD、SHIFT 或开火。观察结束补松手帧。
+该工具只生成诊断，不能替代物理停机证据、双人签字或自动 Arm。
 """
 from __future__ import annotations
 
 import argparse
 import json
+import math
 import struct
 import sys
 import time
@@ -38,6 +40,7 @@ sys.path.insert(0, str(HERE))
 
 import dt7_dbus_frame as df                       # noqa: E402
 from rm_client.backend import dt7_link as dl      # noqa: E402
+from rm_client.backend.safety import OfficialSafety
 from rm_client.backend import polar_link as pl    # noqa: E402
 
 BASELINE_S = 0.6
@@ -75,8 +78,11 @@ def _feed(reader, codec, buf: bytearray, sink: list[int]) -> None:
         if seg.segment_id != pl.SEG_DEBUG:
             continue
         value = (seg.fields or {}).get("packages", {}).get("km_key")
-        if value is not None:
+        if (isinstance(value, (int, float)) and not isinstance(value, bool)
+                and math.isfinite(value) and float(value).is_integer() and 0 <= value <= 65535):
             sink.append(int(value))
+            if len(sink) > 2048:
+                del sink[0]
 
 
 def _collect(reader, codec, buf: bytearray, seconds: float, sink: list[int]) -> None:
@@ -103,7 +109,7 @@ def judge(base: int, sent_bits: int, samples: list[int]) -> str:
     return "NO-CHANGE"
 
 
-def run_selftest(*, dt7_port: str, board_port: str, keys=("W", "SHIFT"),
+def run_selftest(*, dt7_port: str, board_port: str, keys=("X",),
                  seconds: float = 4.0, profile: dict | None = None,
                  open_serial=None, baseline_s: float = BASELINE_S) -> dict:
     """跑一遍闭环判定。`open_serial(port, baud)` 可注入，离线测试拿它造假车。"""
@@ -112,6 +118,15 @@ def run_selftest(*, dt7_port: str, board_port: str, keys=("W", "SHIFT"),
     out: dict = {"sent_bits": sent_bits, "keys": [k.upper() for k in keys],
                  "frames_sent": 0, "baseline": None, "observed": [],
                  "verdict": "", "note": "", "refused_before": 0}
+    if {str(k).upper() for k in keys} != {"X"}:
+        out.update(verdict="BLOCKED", note="DT7 qualification permits only X; no ports opened")
+        return out
+    if any(not isinstance(v, (int, float)) or not math.isfinite(v) or not 0.01 <= v <= 60
+           for v in (seconds, baseline_s)):
+        out.update(verdict="BLOCKED", note="probe duration must be finite and bounded; no ports opened")
+        return out
+    safety = OfficialSafety("DT7Qualification")
+    token = safety.begin_qualification({"dt7_selftest"}, ttl_s=120.0)
     opener = open_serial
     if opener is None:
         import serial
@@ -123,6 +138,7 @@ def run_selftest(*, dt7_port: str, board_port: str, keys=("W", "SHIFT"),
     codec = pl.PolarFrameCodec()
     buf = bytearray()
     dt7 = None
+    link = None
     try:
         _collect(lambda n: board.read(n), codec, buf, baseline_s, out["observed"])
         base = mode(out["observed"])
@@ -133,7 +149,7 @@ def run_selftest(*, dt7_port: str, board_port: str, keys=("W", "SHIFT"),
                            "先查 --board-port 是不是那个 DJI/CDC 串口、"
                            "固件 __USB_SEND_DEBUG 是否为 1")
             return out
-        link = dl.Dt7KeyMouseLink(port=dt7_port, profile=prof, mock_output=False)
+        link = dl.Dt7KeyMouseLink(port=dt7_port, profile=prof, mock_output=False, safety=safety)
         gate = link._gate()
         if gate:
             out["verdict"] = "BLOCKED"
@@ -144,7 +160,7 @@ def run_selftest(*, dt7_port: str, board_port: str, keys=("W", "SHIFT"),
         seen: list[int] = []
         start = time.perf_counter()
         while time.perf_counter() - start < seconds:
-            ok, why = link.send(pressed_bits=sent_bits)
+            ok, why = link.send(pressed_bits=sent_bits, qualification_token=token.value)
             if ok:
                 out["frames_sent"] += 1
             else:
@@ -152,14 +168,17 @@ def run_selftest(*, dt7_port: str, board_port: str, keys=("W", "SHIFT"),
             _collect(lambda n: board.read(n), codec, buf, 0.05, seen)
         for _ in range(2):
             link._next_due = 0.0
-            link.send(pressed_bits=0)
+            link.release()
         link._next_due = 0.0
         link.release()
         out["refused_before"] = link.refused
         out["observed"] = out["observed"] + seen
-        out["verdict"] = judge(base, sent_bits, seen)
+        out["verdict"] = judge(base, sent_bits, seen) if out["frames_sent"] else "NOT-SENT"
         return out
     finally:
+        if link is not None and dt7 is not None:
+            link.release()
+        safety.lock_control("DT7 standalone probe finished")
         for handle in (board, dt7):
             try:
                 if handle is not None:
@@ -168,7 +187,7 @@ def run_selftest(*, dt7_port: str, board_port: str, keys=("W", "SHIFT"),
                 pass
 
 
-def run_hold_test(*, dt7_port: str, board_port: str, keys=("W",), seconds: float = 2.0,
+def run_hold_test(*, dt7_port: str, board_port: str, keys=("X",), seconds: float = 2.0,
                   profile: dict | None = None, open_serial=None,
                   press_s: float = 0.6) -> dict:
     """**停发之后键位还在不在？** 这决定 C 路掉线时会不会粘键。
@@ -182,6 +201,15 @@ def run_hold_test(*, dt7_port: str, board_port: str, keys=("W",), seconds: float
     out: dict = {"keys": [k.upper() for k in keys], "bits": bits, "press_frames": 0,
                  "held_after_stop": None, "dropped_after_stop": False, "verdict": "",
                  "note": ""}
+    if any(not isinstance(v, (int, float)) or not math.isfinite(v) or not 0.01 <= v <= 60
+           for v in (seconds, press_s)):
+        out.update(verdict="BLOCKED", note="probe duration must be finite and bounded; no ports opened")
+        return out
+    if {str(k).upper() for k in keys} != {"X"}:
+        out.update(verdict="BLOCKED", note="DT7 qualification permits only X; no ports opened")
+        return out
+    safety = OfficialSafety("DT7Qualification")
+    token = safety.begin_qualification({"dt7_selftest"}, ttl_s=120.0)
     opener = open_serial
     if opener is None:
         import serial
@@ -193,8 +221,9 @@ def run_hold_test(*, dt7_port: str, board_port: str, keys=("W",), seconds: float
     codec = pl.PolarFrameCodec()
     buf = bytearray()
     dt7 = None
+    link = None
     try:
-        link = dl.Dt7KeyMouseLink(port=dt7_port, profile=prof, mock_output=False)
+        link = dl.Dt7KeyMouseLink(port=dt7_port, profile=prof, mock_output=False, safety=safety)
         gate = link._gate()
         if gate:
             out["verdict"] = "BLOCKED"
@@ -209,22 +238,35 @@ def run_hold_test(*, dt7_port: str, board_port: str, keys=("W",), seconds: float
             out["verdict"] = "NO-READBACK"
             out["note"] = "读不到车上回读，粘键测试不成立（别当成安全）"
             return out
+        if baseline & bits:
+            out.update(verdict="BLOCKED", note="baseline already contains probe: cannot certify transition")
+            return out
         end = time.perf_counter() + press_s
         while time.perf_counter() < end:
-            if link.send(pressed_bits=bits)[0]:
+            if link.send(pressed_bits=bits, qualification_token=token.value)[0]:
                 out["press_frames"] += 1
             _collect(lambda n: board.read(n), codec, buf, 0.02, [])
-        # 故意**不** release：这一步模拟的就是进程被杀
+        # Observation window intentionally stops TX; finally attempts neutral afterwards.
+        if not out["press_frames"]:
+            out.update(verdict="NOT-SENT", note="no actual DT7 press frame: cannot evaluate expiry")
+            return out
         stop_at = time.perf_counter()
         tail: list[int] = []
         stamps: list[tuple[float, int]] = []
+        first_clear = None
         while time.perf_counter() - stop_at < seconds:
             batch: list[int] = []
             _collect(lambda n: board.read(n), codec, buf, 0.05, batch)
             now = time.perf_counter()
             for value in batch:
+                if first_clear is None and (value & bits) != bits:
+                    first_clear = (now, value)
                 stamps.append((now, value))
             tail.extend(batch)
+            if len(stamps) > 4096:
+                del stamps[:-4096]
+            if len(tail) > 4096:
+                del tail[:-4096]
         # 看**稳态**而不是"有没有过按住位"：超时清零的实现前一段必然还停在按住位，
         # 拿"任意样本仍按住"当判据会把安全侧误判成粘键（现场就会白加一条规矩）。
         tail = [s for s in tail if s is not None]
@@ -243,11 +285,14 @@ def run_hold_test(*, dt7_port: str, board_port: str, keys=("W",), seconds: float
             "停发后最后一段回读仍停在按住的那些位 = 粘键" if out["verdict"] == "STUCK"
             else "停发后键位自己掉回基线 = DT7 会过期清零（安全侧）")
         # "多久才清零"要用真实时间戳量，不能拿采样个数乘一个猜出来的周期
-        cleared = next(((ts, v) for ts, v in stamps if (v & bits) != bits), None)
+        cleared = first_clear
         out["clear_after_s"] = round(cleared[0] - stop_at, 3) if cleared else None
         out["tail_span_s"] = round(stamps[-1][0] - stop_at, 3) if stamps else None
         return out
     finally:
+        if link is not None and dt7 is not None:
+            link.release()
+        safety.lock_control("DT7 standalone probe finished")
         for handle in (board, dt7):
             try:
                 if handle is not None:
@@ -371,7 +416,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="C 路（PC→DT7→DR16→C 板）闭环自检")
     ap.add_argument("--dt7-port", default=None, help="DT7 那个 DJI USB Virtual COM")
     ap.add_argument("--board-port", default=None, help="C 板 Type-C 虚拟串口（只读回读）")
-    ap.add_argument("--keys", default="W,SHIFT", help="要注入的键位，逗号分隔")
+    ap.add_argument("--keys", default="X", help="资格探针仅允许 X；必须核实当前固件无动作")
     ap.add_argument("--seconds", type=float, default=4.0)
     ap.add_argument("--dry-run", action="store_true", help="不碰硬件，用假车走一遍流程")
     ap.add_argument("--sim-reject", action="store_true", help="配合 --dry-run：假车不理帧")

@@ -22,6 +22,7 @@ CONTROL_TOPICS = frozenset({
     "DartCommand",
     "SentryCtrlCommand",
     "AirSupportCommand",
+    "DT7KeyboardMouseControl",
 })
 
 
@@ -59,7 +60,8 @@ class OfficialSafety:
         self._stage_seen = False
         self._publish_at: dict[str, float] = {}
         self._publish_limit_hz = 10.0
-        self._topic_limit_hz = {"KeyboardMouseControl": 75.0, "CustomControl": 75.0}
+        self._topic_limit_hz = {"KeyboardMouseControl": 75.0, "CustomControl": 75.0,
+                               "DT7KeyboardMouseControl": 30.0}
         self._qualification: QualificationToken | None = None
         self._authorized_capabilities: frozenset[str] = frozenset()
         self.last_reason = "startup lock"
@@ -125,6 +127,8 @@ class OfficialSafety:
         ttl_s: float = 30.0,
         now: float | None = None,
     ) -> QualificationToken:
+        if self.estop_active or self.control_state == ControlState.ESTOP:
+            raise ValueError("release E-stop explicitly before qualification")
         current = time.perf_counter() if now is None else float(now)
         token = QualificationToken(
             value=secrets.token_urlsafe(24),
@@ -139,6 +143,8 @@ class OfficialSafety:
         return token
 
     def arm_match(self, capabilities: Iterable[str]) -> None:
+        if self.estop_active or self.control_state == ControlState.ESTOP:
+            raise ValueError("release E-stop explicitly before arming")
         allowed = frozenset(str(value) for value in capabilities)
         if "core_kmc" not in allowed:
             raise ValueError("core_kmc qualification is required")
@@ -152,6 +158,8 @@ class OfficialSafety:
 
     @staticmethod
     def _capability_for(name: str, intent: str) -> str:
+        if name == "DT7KeyboardMouseControl":
+            return "dt7_control"
         if intent in {"prm1_vision", "prm1_spin", "hero", "economy", "core_kmc"}:
             return intent
         if name == "KeyboardMouseControl":
@@ -174,7 +182,9 @@ class OfficialSafety:
         current = time.perf_counter() if now is None else float(now)
         if self.estop_active or self.control_state == ControlState.ESTOP:
             return self._deny("E-stop active; only the dedicated zero KMC bypass is allowed")
-        if not self.allow_mqtt_publish:
+        # DT7 is an independent transport, not MQTT. Its explicit Real TX
+        # switch is checked by the manager/link, but never replaces this lock.
+        if not self.allow_mqtt_publish and name != "DT7KeyboardMouseControl":
             return self._deny("current scenario is mock-only and does not allow real MQTT publishing")
         authorized_qualification = False
         if name in CONTROL_TOPICS:
@@ -196,7 +206,7 @@ class OfficialSafety:
                 capability = self._capability_for(name, str(intent))
                 if capability not in self._authorized_capabilities:
                     return self._deny(f"capability {capability} remains LOCKED MOCK")
-        if self.enforce_official_limits and name in CONTROL_TOPICS:
+        if (self.enforce_official_limits or name == "DT7KeyboardMouseControl") and name in CONTROL_TOPICS:
             # A token-bound qualification frame is a supervised, neutral test
             # publish.  The stage gate exists to stop unsupervised control in
             # non-fighting stages; requiring stage 4 here would make the whole
@@ -206,9 +216,18 @@ class OfficialSafety:
                 return self._deny("not in an authoritative fighting stage")
             previous = self._publish_at.get(name, -1.0)
             limit_hz = self._topic_limit_hz.get(name, self._publish_limit_hz)
-            if previous >= 0.0 and current - previous < 1.0 / limit_hz:
+            # DT7's writer handles 30 Hz and the one-shot neutral exception.
+            # Applying this MQTT limiter to an authorization-only check would
+            # toggle the manager's live flag and inject unwanted zero frames.
+            if name != "DT7KeyboardMouseControl" and previous >= 0.0 and current - previous < 1.0 / limit_hz:
                 return self._deny(f"{name} exceeds {limit_hz:g} Hz")
         return True, "ok"
+
+    def can_transmit_dt7(self, *, qualification_token: str | None = None,
+                         now: float | None = None) -> tuple[bool, str]:
+        intent = "dt7_selftest" if qualification_token else "dt7_control"
+        return self.can_publish("DT7KeyboardMouseControl", now=now,
+                                intent=intent, qualification_token=qualification_token)
 
     def _deny(self, reason: str) -> tuple[bool, str]:
         self.last_reason = reason

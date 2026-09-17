@@ -122,6 +122,11 @@ def main() -> int:
                 if seg.segment_id == pl.SEG_DEBUG:
                     km = (seg.fields or {}).get("packages", {}).get("km_key")
     check("上行经过桥之后仍能解出 Debug 段（km_key=17）", km == 17, str(km))
+    # Receiving TCP bytes can beat the upstream thread's post-sendall counter
+    # commit. Wait for that independent event, not an assumed GIL schedule.
+    counter_deadline = time.monotonic() + 1.0
+    while bridge2.bytes_serial_to_client == 0 and time.monotonic() < counter_deadline:
+        time.sleep(0.002)
     check("桥把上行的字节数也算进统计", bridge2.bytes_serial_to_client > 0,
           str(bridge2.bytes_serial_to_client))
 

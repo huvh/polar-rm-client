@@ -13,6 +13,7 @@ from enum import Enum
 import hashlib
 import hmac
 import json
+import math
 import os
 from pathlib import Path
 import secrets
@@ -39,11 +40,15 @@ CORE_TESTS = (
     "field_signoff",
 )
 DYNAMIC_TESTS = frozenset(CORE_TESTS + (
+    "dt7_link_test",
+    "dt7_robot_safety_test",
     "economy_live_test",
     "prm1_vision_bench_test",
     "prm1_spin_bench_test",
 ))
 OPTIONAL_TESTS = (
+    "dt7_link_test",
+    "dt7_robot_safety_test",
     "economy_live_test",
     "prm1_vision_schema_review",
     "prm1_vision_bench_test",
@@ -70,6 +75,7 @@ class TestStatus(str, Enum):
 
 class Capability(str, Enum):
     CORE_KMC = "core_kmc"
+    DT7_CONTROL = "dt7_control"
     HERO = "hero"
     ECONOMY = "economy"
     PRM1_VISION = "prm1_vision"
@@ -329,6 +335,8 @@ class QualificationManager:
             raise ValueError("create a qualification session first")
         if source in {"config", "ui-boolean"}:
             raise ValueError("configuration cannot create technical evidence")
+        if str(key) in {"dt7_link_test", "dt7_robot_safety_test"}:
+            raise ValueError("DT7 evidence requires the transport-bound/supervised runner")
         if str(key) in PRM1_TESTS:
             raise ValueError("PRM1 evidence requires the supervised firmware-bound runner")
         return self._record_result(
@@ -406,6 +414,39 @@ class QualificationManager:
             notes=notes,
             source="supervised-prm1-fixture",
         )
+
+    def record_dt7_probe(self, probe, *, profile_sha256: str, real_transport: bool) -> TestResult:
+        from .dt7_qualification import Dt7Probe
+        if not isinstance(probe, Dt7Probe) or probe.result is None or not real_transport:
+            raise ValueError("a completed real DT7 probe is required, mock cannot mint evidence")
+        details = dict(probe.result)
+        details["profile_sha256"] = self.store._normalise_hash(profile_sha256)
+        return self._record_result("dt7_link_test", details["verdict"] == "PASS",
+            measured=details, threshold="fresh pre-send baseline and actual vehicle key transition",
+            notes="Key-field probe is not a physical motor-stop certificate", source="dt7-probe-runner")
+
+    def record_supervised_dt7_safety(self, *, observer: str, firmware_hash: str,
+                                    profile_sha256: str, measured: Mapping[str, Any]) -> TestResult:
+        if self.session is None or self.store._normalise_hash(firmware_hash) != self.session.firmware_hash:
+            raise ValueError("DT7 safety observation must match the session firmware")
+        if not str(observer).strip():
+            raise ValueError("a named physical safety observer is required")
+        digest = self.store._normalise_hash(profile_sha256)
+        link = self.session.tests.get("dt7_link_test")
+        if not self.test_passed("dt7_link_test") or not isinstance(link.measured, Mapping) or link.measured.get("profile_sha256") != digest:
+            raise ValueError("a fresh matching DT7 link probe is required")
+        details = dict(measured)
+        required = ("physical_estop_observed", "physical_loss_zero_observed", "reconnect_stayed_neutral")
+        times = [details.get(key) for key in ("estop_zero_ms", "loss_zero_ms")]
+        passed = all(details.get(key) is True for key in required) and all(
+            isinstance(value, (int, float)) and not isinstance(value, bool)
+            and math.isfinite(value) and 0 <= value <= 500 for value in times)
+        details.update(observer=str(observer).strip(), profile_sha256=digest,
+                       robot_id=self.session.robot_id, firmware_hash=self.session.firmware_hash)
+        return self._record_result("dt7_robot_safety_test", passed, measured=details,
+            threshold={"physical_observer_required": True, "maximum_zero_ms": 500},
+            notes="Physical observations, not configuration or key-field inference",
+            source="supervised-dt7-safety-fixture")
 
     def sign_off(self, safety_lead: str) -> TestResult:
         if self.session is None:
@@ -555,6 +596,8 @@ class QualificationManager:
         core, reason = self.core_ready()
         mapping = {
             Capability.CORE_KMC.value: core,
+            Capability.DT7_CONTROL.value: core and self.test_passed("dt7_link_test")
+            and self.test_passed("dt7_robot_safety_test"),
             Capability.HERO.value: core and self.test_passed("hero_deploy_status_test"),
             Capability.ECONOMY.value: core and self.test_passed("economy_live_test"),
             # PRM1 can never inherit core authorization. It needs a reviewed

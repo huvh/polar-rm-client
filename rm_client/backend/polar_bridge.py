@@ -143,6 +143,8 @@ class PolarStateBridge:
         # 0x03 的部件错误位单独留一份，供 HUD 红字用
         self.module_errors: dict[str, bool] = {}
         self.debug_packages: dict[str, float] = {}
+        self.debug_key_at = 0.0
+        self.debug_key_sequence = 0
         # 机器人上报的自身位置/朝向，用于驾驶反馈
         self.robot_report: dict[str, float] = {}
 
@@ -161,6 +163,8 @@ class PolarStateBridge:
         self.overlay.clear()
         self.module_errors.clear()
         self.debug_packages.clear()
+        self.debug_key_at = 0.0
+        self.debug_key_sequence = 0
         self.robot_report.clear()
         self.segment_counts.clear()
         self.last_segment_at = 0.0
@@ -355,6 +359,20 @@ class PolarStateBridge:
             self.debug_packages = {
                 str(name): _finite(value) for name, value in packages.items()
             }
+            # Only a valid km_key observation advances the sample identity.
+            # Other telemetry must not make a retained keyboard sample fresh.
+            try:
+                raw = packages.get("km_key")
+                key = float(raw)
+                valid = not isinstance(raw, bool) and math.isfinite(key) and key.is_integer() and 0 <= key <= 0xffff
+            except (TypeError, ValueError, OverflowError):
+                valid = False
+            if valid:
+                self.debug_key_at = self.clock()
+                self.debug_key_sequence += 1
+            else:
+                self.debug_packages.pop("km_key", None)
+                self.debug_key_at = 0.0
         self.overlay["polar_debug_packages"] = self.debug_packages
 
 
