@@ -25,9 +25,14 @@
 
 ## Minecraft 1.21.11 HUD 资源
 
-- Hotbar、选择框、心、护甲、饱食度、BossBar、状态背景和 `ascii.png` 位图字体来自用户提供的本机 Minecraft 1.21.11 Fabric 客户端 JAR。
-- 提取基准 JAR 的 SHA-256 为 `1473c9489ac50fda3c435049a76a70d61a10b8610db27f5ba9d8756b686cd3bd`；提交中的 22 个 Minecraft HUD 资源文件均已逐文件哈希回查为该 JAR 内的原始字节。
+- Hotbar、选择框、心、护甲、饱食度、BossBar、状态背景、背包容器和 `ascii.png` 位图字体来自用户提供的本机 Minecraft 1.21.11 Fabric 客户端 JAR。
+- 提取基准 JAR 的 SHA-256 为 `1473c9489ac50fda3c435049a76a70d61a10b8610db27f5ba9d8756b686cd3bd`；提交中的 23 个 Minecraft HUD 资源文件均已逐文件哈希回查为该 JAR 内的原始字节。新增 `inventory.png` 对应 `assets/minecraft/textures/gui/container/inventory.png`，SHA-256 为 `c2f850076ad7ebd7a1b27d017fe5f66ac388f54de374de988cb79f86b1d59a65`。
 - 资源只用于本地 Minecraft 战斗 HUD 预设；相关商标、视觉资源和其他权利归 Mojang/Microsoft 及各自权利人所有。本项目未打包完整 Minecraft 客户端或游戏代码。
+
+## RoboMaster 学生客户端 UI 参考
+
+- 学生客户端语言包中的界面标题和字段说明用于核对受伤害、结算、补弹、飞镖、性能点等展示项；未复制完整语言包、Unity 资源、登录实现或通信代码。
+- 新增的 16px 增益/模块方块图标由本项目绘制，不是 Minecraft 药水或 DJI 原图。
 
 ## rm-native-viewer
 

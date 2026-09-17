@@ -54,6 +54,7 @@
 from __future__ import annotations
 
 import time
+from dataclasses import replace
 
 from PySide6.QtCore import QPointF, QRectF, Qt, QTimer
 from PySide6.QtGui import QPainter, QPainterPath
@@ -65,6 +66,7 @@ from ...gpu_frame_compositor import LensMaterial
 from ...overlay_coordinator import OverlayKind
 from ...paint import rounded_rect, text_width
 from ...theme import THEME, color
+from ...student_reload import append_reload_details, reload_detail_height, paint_reload_commands
 from ...economy_glass import draw_economy_glass, draw_economy_glass_capsule, draw_economy_glass_well
 from ....economy import (
     CATEGORY_TITLES,
@@ -205,6 +207,9 @@ class EconomyMixin:
 
     def economy_offers(self, category: str | None = None) -> list[EconomyOffer]:
         offers = available_actions(self.state)
+        labels = {"rmuc_confirm_respawn": "免费复活 [Y]", "rmuc_gold_respawn": "买活 [F1]"}
+        offers = [replace(offer, title=labels[offer.key], short_title=labels[offer.key])
+                  if offer.key in labels else offer for offer in offers]
         if category is None:
             return offers
         return [offer for offer in offers if offer.category == category]
@@ -254,12 +259,18 @@ class EconomyMixin:
                     self.open_match_chat()
                 elif pending_overlay == OverlayKind.HERO_DEPLOY:
                     self.open_hero_deploy_interface()
+                elif pending_overlay == OverlayKind.STUDENT:
+                    panel = self._student_pending_panel
+                    self._student_pending_panel = None
+                    if panel:
+                        self.open_student_panel(panel)
 
             # Present/restore is still on the GL stack here. Defer the next
             # modal request to the event queue so ownership never overlaps.
             QTimer.singleShot(0, open_pending_overlay)
 
     def open_economy_workspace(self, category: str | None = None) -> None:
+        self.close_student_panel(immediate=True)
         if self.hero_deploy_video_cut_active():
             self.open_hero_deploy_interface()
             self.toast("Exit Hero deploy mode before opening Economy")
@@ -795,6 +806,13 @@ class EconomyMixin:
 
         history_top = detail.top() + 144.0 * scale
         history_max_bottom = content_bottom - 4.0 * scale
+        if self.economy_category == "ammo":
+            reload_clip = QRectF(detail.left()+detail_pad, history_top,
+                                detail.width()-2*detail_pad, max(0.0, history_max_bottom-history_top))
+            reload_commands = ClickGuiDrawList()
+            append_reload_details(self, reload_commands, reload_clip, reload_clip, content_alpha, scale, self.economy_visible)
+            paint_reload_commands(self, p, reload_commands)
+            history_top += reload_detail_height(self)*scale
         if history_top + 40.0 * scale < history_max_bottom:
             self.draw_glass_text(
                 p,
@@ -1317,6 +1335,7 @@ class EconomyMixin:
         detail_vp_clip = body_clip(detail_vp)
         # Compute detail content height for scroll bounds
         detail_content_h = 142.0  # selected info module
+        detail_content_h += reload_detail_height(self)
         history = list(reversed(self.economy_bridge.history[-3:]))
         detail_content_h += 24.0 + max(1, len(history)) * 52.0 if history else 52.0
         self.economy_detail_scroll.set_bounds(max(0.0, detail_content_h - detail_vp.height()))
@@ -1361,6 +1380,10 @@ class EconomyMixin:
 
         # Transaction history
         history_top = detail_vp.top() + 128.0 - detail_scroll
+        append_reload_details(self, commands,
+                              QRectF(detail_vp.left(), history_top, detail_vp.width(), reload_detail_height(self)),
+                              detail_vp_clip, detail_alpha, interactive=self.economy_visible and layout.interactive)
+        history_top += reload_detail_height(self)
         button = layout.action_button.translated(0.0, layout.detail_offset)
         if history_top + 36.0 < detail_vp_clip.bottom():
             commands.text(

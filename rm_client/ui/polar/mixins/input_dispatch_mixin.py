@@ -552,6 +552,8 @@ class InputDispatchMixin:
         self._combat_input_was_allowed = False
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
+        if self.handle_student_mouse(event, "press"):
+            return
         self.setFocus(Qt.FocusReason.MouseFocusReason)
         if self.binding_module is not None:
             return
@@ -585,6 +587,8 @@ class InputDispatchMixin:
             self.search_focus = False
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
+        if self.handle_student_mouse(event, "move"):
+            return
         if self.quick_action_wheel.active or self.overlay_coordinator.radial_active:
             point = event.position()
             previous = self.quick_action_wheel.selected_index
@@ -650,6 +654,8 @@ class InputDispatchMixin:
             panel["y"] = point.y() - self.drag["offset_y"]
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+        if self.handle_student_mouse(event, "release"):
+            return
         if self.quick_action_wheel.active or self.overlay_coordinator.radial_active:
             self.quick_action_wheel.update_pointer(event.position().x(), event.position().y())
             event.accept()
@@ -695,6 +701,11 @@ class InputDispatchMixin:
             event.accept()
 
     def wheelEvent(self, event: QWheelEvent) -> None:
+        if self.student_ui.visible:
+            if self.student_ui.panel == "inventory":
+                self.handle_student_action("student_page", -1 if event.angleDelta().y() > 0 else 1)
+            event.accept()
+            return
         point = event.position()
         delta = -event.angleDelta().y() / 120.0 * 28.0
         if self.match_chat.input_open:
@@ -833,6 +844,9 @@ class InputDispatchMixin:
                 self.auto_save_config()
             else:
                 self.open_hero_deploy_interface()
+            event.accept()
+            return
+        if self.handle_student_key(event, True):
             event.accept()
             return
         chat_module = self.registry.get("MatchChat")
@@ -1005,6 +1019,9 @@ class InputDispatchMixin:
             return
 
     def keyReleaseEvent(self, event: QKeyEvent) -> None:
+        if self.handle_student_key(event, False):
+            event.accept()
+            return
         if self.binding_module is not None or self.search_focus:
             return
         quick_wheel_module = self.registry.get("QuickActionWheel")
@@ -1074,7 +1091,8 @@ class InputDispatchMixin:
         """Only the unobstructed combat viewport owns robot key/mouse input."""
 
         return bool(
-            not self.home_visible
+            not self.student_ui.visible
+            and not self.home_visible
             and not self.gui_visible
             and not self.economy_visible
             and not self.hero_deploy_ui.visible
@@ -1169,6 +1187,8 @@ class InputDispatchMixin:
     # ------------------------------------------------------------------
 
     def dispatch(self, action: str, payload: Any, point: QPointF, button: int, rect: QRectF) -> None:
+        if self.handle_student_action(action, payload, point):
+            return
         if action in _GUI_CACHE_INVALIDATE_ACTIONS:
             self.invalidate_gui_cache()
         handler = _DISPATCH_HANDLERS.get(action)

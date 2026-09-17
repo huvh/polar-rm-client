@@ -489,6 +489,8 @@ class RobotState:
     sentry_ctrl_result: dict[str, Any] = field(default_factory=dict)
     special_mechanisms: list[dict[str, Any]] = field(default_factory=list)
     injury_stats: dict[int, dict[str, Any]] = field(default_factory=dict)
+    # Frontend-only seam for detailed student panels. Never a control flag.
+    student_ui_data: dict[str, Any] = field(default_factory=dict)
     # RobotInjuryStat is cumulative.  The backend baselines the first sample
     # and publishes only positive 17/42 mm deltas through these fields so a
     # reconnect cannot be mistaken for a fresh hit.
@@ -1960,6 +1962,8 @@ def build_default_registry() -> ModuleRegistry:
             description="把 RMUI JUP/PTE/WHE/LES 状态元素转换为 POLAR 指示器。",
         ),
     ]
+    from .student_ui import student_modules
+    modules.extend(student_modules())
     # Function-bar slots accept any module, but the list is populated only
     # after registry construction so it cannot drift when modules are added.
     function_bar = next((module for module in modules if module.name == "MinecraftCombatHUD"), None)

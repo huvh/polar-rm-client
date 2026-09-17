@@ -177,6 +177,10 @@ class VideoBackendMixin:
         if name == "MatchChat":
             self.open_match_chat()
             return True
+        from ....student_ui import PANEL_MODULES
+        if name in PANEL_MODULES:
+            self.open_student_panel(PANEL_MODULES[name])
+            return True
         target = self.registry.get(name)
         if target is None:
             self.toast(f"MC slot target missing: {name}")
@@ -207,6 +211,7 @@ class VideoBackendMixin:
         )
 
     def open_hero_deploy_interface(self) -> bool:
+        self.close_student_panel(immediate=True)
         if self.home_visible:
             return False
         module = self.registry.get("HeroLob")
@@ -946,6 +951,7 @@ class VideoBackendMixin:
             and self.setting_bool(match_chat, "Referee Notices", True)
         ):
             self.chat_event_adapter.combat(event)
+            self.student_notice_adapter.combat(event, self.get_setting_number(effect, "Combo Window", 5.0))
         if effect.enabled:
             self.kill_fx.trigger(
                 event,

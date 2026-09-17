@@ -560,6 +560,11 @@ class TacticalMapMixin:
         accent = self.hud_accent()
         x = band.left()
         for kind, name, remaining in self.buff_timeline_rows():
+            # Minecraft effects replace the legacy buff chips only while that
+            # preset is active. Global mechanism notices and normal HUD stay.
+            mc_effects = self.registry.get("MinecraftBuffs")
+            if kind == "buff" and mc_effects and mc_effects.enabled and getattr(self, "minecraft_hud_active", lambda: False)():
+                continue
             text = f"{name} {remaining}s" if show_time and remaining > 0 else name
             chip_w = max(28.0, self.text_advance(font, text) + 12.0)
             if x + chip_w > band.right():

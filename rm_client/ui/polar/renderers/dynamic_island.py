@@ -94,6 +94,12 @@ class DynamicIslandMixin:
                 "progress": max(0.0, min(1.0, self.state.stage_countdown_sec / duration)),
             }
 
+        from ....student_ui import rune_summary
+        rune = self.registry.get("RuneRingStatus")
+        summary = rune_summary(self.state)
+        if rune and rune.enabled and self.setting_bool(rune, "Show in Island", True) and summary:
+            return {"active": True, "kind": "info", "color": self.hud_accent(),
+                    "title": "能量机关", "description": summary, "progress": 1.0}
         mqtt = "MQTT live" if self.state.mqtt_connected else "MQTT mock"
         serial = "SERIAL live" if self.state.serial_connected else "SERIAL mock"
         text = f"{self.scenario_manager.current.title} | {self.match_mode_manager.current.title} | {self.state.fps:.0f} FPS | {mqtt} | {serial}"

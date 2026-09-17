@@ -606,6 +606,11 @@
       "type": "float",
       "volatile": true
     },
+    "_student_pending_panel": {
+      "kind": "plain-attribute",
+      "sig": "None",
+      "type": "NoneType"
+    },
     "_text_metric_cache": {
       "kind": "plain-attribute",
       "sig": "dict",
@@ -1287,6 +1292,11 @@
     "close_match_chat": {
       "kind": "bound-method",
       "sig": "PolarRMWindow.close_match_chat",
+      "type": "method"
+    },
+    "close_student_panel": {
+      "kind": "bound-method",
+      "sig": "StudentFrontendMixin.close_student_panel",
       "type": "method"
     },
     "colorCount": {
@@ -2209,6 +2219,16 @@
       "sig": "PolarRMWindow.draw_string_with_shadow_mc",
       "type": "method"
     },
+    "draw_student_frontend": {
+      "kind": "bound-method",
+      "sig": "StudentFrontendMixin.draw_student_frontend",
+      "type": "method"
+    },
+    "draw_student_status": {
+      "kind": "bound-method",
+      "sig": "StudentFrontendMixin.draw_student_status",
+      "type": "method"
+    },
     "draw_synthetic_video": {
       "kind": "bound-method",
       "sig": "PolarRMWindow.draw_synthetic_video",
@@ -2930,6 +2950,26 @@
     "handle_startup_key": {
       "kind": "bound-method",
       "sig": "PolarRMWindow.handle_startup_key",
+      "type": "method"
+    },
+    "handle_student_action": {
+      "kind": "bound-method",
+      "sig": "StudentFrontendMixin.handle_student_action",
+      "type": "method"
+    },
+    "handle_student_config_action": {
+      "kind": "bound-method",
+      "sig": "StudentFrontendMixin.handle_student_config_action",
+      "type": "method"
+    },
+    "handle_student_key": {
+      "kind": "bound-method",
+      "sig": "StudentFrontendMixin.handle_student_key",
+      "type": "method"
+    },
+    "handle_student_mouse": {
+      "kind": "bound-method",
+      "sig": "StudentFrontendMixin.handle_student_mouse",
       "type": "method"
     },
     "handle_tactical_map_hold_event": {
@@ -3898,6 +3938,11 @@
       "sig": "PolarRMWindow.open_match_chat",
       "type": "method"
     },
+    "open_student_panel": {
+      "kind": "bound-method",
+      "sig": "StudentFrontendMixin.open_student_panel",
+      "type": "method"
+    },
     "overlay_coordinator": {
       "kind": "plain-attribute",
       "sig": "OverlayCoordinator",
@@ -4513,6 +4558,11 @@
       "sig": "RmSerialBackend",
       "type": "RmSerialBackend"
     },
+    "server_chat_renderer": {
+      "kind": "plain-attribute",
+      "sig": "MinecraftServerChatRenderer",
+      "type": "MinecraftServerChatRenderer"
+    },
     "setAcceptDrops": {
       "kind": "callable",
       "sig": "PolarRMWindow.setAcceptDrops",
@@ -5099,6 +5149,26 @@
       "sig": "ModuleListMixin.status_card_warning",
       "type": "method"
     },
+    "student_notice_adapter": {
+      "kind": "plain-attribute",
+      "sig": "StudentNoticeAdapter",
+      "type": "StudentNoticeAdapter"
+    },
+    "student_reload_expanded": {
+      "kind": "plain-attribute",
+      "sig": "False",
+      "type": "bool"
+    },
+    "student_renderer": {
+      "kind": "plain-attribute",
+      "sig": "StudentPanelRenderer",
+      "type": "StudentPanelRenderer"
+    },
+    "student_ui": {
+      "kind": "plain-attribute",
+      "sig": "StudentUiState",
+      "type": "StudentUiState"
+    },
     "style": {
       "kind": "callable",
       "sig": "PolarRMWindow.style",
@@ -5448,6 +5518,11 @@
     "update_hud_liquid_source": {
       "kind": "bound-method",
       "sig": "PolarRMWindow.update_hud_liquid_source",
+      "type": "method"
+    },
+    "update_student_frontend": {
+      "kind": "bound-method",
+      "sig": "StudentFrontendMixin.update_student_frontend",
       "type": "method"
     },
     "updatesEnabled": {

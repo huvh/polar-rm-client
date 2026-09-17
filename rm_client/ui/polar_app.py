@@ -131,6 +131,10 @@ from .economy_workspace import EconomyIslandState, EconomyWorkspaceLayer
 from .liquid_glass import LiquidGlassRenderer
 from .layout import HudAnchorStack
 from .overlay_coordinator import OverlayCoordinator, OverlayKind
+from ..student_ui import StudentUiState, StudentNoticeAdapter
+from .student_panels import StudentPanelRenderer
+from .minecraft_chat import MinecraftServerChatRenderer
+from .polar.mixins.student_frontend_mixin import StudentFrontendMixin
 from .quick_action_wheel import ACTION_LABELS, DEFAULT_ACTIONS, QuickActionWheelState
 from .quick_action_wheel_gpu import QuickActionWheelCommand, QuickActionWheelGpuRenderer
 from .startup_gl import StartupGpuCompositor, TextureOrigin
@@ -340,7 +344,7 @@ class PolarHudOverlay(QWidget):
         self.owner.wheelEvent(event)
 
 
-class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, ModuleListMixin, TacticalMapMixin, DynamicIslandMixin, StartupSceneMixin, PersistenceMixin, VideoBackendMixin, ClickGuiBuildersMixin, EconomyMixin, InputDispatchMixin, ConfigActionsMixin, QOpenGLWidget):
+class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, ModuleListMixin, TacticalMapMixin, DynamicIslandMixin, StartupSceneMixin, PersistenceMixin, VideoBackendMixin, ClickGuiBuildersMixin, EconomyMixin, InputDispatchMixin, ConfigActionsMixin, StudentFrontendMixin, QOpenGLWidget):
     """主窗口直接使用 Qt OpenGL 表面，所有 QPainter UI 都由 OpenGL 合成呈现。"""
 
     # ------------------------------------------------------------------
@@ -484,6 +488,11 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             self.paths.asset("minecraft_hud")
         )
         self._last_minecraft_hud_layout = None
+        self.student_ui = StudentUiState()
+        self.student_renderer = StudentPanelRenderer(self.paths.asset("minecraft_hud"))
+        self.server_chat_renderer = MinecraftServerChatRenderer(self.paths.asset("minecraft_hud"))
+        self.student_reload_expanded = False
+        self._student_pending_panel = None
         self.hero_deploy_ui = HeroDeployInterfaceState()
         self.hero_deploy_renderer = HeroDeployRenderer()
         # Align the baseline instead of leaving it at zero: scenario setup
@@ -693,6 +702,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         self.quick_action_wheel = QuickActionWheelState()
         self.match_chat = MatchChatController()
         self.chat_event_adapter = ChatEventAdapter(self.match_chat)
+        self.student_notice_adapter = StudentNoticeAdapter(self.match_chat)
         self._gpu_warm_pending = True
 
         self.sync_quick_action_wheel_settings()
@@ -755,6 +765,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         self.economy_offers_scroll.update(ui_dt)
         self.economy_detail_scroll.update(ui_dt)
         self.quick_action_wheel.update(ui_dt)
+        self.update_student_frontend(ui_dt)
         input_allowed = self.combat_control_input_allowed()
         if self._combat_input_was_allowed and not input_allowed:
             # Opening ClickGUI/chat/economy while holding a key must release the
@@ -901,6 +912,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                 and self.setting_bool(match_chat, "Referee Notices", True)
             ):
                 self.chat_event_adapter.poll(self.state, now)
+                self.student_notice_adapter.poll(self.state, now)
         high_rate = (
             not self.home_visible
             or self.startup_needs_high_rate()
@@ -1494,7 +1506,8 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             clickgui_active = not startup_scene and (
                 self.gui_timeline.progress > 0.01 or self.gui_visible
             )
-            modal_backdrop_active = economy_active or clickgui_active
+            student_active = not startup_scene and self.student_ui.visible
+            modal_backdrop_active = economy_active or clickgui_active or student_active
             economy_reveal = (
                 max(0.0, min(1.0, self.economy_island.progress))
                 if economy_active
@@ -1518,6 +1531,12 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                 backdrop_active = clickgui_reveal > 0.0
                 backdrop_progress = 1.0 if backdrop_active else 0.0
                 backdrop_blur = self.gui_timeline.blur_radius()
+                backdrop_dim = 0.0
+                backdrop_blur_kernel = "jello_box20"
+            elif student_active:
+                backdrop_active = True
+                backdrop_progress = 1.0
+                backdrop_blur = 20.0 * min(1.0, self.student_ui.progress * 4.0)
                 backdrop_dim = 0.0
                 backdrop_blur_kernel = "jello_box20"
             else:
@@ -1690,6 +1709,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                     priority_overlay_active = bool(
                         self.quick_action_wheel.visible
                         or self.match_chat.input_open
+                        or self.student_ui.visible
                     )
                     now = time.perf_counter()
                     # The wheel is normally held for less than a second, so a
@@ -2032,6 +2052,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             bool(self.economy_visible or self.economy_island.progress > 0.01),
             self._economy_scene_epoch,
             bool(self.gui_visible or self.gui_timeline.progress > 0.01),
+            bool(self.student_ui.visible),
             int(self.state.deploy_mode),
             int(self.state.deploy_status_revision),
         )
@@ -2340,6 +2361,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             height,
             force_economy_compat=force_economy_compat,
         )
+        self.draw_student_frontend(p, width, height)
         if owns_painter:
             p.end()
 
@@ -2350,6 +2372,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             or self.gui_timeline.progress > 0.01
             or self.economy_visible
             or self.economy_island.progress > 0.01
+            or self.student_ui.visible
         )
 
     def economy_stage_active(self) -> bool:
@@ -2507,6 +2530,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             self.draw_chassis_gimbal_indicator(p, logical_width, logical_height)
             self.draw_telemetry_strip(p, logical_width, logical_height)
         p.restore()
+        self.draw_student_status(p, width, height)
         if include_chat:
             self.draw_match_chat(p, width, height, now=now)
         if include_radial:
@@ -2539,6 +2563,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                 self.draw_match_chat(painter, width, height, now=started_at)
             if self.quick_action_wheel.visible:
                 self.draw_quick_action_wheel(painter, width, height)
+            self.draw_student_frontend(painter, width, height)
             painter.end()
             self.flush_gpu_quick_action_wheel(functions, width, height, ratio)
             self.gpu_compositor.last_dynamic_ms = (
@@ -2736,76 +2761,8 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         *,
         now: float | None = None,
     ) -> None:
-        module = self.registry.get("MatchChat")
-        if module is None or not module.enabled:
-            return
-        rows = self.match_chat.visible_messages(
-            now=now,
-            closed_lines=int(self.get_setting_number(module, "Closed Lines", 6)),
-            open_lines=int(self.get_setting_number(module, "Open Lines", 16)),
-            fade_seconds=self.get_setting_number(module, "Fade Seconds", 10.0),
-        )
-        if not rows and not self.match_chat.input_open:
-            return
-
-        margin = 12.0
-        chat_width = min(520.0, max(280.0, width * 0.46))
-        row_height = 18.0
-        input_height = 24.0
-        input_bottom = height - 50.0
-        rows_bottom = input_bottom - (input_height + 5.0 if self.match_chat.input_open else 0.0)
-        font = self.font("poppins_medium", 8.2)
-        level_colors = {
-            "success": color("#73f2a7"),
-            "warning": color("#ffd166"),
-            "danger": color("#ff6b6b"),
-            "chat": color("#ffffff"),
-            "info": color("#dce7f3"),
-        }
-
-        p.save()
-        p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        for row_index, (message, alpha) in enumerate(reversed(rows)):
-            y = rows_bottom - (row_index + 1) * row_height
-            text = f"<{message.source}> {message.text}" if message.source == "you" else message.text
-            text_width_px = min(
-                chat_width - 14.0,
-                self.text_advance(font, text) + 13.0,
-            )
-            rect = QRectF(margin, y, max(80.0, text_width_px), row_height - 1.0)
-            rounded_rect(
-                p,
-                rect,
-                2.0,
-                color("#090b0f", (0.50 if self.match_chat.input_open else 0.38) * alpha),
-            )
-            self.draw_text(
-                p,
-                rect.adjusted(5.0, 0.0, -4.0, 0.0),
-                text,
-                font,
-                with_alpha(level_colors.get(message.level, level_colors["info"]), alpha),
-            )
-
-        if self.match_chat.input_open:
-            input_rect = QRectF(margin, input_bottom - input_height, chat_width, input_height)
-            rounded_rect(
-                p,
-                input_rect,
-                3.0,
-                color("#05070a", 0.72),
-                color("#ffffff", 0.24),
-            )
-            cursor = "_" if int((now or time.perf_counter()) * 2.0) % 2 == 0 else ""
-            self.draw_text(
-                p,
-                input_rect.adjusted(7.0, 0.0, -7.0, 0.0),
-                f"> {self.match_chat.input_text}{cursor}",
-                self.font("poppins_medium", 8.6),
-                color("#ffffff"),
-            )
-        p.restore()
-
+        self.server_chat_renderer.draw(self, p, width, height, time.perf_counter() if now is None else float(now))
+        return
     def match_chat_reserved_height(self, *, now: float | None = None) -> float:
         """Return the lower-left vertical space occupied by visible chat."""
         module = self.registry.get("MatchChat")
@@ -2820,7 +2777,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         if not rows and not self.match_chat.input_open:
             return 0.0
         input_space = 29.0 if self.match_chat.input_open else 0.0
-        return len(rows) * 18.0 + input_space + 10.0
+        return max(len(rows) * 20.0 + input_space + 10.0, self.server_chat_renderer.last_height)
 
     def paint_clickgui_overlay(
         self,
@@ -3008,6 +2965,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
     # ------------------------------------------------------------------
 
     def open_match_chat(self) -> None:
+        self.close_student_panel(immediate=True)
         module = self.registry.get("MatchChat")
         if module is None or not module.enabled or self.home_visible:
             return
@@ -3220,6 +3178,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
     def focusOutEvent(self, event) -> None:
         """A lost foreground window is an unconditional control epoch break."""
 
+        self.student_ui.dragging = ""
         try:
             self.control.mock_output = bool(self.backend.mqtt.mock_output)
             self.control.release_all(self.state, self.registry)

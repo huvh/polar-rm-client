@@ -155,6 +155,8 @@ class ClickGuiBuildersMixin:
         play_sound: bool = True,
     ) -> None:
         visible = bool(visible)
+        if visible:
+            self.close_student_panel(immediate=True)
         if visible and self.hero_deploy_video_cut_active():
             self.open_hero_deploy_interface()
             self.toast("Hero deploy console is locked until exit sync")

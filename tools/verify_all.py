@@ -30,6 +30,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 PYTHON_SUITES = (
+    "student_frontend_test",  # MC 背包/Jello 学生面板：只读展示、草稿不发、模态与缓存
     "polar_spec_test",        # 协议规格：加载/校验/改 JSON 真能改行为/新增段零 Python
     "robot_roles_test",       # 兵种对齐：限幅、禁驾、不一致告警、键位分层
     "polar_link_test",        # 帧编解码、CRC 三方对拍、时间戳单调、fire 恒 0

@@ -206,6 +206,8 @@ class ConfigActionsMixin:
         self.auto_save_config()
 
     def handle_config_action(self, action_name: str) -> None:
+        if self.handle_student_config_action(action_name):
+            return
         qualification_actions = {
             "New Qualification Session",
             "Reset Qualification Session",

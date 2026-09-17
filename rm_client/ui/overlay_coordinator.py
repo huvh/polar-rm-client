@@ -8,6 +8,7 @@ class OverlayKind(str, Enum):
     CLICKGUI = "clickgui"
     ECONOMY = "economy"
     HERO_DEPLOY = "hero_deploy"
+    STUDENT = "student"
     CHAT = "chat"
     RADIAL = "radial"
 
