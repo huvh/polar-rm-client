@@ -396,8 +396,16 @@ def main(argv=None) -> int:
             sp.flush()
             print(f"  #{i + 1} -> {args.port}  {payload.hex(' ')}")
             time.sleep(0.014)
-        sp.write(bytes(len(payload)))   # 收尾发等长全零：别把键粘在车上
-        sp.flush()
+        # 收尾必须发【合法中立帧】。旧版这里是 ``sp.write(bytes(len(payload)))``，
+        # 那是 22 个 0x00、不是 0x5A 帧，DT7 直接忽略；2026-09-18 上板实测：
+        #   合法中立帧 -> 键位 ≤0.35s 归零
+        #   22 个 0x00 -> 与"完全不发"一样，要等 DT7 自身 ~1.2s 输入超时才归零
+        # 连发 3 帧，避免只发一帧时撞上 DT7 的刷新窗口被吞。
+        neutral = build_candidate(args.candidate, 0, (0, 0, 0))
+        for _ in range(3):
+            sp.write(neutral)
+            sp.flush()
+            time.sleep(0.014)
         time.sleep(0.05)
     print("已发完并补了一帧全零释放。车动 -> 帧型对了；不动 -> 换下一个 --candidate。")
     return 0

@@ -467,8 +467,13 @@ def main(argv=None) -> int:
         written = write_report(args.report, rep)
         print(f"证据已写入：{written}")
     print(f"注入键位 {res['keys']} = 0b{res['sent_bits']:016b}，实际发出 {res['frames_sent']} 帧")
-    if res["verdict"] in ("NO-CHANGE", "NO-READBACK") and not res.get("frames_sent"):
-        # 客户端一帧都没写出去时，"DT7 没理这一帧"是假结论，会逼人换帧型/怀疑遥控器
+    # 注意：**不要**把 NO-READBACK 重标成 NOT-SENT。
+    # NO-READBACK = 板上没有任何 km_key 判据（固件没编那几个调试槽），
+    # run_selftest 在 base is None 时**早于任何发送**就已返回；
+    # 重标会给出"客户端一帧都没写出去 / 查闸门 / 查 Real TX"的假结论，
+    # 把排查方向从"固件缺槽位"带偏到"闸门没放行"（2026-09-18 实测踩到）。
+    if res["verdict"] == "NO-CHANGE" and not res.get("frames_sent"):
+        # "DT7 没理这一帧"只有在确实发过帧之后才成立
         res["verdict"] = "NOT-SENT"
         res["note"] = "客户端一帧都没写出去：查闸门 / DT7 Real TX / dt7_last_error"
     print(f"基线 km_key={res['baseline']}，回读样本 {len(res['observed'])} 个")
