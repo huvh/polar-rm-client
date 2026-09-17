@@ -56,6 +56,7 @@ PYTHON_SUITES = (
     "hud_batch8_settings_test",       # 第 8 批：启动二级页/锁定框/弹药告警/缓冲能量
     "hud_overlay_settings_test",    # RobotOverlay Robot ID / Crosshair Heat Color（第 4 批）
     "backend_protocol_test",  # 官方裁判协议（回归护栏）
+    "referee_integration_test",  # 年度协议隔离 / 只读学生版 / 真 MQTT localhost 回环
     "api_freeze_test",        # 窗口成员冻结（防误删公开面）
 )
 

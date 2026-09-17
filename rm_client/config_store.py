@@ -227,6 +227,12 @@ def apply_registry_config(registry: Any, data: dict[str, Any]) -> None:
                 setting.value = number
             elif setting.kind == "mode":
                 text_value = str(value)
+                if module.name == "MQTTLink" and setting.name == "Referee Profile":
+                    # Unknown annual schemas must reach the backend's explicit
+                    # fail-closed validator, not silently become this year's
+                    # default through the ordinary enum migration path.
+                    setting.value = text_value
+                    continue
                 if setting.name == "Status Display":
                     text_value = {
                         "Auto": "LiquidAuto",

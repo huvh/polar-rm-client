@@ -9,6 +9,7 @@ from typing import Any, Callable
 from .match_modes import MATCH_MODE_KEYS
 from .robot_profiles import RMUC_ROBOTS
 from .scenarios import SCENARIO_MODES
+from .backend.referee.registry import DEFAULT_PROFILE, supported_profiles
 from .serial_ports import port_choices as polar_port_choices
 from .serial_ports import rc_port_choices as dt7_port_choices
 
@@ -299,6 +300,7 @@ class GuiModeManager:
 
 @dataclass
 class RobotState:
+    referee_profile: str = DEFAULT_PROFILE
     match_mode: str = "RMUC7v7"
     match_title: str = "RMUC 7v7"
     match_duration_sec: int = 420
@@ -1586,8 +1588,9 @@ def build_default_registry() -> ModuleRegistry:
                 mode_setting("Host", "127.0.0.1", ["127.0.0.1", "192.168.12.1"]),
                 number_setting("Port", 3333, 1000, 9999, 1),
                 bool_setting("Auto Connect", False),
+                mode_setting("Referee Profile", DEFAULT_PROFILE, list(supported_profiles())),
             ],
-            description="SharkDataSever MQTT/protobuf 连接预留模块。",
+            description="裁判系统 MQTT/protobuf；年度协议显式选择，未知版本禁止回退。",
         ),
         Module(
             "UDPVideo",

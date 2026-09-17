@@ -1,9 +1,9 @@
 """MQTT 后端（对齐 SharkClient Rust mqtt_client 的能力，纯 Python 实现）。
 
-- 真实连接/自动重连（paho reconnect_delay_set）
+- 真实连接/退避重建连接（丢弃旧客户端未确认的运动指令）
 - 收发统计、最后消息时间、重连次数
-- 订阅全量 topic（#），在回调线程解码后放入队列，UI 主线程安全消费
-- 发布走 OfficialMqttBridge 边界：mock 记录 或 真实发布 + 10Hz 限频 + 安全门控
+- 按年度 profile 订阅下行 topic，在回调线程解码后放入有界队列
+- 发布走 OfficialMqttBridge 边界：mock 记录 或年度限频 + 安全门控
 """
 
 from __future__ import annotations
@@ -14,12 +14,8 @@ from collections import deque
 from typing import Any, Callable
 
 from ..transports import MqttPublishRecord, OfficialMqttBridge
-from .protocol import (
-    decode_message,
-    encode_custom_control,
-    encode_keyboard_mouse_control,
-    topic_message_name,
-)
+from .referee.registry import DEFAULT_PROFILE, get_profile
+from .referee.validation import InvalidRefereePayload, validate_message
 from .safety import OfficialSafety
 
 
@@ -33,10 +29,13 @@ class RmMqttBackend(OfficialMqttBridge):
         client_id: str = "3",
         mock_output: bool = True,
         safety: OfficialSafety | None = None,
+        referee_profile: str = DEFAULT_PROFILE,
     ) -> None:
-        super().__init__(host=host, port=port, client_id=client_id)
+        self.referee = get_profile(referee_profile)
+        super().__init__(host=host, port=port, client_id=self.referee.validate_client_id(client_id))
         self.mock_output = bool(mock_output)
         self.safety = safety or OfficialSafety()
+        self.safety.configure_referee_limits(self.referee.uplink_hz)
         self.messages_received = 0
         self.messages_sent = 0
         self.bytes_received = 0
@@ -49,6 +48,14 @@ class RmMqttBackend(OfficialMqttBridge):
         self._on_connect_hook: Callable[[], None] | None = None
         self.event_hook: Callable[[str, dict[str, Any]], None] | None = None
         self.disconnected_at = time.perf_counter()
+        self.receive_generation = 0
+        self.invalid_messages = 0
+        self.ignored_topics = 0
+        self.queue_overflows = 0
+        self._reconnect_required = False
+        self._next_reconnect_at = 0.0
+        self._reconnect_backoff_s = 0.5
+        self._zero_after_reconnect = False
 
     # ------------------------------------------------------------------
     # 生命周期
@@ -58,28 +65,28 @@ class RmMqttBackend(OfficialMqttBridge):
             return
         try:
             import paho.mqtt.client as mqtt  # type: ignore
+            self.client_id = self.referee.validate_client_id(self.client_id)
             self._mqtt = mqtt
             try:
                 self.client = mqtt.Client(
                     mqtt.CallbackAPIVersion.VERSION2,
                     client_id=self.client_id or None,
                     clean_session=True,
+                    protocol=mqtt.MQTTv311,
+                    reconnect_on_failure=False,
                 )
             except Exception:
-                self.client = mqtt.Client(client_id=self.client_id or None)
+                self.client = mqtt.Client(client_id=self.client_id or None,
+                                          protocol=mqtt.MQTTv311,
+                                          reconnect_on_failure=False)
             self.client.on_connect = self._on_connect
             self.client.on_disconnect = self._on_disconnect
+            self.client.on_connect_fail = self._on_connect_fail
             self.client.on_message = self._on_message
             self.client.reconnect_delay_set(min_delay=1, max_delay=30)
-            try:
-                self.client.will_set(
-                    "ClientStatus", b'{"online":false}', qos=1, retain=True
-                )
-            except Exception:
-                pass
             self.client.connect_async(self.host, self.port, keepalive=30)
-            self.client.loop_start()
             self._started = True
+            self.client.loop_start()
         except Exception as exc:  # pragma: no cover - depends on paho availability
             self.last_error = str(exc)
             self.connected = False
@@ -87,33 +94,66 @@ class RmMqttBackend(OfficialMqttBridge):
 
     def stop(self, *, publish_status: bool = True) -> None:
         self._started = False
+        self._reconnect_required = False
         client = self.client
         self.client = None
+        self.clear_received_epoch()
         if client is not None:
-            if publish_status:
-                try:
-                    info = client.publish(
-                        "ClientStatus", b'{"online":false}', qos=1, retain=True
-                    )
-                    # Give QoS1 a short bounded chance to leave the process
-                    # before disconnect.  Fake/legacy clients need no special
-                    # handling, and shutdown must never block indefinitely.
-                    waiter = getattr(info, "wait_for_publish", None)
-                    if callable(waiter):
-                        waiter(timeout=0.5)
-                except Exception:
-                    pass
+            # publish_status is retained for API compatibility only. No
+            # ClientStatus JSON / retained will belongs to the official wire.
             try:
                 client.disconnect()
             except Exception:
                 pass
             try:
-                client.loop_stop(force=True)
+                client.loop_stop()
             except Exception:
                 pass
         self.connected = False
         self.disconnected_at = time.perf_counter()
         self._emit_event("mqtt_disconnect", reason="stop")
+
+    def poll_connection(self) -> None:
+        """Recreate the client outside its callback thread after a disconnect.
+
+        Paho may replay unacknowledged QoS1 commands on reconnect even with
+        clean_session=True. A fresh Client discards that motion queue instead.
+        Deliberate stop/profile failures never schedule an automatic restart.
+        """
+        if not self._reconnect_required or time.perf_counter() < self._next_reconnect_at:
+            return
+        self.stop(publish_status=False)
+        self._zero_after_reconnect = True
+        self.start()
+
+    def clear_received_epoch(self) -> None:
+        with self._decoded_lock:
+            self.receive_generation += 1
+            self._decoded.clear()
+        with self._received_lock:
+            self._received_messages.clear()
+
+    def set_referee_profile(self, profile_id: str) -> None:
+        try:
+            profile = get_profile(profile_id)
+        except ValueError:
+            self.publish_estop_zero()
+            self.stop(publish_status=False)
+            self.safety.lock_control("unsupported referee profile")
+            self.safety.current_stage = "0"
+            self.safety._stage_seen = False
+            raise
+        if profile.profile_id == self.referee.profile_id:
+            return
+        started = self._started
+        self.stop(publish_status=False)
+        self.referee = profile
+        self.safety.configure_referee_limits(profile.uplink_hz)
+        self.safety.lock_control("referee profile changed")
+        self.safety.current_stage = "0"
+        self.safety._stage_seen = False
+        if started:
+            self.start()
 
     def set_address(self, host: str, port: int) -> bool:
         """改 broker 地址。已经连着就断开重连，返回是否真的换了。
@@ -129,6 +169,10 @@ class RmMqttBackend(OfficialMqttBridge):
             return False
         self.host = host
         self.port = port
+        self.clear_received_epoch()
+        self.safety.lock_control("MQTT endpoint changed")
+        self.safety.current_stage = "0"
+        self.safety._stage_seen = False
         if self._started:
             self.stop(publish_status=False)
             self.start()
@@ -138,51 +182,87 @@ class RmMqttBackend(OfficialMqttBridge):
     # paho 回调
     # ------------------------------------------------------------------
     def _on_connect(self, client, _userdata, _flags, reason_code, _properties=None) -> None:
-        ok = int(reason_code) == 0 if not isinstance(reason_code, str) else reason_code == "Success"
+        if client is not self.client:
+            return
+        # Callback API v2 supplies ReasonCode, which deliberately has no int().
+        value = getattr(reason_code, "value", reason_code)
+        ok = value == 0 or str(value) == "Success"
         self.connected = ok
         if ok:
             self.connected_at = time.time()
             self.disconnected_at = 0.0
+            self._reconnect_required = False
+            self._reconnect_backoff_s = 0.5
             self._emit_event("mqtt_connect", host=self.host, port=self.port)
-            try:
-                client.publish("ClientStatus", b'{"online":true}', qos=1, retain=True)
-            except Exception:
-                pass
-            client.subscribe("#", qos=1)
+            client.subscribe([(name, self.referee.max_qos) for name in sorted(self.referee.codec.DOWNLINK_MESSAGES)])
+            if self._zero_after_reconnect and not self.referee.read_only:
+                self._zero_after_reconnect = False
+                self.publish_estop_zero()
             if self._on_connect_hook:
                 try:
                     self._on_connect_hook()
                 except Exception:
                     pass
+        else:
+            self._schedule_reconnect(f"connect rejected: {reason_code}")
 
-    def _on_disconnect(self, _client, _userdata, _flags=None, _reason_code=None, _properties=None) -> None:
-        if self.connected:
-            self.reconnect_count += 1
+    def _on_connect_fail(self, client, _userdata) -> None:
+        if client is self.client:
+            self._schedule_reconnect("connect failed")
+
+    def _schedule_reconnect(self, reason: str) -> None:
         self.connected = False
         self.disconnected_at = time.perf_counter()
-        self._emit_event("mqtt_disconnect", reason=str(_reason_code))
+        self.clear_received_epoch()
+        self.safety.lock_control(reason)
+        self.safety.current_stage = "0"
+        self.safety._stage_seen = False
+        self._reconnect_required = self._started
+        self._next_reconnect_at = time.perf_counter() + self._reconnect_backoff_s
+        self._reconnect_backoff_s = min(5.0, self._reconnect_backoff_s * 2.0)
+        self._emit_event("mqtt_disconnect", reason=reason)
+
+    def _on_disconnect(self, _client, _userdata, _flags=None, _reason_code=None, _properties=None) -> None:
+        if _client is not self.client:
+            return
+        if self.connected:
+            self.reconnect_count += 1
+        self._schedule_reconnect(f"MQTT disconnected: {_reason_code}")
 
     def _on_message(self, client, userdata, msg) -> None:
-        super()._on_message(client, userdata, msg)
+        if client is not self.client:
+            return
+        generation = self.receive_generation
+        profile = self.referee
         payload = bytes(msg.payload)
         self.messages_received += 1
         self.bytes_received += len(payload)
         self.last_message_at = time.time()
         topic = str(msg.topic)
         self._emit_event("referee_rx", topic=topic, payload=payload)
-        name = topic_message_name(topic)
-        if name in {"GameStatus"}:
-            # 比赛阶段同步给安全策略
-            data = decode_message(name, payload)
-            if data:
-                self.safety.update_stage(data.get("current_stage", "0"))
-                with self._decoded_lock:
-                    self._decoded.append((topic, name, data, time.perf_counter()))
-                return
-        data = decode_message(name, payload)
+        # Official topics are exact instruction names, not arbitrary prefixes
+        # or a topic echoed from our own uplink.
+        name = topic
+        if name not in profile.codec.DOWNLINK_MESSAGES:
+            self.ignored_topics += 1
+            return
+        try:
+            data = profile.codec.decode_message(name, payload)
+        except Exception as exc:
+            self.last_error = f"{name} decode failed: {type(exc).__name__}: {exc}"
+            data = {}
         if not data:
+            self.invalid_messages += 1
+            self._emit_event("referee_decode_error", topic=topic, profile=profile.profile_id)
             return
         with self._decoded_lock:
+            if generation != self.receive_generation or profile is not self.referee or client is not self.client:
+                return
+            super()._on_message(client, userdata, msg)
+            if name == "GameStatus" and 5 in data.get("__present__", ()):
+                self.safety.update_stage(data["current_stage"])
+            if len(self._decoded) == self._decoded.maxlen:
+                self.queue_overflows += 1
             self._decoded.append((topic, name, data, time.perf_counter()))
 
     # ------------------------------------------------------------------
@@ -200,6 +280,17 @@ class RmMqttBackend(OfficialMqttBridge):
     def publish_topic(self, topic: str, payload: bytes, *, qos: int = 1,
                       now: float | None = None, intent: str = "control",
                       qualification_token: str | None = None) -> tuple[bool, str]:
+        valid, reason = self.referee.validate_publish(topic, qos)
+        if not valid:
+            self.last_error = reason
+            return False, reason
+        try:
+            validate_message(topic, bytes(payload), self.referee.codec.FIELDS)
+            if topic == "CustomControl" and len(self.referee.codec._b(self.referee.codec.decode_fields(payload), 1)) > 30:
+                raise InvalidRefereePayload("CustomControl payload exceeds 30 bytes")
+        except (InvalidRefereePayload, TypeError) as exc:
+            self.last_error = f"invalid {topic}: {exc}"
+            return False, self.last_error
         # 急停在任何模式（含 mock）都立即生效
         if self.safety.estop_active:
             self.last_error = "急停激活，禁止发布"
@@ -219,12 +310,11 @@ class RmMqttBackend(OfficialMqttBridge):
             self._emit_event("publish_result", topic=topic, ok=True, reason="mock", intent=intent)
             return True, "mock"
         if self.client is None or not self.connected:
-            # 这条错误在现场几乎总是同一个原因：3333 的监听者是**选手端那一侧**
-            # （12.x 裁判端/服务器包里没有任何 MQTT 栈，见
-            # tools/dt7_link/README.md 第 16.2 节），所以先确认选手端在跑、host 填对。
-            self.last_error = ("未连接 MQTT 客户端：3333 由官方选手端那侧监听，"
-                              "先确认选手端已启动、且 host 是选手端那台机器"
-                              "（同机用 127.0.0.1，跨机用它的 192.168.12.x）")
+            self.last_error = (
+                "未连接裁判 MQTT：检查官方自定义客户端服务、网卡及机器人 ClientId；"
+                f"当前 {self.host}:{self.port} / ClientId={self.client_id}。"
+                "引擎内部 TCP 登录端口不是该 MQTT 接口。"
+            )
             self._emit_event("publish_result", topic=topic, ok=False, reason=self.last_error, intent=intent)
             return False, self.last_error
         try:
@@ -316,7 +406,9 @@ class RmMqttBackend(OfficialMqttBridge):
 
     def publish_estop_zero(self) -> tuple[bool, str]:
         """仅发布固定全零 KMC，绕过普通限频以避免按键释放被 75Hz 门控吞掉。"""
-        payload = encode_keyboard_mouse_control()
+        if self.referee.read_only:
+            return False, "Student preview is READ ONLY; use the physical E-stop"
+        payload = self.referee.codec.encode_keyboard_mouse_control()
         if self.mock_output:
             self._publish_record("KeyboardMouseControl", payload, 1)
             self._emit_event("publish_result", topic="KeyboardMouseControl", ok=True, reason="estop mock", intent="estop_zero")
@@ -348,12 +440,19 @@ class RmMqttBackend(OfficialMqttBridge):
         if len(data) > 30:
             self.last_error = "CustomControl 载荷最多 30 字节"
             return False
-        ok, _ = self.publish_topic("CustomControl", encode_custom_control(data), qos=1)
+        ok, _ = self.publish_topic("CustomControl", self.referee.codec.encode_custom_control(data), qos=1)
         return ok
 
     def stats(self) -> dict[str, Any]:
         return {
             "connected": self.connected,
+            "referee_profile": self.referee.profile_id,
+            "protocol_version": self.referee.protocol_version,
+            "read_only": self.referee.read_only,
+            "receive_generation": self.receive_generation,
+            "invalid_messages": self.invalid_messages,
+            "ignored_topics": self.ignored_topics,
+            "queue_overflows": self.queue_overflows,
             "host": self.host,
             "port": self.port,
             "client_id": self.client_id,

@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
+from .backend.referee.registry import get_profile
+
+_REFEREE = get_profile()
 
 
 SCENARIO_MODES = ["OfficialEvent", "CampusSimulation", "LabDebug"]
@@ -51,10 +54,10 @@ SCENARIOS: dict[str, ScenarioConfig] = {
         subtitle="192.168.12.1 MQTT / UDP 3334",
         description="对齐 RM2026 自定义客户端默认传输参数的官方赛事配置。",
         connection=ConnectionProfile(
-            mqtt_host="192.168.12.1",
-            mqtt_port=3333,
+            mqtt_host=_REFEREE.mqtt_host,
+            mqtt_port=_REFEREE.mqtt_port,
             udp_host="0.0.0.0",
-            udp_port=3334,
+            udp_port=_REFEREE.udp_port,
             serial_port="Stub",
             serial_baud=115200,
             video_source="UDP HEVC",
@@ -73,9 +76,9 @@ SCENARIOS: dict[str, ScenarioConfig] = {
         description="用于校内训练、SharkDataServer 和本地图传模拟的配置。",
         connection=ConnectionProfile(
             mqtt_host="127.0.0.1",
-            mqtt_port=3333,
+            mqtt_port=_REFEREE.mqtt_port,
             udp_host="127.0.0.1",
-            udp_port=3334,
+            udp_port=_REFEREE.udp_port,
             serial_port="Stub",
             serial_baud=115200,
             video_source="Shark UDP",
@@ -94,9 +97,9 @@ SCENARIOS: dict[str, ScenarioConfig] = {
         description="用于摄像头预览、协议测试和 mock 输出的本地调试配置。",
         connection=ConnectionProfile(
             mqtt_host="127.0.0.1",
-            mqtt_port=3333,
+            mqtt_port=_REFEREE.mqtt_port,
             udp_host="127.0.0.1",
-            udp_port=3334,
+            udp_port=_REFEREE.udp_port,
             serial_port="Stub",
             serial_baud=115200,
             video_source="Webcam",

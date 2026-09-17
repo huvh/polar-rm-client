@@ -24,6 +24,7 @@ from typing import Any, Mapping
 import uuid
 
 from .protocol import PROTOCOL_VERSION
+from .referee.registry import DEFAULT_PROFILE, get_profile
 
 
 EVIDENCE_SCHEMA = 1
@@ -113,6 +114,7 @@ class QualificationSession:
     operator: str
     safety_lead: str = ""
     protocol_version: str = PROTOCOL_VERSION
+    referee_profile: str = DEFAULT_PROFILE
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
     tests: dict[str, TestResult] = field(default_factory=dict)
@@ -133,12 +135,16 @@ class QualificationSession:
 
 
 class QualificationEvidenceStore:
-    def __init__(self, root: Path, *, build_commit: str) -> None:
+    def __init__(self, root: Path, *, build_commit: str,
+                 referee_profile: str = DEFAULT_PROFILE,
+                 protocol_version: str = PROTOCOL_VERSION) -> None:
         self.root = Path(root)
         self.sessions_dir = self.root / "sessions"
         self.key_path = self.root / ".integrity_key"
         self.current_path = self.root / "current.json"
         self.build_commit = str(build_commit or "UNKNOWN")
+        self.referee_profile = str(referee_profile)
+        self.protocol_version = str(protocol_version)
         self.last_error = ""
 
     def create(
@@ -159,6 +165,8 @@ class QualificationEvidenceStore:
             match_mode=str(match_mode).strip(),
             video_source=str(video_source).strip(),
             operator=str(operator).strip(),
+            referee_profile=self.referee_profile,
+            protocol_version=self.protocol_version,
         )
         self.save(session)
         return session
@@ -499,9 +507,15 @@ class QualificationManager:
     def core_ready(self) -> tuple[bool, str]:
         if self.session is None:
             return False, "no qualification session"
+        try:
+            if get_profile(self.store.referee_profile).read_only:
+                return False, "Student preview profile is read-only, never match-qualified"
+        except ValueError:
+            return False, "unsupported referee profile"
         if self.session.build_commit != self.store.build_commit:
             return False, "build mismatch"
-        if self.session.protocol_version != PROTOCOL_VERSION:
+        if (self.session.protocol_version != self.store.protocol_version
+                or self.session.referee_profile != self.store.referee_profile):
             return False, "protocol mismatch"
         if self.session.video_source not in {"udp", "native_0310"}:
             return False, "qualification video source is undeclared"

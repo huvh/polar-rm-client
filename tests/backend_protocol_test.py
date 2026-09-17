@@ -641,7 +641,7 @@ def test_shutdown_neutral_frame_and_readiness_consumption() -> None:
     check("shutdown neutral payload exact", kmc[-1][1] == proto.encode_keyboard_mouse_control())
     check("shutdown latches local estop", manager.safety.estop_active and manager.serial.estop_active)
     status = [item for item in fake.messages if item[0] == "ClientStatus"]
-    check("shutdown publishes retained offline", bool(status) and status[-1][1] == b'{"online":false}')
+    check("shutdown emits no undocumented JSON topic", not status)
 
 
 def test_scenario_restart_does_not_publish_offline() -> None:
@@ -769,7 +769,7 @@ def test_mqtt_publish_rc() -> None:
             return _InfoErr()
 
     backend.client = _FakeErr()
-    ok, reason = backend.publish_topic("DartCommand", b"x")
+    ok, reason = backend.publish_topic("DartCommand", proto.encode_dart_command(1, False, False))
     check("disconnected publish rc -> False", ok is False and "rc=4" in reason)
 
     class _InfoOk:
@@ -783,15 +783,15 @@ def test_mqtt_publish_rc() -> None:
             return _InfoOk()
 
     backend.client = _FakeOk()
-    ok, reason = backend.publish_topic("DartCommand", b"x")
+    ok, reason = backend.publish_topic("DartCommand", proto.encode_dart_command(1, False, False))
     check("connected publish ok", ok is True and reason == "ok")
-    ok, reason = backend.publish_topic("DartCommand", b"x")
+    ok, reason = backend.publish_topic("DartCommand", proto.encode_dart_command(1, False, False))
     check("10Hz after real publish", ok is False and "10" in reason)
 
     backend2 = RmMqttBackend(host="127.0.0.1", port=3333, client_id="3",
                              mock_output=True, safety=s)
     s.trigger_estop()
-    ok, reason = backend2.publish_topic("DartCommand", b"x")
+    ok, reason = backend2.publish_topic("DartCommand", proto.encode_dart_command(1, False, False))
     check("estop blocks mock", ok is False and bool(reason))
     s.release_estop()
 
@@ -913,7 +913,7 @@ def test_backend_frontend_sync() -> None:
     marker_manager = BackendManager(state=marker_state, client_id="3", scenario_key="OfficialEvent")
     marker_manager.mqtt._decoded.append(("MapClickInfo", "MapClickInfo", {
         "ascii": ord("A"), "map_x": 4.5, "map_y": 6.5, "type": 1,
-        "__present__": frozenset({2, 6, 7, 8}),
+        "__present__": frozenset({5, 6, 7, 8}),
     }, time.perf_counter()))
     check("first MapClick applied", marker_manager.apply_updates(marker_state) == 1)
     check(

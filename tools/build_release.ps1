@@ -274,6 +274,7 @@ print('polar spec OK: %d segments, %d roles, %d warnings'
         # already selected the Windows platform plugin.
         $env:QT_QPA_PLATFORM = "offscreen"
         Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\backend_protocol_test.py") "backend_protocol" 240 $testLogRoot
+        Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\referee_integration_test.py") "referee_integration" 180 $testLogRoot
         # Team StandardRobot++ 0x5A link: framing/CRC parity with the team's own
         # reference implementation, HUD overlay + arbitration, a virtual-robot
         # end-to-end loop, and a real-window startup path. These are the gates
@@ -358,6 +359,7 @@ print('polar spec OK: %d segments, %d roles, %d warnings'
         Copy-Item -Destination (Join-Path $portable "licenses") -Recurse -Force
     Copy-Item -LiteralPath (Join-Path $sourceRoot "THIRD_PARTY_NOTICES.md") -Destination (Join-Path $portable "licenses\THIRD_PARTY_NOTICES.md") -Force
     Copy-Item -LiteralPath (Join-Path $sourceRoot "FIELD_CANDIDATE.md") -Destination (Join-Path $portable "FIELD_CANDIDATE.md") -Force
+    Copy-Item -LiteralPath (Join-Path $sourceRoot "REFEREE_INTEGRATION.md") -Destination (Join-Path $portable "REFEREE_INTEGRATION.md") -Force
 
     $ffVersion = (& $FfmpegPath -hide_banner -version) -join "`n"
     Set-Content -LiteralPath (Join-Path $portable "licenses\FFMPEG-BUILD.txt") -Value $ffVersion -Encoding UTF8
@@ -380,6 +382,19 @@ exit /b %errorlevel%
 
     $pythonVersion = (& $python --version) 2>&1
     $dependencyLines = (& $python -m pip freeze) | Sort-Object
+    # Read the reviewed contracts from the exact archived source, not the
+    # developer checkout. The manifest must not silently pin a different year.
+    $refereeJson = & $python -c @"
+import json, sys
+sys.path.insert(0, r'$sourceRoot')
+from rm_client.backend.referee.registry import get_profile, supported_profiles
+profiles = [get_profile(key) for key in supported_profiles()]
+print(json.dumps({'default_profile': get_profile().profile_id, 'protocol_version': get_profile().protocol_version,
+    'profiles': [{'id': p.profile_id, 'version': p.protocol_version, 'read_only': p.read_only,
+        'contract_pdf_sha256': p.codec.SOURCE_SHA256} for p in profiles]}))
+"@
+    if ($LASTEXITCODE -ne 0) { throw "release referee profile metadata failed" }
+    $refereeMetadata = $refereeJson | ConvertFrom-Json
     $criticalFiles = [ordered]@{
         "bin/ffmpeg.exe" = $expectedFfmpeg
         "defaults/default.json" = (Get-FileHash (Join-Path $portable "defaults\default.json") -Algorithm SHA256).Hash
@@ -391,6 +406,7 @@ exit /b %errorlevel%
         "licenses/FFMPEG-BUILD.txt" = (Get-FileHash (Join-Path $portable "licenses\FFMPEG-BUILD.txt") -Algorithm SHA256).Hash
         "licenses/THIRD_PARTY_NOTICES.md" = (Get-FileHash (Join-Path $portable "licenses\THIRD_PARTY_NOTICES.md") -Algorithm SHA256).Hash
         "FIELD_CANDIDATE.md" = (Get-FileHash (Join-Path $portable "FIELD_CANDIDATE.md") -Algorithm SHA256).Hash
+        "REFEREE_INTEGRATION.md" = (Get-FileHash (Join-Path $portable "REFEREE_INTEGRATION.md") -Algorithm SHA256).Hash
         "START-POLAR-RM.bat" = (Get-FileHash (Join-Path $portable "START-POLAR-RM.bat") -Algorithm SHA256).Hash
         "POLAR-RM.exe" = (Get-FileHash (Join-Path $portable "POLAR-RM.exe") -Algorithm SHA256).Hash
     }
@@ -402,7 +418,8 @@ exit /b %errorlevel%
         git_commit = $commit
         source_kind = $sourceKind
         built_at_utc = [DateTime]::UtcNow.ToString("o")
-        protocol_version = "1.3.1"
+        protocol_version = $refereeMetadata.protocol_version
+        referee = $refereeMetadata
         python = "$pythonVersion"
         dependencies = $dependencyLines
         critical_files = $criticalFiles
@@ -420,6 +437,7 @@ exit /b %errorlevel%
         }
         tests = [ordered]@{
             backend_protocol = "PASS"
+            referee_integration = "PASS"
             field_candidate = "PASS"
             dt7_alignment = "PASS"
             ui_backend_regression = "PASS"

@@ -89,6 +89,13 @@ class OfficialSafety:
         self.allow_mqtt_publish = bool(allow_mqtt_publish)
         self.enforce_official_limits = bool(enforce_official_limits)
 
+    def configure_referee_limits(self, uplink_hz: Any) -> None:
+        """Annual MQTT limits cannot alter the independent DT7 policy."""
+        dt7 = self._topic_limit_hz["DT7KeyboardMouseControl"]
+        self._topic_limit_hz = {str(name): float(hz) for name, hz in uplink_hz.items()}
+        self._topic_limit_hz["DT7KeyboardMouseControl"] = dt7
+        self._publish_at.clear()
+
     def from_scenario(self, config: Any) -> None:
         self.scenario_key = str(config.key)
         self.configure(

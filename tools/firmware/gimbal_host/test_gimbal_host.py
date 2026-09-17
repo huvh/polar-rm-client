@@ -31,6 +31,8 @@ REPO = HERE.parents[3] / "tmp_polarbear" / "StandardRobotpp"
 BRIDGE_APPLY = HERE.parent / "host_bridge" / "apply_host_bridge.py"
 BRIDGE_HEADER_REL = "application/typedef/host_chassis_bridge.h"
 USB_REL = "application/communication/usb_task.c"
+sys.path.insert(0, str(HERE.parent))
+import bridge_fixture as bf
 GIMBAL_REL = "application/gimbal/gimbal_yaw_pitch_direct.c"
 MARK = "POLAR-GIMBAL-HOST"
 BRIDGE_MARK = "POLAR-HOST-BRIDGE"
@@ -183,7 +185,7 @@ int main(void)
                   ((run.stdout or "") + (run.stderr or "")).strip()[-160:])
 
 
-def main() -> int:
+def _run_checks() -> int:
     if not REPO.exists() or not (REPO / ".git").exists():
         print(f"SKIP: 固件副本不存在（{REPO}）")
         return 0
@@ -265,6 +267,21 @@ def main() -> int:
         return 1
     print("ALL GIMBAL-HOST TESTS PASSED")
     return 0
+
+
+def main() -> int:
+    if not REPO.exists():
+        return _run_checks()
+    # Include transitively modified RC/chassis files and restore even if an
+    # installer fails before the inner try/finally. Never leave half a bridge.
+    snapshot = bf.stage(REPO, [USB_REL, GIMBAL_REL, BRIDGE_HEADER_REL,
+        "application/other/remote_control.c",
+        "application/chassis/chassis_mecanum.c",
+        "application/chassis/chassis_omni.c"])
+    try:
+        return _run_checks()
+    finally:
+        bf.restore(snapshot, REPO)
 
 
 if __name__ == "__main__":

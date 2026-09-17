@@ -27,6 +27,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[3] / "tmp_polarbear" / "StandardRobotpp"
 USB_REL = "application/communication/usb_task.c"
+RC_REL = "application/other/remote_control.c"
 MECA_REL = "application/chassis/chassis_mecanum.c"
 OMNI_REL = "application/chassis/chassis_omni.c"
 HEADER_REL = "application/typedef/host_chassis_bridge.h"
@@ -95,8 +96,11 @@ def main() -> int:
         # 顺序很重要：**先拍快照**，再把要改的文件放回干净状态。
         # 反过来做的话 checkout 丢掉的东西（prepare_hero_build 写的桥、别的自检装的补丁）
         # 就再也 restore 不回来了。收尾只认这份快照，绝不用 git checkout -- .
-        SNAPSHOT = bf.stage(REPO, [USB_REL, MECA_REL, OMNI_REL, HEADER_REL])
-        git("checkout", "--", USB_REL, MECA_REL, OMNI_REL)
+        # apply_host_bridge also bootstraps the drive-keys patch, which edits
+        # remote_control.c. Omitting it leaks a half-applied patch into the
+        # following gimbal test (and into a developer's firmware checkout).
+        SNAPSHOT = bf.stage(REPO, [USB_REL, RC_REL, MECA_REL, OMNI_REL, HEADER_REL])
+        git("checkout", "--", USB_REL, RC_REL, MECA_REL, OMNI_REL)
         owns_revert = True
         apply = subprocess.run(
             [sys.executable, str(HERE / "apply_host_bridge.py"), str(REPO)],

@@ -6,6 +6,12 @@ root = Path(SPECPATH).parent
 datas = []
 binaries = []
 hiddenimports = []
+# Public exports are lazy to keep schema imports free of Qt/OpenCV. Explicit
+# inclusion is required because import_module names are otherwise invisible.
+hiddenimports += ["rm_client.backend." + name for name in (
+    "manager", "safety", "mqtt_backend", "video_backend", "serial_backend",
+    "readiness", "qualification", "protocol", "team_control",
+)]
 for package in ("cv2", "openvino"):
     try:
         d, b, h = collect_all(package)
