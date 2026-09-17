@@ -1,6 +1,6 @@
-"""Original mod items/operator preview and game-native formatted pixel text.
+"""Original mod items and game-native formatted pixel text.
 
-Font/damage sprites are local game resources; mod items/operator are original.
+Font/damage sprites are local game resources; mod items are original.
 Images are cached; no 3D engine, network, per-frame model rebuild, glass material
 or control publisher is introduced.
 """
@@ -13,8 +13,8 @@ import math
 from pathlib import Path
 import zipfile
 
-from PySide6.QtCore import QPointF, QRectF, Qt
-from PySide6.QtGui import QColor, QImage, QPainter, QTransform
+from PySide6.QtCore import QRectF, Qt
+from PySide6.QtGui import QColor, QImage, QPainter
 from .minecraft_mod_items import recipe_for, crafted_item, MODULE_RECIPES, CATEGORY_RECIPES
 
 
@@ -154,58 +154,3 @@ class MinecraftItemAtlas:
         key=self.item_name(name,category)
         if key not in self.custom:self.custom[key]=crafted_item(key)
         return self.custom[key]
-
-
-class MinecraftPlayerPreview:
-    """Cached operator portrait, with a textured-player renderer for skin inputs."""
-    def __init__(self, skin_path: Path | None = None, *, portrait_path: Path | None = None):
-        self.skin = (QImage(str(skin_path)) if skin_path else QImage()).convertToFormat(QImage.Format_ARGB32_Premultiplied)
-        self.portrait = (QImage(str(portrait_path)) if portrait_path else QImage()).convertToFormat(QImage.Format_ARGB32_Premultiplied)
-        self._image = QImage(); self.rebuilds = 0
-
-    def image(self):
-        if not self._image.isNull(): return self._image
-        image = QImage(100,140,QImage.Format_ARGB32_Premultiplied); image.fill(Qt.transparent)
-        if not self.portrait.isNull():
-            # One nearest-neighbour fit at load time; inventory animation only
-            # composites this thumbnail, never the full-resolution artwork.
-            tile = self.portrait.scaled(image.size(), Qt.KeepAspectRatio, Qt.FastTransformation)
-            p = QPainter(image)
-            p.drawImage(QPointF((image.width()-tile.width())/2, (image.height()-tile.height())/2), tile)
-            p.end(); self._image = image; self.rebuilds += 1
-            return image
-        if self.skin.isNull(): return image
-        yaw, pitch = math.radians(-22), math.radians(9)
-        def project(x,y,z):
-            xx=x*math.cos(yaw)+z*math.sin(yaw); zz=-x*math.sin(yaw)+z*math.cos(yaw)
-            return QPointF(50+xx*3.4,10+(y*math.cos(pitch)-zz*math.sin(pitch))*3.4), y*math.sin(pitch)+zz*math.cos(pitch)
-        faces=[]
-        def cube(cx,cy,w,h,d,u,v,pad=0):
-            x0,x1=cx-w/2-pad,cx+w/2+pad; y0,y1=cy-h/2-pad,cy+h/2+pad;z0,z1=-d/2-pad,d/2+pad
-            # UVs follow the actual wide-player model's box unfolding.
-            polygons=[([(x0,y0,z0),(x1,y0,z0),(x0,y1,z0)],(u+d,v+d,w,h),.98),
-                      ([(x0,y0,z1),(x0,y0,z0),(x0,y1,z1)],(u+d+w,v+d,d,h),.72),
-                      ([(x0,y0,z1),(x1,y0,z1),(x0,y0,z0)],(u+d,v,w,d),1.0)]
-            for points,uv,shade in polygons:
-                projected=[project(*point) for point in points]
-                faces.append((sum(depth for _,depth in projected)/3,[p for p,_ in projected],uv,shade))
-        for cx,cy,w,h,d,u,v,outer_u,outer_v in [
-            (-2,26,4,12,4,0,16,0,32),(2,26,4,12,4,16,48,0,48),
-            (-6,14,4,12,4,40,16,40,32),(6,14,4,12,4,32,48,48,48),
-            (0,14,8,12,4,16,16,16,32),(0,4,8,8,8,0,0,32,0)]:
-            cube(cx,cy,w,h,d,u,v);cube(cx,cy,w,h,d,outer_u,outer_v,.25)
-        p=QPainter(image);p.setRenderHint(QPainter.SmoothPixmapTransform,False)
-        for _,points,uv,shade in sorted(faces,key=lambda row:row[0],reverse=True):
-            tile=self.skin.copy(*uv)
-            if shade<1:
-                tint=QPainter(tile);tint.setCompositionMode(QPainter.CompositionMode_SourceAtop)
-                tint.fillRect(tile.rect(),QColor(0,0,0,round(255*(1-shade))));tint.end()
-            a,b,c=points
-            p.save();p.setTransform(QTransform((b.x()-a.x())/tile.width(),(b.y()-a.y())/tile.width(),
-                (c.x()-a.x())/tile.height(),(c.y()-a.y())/tile.height(),a.x(),a.y()))
-            p.drawImage(0,0,tile);p.restore()
-        p.end();self._image=image;self.rebuilds+=1
-        return image
-
-    def face(self):
-        face=self.skin.copy(8,8,8,8);p=QPainter(face);p.drawImage(0,0,self.skin.copy(40,8,8,8));p.end();return face

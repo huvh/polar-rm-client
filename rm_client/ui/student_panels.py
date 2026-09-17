@@ -17,7 +17,7 @@ from .clickgui_gpu import ClickGuiDrawList
 from .animation import Easings
 from .jello_clickgui import JelloMainTimeline
 from .jello_locale import module_label, chinese_enabled
-from .minecraft_presentation import MinecraftItemAtlas, MinecraftPlayerPreview
+from .minecraft_presentation import MinecraftItemAtlas
 
 
 @dataclass(frozen=True)
@@ -71,7 +71,6 @@ class StudentPanelRenderer:
         self.asset_root = Path(asset_root)
         self.inventory = QImage(str(self.asset_root / "inventory.png"))
         self.items = MinecraftItemAtlas(self.asset_root)
-        self.player = MinecraftPlayerPreview(portrait_path=self.asset_root / "robot_operator.png")
         self._cache_key = None
         self._cache_image = QImage()
         self._cache_hits: tuple[PanelHit, ...] = ()
@@ -315,7 +314,7 @@ class StudentPanelRenderer:
             self.button(host,p,QRectF((7+i*29)*s,17*s,28*s,13*s),{"Combat":"战斗","Movement":"移动","Vision":"视觉","Strategy":"战术","System":"系统","Render":"渲染"}[name],s,hits,"student_category",name,host.student_ui.category==name,True)
         # Keep the original survival inventory silhouette/slots. Replace the
         # crafting recipes with a clearly labelled skill-workbench shortcut.
-        p.drawImage(r(27,8,50,70),self.player.image())
+        # The original player well stays empty: no Steve, portrait or mascot.
         self.text(host,p,r(94,5,76,10),"技能/性能",4,s)
         mod=host.registry.get("SkillConfiguration")
         for i,(name,item) in enumerate((("Chassis Points","ChassisAssist"),("Shooter Points","FrictionWheel"),("Shooter Draft","ArmorAutoAim"),("Chassis Draft","PowerGuard"))):

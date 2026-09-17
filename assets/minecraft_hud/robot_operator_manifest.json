@@ -1,7 +1,0 @@
-{
-  "file": "robot_operator.png",
-  "sha256": "cff36a9da25b0d69ea5e18a2a80cc3ed9b0657584fa9f7eb74e7f9ea062be3ab",
-  "source": "Original project character generated with built-in image_gen",
-  "prompt_summary": "One original full-body Minecraft-style RoboMaster robot operator for the inventory player preview, three-quarter idle pose, cubic player proportions, off-white and steel-gray armour, charcoal visor with two cyan square eyes, cyan chest core, orange shoulder markings and belt buckle, block boots, hard pixel materials, transparent RGBA background. No Steve, Alex, human face, existing branded character, weapon, prop, UI, text, ground or shadow.",
-  "rendering": "One cached 100x140 aspect-fit nearest-neighbour thumbnail; no per-frame rasterization or glass/material changes."
-}

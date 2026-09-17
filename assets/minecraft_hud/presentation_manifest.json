@@ -35,10 +35,6 @@
     "source": "assets/minecraft/textures/item/arrow.png",
     "sha256": "fe76b2e0c79e09ddd037111cfc1d0510e1e13f2c2ff71bbf23e9c48b98d9030c"
   },
-  "steve.png": {
-    "source": "assets/minecraft/textures/entity/player/wide/steve.png",
-    "sha256": "06628f9cef88520da742ab280a01677ce17c99717f964ed89ed791673121094c"
-  },
   "font_default.json": {
     "source": "assets/minecraft/font/include/default.json",
     "sha256": "e17f8a4289db15bf662df3ab623ad4dd9bda9d2b2e3e9e9e743234ff186bd0c4"

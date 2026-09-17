@@ -137,12 +137,9 @@ def main():
         for name in ("ArmorAutoAim","SpinMode","SkillConfiguration"):
             check(w.student_renderer.items.image(name).cacheKey()==w.minecraft_hud.items.image(name).cacheKey() or
                   w.student_renderer.items.image(name)==w.minecraft_hud.items.image(name),f"inventory/hotbar share item for {name}")
-        avatar=w.student_renderer.player.image();avatar_key=avatar.cacheKey()
-        for _ in range(100):w.student_renderer.player.image()
-        check(avatar_key==w.student_renderer.player.image().cacheKey() and w.student_renderer.player.rebuilds==1,"Minecraft mech portrait cached over 100 frames")
-        check(len({avatar.pixelColor(x,y).rgba() for x in range(avatar.width()) for y in range(avatar.height())})>30,"Minecraft mech preview contains detailed pixel materials, not flat robot rectangles")
-        check(w.student_renderer.player.skin.isNull() and not w.student_renderer.player.portrait.isNull(),"inventory uses original robot operator instead of Steve skin")
-        check(avatar.pixelColor(0,0).alpha()==0 and avatar.pixelColor(99,139).alpha()==0,"operator thumbnail retains transparent fitted margins")
+        check(not hasattr(w.student_renderer,"player"),"inventory has no Steve, portrait or mascot renderer")
+        for name in ("steve.png","robot_operator.png","robot_operator_manifest.json"):
+            check(not (w.student_renderer.asset_root/name).exists(),f"removed unused avatar resource {name}")
         check(w.handle_student_key(key(Qt.Key.Key_E),True),"E opens MC inventory")
         w.student_ui.progress=1;draw(w)
         check(w.student_ui.panel=="inventory" and w.overlay_coordinator.modal==OverlayKind.STUDENT,"inventory owns modal input")
