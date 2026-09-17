@@ -1,7 +1,8 @@
-"""Game-native item sprites, textured player preview and formatted pixel text.
+"""Original mod items/operator preview and game-native formatted pixel text.
 
-All textures are local game resources. Images are cached; no 3D engine, network,
-per-frame model rebuild, glass material or control publisher is introduced.
+Font/damage sprites are local game resources; mod items/operator are original.
+Images are cached; no 3D engine, network, per-frame model rebuild, glass material
+or control publisher is introduced.
 """
 from __future__ import annotations
 
@@ -156,14 +157,23 @@ class MinecraftItemAtlas:
 
 
 class MinecraftPlayerPreview:
-    """Orthographic textured Minecraft cuboids, cached after one rasterization."""
-    def __init__(self, skin_path: Path):
-        self.skin = QImage(str(skin_path)).convertToFormat(QImage.Format_ARGB32_Premultiplied)
+    """Cached operator portrait, with a textured-player renderer for skin inputs."""
+    def __init__(self, skin_path: Path | None = None, *, portrait_path: Path | None = None):
+        self.skin = (QImage(str(skin_path)) if skin_path else QImage()).convertToFormat(QImage.Format_ARGB32_Premultiplied)
+        self.portrait = (QImage(str(portrait_path)) if portrait_path else QImage()).convertToFormat(QImage.Format_ARGB32_Premultiplied)
         self._image = QImage(); self.rebuilds = 0
 
     def image(self):
         if not self._image.isNull(): return self._image
         image = QImage(100,140,QImage.Format_ARGB32_Premultiplied); image.fill(Qt.transparent)
+        if not self.portrait.isNull():
+            # One nearest-neighbour fit at load time; inventory animation only
+            # composites this thumbnail, never the full-resolution artwork.
+            tile = self.portrait.scaled(image.size(), Qt.KeepAspectRatio, Qt.FastTransformation)
+            p = QPainter(image)
+            p.drawImage(QPointF((image.width()-tile.width())/2, (image.height()-tile.height())/2), tile)
+            p.end(); self._image = image; self.rebuilds += 1
+            return image
         if self.skin.isNull(): return image
         yaw, pitch = math.radians(-22), math.radians(9)
         def project(x,y,z):

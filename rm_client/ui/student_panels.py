@@ -71,7 +71,7 @@ class StudentPanelRenderer:
         self.asset_root = Path(asset_root)
         self.inventory = QImage(str(self.asset_root / "inventory.png"))
         self.items = MinecraftItemAtlas(self.asset_root)
-        self.player = MinecraftPlayerPreview(self.asset_root / "steve.png")
+        self.player = MinecraftPlayerPreview(portrait_path=self.asset_root / "robot_operator.png")
         self._cache_key = None
         self._cache_image = QImage()
         self._cache_hits: tuple[PanelHit, ...] = ()
