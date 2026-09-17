@@ -8,7 +8,7 @@
 
 | 功能 / ClickGUI mod | 入口与显示 | 本地学生语言包依据 |
 |---|---|---|
-| InjuryStatistics | 按住 `~`，松开收起；暗色 MC 计分板，各伤害累计快照 | BattlePanel_InjuryStatistics / CollapsePanel |
+| InjuryStatistics | 按住 `~`，松开收起；屏幕上方原版 Tab 列表式伤害累计快照，不是 Jello 设置卡片 | BattlePanel_InjuryStatistics / CollapsePanel |
 | MatchSettlement | 设置中 Open Settlement；比赛 MATCH→SETTLEMENT 自动展开 Jello 结算，冻结当时快照 | SettlementPanel_BaseHP / RobotHP / Kills / HurtHP / EnergyMechanism / NumberOfArmorBreak |
 | ReloadingPanel | `O` / `I`；已有买弹工作区右侧展开补弹/换弹，沿用原滚动视口 | ReloadingPanel_LeftGate / RightGate / VirtualTotal / PhysicalTotal / NoAtSupplierZone |
 | DartPanel | 设置中 Open Dart Panel；飞镖档 `F` 可打开；目标、闸门、初速度、发射数、冷却、检测模块；面板内 `J/F/L` 只编辑草稿 | DartsPanel_CurrentTarget / OpenDartGate / DartInitialSpeed / NumberDartFired / LaunchingStationCooling |
@@ -61,7 +61,27 @@ MC GUI Scale / Scale Multiplier 沿用已有设置，不影响外挂层倍率。
 API 冻结基线仅补充新增的 15 个前端成员；旧成员、签名、类型和模块符号经
 差分确认没有漂移，未重新采集覆盖整个基线。
 
-本机验证：30 套 Python 测试均通过；新增前端测试最终 69 项检查通过。
+本机验证：30 套 Python 测试均通过；前端测试最终 88 项检查通过。
 真实 Windows OpenGL 完成 26 张合成器截图（四分辨率的五种面板及 HUD、
 已有经济页与 100 次恢复后的 HUD）。四 DPR 的字体/命中检查在离屏测试中完成，
 不等同于四台不同 DPI 显示器的现场验收。
+
+## Minecraft 视觉修订
+
+- 右侧参考用户提供的 Hypixel SkyBlock / Bed Wars 截图：金色居中标题、灰色
+  日期/阶段、分组空行、左对齐的彩色队伍/数值、黄色项目页脚。完整机器人名册
+  不再塞进侧栏。没有照抄 Hypixel 网站地址，也没有造装饰性的比分或网络 ping。
+- `~` 保留原入口；只是采用 MC Tab 的像素文字、半透明条目、右侧积分列和
+  顶部/底部说明。Tab 键仍保持原有战术地图绑定。列表显示时暂时让开居中的
+  灵动岛/TargetHUD，松开后恢复；不修改模块开关或液态玻璃材质。
+- 背包人物采用原版 wide Steve 皮肤、头/躯干/四肢纹理 UV、立体侧面与外层；
+  模型只绘制一次缓存，不是原来的几块矩形机器人。
+- Mod 物品是本项目原创 MC 像素物品，不是直接把弓/剑/珍珠全盘搬过来。
+  自瞄炮塔、陀螺底盘、带抛物线的吊射炮、弹药箱、金币袋、技能法杖、
+  资源浮岛等固定表达功能；同一 Mod 在背包/技能工作台/拖动/九格栏中一致。
+  完整名称仍在 tooltip 中，图标上不压英文缩写。制作代码为
+  `rm_client/ui/minecraft_mod_items.py`，32px 图缓存、16-grid 硬边、nearest 合成。
+- MC 中文使用本机 asset index 29 的原始 Unihex 字体，英文/符号使用该版本
+  bitmap provider 映射；Jello 仍使用原有 Helvetica/YaHei，普通液态玻璃 HUD 不变。
+  字体授权文件随 `unifont.zip` 保存，原始资源来源和哈希见
+  `assets/minecraft_hud/presentation_manifest.json`。

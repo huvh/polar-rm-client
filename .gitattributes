@@ -1,0 +1,3 @@
+# Keep extracted font metadata/license byte-for-byte identical to local assets.
+assets/minecraft_hud/font_default.json -text
+assets/minecraft_hud/UNIFONT_LICENSE.txt -text -whitespace

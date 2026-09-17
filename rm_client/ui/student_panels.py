@@ -17,6 +17,7 @@ from .clickgui_gpu import ClickGuiDrawList
 from .animation import Easings
 from .jello_clickgui import JelloMainTimeline
 from .jello_locale import module_label, chinese_enabled
+from .minecraft_presentation import MinecraftItemAtlas, MinecraftPlayerPreview
 
 
 @dataclass(frozen=True)
@@ -69,6 +70,8 @@ class StudentPanelRenderer:
     def __init__(self, asset_root: Path) -> None:
         self.asset_root = Path(asset_root)
         self.inventory = QImage(str(self.asset_root / "inventory.png"))
+        self.items = MinecraftItemAtlas(self.asset_root)
+        self.player = MinecraftPlayerPreview(self.asset_root / "steve.png")
         self._cache_key = None
         self._cache_image = QImage()
         self._cache_hits: tuple[PanelHit, ...] = ()
@@ -89,17 +92,18 @@ class StudentPanelRenderer:
     @staticmethod
     def geometry(host: Any, width: int, height: int) -> tuple[QRectF, float]:
         state = host.student_ui
-        if state.panel == "inventory":
+        if state.panel in {"inventory", "damage"}:
             module = host.registry.get("MinecraftCombatHUD")
             desired = host.minecraft_hud.layout(width, height, host.setting_mode(module, "GUI Scale", "Auto"),
                 scale_multiplier=host.get_setting_number(module, "Scale Multiplier", 1.0)).scale
-            scale = min(desired, (width - 32) / 190, (height - 32) / 220)
-            w, h = 190 * scale, 220 * scale
+            logical_w,logical_h = (190,220) if state.panel=="inventory" else (280,170)
+            scale = min(desired, (width - 32) / logical_w, (height - 32) / logical_h)
+            w, h = logical_w * scale, logical_h * scale
         else:
             scale = min(host.get_gui_scale(), (width - 32) / 740, (height - 32) / 550)
             w, h = 740 * scale, 550 * scale
         scale = max(0.1, scale)
-        return QRectF((width - w) / 2, (height - h) / 2, w, h), scale
+        return QRectF((width-w)/2, 10 if state.panel=="damage" else (height-h)/2, w, h), scale
 
     def draw(self, host: Any, p: QPainter, width: int, height: int) -> None:
         state = host.student_ui
@@ -127,6 +131,8 @@ class StudentPanelRenderer:
             hits: list[PanelHit] = []
             if state.panel == "inventory":
                 self.inventory_panel(host, painter, local, scale, hits)
+            elif state.panel == "damage":
+                self.tab_panel(host, painter, local, scale, hits)
             else:
                 self.jello_panel(host, painter, local, scale, hits)
             painter.end()
@@ -134,8 +140,8 @@ class StudentPanelRenderer:
             self.rebuilds += 1
         p.save()
         p.setOpacity(p.opacity() * progress)
-        p.fillRect(QRectF(0, 0, width, height), QColor(0, 0, 0, 100))
-        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, state.panel != "inventory")
+        if state.panel!="damage":p.fillRect(QRectF(0,0,width,height),QColor(0,0,0,100))
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, state.panel not in {"inventory","damage"})
         timeline = JelloMainTimeline()
         timeline.progress = state.progress
         timeline.target = 1.0 if state.opened else 0.0
@@ -167,7 +173,11 @@ class StudentPanelRenderer:
                 if state.panel == "inventory" and hit.action == "student_slot":
                     host.add_hotspot(rect, "student_clear_slot", hit.payload, button=3, tooltip="右键清空功能栏槽位")
         if state.dragging:
-            ghost = QRectF(host.hover_point.x() + 14, host.hover_point.y() + 8, 220, 30)
+            target=host.registry.get(state.dragging)
+            icon_size=min(48,16*scale)
+            p.drawImage(QRectF(host.hover_point.x()-icon_size/2,host.hover_point.y()-icon_size/2,icon_size,icon_size),
+                        self.items.image(state.dragging,target.category if target else "System"))
+            ghost = QRectF(host.hover_point.x() + icon_size/2+5, host.hover_point.y() + 8, 220, 30)
             ghost.moveLeft(min(ghost.left(),max(4,width-ghost.width()-4)))
             ghost.moveTop(min(ghost.top(),height-34))
             p.fillRect(ghost, QColor(0, 0, 0, 190))
@@ -204,15 +214,10 @@ class StudentPanelRenderer:
         return ()
 
     def text(self, host: Any, p: QPainter, rect: QRectF, text: str, size: float, scale: float, color: str = "#333333", medium: bool = False, align=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter) -> None:
-        if host.student_ui.panel in {"inventory", "damage"} and text.isascii():
-            bitmap=host.minecraft_hud.font
-            image=bitmap.image(text,QColor(color),1,shadow=host.student_ui.panel=="damage")
-            ratio=size*scale*96/72/8
-            w,h=image.width()*ratio,image.height()*ratio
-            x=rect.right()-w if align & Qt.AlignmentFlag.AlignRight else rect.center().x()-w/2 if align & Qt.AlignmentFlag.AlignHCenter else rect.left()
-            p.save();p.setClipRect(rect,Qt.ClipOperation.IntersectClip)
-            p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform,False)
-            p.drawImage(QRectF(x,rect.center().y()-h/2,w,h),image);p.restore()
+        if host.student_ui.panel in {"inventory", "damage"}:
+            pixel_scale=scale if host.student_ui.panel=="inventory" and size<=6 else size*scale*96/72/8
+            host.minecraft_hud.styled_font.draw(p,rect,text,pixel_scale,align,
+                shadow=host.student_ui.panel=="damage",base=QColor(color))
             return
         font = self.font(host, size * scale, medium)
         if any(ord(char) > 255 for char in text):
@@ -225,34 +230,46 @@ class StudentPanelRenderer:
     def button(self, host: Any, p: QPainter, rect: QRectF, label: str, scale: float, hits: list[PanelHit], action: str, payload: Any = None, primary: bool = False, pixel: bool = False) -> None:
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(QColor("#29a6ff" if primary else "#ededed"))
-        p.drawRect(rect) if pixel else p.drawRoundedRect(rect, 4 * scale, 4 * scale)
+        if pixel:
+            p.fillRect(rect,QColor("#373737"));inside=rect.adjusted(scale,scale,-scale,-scale)
+            p.fillRect(inside,QColor("#777777" if primary else "#686868"))
+            p.fillRect(QRectF(inside.left(),inside.top(),inside.width(),scale),QColor("#d4d4d4"))
+            p.fillRect(QRectF(inside.left(),inside.bottom()-scale,inside.width(),scale),QColor("#353535"))
+        else:p.drawRoundedRect(rect, 4 * scale, 4 * scale)
         pad=(1 if pixel else 5)*scale
         self.text(host, p, rect.adjusted(pad, 0, -pad, 0), label, 11 if not pixel else 4, scale,
-                  "#ffffff" if primary else "#333333", align=Qt.AlignmentFlag.AlignCenter)
+                  "#ffff55" if pixel and primary else "#ffffff" if pixel or primary else "#333333", align=Qt.AlignmentFlag.AlignCenter)
         hits.append(PanelHit(rect, action, payload, label))
+
+    def tab_panel(self, host, p, rect, s, hits):
+        """Vanilla Tab-list chrome, score column and real item glyphs; no cards."""
+        def r(x,y,w,h):return QRectF(x*s,y*s,w*s,h*s)
+        font=host.minecraft_hud.styled_font
+        p.fillRect(rect,QColor(0,0,0,90))
+        p.fillRect(r(3,3,274,23),QColor(0,0,0,155))
+        font.draw(p,r(12,3,256,12),"§e§lROBOMASTER",s,Qt.AlignHCenter)
+        font.draw(p,r(10,15,260,10),"§7受伤害统计  §8/  §f"+str(host.state.match_title),s*.75,Qt.AlignHCenter)
+        items=("diamond_sword","arrow","fire_charge","iron_ingot","firework_rocket","iron_chestplate","compass_16","paper","nether_star")
+        for i,((label,value),item) in enumerate(zip(damage_rows(host.state),items)):
+            row=r(5,30+i*12,270,11)
+            p.fillRect(row,QColor(255,255,255,32))
+            p.drawImage(r(7,31+i*12,9,9),self.items.images[item])
+            font.draw(p,r(20,30+i*12,187,11),"§f"+label,s)
+            font.draw(p,r(212,30+i*12,57,11),("§7" if value=="—" else "§e")+value,s,Qt.AlignRight)
+        p.fillRect(r(3,143,274,23),QColor(0,0,0,155))
+        font.draw(p,r(8,143,264,11),"§7按住 ~ 查看 · 松开收起",s*.9,Qt.AlignHCenter)
+        font.draw(p,r(8,154,264,10),"§7累计快照 / 未收到的字段显示 —",s*.9,Qt.AlignHCenter)
 
     def jello_panel(self, host: Any, p: QPainter, rect: QRectF, s: float, hits: list[PanelHit]) -> None:
         panel = host.student_ui.panel
-        damage = panel == "damage"
-        p.setPen(Qt.PenStyle.NoPen); p.setBrush(QColor(15, 18, 22, 235) if damage else QColor("#fefefe"))
-        p.drawRect(rect) if damage else p.drawRoundedRect(rect, 8 * s, 8 * s)
-        ink = "#ffffff" if damage else "#333333"
-        title = {"damage": "受伤害统计", "settlement": "比赛结算", "darts": "飞镖控制面板", "skills": "性能点 / 技能配置"}.get(panel, "补弹面板")
+        p.setPen(Qt.PenStyle.NoPen); p.setBrush(QColor("#fefefe"))
+        p.drawRoundedRect(rect,8*s,8*s)
+        ink = "#333333"
+        title = {"settlement": "比赛结算", "darts": "飞镖控制面板", "skills": "性能点 / 技能配置"}.get(panel, "补弹面板")
         self.text(host, p, QRectF(26*s, 5*s, 640*s, 60*s), title, 23, s, ink)
         self.button(host, p, QRectF(680*s, 18*s, 34*s, 30*s), "×", s, hits, "student_close")
         self.text(host, p, QRectF(26*s, 64*s, 688*s, 28*s), "裁判下行 / 未提供的字段显示 —" if panel != "skills" else "右侧为本地配置草稿，左侧为已同步状态", 11, s, "#8d959d")
         rows = self.content_rows(host)
-        if damage:
-            row_w, row_h = 660*s, 35*s
-            maximum = max((float(value) for _, value in rows[1:] if value != "—"), default=1)
-            for i, (label, value) in enumerate(rows):
-                y = (100 + i*row_h/s)*s
-                p.fillRect(QRectF(28*s, y, row_w, row_h-2*s), QColor(0,0,0,100))
-                if i and value != "—": p.fillRect(QRectF(28*s, y+row_h-5*s, (row_w*float(value)/max(1,maximum)), 2*s), QColor("#55ffff"))
-                self.text(host,p,QRectF(38*s,y,420*s,row_h),label,13,s,"#ffffff")
-                self.text(host,p,QRectF(480*s,y,196*s,row_h),value,14,s,"#55ffff",align=Qt.AlignmentFlag.AlignRight|Qt.AlignmentFlag.AlignVCenter)
-            self.text(host,p,QRectF(28*s,470*s,680*s,42*s),"按住 ~ 展开，松开收起  ·  累计快照，不叠加重复报告",11,s,"#9ba8b8")
-            return
         if panel == "settlement":
             for i,(label,value) in enumerate(rows):
                 row,col=divmod(i,2); tile=QRectF((26+col*354)*s,(104+row*70)*s,336*s,60*s)
@@ -298,15 +315,14 @@ class StudentPanelRenderer:
             self.button(host,p,QRectF((7+i*29)*s,17*s,28*s,13*s),{"Combat":"战斗","Movement":"移动","Vision":"视觉","Strategy":"战术","System":"系统","Render":"渲染"}[name],s,hits,"student_category",name,host.student_ui.category==name,True)
         # Keep the original survival inventory silhouette/slots. Replace the
         # crafting recipes with a clearly labelled skill-workbench shortcut.
-        p.fillRect(r(26,8,51,70),QColor("#303438"))
-        for x,y,w,h,c in [(34,15,20,14,"#62bdf6"),(27,31,34,22,"#dce4ec"),(31,53,9,15,"#6f899d"),(49,53,9,15,"#6f899d")]:p.fillRect(r(x,y,w,h),QColor(c))
-        self.text(host,p,r(27,9,48,9),f"ROBOT {host.state.robot_id}",3.5,s,"#ffffff")
-        self.text(host,p,r(94,5,76,10),"技能 / 性能工作台",4,s)
+        p.drawImage(r(27,8,50,70),self.player.image())
+        self.text(host,p,r(94,5,76,10),"技能/性能",4,s)
         mod=host.registry.get("SkillConfiguration")
-        for i,(name,kind) in enumerate((("Chassis Points",4),("Shooter Points",1),("Shooter Draft",3),("Chassis Draft",7))):
+        for i,(name,item) in enumerate((("Chassis Points","ChassisAssist"),("Shooter Points","FrictionWheel"),("Shooter Draft","ArmorAutoAim"),("Chassis Draft","PowerGuard"))):
             col,row=i%2,i//2;cell=r(98+18*col,18+18*row,16,16)
-            p.drawImage(cell,self.icons[kind]);hits.append(PanelHit(cell,"student_open","skills",name))
-        self.button(host,p,r(154,28,16,16),"配置",s,hits,"student_open","skills",True,True)
+            p.drawImage(cell,self.items.image(item));hits.append(PanelHit(cell,"student_open","skills",name))
+        output=r(154,28,16,16);p.drawImage(output,self.items.image("SkillConfiguration"))
+        hits.append(PanelHit(output,"student_open","skills","打开技能 / 性能配置"))
         self.text(host,p,r(95,56,77,12),"可分配点: "+value_text(presentation_data(host.state).get("assignable_points")),3.7,s)
         p.fillRect(r(8,73,162,10),QColor("#c6c6c6"))
         self.text(host,p,r(8,73,162,10),"拖拽模块到九格功能栏",4,s)
@@ -315,15 +331,14 @@ class StudentPanelRenderer:
         visible=modules[host.student_ui.page*27:(host.student_ui.page+1)*27]
         for i,module in enumerate(visible):
             row,col=divmod(i,9);cell=r(8+18*col,84+18*row,16,16)
-            kind=(categories.index(module.category)+i)%7+1
-            p.drawImage(cell,self.icons[kind])
-            self.text(host,p,cell.adjusted(0,8*s,0,0),host.minecraft_hud.abbreviation(module.name),3,s,"#ffffff",align=Qt.AlignmentFlag.AlignCenter)
+            p.drawImage(cell,self.items.image(module.name,module.category))
             hits.append(PanelHit(cell,"student_inventory_item",module.name,module_label(module.name,chinese_enabled(host.registry))+" · 拖拽到下方槽位（不启用模块）"))
         assignments=host.minecraft_hud.assignments(host.registry.get("MinecraftCombatHUD"))
         for i,name in enumerate(assignments):
             cell=r(8+18*i,142,16,16)
             if name!="Empty":
-                p.drawImage(cell,self.icons[(i%7)+1]);self.text(host,p,cell.adjusted(0,8*s,0,0),host.minecraft_hud.abbreviation(name),3,s,"#ffffff",align=Qt.AlignmentFlag.AlignCenter)
+                module=host.registry.get(name)
+                p.drawImage(cell,self.items.image(name,module.category if module else "System"))
             if i==host.student_ui.selected_slot:
                 p.setBrush(Qt.BrushStyle.NoBrush);p.setPen(QPen(QColor("#55ffff"),max(1,s/2)));p.drawRect(cell)
             hits.append(PanelHit(cell,"student_slot",i,f"{i+1}: {module_label(name,chinese_enabled(host.registry))} · 点击分配，右键清空"))

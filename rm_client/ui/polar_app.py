@@ -1536,7 +1536,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             elif student_active:
                 backdrop_active = True
                 backdrop_progress = 1.0
-                backdrop_blur = 20.0 * min(1.0, self.student_ui.progress * 4.0)
+                backdrop_blur = 0.0 if self.student_ui.panel=="damage" else 20.0 * min(1.0, self.student_ui.progress * 4.0)
                 backdrop_dim = 0.0
                 backdrop_blur_kernel = "jello_box20"
             else:
@@ -2053,6 +2053,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             self._economy_scene_epoch,
             bool(self.gui_visible or self.gui_timeline.progress > 0.01),
             bool(self.student_ui.visible),
+            self.student_ui.panel if self.student_ui.visible else None,
             int(self.state.deploy_mode),
             int(self.state.deploy_status_revision),
         )
@@ -2431,6 +2432,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         logical_width = max(1, int(width / scale))
         logical_height = max(1, int(height / scale))
         minecraft_active = self.minecraft_hud_active()
+        held_tab_list = self.student_ui.visible and self.student_ui.panel=="damage"
         if minecraft_active:
             # Original MC chrome is one low-resolution nearest-neighbour
             # layer.  Every client/mod overlay below remains at its own HUD
@@ -2490,7 +2492,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             )
             self.draw_target_overlay(p, mock_energy, energy_module)
 
-        if include_target_hud:
+        if include_target_hud and not held_tab_list:
             self.paint_combat_target_overlay(
                 p,
                 logical_width,
@@ -2498,7 +2500,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                 display_result,
                 now,
             )
-        if self.setting_bool(hud, "Dynamic Island", True):
+        if self.setting_bool(hud, "Dynamic Island", True) and not held_tab_list:
             self.draw_dynamic_island(p, logical_width)
         tactical_map = self.registry.get("TacticalMap")
         # Always show map while tuning ClickGUI unless caller forces it off.

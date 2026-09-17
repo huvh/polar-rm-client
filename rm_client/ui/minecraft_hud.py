@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from dataclasses import dataclass
+from datetime import datetime
 import math
 from pathlib import Path
 import time
@@ -17,6 +18,7 @@ from typing import Any, Iterable
 
 from PySide6.QtCore import QPointF, QRect, QRectF, QSize, Qt
 from PySide6.QtGui import QColor, QImage, QPainter, QPolygonF
+from .minecraft_presentation import MinecraftItemAtlas, MinecraftStyledFont
 
 
 FUNCTION_SLOT_NAMES = tuple(f"Slot {index}" for index in range(1, 10))
@@ -186,6 +188,8 @@ class MinecraftCombatHudRenderer:
             for name in self.SPRITES
         }
         self.font = MinecraftBitmapFont(self.asset_root / "ascii.png")
+        self.styled_font = MinecraftStyledFont(self.font,self.asset_root)
+        self.items = MinecraftItemAtlas(self.asset_root)
         self.selected_slot = 0
         self._layer_image = QImage()
         self._layer_key: tuple[Any, ...] | None = None
@@ -219,13 +223,13 @@ class MinecraftCombatHudRenderer:
         )
         boss = tuple(QRectF((width - 182 * scale) // 2, (15 + index * 15) * scale, 182 * scale, 5 * scale) for index in range(3))
         lines = tuple(str(line) for line in scoreboard_lines)
-        logical_score_w = max((self.font.logical_width(line) for line in lines), default=104)
+        logical_score_w = max((self.styled_font.width(line) for line in lines), default=104)
         score_w = max(112, logical_score_w + 8) * scale
         score_h = max(12, len(lines) * 9 + 5) * scale
         # Hypixel-style sidebars keep the upper-right clear for ArrayList/mod
         # overlays.  Anchor match information above the status/hotbar band,
         # rather than vertically centring a tall diagnostics dump.
-        score_y = max(58 * scale, height - score_h - 52 * scale)
+        score_y = max(40 * scale, min((height-score_h)*.5,height-score_h-52*scale))
         scoreboard = QRectF(width - score_w - 4 * scale, score_y, score_w, score_h)
         # Keep effect tiles below the three boss bars.  At 2K/Auto scale 6 a
         # vanilla 6-slot effect row is 936 px wide; placing it at y=4 clipped
@@ -268,14 +272,14 @@ class MinecraftCombatHudRenderer:
         multiplier = max(0.50, min(2.00, float(scale_multiplier)))
         requested = max(0.25, base_scale * multiplier)
 
-        logical_score_width = max((self.font.logical_width(line) for line in lines), default=112)
+        logical_score_width = max((self.styled_font.width(line) for line in lines), default=112)
         score_width = max(112, logical_score_width + 8)
         score_height = max(12, len(lines) * 9 + 5)
         # Content-aware safety cap, not Minecraft's conservative 320x240 cap:
         # user scaling remains useful while the actual hotbar/effects/score
         # extents are guaranteed to stay inside the framebuffer.
         widest = max(182.0, 154.0, float(score_width + 8))
-        tallest = max(82.0, float(score_height + 58))
+        tallest = max(82.0, float(score_height + 92))
         safe_scale = min(
             max(0.05, (width - 8.0) / widest),
             max(0.05, (height - 8.0) / tallest),
@@ -387,47 +391,29 @@ class MinecraftCombatHudRenderer:
         allies, enemies = MinecraftCombatHudRenderer._team_rows(state)
         ally_alive = sum(1 for row in allies if int(row.get("hp", 0)) > 0 and str(row.get("state", "")).upper() not in {"DOWN", "DEAD"})
         enemy_alive = sum(1 for row in enemies if int(row.get("hp", 0)) > 0 and str(row.get("state", "")).upper() not in {"DOWN", "DEAD"})
-        local_id = int(getattr(state, "robot_id", 0) or 0)
-        lob_status = "ARM" if bool(getattr(state, "hero_lob_armed", False)) else "OFF"
-        lines: list[tuple[str, QColor]] = [
-            (str(getattr(state, "match_title", "RM MATCH")).upper(), QColor("#55ffff")),
-            (f"{seconds // 60:02d}:{seconds % 60:02d}  A{ally_alive} E{enemy_alive}", QColor("#ffffff")),
-            (f"BASE A{int(getattr(state, 'base_health', 0))}|E{int(getattr(state, 'enemy_base_health', 0))}", QColor("#ffffff")),
-            (f"SHLD A{int(getattr(state, 'base_shield', 0))}|E{int(getattr(state, 'enemy_base_shield', 0))}", QColor("#ffffff")),
-            (f"POST A{int(getattr(state, 'outpost_health', 0))}|E{int(getattr(state, 'enemy_outpost_health', 0))}", QColor("#ffffff")),
+        stage=str(getattr(state,"current_stage","NOT_STARTED"))
+        label={"NOT_STARTED":"WAITING","MATCH":"MATCH","SETTLEMENT":"RESULTS","COUNTDOWN":"COUNTDOWN"}.get(stage,stage)
+        # Bed Wars sidebar hierarchy: title / metadata / timer / teams / stats.
+        # Empty score lines create genuine spacing. No fake Hypixel address,
+        # objective, ping, red decorative scores or full roster dump.
+        texts=[
+            "§e§l"+str(getattr(state,"match_title","ROBOMASTER")).upper(),
+            "§7"+datetime.now().strftime("%m/%d/%y")+" §8"+label,
+            "",
+            f"§fTime left: §a{seconds//60}:{seconds%60:02d}",
+            "",
+            f"§aA §fAlly: §a{ally_alive} §7YOU",
+            f"§cE §fEnemy: §c{enemy_alive}",
+            f"§fBase: §a{int(getattr(state,'base_health',0))} §7/ §c{int(getattr(state,'enemy_base_health',0))}",
+            f"§fShield: §a{int(getattr(state,'base_shield',0))}% §7/ §c{int(getattr(state,'enemy_base_shield',0))}%",
+            f"§fPost: §a{int(getattr(state,'outpost_health',0))} §7/ §c{int(getattr(state,'enemy_outpost_health',0))}",
+            "",
+            f"§fKills: §a{int(getattr(state,'referee_kill_count',0))}",
+            f"§fAmmo: §a{int(getattr(state,'remaining_ammo',0))}",
+            f"§fGold: §6{int(getattr(state,'polar_gold_coin',0))}",
+            "§epolar-rm-client",
         ]
-        # A 7v7 roster used to turn this sidebar into a full-height terminal.
-        # Keep three actionable rows (local robot first, then lowest-HP peers)
-        # and use the fourth row as an explicit overflow count.  The tactical
-        # map remains the detailed roster view.
-        def sidebar_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-            return sorted(
-                rows,
-                key=lambda row: (
-                    int(row.get("id", 0) or 0) != local_id,
-                    max(0, int(row.get("hp", 0) or 0)),
-                    int(row.get("id", 0) or 0),
-                ),
-            )
-
-        allies = sidebar_rows(allies)
-        enemies = sidebar_rows(enemies)
-        detailed_count = 3 if max(len(allies), len(enemies)) > 4 else 4
-        for index in range(min(detailed_count, max(len(allies), len(enemies)))):
-            ally = MinecraftCombatHudRenderer._compact_robot_status("A", allies[index], local_id) if index < len(allies) else "A-- --"
-            enemy = MinecraftCombatHudRenderer._compact_robot_status("E", enemies[index], local_id) if index < len(enemies) else "E-- --"
-            lines.append((f"{ally}|{enemy}", QColor("#ffffff")))
-        if max(len(allies), len(enemies)) > detailed_count:
-            ally_more = max(0, len(allies) - detailed_count)
-            enemy_more = max(0, len(enemies) - detailed_count)
-            lines.append((f"A+{ally_more} MORE|E+{enemy_more} MORE", QColor("#aaaaaa")))
-        lines.append(
-            (
-                f"AMMO {int(getattr(state, 'remaining_ammo', 0))}  LOB {lob_status}",
-                QColor("#ff55ff") if lob_status == "ARM" else QColor("#ffaa00"),
-            )
-        )
-        return tuple(lines)
+        return tuple((text,QColor("#ffffff")) for text in texts)
 
     def draw(self, painter: QPainter, width: int, height: int, state: Any, registry: Any, module: Any) -> MinecraftHudLayout:
         lines = self.scoreboard_lines(state)
@@ -549,16 +535,10 @@ class MinecraftCombatHudRenderer:
             )
             self._sprite(layer_painter, "hotbar_selection", selection)
             for index, (rect, (name, enabled)) in enumerate(zip(layout.slots, assignment_states)):
-                label = self.abbreviation(name)
-                label_width = self.font.logical_width(label) * scale
-                self.font.draw(
-                    layer_painter,
-                    rect.center().x() - label_width * 0.5,
-                    rect.top() + 4 * scale,
-                    label,
-                    QColor("#55ff55") if enabled else QColor("#ffffff"),
-                    scale,
-                )
+                if name!="Empty":
+                    target=registry.get(name) if registry else None
+                    layer_painter.drawImage(rect,self.items.image(name,target.category if target else "System"))
+                    if enabled:layer_painter.fillRect(QRectF(rect.left()+2,rect.bottom()-1,12,1),QColor("#55ff55"))
                 self.font.draw(layer_painter, rect.left(), rect.top(), str(index + 1), QColor("#ffff55") if index == self.selected_slot else QColor("#aaaaaa"), max(1, scale // 2), shadow=True)
 
             self._draw_meter(layer_painter, layout.hearts, hp_ratio, "heart_container", "heart_half", "heart_full")
@@ -686,19 +666,8 @@ class MinecraftCombatHudRenderer:
         for index, (text, text_color) in enumerate(lines):
             row = QRectF(rect.left(), y + index * row_h, rect.width(), row_h)
             painter.fillRect(row, QColor(0, 0, 0, 105 if index else 150))
-            if index == 0:
-                painter.fillRect(QRectF(row.left(), row.top(), 2 * scale, row.height()), QColor("#55ffff"))
-                text_w = self.font.logical_width(text) * scale
-                self.font.draw(painter, row.center().x() - text_w * 0.5, row.top(), text, text_color, scale)
-                continue
-            if "|" in text:
-                left, right = text.split("|", 1)
-                right_w = self.font.logical_width(right) * scale
-                self.font.draw(painter, row.left() + 3 * scale, row.top(), left, QColor("#55ff55"), scale)
-                self.font.draw(painter, row.right() - right_w - 3 * scale, row.top(), right, QColor("#ff5555"), scale)
-                continue
-            text_w = self.font.logical_width(text) * scale
-            self.font.draw(painter, row.right() - text_w - 2 * scale, row.top(), text, text_color, scale)
+            self.styled_font.draw(painter,row.adjusted(3*scale,0,-3*scale,0),text,scale,
+                                  Qt.AlignHCenter if index==0 else Qt.AlignLeft)
 
     def _draw_effects(self, painter: QPainter, origin: QPointF, effects: tuple[tuple[str, bool], ...], scale: int) -> None:
         for index, (label, active) in enumerate(effects):

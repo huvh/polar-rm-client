@@ -3735,11 +3735,15 @@ def test_minecraft_hud_assets_layout_and_render() -> None:
         {"id": 107, "name": "Sentry", "hp": 530, "max": 600, "state": "PATROL"},
     ]
     texts = tuple(text for text, _color in renderer.scoreboard_lines(state))
-    assert len(texts) <= 10
-    assert any(text.startswith(">A03 560|") for text in texts)
-    assert any("|E03 420" in text for text in texts)
-    assert any(text.startswith("BASE A") and "|E" in text for text in texts)
-    assert any(text.startswith("SHLD A") and "|E" in text for text in texts)
+    assert len(texts) == 15
+    assert texts[0].startswith("§e§l") and texts[1].startswith("§7")
+    assert texts.count("") == 3
+    assert any("Ally: §a3 §7YOU" in text for text in texts)
+    assert any("Enemy: §c3" in text for text in texts)
+    assert any(text.startswith("§fBase:") and "§c" in text for text in texts)
+    assert any(text.startswith("§fShield:") and "§c" in text for text in texts)
+    assert texts[-1] == "§epolar-rm-client"
+    assert all("|" not in text and "www.hypixel" not in text for text in texts)
     state.robot_rows.extend(
         [
             {"id": robot_id, "name": "Infantry", "hp": 400 + robot_id, "max": 600, "state": "ALIVE"}
@@ -3747,9 +3751,9 @@ def test_minecraft_hud_assets_layout_and_render() -> None:
         ]
     )
     seven_v_seven = tuple(text for text, _color in renderer.scoreboard_lines(state))
-    assert len(seven_v_seven) == 10
-    assert seven_v_seven[5].startswith(">A03 560|")
-    assert "A+4 MORE|E+4 MORE" in seven_v_seven
+    assert len(seven_v_seven) == 15  # roster growth does not enlarge sidebar
+    assert "§aA §fAlly: §a6 §7YOU" in seven_v_seven
+    assert "§cE §fEnemy: §c6" in seven_v_seven
     expected = {
         (1000, 620): 2,
         (1280, 720): 3,

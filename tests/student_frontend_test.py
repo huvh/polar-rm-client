@@ -7,6 +7,7 @@ No live capture, protocol publisher, evidence/Arm or user config is touched.
 from __future__ import annotations
 
 import os
+import hashlib
 from pathlib import Path
 import sys
 from tempfile import TemporaryDirectory
@@ -32,6 +33,7 @@ from rm_client.ui.polar_app import PolarRMWindow
 from rm_client.ui.student_reload import append_reload_details, reload_detail_height
 from rm_client.ui.clickgui_gpu import ClickGuiDrawList
 from rm_client.ui.polar.primitives import EconomyScenePhase
+from rm_client.ui.minecraft_presentation import plain_text
 
 COUNT=0
 def check(condition, label):
@@ -119,6 +121,26 @@ def main():
         w.auto_save_config=lambda:None
         w.gui_visible=False;w.gui_timeline.progress=0
         w.registry.get("HUD").get_setting("Combat Preset").value="Minecraft"
+        font=w.minecraft_hud.styled_font
+        check(ord("伤") in font.hex_data and font.width("伤害")==18,"MC Chinese uses original Unihex pixel glyphs")
+        colored=font.image("§eA §a2 §c3")
+        colors={colored.pixelColor(x,y).name() for x in range(colored.width()) for y in range(colored.height()) if colored.pixelColor(x,y).alpha()}
+        check({"#ffff55","#55ff55","#ff5555"}.issubset(colors),"vanilla palette textures correctly tint yellow/green/red")
+        check(plain_text("§e§lRM§r UI")=="RM UI","formatting codes never enter layout widths")
+        check(font.width("§lAB§rC")==font.width("ABC")+2,"MC bold advances are preserved without overlapping glyphs")
+        check(all(not i.isNull() for i in w.student_renderer.items.images.values()),"vanilla inventory item resources present")
+        check(w.student_renderer.items.item_name("ArmorAutoAim")=="aim_turret" and w.student_renderer.items.item_name("SpinMode")=="spin_chassis","original mod items depict functions, not vanilla loot substitutions")
+        combat_icons=[w.student_renderer.items.image(name) for name in ("ArmorAutoAim","EnergyAutoAim","ArmorLock","HeroLob","FireControlStub","FrictionWheel","LockState")]
+        check(len({hashlib.sha256(image.constBits()).hexdigest() for image in combat_icons})==7,"combat mods have seven distinct crafted silhouettes")
+        check(w.student_renderer.items.image("ArmorAutoAim").size().width()==32 and
+              w.student_renderer.items.image("ArmorAutoAim")!=w.student_renderer.items.images["arrow"],"crafted 32px pixel items are not untouched vanilla textures")
+        for name in ("ArmorAutoAim","SpinMode","SkillConfiguration"):
+            check(w.student_renderer.items.image(name).cacheKey()==w.minecraft_hud.items.image(name).cacheKey() or
+                  w.student_renderer.items.image(name)==w.minecraft_hud.items.image(name),f"inventory/hotbar share item for {name}")
+        avatar=w.student_renderer.player.image();avatar_key=avatar.cacheKey()
+        for _ in range(100):w.student_renderer.player.image()
+        check(avatar_key==w.student_renderer.player.image().cacheKey() and w.student_renderer.player.rebuilds==1,"textured Steve cached over 100 frames")
+        check(len({avatar.pixelColor(x,y).rgba() for x in range(avatar.width()) for y in range(avatar.height())})>30,"Steve preview contains actual skin details, not flat robot rectangles")
         check(w.handle_student_key(key(Qt.Key.Key_E),True),"E opens MC inventory")
         w.student_ui.progress=1;draw(w)
         check(w.student_ui.panel=="inventory" and w.overlay_coordinator.modal==OverlayKind.STUDENT,"inventory owns modal input")
@@ -154,6 +176,15 @@ def main():
         for panel_name in ("damage","settlement","darts","skills"):
             w.open_student_panel(panel_name);w.student_ui.progress=1;draw(w)
             check(all(h.action.startswith("student_") for h in w.hotspots),f"{panel_name} no underlying controls")
+        w.open_student_panel("damage");w.student_ui.progress=1;draw(w)
+        check(not w.hotspots,"Tab-style held damage list has no Jello card buttons")
+        tab_key=w.gpu_static_ui_key(1280,720,1)
+        w.student_ui.panel="inventory"
+        check(w.gpu_static_ui_key(1280,720,1)!=tab_key,"panel transitions refresh HUD snapshot rather than retaining hidden glass lenses")
+        w.student_ui.panel="damage"
+        for width,height in ((1280,720),(1600,900),(1920,1080),(2560,1440)):
+            rect,scale=w.student_renderer.geometry(w,width,height)
+            check(QRectF(0,0,width,height).contains(rect) and abs(rect.width()/rect.height()-280/170)<.001,f"Tab geometry bounded {width}x{height}")
         w.handle_student_action("student_draft","dart_fire")
         check("未下发" in w.student_ui.note,"dart fire remains explicitly inert")
         w.open_student_panel("settlement");snapshot=w.student_ui.settlement;w.state.base_health=1

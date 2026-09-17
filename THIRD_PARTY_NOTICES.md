@@ -28,11 +28,13 @@
 - Hotbar、选择框、心、护甲、饱食度、BossBar、状态背景、背包容器和 `ascii.png` 位图字体来自用户提供的本机 Minecraft 1.21.11 Fabric 客户端 JAR。
 - 提取基准 JAR 的 SHA-256 为 `1473c9489ac50fda3c435049a76a70d61a10b8610db27f5ba9d8756b686cd3bd`；提交中的 23 个 Minecraft HUD 资源文件均已逐文件哈希回查为该 JAR 内的原始字节。新增 `inventory.png` 对应 `assets/minecraft/textures/gui/container/inventory.png`，SHA-256 为 `c2f850076ad7ebd7a1b27d017fe5f66ac388f54de374de988cb79f86b1d59a65`。
 - 资源只用于本地 Minecraft 战斗 HUD 预设；相关商标、视觉资源和其他权利归 Mojang/Microsoft 及各自权利人所有。本项目未打包完整 Minecraft 客户端或游戏代码。
+- 视觉修订另取本地 JAR 的 wide Steve 皮肤、两张 bitmap 字体表/provider 配置及九个伤害类别物品纹理；额外 14 个原始资源的哈希/来源记录在 `assets/minecraft_hud/presentation_manifest.json`。Mod 图标为项目原创的功能性像素物品，不是以上原版物品的替代名称。
+- `unifont.zip` 来自本机 Minecraft asset index 29，SHA-1 为 `ccd5ac4767ce0a9c71d1dd62f2dc25449789b5dd`。其中字体版本为 GNU Unifont 17.0.01，原始授权全文保留在压缩包及 `assets/minecraft_hud/UNIFONT_LICENSE.txt`：编译字体采用 SIL OFL 1.1 和 GPL（带字体嵌入例外），具体适用条款以该授权全文为准。字体未修改。
 
 ## RoboMaster 学生客户端 UI 参考
 
 - 学生客户端语言包中的界面标题和字段说明用于核对受伤害、结算、补弹、飞镖、性能点等展示项；未复制完整语言包、Unity 资源、登录实现或通信代码。
-- 新增的 16px 增益/模块方块图标由本项目绘制，不是 Minecraft 药水或 DJI 原图。
+- 16px 增益图标及新版 32px 功能性 Mod 物品图标由本项目绘制，不是 Minecraft 药水、原版装备的直接更名或 DJI 原图。
 
 ## rm-native-viewer
 
