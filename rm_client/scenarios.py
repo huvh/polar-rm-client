@@ -35,6 +35,11 @@ class SafetyProfile:
     # 队内链路驾驶开关。默认关闭：只有台架/校内场景显式打开，
     # 且仍受 LOCKED 状态机与本地看门狗约束。
     allow_polar_drive: bool = False
+    # 台架实验（LabDebug）直连 DT7 驾驶开关：默认关闭。
+    # 打开后该场景允许把键鼠帧真实写进 DT7 VCOM（不走比赛资格链），
+    # 但仍受急停 / 模块开关 / Allow Drive / 30Hz 限频约束。
+    # OfficialEvent 与 CampusSimulation 保持 False = 原有资格链完全不变。
+    allow_dt7_drive: bool = False
 
 
 @dataclass
@@ -109,6 +114,7 @@ SCENARIOS: dict[str, ScenarioConfig] = {
             allow_real_serial=False,
             allow_mqtt_publish=False,
             enforce_official_limits=False,
+            allow_dt7_drive=True,      # [台架] LabDebug 显式允许直连 DT7 驾驶
         ),
     ),
 }

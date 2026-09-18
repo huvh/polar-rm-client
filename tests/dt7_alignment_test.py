@@ -269,6 +269,74 @@ def test_integration(root):
     manager.shutdown()
 
 
+def test_lab_debug_drive(root):
+    """LabDebug (bench scene) opens DT7 real egress only; the match state machine stays LOCKED."""
+    manager = BackendManager(workspace=root, scenario_key="LabDebug", client_id="3")
+    state, registry = RobotState(), build_default_registry()
+    state.robot_id, state.match_mode = 3, "RMUC 7v7"
+    manager.state = state
+    manager._active_video_source = "udp"
+    module = registry.get("RobotLink")
+    module.enabled = True
+    for name, value in (("Allow Drive", True), ("Direct DT7 Egress", True),
+                        ("DT7 Real TX", True), ("DT7 Port", "NO_HARDWARE")):
+        module.get_setting(name).value = value
+    output = []
+    prof = load_profile()
+    link = Dt7KeyMouseLink(port="NO_HARDWARE", profile=prof, mock_output=False,
+                           write_bytes=output.append)
+    manager._dt7_link = link
+    # LabDebug keeps the MQTT uplink mocked: only the physical DT7 port is opened.
+    control = KeyboardControlBridge(publisher=manager, mock_output=True)
+    check(bool(manager.safety.allow_dt7_drive) and bool(manager.safety.stats()["allow_dt7_drive"]),
+          "LabDebug scenario exposes the lab DT7 drive switch")
+    official = BackendManager(workspace=root/"official-fixture", scenario_key="OfficialEvent", client_id="3")
+    check(not official.safety.allow_dt7_drive, "OfficialEvent keeps the lab DT7 drive switch closed")
+    check(not official.safety.can_transmit_dt7()[0], "OfficialEvent still refuses DT7 transport while LOCKED")
+    campus = BackendManager(workspace=root/"campus-fixture", scenario_key="CampusSimulation", client_id="3")
+    check(not campus.safety.allow_dt7_drive and not campus.safety.can_transmit_dt7()[0],
+          "CampusSimulation keeps DT7 drive closed and transport denied")
+    campus.shutdown()
+    manager.tick_polar_link(state, registry, control)
+    check(manager.safety.control_state == ControlState.LOCKED and bool(control.dt7_enabled),
+          "lab drive opens DT7 egress while the match state machine stays LOCKED")
+    check(manager._dt7_evidence_gate(prof)[0], "lab drive waives the qualification evidence gate")
+    official.safety.update_stage("4")
+    official.safety.arm_match({"core_kmc"})
+    check(not official.safety.can_transmit_dt7()[0],
+          "OfficialEvent still denies DT7 without its own dt7_control capability")
+    official.shutdown()
+    control.set_key("W", True, state, registry)
+    check(bool(output) and keys(output[-1]) == 1, "W reaches the DT7 wire without any qualification fixture")
+    before = len(output)
+    control.send_from_state(state, registry)
+    check(len(output) == before and link.last_send_rate_limited, "lab drive still obeys the 30 Hz writer limit")
+    link._next_due = 0
+    control.left_button_down = control.right_button_down = True
+    control.send_from_state(state, registry)
+    check(decode_dt7_frame(output[-1])["payload"][6:8] == b"\0\0", "lab drive keeps the fire gate closed by default")
+    module.get_setting("DT7 Allow Fire Keys").value = True
+    manager.tick_polar_link(state, registry, control)
+    link._next_due = 0
+    control.send_from_state(state, registry)
+    check(decode_dt7_frame(output[-1])["payload"][6:8] == b"\1\1", "explicit fire gate still controls lab mouse buttons")
+    check(not manager.safety.can_publish("KeyboardMouseControl")[0],
+          "lab switch never opens the MQTT driving topic")
+    control.set_mouse_button(1, False, state, registry)
+    control.set_mouse_button(3, False, state, registry)
+    control.set_key("W", False, state, registry)
+    control.tick(state, registry, now=time.perf_counter()+1)
+    check(keys(output[-1]) == 0 and link.wire_neutral, "release lands a neutral frame on the DT7 wire")
+    manager.safety.trigger_estop()
+    link._next_due = 0
+    ok, why = link.send(pressed_bits=1)
+    check(not ok and "E-stop" in str(why), "E-stop still denies lab DT7 drive")
+    manager.tick_polar_link(state, registry, control)
+    check(not control.dt7_enabled and keys(output[-1]) == 0, "E-stop drops the lab route and lands neutral")
+    manager.shutdown()
+
+
+
 def test_portable(root):
     paths = RuntimePaths.discover(executable=root/"POLAR-RM.exe", environ={}, frozen=True)
     check(paths.defaults_root == root/"defaults", "portable DT7 profile belongs in defaults")
@@ -291,6 +359,7 @@ def main():
             test_samples()
             test_evidence(root/"evidence-fixture")
             test_integration(root/"backend-fixture")
+            test_lab_debug_drive(root/"lab-fixture")
             test_portable(root/"portable-fixture")
     print(f"DT7 alignment PASS: {CHECKS} checks; OFFLINE ONLY / NOT READY FOR REAL MATCH")
 

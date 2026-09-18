@@ -8,6 +8,8 @@
 
 - 正常 DT7 真发必须同时满足显式 RobotLink/Allow Drive/Direct DT7/Real TX、
   `MATCH_ARMED`、独立 `dt7_control` 能力和权威比赛阶段。
+  唯一例外：`LabDebug` 台架场景，见下面 2026-09-18 一节；
+  另外两个场景与所有 MQTT 主题一字未改。
 - 串口发送层再次检查授权；不能借 MQTT 的 `core_kmc` 或资格令牌绕过。
   DT7 自己限频 30 Hz，不使用 MQTT 75 Hz 的节流记账来切换 live 状态。
 - 每次实际发送复核资格有效期、双人签字、运行时机器人/赛制/图传源以及
@@ -21,6 +23,37 @@
   无法送达时仅保留重试，绝不能把主动补零当作车端 watchdog 的证明。
 - E-stop 必须先显式解除，不能直接用 Arm 或新建资格令牌解除。
 - `DT7 Allow Fire Keys` 同时约束 Q/E 和鼠标按钮；探针强制清除鼠标和开火输入。
+
+## 2026-09-18 台架例外：LabDebug 直连 DT7 驾驶
+
+台架上（单板 + DT7 + DR16，不接车）客户端 UI 的 WASD 之前发不出去：整条链要求
+`MATCH_ARMED` 和 24 小时双人签字动态证据，台架拿不到，实验模式实际只剩 mock。
+本轮只给 `LabDebug` 开一个口子。
+
+- 新增 `SafetyProfile.allow_dt7_drive`（默认 False）。只有 `LabDebug` 的 profile
+  置 True，`OfficialEvent` / `CampusSimulation` 保持 False。
+- `OfficialSafety.can_publish()` 只对 `DT7KeyboardMouseControl` 这一个 topic 跳过
+  `MATCH_ARMED` / 资格令牌 / 比赛阶段三个检查；同场景的 MQTT 主题
+  （`KeyboardMouseControl` 等）仍然按 mock-only 拒绝。
+- `BackendManager._dt7_evidence_gate()` 在该开关下直接放行，不再要求 24 小时
+  动态证据。其他场景的资格链一字未改。
+- 比赛状态机没有放开：LabDebug 里 `control_state` 依旧是 `LOCKED`，被放开的
+  只是"这条物理出口还需不需要资格链"。
+- 保持不变：E-stop 仍最先拒绝（该场景也一样）；模块开关 / `Allow Drive` /
+  `DT7 Real TX` / 30 Hz 限频 / 短写锁定与中立补帧 / 换口保留旧 writer /
+  松手帧落地全部照旧。
+- 运行期切场景走 `apply_scenario` → `_apply_config` → `from_scenario` 重算该开关
+  并锁一次控制，台架授权不会被带进正式场景。
+
+边界：这只能证明"客户端把键鼠帧写进 DT7 VCOM"，**不构成比赛就绪证据**，也不
+证明车端执行器会停。上车仍按上一节走完整资格链。
+
+本轮验证：`tests/dt7_alignment_test.py` 111 checks（原 96 + 台架 15）；
+`tools/verify_all.py` 客户端侧 55 组 GO；`tests/polar_link_test.py`、
+`tests/polar_bridge_test.py`、`tests/polar_integration_test.py` 各自 exit 0；
+`tools/dt7_link/test_dt7_ui_selftest.py`、`tools/dt7_link/test_wireless_selftest.py`、
+`tools/dt7_link/test_dt7_release_flush.py` 通过。本轮同样**没有打开真实串口、
+没有生成现场证据**。
 
 ## 探针与现场流程
 

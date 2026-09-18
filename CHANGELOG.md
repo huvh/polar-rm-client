@@ -4,6 +4,7 @@
 
 ### Field-chain hardening
 
+- Waived the match qualification evidence chain for DT7 direct egress in `LabDebug` only, so bench driving works while E-stop precedence, module gates, Real TX, 30 Hz limiting, neutral flush and the other two scenarios stay unchanged.
 - Isolated malformed Tongji UDP observations, made calibration/control flags fail closed, and kept the receiver alive for subsequent valid packets.
 - Bounded and validated fragmented video frame assembly, including conflicting totals, duplicate chunks, gaps, in-flight floods and aggregate retained memory.
 - Stopped 60 Hz demo telemetry from overwriting authoritative referee state outside `LabDebug`.

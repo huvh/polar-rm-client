@@ -1171,6 +1171,11 @@ class BackendManager:
         self.field_log.emit(event, **payload)
 
     def _dt7_evidence_gate(self, profile: dict) -> tuple[bool, str]:
+        # 台架实验（LabDebug）：场景显式打开台架驾驶时，跳过比赛资格证据校验。
+        # 传输本身仍受急停 / 模块开关 / Allow Drive / 30Hz 限频约束；
+        # 其他场景（OfficialEvent / CampusSimulation）的资格链完全不变。
+        if self.safety.allow_dt7_drive:
+            return True, "lab drive (LabDebug): qualification evidence waived"
         if "dt7_control" not in self.qualification.capabilities():
             return False, "DT7 evidence missing/expired or human sign-off invalid"
         session = self.qualification.session

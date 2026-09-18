@@ -53,6 +53,7 @@ class OfficialSafety:
         self.mock_writes = True
         self.allow_mqtt_publish = False
         self.enforce_official_limits = False
+        self.allow_dt7_drive = False   # 由场景配置显式打开（当前仅 LabDebug）
         self.control_state = ControlState.LOCKED
         self.estop_active = False
         self.estop_at = 0.0
@@ -103,6 +104,8 @@ class OfficialSafety:
             allow_mqtt_publish=bool(config.safety.allow_mqtt_publish),
             enforce_official_limits=bool(config.safety.enforce_official_limits),
         )
+        # 台架驾驶开关随场景切换（默认 False，只有 LabDebug 的 profile 打开）
+        self.allow_dt7_drive = bool(getattr(config.safety, "allow_dt7_drive", False))
         self.current_stage = "0"
         self._stage_seen = False
         self._publish_at.clear()
@@ -194,7 +197,16 @@ class OfficialSafety:
         if not self.allow_mqtt_publish and name != "DT7KeyboardMouseControl":
             return self._deny("current scenario is mock-only and does not allow real MQTT publishing")
         authorized_qualification = False
-        if name in CONTROL_TOPICS:
+        # 台架实验（LabDebug）：场景显式打开开关时，允许直连 DT7 的驾驶输出，
+        # 不要求 MATCH_ARMED / 资格令牌 / 比赛阶段。
+        # 只作用于 DT7KeyboardMouseControl 这一个 topic；急停仍优先拒绝
+        # （见本函数开头的 E-stop 分支），限频与看门狗行为不变。
+        lab_dt7_drive = bool(
+            self.allow_dt7_drive
+            and name == "DT7KeyboardMouseControl"
+            and not self.estop_active
+        )
+        if name in CONTROL_TOPICS and not lab_dt7_drive:
             if self.control_state == ControlState.LOCKED:
                 return self._deny("match control is LOCKED")
             if self.control_state == ControlState.QUALIFICATION:
@@ -219,7 +231,7 @@ class OfficialSafety:
             # non-fighting stages; requiring stage 4 here would make the whole
             # qualification flow unreachable before a match.  Rate limits still
             # apply, which is exactly what the heartbeat test measures.
-            if not authorized_qualification and not self.is_fighting():
+            if not lab_dt7_drive and not authorized_qualification and not self.is_fighting():
                 return self._deny("not in an authoritative fighting stage")
             previous = self._publish_at.get(name, -1.0)
             limit_hz = self._topic_limit_hz.get(name, self._publish_limit_hz)
@@ -277,6 +289,7 @@ class OfficialSafety:
             "mock_writes": self.mock_writes,
             "allow_mqtt_publish": self.allow_mqtt_publish,
             "enforce_official_limits": self.enforce_official_limits,
+            "allow_dt7_drive": self.allow_dt7_drive,
             "control_state": self.control_state.value,
             "authorized_capabilities": sorted(self._authorized_capabilities),
             "qualification_expires_at": token.expires_at if token else 0.0,
