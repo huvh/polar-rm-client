@@ -125,6 +125,7 @@ from .jello_locale import (
 )
 from .hero_deploy import HeroDeployInterfaceState, HeroDeployRenderer
 from .minecraft_hud import MinecraftCombatHudRenderer
+from .top_match_bar_controller import TopMatchBarController
 from .gpu_frame_compositor import GlassOwner, GpuFrameCompositor, LensMaterial
 from .island_icon_gpu import IslandIconCommand, IslandIconGpuRenderer
 from .economy_glass import draw_economy_glass, draw_economy_glass_capsule, draw_economy_glass_well
@@ -404,6 +405,8 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             scenario_key=self.scenario_manager.current.key,
         )
         self.mqtt = self.backend.mqtt
+        self.top_match_bar = TopMatchBarController(self)
+        self.backend.referee_view_observer = self.top_match_bar.observe_referee
         self.official_feed = OfficialMatchFeed()
         self.vision_kill_detector = VisionKillDetector()
         self._official_state_updates: dict[str, Any] = {}
@@ -2517,6 +2520,10 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             )
         if self.setting_bool(hud, "Dynamic Island", True) and not held_tab_list:
             self.draw_dynamic_island(p, logical_width)
+        # Pure display layer, no widget/focus/input ownership. Kept outside the
+        # static video/HUD cache so stale observations expire without new video.
+        if not minecraft_active and not held_tab_list:
+            self.top_match_bar.paint(p, logical_width, logical_height, now)
         tactical_map = self.registry.get("TacticalMap")
         # Always show map while tuning ClickGUI unless caller forces it off.
         draw_map = True if include_map is None else include_map
@@ -3337,7 +3344,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         if self.setting_bool(hud, "Watermark", True):
             self.draw_watermark(p)
         match_timer = self.registry.get("MatchTimer")
-        if match_timer is not None and match_timer.enabled:
+        if match_timer is not None and match_timer.enabled and not self.top_match_bar.enabled():
             self.draw_match_header(p, scaled_width)
         chat_reserve = self.match_chat_reserved_height(now=time.perf_counter()) / hud_scale
         bottom_left = HudAnchorStack(

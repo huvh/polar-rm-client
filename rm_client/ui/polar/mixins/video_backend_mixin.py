@@ -1015,11 +1015,15 @@ class VideoBackendMixin:
         team_theme = self.setting_mode(effect, "Team Theme", "Alliance")
         if team_theme == "Alliance":
             team_theme = "CT Blue" if self.alliance_side() == "Blue" else "T Gold"
+        toggles = self.elimination_element_toggles(effect)
+        top_bar = getattr(self, "top_match_bar", None)
+        if top_bar is not None and top_bar.owns_progress():
+            toggles["match_progress"] = False
         self.kill_fx.draw(
             p, width, height,
             preset=self.setting_mode(effect, "Preset", "Default Scrolling"),
             visibility=self.setting_mode(effect, "Element Visibility", "Preset"),
-            element_toggles=self.elimination_element_toggles(effect),
+            element_toggles=toggles,
             state=self.state,
             island_anchor_bottom=self.dynamic_island_bottom_anchor(width, height),
             team=team_theme,

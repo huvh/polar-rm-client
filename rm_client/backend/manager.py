@@ -150,6 +150,10 @@ class BackendManager:
         self._last_estop_zero_reason = "not run"
         self._input_clear_generation = 0
         self.input_clear_hook: Callable[[str], None] | None = None
+        # Optional presentation-only observer, called after authoritative apply.
+        # It never owns/drains a queue and errors cannot affect control state.
+        self.referee_view_observer: Callable[[str, dict[str, Any], float], None] | None = None
+        self._referee_view_error = ""
         self._last_logged_stage = ""
         self.field_log = RotatingJsonlLogger(self.paths.logs_root)
         self._last_spin_note = ''
@@ -1640,6 +1644,25 @@ class BackendManager:
     # ------------------------------------------------------------------
     # 下行消息 → RobotState
     # ------------------------------------------------------------------
+    def _notify_referee_view(self, name: str, data: dict[str, Any], timestamp: float) -> None:
+        try:
+            observer = getattr(self, "referee_view_observer", None)
+            if observer is None:
+                return
+            observer(name, dict(data), float(timestamp))
+            self._referee_view_error = ""
+        except Exception as exc:
+            try:
+                error = f"{type(exc).__name__}: {exc}"
+            except Exception:
+                error = type(exc).__name__
+            if error != getattr(self, "_referee_view_error", ""):
+                self._referee_view_error = error
+                try:
+                    _LOG.warning("read-only referee view observer failed: %s", error)
+                except Exception:
+                    pass  # Even a broken display-error logger cannot affect apply.
+
     def apply_updates(self, state: RobotState) -> int:
         """消费解码队列并写入 RobotState；返回本次应用的消息条数。"""
         messages = self.mqtt.drain_decoded()
@@ -1651,6 +1674,7 @@ class BackendManager:
                 # of clearing it immediately after it was written.
                 self._begin_official_state(state, _ts)
                 self._apply_one(state, name, data)
+                self._notify_referee_view(name, data, _ts)
                 count += 1
                 self._official_state_updates_count += 1
             except Exception as exc:

@@ -1,0 +1,29 @@
+{
+  "binding": "PyQt5.QtGui",
+  "comparisons_passed": 144,
+  "changed_bytes": 0,
+  "checks": [
+    "pixels",
+    "metrics",
+    "generation",
+    "hits",
+    "misses",
+    "texture retirement",
+    "warm object identity"
+  ],
+  "layout_directions": [
+    "LTR",
+    "RTL"
+  ],
+  "dpr": [
+    1.0,
+    1.5,
+    2.0
+  ],
+  "raster_scales": [
+    0.75,
+    1.3
+  ],
+  "aggregate_pixels_sha256": "9a0b4ceb9225feabf4af23aef5650ddcb46e2d396356b1bb2a46e9e616067f99",
+  "limit": "Relative CPU raster equality only; does not verify script-font coverage, PySide6/GL, full-screen animation or FPS."
+}

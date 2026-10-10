@@ -5435,6 +5435,11 @@
       "sig": "PolarRMWindow.topLevelWidget",
       "type": "builtin_function_or_method"
     },
+    "top_match_bar": {
+      "kind": "plain-attribute",
+      "sig": "TopMatchBarController",
+      "type": "TopMatchBarController"
+    },
     "tr": {
       "kind": "callable",
       "sig": "PolarRMWindow.tr",
