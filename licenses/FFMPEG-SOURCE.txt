@@ -1,0 +1,22 @@
+FFmpeg bundled binary redistribution notice
+===========================================
+
+The portable POLAR-RM package bundles an unmodified static GPLv3 Gyan.dev
+FFmpeg full build. The build is identified in BUILD_MANIFEST.json and
+FFMPEG-BUILD.txt by its exact version, configuration and SHA-256.
+
+Corresponding upstream source commit:
+https://github.com/FFmpeg/FFmpeg/commit/c898ddb8fe
+
+Source archive / repository:
+https://github.com/FFmpeg/FFmpeg/tree/c898ddb8fe
+https://ffmpeg.org/download.html#get-sources
+
+Windows build provider and source/build documentation:
+https://www.gyan.dev/ffmpeg/builds/
+
+License information:
+https://ffmpeg.org/legal.html
+
+The release builder fails unless the exact approved FFmpeg hash and the GPLv3
+license file are present. This notice is not a replacement for the GPL text.

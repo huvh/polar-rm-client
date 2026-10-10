@@ -3,19 +3,109 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 import math
 import time
-from typing import Any, Callable
+from typing import Any, Callable, Protocol
+
+
+CATEGORY_TITLES = {
+    "ammo": "弹丸",
+    "recovery": "恢复",
+    "revive": "复活",
+    "support": "支援",
+}
+
+TRANSACTION_LABELS = {
+    "confirming": "等待确认",
+    "pending": "等待裁判系统",
+    "succeeded": "操作成功",
+    "rejected": "请求被拒绝",
+    "timed_out": "确认超时",
+}
 
 
 @dataclass(frozen=True)
-class EconomyAction:
+class EconomyContext:
+    match_mode: str
+    robot_profile: str
+    projectile_type: str
+    gold: int
+    total_gold: int
+    current_ammo: int
+    ammo_capacity: int
+    current_health: int
+    max_health: int
+    in_supply_zone: bool
+    supply_zone_known: bool
+    out_of_combat: bool
+    can_remote_heal: bool
+    can_remote_ammo: bool
+    respawn_pending: bool
+    respawn_progress: float
+    respawn_can_free: bool
+    respawn_gold_cost: int
+    respawn_can_pay: bool
+    air_support_active: bool
+    air_support_can_free: bool
+    mock_mode: bool
+
+    @property
+    def alive(self) -> bool:
+        return self.current_health > 0
+
+    @classmethod
+    def from_state(cls, state: Any) -> "EconomyContext":
+        return cls(
+            match_mode=str(getattr(state, "match_mode", "RMUC7v7")),
+            robot_profile=str(getattr(state, "robot_profile", getattr(state, "robot_type", "Infantry1"))),
+            projectile_type=str(getattr(state, "projectile_type", "17mm")),
+            gold=max(0, int(getattr(state, "remaining_economy", 0))),
+            total_gold=max(0, int(getattr(state, "total_economy_obtained", 0))),
+            current_ammo=max(0, int(getattr(state, "remaining_ammo", 0))),
+            ammo_capacity=max(0, int(getattr(state, "ammo_capacity", 0))),
+            current_health=max(0, int(getattr(state, "current_health", 0))),
+            max_health=max(1, int(getattr(state, "max_health", 1))),
+            in_supply_zone=bool(getattr(state, "in_supply_zone", False)),
+            supply_zone_known=bool(getattr(state, "supply_zone_known", False)),
+            out_of_combat=bool(getattr(state, "out_of_combat", True)),
+            can_remote_heal=bool(getattr(state, "can_remote_heal", True)),
+            can_remote_ammo=bool(getattr(state, "can_remote_ammo", True)),
+            respawn_pending=bool(getattr(state, "respawn_pending", False)),
+            respawn_progress=max(0.0, min(1.0, float(getattr(state, "respawn_progress", 0.0)))),
+            respawn_can_free=bool(getattr(state, "respawn_can_free", False)),
+            respawn_gold_cost=max(0, int(getattr(state, "respawn_gold_cost", 0))),
+            respawn_can_pay=bool(getattr(state, "respawn_can_pay", False)),
+            air_support_active=bool(getattr(state, "air_support_active", False)),
+            air_support_can_free=bool(getattr(state, "air_support_can_free", False)),
+            mock_mode=bool(getattr(state, "economy_mock_mode", True)),
+        )
+
+
+@dataclass(frozen=True)
+class EconomyOffer:
     key: str
+    category: str
     title: str
     short_title: str
+    description: str
     unit: str
     minimum: int
     cost: int
+    command_type: int
+    command_param: int
     enabled: bool
     reason: str = ""
+    confirmation: str = "double"
+    topic: str = "CommonCommand"
+    estimated: bool = False
+    status_only: bool = False
+
+    @property
+    def quantity(self) -> int:
+        return self.minimum
+
+
+# Keep the public name used by existing callers while the workspace migrates to
+# the more precise EconomyOffer terminology.
+EconomyAction = EconomyOffer
 
 
 @dataclass(frozen=True)
@@ -27,76 +117,216 @@ class EconomyRequest:
     action: str
     quantity: int
     cost: int
-    mock: bool = True
+    command_type: int
+    command_param: int
+    topic: str
+    payload: bytes
+    mock: bool
+
+
+@dataclass
+class EconomyTransaction:
+    request: EconomyRequest
+    offer: EconomyOffer
+    status: str
+    message: str
+    submitted_at: float
+    deadline_at: float
+    mock_complete_at: float
+    baseline_gold: int
+    baseline_ammo: int
+    baseline_health: int
+    baseline_revision: int
+    baseline_respawn_pending: bool
+    baseline_support_active: bool
+    completed_at: float = 0.0
+
+    @property
+    def sequence(self) -> int:
+        return self.request.sequence
+
+
+class EconomyTransport(Protocol):
+    """Transport boundary used by the workspace without owning MQTT state."""
+
+    def send(self, request: EconomyRequest) -> bool:
+        ...
+
+
+def encode_common_command(command_type: int, param: int) -> bytes:
+    """Compatibility API for callers that explicitly target the default year."""
+    from .backend.referee.registry import get_profile
+    return get_profile().codec.encode_common_command(command_type, param)
+
+
+def encode_air_support_command(command_id: int) -> bytes:
+    from .backend.referee.registry import get_profile
+    return get_profile().codec.encode_air_support_command(command_id)
+
+
+def available_actions(state: Any) -> list[EconomyOffer]:
+    """Dispatch annual rules without silently accepting an unsupported year."""
+    from .backend.referee.registry import DEFAULT_PROFILE, get_profile
+    return get_profile(getattr(state, "referee_profile", DEFAULT_PROFILE)).available_actions(state)
+
 
 
 class EconomyCommandBridge:
-    """经济操作安全桥。默认只缓存请求，显式注册发送器后才向队内协议转发。"""
+    """Transaction boundary shared by official MQTT and deterministic mock."""
 
     def __init__(self) -> None:
         self.sequence = 0
         self.last_request: EconomyRequest | None = None
-        self.history: list[EconomyRequest] = []
-        self.sender: Callable[[EconomyRequest], None] | None = None
+        self.history: list[EconomyTransaction] = []
+        self.sender: Callable[[EconomyRequest], bool] | None = None
 
-    def submit(self, state: Any, action: EconomyAction, quantity: int = 1) -> EconomyRequest:
-        self.sequence += 1
+    @property
+    def latest(self) -> EconomyTransaction | None:
+        return self.history[-1] if self.history else None
+
+    def submit(
+        self,
+        state: Any,
+        offer: EconomyOffer,
+        quantity: int = 1,
+        *,
+        mock: bool | None = None,
+        now: float | None = None,
+    ) -> EconomyTransaction:
+        if not offer.enabled or offer.status_only:
+            raise ValueError(offer.reason or "当前操作不可用")
+        now = time.perf_counter() if now is None else float(now)
         quantity = max(1, int(quantity))
+        mock = self.sender is None if mock is None else bool(mock)
+        command_param = offer.command_param * quantity if offer.command_param > 0 else 0
+        from .backend.referee.registry import DEFAULT_PROFILE, get_profile
+        codec = get_profile(getattr(state, "referee_profile", DEFAULT_PROFILE)).codec
+        payload = (
+            codec.encode_air_support_command(offer.command_type)
+            if offer.topic == "AirSupportCommand"
+            else codec.encode_common_command(offer.command_type, command_param)
+        )
+        self.sequence += 1
         request = EconomyRequest(
             sequence=self.sequence,
             timestamp=time.time(),
-            match_mode=str(state.match_mode),
-            robot_profile=str(getattr(state, "robot_profile", state.robot_type)),
-            action=action.key,
+            match_mode=str(getattr(state, "match_mode", "")),
+            robot_profile=str(getattr(state, "robot_profile", getattr(state, "robot_type", ""))),
+            action=offer.key,
             quantity=quantity,
-            cost=int(action.cost * quantity),
-            mock=self.sender is None,
+            cost=offer.cost * quantity,
+            command_type=offer.command_type,
+            command_param=command_param,
+            topic=offer.topic,
+            payload=payload,
+            mock=mock,
+        )
+        transaction = EconomyTransaction(
+            request=request,
+            offer=offer,
+            status="pending",
+            message="MOCK 正在处理" if mock else "已发送，等待裁判系统确认",
+            submitted_at=now,
+            deadline_at=now + (2.0 if mock else 5.0),
+            mock_complete_at=now + 0.36 if mock else 0.0,
+            baseline_gold=int(getattr(state, "remaining_economy", 0)),
+            baseline_ammo=int(getattr(state, "remaining_ammo", 0)),
+            baseline_health=int(getattr(state, "current_health", 0)),
+            baseline_revision=int(getattr(state, "economy_status_revision", 0)),
+            baseline_respawn_pending=bool(getattr(state, "respawn_pending", False)),
+            baseline_support_active=bool(getattr(state, "air_support_active", False)),
         )
         self.last_request = request
-        self.history.append(request)
+        self.history.append(transaction)
         self.history = self.history[-32:]
-        if self.sender is not None:
-            self.sender(request)
-        elif action.key in ("ammo17", "ammo42"):
-            added = max(0, int(action.minimum) * quantity)
+        if not mock:
+            accepted = bool(self.sender and self.sender(request))
+            if not accepted:
+                transaction.status = "rejected"
+                transaction.message = "MQTT 请求未发送"
+                transaction.completed_at = now
+        return transaction
+
+    def update(self, state: Any, now: float | None = None) -> EconomyTransaction | None:
+        transaction = self.latest
+        if transaction is None or transaction.status != "pending":
+            return transaction
+        now = time.perf_counter() if now is None else float(now)
+        if transaction.request.mock and now >= transaction.mock_complete_at:
+            self._apply_mock(state, transaction)
+            transaction.status = "succeeded"
+            transaction.message = "MOCK 操作成功"
+            transaction.completed_at = now
+            return transaction
+        explicit = str(getattr(state, "economy_command_status", "")).lower()
+        revision_changed = int(getattr(state, "economy_status_revision", 0)) > transaction.baseline_revision
+        if revision_changed and explicit in {"succeeded", "accepted", "success"}:
+            transaction.status = "succeeded"
+            transaction.message = "裁判系统已确认"
+            transaction.completed_at = now
+        elif revision_changed and explicit in {"rejected", "denied", "failed"}:
+            transaction.status = "rejected"
+            transaction.message = "裁判系统拒绝请求"
+            transaction.completed_at = now
+        elif not transaction.request.mock and self._official_result_observed(state, transaction):
+            transaction.status = "succeeded"
+            transaction.message = "裁判系统已确认"
+            transaction.completed_at = now
+        elif now >= transaction.deadline_at:
+            transaction.status = "timed_out"
+            transaction.message = "未确认；不会自动重试，避免 QoS1 重复扣款"
+            transaction.completed_at = now
+        return transaction
+
+    @staticmethod
+    def _official_result_observed(state: Any, transaction: EconomyTransaction) -> bool:
+        revision = int(getattr(state, "economy_status_revision", 0))
+        if revision <= transaction.baseline_revision:
+            return False
+        key = transaction.offer.key
+        gold = int(getattr(state, "remaining_economy", transaction.baseline_gold))
+        ammo = int(getattr(state, "remaining_ammo", transaction.baseline_ammo))
+        health = int(getattr(state, "current_health", transaction.baseline_health))
+        if "ammo" in key or "_17_" in key or "_42_" in key:
+            # Team gold is shared.  A teammate spending coins is not an ACK for
+            # this robot.  Only the local RobotDynamicStatus ammo delta can
+            # confirm a projectile request.
+            return ammo > transaction.baseline_ammo
+        if "heal" in key:
+            return health > transaction.baseline_health
+        if "respawn" in key:
+            pending = bool(getattr(state, "respawn_pending", True))
+            return health > transaction.baseline_health or (transaction.baseline_respawn_pending and not pending)
+        if "support" in key:
+            desired = "cancel" not in key
+            active = bool(getattr(state, "air_support_active", transaction.baseline_support_active))
+            return active == desired and active != transaction.baseline_support_active
+        return False
+
+    @staticmethod
+    def _apply_mock(state: Any, transaction: EconomyTransaction) -> None:
+        request = transaction.request
+        offer = transaction.offer
+        state.economy_managed = True
+        state.remaining_economy = max(0, int(getattr(state, "remaining_economy", 0)) - request.cost)
+        if offer.category == "ammo":
+            added = max(0, offer.minimum * request.quantity)
             state.remaining_ammo = max(0, int(getattr(state, "remaining_ammo", 0))) + added
             state.ammo_capacity = max(int(getattr(state, "ammo_capacity", 0)), state.remaining_ammo)
-        return request
-
-
-def _rmuc_time_step(state: Any) -> int:
-    remaining = max(0, int(getattr(state, "stage_countdown_sec", 420)))
-    return max(0, math.ceil((420 - remaining) / 60.0))
-
-
-def available_actions(state: Any) -> list[EconomyAction]:
-    gold = int(getattr(state, "remaining_economy", 0))
-    profile = str(getattr(state, "robot_profile", "Infantry1"))
-    match_mode = str(getattr(state, "match_mode", "RMUC7v7"))
-    projectile = str(getattr(state, "projectile_type", "17mm"))
-
-    if match_mode == "RMUL3v3":
-        actions = [
-            EconomyAction("ammo17", "购买 17 mm 弹丸", "17 MM", "100 发", 10, 10, projectile == "17mm" and gold >= 10, "仅步兵/哨兵可用"),
-            EconomyAction("ammo42", "购买 42 mm 弹丸", "42 MM", "1 发", 1, 10, projectile == "42mm" and gold >= 10, "仅英雄可用"),
-        ]
-        return actions
-
-    step = _rmuc_time_step(state)
-    level = max(1, int(getattr(state, "level", 1)))
-    heal_cost = 50 + step * 20
-    revive_cost = step * 80 + level * 20
-    alive = int(getattr(state, "current_health", 0)) > 0
-    chassis_robot = profile in ("Hero", "Engineer", "Infantry1", "Infantry2", "Sentinel")
-    actions = [
-        EconomyAction("ammo17", "远程购买 17 mm 弹丸", "17 MM", "100 发", 100, 150, projectile == "17mm" and gold >= 150, "当前机器人不使用 17 mm"),
-        EconomyAction("ammo42", "远程购买 42 mm 弹丸", "42 MM", "10 发", 10, 150, projectile == "42mm" and gold >= 150, "当前机器人不使用 42 mm"),
-        EconomyAction("remote_heal", "远程补血", "HEAL", "60% HP", 1, heal_cost, chassis_robot and alive and gold >= heal_cost, "仅存活的地面机器人可购买"),
-        EconomyAction("instant_revive", "立即复活", "REVIVE", "100% HP", 1, revive_cost, chassis_robot and not alive and gold >= revive_cost, "仅战亡的地面机器人可购买"),
-        EconomyAction("aerial_support", "空中支援时间", "AIR", "1 秒", 1, 1, profile == "Aerial" and gold >= 1, "仅空中机器人使用"),
-    ]
-    return actions
+        elif offer.key == "rmuc_remote_heal":
+            maximum = max(1, int(getattr(state, "max_health", 1)))
+            state.current_health = min(maximum, int(getattr(state, "current_health", 0)) + round(maximum * 0.60))
+        elif "respawn" in offer.key:
+            state.current_health = max(1, int(getattr(state, "max_health", 1)))
+            state.respawn_pending = False
+            state.respawn_progress = 1.0
+        elif offer.topic == "AirSupportCommand":
+            state.air_support_active = offer.command_type != 0
+        state.economy_status_revision = int(getattr(state, "economy_status_revision", 0)) + 1
+        state.economy_command_status = "succeeded"
 
 
 def request_payload(request: EconomyRequest) -> dict[str, Any]:
-    return {"protocol": "rm.economy.request.v1", **asdict(request)}
+    data = asdict(request)
+    data["payload"] = request.payload.hex()
+    return {"protocol": "rm.economy.request.v2", **data}

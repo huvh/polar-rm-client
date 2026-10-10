@@ -102,22 +102,47 @@ class VisionWireBatch:
         alpha: float = 1.0,
         closed: bool = False,
         dashed: bool = False,
+        glow: float = 0.85,
     ) -> None:
+        """Debug Box ESP fluorescent white (esp-box-white.html drawBoxEdges).
+
+        Pure RGB 1,1,1 core; multi-pass soft bloom (no fill). Default glow 0.85
+        so wireframes read bright on dark camera frames.
+        """
         alpha = max(0.0, min(1.0, float(alpha)))
+        glow = max(0.0, min(1.0, float(glow)))
+        base_w = max(0.5, float(width))
         dash = 7.0 if dashed else 0.0
         gap = 5.0 if dashed else 0.0
+        if glow > 0.01:
+            self.polyline(
+                points,
+                QColor(255, 255, 255, max(1, round(255 * 0.06 * glow * alpha))),
+                base_w + 8.0 * glow,
+                closed=closed,
+                dash_length=dash,
+                gap_length=gap,
+            )
+            self.polyline(
+                points,
+                QColor(255, 255, 255, max(1, round(255 * 0.14 * glow * alpha))),
+                base_w + 3.5 * glow,
+                closed=closed,
+                dash_length=dash,
+                gap_length=gap,
+            )
+            self.polyline(
+                points,
+                QColor(255, 255, 255, max(1, round(255 * 0.30 * glow * alpha))),
+                base_w + 1.5 * glow,
+                closed=closed,
+                dash_length=dash,
+                gap_length=gap,
+            )
         self.polyline(
             points,
-            QColor(255, 255, 255, round(42 * alpha)),
-            width + 2.4,
-            closed=closed,
-            dash_length=dash,
-            gap_length=gap,
-        )
-        self.polyline(
-            points,
-            QColor(255, 255, 255, round(255 * alpha)),
-            width,
+            QColor(255, 255, 255, max(1, round(255 * alpha))),
+            base_w,
             closed=closed,
             dash_length=dash,
             gap_length=gap,
@@ -131,24 +156,44 @@ class VisionWireBatch:
         width: float,
         alpha: float = 1.0,
         dashed: bool = False,
+        glow: float = 0.85,
     ) -> None:
-        """Append a white core and a narrow neutral-white halo."""
+        """Single-edge fluorescent white (same formula as fluorescent_polyline)."""
         alpha = max(0.0, min(1.0, float(alpha)))
+        glow = max(0.0, min(1.0, float(glow)))
+        base_w = max(0.5, float(width))
         dash = 7.0 if dashed else 0.0
         gap = 5.0 if dashed else 0.0
+        if glow > 0.01:
+            self.line(
+                start,
+                end,
+                QColor(255, 255, 255, max(1, round(255 * 0.06 * glow * alpha))),
+                base_w + 8.0 * glow,
+                dash_length=dash,
+                gap_length=gap,
+            )
+            self.line(
+                start,
+                end,
+                QColor(255, 255, 255, max(1, round(255 * 0.14 * glow * alpha))),
+                base_w + 3.5 * glow,
+                dash_length=dash,
+                gap_length=gap,
+            )
+            self.line(
+                start,
+                end,
+                QColor(255, 255, 255, max(1, round(255 * 0.30 * glow * alpha))),
+                base_w + 1.5 * glow,
+                dash_length=dash,
+                gap_length=gap,
+            )
         self.line(
             start,
             end,
-            QColor(255, 255, 255, round(42 * alpha)),
-            width + 2.4,
-            dash_length=dash,
-            gap_length=gap,
-        )
-        self.line(
-            start,
-            end,
-            QColor(255, 255, 255, round(255 * alpha)),
-            width,
+            QColor(255, 255, 255, max(1, round(255 * alpha))),
+            base_w,
             dash_length=dash,
             gap_length=gap,
         )

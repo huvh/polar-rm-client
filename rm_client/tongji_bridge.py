@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from itertools import islice
 import json
+import math
 import socket
 import threading
 import time
@@ -11,6 +13,61 @@ from typing import Any
 PROTOCOL = "rm.vision.tongji.v1"
 DEFAULT_PORT = 9871
 ARMOR_NAMES = ("one", "two", "three", "four", "five", "sentry", "outpost", "base", "not_armor")
+MAX_FRAME_DIMENSION = 16_384
+
+
+def _finite_float(value: Any) -> float:
+    number = float(value)
+    if not math.isfinite(number):
+        raise ValueError("non-finite number")
+    return number
+
+
+def _bounded_text(value: Any, fallback: str, limit: int = 96) -> str:
+    return str(fallback if value is None else value)[:limit]
+
+
+def _fail_closed_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int) and value in (0, 1):
+        return bool(value)
+    return False
+
+
+def _safe_mapping(value: Any, *, max_items: int = 32) -> dict[str, Any]:
+    """Copy a small JSON object without retaining unbounded diagnostic maps."""
+
+    if not isinstance(value, dict):
+        return {}
+    return {
+        _bounded_text(key, "", 64): item
+        for key, item in islice(value.items(), max(0, int(max_items)))
+    }
+
+
+def _safe_pose_mapping(value: Any) -> dict[str, Any]:
+    """Normalize the only pose fields consumed by the UI.
+
+    A malformed ``yaw_rad``/``pitch_rad`` used to survive the UDP parser and
+    fail later when the UI converted it with ``float()``.  Drop that one field
+    while retaining bounded, non-control diagnostics from the same packet.
+    """
+
+    result = _safe_mapping(value)
+    for key in ("yaw_rad", "pitch_rad"):
+        if key not in result:
+            continue
+        try:
+            result[key] = _finite_float(result[key])
+        except (TypeError, ValueError, OverflowError):
+            result.pop(key, None)
+    for key in ("calibrated", "control", "fire"):
+        if key in result:
+            # These flags gate control-capable vision output. JSON strings such
+            # as "false" must not become truthy through Python's bool().
+            result[key] = _fail_closed_bool(result[key])
+    return result
 
 
 @dataclass(frozen=True)
@@ -35,15 +92,15 @@ def _armor(payload: Any) -> dict[str, Any] | None:
         for point in raw_points[:4]:
             if isinstance(point, (tuple, list)) and len(point) >= 2:
                 try:
-                    points.append([float(point[0]), float(point[1])])
-                except (TypeError, ValueError):
+                    points.append([_finite_float(point[0]), _finite_float(point[1])])
+                except (TypeError, ValueError, OverflowError):
                     continue
     raw_box = payload.get("box", [])
     box: list[float] = []
     if isinstance(raw_box, (tuple, list)) and len(raw_box) >= 4:
         try:
-            box = [float(value) for value in raw_box[:4]]
-        except (TypeError, ValueError):
+            box = [_finite_float(value) for value in raw_box[:4]]
+        except (TypeError, ValueError, OverflowError):
             box = []
     if len(points) == 4 and not box:
         xs = [point[0] for point in points]
@@ -60,26 +117,38 @@ def _armor(payload: Any) -> dict[str, Any] | None:
         for point in raw_back[:4]:
             if isinstance(point, (tuple, list)) and len(point) >= 2:
                 try:
-                    back_points.append([float(point[0]), float(point[1])])
-                except (TypeError, ValueError):
+                    back_points.append([_finite_float(point[0]), _finite_float(point[1])])
+                except (TypeError, ValueError, OverflowError):
                     continue
+    try:
+        armor_id = int(payload.get("id", -1))
+        plate_id = int(payload.get("plate_id", armor_id))
+        confidence = max(0.0, min(1.0, _finite_float(payload.get("confidence", 0.0))))
+        distance_m = max(0.0, _finite_float(payload.get("distance_m", 0.0)))
+        depth_m = max(0.0, _finite_float(payload.get("depth_m", 0.0)))
+        yaw_rad = _finite_float(payload.get("yaw_rad", 0.0))
+        light_strength = max(0.0, min(1.0, _finite_float(payload.get("light_strength", 0.0))))
+    except (TypeError, ValueError, OverflowError):
+        # One malformed observation must not discard valid detections from the
+        # same datagram or terminate the long-running UDP receive thread.
+        return None
     return {
-        "id": int(payload.get("id", -1)),
-        "name": str(payload.get("name", payload.get("label", "armor"))),
-        "color": str(payload.get("color", "unknown")),
-        "confidence": max(0.0, min(1.0, float(payload.get("confidence", 0.0)))),
+        "id": armor_id,
+        "name": _bounded_text(payload.get("name", payload.get("label", "armor")), "armor"),
+        "color": _bounded_text(payload.get("color", "unknown"), "unknown", 32),
+        "confidence": confidence,
         "box": box,
         "points": points,
         "back_points": back_points,
-        "locked": bool(payload.get("locked", False)),
-        "predicted": bool(payload.get("predicted", False)),
-        "aim": bool(payload.get("aim", False)),
-        "distance_m": max(0.0, float(payload.get("distance_m", 0.0))),
-        "depth_m": max(0.0, float(payload.get("depth_m", 0.0))),
-        "yaw_rad": float(payload.get("yaw_rad", 0.0)),
-        "plate_id": int(payload.get("plate_id", payload.get("id", -1))),
-        "light_strength": max(0.0, min(1.0, float(payload.get("light_strength", 0.0)))),
-        "light_state": str(payload.get("light_state", "unknown")),
+        "locked": _fail_closed_bool(payload.get("locked", False)),
+        "predicted": _fail_closed_bool(payload.get("predicted", False)),
+        "aim": _fail_closed_bool(payload.get("aim", False)),
+        "distance_m": distance_m,
+        "depth_m": depth_m,
+        "yaw_rad": yaw_rad,
+        "plate_id": plate_id,
+        "light_strength": light_strength,
+        "light_state": _bounded_text(payload.get("light_state", "unknown"), "unknown", 32),
     }
 
 
@@ -87,36 +156,46 @@ def parse_tongji_packet(data: bytes) -> TongjiPacket | None:
     """校验并标准化 UDP `rm.vision.tongji.v1` 包，坏包不会影响 UI 线程。"""
     try:
         payload = json.loads(data.decode("utf-8"))
-    except (UnicodeDecodeError, ValueError):
+    except (UnicodeDecodeError, ValueError, TypeError):
         return None
     if not isinstance(payload, dict) or payload.get("protocol") != PROTOCOL:
         return None
     try:
-        width = max(1, int(payload.get("frame_w", 1)))
-        height = max(1, int(payload.get("frame_h", 1)))
-    except (TypeError, ValueError):
+        width = int(payload.get("frame_w", 1))
+        height = int(payload.get("frame_h", 1))
+        timestamp_ns = int(payload.get("timestamp_ns", time.time_ns()))
+        if not (1 <= width <= MAX_FRAME_DIMENSION and 1 <= height <= MAX_FRAME_DIMENSION):
+            return None
+        if timestamp_ns < 0:
+            return None
+    except (TypeError, ValueError, OverflowError):
         return None
     raw_armors = payload.get("armors", [])
     if not isinstance(raw_armors, list):
         raw_armors = []
-    armors = tuple(item for item in (_armor(value) for value in raw_armors) if item is not None)
-    primary = _armor(payload.get("primary"))
-    if primary is None and armors:
-        primary = next((armor for armor in armors if armor["locked"]), armors[0])
-    energy = _armor(payload.get("energy"))
-    gimbal = payload.get("gimbal", {})
-    command = payload.get("command", {})
-    return TongjiPacket(
-        timestamp_ns=int(payload.get("timestamp_ns", time.time_ns())),
-        frame_width=width,
-        frame_height=height,
-        mode=str(payload.get("mode", "auto_aim")),
-        primary=primary,
-        armors=armors,
-        energy=energy,
-        gimbal=gimbal if isinstance(gimbal, dict) else {},
-        command=command if isinstance(command, dict) else {},
-    )
+    try:
+        armors = tuple(
+            item for item in (_armor(value) for value in raw_armors[:256]) if item is not None
+        )
+        primary = _armor(payload.get("primary"))
+        if primary is None and armors:
+            primary = next((armor for armor in armors if armor["locked"]), armors[0])
+        energy = _armor(payload.get("energy"))
+        return TongjiPacket(
+            timestamp_ns=timestamp_ns,
+            frame_width=width,
+            frame_height=height,
+            mode=_bounded_text(payload.get("mode", "auto_aim"), "auto_aim", 32),
+            primary=primary,
+            armors=armors,
+            energy=energy,
+            gimbal=_safe_pose_mapping(payload.get("gimbal", {})),
+            command=_safe_pose_mapping(payload.get("command", {})),
+        )
+    except Exception:
+        # ``data`` is an untrusted UDP boundary. A parser regression remains
+        # contained to this datagram and cannot kill the receiver thread.
+        return None
 
 
 def build_tongji_packet(
@@ -154,6 +233,9 @@ class TongjiVisionReceiver:
         self.connected = False
         self.last_error = ""
         self.last_received_ns = 0
+        self.packets_received = 0
+        self.invalid_packets = 0
+        self.parse_errors = 0
         self._latest: TongjiPacket | None = None
         self._lock = threading.Lock()
         self._thread: threading.Thread | None = None
@@ -207,8 +289,15 @@ class TongjiVisionReceiver:
                     continue
                 except OSError:
                     break
-                packet = parse_tongji_packet(data)
+                self.packets_received += 1
+                try:
+                    packet = parse_tongji_packet(data)
+                except Exception as error:
+                    self.parse_errors += 1
+                    self.last_error = f"parse error: {type(error).__name__}: {error}"
+                    continue
                 if packet is None:
+                    self.invalid_packets += 1
                     continue
                 with self._lock:
                     self._latest = packet
@@ -224,6 +313,8 @@ class TongjiVisionReceiver:
                 except OSError:
                     pass
             self._socket = None
+            self.running = False
+            self.connected = False
 
 
 class PolarPublisher:

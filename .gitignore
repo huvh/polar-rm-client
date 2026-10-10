@@ -39,6 +39,11 @@ Desktop.ini
 tmp_render_checks/
 tmp_selfcheck/
 tmp_*/
+# 本机跑 golden / 编译体检时留下的抓帧日志与源码快照，别让 git add -A 顺手带走
+_golden_out.txt
+kernel.errors.txt
+tmp_*.zip
+tmp_*.json
 _backup_*/
 
 # --- Release archives (large; rebuild with tools/build_release.ps1) ---
@@ -62,3 +67,18 @@ calibrations/*
 
 # --- Optional: ignore entire unpacked release tree under release/ ---
 release/POLAR-RM_Custom_Client_*/
+
+# Portable runtime state / qualification evidence (never source controlled)
+field_evidence/
+logs/
+user_data/
+build/
+dist/
+*.spec.bak
+_pdf_extract.txt
+
+# Local environments and user-imported audio
+.venv-polar/
+.venv-polar.broken-*/
+assets/ui_sounds/custom/*
+!assets/ui_sounds/custom/.gitkeep

@@ -10,6 +10,76 @@ def clamp01(value: float) -> float:
     return max(0.0, min(1.0, value))
 
 
+def step_damped_spring(
+    value: float,
+    velocity: float,
+    target: float,
+    dt: float,
+    *,
+    stiffness: float = 300.0,
+    damping_ratio: float = 1.0,
+    mass: float = 1.0,
+) -> tuple[float, float]:
+    """Advance a Compose-style damped spring without frame-rate drift.
+
+    AndroidLiquidGlass uses Compose ``spring(dampingRatio, stiffness)`` for
+    Control Center expansion, press feedback and interactive highlights. A
+    single Euler step gives visibly different trajectories at 60/90/144 Hz.
+    This analytical solution makes one 14 ms step and two 7 ms steps land at
+    the same position and velocity.
+    """
+
+    # The closed-form solution is stable for long frames, unlike Euler
+    # integration.  Keep a generous suspend guard, but do not truncate an
+    # ordinary 80-200 ms render stall: doing so stretches a 450 ms transition
+    # and is perceived as a hitch followed by slow motion.
+    dt = max(0.0, min(1.0, float(dt)))
+    if dt <= 0.0:
+        return float(value), float(velocity)
+    stiffness = max(1.0e-6, float(stiffness))
+    mass = max(1.0e-6, float(mass))
+    damping_ratio = max(0.0, float(damping_ratio))
+    target = float(target)
+    displacement = float(value) - target
+    velocity = float(velocity)
+    # A settled spring is an exact fixed point. UI owners still tick while
+    # idle; avoid exponent/trigonometric work without changing thresholds or
+    # suppressing a new target or residual momentum.
+    if displacement == 0.0 and velocity == 0.0:
+        return target, velocity
+    omega = math.sqrt(stiffness / mass)
+
+    if damping_ratio < 1.0 - 1.0e-5:
+        damped_omega = omega * math.sqrt(max(1.0e-9, 1.0 - damping_ratio * damping_ratio))
+        decay = math.exp(-damping_ratio * omega * dt)
+        cosine = math.cos(damped_omega * dt)
+        sine = math.sin(damped_omega * dt)
+        a = displacement
+        b = (velocity + damping_ratio * omega * displacement) / damped_omega
+        shape = a * cosine + b * sine
+        next_displacement = decay * shape
+        next_velocity = decay * (
+            -damping_ratio * omega * shape
+            + (-a * damped_omega * sine + b * damped_omega * cosine)
+        )
+    elif damping_ratio <= 1.0 + 1.0e-5:
+        decay = math.exp(-omega * dt)
+        helper = velocity + omega * displacement
+        next_displacement = decay * (displacement + helper * dt)
+        next_velocity = decay * (velocity - omega * helper * dt)
+    else:
+        root = math.sqrt(damping_ratio * damping_ratio - 1.0)
+        r1 = -omega * (damping_ratio - root)
+        r2 = -omega * (damping_ratio + root)
+        c1 = (velocity - r2 * displacement) / (r1 - r2)
+        c2 = displacement - c1
+        e1 = math.exp(r1 * dt)
+        e2 = math.exp(r2 * dt)
+        next_displacement = c1 * e1 + c2 * e2
+        next_velocity = c1 * r1 * e1 + c2 * r2 * e2
+    return target + next_displacement, next_velocity
+
+
 class Easings:
     @staticmethod
     def linear(t: float) -> float:
@@ -90,6 +160,9 @@ class SmoothAnimation:
             self.to_value = target
             self.value = target
             return
+        # Retarget from the value at this frame's shared timestamp, not from
+        # the previous paint. This keeps rapid module toggles continuous.
+        self.tick(now)
         self.from_value = self.value
         self.to_value = target
         self.duration = max(0.001, duration)
@@ -143,11 +216,19 @@ class SpringAnimation:
         self.velocity = 0.0
 
     def update(self, dt: float) -> float:
-        dt = max(0.0, min(0.033, dt))
-        force = -self.stiffness * (self.value - float(self.target)) - self.damping * self.velocity
-        acceleration = force / self.mass
-        self.velocity += acceleration * dt
-        self.value += self.velocity * dt
+        ratio = self.damping / max(
+            1.0e-6,
+            2.0 * math.sqrt(max(1.0e-6, self.stiffness * self.mass)),
+        )
+        self.value, self.velocity = step_damped_spring(
+            self.value,
+            self.velocity,
+            float(self.target),
+            dt,
+            stiffness=self.stiffness,
+            damping_ratio=ratio,
+            mass=self.mass,
+        )
         return self.value
 
 
@@ -239,17 +320,21 @@ class GuiTransitionTimeline:
 
     def reverse_from_current(self) -> None:
         self.target = 0.0 if self.target > 0.5 else 1.0
-        # 反向时保留当前位置，但清掉旧方向惯性，避免关窗第一帧继续向前冲。
-        self.velocity = 0.0
+        # Preserve momentum. The new target immediately bends the spring in
+        # the opposite direction, so rapid open/close gestures stay continuous.
 
     def update(self, dt: float) -> float:
-        dt = max(0.0, min(0.033, float(dt)))
-        # 临界阻尼弹簧：有柔性，但不会像 overshoot 动画一样来回抖动。
-        stiffness = 82.0
-        damping = 18.0
-        acceleration = (self.target - self.progress) * stiffness - self.velocity * damping
-        self.velocity += acceleration * dt
-        self.progress = clamp01(self.progress + self.velocity * dt)
+        stiffness = 300.0
+        damping_ratio = 0.5 if self.target > self.progress else 1.0
+        self.progress, self.velocity = step_damped_spring(
+            self.progress,
+            self.velocity,
+            self.target,
+            dt,
+            stiffness=stiffness,
+            damping_ratio=damping_ratio,
+        )
+        self.progress = max(-0.02, min(1.08, self.progress))
         if abs(self.target - self.progress) < 0.0015 and abs(self.velocity) < 0.01:
             self.progress = self.target
             self.velocity = 0.0
@@ -338,7 +423,11 @@ class ReversibleExpoTimeline:
         self.target = clamp01(target)
 
     def update(self, dt: float) -> float:
-        dt = max(0.0, min(0.05, float(dt)))
+        # The exponential step is analytical, just like the container spring.
+        # Consume the same elapsed UI time after a missed frame; a 50 ms cap
+        # left child opacity behind geometry after a 80-200 ms render stall.
+        # Retain the same one-second suspend guard as step_damped_spring.
+        dt = max(0.0, min(1.0, float(dt)))
         difference = self.target - self.progress
         if abs(difference) <= 0.0005:
             self.progress = self.target
@@ -371,6 +460,12 @@ class IslandContainerState:
     response_per_60hz_frame: float = 0.20
     initialized: bool = False
     content: ReversibleExpoTimeline = None  # type: ignore[assignment]
+    velocity_x: float = 0.0
+    velocity_y: float = 0.0
+    velocity_width: float = 0.0
+    velocity_height: float = 0.0
+    velocity_radius: float = 0.0
+    damping_ratio: float = 1.0
 
     def __post_init__(self) -> None:
         if self.content is None:
@@ -383,12 +478,26 @@ class IslandContainerState:
         width: float,
         height: float,
         radius: float | None = None,
+        *,
+        opening: bool | None = None,
     ) -> None:
-        self.target_x = float(x)
-        self.target_y = float(y)
-        self.target_width = max(0.0, float(width))
-        self.target_height = max(0.0, float(height))
-        self.target_radius = max(0.0, float(self.target_height * 0.5 if radius is None else radius))
+        next_x = float(x)
+        next_y = float(y)
+        next_width = max(0.0, float(width))
+        next_height = max(0.0, float(height))
+        next_radius = max(0.0, float(next_height * 0.5 if radius is None else radius))
+        old_area = self.target_width * self.target_height
+        new_area = next_width * next_height
+        if self.initialized and (opening is not None or abs(new_area - old_area) > 0.01):
+            # AndroidLiquidGlass Control Center: reveal spring(0.5, 300),
+            # settle/close spring(1, 300). Geometry and clip share this leg.
+            expanding = new_area > old_area if opening is None else bool(opening)
+            self.damping_ratio = 0.5 if expanding else 1.0
+        self.target_x = next_x
+        self.target_y = next_y
+        self.target_width = next_width
+        self.target_height = next_height
+        self.target_radius = next_radius
         if not self.initialized:
             self.x = self.target_x
             self.y = self.target_y
@@ -396,6 +505,11 @@ class IslandContainerState:
             self.height = self.target_height
             self.radius = self.target_radius
             self.initialized = True
+            self.velocity_x = 0.0
+            self.velocity_y = 0.0
+            self.velocity_width = 0.0
+            self.velocity_height = 0.0
+            self.velocity_radius = 0.0
 
     def set_content_target(self, target: float, duration: float | None = None) -> None:
         if duration is not None:
@@ -403,16 +517,25 @@ class IslandContainerState:
         self.content.set_target(target)
 
     def update(self, dt: float) -> None:
-        dt = max(0.0, min(0.05, float(dt)))
-        response = max(0.001, min(0.999, self.response_per_60hz_frame))
-        alpha = 1.0 - pow(1.0 - response, dt * 60.0)
+        response = max(0.05, min(0.50, self.response_per_60hz_frame))
+        stiffness = 300.0 * (response / 0.20) ** 2
         for name in ("x", "y", "width", "height", "radius"):
             current = float(getattr(self, name))
             target = float(getattr(self, f"target_{name}"))
-            value = current + (target - current) * alpha
-            if abs(target - value) < 0.025:
+            velocity_name = f"velocity_{name}"
+            value, velocity = step_damped_spring(
+                current,
+                float(getattr(self, velocity_name)),
+                target,
+                dt,
+                stiffness=stiffness,
+                damping_ratio=self.damping_ratio,
+            )
+            if abs(target - value) < 0.025 and abs(velocity) < 0.08:
                 value = target
+                velocity = 0.0
             setattr(self, name, value)
+            setattr(self, velocity_name, velocity)
         self.content.update(dt)
 
     def active(self) -> bool:
@@ -420,7 +543,11 @@ class IslandContainerState:
             abs(float(getattr(self, name)) - float(getattr(self, f"target_{name}"))) > 0.025
             for name in ("x", "y", "width", "height", "radius")
         )
-        return geometry_active or self.content.active()
+        velocity_active = any(
+            abs(float(getattr(self, f"velocity_{name}"))) > 0.08
+            for name in ("x", "y", "width", "height", "radius")
+        )
+        return geometry_active or velocity_active or self.content.active()
 
 
 @dataclass
@@ -435,7 +562,7 @@ class MapIslandState:
 
     def set_target(self, x: float, y: float, width: float, height: float, expanded: bool) -> None:
         radius = 6.0 + (4.0 if expanded else 0.0)
-        self.container.set_target_geometry(x, y, width, height, radius)
+        self.container.set_target_geometry(x, y, width, height, radius, opening=expanded)
         self.container.set_content_target(1.0 if expanded else 0.0, 0.22)
 
     def update(self, dt: float) -> None:

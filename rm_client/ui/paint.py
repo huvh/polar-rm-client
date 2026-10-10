@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import time
 from typing import Iterable
 
 from PySide6.QtCore import QPointF, QRectF, Qt
@@ -106,5 +107,22 @@ def path_from_points(points: Iterable[tuple[float, float]]) -> QPainterPath:
 
 
 def accent_color(index: int, phase: float = 0.0) -> QColor:
+    """Legacy stepped palette (static-friendly). Prefer rainbow_color for HUD RGB."""
     hue = (index * 0.095 + phase * 0.04) % 1.0
     return QColor.fromHsvF(hue, 0.68, 1.0, 1.0)
+
+
+def rainbow_color(speed: int = 10, offset: int = 0) -> QColor:
+    """OpenZen ColorUtil.getRainbowColor — animated full RGB cycle.
+
+    hueDegrees = (millis / speed + offset) % 360
+    HSBtoRGB(hue, 0.5, 1.0)
+    """
+    millis = int(time.time() * 1000.0)
+    hue_degrees = (millis // max(1, int(speed)) + int(offset)) % 360
+    return QColor.fromHsvF(hue_degrees / 360.0, 0.50, 1.0, 1.0)
+
+
+def rainbow_color_index(index: int, speed: int = 10, step: int = 8) -> QColor:
+    """Per-row rainbow matching OpenZen ModuleListHud (offset = index * 8)."""
+    return rainbow_color(speed, int(index) * int(step))

@@ -1,0 +1,120 @@
+diff --git a/application/communication/usb_task.c b/application/communication/usb_task.c
+index c5e92b1..928b257 100644
+--- a/application/communication/usb_task.c
++++ b/application/communication/usb_task.c
+@@ -124,6 +124,26 @@ static const ground_robot_position_t * GROUND_ROBOT_POSITION;
+ // 判断USB连接状态用到的一些变量
+ static bool USB_OFFLINE = true;
+ static uint32_t RECEIVE_TIME = 0;
++/* 上位机虚拟遥控器（上行 0x03）最后一帧的接收时刻。
++ * 不能用 RECEIVE_TIME 代替：后者对任意 CRC 通过的包（RobotCmd、调参帧等）都刷新，
++ * 无法反映 0x03 本身是否断了。 */
++static uint32_t VIRTUAL_RC_RECEIVE_TIME = 0;
++
++/* 允许上位机叠加的键位，分两层：
++ *   Tier 1 驾驶：W=0 S=1 A=2 D=3
++ *   Tier 2 模式切换：SHIFT=4（小陀螺）。它是防御性底盘模式，不涉及任何发射动作，
++ *           所以与 Q/E 不同类，“受击后小陀螺”需要它能从上位机触发。
++ * 永不放行：
++ *   shoot_fric_trigger.c:100  Q -> 启动摩擦轮（开火前置执行器）
++ *   shoot_fric_trigger.c:104  E -> 关闭摩擦轮
++ *   chassis_omni.c:334 / chassis_mecanum.c:269  F -> 翻转 sc_flag
++ *
++ * 注意：本掩码只是**硬件侧上限**（0x1F，含 SHIFT）。实际是否真发 SHIFT，
++ * 由客户端 RobotLink 的 “Allow Spin Key” 开关决定，**默认不放行**。
++ * 两层不一致时以“更严”的一侧为准，所以客户端默认仍只发 W/S/A/D。 */
++#define VRC_DRIVE_KEY_MASK ((uint16_t)0x001F)
++/* 0x03 新鲜度阈值：略大于 USB 层 100ms 判离线阈值，避免两层抖动 */
++#define VRC_FRESH_TIMEOUT_MS 150
+ static uint32_t LATEST_RX_TIMESTAMP = 0;
+ static uint32_t CONTINUE_RECEIVE_CNT = 0;
+ 
+@@ -255,6 +275,11 @@ static void UsbSendRobotMotionData(void);
+ 
+ static void GetCmdData(void);
+ static void GetVirtualRcCtrlData(void);
++static void UsbMergeVirtualRcKeys(void);
++
++/* remote_control.c 里的全局遥控器快照。`get_remote_control_point()`
++ * 返回 const 指针（不可写），而本函数需要 OR 叠加键位，所以直接 extern。 */
++extern RC_ctrl_t rc_ctrl;
+ 
+ /******************************************************************/
+ /* Task                                                           */
+@@ -281,6 +306,7 @@ void usb_task(void const * argument)
+         UsbReceiveData();
+         GetCmdData();
+         GetVirtualRcCtrlData();
++        UsbMergeVirtualRcKeys();
+ 
+         if (HAL_GetTick() - RECEIVE_TIME > USB_OFFLINE_THRESHOLD) {
+             USB_OFFLINE = true;
+@@ -690,6 +716,7 @@ static void UsbReceiveData(void)
+                         memcpy(&RECEIVE_PID_DEBUG_DATA, sof_address, sizeof(ReceiveDataPidDebug_s));
+                     } break;
+                     case VIRTUAL_RC_DATA_RECEIVE_ID: {
++                        VIRTUAL_RC_RECEIVE_TIME = HAL_GetTick();
+                         memcpy(
+                             &RECEIVE_VIRTUAL_RC_DATA, sof_address, sizeof(ReceiveDataVirtualRc_s));
+                     } break;
+@@ -1225,6 +1252,36 @@ static void GetVirtualRcCtrlData(void)
+     memcpy(&VIRTUAL_RC_CTRL, &RECEIVE_VIRTUAL_RC_DATA.data, sizeof(RC_ctrl_t));
+ }
+ 
++/**
++ * @brief          把上位机驾驶键位叠加进 rc_ctrl.key.v
++ * @param[in]      none
++ * @retval         none
++ *
++ * 为什么是 OR 叠加而不是 memcpy 覆盖整个 rc_ctrl：
++ *  - 物理遥控器的键位、摇杆、鼠标全部保留，上位机只是“加上”四个驾驶键；
++ *  - 链路一过期本函数就不再置位，下一次 SBUS 刷新自然回到真遥控器状态，
++ *    不会把驾驶员的按键冻在最后一帧（memcpy 覆盖方案做不到这点）。
++ *
++ * 为什么只取 W/S/A/D：固件对 Q/E（摩擦轮）、SHIFT（小陀螺）、F（sc_flag）
++ * 都有真实动作，全量透传会把开火相关 actuation 从遥控器手里搬走上位机。
++ *
++ * @note 接管判据只能用下面两个显式条件，不能拿“key.v 非零”当依据：
++ *       那样是循环论证（唯一会置位的就是本函数自己）。另注意本补丁已同时
++ *       去掉了 remote_control.c 里 ET08A 每帧清 key.v 的那一行，否则会与本函数
++ *       形成 merge-vs-clear 竞态。
++ * @note 本函数定义必须留在本文件：VIRTUAL_RC_CTRL / USB_OFFLINE 都是 static。
++ */
++static void UsbMergeVirtualRcKeys(void)
++{
++    uint16_t drive_keys = 0;
++
++    if (!USB_OFFLINE
++        && (HAL_GetTick() - VIRTUAL_RC_RECEIVE_TIME) <= VRC_FRESH_TIMEOUT_MS) {
++        drive_keys = VIRTUAL_RC_CTRL.key.v & VRC_DRIVE_KEY_MASK;
++    }
++    rc_ctrl.key.v |= drive_keys;
++}
++
+ /*******************************************************************************/
+ /* Public Function                                                             */
+ /*******************************************************************************/
+diff --git a/application/other/remote_control.c b/application/other/remote_control.c
+index 25b482d..9e5d939 100644
+--- a/application/other/remote_control.c
++++ b/application/other/remote_control.c
+@@ -417,13 +417,18 @@ static void sbus_to_rc(volatile const uint8_t *sbus_buf, RC_ctrl_t *rc_ctrl)
+     }
+ 
+ // DT7遥控器特殊通道置零
++//
++// 注意：这里**不再清 key.v**。调用本宏的是 ET08A / AT9S / HT8A 等无键盘遥控器，
++// 它们本身不贡献任何键位bit，清 0 对遥控器是空操作；但上位机 0x03 虚拟遥控器帧
++// 注入的驾驶键位图会被每帧 SBUS 抹掉，与 usb_task.c 里的 UsbMergeVirtualRcKeys()
++// 形成 merge-vs-clear 竞态（车速按占空比抖动、最差情况完全不响应）。
++// 无键盘的遥控器没有“拥有” key.v 的资格，因此不应当写它。
+ #define SPECIAL_CHANNEL_SET_SERO()\
+     rc_ctrl->mouse.x = 0;         \
+     rc_ctrl->mouse.y = 0;         \
+     rc_ctrl->mouse.z = 0;         \
+     rc_ctrl->mouse.press_l = 0;   \
+     rc_ctrl->mouse.press_r = 0;   \
+-    rc_ctrl->key.v = 0;           \
+     rc_ctrl->rc.ch[4] = 0;        \
+ 
+ #if (__RC_TYPE == RC_AT9S_PRO)

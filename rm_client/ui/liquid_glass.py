@@ -57,6 +57,15 @@ class LiquidGlassRenderer:
             QImage(), soft_image.copy(), lens_image.copy(), luminance.copy(), QRectF(draw_rect), key
         )
 
+    def discard(self, source: str) -> None:
+        """Release one source snapshot without changing glass material rules."""
+
+        self.snapshots.pop(source, None)
+        for key in tuple(self.light_state):
+            if key[0] == source:
+                self.light_state.pop(key, None)
+                self.light_time.pop(key, None)
+
     def draw(
         self,
         painter: QPainter,

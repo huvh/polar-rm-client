@@ -42,7 +42,11 @@ class LocalDetection:
 
 
 class LocalTargetSelector:
-    """保持同一画面目标，避免检测列表顺序变化导致主目标来回跳。"""
+    """保持同一画面目标，避免检测列表顺序变化导致主目标来回跳。
+
+    可选 ``fov_radius_x/y``：仅在画面中心椭圆内的检测可被选为自瞄主目标；
+    圆外目标仍可由上层原样绘制 ESP，只是不会 lock。
+    """
 
     def __init__(self) -> None:
         self.center: tuple[float, float] | None = None
@@ -51,6 +55,8 @@ class LocalTargetSelector:
         self.track_id = 0
         self.missed_frames = 0
         self.last_seen_at = 0.0
+        self.fov_radius_x: float | None = None
+        self.fov_radius_y: float | None = None
 
     def reset(self) -> None:
         self.center = None
@@ -58,6 +64,15 @@ class LocalTargetSelector:
         self.color = ""
         self.missed_frames = 0
         self.last_seen_at = 0.0
+
+    def set_fov_radius(self, radius_x: float | None, radius_y: float | None = None) -> None:
+        """Source-pixel FOV ellipse half-axes; None disables the FOV gate."""
+        if radius_x is None or radius_x <= 0.0:
+            self.fov_radius_x = None
+            self.fov_radius_y = None
+            return
+        self.fov_radius_x = float(radius_x)
+        self.fov_radius_y = float(radius_y if radius_y is not None and radius_y > 0.0 else radius_x)
 
     def _hold_limits(self) -> tuple[float, int]:
         """灭灯/过暗时延长关联，避免 track_id 跳变导致视觉击杀丢 lit 历史。"""
@@ -83,6 +98,15 @@ class LocalTargetSelector:
             self.missed_frames = 0
             self.last_seen_at = time.perf_counter()
 
+    def _in_fov(self, center: tuple[float, float], width: int, height: int) -> bool:
+        rx = self.fov_radius_x
+        ry = self.fov_radius_y
+        if rx is None or ry is None:
+            return True
+        dx = (center[0] - width * 0.5) / max(1e-3, rx)
+        dy = (center[1] - height * 0.5) / max(1e-3, ry)
+        return (dx * dx + dy * dy) <= 1.0
+
     def select(self, detections: list[LocalDetection], width: int, height: int, *, keep_missing: bool = False) -> tuple[int, int] | None:
         if not detections:
             if not keep_missing:
@@ -98,13 +122,21 @@ class LocalTargetSelector:
             (item.box[0] + item.box[2] * 0.5, item.box[1] + item.box[3] * 0.5)
             for item in detections
         ]
+        in_fov = [index for index, center in enumerate(centers) if self._in_fov(center, width, height)]
+        if not in_fov:
+            # 圆外仍可有检测，但本帧不建立/保持自瞄锁定。
+            if not keep_missing:
+                self.mark_missed()
+            return None
+
         diagonal = math.hypot(float(width), float(height))
         gate = max(48.0, diagonal * 0.16)
         candidate_index: int | None = None
 
         if self.center is not None:
             compatible = [
-                index for index, item in enumerate(detections)
+                index for index in in_fov
+                for item in (detections[index],)
                 if item.name == self.name
                 and (
                     item.color == self.color
@@ -122,8 +154,8 @@ class LocalTargetSelector:
                 candidate_index = min(nearby, key=lambda index: math.dist(centers[index], self.center))
 
         if candidate_index is None:
-            # 初次锁定或旧目标离开画面：优先置信度，不沿用旧下标。
-            candidate_index = max(range(len(detections)), key=lambda index: detections[index].confidence)
+            # 初次锁定或旧目标离开 FOV：仅在圆内按置信度选主目标。
+            candidate_index = max(in_fov, key=lambda index: detections[index].confidence)
             if self.center is not None:
                 self.track_id += 1
 
@@ -310,6 +342,9 @@ class LocalAlignedVision:
         self.armor_count = 4
         self.radius_m = 0.23
         self.horizon_s = 0.06
+        self.retry_after = 0.0
+        self._stop_event = threading.Event()
+        self._pending_event = threading.Event()
 
     def configure(self, model_path: Path, device: str) -> None:
         if model_path == self.model_path and device == self.device:
@@ -323,25 +358,52 @@ class LocalAlignedVision:
         self.radius_m = max(0.10, min(0.45, float(radius_m)))
         self.horizon_s = max(0.0, min(0.30, float(horizon_s)))
 
+    def configure_autoaim_fov(self, radius_x: float | None, radius_y: float | None = None) -> None:
+        """Limit autoaim lock to a center ellipse in source pixels; ESP still lists all detections."""
+        self._target_selector.set_fov_radius(radius_x, radius_y)
+
     def start(self) -> None:
         if self.running:
             return
+        if self._thread is not None and self._thread.is_alive():
+            return
+        if time.perf_counter() < self.retry_after:
+            return
+        self._stop_event = threading.Event()
+        self._pending_event = threading.Event()
         self.running = True
-        self._thread = threading.Thread(target=self._run, name="polar-tongji-local", daemon=True)
-        self._thread.start()
+        self._thread = threading.Thread(
+            target=self._run,
+            args=(self._stop_event, self._pending_event),
+            name="polar-tongji-local",
+            daemon=True,
+        )
+        try:
+            self._thread.start()
+        except Exception:
+            self.running = False
+            self._thread = None
+            raise
 
     def stop(self) -> None:
         self.running = False
-        if self._thread is not None and self._thread.is_alive():
-            self._thread.join(timeout=0.8)
-        self._thread = None
-        self._detector = None
+        self._stop_event.set()
+        self._pending_event.set()
+        thread = self._thread
+        if thread is not None and thread.is_alive() and thread is not threading.current_thread():
+            thread.join(timeout=1.2)
+        if thread is None or not thread.is_alive():
+            self._thread = None
+            self._detector = None
+            with self._lock:
+                self._pending = None
 
     def submit(self, sequence: int, width: int, height: int, bgr: Any) -> None:
         if not self.running:
             return
         with self._lock:
             self._pending = (sequence, width, height, bgr.copy())
+        self._pending_event.set()
 
     def latest(self, timeout_ms: float = 350.0) -> tuple[int, int, int, int, list[dict[str, Any]], float, float, dict[str, Any] | None] | None:
         with self._lock:
@@ -350,16 +412,23 @@ class LocalAlignedVision:
             return None
         return result
 
-    def _run(self) -> None:
+    def _run(self, stop_event: threading.Event, pending_event: threading.Event) -> None:
         try:
             self._detector = TongjiYoloV5(self.model_path, self.device)
             self.active_device = self._detector.active_device
-            while self.running:
+            while self.running and not stop_event.is_set():
+                # Waiting for a latest-frame notification avoids the previous
+                # 3 ms busy loop, which multiplied into 100+ hot threads when
+                # a camera was missing or several UI smoke windows were built.
+                if not pending_event.wait(0.25):
+                    continue
+                pending_event.clear()
+                if stop_event.is_set():
+                    break
                 with self._lock:
                     pending = self._pending
                     self._pending = None
                 if pending is None:
-                    time.sleep(0.003)
                     continue
                 sequence, width, height, bgr = pending
                 started = time.perf_counter()
@@ -418,6 +487,12 @@ class LocalAlignedVision:
                             else:
                                 # 用滤波后的实体板替换原始角点，避免主板重复且让 Aim Face 也稳定。
                                 payload[0].update(plate_payload)
+                elif detections:
+                    # FOV 内无主目标：仍发布全部检测供 3D ESP，全部 unlocked。
+                    for index, item in enumerate(detections):
+                        payload.append(item.payload(index, locked=False))
+                    self._held_payload = []
+                    self._prediction.reset()
                 if not payload:
                     # 短暂漏检不让整车预测面瞬间消失；超过 300ms 仍会安全清空。
                     loss_evidence = pending_loss or self._loss_probe.sample_loss(bgr, width, height, sequence)
@@ -445,5 +520,11 @@ class LocalAlignedVision:
         except Exception as error:
             self.last_error = str(error)
             self.active_device = "unavailable"
+            # A missing/corrupt model must not spawn a new loader at every
+            # 60 Hz UI tick. Retry slowly so a repaired file is still picked up.
+            self.retry_after = time.perf_counter() + 5.0
         finally:
             self.running = False
+            self._detector = None
+            if self._thread is threading.current_thread():
+                self._thread = None

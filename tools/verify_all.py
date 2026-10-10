@@ -1,0 +1,402 @@
+"""一条命令验证「客户端侧」是否全部就绪，给出 GO / NO-GO。
+
+为什么需要它：这个项目现在有 9 套 Python 测试、2 个 C 编译/行为校验、1 个固件
+准备自检。它们散在不同文件里，而最终要判断的其实只有一句话：
+
+    客户端这边还能不能挑出问题？能不能放心去 Keil 编译？
+
+本脚本把它们串成一次运行，任何一项红就 NO-GO 并列出是哪项。
+
+跑法：
+    python tools/verify_all.py
+    python tools/verify_all.py --firmware <StandardRobotpp 路径>   # 附带固件准备自检
+
+注意：这里全部是**离线**检查。它证明不了"车真的会动" —— 那需要硬件。
+
+并行跑两个 verify_all 会出现"假红"：固件自检共享同一棵工作树，
+旧版校验会临时改写固件。当前统一只读检查指定树，并拒绝自动安装；保留文件锁拒绝第二个实例
+（实测：同一份代码一次报 3/51 红、一次 51 全绿，红的那次不是代码坏）。
+因此这份清单的红色结果只有在"只有一个实例在跑"时才可作为证据。
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import os
+import re
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+
+PYTHON_SUITES = (
+    "test_build_safety_regressions",  # isolated packaging / path / file-preservation guards
+    "test_transport_safety_regressions",
+    "test_ui_state_regressions",
+    "student_frontend_test",  # MC 背包/Jello 学生面板：只读展示、草稿不发、模态与缓存
+    "polar_spec_test",        # 协议规格：加载/校验/改 JSON 真能改行为/新增段零 Python
+    "robot_roles_test",       # 兵种对齐：限幅、禁驾、不一致告警、键位分层
+    "polar_link_test",        # 帧编解码、CRC 三方对拍、时间戳单调、fire 恒 0
+    "polar_bridge_test",      # 段→HUD 映射、驾驶通道门控、改绑、云台出口互斥
+    "polar_integration_test", # 端到端回环：官方场景开车、无 0x1E 的 sim2real、急停竞态
+    "polar_selftest_test",    # 无头自检本身
+    "polar_startup_test",     # 真实窗口：链路 tick、HUD 渲染、改绑持久化
+    "gimbal_host_request_test", # 云台直控请求位：电平语义、急停撤回、三条件闸门
+    "autoaim_settings_test",  # 自瞄 Fov/Priority 接线：换算精确、未标定不加门、降级不谎报
+    "hud_telemetry_settings_test",  # HUD 遥测面板 Show Bar/Warn/Show Limit 接线与两处一致
+    "hud_status_settings_test",     # 战况面板 12 个开关：三个构造器行为必须一致
+    "hud_batch16_killfx_test",        # 击杀特效：锁定目标加分开关→标签→提示音贯通
+    "hud_batch17_crosshair_test",     # 准星样式：同名洗白的隐藏孤儿；默认档逐图元不变
+    "hud_batch18_powerguard_test",   # 功率保护两个告警阈值：模块关着逐值不变、开了只能加严
+    "hud_batch19_bufftimeline_test", # 增益时间轴：从“整个模块没消费者”到有面板（含真窗口像素）
+    "hud_batch20_robotoverlay_color_test", # 装甲盒配色 Color：默认档三个消费点逐值不变；Threat 降级不静默
+    "hud_batch21_radaroverlay_map_test", # 雷达叠加 Map：默认 Both=接线前两张图都画；Mini/Full 按展开态分档
+    "settings_doc_consistency_test", # 孤儿数的 7 处出处（文档/闸门/实测）必须一致
+    "hud_batch14_settings_test",       # 状态卡片：三处消费点共用判据 + GimbalPower 三项
+    "hud_batch13_settings_test",       # 地图标记：默认字节不变 + 编解码往返
+    "hud_batch10_settings_test",      # 缓冲上限写入状态（静态分支）+ RM 指示灯开关
+    "hud_batch9_settings_test",       # 电容单一数据源 + 装甲盒深度边开关
+    "hud_batch8_settings_test",       # 第 8 批：启动二级页/锁定框/弹药告警/缓冲能量
+    "hud_overlay_settings_test",    # RobotOverlay Robot ID / Crosshair Heat Color（第 4 批）
+    "backend_protocol_test",  # 官方裁判协议（回归护栏）
+    "referee_integration_test",  # 年度协议隔离 / 只读学生版 / 真 MQTT localhost 回环
+    "api_freeze_test",        # 窗口成员冻结（防误删公开面）
+)
+
+C_CHECKS = (
+    ("tools/firmware/test_patch_real_headers.py", "补丁代码用固件真实头文件编译"),
+    ("tools/firmware/test_patch_logic.py", "补丁代码行为断言（含 tick 回绕、竞态）"),
+    # 上位机<->底盘 桥接（上行 0x04 / 下行 0x1F）：把小陀螺从“借 SHIFT
+    # 边沿翻转”改成“显式设定 + 回读闭环”。这一项同时含编译与 9 组行为断言。
+    #
+    # 与上面两项的相互干扰已处理：三个脚本都会先判断“目标改动是不是已经在
+    # 树里”，在就不动 git。否则 prepare_hero_build.py 刚准备好的工作树
+    # 会被后一个脚本的 finally 里 git checkout 静默撤销，造成“报 GO 但改动已没了”。
+    # 2026-09-05 补严：光"已在树里就不动"还不够——那几个脚本收尾用的是
+    # `git checkout -- .`（想把**自己**装的桥撤掉，实际把**整棵树**所有改动一起冲掉，
+    # 包括 prepare 写好的兵种 include 与 MOUSE_SENSITIVITY；本轮真的复现过一次：
+    # 英雄参数被冲回 100000.0f，紧接着新加的体检就 NO-GO）。
+    # 现在统一走 tools/firmware/bridge_fixture.py：装之前按字节快照，收尾原样放回。
+    ("tools/firmware/host_bridge/test_host_bridge.py",
+     "自转桥接（0x04/0x1F）编译 + 行为断言"),
+    ("tools/firmware/motion_feedback/test_motion_feedback.py",
+     "速度回读桥（0x1E）编译 + 运动学往返断言"),
+    ("tools/firmware/gimbal_host/test_gimbal_host.py",
+     "云台直控桥（0x04 param0）结构 + 编译 + 真值表断言"),
+    # 驾驶键位三方写入者（DT7 解码 / 无键盘遥控器置零宏 / usb_task 合并）。
+    # 这一项必须是**可执行**的行为校验：粘键和整帧覆盖都是运行时语义，
+    # 编译器一句都不会报。带 --negative 还能证明这些断言抓得住旧写法。
+    ("tools/firmware/host_bridge/test_rc_key_ledger.py",
+     "驾驶键位账本（DT7 不被抹 / 松键能归零）8 组行为断言"),
+    # DT7/DR16 官方 18 字节帧的位序：把固件里真实的 sbus_to_rc() 编成 exe，
+    # 用 Python 打的帧喂进去逐字段比对。这一项防的是"手册/固件/客户端三方
+    # 位序悄悄错开"——键位错一位就是车上按 Shift 变按 Q 那类现场怪事。
+    ("tools/dt7_link/test_dbus_frame_vs_firmware.py",
+     "DT7 官方 18 字节帧位序 == 固件真实解码（逐字段 + 常量守卫）"),
+    # 图传键鼠链路。两项都要，因为它们查的是不同的东西：
+    # layout 查"客户端打的字节"和"C 结构体"是否还对得上（改了任何一端、
+    # 或 __packed__ 没生效都会红）；行为查五档仲裁与三条底线。
+    ("tools/firmware/km_link/test_km_payload_layout.py",
+     "PRM1 键鼠载荷：C 结构体偏移 == 客户端 struct 打包（逐字段）"),
+    ("tools/firmware/km_link/test_km_link.py",
+     "图传键鼠五档仲裁 + 摇杆底线 + 开火权限（喂客户端真字节）"),
+    # 客户端这一半：默认关、关着不多发、松键能清零。
+    ("tools/dt7_link/test_radio_km_client.py",
+     "无线键鼠出口客户端侧（默认关 / 不粘键 / 载荷 26B / UI 开关三道闸）"),
+    # DT7 旁听（只读）：分帧与键位位序判读的离线断言。现场那条
+    # "Q 到底在 bit4 还是 bit6" 的死结靠它判，所以它必须一直绿。
+    ("tools/dt7_link/test_vcp_listen.py",
+     "DT7 VCP 旁听：空闲线分帧 + 键位 bit 跳变双位序判读"),
+    # 抓包差分：现场只抓一次官方选手端<->DT7，位序与键位字节靠它算，
+    # 所以它的判据必须一直可靠（含"不许硬判位序"与"不许乱认键位"两条）。
+    ("tools/dt7_link/test_frame_diff.py",
+     "DT7 抓包差分：键位字节/位序 判定（合成样本，含两类不许乱判）"),
+    # 自定义控制器出口：帧必须被**固件里那份官方 CRC 代码**验收通过，
+    # 否则选手端整帧丢弃，现象是"发了但没反应"，最难查。
+    ("tools/dt7_link/test_cc_link.py",
+     "自定义控制器 0x0306 出口（帧被固件 CRC 验收 + 三道闸 + 不静默丢键）"),
+    # DT7 直连：帧/位域/CRC/默认关 都可离线证；命令号仍是候选值，
+    # 所以断言名字里写着"未确认"，防止后人当成已定论。
+    ("tools/dt7_link/test_dt7_link.py",
+     "DT7 直连出口（5A/22B 帧对厂商反汇编 + 两族 CRC 互不认 + 真发闸/互斥/松手）"),
+    # 挑口：认错口的代价不是"连不上"，而是产出假结论 ——
+    # 把遥控器帧写进 C 板的 CDC，再拿同一块板的 km_key 判读，永远得到 NO-CHANGE，
+    # 于是我们以为"DT7 不认这一帧"，白换一整轮帧型。
+    ("tools/test_settings_are_read.py",
+     "设置项接线审计（每个 RobotLink 项都被取用 + Port/Baud 优先级规则）"),
+    ("tools/test_port_picking.py",
+     "Auto 挑口（DT7 只认 DJI VCOM / CC 只认 FTDI / 车的口一律判负）"),
+    # C 路闭环自检工具的判据本身也要有证据：说 PASS 必须真是"我们发的位到了车上合并键位"，
+    # 而且三种失败形态（DT7 不理帧 / 载荷错位 / 读不到回读）都不许误判成通。
+    # D 路（车端 USB<->WiFi 桥）两条：桥本身是裸管道（不改字节、断链不再写串口），
+    # 以及接到客户端传输层之后"提交意图 -> 字节原样落到 C 板、上行帧能拼回来"。
+    ("tools/test_car_bridge_loopback.py",
+     "车端桥裸管道（分片到达不改字节 / 上行拼回帧 / 断开后不再写串口）"),
+    ("tools/test_car_bridge_transport.py",
+     "D 路接进传输层（tcp 模式不被 Stub 端口挡住 / 意图落到串口 / 连不上报错清楚）"),
+    # 端到端（离线）：闸门 -> 控制层 -> 运行期 DT7 出口 -> 假 DT7 -> "车上那本键位账"。
+    # 分层各自绿不等于接起来能用，所以这条链要单独钉住。
+    ("tools/dt7_link/test_end_to_end_c_link.py",
+     "C 路端到端离线（按键到车上键位 / 松手 / 急停交还 / 互斥 / 鼠标截断）"),
+    # 扫帧型工具：必须"只认出那一种"。它自己就被两条断言抓出过 bug
+    # （假车攒陈旧帧 => 六种全 PASS；循环里发的是运行期那一种 => 六种其实是同一种）
+    ("tools/dt7_link/test_dt7_sweep.py",
+     "C 路扫帧型（只认得出那一种 / 清零帧 / 无回读不结论 / 未定案不写字节）"),
+    ("tools/firmware/test_prepare_hero_options.py",
+     "prepare_hero_build 新选项（--mouse-sens 改得动且幂等 / 注释吞 define 能被体检抓住）"),
+    # 界面上那个"Run DT7 Link Selftest"按钮的可测部分：判据、两个把手，
+    # 以及"设置项/分派/处理函数"三处必须成对（防按钮变成空壳）。
+    ("tools/dt7_link/test_dt7_ui_selftest.py",
+     "C 路界面自检（X 探针无消费者 / 把手作用到发送 / 按钮不是空壳）"),
+    ("tools/dt7_link/test_wireless_selftest.py",
+     "C 路闭环自检（假车真回环 / NO-CHANGE 与 PARTIAL 不误判 / 假阳性防线）"),
+    # broker 地址：正式赛的键鼠要发到赛事引擎那台 192.168.12.1，
+    # 界面上那个地址以前是摆设（改了没人读），现在必须有断言钉住。
+    # 三个子代理复查抓出来的坑（reserved 落在 ch[4]、限流吃掉鼠标增量、
+    # MOUSE_SENSITIVITY 量级）：钉成断言，防止下一轮又把默认值改回去
+    ("tools/dt7_link/test_dt7_review_fixes.py",
+     "C 路复查三个坑（reserved=通道中值 / 限流不吃鼠标 / 镜头灵敏度量级）"),
+    # 松手帧必须落地：DT7/DR16 没有过期自动清零，被 max_hz 挡下的中立帧就是
+    # "手松了车还在走"。这一坑是假时钟 24 个相位扫出来的（旧代码 24/24 全被挡，
+    # 最好情况 253ms 才补上），所以断言也必须按相位扫，不能只测一个 lucky case。
+    ("tools/dt7_link/test_dt7_release_flush.py",
+     "C 路松手帧（限流不许吃掉零键 / 写失败要补发 / 暂停与关出口不许空转 / 水印说实话）"),
+    ("tools/test_mqtt_link_settings.py",
+     "MQTT broker 地址接线（改设置就换地址 / 已连接会重连 / 非法值回写不骗人）"),
+)
+
+#: 前后端对齐审计（防倒退闸门）。
+#: 孤儿基线当前为 **22**（排除翻译表后的口径），只许减不许增。
+#: 演进：71（初始真实值）→ 68（瞄准+遥测）→ 56（战况面板 12 项）
+#: → 53（顶栏 3 项）→ 51（覆盖层与准星）→ 50（渲染后端 Renderer）→ 48（超限脉冲与发光）→ 47（审计修正：常量别名不再被误判）
+#: → 43（启动二级页、锁定框、弹药告警、缓冲能量）
+#: → 42（装甲盒深度边；并修正电容读 mock 字段的既有 bug）
+#: → 40（RM 指示灯开关；并修正缓冲上限写错分支的死代码）
+#: → 38（雷达照射高亮、锁定脉冲）→ 36（两颗增益灯）
+#: → 34（地图标记类型与广播开关）→ 31（云台电压三项）→ 30（装甲盒开关）
+#: → 29（锁定目标加分；上一轮判成“需改绘制层”，实际只差一行供值）
+#: → 27（功率保护的两个告警阈值；该模块默认关着，所以接线零画面风险）
+#: → 24（增益时间轴三项；模块本来连面板都没有，位置是量出来而不是猜的）
+#: → 23（装甲盒配色 Color；默认值改成等于接线前画面的 White，三个消费点逐值不变）
+#: → 22（雷达叠加 Map；默认值改成等于接线前画面的 Both，两条面板路径共用一个门）。
+#: 其中两项查证后故意不接（MQTTLink/Auto Connect 与 UDPVideo/Reassemble），
+#: 理由见 tools/SETTINGS_GAPS.md。
+#: 早期版本没排除 `jello_locale.py`（中英翻译表），把“有中文名”当成“有人读”，
+#: 曾错报 36/33。假数字比不知道数字更坑。
+#: 另有 51 个同名设置项被判 AMBIGUOUS，**不计入也不计减**基线。
+AUDIT_CHECKS = (
+    ("tools/audit_settings.py", "二级界面设置项孤儿数不超基线",
+     ["--max-orphans", "22"]),
+)
+
+
+def run(label: str, argv: list[str], *, firmware: Path | None = None,
+        timeout: float = 180.0) -> tuple[bool, str]:
+    env = dict(os.environ)
+    env.setdefault("QT_QPA_PLATFORM", "offscreen")
+    env.setdefault("PYTHONIOENCODING", "utf-8")
+    # Never silently select a sibling checkout; every child sees the same target.
+    env["POLAR_FIRMWARE_ROOT"] = str(firmware or ROOT / ".firmware-not-selected")
+    env["POLAR_FIRMWARE_READ_ONLY"] = "1"
+    with tempfile.TemporaryDirectory(prefix="verify_all_") as user_data:
+        env["POLAR_USER_DATA_ROOT"] = user_data
+        try:
+            proc = subprocess.run(argv, cwd=str(ROOT), capture_output=True, text=True,
+                                  encoding="utf-8", errors="replace", env=env, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            return False, f"INCOMPLETE: timeout after {timeout:g}s"
+        except OSError as exc:
+            return False, f"INCOMPLETE: {exc}"
+    out = (proc.stdout or "") + (proc.stderr or "")
+    skipped = re.findall(r"(?im)^\s*(?:\[SKIP\]|SKIP:|\[INCOMPLETE\]).*$", out)
+    if proc.returncode == 77 or (proc.returncode == 0 and skipped):
+        return False, "INCOMPLETE: " + (" | ".join(line.strip() for line in skipped)[:360] or "check not run")
+    if proc.returncode != 0:
+        bad = [line.strip() for line in out.splitlines()
+               if line.strip().startswith("[FAIL]") or "AssertionError" in line
+               or "error:" in line or "FAILED" in line]
+        return False, " | ".join(bad[:3])[:400] or f"exit={proc.returncode}"
+    count = sum(1 for line in out.splitlines() if line.strip().startswith("[PASS]"))
+    return True, f"{count} 项通过" if count else "通过"
+
+
+def firmware_identity(repo: Path) -> str:
+    """Bind reports to all worktree bytes, including untracked source files."""
+    head = subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"],
+                          capture_output=True, text=True, timeout=10)
+    if head.returncode != 0:
+        raise ValueError("firmware target is not a Git worktree")
+    digest = hashlib.sha256()
+    for directory, dirs, files in os.walk(repo):
+        dirs[:] = sorted(name for name in dirs if name != ".git")
+        for name in sorted(files):
+            path = Path(directory) / name
+            if path.name == ".git":
+                continue
+            relative = path.relative_to(repo).as_posix().encode("utf-8")
+            digest.update(len(relative).to_bytes(4, "big"))
+            digest.update(relative)
+            if path.is_symlink():
+                digest.update(b"symlink:" + os.readlink(path).encode("utf-8"))
+            else:
+                content = hashlib.sha256()
+                with path.open("rb") as handle:
+                    for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                        content.update(chunk)
+                digest.update(content.digest())
+    return f"path={repo} commit={head.stdout.strip()} tree_sha256={digest.hexdigest()}"
+
+
+_LOCK = None
+
+
+def acquire_lock() -> bool:
+    """同一时刻只允许一个 verify_all，避免共享测试资源互相干扰。
+
+    用文件锁而不是 pid 文件：进程被杀也不会留下假的占用者（锁随句柄关闭自动释放）。
+    """
+    global _LOCK
+    path = Path(tempfile.gettempdir()) / "rm_verify_all.lock"
+    try:
+        handle = open(path, "a+", encoding="utf-8")
+        if os.name == "nt":
+            import msvcrt
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        return False
+    handle.seek(0)
+    handle.truncate()
+    handle.write(str(os.getpid()))
+    handle.flush()
+    _LOCK = handle
+    return True
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Offline checks; no firmware installation")
+    parser.add_argument("--firmware", type=Path, help="exact prepared firmware worktree to validate")
+    parser.add_argument("--timeout", type=float, default=180.0, help="per-check timeout in seconds")
+    args = parser.parse_args()
+    if args.timeout <= 0:
+        parser.error("--timeout must be positive")
+    py = sys.executable
+    firmware = args.firmware.expanduser().resolve() if args.firmware else None
+    identity = None
+    if firmware is not None:
+        try:
+            identity = firmware_identity(firmware)
+        except (OSError, ValueError, subprocess.TimeoutExpired) as exc:
+            print(f"[NO-GO] Invalid firmware target: {exc}")
+            return 2
+        print(f"[target] {identity}")
+
+    failures: list[str] = []
+    incomplete: list[str] = []
+    total_checks = 0
+
+    if not acquire_lock():
+        print("[NO-GO] 已经有一个 verify_all 在跑：固件自检共享同一棵工作树，\n"
+              "        并行会争用测试资源，结果不可信。等它跑完再来。",
+              file=sys.stderr)
+        return 2
+    print("=" * 66)
+    print("客户端侧就绪验证（离线）")
+    print("=" * 66)
+
+    print("\n[Python 测试套件]")
+    for name in PYTHON_SUITES:
+        path = ROOT / "tests" / f"{name}.py"
+        if not path.exists():
+            print(f"  [INCOMPLETE] {name:24} 文件不存在")
+            incomplete.append(f"Missing test: {name}")
+            total_checks += 1
+            continue
+        ok, detail = run(name, [py, "-u", str(path)], firmware=firmware, timeout=args.timeout)
+        total_checks += 1
+        print(f"  [{'OK' if ok else 'XX'}] {name:24} {detail}")
+        if not ok:
+            (incomplete if detail.startswith("INCOMPLETE:") else failures).append(f"Python: {name} -> {detail}")
+
+    print("\n[固件补丁编译与行为校验]")
+    for rel, label in C_CHECKS:
+        path = ROOT / rel
+        if not path.exists():
+            print(f"  [INCOMPLETE] {label} 文件不存在")
+            incomplete.append(f"Missing check: {label}")
+            total_checks += 1
+            continue
+        ok, detail = run(label, [py, "-u", str(path)], firmware=firmware, timeout=args.timeout)
+        total_checks += 1
+        print(f"  [{'OK' if ok else 'XX'}] {label:38} {detail}")
+        if not ok:
+            (incomplete if detail.startswith("INCOMPLETE:") else failures).append(f"C: {label} -> {detail}")
+
+    print("\n[前后端对齐审计]")
+    for rel, label, extra in AUDIT_CHECKS:
+        path = ROOT / rel
+        if not path.exists():
+            print(f"  [INCOMPLETE] {label} 文件不存在")
+            incomplete.append(f"Missing check: {label}")
+            total_checks += 1
+            continue
+        ok, detail = run(label, [py, "-u", str(path), *extra], firmware=firmware, timeout=args.timeout)
+        total_checks += 1
+        print(f"  [{'OK' if ok else 'XX'}] {label:38} {detail}")
+        if not ok:
+            (incomplete if detail.startswith("INCOMPLETE:") else failures).append(f"审计: {label} -> {detail}")
+
+    if firmware:
+        print("\n[固件工程准备自检]")
+        path = ROOT / "tools" / "firmware" / "prepare_hero_build.py"
+        ok, detail = run("prepare", [py, "-u", str(path), str(firmware), "--check-only"],
+                         firmware=firmware, timeout=args.timeout)
+        total_checks += 1
+        print(f"  [{'OK' if ok else 'XX'}] 指定固件工作树只读自检")
+        if not ok:
+            (incomplete if detail.startswith("INCOMPLETE:") else failures).append(f"固件自检 -> {detail}")
+        try:
+            if firmware_identity(firmware) != identity:
+                failures.append("Firmware worktree changed during verification; results are invalid")
+        except (OSError, ValueError, subprocess.TimeoutExpired) as exc:
+            failures.append(f"Cannot verify unchanged firmware target: {exc}")
+
+    print("\n" + "=" * 66)
+    if failures or incomplete:
+        print(f"结论：NO-GO —— {len(failures)} FAIL, {len(incomplete)} INCOMPLETE / {total_checks} checks")
+        for line in failures + incomplete:
+            print(f"  - {line[:180]}")
+        print("\n先解决上面这些，再去 Keil 编译。")
+        return 1
+
+    print(f"结论：GO —— 客户端侧 {total_checks} 组检查全部通过")
+    print("""
+下一步（需要你做，客户端无法代验）：
+  1. 提交这些文件，否则发布包里根本没有队内链路
+  2. python tools/firmware/prepare_hero_build.py <固件路径>   -> 看到 GO
+  3. Keil 编译烧录（工程是"警告即错误"）
+  4. 确认 __RC_TYPE 与车上装的遥控器是同一家（默认 --rc dt7 = DT7 + DR16）。
+     注意别夸大：DT7 的 18 字节帧按帧长分派、跟这个宏无关，键鼠开车本来就能用；
+     配错真正致命的是**车上是 25 字节遥控器而宏选错那一家**（整帧不解析、车不动）。
+     详见 tools/firmware/host_bridge/RC_LINKS.md 第 2 节。
+  5. 上电后把遥控器三位拨杆 s[0] 拨到【中间】
+     停在下方时固件走 CHASSIS_LOCK，不读驾驶键位图，车绝对不会动。
+     上方也能开车，但那是固件**无条件强制常转**（chassis_mecanum.c:102），
+     与 spin_flag 无关——此时客户端的小陀螺开关看上去"没反应"，
+     排查时极易误判成补丁没打上。**要验小陀螺就必须拨中间。**
+  6. 客户端：开 RobotLink 模块 + Allow Drive + Client Chassis Drive
+     并把 Drive Channel 设为 virtual_rc
+
+注意：以上全部是离线验证。它证明不了"车真的会动"。
+""")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

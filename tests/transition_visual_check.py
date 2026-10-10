@@ -31,7 +31,10 @@ def main() -> int:
     window.resize(2560, 1440)
     camera = window.registry.get("CameraFeed")
     if camera and camera.get_setting("Source"):
-        camera.get_setting("Source").value = "Synthetic"
+        camera.get_setting("Source").value = "Webcam"
+    # This visual fixture injects a deterministic frame below; never let a
+    # physical webcam race it while transition screenshots are captured.
+    window.ensure_camera_started = lambda: None
     output = Path("tmp_render_checks")
     output.mkdir(exist_ok=True)
     window.show()
@@ -67,7 +70,9 @@ def main() -> int:
         painter.end()
         window.frame_image = frame
         window.frame_pixmap = QPixmap.fromImage(frame)
-        window._last_capture_sequence += 1
+        window._normal_backend_mode = "webcam"
+        window._normal_frame_source = "webcam"
+        window._display_frame_sequence += 1
         window._gpu_background_key = None
         # Keep the center HUD visible without fabricating a vision target.  A
         # lost target remains in its documented ten-second grace phase, which
@@ -91,7 +96,25 @@ def main() -> int:
             target_image.save(str(output / "transition_hud_target.png"))
             ratio = max(1.0, float(window.devicePixelRatioF()))
             hud_scale = window.get_hud_scale(window.width(), window.height())
-            outer_radius = (16.0 * 2.35 + (5.0 * 2.35 + 1.0) * 0.5) * hud_scale * ratio
+            target_module = window.registry.get("CombatTargetHUD")
+            visual = window.combat_target_visual(target_module)
+            combat_scale = 1.65 if visual == "Classic" else 2.35
+            ring_extent = (
+                16.0 * combat_scale
+                + (5.0 * combat_scale + 1.0) * 0.5
+            )
+            # Clear/Enhanced has a circular radial plate extending ten logical
+            # pixels beyond the red stroke. Sample outside that complete circle
+            # but within the uploaded ROI; otherwise this check mistakes the
+            # intentional low-alpha plate edge for a rectangular driver leak.
+            if visual != "Classic":
+                plate_extent = (
+                    16.0 * combat_scale
+                    + (5.0 * combat_scale * 0.92) * 0.5
+                    + 10.0
+                )
+                ring_extent = max(ring_extent, plate_extent)
+            outer_radius = ring_extent * hud_scale * ratio
             offset = outer_radius * 0.82
             center_x = target_image.width() * 0.5
             center_y = target_image.height() * 0.5

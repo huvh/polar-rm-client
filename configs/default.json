@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "gui_mode": "PolarUnified",
-  "selected_category": "Render",
+  "gui_mode": "JelloSigma",
+  "selected_category": "System",
   "selected_module": "EliminationFX",
   "module_expanded": [],
   "old_panels": {
@@ -111,7 +111,7 @@
       "scroll": 0.0
     },
     "Strategy": {
-      "x": 1250.0,
+      "x": 1064.0,
       "y": 182.0,
       "scroll": 0.0
     },
@@ -130,6 +130,44 @@
       "y": 430.0,
       "scroll": 0.0
     }
+  },
+  "quick_action_wheel": {
+    "sectors": 8,
+    "radius": 118.0,
+    "dead_zone": 38.0,
+    "show_labels": true,
+    "label_style": "Action",
+    "icon_style": "Initials",
+    "actions": [
+      "economy",
+      "economy_ammo",
+      "toggle_armor_autoaim",
+      "toggle_armor_lock",
+      "match_chat",
+      "toggle_spin",
+      "toggle_friction",
+      "clickgui"
+    ],
+    "labels": [
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
+    "icons": [
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ]
   },
   "modules": {
     "Scenario": {
@@ -208,12 +246,13 @@
         "Fov": 85.0,
         "Smooth": 0.28,
         "Priority": "Armor",
-        "Lock Style": "White Outline",
-        "Draw Fov": true
+        "Lock Style": "Polar Corner",
+        "Draw Fov": true,
+        "Circle Size": 370.0
       }
     },
     "EliminationFX": {
-      "enabled": false,
+      "enabled": true,
       "keybind": "Shift",
       "settings": {
         "Preset": "Card",
@@ -266,12 +305,44 @@
       }
     },
     "ArmorLock": {
-      "enabled": false,
-      "keybind": "B",
+      "enabled": true,
+      "keybind": "L",
       "settings": {
         "Lock Point": "Center",
         "Predict": 0.12,
         "Heat Guard": true
+      }
+    },
+    "HeroLob": {
+      "enabled": true,
+      "keybind": "K",
+      "settings": {
+        "Mode": "Radar Assisted",
+        "Target": "Enemy Base",
+        "Distance": 18.5,
+        "Height Delta": 0.0,
+        "Bearing": 0.0,
+        "Arc": "High",
+        "Muzzle Speed": 16.0,
+        "Gravity": 9.80665,
+        "Yaw Offset": 0.0,
+        "Pitch Offset": 0.0,
+        "Muzzle Length": 0.35,
+        "Yaw Calibration Tolerance": 1.0,
+        "Pitch Calibration Tolerance": 1.5,
+        "Max Roll": 8.0,
+        "Require Fresh Telemetry": true,
+        "Telemetry Timeout": 0.5,
+        "Heat Guard": 0.88,
+        "Mock Output": true,
+        "Calibrate Lob Yaw": "Calibrate Lob Yaw",
+        "Calibrate Lob Pitch": "Calibrate Lob Pitch",
+        "Confirm Relocalization": "Confirm Relocalization",
+        "Invalidate Relocalization": "Invalidate Relocalization",
+        "Open Deploy Interface": "Open Deploy Interface",
+        "Preview Lob": "Preview Lob",
+        "Arm Assisted Lob": "Arm Assisted Lob",
+        "Disarm Assisted Lob": "Disarm Assisted Lob"
       }
     },
     "FireControlStub": {
@@ -290,6 +361,20 @@
         "Direction": "Auto",
         "Spin Speed": 420.0,
         "Power Guard": true
+      }
+    },
+    "AutoSpinOnHit": {
+      "enabled": true,
+      "keybind": "None",
+      "settings": {
+        "Minimum Damage": 1,
+        "Duration": 2.5,
+        "Cooldown": 1.0,
+        "Only During Match": true,
+        "Require Referee Link": true,
+        "Power Guard": true,
+        "Minimum Buffer": 10.0,
+        "Auto Disable": true
       }
     },
     "ChassisAssist": {
@@ -353,10 +438,10 @@
       "enabled": true,
       "keybind": "None",
       "settings": {
-        "Style": "PolarMechanicalWire",
+        "Style": "JelloShadow",
         "Renderer": "GPU Auto",
-        "Show Prediction": true,
-        "Show Labels": true,
+        "Show Prediction": false,
+        "Show Labels": false,
         "Prediction Labels": false,
         "Show Depth": true,
         "Line Width": 2.0,
@@ -439,7 +524,7 @@
       "keybind": "None",
       "settings": {
         "Command": "Free",
-        "Require Confirm": true
+        "Require Confirm": false
       }
     },
     "MatchTimer": {
@@ -472,7 +557,7 @@
     },
     "EconomyPanel": {
       "enabled": true,
-      "keybind": "None",
+      "keybind": "P",
       "settings": {
         "Gold": true,
         "Tech Level": true,
@@ -483,11 +568,41 @@
     },
     "ProjectileShop": {
       "enabled": true,
-      "keybind": "None",
+      "keybind": "K",
       "settings": {
         "Ammo Type": "17mm",
         "Mock Request": true,
         "Show Cost": true
+      }
+    },
+    "MatchChat": {
+      "enabled": true,
+      "keybind": "T",
+      "settings": {
+        "Referee Notices": true,
+        "Fade Seconds": 10.0,
+        "Closed Lines": 6.0,
+        "Open Lines": 16.0
+      }
+    },
+    "QuickActionWheel": {
+      "enabled": true,
+      "keybind": "Q",
+      "settings": {
+        "Sectors": "8",
+        "Radius": 118.0,
+        "Dead Zone": 38.0,
+        "Show Labels": true,
+        "Label Style": "Action",
+        "Icon Style": "Initials",
+        "Up": "Economy",
+        "Upper Right": "Ammo",
+        "Right": "Auto Aim",
+        "Lower Right": "Armor Lock",
+        "Down": "Match Chat",
+        "Lower Left": "Spin Mode",
+        "Left": "Friction Wheel",
+        "Upper Left": "ClickGUI"
       }
     },
     "ThermalPowerPanel": {
@@ -547,11 +662,15 @@
         "Robot List": true,
         "Status Cards": true,
         "RM Indicators": true,
+        "Combat Preset": "Minecraft 1.21.11",
         "Density": "Balanced",
         "Visual Tone": "LiquidClean",
-        "Target Style": "RoundCompact",
+        "Target Style": "BarOnly",
         "Right Display": "ModuleListHud",
         "ModuleList Style": "PolarTextList",
+        "Jello List Size": "Normal",
+        "Jello List Animations": true,
+        "Jello List Sound": true,
         "ModuleList Surface": "LiquidGlass",
         "ModuleList Alignment": "Right",
         "ModuleList Order": "Descending",
@@ -592,6 +711,23 @@
         "Show Status Line": true
       }
     },
+    "MinecraftCombatHUD": {
+      "enabled": true,
+      "keybind": "None",
+      "settings": {
+        "GUI Scale": "2x",
+        "Scale Multiplier": 1.0,
+        "Slot 1": "ArmorAutoAim",
+        "Slot 2": "ArmorLock",
+        "Slot 3": "FrictionWheel",
+        "Slot 4": "SpinMode",
+        "Slot 5": "EconomyPanel",
+        "Slot 6": "ProjectileShop",
+        "Slot 7": "TacticalMap",
+        "Slot 8": "MatchChat",
+        "Slot 9": "ClickGui"
+      }
+    },
     "ChassisGimbalIndicator": {
       "enabled": true,
       "keybind": "None",
@@ -605,10 +741,10 @@
     },
     "ClickGui": {
       "enabled": true,
-      "keybind": "None",
+      "keybind": "RightShift",
       "settings": {
-        "Mode": "PolarUnified",
         "Scale": 1.0,
+        "Language": "简体中文",
         "Render Backend": "Unified GPU",
         "Save Layout": true
       }

@@ -150,6 +150,17 @@ class VideoWallpaperPlayer:
             if self.path == path and self._last_error:
                 return False
         self._stop_worker(keep_frame=True, wait=False)
+        # Importing cv2 for the first time from this worker races Qt's plugin
+        # loader on Windows and can deadlock or access-violate inside Python's
+        # import machinery. Resolve the native module on the caller/UI thread
+        # before starting any decode worker. Subsequent imports are lock-free
+        # dictionary lookups, and decode itself remains fully off the UI path.
+        try:
+            import cv2  # type: ignore  # noqa: F401
+        except ImportError as exc:
+            with self._lock:
+                self._last_error = str(exc)
+            return False
         with self._lock:
             self.path = path
             self._generation += 1
@@ -323,12 +334,12 @@ class VideoWallpaperPlayer:
 
 
 class PkgSceneRenderer:
-    def __init__(self, workspace: Path) -> None:
+    def __init__(self, workspace: Path, *, wallpaper_dir: Path | None = None, cache_dir: Path | None = None) -> None:
         self.workspace = Path(workspace)
-        self.wallpaper_dir = self.workspace / "3000925581"
+        self.wallpaper_dir = Path(wallpaper_dir) if wallpaper_dir is not None else self.workspace / "3000925581"
         self.package_path = self.wallpaper_dir / "scene.pkg"
         self.project_path = self.wallpaper_dir / "project.json"
-        self.cache_dir = self.workspace / "rm_custom_client" / ".wallpaper_cache" / "3000925581"
+        self.cache_dir = Path(cache_dir) if cache_dir is not None else self.workspace / "rm_custom_client" / ".wallpaper_cache" / "3000925581"
         self._vfs: PkgVirtualFileSystem | None = None
         self._scene: dict[str, Any] | None = None
         self._project_title = "Default3000925581Pkg"
@@ -625,14 +636,14 @@ class PkgSceneRenderer:
 
 
 class StartupWallpaperManager:
-    def __init__(self, workspace: Path) -> None:
+    def __init__(self, workspace: Path, *, assets_dir: Path | None = None, user_dir: Path | None = None, pkg_dir: Path | None = None, cache_dir: Path | None = None) -> None:
         self.workspace = Path(workspace)
-        self.assets_dir = self.workspace / "rm_custom_client" / "assets" / "wallpapers"
+        self.assets_dir = Path(assets_dir) if assets_dir is not None else self.workspace / "rm_custom_client" / "assets" / "wallpapers"
         self.builtin_dir = self.assets_dir / "builtin"
         self.texas_video = self.builtin_dir / "texas.mp4"
         self.vending_video = self.builtin_dir / "vending-machine.mp4"
-        self.user_dir = self.assets_dir / "user"
-        self.pkg_scene = PkgSceneRenderer(self.workspace)
+        self.user_dir = Path(user_dir) if user_dir is not None else self.assets_dir / "user"
+        self.pkg_scene = PkgSceneRenderer(self.workspace, wallpaper_dir=pkg_dir, cache_dir=cache_dir)
         self.video_player = VideoWallpaperPlayer()
         self.last_frame = QImage()
         self.last_draw_rect = QRectF()

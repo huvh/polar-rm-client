@@ -1,0 +1,187 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+# DT7 / 自定义控制器的 Auto 挑口。认错口的代价不是"连不上"，而是**产出假结论**：
+# 把遥控器帧写进 C 板的 CDC，又拿同一块板的 km_key 回读判读 => 永远 NO-CHANGE
+# => 我们会误判成"DT7 不认这帧"，然后白换一整轮帧型。
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+ROOT = HERE.parent
+sys.path.insert(0, str(ROOT))
+
+from rm_client import serial_ports as sp          # noqa: E402
+from rm_client.backend import cc_link as cc       # noqa: E402
+from rm_client.backend import dt7_link as dl      # noqa: E402
+
+FAILED = 0
+
+
+def check(name, ok, detail=""):
+    global FAILED
+    print(f"{'[ OK ]' if ok else '[FAIL]'} {name}" + (f"  {detail}" if detail else ""))
+    FAILED += 0 if ok else 1
+
+
+ROBOT = {"device": "COM3", "name": "COM3", "description": "STMicroelectronics Virtual COM Port",
+         "vid": 0x0483, "pid": 0x5720, "serial_number": ""}
+DT7 = {"device": "COM9", "name": "COM9", "description": "DJI USB Virtual COM",
+       "vid": 0xFFF0, "pid": 0x0008, "serial_number": ""}
+FTDI = {"device": "COM7", "name": "COM7", "description": "USB Serial Port (COM7)",
+        "vid": 0x0403, "pid": 0x6001, "serial_number": ""}
+OTHER = {"device": "COM5", "name": "COM5", "description": "USB Serial",
+         "vid": 0x1A86, "pid": 0x7523, "serial_number": ""}
+
+
+def with_ports(entries):
+    real = sp.list_serial_ports
+    sp.list_serial_ports = lambda: [dict(e) for e in entries]
+    return real
+
+
+def main() -> int:
+    print("\n--- 1) 车与遥控器同时插着（现场最常见的形态）---")
+    real = with_ports([ROBOT, DT7, FTDI, OTHER])
+    try:
+        check("DT7 的 Auto 必须挑 DJI 那个口，而不是分最高的机器人口",
+              sp.resolve_rc_port("Auto") == "COM9", sp.resolve_rc_port("Auto"))
+        check("运行期链路解析到同一个口", dl.Dt7KeyMouseLink(port="Auto")._open_target()[0] == "COM9")
+        target, why = dl.Dt7KeyMouseLink(port="COM3")._open_target()
+        check("显式把 DT7 指到车的口 -> 拒发并说清为什么",
+              target == "" and "机器人本体" in why, why[:60])
+        forced = dl.Dt7KeyMouseLink(port="COM3", profile={**dl.DEFAULT_PROFILE,
+                                                          "allow_robot_port": True})
+        check("真要这么接时能显式放行（不把工具做成死路）",
+              forced._open_target()[0] == "COM3", str(forced._open_target()))
+        check("下拉里不混进车的口", sp.rc_port_choices() == ["Auto", "COM9"],
+              str(sp.rc_port_choices()))
+        check("CC 的 Auto 挑 FTDI（选手端只认它）", sp.resolve_cc_port("Auto") == "COM7",
+              sp.resolve_cc_port("Auto"))
+        check("CC 打分把车与遥控器的口都判负",
+              sp.score_cc_port(ROBOT) < 0 and sp.score_cc_port(DT7) < 0
+              and sp.score_cc_port(FTDI) == 100)
+        check("cc_link 有 resolved_port 字段（缺了会在真发那刻抛 AttributeError）",
+              hasattr(cc.CustomControllerLink(port="Auto", mock_output=False), "resolved_port"))
+    finally:
+        sp.list_serial_ports = real
+
+    print("\n--- 2) 只插了车、没插遥控器 ---")
+    real = with_ports([ROBOT])
+    try:
+        check("Auto 退回 Stub，绝不退到机器人口上", sp.resolve_rc_port("Auto") == sp.STUB_PORT)
+        target, why = dl.Dt7KeyMouseLink(port="Auto")._open_target()
+        check("错误信息说人话（不是 could not open port 'Auto'）",
+              target == "" and "DJI USB Virtual COM" in why, why[:60])
+    finally:
+        sp.list_serial_ports = real
+
+    print("\n--- 3) 两个 DJI 口（双遥控器）---")
+    real = with_ports([DT7, dict(DT7, device="COM11")])
+    try:
+        check("同分两个候选 -> 不猜，返回 Stub 让人显式选",
+              sp.resolve_rc_port("Auto") == sp.STUB_PORT)
+    finally:
+        sp.list_serial_ports = real
+
+    print("\n--- 3b) 两条链路绝不能互相抢口 ---")
+    real2 = with_ports([ROBOT, DT7, FTDI])
+    try:
+        check("车与遥控器同时插着：A 路的 Auto 选车，不选遥控器",
+              sp.resolve_port("Auto") == "COM3", sp.resolve_port("Auto"))
+        check("同一套设备下 DT7 的 Auto 选遥控器", sp.resolve_rc_port("Auto") == "COM9",
+              sp.resolve_rc_port("Auto"))
+        pc = sp.port_choices()
+        rc = sp.rc_port_choices()
+        # 车的候选**故意**把所有探测到的口都列出来（人工兜底要用）；
+        # 保证不在下拉列表里，而在：① Auto 绝不选对方 ② DT7 侧对车的口拒发
+        check("车的候选保留人工兜底（含所有检出的口）", {"Stub", "Auto", "COM3", "COM9"} <= set(pc),
+              str(pc))
+        check("遥控器的候选只列 DJI 的口（少一个选错的机会）", rc == ["Auto", "COM9"], str(rc))
+        refuse = dl.Dt7KeyMouseLink(port="COM3")
+        target, why = refuse._open_target()
+        check("真把 DT7 指到车的口时：拒发并说清原因",
+              target == "" and "机器人本体" in why, why[:60])
+    finally:
+        sp.list_serial_ports = real2
+    chinese = dict(ROBOT, description="USB 串行设备")      # 中文 Windows 上 C 板就这样
+    real3 = with_ports([chinese, DT7])
+    try:
+        check("中文描述让车只剩 30 分时，A 路也不许退而选遥控器（DT7 判负）",
+              sp.resolve_port("Auto") == "COM3", sp.resolve_port("Auto"))
+        check("此时 DT7 仍要选到遥控器", sp.resolve_rc_port("Auto") == "COM9",
+              sp.resolve_rc_port("Auto"))
+    finally:
+        sp.list_serial_ports = real3
+    real4 = with_ports([DT7])
+    try:
+        check("只插了遥控器时 A 路必须 Stub，而不是抓一个能用的口凑数",
+              sp.resolve_port("Auto") == sp.STUB_PORT, sp.resolve_port("Auto"))
+    finally:
+        sp.list_serial_ports = real4
+
+    print("\n--- 4) 显式端口一律原样 ---")
+    check("DT7 显式 COM7 不重解析", sp.resolve_rc_port("COM7") == "COM7")
+    check("CC 显式 COM8 不重解析", sp.resolve_cc_port("COM8") == "COM8")
+    check("空值退回 Stub（不会拿空串去开端口）",
+          sp.resolve_rc_port("") == sp.STUB_PORT and sp.resolve_cc_port(None) == sp.STUB_PORT)
+    check("profile 里默认值不是 Auto 时也不会被改口", dl.DEFAULT_PROFILE.get("baudrate") == 961200)
+
+    print("\n--- 5) DT7 比客户端晚插上：不许逼操作员重启程序 ---")
+    # options 是启动那一刻一次性算的（model.py 里三处 port_choices()），
+    # 之前没有任何刷新入口：先开客户端再插 DT7，下拉里就只有 Auto，
+    # 而 Auto 认不出 DJI 口时是**故意拒发**的（不乱开别人的口），于是只剩重启。
+    class _S:
+        def __init__(self, value, options):
+            self.value, self.options = value, list(options)
+
+    class _M:
+        def __init__(self, settings):
+            self._s = settings
+
+        def get_setting(self, name):
+            return self._s.get(name)
+
+    class _R:
+        def __init__(self, module):
+            self._m = module
+
+        def get(self, _name):
+            return self._m
+
+    real = with_ports([ROBOT, DT7])
+    try:
+        mod = _M({"Port": _S("Auto", ["Auto"]), "DT7 Port": _S("Auto", ["Auto"]),
+                  "CC Port": _S("Auto", ["Auto"])})
+        reg = _R(mod)
+        d1 = sp.refresh_port_options(reg)
+        check("重扫把 DT7 那个口塞进候选", "COM9" in mod.get_setting("DT7 Port").options,
+              str(mod.get_setting("DT7 Port").options))
+        check("车的口不许混进 DT7 候选（DT7 只认 DJI）",
+              "COM3" not in mod.get_setting("DT7 Port").options,
+              str(mod.get_setting("DT7 Port").options))
+        check("车的口仍然在 A 路候选里", "COM3" in mod.get_setting("Port").options,
+              str(mod.get_setting("Port").options))
+        check("重扫报出人话差异（不是返回 None 让人猜）", bool(d1), "；".join(d1))
+        check("再扫一次是幂等的（没有变化就不报）", sp.refresh_port_options(reg) == [])
+        # 拔掉 DT7 之后重扫：已经配好的显式口不许从下拉里消失，否则越刷新越坏
+        mod2 = _M({"Port": _S("Auto", ["Auto"]), "DT7 Port": _S("COM9", ["COM9"]),
+                   "CC Port": _S("Auto", ["Auto"])})
+        sp.list_serial_ports = lambda: [dict(ROBOT)]
+        mod2.get_setting("DT7 Port").options = ["Auto"]
+        sp.refresh_port_options(_R(mod2))
+        check("口现在不在，但它是当前值 —— 必须保住",
+              "COM9" in mod2.get_setting("DT7 Port").options,
+              str(mod2.get_setting("DT7 Port").options))
+        check("重扫不改当前值（刷新候选不该改变行为）",
+              mod2.get_setting("DT7 Port").value == "COM9")
+    finally:
+        sp.list_serial_ports = real
+
+    print("\n" + ("有失败项" if FAILED else "挑口识别全部通过"))
+    return 1 if FAILED else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

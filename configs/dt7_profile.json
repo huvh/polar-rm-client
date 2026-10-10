@@ -1,0 +1,32 @@
+{
+  "_comment": "DT7 直连出口（C 路）的运行参数。这一帧是从小客户端二进制里逐条反汇编复原的，不是猜出来的。",
+  "_evidence": "帧结构由厂商类型定义逐字对上：CommonHeader_V1{hdr_flag,length,protocol_version,crc8}（dump.cs:136044-136050）+ Data_Body_Prefix{sequence_number,cmd_id}（:136054-136058）+ Input_Device_Status_RC 12 字节（:136075-136085）+ 尾 crc16 小端。发送现场 GameAssembly.dll SerialPortThread.OnSendInputStatus RVA 0x27B2A0-0x27BAE0：0x18027B486 置 0x5A、0x18027B522 写前缀 00 00 00 20、CRC 族 CRCCheck 0x77/0x1862（表本体在 global-metadata.dat 0x438A30/0x442C10，与标准反射表逐字节一致）。波特率 961200 出自 decomp/SerialPortThread.cs:92-95。",
+  "_caveat": "命令号的语义已由厂商常量名结案：CONTROL_PC_ROBOT 就是 PC 控机器人这条通道。仍未上机证明的只有一件事：这台 DT7 的现行固件认不认我们写的这 22 字节。第一次上车请架空驱动轮，并用 dt7_wireless_selftest.py 判 PASS。",
+  "cmd_wire": 8192,
+  "cmd_set": 0,
+  "cmd_id_keyboard": null,
+  "cmd_confirmed": true,
+  "allow_experimental_cmd": false,
+  "payload_layout": "<hhhBBHH",
+  "payload_fields": [
+    "mouse_x",
+    "mouse_y",
+    "mouse_z",
+    "left",
+    "right",
+    "keyboard_value",
+    "reserved"
+  ],
+  "frame_variant": "dji_rc_v1",
+  "datalen_includes_cmd": true,
+  "crc_variant": "rc_check",
+  "protocol_version": 1,
+  "seq_increments": false,
+  "baudrate": 961200,
+  "max_hz": 30.0,
+  "_cmd_name": "Proto_Prefix.CONTROL_PC_ROBOT = 8192 = 0x2000（dump.cs:136032-136035）",
+  "mouse_limit": 200,
+  "_mouse_limit": "每帧鼠标增量上限（像素），0=不限。云台增量=mouse/MOUSE_SENSITIVITY，界面掉帧时一帧能攒几千像素，不截就会一帧甩到限位。",
+  "allow_robot_port": false,
+  "_port_note": "DT7 Port 填 Auto 时只会挑 DJI USB Virtual COM（VID_FFF0&PID_0008）；认不出就拒发而不是乱开一个口。非要往别的口写就 allow_robot_port=true 并显式选口。"
+}

@@ -5,6 +5,9 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
 from PySide6.QtCore import QRectF, Qt, QTimer
 from PySide6.QtGui import QColor, QFont, QPainter, QSurfaceFormat
 from PySide6.QtOpenGLWidgets import QOpenGLWidget
@@ -31,12 +34,28 @@ class GpuSmokeWidget(QOpenGLWidget):
         painter.fillRect(self.rect(), QColor("#0c0e15"))
         commands = ClickGuiDrawList()
         commands.rect(QRectF(24, 28, 672, 224), 14, QColor(24, 28, 42, 224), QColor(255, 255, 255, 42), 1.0)
+        commands.image(
+            QRectF(636, 38, 42, 31),
+            Path(__file__).resolve().parents[1] / "assets" / "jello" / "options.png",
+            QColor(255, 255, 255, 180),
+        )
         commands.text(
             QRectF(48, 54, 624, 64),
             "POLAR-RM 字体 GPU 144 FPS",
             QFont("Microsoft YaHei UI", 28),
             QColor("#f7f9ff"),
             Qt.AlignmentFlag.AlignCenter,
+            text_profile="jello",
+            preserve_weight=True,
+        )
+        commands.text(
+            QRectF(646, 54, 22, 28),
+            ">",
+            QFont("Microsoft YaHei UI", 18),
+            QColor("#f7f9ff"),
+            Qt.AlignmentFlag.AlignCenter,
+            rotation_degrees=90.0,
+            render_scale=0.85,
         )
         for index in range(24):
             commands.text(
@@ -51,6 +70,22 @@ class GpuSmokeWidget(QOpenGLWidget):
             # Publish glyph pages before native painting. The render pass is
             # read-only and cannot replace atlas textures halfway through.
             self.renderer.prepare_frame(commands, self.devicePixelRatioF())
+            stable_generation = self.renderer.atlas_generation
+            stable_pages = (
+                len(self.renderer.atlases),
+                len(self.renderer.shaped_atlases),
+            )
+            for _ in range(100):
+                self.renderer.prepare_frame(commands, self.devicePixelRatioF())
+            self.result = bool(
+                self.result
+                and self.renderer.atlas_generation == stable_generation
+                and stable_pages
+                == (
+                    len(self.renderer.atlases),
+                    len(self.renderer.shaped_atlases),
+                )
+            )
         painter.beginNativePainting()
         self.result = bool(
             self.result
@@ -66,13 +101,14 @@ class GpuSmokeWidget(QOpenGLWidget):
         )
         self.error = self.renderer.last_error
         self.draw_call_count = self.renderer.draw_calls
-        self.result = self.result and self.draw_call_count <= 6
+        self.result = self.result and self.draw_call_count <= 8
         painter.endNativePainting()
         painter.end()
 
     def finish(self, app: QApplication) -> None:
-        artifact = Path(__file__).with_name("_gpu_renderer_runtime.png")
-        self.grabFramebuffer().save(str(artifact))
+        artifact_name = __import__("os").environ.get("POLAR_GPU_SMOKE_ARTIFACT", "").strip()
+        if artifact_name:
+            self.grabFramebuffer().save(artifact_name)
         self.close()
         app.quit()
 

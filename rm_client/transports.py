@@ -14,42 +14,179 @@ class FrameAssembler:
     包头格式：frame_id uint16 BE、chunk_index uint16 BE、total_bytes uint32 BE。
     """
 
+    HEADER_BYTES = 8
+    MAX_FRAME_BYTES = 16 * 1024 * 1024
+    MAX_BUFFERED_BYTES = 64 * 1024 * 1024
+    MAX_IN_FLIGHT = 64
+    MAX_CHUNKS_PER_FRAME = 4096
+    STALE_SECONDS = 2.0
+
     def __init__(self) -> None:
         self.frames: dict[int, dict[str, object]] = {}
+        self.dropped_count = 0
+        self.invalid_count = 0
+        self.buffered_bytes = 0
+        self.last_completed_frame_id: int | None = None
+        self.stale_packet_count = 0
+        self.sequence_discontinuities = 0
+        self._last_completed_at = 0.0
+
+    def clear(self) -> None:
+        self.frames.clear()
+        self.buffered_bytes = 0
+        self.dropped_count = 0
+        self.invalid_count = 0
+        self.last_completed_frame_id = None
+        self.stale_packet_count = 0
+        self.sequence_discontinuities = 0
+        self._last_completed_at = 0.0
 
     def push_packet(self, packet: bytes) -> bytes | None:
-        if len(packet) < 8:
+        if len(packet) < self.HEADER_BYTES:
+            self.invalid_count += 1
             return None
         frame_id = int.from_bytes(packet[0:2], "big")
         chunk_index = int.from_bytes(packet[2:4], "big")
         total_bytes = int.from_bytes(packet[4:8], "big")
-        payload = packet[8:]
-        entry = self.frames.setdefault(
-            frame_id,
-            {"total": total_bytes, "chunks": {}, "received": 0, "created": time.time()},
-        )
+        payload = packet[self.HEADER_BYTES:]
+        self._drop_old_frames()
+        previous = self.last_completed_frame_id
+        if previous is not None and time.monotonic() - self._last_completed_at > self.STALE_SECONDS:
+            # A sender may restart its uint16 counter without restarting our
+            # socket. After a bounded no-progress interval begin a new epoch,
+            # dropping partial frames and forcing video keyframe recovery.
+            for old_id in list(self.frames):
+                self._remove_frame(old_id, dropped=True)
+            self.last_completed_frame_id = previous = None
+            self.sequence_discontinuities += 1
+        if previous is not None and not 0 < ((frame_id - previous) & 0xFFFF) < 0x8000:
+            # Completion order is not stream order. Never feed an older frame
+            # (or a completed duplicate) after a newer one. Half-range serial
+            # arithmetic also handles the 65535 -> 0 wrap unambiguously.
+            self.stale_packet_count += 1
+            self._remove_frame(frame_id, dropped=True)
+            return None
+        if (
+            not payload
+            or not (1 <= total_bytes <= self.MAX_FRAME_BYTES)
+            or len(payload) > total_bytes
+            or chunk_index >= self.MAX_CHUNKS_PER_FRAME
+        ):
+            self.invalid_count += 1
+            return None
+        entry = self.frames.get(frame_id)
+        if entry is not None and int(entry["total"]) != total_bytes:
+            self._remove_frame(frame_id, dropped=True)
+            self.invalid_count += 1
+            return None
+        if entry is None:
+            if not self._make_room(len(payload), new_frame=True):
+                self.invalid_count += 1
+                return None
+            entry = {
+                "total": total_bytes,
+                "chunks": {},
+                "received": 0,
+                "created": time.monotonic(),
+            }
+            self.frames[frame_id] = entry
         chunks: dict[int, bytes] = entry["chunks"]  # type: ignore[assignment]
-        if chunk_index not in chunks:
+        existing = chunks.get(chunk_index)
+        if existing is not None and existing != payload:
+            self._remove_frame(frame_id, dropped=True)
+            self.invalid_count += 1
+            return None
+        if existing is None:
+            if len(chunks) >= self.MAX_CHUNKS_PER_FRAME:
+                self._remove_frame(frame_id, dropped=True)
+                self.invalid_count += 1
+                return None
+            if not self._make_room(len(payload), protected_frame_id=frame_id):
+                self._remove_frame(frame_id, dropped=True)
+                self.invalid_count += 1
+                return None
             chunks[chunk_index] = payload
             entry["received"] = int(entry["received"]) + len(payload)
-        if int(entry["received"]) >= total_bytes:
-            ordered = [chunks[idx] for idx in sorted(chunks)]
+            self.buffered_bytes += len(payload)
+        received = int(entry["received"])
+        if received > total_bytes:
+            self._remove_frame(frame_id, dropped=True)
+            self.invalid_count += 1
+            return None
+        if received == total_bytes:
+            indexes = sorted(chunks)
+            if indexes != list(range(len(indexes))):
+                self._remove_frame(frame_id, dropped=True)
+                self.invalid_count += 1
+                return None
+            ordered = [chunks[idx] for idx in indexes]
             complete = b"".join(ordered)
-            if len(complete) >= total_bytes:
-                self.frames.pop(frame_id, None)
-                return complete[:total_bytes]
-        self._drop_old_frames()
+            if len(complete) == total_bytes:
+                self._remove_frame(frame_id)
+                previous = self.last_completed_frame_id
+                if previous is not None and ((frame_id - previous) & 0xFFFF) != 1:
+                    self.sequence_discontinuities += 1
+                self.last_completed_frame_id = frame_id
+                self._last_completed_at = time.monotonic()
+                for old_id in list(self.frames):
+                    if not 0 < ((old_id - frame_id) & 0xFFFF) < 0x8000:
+                        self._remove_frame(old_id, dropped=True)
+                return complete
+            self._remove_frame(frame_id, dropped=True)
+            self.invalid_count += 1
         return None
 
+    def _remove_frame(self, frame_id: int, *, dropped: bool = False) -> None:
+        entry = self.frames.pop(frame_id, None)
+        if entry is None:
+            return
+        self.buffered_bytes = max(0, self.buffered_bytes - int(entry.get("received", 0)))
+        if dropped:
+            self.dropped_count += 1
+
+    def _make_room(
+        self,
+        reserve_bytes: int,
+        *,
+        protected_frame_id: int | None = None,
+        new_frame: bool = False,
+    ) -> bool:
+        """Bound both frame count and aggregate fragment memory.
+
+        A single valid frame is at most 16 MiB, but sixty-four such partial
+        frames would otherwise retain roughly one GiB.  Prefer evicting the
+        oldest unrelated frame; an in-progress frame is protected while its
+        next fragment is admitted.
+        """
+
+        reserve_bytes = max(0, int(reserve_bytes))
+        while (
+            (new_frame and len(self.frames) >= self.MAX_IN_FLIGHT)
+            or self.buffered_bytes + reserve_bytes > self.MAX_BUFFERED_BYTES
+        ):
+            candidates = [
+                frame_id
+                for frame_id in self.frames
+                if frame_id != protected_frame_id
+            ]
+            if not candidates:
+                return False
+            oldest = min(
+                candidates,
+                key=lambda frame_id: float(self.frames[frame_id].get("created", 0.0)),
+            )
+            self._remove_frame(oldest, dropped=True)
+        return True
+
     def _drop_old_frames(self) -> None:
-        now = time.time()
+        now = time.monotonic()
         stale = [
             frame_id
             for frame_id, entry in self.frames.items()
-            if now - float(entry.get("created", now)) > 2.0
+            if now - float(entry.get("created", now)) > self.STALE_SECONDS
         ]
         for frame_id in stale:
-            self.frames.pop(frame_id, None)
+            self._remove_frame(frame_id, dropped=True)
 
 
 @dataclass
@@ -68,6 +205,9 @@ class UDPVideoReceiver:
     def start(self) -> None:
         if self.running:
             return
+        # An explicit receiver restart is a new frame-ID epoch. Sender resets
+        # cannot safely be inferred from late packets on an active socket.
+        self._assembler.clear()
         self.running = True
         self._thread = threading.Thread(target=self._run, name="udp-video", daemon=True)
         self._thread.start()
@@ -80,6 +220,9 @@ class UDPVideoReceiver:
             except OSError:
                 pass
             self._socket = None
+        if self._thread is not None and self._thread.is_alive():
+            self._thread.join(timeout=0.6)
+        self._thread = None
 
     def _run(self) -> None:
         try:
@@ -90,21 +233,31 @@ class UDPVideoReceiver:
             self.last_error = str(exc)
             self.running = False
             return
-        while self.running:
-            try:
-                packet, _addr = self._socket.recvfrom(65535)
-            except socket.timeout:
-                continue
-            except OSError as exc:
-                if self.running:
-                    self.last_error = str(exc)
-                break
-            self.packets_received += 1
-            frame = self._assembler.push_packet(packet)
-            if frame is not None:
-                self.frames_received += 1
-                if self.on_frame:
-                    self.on_frame(frame)
+        try:
+            while self.running:
+                try:
+                    packet, _addr = self._socket.recvfrom(65535)
+                except socket.timeout:
+                    continue
+                except OSError as exc:
+                    if self.running:
+                        self.last_error = str(exc)
+                    break
+                self.packets_received += 1
+                frame = self._assembler.push_packet(packet)
+                if frame is not None:
+                    self.frames_received += 1
+                    if self.on_frame:
+                        self.on_frame(frame)
+        finally:
+            self.running = False
+            sock = self._socket
+            self._socket = None
+            if sock is not None:
+                try:
+                    sock.close()
+                except OSError:
+                    pass
 
 
 class CameraFeed:
@@ -217,9 +370,12 @@ class OfficialMqttBridge(MQTTTransport):
         super().__init__(host, port)
         self.client_id = client_id
         self.mock_output = True
-        self.publish_records: list[MqttPublishRecord] = []
+        # Debug history must not grow for the duration of an event.  Indexing,
+        # len(), and append() stay compatible with the former list API.
+        self.publish_records: deque[MqttPublishRecord] = deque(maxlen=1024)
         self._received_messages: deque[tuple[str, bytes, float]] = deque(maxlen=512)
         self._received_lock = threading.Lock()
+        self._command_publish_at: dict[str, float] = {}
 
     def _on_message(self, client, userdata, msg) -> None:
         super()._on_message(client, userdata, msg)
@@ -233,26 +389,47 @@ class OfficialMqttBridge(MQTTTransport):
             self._received_messages.clear()
         return messages
 
-    def publish_binary(self, topic: str, payload: bytes, qos: int = 1) -> None:
+    def publish_binary(self, topic: str, payload: bytes, qos: int = 1) -> bool:
         record = MqttPublishRecord(topic=topic, payload=payload, qos=qos, timestamp=time.time(), mock_output=self.mock_output)
         self.publish_records.append(record)
         if self.mock_output:
-            return
+            return True
         if self.client is None:
             self.last_error = "未连接 MQTT 客户端"
-            return
+            return False
         try:
             self.client.publish(topic, payload, qos=qos)
+            return True
         except Exception as exc:
             self.last_error = str(exc)
+            return False
 
-    def publish_keyboard_mouse(self, payload: bytes) -> None:
-        self.publish_binary("KeyboardMouseControl", payload, qos=1)
+    def publish_match_command(self, topic: str, payload: bytes, *, qos: int = 1, now: float | None = None) -> bool:
+        """Publish a referee command while enforcing the protocol's 10 Hz ceiling."""
 
-    def publish_custom_control(self, data: bytes) -> None:
+        now = time.perf_counter() if now is None else float(now)
+        previous = self._command_publish_at.get(topic, -1.0)
+        if previous >= 0.0 and now - previous < 0.10:
+            self.last_error = f"{topic} 发布频率超过 10Hz"
+            return False
+        accepted = self.publish_binary(topic, payload, qos=qos)
+        if accepted:
+            self._command_publish_at[topic] = now
+        return accepted
+
+    def publish_common_command(self, payload: bytes, *, now: float | None = None) -> bool:
+        return self.publish_match_command("CommonCommand", payload, qos=1, now=now)
+
+    def publish_air_support_command(self, payload: bytes, *, now: float | None = None) -> bool:
+        return self.publish_match_command("AirSupportCommand", payload, qos=1, now=now)
+
+    def publish_keyboard_mouse(self, payload: bytes) -> bool:
+        return self.publish_binary("KeyboardMouseControl", payload, qos=1)
+
+    def publish_custom_control(self, data: bytes) -> bool:
         if len(data) > 30:
             raise ValueError("CustomControl 载荷最多 30 字节")
-        self.publish_binary("CustomControl", data, qos=1)
+        return self.publish_binary("CustomControl", data, qos=1)
 
 
 class VideoPipeline:

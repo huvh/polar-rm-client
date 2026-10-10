@@ -1,0 +1,240 @@
+diff --git a/application/chassis/chassis_mecanum.c b/application/chassis/chassis_mecanum.c
+index ac175c9..1bad9c5 100644
+--- a/application/chassis/chassis_mecanum.c
++++ b/application/chassis/chassis_mecanum.c
+@@ -28,6 +28,10 @@
+ #include "math.h"
+ #include "usb_debug.h"
+ #include "chassis_power_control.h"
++#include "supervisory_computer_cmd.h"
++
++/* 上位机驾驶断流归零阈值（ms）：略大于 USB 层的 100ms 判离线阈值 */
++#define SC_CHASSIS_TIMEOUT_MS 150u
+ 
+ 
+ Chassis_s chassis;
+@@ -99,7 +103,10 @@ void ChassisSetMode(void)
+     }
+     else if (switch_is_up(chassis.rc->rc.s[0]))
+     {
+-        chassis.mode = CHASSIS_SPIN;
++        /* F 键（sc_flag）切换上位机驾驶；不按时仍为小陀螺，行为与今天一致。
++         * 必须同时要求链路在线：否则误按 F 且上位机未连时上档位底盘会直接冻结
++         * （还会丢掉小陀螺）；链路断开时自动回到原 RC 模式。 */
++        chassis.mode = (chassis.sc_flag && GetUsbStatus()) ? CHASSIS_SC : CHASSIS_SPIN;
+ 
+     }
+ }
+@@ -245,6 +252,29 @@ void ChassisReference(void)
+             chassis.reference.wz=8;
+         }
+     }
++    else if (chassis.mode == CHASSIS_SC)
++    {
++        /* 上位机（自定义客户端）驾驶：机体系速度，带断流归零与逐轴限幅。
++         * 写 chassis.reference.*（机体系），不写 reference_rc.*。
++         * 遥控器权限高于本分支：toe 故障 / s[0] 下档已在首分支进 LOCK。
++         *
++         * TODO(与固件作者确认): vx/vy 机体系还是云台系（本文件 FOLLOW/SPIN
++         *      分支乘了 cosf/sinf(yaw_delta) 而本分支不乘）、各轴符号方向、
++         *      以及 CHASSIS_RC_MAX_VELOCITY=2.0 作为上位机 wz 限幅是否偏小。
++         */
++        if (GetUsbStatus() == 0U || GetScCmdAge() > SC_CHASSIS_TIMEOUT_MS)
++        {
++            chassis.reference.vx = 0.0f;
++            chassis.reference.vy = 0.0f;
++            chassis.reference.wz = 0.0f;
++        }
++        else
++        {
++            chassis.reference.vx = fp32_constrain(GetScCmdChassisSpeed(AX_X), -CHASSIS_RC_MAX_SPEED, CHASSIS_RC_MAX_SPEED);
++            chassis.reference.vy = fp32_constrain(GetScCmdChassisSpeed(AX_Y), -CHASSIS_RC_MAX_SPEED, CHASSIS_RC_MAX_SPEED);
++            chassis.reference.wz = fp32_constrain(GetScCmdChassisVelocity(AX_Z), -CHASSIS_RC_MAX_VELOCITY, CHASSIS_RC_MAX_VELOCITY);
++        }
++    }
+     
+ }
+ 
+diff --git a/application/chassis/chassis_mecanum.h b/application/chassis/chassis_mecanum.h
+index a3b7ca5..a2c11ee 100644
+--- a/application/chassis/chassis_mecanum.h
++++ b/application/chassis/chassis_mecanum.h
+@@ -37,6 +37,7 @@ typedef enum {
+     CHASSIS_SINGLE,    //只有底盘的模式
+     CHASSIS_FOLLOW,    //云台跟随模式
+     CHASSIS_SPIN  ,    //云台小陀螺模式 
++    CHASSIS_SC,        //上位机（自定义客户端）驾驶；末尾追加，避免既有枚举值位移
+ } ChassisMode_e;
+ 
+ /**
+diff --git a/application/chassis/chassis_omni.c b/application/chassis/chassis_omni.c
+index 8a64bf7..6146d16 100644
+--- a/application/chassis/chassis_omni.c
++++ b/application/chassis/chassis_omni.c
+@@ -32,6 +32,12 @@
+ #include "usb_debug.h"
+ #include "chassis_power_control.h"
+ #include "referee.h"
++#include "supervisory_computer_cmd.h"
++
++/* 上位机驾驶断流归零阈值（ms）。
++ * 略大于 USB 层的 USB_OFFLINE_THRESHOLD=100ms，避免两层临界抖动。
++ * 底盘控制周期 2ms，因此最坏归零延迟 ≪ readiness 要求的 500ms。 */
++#define SC_CHASSIS_TIMEOUT_MS 150u
+ 
+ Chassis_s chassis;
+ PID_t chassis_pid;
+@@ -113,7 +119,11 @@ void ChassisSetMode(void)
+     }
+     else if (switch_is_up(chassis.rc->rc.s[0]))
+     {
+-        chassis.mode = CHASSIS_FOLLOW;
++        /* F 键（sc_flag）切换上位机驾驶。
++         * 必须同时要求链路在线：否则误按 F 且上位机未连时，
++         * 参考量会恒为 0，上档位的底盘直接冻结（还会丢掉云台跟随）。
++         * 链路断开时自动回到原 RC 模式，不依赖驾驶员反应。 */
++        chassis.mode = (chassis.sc_flag && GetUsbStatus()) ? CHASSIS_SC : CHASSIS_FOLLOW;
+     }
+ }
+ 
+@@ -310,6 +320,38 @@ void ChassisReference(void)
+             chassis.reference.wz = 7.6f + robot_status.robot_level*0.6f;
+         }
+     }
++    else if (chassis.mode == CHASSIS_SC)
++    {
++        /* 上位机（自定义客户端）驾驶：机体系速度，带断流归零与逐轴限幅。
++         *
++         * 写在 chassis.reference.*（机体系）而不是 reference_rc.*，
++         * 否则会被上面分支的 yaw_delta 二次旋转。
++         *
++         * 遥控器拥有最高权限：toe 故障 / s[0] 下档 / 云台未初始化
++         * 已在 ChassisSetMode 首分支进 CHASSIS_LOCK，本分支不会踩到。
++         *
++         * TODO(与固件作者确认):
++         *   1) vx/vy 取机体系还是云台系：doc/API.md 写“底盘坐标系”，
++         *      但本文件 FOLLOW/SPIN 分支都乘了 cosf/sinf(yaw_delta)，
++         *      而本分支不乘 → 与既有驾驶语义不同，必须实车单轴确认。
++         *   2) 各轴符号方向（协议只给单位），上车前逐轴单发 +0.2 验证。
++         *   3) CHASSIS_RC_MAX_VELOCITY=2.0 注释标“仅用于无云台模式”，
++         *      而本文件跟随/小陀螺分支的 wz 参考值在 6.6~8.0 量级，
++         *      用作上位机 wz 限幅可能明显偏小。
++         */
++        if (GetUsbStatus() == 0U || GetScCmdAge() > SC_CHASSIS_TIMEOUT_MS)
++        {
++            chassis.reference.vx = 0.0f;
++            chassis.reference.vy = 0.0f;
++            chassis.reference.wz = 0.0f;
++        }
++        else
++        {
++            chassis.reference.vx = fp32_constrain(GetScCmdChassisSpeed(AX_X), -CHASSIS_RC_MAX_SPEED, CHASSIS_RC_MAX_SPEED);
++            chassis.reference.vy = fp32_constrain(GetScCmdChassisSpeed(AX_Y), -CHASSIS_RC_MAX_SPEED, CHASSIS_RC_MAX_SPEED);
++            chassis.reference.wz = fp32_constrain(GetScCmdChassisVelocity(AX_Z), -CHASSIS_RC_MAX_VELOCITY, CHASSIS_RC_MAX_VELOCITY);
++        }
++    }
+ }
+ 
+ /*-------------------- Console --------------------*/
+diff --git a/application/chassis/chassis_omni.h b/application/chassis/chassis_omni.h
+index a946e45..c20bbd8 100644
+--- a/application/chassis/chassis_omni.h
++++ b/application/chassis/chassis_omni.h
+@@ -40,6 +40,7 @@ typedef enum {
+     CHASSIS_SINGLE,    //只有底盘的模式
+     CHASSIS_FOLLOW,    //云台跟随模式
+     CHASSIS_SPIN,
++    CHASSIS_SC,        //上位机（自定义客户端）驾驶；末尾追加，避免既有枚举值位移
+ } ChassisMode_e;
+ 
+ /**
+diff --git a/application/communication/supervisory_computer_cmd.h b/application/communication/supervisory_computer_cmd.h
+index 62cf1fa..f0043ef 100644
+--- a/application/communication/supervisory_computer_cmd.h
++++ b/application/communication/supervisory_computer_cmd.h
+@@ -24,6 +24,7 @@
+ //API
+ 
+ extern inline uint8_t GetUsbStatus(void);
++extern inline uint32_t GetScCmdAge(void);
+ extern inline float GetScCmdChassisSpeed(uint8_t axis);
+ extern inline float GetScCmdChassisVelocity(uint8_t axis);
+ extern inline float GetScCmdChassisAngle(uint8_t axis);
+diff --git a/application/communication/usb_task.c b/application/communication/usb_task.c
+index c5e92b1..d048cc7 100644
+--- a/application/communication/usb_task.c
++++ b/application/communication/usb_task.c
+@@ -124,6 +124,10 @@ static const ground_robot_position_t * GROUND_ROBOT_POSITION;
+ // 判断USB连接状态用到的一些变量
+ static bool USB_OFFLINE = true;
+ static uint32_t RECEIVE_TIME = 0;
++/* 专属于驾驶指令流（上行 0x01 RobotCmd）的接收时刻。
++ * 不能用 RECEIVE_TIME 代替：后者对任意 CRC 通过的包（调参包、虚拟遥控器包等）都刷新，
++ * 会导致“0x01 已断流但其他包还在发”时底盘带着最后一帧速度一直跑。 */
++static uint32_t ROBOT_CMD_RECEIVE_TIME = 0;
+ static uint32_t LATEST_RX_TIMESTAMP = 0;
+ static uint32_t CONTINUE_RECEIVE_CNT = 0;
+ 
+@@ -685,6 +689,7 @@ static void UsbReceiveData(void)
+                 switch (data_id) {
+                     case ROBOT_CMD_DATA_RECEIVE_ID: {
+                         memcpy(&RECEIVE_ROBOT_CMD_DATA, sof_address, sizeof(ReceiveDataRobotCmd_s));
++                        ROBOT_CMD_RECEIVE_TIME = HAL_GetTick();
+                     } break;
+                     case PID_DEBUG_DATA_RECEIVE_ID: {
+                         memcpy(&RECEIVE_PID_DEBUG_DATA, sof_address, sizeof(ReceiveDataPidDebug_s));
+@@ -1344,4 +1349,54 @@ inline bool GetSCcmdtracking(void)
+ {
+     return ROBOT_CMD_DATA.tracking.tracking;
+ }
++
++/**
++ * @brief          获取USB上位机在线状态
++ * @param[in]      none
++ * @retval         1: 在线；0: 已按 USB_OFFLINE_THRESHOLD 判离线
++ * @warning        定义必须留在本文件：USB_OFFLINE 是 static，
++ *                 挖到头文件里会立刻编译失败。
++ */
++inline uint8_t GetUsbStatus(void)
++{
++    return USB_OFFLINE ? 0 : 1;
++}
++
++/**
++ * @brief          获取距最后一帧**驾驶指令（上行 0x01 RobotCmd）**的毫秒数
++ * @param[in]      none
++ * @retval         uint32_t 距今毫秒数；驾驶指令停发后持续增长
++ * @note           消费者侧用它做断流归零。不要在 USB_OFFLINE 分支里集中
++ *                 memset 控制量，那会把云台 AUTO_AIM 的目标角突降为 0 导致甩杆。
++ *                 本函数故意不用 RECEIVE_TIME：那个变量对任意合法包都刷新，
++ *                 无法反映驾驶指令流是否断了。
++ * @warning        定义必须留在本文件：USB_OFFLINE 与 ROBOT_CMD_RECEIVE_TIME
++ *                 都是 static，挖到头文件里会立刻编译失败。
++ */
++inline uint32_t GetScCmdAge(void)
++{
++    return HAL_GetTick() - ROBOT_CMD_RECEIVE_TIME;
++}
++
++/**
++ * @brief          获取上位机控制指令：底盘姿态，基于欧拉角 r x p x y
++ * @param[in]      axis: AX_X/AX_Y/AX_Z
++ * @retval         float (rad) 底盘姿态
++ */
++inline float GetScCmdChassisAngle(uint8_t axis)
++{
++    if (axis == AX_X)
++    {
++        return ROBOT_CMD_DATA.chassis.roll;
++    }
++    else if (axis == AX_Y)
++    {
++        return ROBOT_CMD_DATA.chassis.pitch;
++    }
++    else if (axis == AX_Z)
++    {
++        return ROBOT_CMD_DATA.chassis.yaw;
++    }
++    return 0.0f;
++}
+ /*------------------------------ End of File ------------------------------*/
