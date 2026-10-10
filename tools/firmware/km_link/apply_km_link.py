@@ -401,7 +401,7 @@ USB_INCLUDE = f'#include "host_km_link.h"  /* {MARK}: 周期仲裁 */' + "\n"
 USB_CALL = f"        HostKmLinkUpdate();  /* {MARK}: 图传键鼠过期归零/仲裁 */\n"
 
 
-def ensure_host_bridge(root: Path, log: list) -> None:
+def ensure_host_bridge(root: Path, log: list, *, dry_run: bool = False) -> None:
     """前置：host_bridge（键位账本 + 门闸）必须先装，本脚本要改写它那几行。"""
     rc = (root / RC_REL).read_text(encoding="utf-8", errors="surrogateescape")
     if "HOST_RC_DRIVER_KEY_GATE" in rc or "HOST_RC_MERGED_KEYS" in rc:
@@ -410,7 +410,10 @@ def ensure_host_bridge(root: Path, log: list) -> None:
     bridge = FIRM_TOOL_DIR / "host_bridge" / "apply_host_bridge.py"
     if not bridge.exists():
         raise RuntimeError(f"缺少前置脚本 POLAR-HOST-BRIDGE")
-    ensure_drive_keys_patch(root, log)
+    if dry_run:
+        raise RuntimeError("dry-run: prerequisite host bridge is absent; no files changed. "
+                           "Full planning requires an already prepared disposable copy.")
+    ensure_drive_keys_patch(root, log, dry_run=dry_run)
     res = subprocess.run([sys.executable, str(bridge), str(root)],
                          capture_output=True, text=True,
                          encoding="utf-8", errors="replace")
@@ -483,7 +486,7 @@ def main(argv: list[str] | None = None) -> int:
     log: list[str] = []
     print(f"固件树：{root}")
     try:
-        ensure_host_bridge(root, log)
+        ensure_host_bridge(root, log, dry_run=args.dry_run)
         r1 = apply_referee(ref, log)
         r2 = apply_remote_control(rc, log)
         r3 = apply_usb_task(usb, log)

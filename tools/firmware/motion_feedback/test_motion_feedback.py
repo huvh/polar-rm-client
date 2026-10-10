@@ -14,7 +14,7 @@
 跑法：
     python tools/firmware/motion_feedback/test_motion_feedback.py
 
-固件副本不存在时跳过（返回 0）。副本存在但还没打补丁时，本测试会
+固件副本不存在时跳过（返回 77，不计通过）。副本存在但还没打补丁时，本测试会
 自己调用 apply_motion_feedback.py 装上、校验完再还原（与 test_host_bridge
 同一套"拥有则还原"纪律，不把工作树弄脏）。
 """
@@ -26,9 +26,10 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+import os
 
 HERE = Path(__file__).resolve().parent
-REPO = HERE.parents[3] / "tmp_polarbear" / "StandardRobotpp"
+REPO = Path(os.environ.get("POLAR_FIRMWARE_ROOT") or str(HERE.parents[3] / "tmp_polarbear" / "StandardRobotpp")).resolve()
 MECA_REL = "application/chassis/chassis_mecanum.c"
 OMNI_REL = "application/chassis/chassis_omni.c"
 USB_REL = "application/communication/usb_task.c"
@@ -202,13 +203,16 @@ def run_usb_check(inc_dirs: list[str]) -> None:
 def main() -> int:
     if not REPO.exists() or not (REPO / ".git").exists():
         print(f"SKIP: 固件副本不存在（{REPO}）")
-        return 0
+        return 77
 
     meca = (REPO / MECA_REL).read_text(encoding="utf-8", errors="ignore")
     omni = (REPO / OMNI_REL).read_text(encoding="utf-8", errors="ignore")
     usb = (REPO / USB_REL).read_text(encoding="utf-8", errors="ignore")
     own_apply = False
     if not (MARK in meca and MARK in omni and MARK in usb):
+        if os.environ.get("POLAR_FIRMWARE_READ_ONLY") == "1":
+            print("[INCOMPLETE] Required prepared files are absent; read-only checks never install patches")
+            return 77
         res = subprocess.run(
             [sys.executable, str(HERE / "apply_motion_feedback.py"), str(REPO)],
             capture_output=True, text=True, encoding="utf-8", errors="replace")

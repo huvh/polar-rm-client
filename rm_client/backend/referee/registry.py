@@ -77,10 +77,12 @@ _RM2026 = RefereeProfile(
     profile_id=DEFAULT_PROFILE, year=2026, protocol_version="1.3.1", codec=codec,
     mqtt_host="192.168.12.1", mqtt_port=3333, client_ip="192.168.12.2",
     udp_port=3334, udp_codec="hevc",
-    # The ordinary event commands retain a conservative 10 Hz ceiling. Map
-    # marks have additional per-client restrictions in section 1.3.1.
+    # Operator role is not authenticated by this client. Use the stricter
+    # semi-automatic operator interval (3 s) for all map marks, also satisfying
+    # the gimbal operator's 0.5 s minimum in section 1.3.1.
     uplink_hz=MappingProxyType({
-        name: 75.0 if name in {"KeyboardMouseControl", "CustomControl"} else 10.0
+        name: (75.0 if name in {"KeyboardMouseControl", "CustomControl"}
+               else 1.0 / 3.0 if name == "MapClickCmd" else 10.0)
         for name in codec.UPLINK_MESSAGES
     }),
 )
@@ -101,6 +103,12 @@ def get_profile(profile_id: str = DEFAULT_PROFILE) -> RefereeProfile:
     try:
         return _PROFILES[str(profile_id)]
     except KeyError as exc:
+        if str(profile_id).lower() in {"rm2026-v2", "rm2026-v2.0", "rm2026-v2.0.0"}:
+            raise UnsupportedRefereeProfile(
+                "RM2026 V2.0.0 is recognized but NOT supported; this client supports "
+                "V1.3.1 and the read-only V1.1.0 student profile. No V2 control "
+                "or automatic protocol downgrade is allowed."
+            ) from exc
         raise UnsupportedRefereeProfile(
             f"Unsupported referee profile {profile_id!r}; no automatic fallback"
         ) from exc

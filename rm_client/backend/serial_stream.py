@@ -12,6 +12,7 @@ serial.Serial 写在 4 个地方，于是"想无线"就得改协议层——白�
 from __future__ import annotations
 
 import socket
+import select
 from typing import Any
 
 
@@ -41,14 +42,23 @@ class TcpByteStream:
 
     def read(self, size: int = 512) -> bytes:
         if self._sock is None:
+            raise ConnectionError("TCP 未连接")
+        if int(size) <= 0:
             return b""
         try:
-            return self._sock.recv(int(size))
-        except socket.timeout:
+            # RX shares a thread with the control deadline. Never wait for
+            # telemetry before allowing a TX/deadman/neutral check.
+            if not select.select([self._sock], [], [], 0)[0]:
+                return b""
+            data = self._sock.recv(int(size))
+            if not data:
+                raise ConnectionError("TCP 对端已关闭连接")
+            return data
+        except (socket.timeout, BlockingIOError):
             return b""
         except OSError:
-            self.is_open = False
-            return b""
+            self.close()
+            raise
 
     def write(self, data: bytes) -> int:
         if self._sock is None:

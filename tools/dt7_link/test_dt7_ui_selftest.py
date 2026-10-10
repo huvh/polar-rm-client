@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+import os
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -54,7 +55,7 @@ def main() -> int:
     x = int(1 << C.KEYBOARD_BITS["X"])
     check("探针是 X 键、位序按厂商表在 bit12", x == 4096 and df.KEY_VENDOR_2026_BITS["X"] == x,
           str(x))
-    fw = ROOT.parent / "tmp_polarbear" / "StandardRobotpp"
+    fw = Path(os.environ.get("POLAR_FIRMWARE_ROOT") or str(ROOT.parent / "tmp_polarbear" / "StandardRobotpp")).resolve()
     if (fw / "application").exists():
         hits = [p.relative_to(fw) for p in (fw / "application").rglob("*.c")
                 if "KEY_X" in p.read_text(encoding="utf-8", errors="ignore")]
@@ -62,6 +63,7 @@ def main() -> int:
               not hits, str(hits[:3]))
     else:
         SKIPPED.append("没有固件树：X 键无消费者的交叉核对未跑")
+        print("[SKIP] 没有固件树：交叉核对未运行")
     v, d = C.evaluate_dt7_selftest([0, 0, x, x], x, 0)
     check("出现目标键位 -> PASS", v == "PASS", f"{v} {d}")
     v, _ = C.evaluate_dt7_selftest([0, 8, 12], x, 0)

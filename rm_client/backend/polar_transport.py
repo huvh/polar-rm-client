@@ -295,7 +295,11 @@ class PolarLinkTransport:
     def stop(self) -> None:
         """**先归零再断开**：固件不会自己清零，直接关口会把最后指令冻在车上。"""
 
-        if self._running:
+        if self._running or self._serial is not None:
+            # Latch before flushing, so the background writer cannot put an
+            # old non-neutral intent back on the wire between the zero burst
+            # and close(). The latch is released explicitly by the manager.
+            self.trigger_estop()
             self._flush_zero_burst(blocking=True)
         self._stop.set()
         self._running = False
@@ -399,12 +403,13 @@ class PolarLinkTransport:
         next_send = time.perf_counter()
         while not self._stop.is_set():
             interval = 1.0 / self.send_hz
-            now = time.perf_counter()
             try:
                 self._drain_rx()
             except Exception as exc:
                 self.last_error = str(exc)
+                self.last_error_code = "STREAM_DISCONNECTED"
                 break
+            now = time.perf_counter()
             if now >= next_send:
                 next_send = now + interval
                 try:
@@ -412,14 +417,35 @@ class PolarLinkTransport:
                 except Exception as exc:
                     self.last_error = str(exc)
                     break
+                if not self.connected:
+                    break
             time.sleep(max(0.0, min(interval * 0.25, next_send - time.perf_counter())))
+        # Discard all receive/control state from this connection. Reconnect
+        # must not reuse a buffered partial frame or an old driving intent.
         self.connected = False
+        self.last_segment_at = 0.0
+        self._rx_buffer.clear()
+        with self._rx_lock:
+            self._rx.clear()
+        with self._intent_lock:
+            self._intent = None
+            self._spin_cmd = SPIN_CMD_NONE
+            self._gimbal_host_request = 0
+            self._drive_was_armed = False
+        stream, self._serial = self._serial, None
+        if stream is not None:
+            try:
+                stream.close()
+            except Exception:
+                pass
         self._running = False
 
     def _drain_rx(self) -> None:
         if self._serial is None:
             return
         chunk = self._serial.read(512)
+        if not getattr(self._serial, "is_open", True):
+            raise ConnectionError("机器人字节流已断开")
         if not chunk:
             return
         self._rx_buffer.extend(chunk)
@@ -447,12 +473,7 @@ class PolarLinkTransport:
     def _pump_tx(self, now: float) -> None:
         if self._estop_active or now < self._zeros_until:
             # 急停/归零突发窗口：有界（ZERO_BURST_S），故意把两路都按零
-            self._write(self._zero_frame(), zero_frame=True)
-            if self.drive_channel in ("virtual_rc", "both"):
-                self._write(self._zero_virtual_rc_frame(), zero_frame=True)
-            # 自转也必须显式关（固件指令过期时是保持现状，光停发不会停转）
-            self._write(self._chassis_cmd_frame(SPIN_CMD_OFF, gimbal_request=False), zero_frame=True)
-            self._drive_was_armed = False
+            self._flush_zero_burst(blocking=False)
             return
         intent = self._take_intent_locked(now)
         # 持锁完成“取意图之后的全部写出”：与 trigger_estop 互斥，
@@ -498,9 +519,13 @@ class PolarLinkTransport:
         if wants_rc and armed and intent is not None:
             self._write(self._virtual_rc_frame_for(intent))
         was_armed = self._drive_was_armed
-        self._drive_was_armed = bool(wants_rc and armed)
-        if was_armed and not self._drive_was_armed:
-            self._write(self._zero_virtual_rc_frame())
+        if was_armed and not (wants_rc and armed):
+            before_rc = self.frames_sent
+            self._write(self._zero_virtual_rc_frame(), zero_frame=True)
+            # An attempted/short release does not establish a neutral wire.
+            self._drive_was_armed = not (self.mock_writes or self.frames_sent > before_rc)
+        else:
+            self._drive_was_armed = bool(wants_rc and armed)
 
     def _take_intent_locked(self, now: float) -> PolarDriveIntent | None:
         with self._intent_lock:
@@ -578,6 +603,8 @@ class PolarLinkTransport:
             written = self._serial.write(payload)
             if written != len(payload):
                 self.last_error = f"串口短写 {written}/{len(payload)}"
+                self.last_error_code = "STREAM_SHORT_WRITE"
+                self.connected = False
                 return
             self.frames_sent += 1
             self.last_send_at = time.perf_counter()
@@ -590,13 +617,19 @@ class PolarLinkTransport:
 
         count = 3 if blocking else 1
         for _ in range(count):
-            before = self.frames_sent
-            self._write(self._zero_frame())
-            if self.frames_sent > before:
-                self.zero_frames_sent += 1
-            # 退出/停发前也要把自转显式关掉：固件没有断流归零，
-            # 停发等于“保持最后一次指令永久执行”。
-            self._write(self._chassis_cmd_frame(SPIN_CMD_OFF, gimbal_request=False), zero_frame=True)
+            with self._intent_lock:
+                before = self.frames_sent
+                self._write(self._zero_frame(), zero_frame=True)
+                if self.frames_sent > before:
+                    self.zero_frames_sent += 1
+                # Only release a previously active RC writer. Repeated zero
+                # 0x03 frames would otherwise overwrite the physical joystick.
+                if self._drive_was_armed:
+                    before_rc = self.frames_sent
+                    self._write(self._zero_virtual_rc_frame(), zero_frame=True)
+                    if self.mock_writes or self.frames_sent > before_rc:
+                        self._drive_was_armed = False
+                self._write(self._chassis_cmd_frame(SPIN_CMD_OFF, gimbal_request=False), zero_frame=True)
             if blocking and count > 1:
                 time.sleep(0.005)
 

@@ -76,3 +76,9 @@ build/
 dist/
 *.spec.bak
 _pdf_extract.txt
+
+# Local environments and user-imported audio
+.venv-polar/
+.venv-polar.broken-*/
+assets/ui_sounds/custom/*
+!assets/ui_sounds/custom/.gitkeep

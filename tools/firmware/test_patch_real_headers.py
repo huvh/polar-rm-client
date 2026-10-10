@@ -12,7 +12,7 @@
 跑法：
     python tools/firmware/test_patch_real_headers.py
 
-固件副本不存在时跳过（返回 0），因为它依赖 tmp_polarbear 的只读 clone。
+固件副本不存在时跳过（返回 77，不计通过），因为它依赖 tmp_polarbear 的只读 clone。
 """
 
 from __future__ import annotations
@@ -22,10 +22,11 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+import os
 
 HERE = Path(__file__).resolve().parent
 PATCH = HERE / "polar-virtual-rc-drive-keys.patch"
-REPO = HERE.parents[2] / "tmp_polarbear" / "StandardRobotpp"
+REPO = Path(os.environ.get("POLAR_FIRMWARE_ROOT") or str(HERE.parents[2] / "tmp_polarbear" / "StandardRobotpp")).resolve()
 USB_REL = "application/communication/usb_task.c"
 RC_REL = "application/other/remote_control.c"
 MECA_REL = "application/chassis/chassis_mecanum.c"
@@ -58,12 +59,15 @@ def extract(text: str, pattern: str, label: str) -> str:
 
 
 def main() -> int:
+    global REPO
+    if len(sys.argv) > 1 and not sys.argv[1].startswith("-"):
+        REPO = Path(sys.argv[1]).expanduser().resolve()
     if not REPO.exists() or not (REPO / ".git").exists():
         print(f"SKIP: 固件副本不存在（{REPO}）")
-        return 0
+        return 77
     if not PATCH.exists():
         print(f"SKIP: 补丁不存在（{PATCH}）")
-        return 0
+        return 77
 
     # 关键：先判断补丁是不是**已经在树里**了。如果是，绝对不能为了"测完恢复干净"
     # 而去 git checkout —— 那会把调用方（如 prepare_hero_build.py）刚准备好的
@@ -80,6 +84,9 @@ def main() -> int:
     if already:
         print("[info] 补丁已存在于工作树，直接编译当前内容（不动 git，不做撤销）")
     else:
+        if os.environ.get("POLAR_FIRMWARE_READ_ONLY") == "1":
+            print("[INCOMPLETE] Required prepared files are absent; read-only checks never install patches")
+            return 77
         # 先拍快照再定向 checkout；收尾只按快照还原（见 bridge_fixture 的说明）
         SNAPSHOT = bf.stage(REPO, [USB_REL, RC_REL, MECA_REL, OMNI_REL, HEADER_REL])
         git("checkout", "--", USB_REL, RC_REL, MECA_REL, OMNI_REL)

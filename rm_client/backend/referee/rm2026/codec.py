@@ -466,6 +466,12 @@ def encode_map_click_cmd(
     map_x: float = 0.0,
     map_y: float = 0.0,
 ) -> bytes:
+    """Encode the semantic API: mark_type = category, mode = marking mode.
+
+    The official proto unfortunately names field 3 ``mode`` and field 6
+    ``type``. Its V1.3.1 table defines their semantics in the opposite order.
+    Keep caller-facing names clear and preserve the official wire numbers.
+    """
     robot_id = bytes(robot_id)
     if len(robot_id) > 7:
         raise ValueError(f"MapClickCmd robot_id 固定 7 字节，实际 {len(robot_id)} 字节")
@@ -473,10 +479,10 @@ def encode_map_click_cmd(
     return b"".join([
         encode_uint(1, is_send_all),
         encode_bytes(2, robot_id),
-        encode_uint(3, mode),
+        encode_uint(3, mark_type),
         encode_uint(4, enemy_id),
         encode_uint(5, ascii_code),
-        encode_uint(6, mark_type),
+        encode_uint(6, mode),
         encode_float(7, map_x),
         encode_float(8, map_y),
     ])

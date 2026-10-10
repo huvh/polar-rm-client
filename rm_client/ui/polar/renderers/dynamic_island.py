@@ -28,8 +28,9 @@ import time
 from typing import Any
 
 from PySide6.QtCore import QPointF, QRectF, Qt
-from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen
+from PySide6.QtGui import QBrush, QColor, QLinearGradient, QPainter, QPainterPath, QPen
 
+from ...animation import Easings
 from ...paint import rounded_rect, with_alpha
 from ...theme import THEME, color
 from ...island_icon_gpu import IslandIconCommand

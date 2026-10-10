@@ -106,8 +106,7 @@
 驾驶仍由五道独立闸门把关，一道都不能省：`Allow Drive` → `Client Chassis Drive` →
 `module.enabled` → 未被急停 → `bridge.active`（**必须真的收到过机器人段才允许发驾驶指令**，
 没接机器人时不活跃是正确的 fail-closed）。验证见
-`tests/team_bench_entry_check.py` 第 5 节（逐项拆闸门，并证明官方场景下
-`_retry_polar_connect` 真的执行到了连接）。
+`tests/polar_bridge_test.py` 及 `tests/test_transport_safety_regressions.py`。旧文档引用的 `team_bench_entry_check.py` 不在当前树中，不能计为已执行验证。
 
 ## 仍阻止实战签字的现场项
 

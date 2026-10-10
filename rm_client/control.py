@@ -244,6 +244,7 @@ class KeyboardControlBridge:
         #: 对象由 manager 注入；没注入时这里为 None，开关打开也不发。
         self.cc_link = None
         self.cc_enabled = False
+        self.cc_release_pending = False
         self.cc_sent = 0
         self.cc_dropped_keys: list[str] = []
         self.cc_last_error = ""
@@ -425,7 +426,8 @@ class KeyboardControlBridge:
         )
         # 松手帧没落地时，即使本地看着"全空闲"也必须继续按心跳发：这是
         # "驾驶员手都抬了车还在往前顶"的唯一兜底，不能受 MQTT/空闲零帧授权影响。
-        must_flush = bool(getattr(self, "dt7_release_pending", False))
+        must_flush = bool(getattr(self, "dt7_release_pending", False)
+                          or getattr(self, "cc_release_pending", False))
         if not active and not self._dirty and not must_flush and not self._idle_zero_authorized():
             return None
         interval = (1.0 / self.heartbeat_hz
@@ -527,6 +529,9 @@ class KeyboardControlBridge:
         "驾驶员按了没反应"是最难查的一类问题。
         本函数绝不写 last_error：这条出口失败不代表官方通道失败。
         """
+        if self.cc_release_pending:
+            self.release_custom_controller()
+            return  # A release retry never replays an old movement snapshot.
         if not self.cc_enabled or self.cc_link is None:
             return
         names = [slot for slot, bit in KEYBOARD_BITS.items()
@@ -540,10 +545,13 @@ class KeyboardControlBridge:
             )
         except Exception as exc:      # 出口异常不得影响主通道
             self.cc_last_error = str(exc)
+            self.cc_release_pending = True
             return
         self.cc_last_error = "" if ok else str(why)
         if ok:
             self.cc_sent += 1
+        elif not names and not command.left_button_down and not command.right_button_down:
+            self.cc_release_pending = True
         self.cc_dropped_keys = list(getattr(self.cc_link, "dropped_keys", []) or [])
 
 
@@ -637,13 +645,16 @@ class KeyboardControlBridge:
     def release_custom_controller(self) -> None:
         """急停/失去焦点时把选手端那侧的键鼠也归零（0x0306 全零键值）。"""
         if self.cc_link is None:
+            self.cc_release_pending = False
             return
+        self.cc_release_pending = True
         try:
             ok, why = self.cc_link.release_all()
         except Exception as exc:
             self.cc_last_error = str(exc)
             return
         self.cc_last_error = "" if ok else str(why)
+        self.cc_release_pending = not ok
     def send_command(self, command: ChassisCommand) -> None:
         self.last_command = command
         self.last_payload = command.to_payload()
@@ -667,7 +678,11 @@ class KeyboardControlBridge:
             self._send_radio_km(command)
         # 自定义控制器出口同理：它是"经官方选手端进 DT7"的独立一条路，
         # 既不受 KMC 成败影响，也不受 0x5A / 图传链路状态影响。
-        if not self.km_source_conflict:
+        if self.cc_release_pending:
+            # Conflicting sources block motion, never the release of an old
+            # CC writer. Keep retrying until that writer accepts neutral.
+            self.release_custom_controller()
+        elif not self.km_source_conflict:
             self._send_custom_controller(command)
         # 直连 DT7：键位图可以复用 command.keyboard_value（位序已被厂商 KeyBoard 枚举
         # 核实，见 README 19.1）；但鼠标这里是**增量**，与 0x0306 那条的绝对像素

@@ -126,75 +126,104 @@ def run_preflight(
     paths = paths or RuntimePaths.discover()
     checks: list[PreflightCheck] = []
     manifest: dict[str, Any] = {}
-    if paths.manifest_path.is_file():
+    manifest_ok = not official
+    manifest_present = paths.manifest_path.is_file()
+    if manifest_present:
         try:
             manifest = json.loads(paths.manifest_path.read_text(encoding="utf-8-sig"))
+            if not isinstance(manifest, dict) or any(
+                not isinstance(manifest.get(key, {}), dict)
+                for key in ("ffmpeg", "critical_files", "resources")
+            ):
+                raise ValueError("manifest sections must be objects")
             checks.append(PreflightCheck("manifest", True, str(paths.manifest_path)))
             sidecar = paths.app_root / "BUILD_MANIFEST.sha256"
             if sidecar.is_file():
-                expected_manifest = sidecar.read_text(encoding="ascii").strip().split()[0].upper()
+                parts = sidecar.read_text(encoding="ascii").strip().split()
+                expected_manifest = parts[0].upper() if parts else ""
                 actual_manifest = _sha256(paths.manifest_path)
-                checks.append(
-                    PreflightCheck(
-                        "manifest_sidecar",
-                        bool(expected_manifest and expected_manifest == actual_manifest),
-                        actual_manifest if expected_manifest == actual_manifest else "manifest digest mismatch",
-                    )
-                )
+                manifest_ok = bool(expected_manifest and expected_manifest == actual_manifest)
+                checks.append(PreflightCheck(
+                    "manifest_sidecar", manifest_ok,
+                    actual_manifest if manifest_ok else "manifest digest mismatch",
+                ))
             else:
-                checks.append(
-                    PreflightCheck(
-                        "manifest_sidecar",
-                        not official,
-                        "BUILD_MANIFEST.sha256 missing",
-                    )
-                )
+                manifest_ok = not official
+                checks.append(PreflightCheck(
+                    "manifest_sidecar", manifest_ok, "BUILD_MANIFEST.sha256 missing",
+                ))
         except Exception as exc:
+            manifest = {}
+            manifest_ok = False
             checks.append(PreflightCheck("manifest", False, f"invalid: {exc}"))
     else:
         checks.append(PreflightCheck("manifest", not official, "source mode / manifest absent"))
 
-    ffmpeg = paths.ffmpeg_path
-    if not ffmpeg.is_file() and not official:
-        configured = os.environ.get("POLAR_FFMPEG", "")
-        ffmpeg = Path(configured) if configured else ffmpeg
-    ffmpeg_ok = ffmpeg.is_file()
-    ffmpeg_detail = str(ffmpeg)
-    if ffmpeg_ok:
-        try:
-            result = subprocess.run(
-                [str(ffmpeg), "-hide_banner", "-version"],
-                capture_output=True,
-                text=True,
-                timeout=5.0,
-            )
-            ffmpeg_ok = result.returncode == 0 and "ffmpeg version" in result.stdout
-            ffmpeg_detail = result.stdout.splitlines()[0] if result.stdout else result.stderr[:200]
-            expected = str(manifest.get("ffmpeg", {}).get("sha256", ""))
-            if official:
-                ffmpeg_ok = bool(ffmpeg_ok and expected and _sha256(ffmpeg) == expected.upper())
-                ffmpeg_detail += "; manifest hash " + ("matched" if ffmpeg_ok else "missing/mismatch")
-        except Exception as exc:
-            ffmpeg_ok = False
-            ffmpeg_detail = str(exc)
-    checks.append(PreflightCheck("ffmpeg", ffmpeg_ok, ffmpeg_detail))
+    # Check integrity before executing any bundled dependency, including the
+    # codec probes. A failed manifest must not merely be logged then ignored.
+    integrity_ok = manifest_ok
     if manifest:
         for relative in manifest.get("critical_files", {}):
             critical = paths.app_root / Path(str(relative))
             ok, detail = paths.validate_manifest_file(critical)
+            integrity_ok = integrity_ok and ok
             checks.append(PreflightCheck(f"integrity:{relative}", ok, detail))
         expected_tree = str(manifest.get("resources", {}).get("tree_sha256", "")).upper()
         if expected_tree:
-            actual_tree = RuntimePaths.hash_tree(paths.resource_root)
-            checks.append(
-                PreflightCheck(
-                    "integrity:resources",
-                    bool(actual_tree and actual_tree == expected_tree),
-                    actual_tree or "resources directory missing",
-                )
-            )
+            try:
+                actual_tree = RuntimePaths.hash_tree(paths.resource_root)
+                ok = bool(actual_tree and actual_tree == expected_tree)
+                detail = actual_tree or "resources directory missing"
+            except OSError as exc:
+                ok, detail = False, str(exc)
+            integrity_ok = integrity_ok and ok
+            checks.append(PreflightCheck("integrity:resources", ok, detail))
         elif official:
+            integrity_ok = False
             checks.append(PreflightCheck("integrity:resources", False, "tree hash absent"))
+
+    ffmpeg = paths.ffmpeg_path
+    if not ffmpeg.is_file() and not official and not manifest_present:
+        configured = os.environ.get("POLAR_FFMPEG", "")
+        ffmpeg = Path(configured) if configured else ffmpeg
+    ffmpeg_ok = ffmpeg.is_file() and integrity_ok
+    ffmpeg_detail = str(ffmpeg) if integrity_ok else "not executed: bundle integrity check failed"
+    if ffmpeg_ok and (official or manifest_present):
+        try:
+            expected = str(manifest.get("ffmpeg", {}).get("sha256", "")).upper()
+            ffmpeg_ok = bool(expected and _sha256(ffmpeg) == expected)
+            ffmpeg_detail = (str(ffmpeg) + "; manifest hash matched" if ffmpeg_ok
+                             else "not executed: FFmpeg manifest hash missing/mismatch")
+        except OSError as exc:
+            ffmpeg_ok, ffmpeg_detail = False, f"not executed: {exc}"
+    if ffmpeg_ok:
+        try:
+            result = subprocess.run(
+                [str(ffmpeg), "-hide_banner", "-version"],
+                capture_output=True, text=True, timeout=5.0,
+            )
+            ffmpeg_ok = result.returncode == 0 and "ffmpeg version" in result.stdout
+            ffmpeg_detail = result.stdout.splitlines()[0] if result.stdout else result.stderr[:200]
+        except Exception as exc:
+            ffmpeg_ok, ffmpeg_detail = False, str(exc)
+    checks.append(PreflightCheck("ffmpeg", ffmpeg_ok, ffmpeg_detail))
+
+    try:
+        from .backend.polar_link import SPEC_STATUS
+        from .backend.polar_spec import load_spec
+        from .backend.cc_link import KEY_USAGE_FILE
+
+        spec = load_spec()
+        spec_ok = bool(spec.ok and SPEC_STATUS.get("ok") and not SPEC_STATUS.get("fell_back", True))
+        checks.append(PreflightCheck(
+            "protocol_spec", spec_ok,
+            spec.source if spec_ok else spec.error_text() or str(SPEC_STATUS),
+        ))
+        key_usage = json.loads(KEY_USAGE_FILE.read_text(encoding="utf-8-sig"))
+        keys_ok = isinstance(key_usage, dict) and bool(key_usage)
+        checks.append(PreflightCheck("cc_key_usage", keys_ok, str(KEY_USAGE_FILE)))
+    except Exception as exc:
+        checks.append(PreflightCheck("protocol_data", False, f"{type(exc).__name__}: {exc}"))
 
     for key, directory in (
         ("configs_writable", paths.configs_root),
@@ -212,7 +241,9 @@ def run_preflight(
 
     qt_ok, qt_detail = _qt_opengl_context()
     checks.append(PreflightCheck("qt_opengl", qt_ok, qt_detail))
-    if codec_selftest:
+    if codec_selftest and not ffmpeg_ok:
+        checks.append(PreflightCheck("codec_selftest", False, "not run: FFmpeg validation failed"))
+    elif codec_selftest:
         from .backend.codec_selftest import run_all_codec_selftests
 
         for result in run_all_codec_selftests():

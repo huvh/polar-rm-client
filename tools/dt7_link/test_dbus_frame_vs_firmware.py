@@ -26,12 +26,13 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+import os
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import dt7_dbus_frame as df  # noqa: E402
 
-DEFAULT_REPO = HERE.parents[2] / "tmp_polarbear" / "StandardRobotpp"
+DEFAULT_REPO = Path(os.environ.get("POLAR_FIRMWARE_ROOT") or str(HERE.parents[2] / "tmp_polarbear" / "StandardRobotpp")).resolve()
 RC_C = "application/other/remote_control.c"
 RC_H = "application/other/remote_control.h"
 
@@ -57,7 +58,7 @@ def main() -> int:
     rc_path, hdr_path = root / RC_C, root / RC_H
     if not rc_path.exists() or not hdr_path.exists():
         print(f"SKIP: 找不到固件源码（{rc_path}）")
-        return 0
+        return 77
 
     rc = rc_path.read_text(encoding="utf-8", errors="ignore")
     hdr = hdr_path.read_text(encoding="utf-8", errors="ignore")

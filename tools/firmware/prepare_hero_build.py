@@ -15,17 +15,21 @@
 设计约束：
 - **幂等**：重复运行不会重复插入或报错
 - **不碰无关文件**：工作树有别人的本地改动时直接拒绝，不做半套修改
-- 撤销用 git，不留手工回退痕迹
+- 撤销按安装前快照恢复；遇到后续编辑或旧版无快照时拒绝覆盖
 """
 
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
+
+from file_guard import FileJournal, SnapshotError
 
 HERE = Path(__file__).resolve().parent
 PATCH = HERE / "polar-virtual-rc-drive-keys.patch"
@@ -730,18 +734,26 @@ def compile_check(repo: Path, step: Step) -> None:
     try:
         import ziglang  # noqa: F401
     except ImportError:
-        step.warn("未安装 ziglang，跳过编译/行为校验",
+        step.bad("INCOMPLETE: 未安装 ziglang，编译/行为校验未运行",
                   "装一下即可启用：pip install ziglang")
         return
+    env = dict(os.environ, POLAR_FIRMWARE_ROOT=str(repo.resolve()), POLAR_FIRMWARE_READ_ONLY="1")
+    print(f"[target] {repo.resolve()}")
     for name, rel, extra in COMPILE_CHECKS:
         script = HERE / rel
         if not script.exists():
-            step.warn(f"找不到 {rel}，跳过该项校验")
+            step.bad(f"INCOMPLETE: 找不到 {rel}，该项校验未运行")
             continue
-        res = subprocess.run([sys.executable, str(script), *extra],
-                             capture_output=True, text=True,
-                             encoding="utf-8", errors="replace")
-        if res.returncode == 0:
+        try:
+            res = subprocess.run([sys.executable, str(script), str(repo.resolve()), *extra],
+                                 capture_output=True, text=True, env=env, timeout=180,
+                                 encoding="utf-8", errors="replace")
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            step.bad(name, f"INCOMPLETE: {exc}")
+            continue
+        output = (res.stdout or "") + (res.stderr or "")
+        skipped = re.search(r"(?im)^\s*(?:\[SKIP\]|SKIP:|\[INCOMPLETE\])", output)
+        if res.returncode == 0 and not skipped:
             step.ok(name)
         else:
             tail = ((res.stderr or "") + (res.stdout or "")).strip().splitlines()[-6:]
@@ -776,7 +788,7 @@ CHECKLIST = """
 3. **键位是"或"进去的，不是接管**。驾驶员键位与客户端键位各记一本账
    （HOST_RC_DRIVER_KEYS / HOST_RC_HOST_KEYS），谁按谁动、两边都松才停；
    0x03 超过 150ms 没刷新，客户端那份账立刻归零，控制权自动回到遥控器手里。
-   客户端只可能碰 W/S/A/D（+ 可选 SHIFT），Q/E（摩擦轮）、F（sc_flag）
+   客户端只可能碰 W/S/A/D，SHIFT、Q/E（摩擦轮）、F（sc_flag）
    在掩码外，永远只能由遥控器触发。
 4. 遥控器三位拨杆 s[0]（右拨杆）建议拨到 **中间**。
    停在下方时固件走 CHASSIS_LOCK（chassis_mecanum.c:97），根本不读
@@ -795,20 +807,14 @@ CHECKLIST = """
 
 
 def revert(repo: Path, step: Step) -> None:
-    print("\n[revert] 撤销本脚本做过的改动")
-    res = git(repo, "checkout", "--", ROBOT_PARAM_REL, USB_REL, RC_REL,
-              MECA_REL, OMNI_REL, GIMBAL_REL)
-    if res.returncode == 0:
-        step.ok("已还原被改动的源文件")
-    else:
-        step.bad("还原失败", (res.stderr or res.stdout).strip()[:200])
-    # 桥接头文件是**新增**的，git checkout 不会删未跟踪文件。
-    # 不显式清掉的话，下一次跑会被当成“已应用”而跳过安装，
-    # 测到的是陈旧副本。
-    header = repo / HOST_BRIDGE_HEADER_REL
-    if header.exists():
-        header.unlink()
-        step.ok("已删除新增的桥接头文件")
+    print("\n[revert] 按安装前快照撤销，保留原有文件与修改")
+    try:
+        journal = FileJournal(repo, OWNED)
+        with journal.locked():
+            count = journal.revert()
+        step.ok(f"已按快照恢复 {count} 个文件")
+    except (SnapshotError, OSError) as exc:
+        step.bad("安全回退被阻止；未使用 git checkout", str(exc))
 
 
 def gcc_differential_check(repo: Path, step: Step) -> None:
@@ -826,16 +832,15 @@ def gcc_differential_check(repo: Path, step: Step) -> None:
     print("\n[可选] GCC 差分语法体检（非 ARMCC 等价，--gcc-check 触发）")
     script = HERE / "gcc_syntax_check.py"
     if not script.exists():
-        step.warn("找不到 gcc_syntax_check.py，跳过差分体检")
+        step.bad("INCOMPLETE: 找不到 gcc_syntax_check.py，差分体检未运行")
         return
-    base = repo.parent / ".polar-gcc-baseline"
-    if base.exists():
-        step.warn("基线临时目录已存在，先删再用", str(base))
-        shutil.rmtree(base, ignore_errors=True)
+    baseline_dir = tempfile.TemporaryDirectory(prefix="polar-gcc-baseline-")
+    base = Path(baseline_dir.name) / "worktree"
     res = git(repo, "worktree", "add", "--detach", str(base), "HEAD")
     if res.returncode != 0:
-        step.warn("无法创建基线 worktree，跳过差分体检",
-                  (res.stderr or res.stdout).strip()[:160])
+        step.bad("INCOMPLETE: 无法创建基线 worktree，差分体检未运行",
+                 (res.stderr or res.stdout).strip()[:160])
+        baseline_dir.cleanup()
         return
     try:
         chk = subprocess.run(
@@ -850,12 +855,15 @@ def gcc_differential_check(repo: Path, step: Step) -> None:
                      " | ".join(tail[:6]) or (out[-1] if out else "")[:150])
     finally:
         git(repo, "worktree", "remove", "--force", str(base))
+        baseline_dir.cleanup()
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="把固件工程准备成英雄板可驾驶状态")
     ap.add_argument("repo", help="StandardRobotpp 仓库路径")
-    ap.add_argument("--revert", action="store_true", help="撤销本脚本的改动")
+    mode = ap.add_mutually_exclusive_group()
+    mode.add_argument("--revert", action="store_true", help="按安装前快照撤销，后续改动会阻止回退")
+    mode.add_argument("--check-only", action="store_true", help="只检查指定工作树，禁止自动安装/改写")
     ap.add_argument("--robot", choices=sorted(ROBOT_PROFILES), default="hero",
                     help="准备哪个兵种的工程。C 路（DT7 键鼠）两个兵种都成立："
                          "__RC_TYPE 与 DT7 解码都在 robot_param.h/remote_control.c 里不分兵种，"
@@ -888,18 +896,33 @@ def main() -> int:
         return 2
     if args.revert:
         revert(repo, step)
-    elif check_clean(repo, step):
-        switch_robot(repo, step, args.robot)
-        switch_rc_type(repo, step, args.rc)
-        switch_km_link(repo, step, args.km, args.km_fire_keys)
-        if args.mouse_sens:
-            switch_mouse_sensitivity(repo, step, args.mouse_sens,
-                                     ROBOT_PROFILES[args.robot]["param"])
-        if apply_patch(repo, step):
+    elif args.check_only:
+        try:
             verify_changes(repo, step, args.rc, args.robot)
             compile_check(repo, step)
-            if args.gcc_check:
-                gcc_differential_check(repo, step)
+        except (OSError, ValueError, IndexError) as exc:
+            step.bad("INCOMPLETE: 指定树缺少完整的待验证文件", str(exc))
+    elif check_clean(repo, step):
+        try:
+            journal = FileJournal(repo, OWNED)
+            with journal.locked():
+                journal.begin()
+                try:
+                    switch_robot(repo, step, args.robot)
+                    switch_rc_type(repo, step, args.rc)
+                    switch_km_link(repo, step, args.km, args.km_fire_keys)
+                    if args.mouse_sens:
+                        switch_mouse_sensitivity(repo, step, args.mouse_sens,
+                                                 ROBOT_PROFILES[args.robot]["param"])
+                    if apply_patch(repo, step):
+                        verify_changes(repo, step, args.rc, args.robot)
+                        compile_check(repo, step)
+                        if args.gcc_check:
+                            gcc_differential_check(repo, step)
+                finally:
+                    journal.finish()
+        except (SnapshotError, OSError, RuntimeError) as exc:
+            step.bad("文件保护/准备操作失败", str(exc))
 
     print("\n" + "=" * 62)
     if step.failures:
@@ -910,7 +933,10 @@ def main() -> int:
         return 1
     for name in step.warnings:
         print(f"提醒：{name}")
-    print("结论：GO —— 工程已就绪，可以开 Keil 编译（工程启用了警告即错误）。")
+    if args.revert:
+        print("回退完成：已恢复安装前内容；这不是构建通过报告。")
+        return 0
+    print("结论：GO —— 指定工程的离线检查通过；尚未验证 Keil 编译或实机。")
     print(CHECKLIST)
     return 0
 

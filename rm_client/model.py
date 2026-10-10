@@ -30,6 +30,10 @@ CONTROL_BIND_OPTIONS = [
     "Up", "Down", "Left", "Right", "F1", "F2", "F3", "F4", "F5",
     "F6", "F7", "F8", "F9", "F10", "F11", "F12", "None",
 ]
+# These keys are consumed by the window before control dispatch. Do not offer
+# a binding which can never reach its slot (F12 must remain the E-stop).
+CONTROL_RESERVED_KEYS = frozenset({"rightshift", "tab", "f8", "f9", "f12"})
+CONTROL_BIND_OPTIONS = [key for key in CONTROL_BIND_OPTIONS if key.lower() not in CONTROL_RESERVED_KEYS]
 
 PRIMARY_GUI_MODE = "JelloSigma"
 
@@ -649,7 +653,7 @@ class RobotState:
         An empty status produces no extra row, preserving the LabDebug layout.
         Shooter is online when either the small or big projectile module is
         reported online; every other chip maps one-to-one to the official
-        V1.3.1 field.  Values are decoded integers, where zero means offline.
+        V1.3.1 field. Only 1 confirms online; 2 is an installation fault.
         """
 
         modules = getattr(self, "robot_module_status", None) or {}
@@ -658,7 +662,7 @@ class RobotState:
         return tuple(
             (
                 label,
-                any(int(modules.get(field_name, 0) or 0) != 0 for field_name in field_names),
+                any(modules.get(field_name) == 1 for field_name in field_names),
             )
             for label, field_names in self.MODULE_INDICATOR_FIELDS
         )

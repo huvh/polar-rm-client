@@ -22,11 +22,12 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+import os
 
 HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parents[2]          # rm_custom_client
 sys.path.insert(0, str(REPO_ROOT))   # 要 import rm_client 的真编码器
-DEFAULT_REPO = REPO_ROOT.parent / "tmp_polarbear" / "StandardRobotpp"
+DEFAULT_REPO = Path(os.environ.get("POLAR_FIRMWARE_ROOT") or str(REPO_ROOT.parent / "tmp_polarbear" / "StandardRobotpp")).resolve()
 RC_REL = "application/other/remote_control.c"
 KM_HDR_REL = "application/typedef/host_km_link.h"
 BRIDGE_HDR_REL = "application/typedef/host_chassis_bridge.h"
@@ -575,7 +576,7 @@ def main() -> int:
                                    root / BRIDGE_HDR_REL)
     if not (rc_path.exists() and km_hdr.exists() and bridge_hdr.exists()):
         print(f"SKIP: 固件树或头文件不齐（先跑 prepare_hero_build.py）\n  {km_hdr}")
-        return 0
+        return 77
 
     rc_src = rc_path.read_text(encoding="utf-8", errors="ignore")
     km_src = km_hdr.read_text(encoding="utf-8", errors="ignore")

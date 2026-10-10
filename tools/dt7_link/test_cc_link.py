@@ -24,6 +24,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+import os
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -37,8 +38,7 @@ from rm_client.backend.cc_link import (               # noqa: E402
 )
 
 FAILED = 0
-DEFAULT_FIRMWARE = Path(r"C:\Users\lulunomaro\Desktop\claude\openzenuicodexver"
-                       r"\tmp_polarbear\StandardRobotpp")
+DEFAULT_FIRMWARE = Path(os.environ.get("POLAR_FIRMWARE_ROOT") or str(ROOT.parent / "tmp_polarbear" / "StandardRobotpp")).resolve()
 CRC_C = "components/support/CRC8_CRC16.c"
 
 
@@ -281,7 +281,7 @@ def main() -> int:
         else DEFAULT_FIRMWARE
     if not (firmware / CRC_C).exists():
         print(f"SKIP: 找不到 {firmware / CRC_C}")
-        return 0
+        return 77
 
     payload = encode_keymouse_0306(key1=cc.HID_USAGE["W"], key2=cc.HID_USAGE["SHIFT"],
                                    x=1000, y=600, left=True)
@@ -388,8 +388,10 @@ def main() -> int:
     last = decode_cc_frame(written[-1]) or {}
     check("松手帧键值为 0", len(last.get("data", b"\x00" * 8)) == 8
           and last["data"][0] == 0 and last["data"][1] == 0, str(last))
-    check("release_all 归零并回中心", link.release_all(now=t["now"] + 2.0)[0]
-          and (decode_cc_frame(written[-1]) or {}).get("data", b"")[0] == 0)
+    cursor_before_release = (link.cursor.x, link.cursor.y)
+    check("release_all 归零并保持光标位置，避免松手时跳动", link.release_all(now=t["now"] + 2.0)[0]
+          and (decode_cc_frame(written[-1]) or {}).get("data", b"")[0] == 0
+          and (link.cursor.x, link.cursor.y) == cursor_before_release)
     mock = CustomControllerLink(mock_output=True)
     mock_ok, mock_why = mock.send_keymouse(pressed=["S"])
     check("mock 模式仍产帧但不写硬件", mock_ok and mock_why == "mock"

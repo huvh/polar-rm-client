@@ -24,10 +24,11 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+import os
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[2]))
-DEFAULT_REPO = HERE.parents[3] / "tmp_polarbear" / "StandardRobotpp"
+DEFAULT_REPO = Path(os.environ.get("POLAR_FIRMWARE_ROOT") or str(HERE.parents[3] / "tmp_polarbear" / "StandardRobotpp")).resolve()
 HDR_REL = "application/typedef/host_km_link.h"
 
 FAILED = 0
@@ -47,7 +48,7 @@ def main() -> int:
     hdr = root / HDR_REL
     if not hdr.exists():
         print(f"SKIP: 固件树里还没有 {HDR_REL}（先跑 prepare_hero_build.py）")
-        return 0
+        return 77
 
     text = hdr.read_text(encoding="utf-8", errors="ignore")
     m = re.search(r"typedef struct\s*\{.*?\}\s*__packed__ prm1_km_cmd_t;", text, re.S)

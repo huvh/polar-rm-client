@@ -21,6 +21,7 @@ import struct
 import sys
 import types
 from pathlib import Path
+import os
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -459,9 +460,7 @@ def test_crc_vs_firmware() -> None:
     import tempfile
     try:
         import test_cc_link as tc
-        fw = Path(tc.DEFAULT_REPO) if hasattr(tc, "DEFAULT_REPO") else Path(
-            r"C:\Users\lulunomaro\Desktop\claude\openzenuicodexver"
-            r"\tmp_polarbear\StandardRobotpp")
+        fw = Path(os.environ.get("POLAR_FIRMWARE_ROOT") or tc.DEFAULT_FIRMWARE).resolve()
         if not (fw / "components/support/CRC8_CRC16.c").exists():
             SKIPPED.append("没有固件树：CRC 交叉验收未跑")
             print("[SKIP] 没有固件树")

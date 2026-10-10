@@ -97,6 +97,15 @@ class ConfigActionsMixin:
         # 驾驶/键鼠槽位的改绑要立即生效，不能等下次加载配置；
         # 否则用户改完键后前几次按键仍按旧绑定开车。
         link_module = self.registry.get("RobotLink")
+        if link_module is not None and not bool(setting.value) and any(
+            setting is link_module.get_setting(name)
+            for name in ("Allow Drive", "Custom Controller Egress", "Radio KM Egress")
+        ):
+            # A gate's falling edge must neutralize pending inputs immediately,
+            # including shortcut changes which never open a blocking menu.
+            self.backend.lock_control("RobotLink output gate disabled")
+            self.control.release_all(self.state, self.registry)
+            self.control.clear_pending()
         if link_module is not None and str(getattr(setting, "name", "")).startswith("Bind "):
             if setting is link_module.get_setting(str(setting.name)):
                 self.sync_control_binds()
@@ -120,17 +129,17 @@ class ConfigActionsMixin:
             return
         alliance_profile = self.registry.get("AllianceProfile")
         if alliance_profile and setting is alliance_profile.get_setting("Side"):
-            self.state.alliance_color = str(setting.value)
+            self.apply_robot_profile(self.current_robot_profile_key(), close_home=False, announce=False)
             self.vision_kill_detector.reset()
             self.toast(f"阵营：{setting.value}")
             self.auto_save_config()
             return
         if match_mode and setting is match_mode.get_setting("Alliance"):
-            self.state.alliance_color = str(setting.value)
             if alliance_profile:
                 side = alliance_profile.get_setting("Side")
                 if side:
                     side.value = setting.value
+            self.apply_robot_profile(self.current_robot_profile_key(), close_home=False, announce=False)
             self.vision_kill_detector.reset()
             self.auto_save_config()
             return
@@ -154,6 +163,11 @@ class ConfigActionsMixin:
         if hud and setting is hud.get_setting("Right Display"):
             self.toast(f"右侧 HUD：{setting.value}")
         config_manager = self.registry.get("ConfigManager")
+        if config_manager and setting is config_manager.get_setting("Load On Start"):
+            try:
+                self.config_store.save_startup_preferences(self.current_profile(), bool(setting.value))
+            except OSError as exc:
+                self.toast(f"启动设置保存失败：{exc}", kind="warning")
         if config_manager and setting is config_manager.get_setting("Profile"):
             self.reload_current_config()
             return
@@ -970,6 +984,10 @@ class ConfigActionsMixin:
         self.auto_save_config()
 
     def on_module_toggled(self, module: Module, enabled: bool, source: str) -> None:
+        if module.name == "RobotLink" and not enabled:
+            self.backend.lock_control("RobotLink disabled")
+            self.control.release_all(self.state, self.registry)
+            self.control.clear_pending()
         jello_click = bool(
             source == "clickgui"
             and self.gui_visible

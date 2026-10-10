@@ -14,14 +14,17 @@
 注意：这里全部是**离线**检查。它证明不了"车真的会动" —— 那需要硬件。
 
 并行跑两个 verify_all 会出现"假红"：固件自检共享同一棵工作树，
-其中一个会 git checkout 还原别人刚装的桥。已加文件锁拒绝第二个实例
+旧版校验会临时改写固件。当前统一只读检查指定树，并拒绝自动安装；保留文件锁拒绝第二个实例
 （实测：同一份代码一次报 3/51 红、一次 51 全绿，红的那次不是代码坏）。
 因此这份清单的红色结果只有在"只有一个实例在跑"时才可作为证据。
 """
 
 from __future__ import annotations
 
+import argparse
+import hashlib
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -30,6 +33,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 PYTHON_SUITES = (
+    "test_build_safety_regressions",  # isolated packaging / path / file-preservation guards
+    "test_transport_safety_regressions",
+    "test_ui_state_regressions",
     "student_frontend_test",  # MC 背包/Jello 学生面板：只读展示、草稿不发、模态与缓存
     "polar_spec_test",        # 协议规格：加载/校验/改 JSON 真能改行为/新增段零 Python
     "robot_roles_test",       # 兵种对齐：限幅、禁驾、不一致告警、键位分层
@@ -187,30 +193,68 @@ AUDIT_CHECKS = (
 )
 
 
-def run(label: str, argv: list[str]) -> tuple[bool, str]:
+def run(label: str, argv: list[str], *, firmware: Path | None = None,
+        timeout: float = 180.0) -> tuple[bool, str]:
     env = dict(os.environ)
     env.setdefault("QT_QPA_PLATFORM", "offscreen")
     env.setdefault("PYTHONIOENCODING", "utf-8")
-    # 隔离用户数据：这些测试会构造真实窗口并自动保存配置，不隔离会污染开发机存档
-    env.setdefault("POLAR_USER_DATA_ROOT", tempfile.mkdtemp(prefix="verify_all_"))
-    proc = subprocess.run(argv, cwd=str(ROOT), capture_output=True, text=True,
-                          encoding="utf-8", errors="replace", env=env)
+    # Never silently select a sibling checkout; every child sees the same target.
+    env["POLAR_FIRMWARE_ROOT"] = str(firmware or ROOT / ".firmware-not-selected")
+    env["POLAR_FIRMWARE_READ_ONLY"] = "1"
+    with tempfile.TemporaryDirectory(prefix="verify_all_") as user_data:
+        env["POLAR_USER_DATA_ROOT"] = user_data
+        try:
+            proc = subprocess.run(argv, cwd=str(ROOT), capture_output=True, text=True,
+                                  encoding="utf-8", errors="replace", env=env, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            return False, f"INCOMPLETE: timeout after {timeout:g}s"
+        except OSError as exc:
+            return False, f"INCOMPLETE: {exc}"
     out = (proc.stdout or "") + (proc.stderr or "")
-    passed = proc.returncode == 0
-    if not passed:
-        bad = [l.strip() for l in out.splitlines()
-               if l.strip().startswith("[FAIL]") or "AssertionError" in l
-               or "error:" in l or "FAILED" in l]
+    skipped = re.findall(r"(?im)^\s*(?:\[SKIP\]|SKIP:|\[INCOMPLETE\]).*$", out)
+    if proc.returncode == 77 or (proc.returncode == 0 and skipped):
+        return False, "INCOMPLETE: " + (" | ".join(line.strip() for line in skipped)[:360] or "check not run")
+    if proc.returncode != 0:
+        bad = [line.strip() for line in out.splitlines()
+               if line.strip().startswith("[FAIL]") or "AssertionError" in line
+               or "error:" in line or "FAILED" in line]
         return False, " | ".join(bad[:3])[:400] or f"exit={proc.returncode}"
-    count = sum(1 for l in out.splitlines() if l.strip().startswith("[PASS]"))
+    count = sum(1 for line in out.splitlines() if line.strip().startswith("[PASS]"))
     return True, f"{count} 项通过" if count else "通过"
+
+
+def firmware_identity(repo: Path) -> str:
+    """Bind reports to all worktree bytes, including untracked source files."""
+    head = subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"],
+                          capture_output=True, text=True, timeout=10)
+    if head.returncode != 0:
+        raise ValueError("firmware target is not a Git worktree")
+    digest = hashlib.sha256()
+    for directory, dirs, files in os.walk(repo):
+        dirs[:] = sorted(name for name in dirs if name != ".git")
+        for name in sorted(files):
+            path = Path(directory) / name
+            if path.name == ".git":
+                continue
+            relative = path.relative_to(repo).as_posix().encode("utf-8")
+            digest.update(len(relative).to_bytes(4, "big"))
+            digest.update(relative)
+            if path.is_symlink():
+                digest.update(b"symlink:" + os.readlink(path).encode("utf-8"))
+            else:
+                content = hashlib.sha256()
+                with path.open("rb") as handle:
+                    for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                        content.update(chunk)
+                digest.update(content.digest())
+    return f"path={repo} commit={head.stdout.strip()} tree_sha256={digest.hexdigest()}"
 
 
 _LOCK = None
 
 
 def acquire_lock() -> bool:
-    """同一时刻只允许一个 verify_all：固件自检共享同一棵工作树，并行跑会互相还原。
+    """同一时刻只允许一个 verify_all，避免共享测试资源互相干扰。
 
     用文件锁而不是 pid 文件：进程被杀也不会留下假的占用者（锁随句柄关闭自动释放）。
     """
@@ -236,19 +280,30 @@ def acquire_lock() -> bool:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description="Offline checks; no firmware installation")
+    parser.add_argument("--firmware", type=Path, help="exact prepared firmware worktree to validate")
+    parser.add_argument("--timeout", type=float, default=180.0, help="per-check timeout in seconds")
+    args = parser.parse_args()
+    if args.timeout <= 0:
+        parser.error("--timeout must be positive")
     py = sys.executable
-    firmware = None
-    if "--firmware" in sys.argv:
-        i = sys.argv.index("--firmware")
-        if i + 1 < len(sys.argv):
-            firmware = sys.argv[i + 1]
+    firmware = args.firmware.expanduser().resolve() if args.firmware else None
+    identity = None
+    if firmware is not None:
+        try:
+            identity = firmware_identity(firmware)
+        except (OSError, ValueError, subprocess.TimeoutExpired) as exc:
+            print(f"[NO-GO] Invalid firmware target: {exc}")
+            return 2
+        print(f"[target] {identity}")
 
     failures: list[str] = []
+    incomplete: list[str] = []
     total_checks = 0
 
     if not acquire_lock():
         print("[NO-GO] 已经有一个 verify_all 在跑：固件自检共享同一棵工作树，\n"
-              "        并行会互相 git checkout，结果不可信。等它跑完再来。",
+              "        并行会争用测试资源，结果不可信。等它跑完再来。",
               file=sys.stderr)
         return 2
     print("=" * 66)
@@ -259,52 +314,63 @@ def main() -> int:
     for name in PYTHON_SUITES:
         path = ROOT / "tests" / f"{name}.py"
         if not path.exists():
-            print(f"  [SKIP] {name:24} 文件不存在")
+            print(f"  [INCOMPLETE] {name:24} 文件不存在")
+            incomplete.append(f"Missing test: {name}")
+            total_checks += 1
             continue
-        ok, detail = run(name, [py, "-u", str(path)])
+        ok, detail = run(name, [py, "-u", str(path)], firmware=firmware, timeout=args.timeout)
         total_checks += 1
         print(f"  [{'OK' if ok else 'XX'}] {name:24} {detail}")
         if not ok:
-            failures.append(f"Python: {name} -> {detail}")
+            (incomplete if detail.startswith("INCOMPLETE:") else failures).append(f"Python: {name} -> {detail}")
 
     print("\n[固件补丁编译与行为校验]")
     for rel, label in C_CHECKS:
         path = ROOT / rel
         if not path.exists():
-            print(f"  [SKIP] {label} 文件不存在")
+            print(f"  [INCOMPLETE] {label} 文件不存在")
+            incomplete.append(f"Missing check: {label}")
+            total_checks += 1
             continue
-        ok, detail = run(label, [py, "-u", str(path)])
+        ok, detail = run(label, [py, "-u", str(path)], firmware=firmware, timeout=args.timeout)
         total_checks += 1
         print(f"  [{'OK' if ok else 'XX'}] {label:38} {detail}")
         if not ok:
-            failures.append(f"C: {label} -> {detail}")
+            (incomplete if detail.startswith("INCOMPLETE:") else failures).append(f"C: {label} -> {detail}")
 
     print("\n[前后端对齐审计]")
     for rel, label, extra in AUDIT_CHECKS:
         path = ROOT / rel
         if not path.exists():
-            print(f"  [SKIP] {label} 文件不存在")
+            print(f"  [INCOMPLETE] {label} 文件不存在")
+            incomplete.append(f"Missing check: {label}")
+            total_checks += 1
             continue
-        ok, detail = run(label, [py, "-u", str(path), *extra])
+        ok, detail = run(label, [py, "-u", str(path), *extra], firmware=firmware, timeout=args.timeout)
         total_checks += 1
         print(f"  [{'OK' if ok else 'XX'}] {label:38} {detail}")
         if not ok:
-            failures.append(f"审计: {label} -> {detail}")
+            (incomplete if detail.startswith("INCOMPLETE:") else failures).append(f"审计: {label} -> {detail}")
 
     if firmware:
         print("\n[固件工程准备自检]")
         path = ROOT / "tools" / "firmware" / "prepare_hero_build.py"
-        ok, detail = run("prepare", [py, "-u", str(path), firmware])
+        ok, detail = run("prepare", [py, "-u", str(path), str(firmware), "--check-only"],
+                         firmware=firmware, timeout=args.timeout)
         total_checks += 1
-        print(f"  [{'OK' if ok else 'XX'}] 英雄工程准备（切兵种+套补丁+9 项自检）")
+        print(f"  [{'OK' if ok else 'XX'}] 指定固件工作树只读自检")
         if not ok:
-            failures.append(f"固件准备 -> {detail}")
-        # 准备脚本会留下已套补丁的工作树，这里只报告不擅自还原别人的仓库
+            (incomplete if detail.startswith("INCOMPLETE:") else failures).append(f"固件自检 -> {detail}")
+        try:
+            if firmware_identity(firmware) != identity:
+                failures.append("Firmware worktree changed during verification; results are invalid")
+        except (OSError, ValueError, subprocess.TimeoutExpired) as exc:
+            failures.append(f"Cannot verify unchanged firmware target: {exc}")
 
     print("\n" + "=" * 66)
-    if failures:
-        print(f"结论：NO-GO —— {len(failures)} / {total_checks} 项未通过")
-        for line in failures:
+    if failures or incomplete:
+        print(f"结论：NO-GO —— {len(failures)} FAIL, {len(incomplete)} INCOMPLETE / {total_checks} checks")
+        for line in failures + incomplete:
             print(f"  - {line[:180]}")
         print("\n先解决上面这些，再去 Keil 编译。")
         return 1

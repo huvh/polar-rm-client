@@ -110,10 +110,16 @@ def resolve_performance(
     return RobotPerformance(0, 0, 0, 0, "None")
 
 
+def robot_id_for_alliance(profile: RobotProfile, alliance: str) -> int:
+    if alliance not in ("Red", "Blue"):
+        raise ValueError("Unknown robot alliance")
+    return profile.robot_id + (100 if alliance == "Blue" else 0)
+
+
 def apply_profile_to_state(state: Any, profile: RobotProfile, performance: RobotPerformance, level: int) -> None:
     state.robot_profile = profile.key
     state.robot_type = profile.title
-    state.robot_id = profile.robot_id
+    state.robot_id = robot_id_for_alliance(profile, getattr(state, "alliance_color", "Red"))
     state.level = max(1, min(10, int(level)))
     state.max_health = performance.max_health
     state.current_health = performance.max_health

@@ -1162,7 +1162,17 @@ def test_drive_channel_gating() -> None:
     t5.trigger_estop()
     t5._pump_tx(__import__("time").perf_counter())
     estop_ids = ids(t5._serial.written)
-    check("急停时两路都发归零帧", 1 in estop_ids and 3 in estop_ids, str(estop_ids))
+    check("未曾授权驾驶的急停不占用真实遥控器", 1 in estop_ids and 3 not in estop_ids, str(estop_ids))
+    t5.release_estop()
+    t5._zeros_until = 0.0
+    t5.submit(PolarDriveIntent(key_value=0x01))
+    t5._pump_tx(__import__("time").perf_counter())
+    t5._serial.written.clear()
+    t5.trigger_estop()
+    check("曾活动RC在急停调用返回前立刻释放",
+          ids(t5._serial.written).count(3) == 1, str(ids(t5._serial.written)))
+    t5._pump_tx(__import__("time").perf_counter())
+    check("RC释放后不反复冻结真实摇杆", ids(t5._serial.written).count(3) == 1)
     for f in t5._serial.written:
         if f[2] == 3:
             check("急停 0x03 的 key.v 已清零",

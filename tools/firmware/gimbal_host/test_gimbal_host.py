@@ -25,9 +25,10 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+import os
 
 HERE = Path(__file__).resolve().parent
-REPO = HERE.parents[3] / "tmp_polarbear" / "StandardRobotpp"
+REPO = Path(os.environ.get("POLAR_FIRMWARE_ROOT") or str(HERE.parents[3] / "tmp_polarbear" / "StandardRobotpp")).resolve()
 BRIDGE_APPLY = HERE.parent / "host_bridge" / "apply_host_bridge.py"
 BRIDGE_HEADER_REL = "application/typedef/host_chassis_bridge.h"
 USB_REL = "application/communication/usb_task.c"
@@ -188,7 +189,7 @@ int main(void)
 def _run_checks() -> int:
     if not REPO.exists() or not (REPO / ".git").exists():
         print(f"SKIP: 固件副本不存在（{REPO}）")
-        return 0
+        return 77
 
     owns_gimbal = False
     owns_bridge = False
@@ -196,6 +197,9 @@ def _run_checks() -> int:
     gim0 = (REPO / GIMBAL_REL).read_text(encoding="utf-8", errors="ignore")
     usb0 = (REPO / USB_REL).read_text(encoding="utf-8", errors="ignore")
     if MARK not in gim0:
+        if os.environ.get("POLAR_FIRMWARE_READ_ONLY") == "1":
+            print("[INCOMPLETE] Required prepared files are absent; read-only checks never install patches")
+            return 77
         # 判断"host_bridge 在不在树里"必须看 .c 内容，不能只看头文件是否存在：
         # 兄弟测试收尾会 git checkout 把 .c 还原，而头文件是未跟踪的、留在那儿，
         # 于是"头文件在、桥接代码不在"的半套状态会让下面的锚点直接找不到。
@@ -270,6 +274,8 @@ def _run_checks() -> int:
 
 
 def main() -> int:
+    if os.environ.get("POLAR_FIRMWARE_READ_ONLY") == "1":
+        return _run_checks()
     if not REPO.exists():
         return _run_checks()
     # Include transitively modified RC/chassis files and restore even if an

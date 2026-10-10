@@ -73,11 +73,12 @@ from PySide6.QtGui import (
 
 # 相对导入层级：rm_client/ui/polar/renderers/ → .... = rm_client、... = rm_client.ui
 from ....match_modes import MATCH_MODES, MATCH_MODE_KEYS
-from ....robot_profiles import profiles_for_match
+from ....robot_profiles import profiles_for_match, robot_id_for_alliance
 from ....scenarios import SCENARIOS
 from ...animation import Easings
 from ...clickgui_gpu import ClickGuiDrawList
 from ...gpu_frame_compositor import LensMaterial
+from ...startup_gl import TextureOrigin
 from ...paint import accent_color, glow_rect, glow_text, rounded_rect, text_width, with_alpha
 from ...theme import THEME, color
 
@@ -516,7 +517,7 @@ class StartupSceneMixin:
             rect = QRectF(margin + (index % columns) * (card_w + gap), top + (index // columns) * (card_h + gap), card_w, card_h)
             accent = self.startup_menu_accent(index + 1)
             self.draw_liquid_glass_panel(p, rect, 12 * scale, accent=accent, hover=0.55 if profile.key == selected else 0.0, scale=scale)
-            self.draw_text(p, rect.adjusted(18 * scale, 14 * scale, -18 * scale, -rect.height() + 40 * scale), f"{profile.short_title}  ·  ID {profile.robot_id}", self.font("poppins_bold", 10 * scale), THEME.text)
+            self.draw_text(p, rect.adjusted(18 * scale, 14 * scale, -18 * scale, -rect.height() + 40 * scale), f"{profile.short_title}  ·  ID {robot_id_for_alliance(profile, self.alliance_side())}", self.font("poppins_bold", 10 * scale), THEME.text)
             self.draw_text(p, rect.adjusted(18 * scale, 49 * scale, -18 * scale, -12 * scale), profile.description, self.font("poppins_regular", 7.4 * scale), THEME.muted, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
             self.add_hotspot(rect, "select_robot_profile", profile.key)
         back = QRectF(margin, height - 55 * scale, 110 * scale, 34 * scale)
@@ -1497,9 +1498,9 @@ class StartupSceneMixin:
     def apply_scenario(self, key: str, close_home: bool) -> None:
         config = self.scenario_manager.set_scenario(key)
         self.scenario_manager.apply_to_registry(self.registry)
-        self.scenario_manager.apply_to_runtime(self.mqtt, self.udp, self.control)
         # 后端按三种模式启动/停止 MQTT、UDP、串口（仅连接层，不动 UI）
-        self.backend.apply_scenario(key)
+        self.backend.apply_scenario(key, registry=self.registry)
+        self.control.mock_output = bool(self.backend.mqtt.mock_output)
         if close_home:
             self.home_visible = False
             self.gui_visible = False
