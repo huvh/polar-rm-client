@@ -25,6 +25,7 @@ CATEGORY_ZH = {
 }
 
 MODULE_ZH = {
+    "TopMatchBar": "CS顶部战况",
     "Scenario": "运行场景",
     "StartupVisual": "启动视觉",
     "MatchMode": "比赛模式",

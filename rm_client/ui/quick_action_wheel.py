@@ -224,6 +224,9 @@ class QuickActionWheelState:
     def load_config(self, data: Any) -> None:
         if not isinstance(data, dict):
             return
+        from ..config_store import validate_client_config
+
+        validate_client_config({"quick_action_wheel": data})
         actions = data.get("actions")
         labels = data.get("labels")
         icons = data.get("icons")

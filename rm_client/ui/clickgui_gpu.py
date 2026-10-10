@@ -1175,6 +1175,13 @@ class ClickGuiGpuRenderer:
         key = self._font_key(font, raster_scale, preserve_weight)
         requested = {str(value) for value in texts if str(value)}
         known = self._shaped_texts.setdefault(key, set())
+        current = self.shaped_atlases.get(key)
+        # Warm frames usually request a small subset of a preloaded page.
+        # Avoid copying/comparing its entire (up to 2048-line) set each frame.
+        # Oversized pages still take the original bounded-retention path.
+        if current is not None and len(known) <= 2048 and requested.issubset(known):
+            self.atlas_hits += 1
+            return current
         before = set(known)
         known.update(requested)
         # A settings description can be supplied by a plugin.  Keep the cache
@@ -1307,6 +1314,12 @@ class ClickGuiGpuRenderer:
         raster_scale = max(0.25, float(raster_scale))
         key = self._font_key(font, raster_scale, preserve_weight)
         chars = self._atlas_chars.setdefault(key, set())
+        current = self.atlases.get(key)
+        # Check only this frame's glyphs on a warm page; retain the original
+        # eviction/rebuild and render-pass lock behavior for every miss.
+        if current is not None and len(chars) <= 1024 and chars.issuperset(text):
+            self.atlas_hits += 1
+            return current
         before = set(chars)
         chars.update(text)
         if len(chars) > 1024:

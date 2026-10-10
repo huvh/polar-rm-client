@@ -146,6 +146,11 @@
       "type": "float",
       "volatile": true
     },
+    "_apply_config_data": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow._apply_config_data",
+      "type": "method"
+    },
     "_auto_save_pending": {
       "kind": "plain-attribute",
       "sig": "False",
@@ -544,6 +549,11 @@
       "kind": "plain-attribute",
       "sig": "dict",
       "type": "dict"
+    },
+    "_paint_compatibility_frame": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow._paint_compatibility_frame",
+      "type": "method"
     },
     "_paint_gpu_frame_cached": {
       "kind": "bound-method",
@@ -5424,6 +5434,11 @@
       "kind": "callable",
       "sig": "PolarRMWindow.topLevelWidget",
       "type": "builtin_function_or_method"
+    },
+    "top_match_bar": {
+      "kind": "plain-attribute",
+      "sig": "TopMatchBarController",
+      "type": "TopMatchBarController"
     },
     "tr": {
       "kind": "callable",

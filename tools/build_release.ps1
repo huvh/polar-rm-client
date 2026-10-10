@@ -168,6 +168,7 @@ function Get-TreeHash([string]$Python, [string]$Source, [string]$Root) {
     return $value
 }
 
+$buildSucceeded = $false
 try {
     Assert-Hash $FfmpegPath $expectedFfmpeg "FFmpeg"
     Assert-Hash $TexasWallpaperPath $expectedTexas "Texas wallpaper"
@@ -181,7 +182,8 @@ try {
         # Developer smoke only. Field releases must omit this switch and use
         # an immutable explicit Git commit.
         Get-ChildItem -LiteralPath $clientRoot -Force | Where-Object {
-            $_.Name -notin @(".git", ".venv", "release", "field_evidence", "logs", "user_data")
+            $_.Name -notin @(".git", ".venv", ".venv-polar", "release", "field_evidence", "logs", "user_data") -and
+                $_.Name -notlike ".venv-polar.broken-*"
         } | Copy-Item -Destination $sourceRoot -Recurse -Force
         $commit = (& git -c core.excludesFile=NUL -C $clientRoot rev-parse HEAD).Trim()
         $sourceKind = "working-tree-smoke"
@@ -199,6 +201,14 @@ try {
         $sourceKind = "immutable-git-commit"
     }
     Set-Content -LiteralPath (Join-Path $sourceRoot "BUILD_COMMIT.txt") -Value $commit -Encoding ASCII
+
+    # Legacy user imports are private runtime data, even in a working-tree build.
+    # Remove them only from this disposable staging tree, never from the checkout.
+    $legacyStagedSounds = Join-Path $sourceRoot "assets\ui_sounds\custom"
+    if (Test-Path -LiteralPath $legacyStagedSounds) {
+        Assert-UnderPath $legacyStagedSounds $stageRoot
+        Remove-Item -LiteralPath $legacyStagedSounds -Recurse -Force
+    }
 
     # 队内 0x5A 链路的协议规格是数据文件（电控改它即可适配新固件）。
     # 代码在规格缺失/损坏时会回退到内置表继续跑，所以“能跑”不代表“规格已 shipped”。
@@ -273,6 +283,9 @@ print('polar spec OK: %d segments, %d roles, %d warnings'
         # setdefault(), which is too late when another imported module has
         # already selected the Windows platform plugin.
         $env:QT_QPA_PLATFORM = "offscreen"
+        Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\test_build_safety_regressions.py") "build_safety_regressions" 120 $testLogRoot
+        Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\test_transport_safety_regressions.py") "transport_safety_regressions" 120 $testLogRoot
+        Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\test_ui_state_regressions.py") "ui_state_regressions" 120 $testLogRoot
         Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\backend_protocol_test.py") "backend_protocol" 240 $testLogRoot
         Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\referee_integration_test.py") "referee_integration" 180 $testLogRoot
         # Team StandardRobot++ 0x5A link: framing/CRC parity with the team's own
@@ -290,7 +303,13 @@ print('polar spec OK: %d segments, %d roles, %d warnings'
         Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\api_freeze_test.py") "api_freeze" 180 $testLogRoot
         Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\field_candidate_test.py") "field_candidate" 240 $testLogRoot
         Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\dt7_alignment_test.py") "dt7_alignment" 180 $testLogRoot
-        Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\smoke_test.py") "ui_backend_regression" 300 $testLogRoot
+        $oldRequireVideoFixture = $env:POLAR_REQUIRE_VIDEO_FIXTURE
+        try {
+            $env:POLAR_REQUIRE_VIDEO_FIXTURE = "1"
+            Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\smoke_test.py") "ui_backend_regression" 300 $testLogRoot
+        } finally {
+            $env:POLAR_REQUIRE_VIDEO_FIXTURE = $oldRequireVideoFixture
+        }
         Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\gpu_compositor_test.py") "gpu_compositor" 180 $testLogRoot
         # QOpenGLWidget runtime smokes require a real desktop/WGL surface. A
         # caller's inherited offscreen setting would otherwise create zero
@@ -397,6 +416,8 @@ print(json.dumps({'default_profile': get_profile().profile_id, 'protocol_version
     $refereeMetadata = $refereeJson | ConvertFrom-Json
     $criticalFiles = [ordered]@{
         "bin/ffmpeg.exe" = $expectedFfmpeg
+        "_internal/rm_client/backend/polar_protocol.json" = (Get-FileHash (Join-Path $portable "_internal\rm_client\backend\polar_protocol.json") -Algorithm SHA256).Hash
+        "_internal/configs/cc_key_usage.json" = (Get-FileHash (Join-Path $portable "_internal\configs\cc_key_usage.json") -Algorithm SHA256).Hash
         "defaults/default.json" = (Get-FileHash (Join-Path $portable "defaults\default.json") -Algorithm SHA256).Hash
         "defaults/dt7_profile.json" = (Get-FileHash (Join-Path $portable "defaults\dt7_profile.json") -Algorithm SHA256).Hash
         "resources/assets/wallpapers/builtin/texas.mp4" = $expectedTexas
@@ -521,10 +542,14 @@ print(json.dumps({'default_profile': get_profile().profile_id, 'protocol_version
         [System.IO.Compression.CompressionLevel]::Optimal,
         $true
     )
+    $buildSucceeded = $true
     Write-Host "Self-contained field candidate built: $outputPath"
 }
 finally {
-    if (Test-Path -LiteralPath $stageRoot) {
+    if (-not $buildSucceeded) {
+        Write-Warning "Build failed. Source and test logs retained for diagnosis: $stageRoot"
+    }
+    if ($buildSucceeded -and (Test-Path -LiteralPath $stageRoot)) {
         Assert-UnderPath $stageRoot ([System.IO.Path]::GetTempPath())
         Remove-Item -LiteralPath $stageRoot -Recurse -Force
     }

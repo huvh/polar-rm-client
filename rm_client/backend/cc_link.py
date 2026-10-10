@@ -231,6 +231,7 @@ class CustomControllerLink:
     last_keys: tuple[int, int] = (0, 0)
     dropped_keys: list[str] = field(default_factory=list)
     _next_due: float = 0.0
+    wire_neutral: bool = True
     cursor: VirtualCursor = field(default_factory=VirtualCursor)
 
     # ---- 频率控制 -------------------------------------------------
@@ -242,8 +243,17 @@ class CustomControllerLink:
         self._next_due = now + interval
         return True
 
-    def _send(self, cmd_id: int, payload: bytes, now: float) -> tuple[bool, str]:
-        if not self._rate_gate(now):
+    def _send(self, cmd_id: int, payload: bytes, now: float, *,
+              neutral_release: bool = False) -> tuple[bool, str]:
+        if neutral_release:
+            # The bypass is available only for an internally encoded key and
+            # button release; it cannot carry a non-neutral command.
+            if cmd_id != CC_CMD_KEYMOUSE or len(payload) != KEYMOUSE_PAYLOAD_SIZE \
+                    or payload[:2] != b"\x00\x00" \
+                    or payload[3] & 0xF0 or payload[5] & 0xF0 or payload[6:] != b"\x00\x00":
+                raise ValueError("CC rate bypass only accepts neutral key/button release")
+            self._next_due = max(self._next_due, now + 1.0 / max(1.0, float(self.max_hz)))
+        elif not self._rate_gate(now):
             return False, f"超过 {self.max_hz:g}Hz 上限，本帧已丢弃"
         self.seq = (self.seq + 1) & 0xFF
         try:
@@ -255,7 +265,9 @@ class CustomControllerLink:
         if not self.mock_output:
             try:
                 if self.write_bytes is not None:
-                    self.write_bytes(frame)
+                    written = self.write_bytes(frame)
+                    if written is not None and written != len(frame):
+                        raise IOError(f"CC 串口短写 {written}/{len(frame)}")
                 else:
                     import serial
                     from .. import serial_ports as ports
@@ -265,8 +277,10 @@ class CustomControllerLink:
                             "没找到自定义控制器该用的 FTDI 口（选手端只认它）："
                             "插好线或在 CC Port 里显式选口")
                     self.resolved_port = target
-                    with serial.Serial(target, self.baudrate, timeout=0.2) as sp:
-                        sp.write(frame)
+                    with serial.Serial(target, self.baudrate, timeout=0.2, write_timeout=0.2) as sp:
+                        written = sp.write(frame)
+                        if written != len(frame):
+                            raise IOError(f"CC 串口短写 {written}/{len(frame)}")
             except Exception as exc:
                 self.last_error = str(exc)
                 return False, str(exc)
@@ -289,7 +303,16 @@ class CustomControllerLink:
         self.dropped_keys = dropped
         payload = encode_keymouse_0306(key1=key1, key2=key2, x=x, y=y,
                                        left=left, right=right)
+        neutral = not (key1 or key2 or left or right)
+        if neutral and not self.wire_neutral:
+            return self.release_all(now)
+        if not neutral:
+            # Failed/partial writes have an unknown outcome. Only a successful
+            # release may certify neutral again.
+            self.wire_neutral = False
         ok, why = self._send(CC_CMD_KEYMOUSE, payload, now)
+        if ok:
+            self.wire_neutral = neutral
         return ok, why
 
     def send_robot_interact(self, data: bytes, now: float | None = None
@@ -308,11 +331,15 @@ class CustomControllerLink:
     def release_all(self, now: float | None = None) -> tuple[bool, str]:
         """一键松手：全零键值 + 保持当前光标位置（0 表示"无按键按下"）。"""
         now = self.time_fn() if now is None else float(now)
-        self.cursor.reset()
-        return self._send(CC_CMD_KEYMOUSE,
+        ok, why = self._send(CC_CMD_KEYMOUSE,
                           encode_keymouse_0306(key1=0, key2=0,
                                                x=self.cursor.x, y=self.cursor.y),
-                          now)
+                          now, neutral_release=True)
+        self.wire_neutral = bool(ok)
+        if ok:
+            self.last_keys = (0, 0)
+            self.dropped_keys = []
+        return ok, why
 
 
 def decode_cc_frame(frame: bytes) -> dict | None:

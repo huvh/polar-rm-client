@@ -36,7 +36,7 @@ python -m venv .venv
 - `Default3000925581Pkg`：Wallpaper Engine 场景兼容模式。
 - `ParticleGrid`：视频不可用时的交互粒子网格。
 
-壁纸库支持导入 `mp4 / webm / mov / avi / mkv / gif / png / jpg`。导入文件会复制到 `assets/wallpapers/user/`，当前选择会随 config 自动保存；用户壁纸可以删除，内置壁纸不会被删除。
+壁纸库支持导入 `mp4 / webm / mov / avi / mkv / gif / png / jpg`。导入文件会复制到运行时用户数据目录的 `wallpapers/`（默认 `user_data/wallpapers/`），当前选择会随 config 自动保存；用户壁纸可以删除，内置壁纸不会被删除。
 
 `StartupVisual -> Motion Quality` 控制启动页运动质量：
 

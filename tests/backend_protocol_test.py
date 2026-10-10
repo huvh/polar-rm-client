@@ -28,6 +28,19 @@ from rm_client.native_viewer_telemetry import find_h264_sps_offset  # noqa: E402
 from rm_client.scenarios import SCENARIOS  # noqa: E402
 
 PASS = 0
+SKIPPED: list[str] = []
+
+
+def require_video_dependencies(test_name: str) -> bool:
+    try:
+        import cv2  # type: ignore  # noqa: F401
+        import numpy  # type: ignore  # noqa: F401
+    except Exception as exc:
+        reason = f"{test_name}: video dependency unavailable: {type(exc).__name__}: {exc}"
+        SKIPPED.append(reason)
+        print("  SKIP " + reason)
+        return False
+    return True
 
 
 def check(name: str, condition: bool, detail: str = "") -> None:
@@ -58,10 +71,10 @@ def test_uplink_roundtrip() -> None:
     fields = proto.decode_fields(payload)
     check("map is_send_all", proto._u(fields, 1) == 1)
     check("map robot_id fixed 7 bytes", proto._b(fields, 2) == bytes([1, 3, 0, 0, 0, 0, 0]))
-    check("map mode", proto._u(fields, 3) == 2)
+    check("map category is field 3 (proto mode)", proto._u(fields, 3) == 3)
     check("map enemy", proto._u(fields, 4) == 103)
     check("map ascii", proto._u(fields, 5) == 65)
-    check("map type", proto._u(fields, 6) == 3)
+    check("map marking mode is field 6 (proto type)", proto._u(fields, 6) == 2)
     check("map x", abs(proto._f(fields, 7) - 12.5) < 1e-4)
     check("map y", abs(proto._f(fields, 8) - 7.25) < 1e-4)
 
@@ -954,9 +967,12 @@ def test_backend_frontend_sync() -> None:
 
 def test_native_0310_video_pipeline() -> None:
     print("[native] 0x0310 H.264 reassembly -> persistent decoder")
+    if not require_video_dependencies("native 0x0310 pipeline"):
+        return
     import subprocess
     ffmpeg = resolve_ffmpeg_executable()
     if not ffmpeg:
+        SKIPPED.append("native 0x0310 pipeline: ffmpeg unavailable")
         print("  skip (no ffmpeg)")
         return
     proc = subprocess.run(
@@ -1006,9 +1022,12 @@ def test_native_0310_video_pipeline() -> None:
 
 def test_persistent_h264_decoder() -> None:
     print("[decoder] ContinuousMjpegDecoder h264 end-to-end")
+    if not require_video_dependencies("persistent H264 decoder"):
+        return
     import subprocess
     ffmpeg = resolve_ffmpeg_executable()
     if not ffmpeg:
+        SKIPPED.append("persistent H264 decoder: ffmpeg unavailable")
         print("  skip (no ffmpeg)")
         return
     from rm_client.backend.video_backend import ContinuousMjpegDecoder
@@ -1039,6 +1058,8 @@ def test_persistent_h264_decoder() -> None:
 
 def test_mjpeg_stream_splitter() -> None:
     print("[decoder] MJPEG stream splitter (no ffmpeg needed)")
+    if not require_video_dependencies("MJPEG stream splitter"):
+        return
     import cv2  # type: ignore
     import numpy as np  # type: ignore
     from rm_client.backend.video_backend import consume_mjpeg_stream
@@ -1081,6 +1102,9 @@ def main() -> None:
     test_native_0310_video_pipeline()
     test_persistent_h264_decoder()
     test_mjpeg_stream_splitter()
+    if SKIPPED:
+        print(f"\\nINCOMPLETE ({PASS} checks passed; {len(SKIPPED)} dependency-blocked tests skipped)")
+        raise SystemExit(77)
     print(f"\\nALL PASSED ({PASS} checks)")
 
 

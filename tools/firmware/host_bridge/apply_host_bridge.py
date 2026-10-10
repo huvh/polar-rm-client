@@ -247,7 +247,7 @@ def _replace_once(text: str, pattern: str, replacement: str, what: str, log: lis
     return new
 
 
-def ensure_drive_keys_patch(root: Path, log: list) -> None:
+def ensure_drive_keys_patch(root: Path, log: list, *, dry_run: bool = False) -> None:
     """保证 usb_task.c 里已有 UsbMergeVirtualRcKeys()（驾驶补丁的产物）。
 
     为什么在这里自动补而不是让调用方负责：本脚本的键位那三步
@@ -265,6 +265,9 @@ def ensure_drive_keys_patch(root: Path, log: list) -> None:
     if not DRIVE_KEYS_PATCH.exists():
         raise RuntimeError(
             f"缺少驾驶补丁，且 usb_task.c 里没有 UsbMergeVirtualRcKeys：{DRIVE_KEYS_PATCH}")
+    if dry_run:
+        raise RuntimeError("dry-run: prerequisite drive patch is absent; no files changed. "
+                           "Full planning requires an already prepared disposable copy.")
     res = subprocess.run(["git", "apply", str(DRIVE_KEYS_PATCH)],
                          cwd=root, capture_output=True, text=True,
                          encoding="utf-8", errors="replace")
@@ -497,7 +500,7 @@ def main(argv: list[str] | None = None) -> int:
     log: list[str] = []
     print(f"固件树：{root}")
     try:
-        ensure_drive_keys_patch(root, log)
+        ensure_drive_keys_patch(root, log, dry_run=args.dry_run)
     except RuntimeError as exc:
         print(f"[FAIL] {exc}")
         return 2

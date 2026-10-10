@@ -133,6 +133,7 @@ class Bridge:
                     data = ser.read(READ_SIZE) if hasattr(ser, "read") else b""
                 except Exception as exc:
                     self.last_error = f"读串口失败：{exc}"
+                    alive.clear()
                     return
                 if not data:
                     time.sleep(0.002)
@@ -141,6 +142,7 @@ class Bridge:
                     conn.sendall(bytes(data))
                     self.bytes_serial_to_client += len(data)
                 except OSError:
+                    alive.clear()
                     return
 
         reader = threading.Thread(target=upstream, daemon=True)
@@ -148,17 +150,23 @@ class Bridge:
         conn.settimeout(0.1)
         events = 0
         try:
-            while not self.stop.is_set():
+            while alive.is_set() and not self.stop.is_set():
                 try:
                     data = conn.recv(READ_SIZE)
                 except (TimeoutError, BlockingIOError, socket.timeout):
-                    data = b""
+                    # A timeout means no data yet; b'' returned by recv is
+                    # EOF and must free this single-client bridge immediately.
+                    continue
                 except OSError:
                     return
-                if data:
+                if not data:
+                    return
+                if data and alive.is_set() and not self.stop.is_set():
                     try:
-                        ser.write(data)
-                        self.bytes_client_to_serial += len(data)
+                        written = ser.write(data)
+                        if written != len(data):
+                            raise IOError(f"串口短写 {written}/{len(data)}")
+                        self.bytes_client_to_serial += written
                     except Exception as exc:
                         self.last_error = f"写串口失败：{exc}"
                         return

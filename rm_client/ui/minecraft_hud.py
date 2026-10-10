@@ -410,7 +410,7 @@ class MinecraftCombatHudRenderer:
             "",
             f"§fKills: §a{int(getattr(state,'referee_kill_count',0))}",
             f"§fAmmo: §a{int(getattr(state,'remaining_ammo',0))}",
-            f"§fGold: §6{int(getattr(state,'polar_gold_coin',0))}",
+            f"§fGold: §6{int(getattr(state,'remaining_economy',0))}",
             "§epolar-rm-client",
         ]
         return tuple((text,QColor("#ffffff")) for text in texts)

@@ -38,20 +38,22 @@ from __future__ import annotations
 
 import math
 import time
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
 from PySide6.QtWidgets import QFileDialog
 
 # 相对导入层级：rm_client/ui/polar/mixins/ → .... = rm_client、... = rm_client.ui
-from ....config_store import apply_registry_config, export_client_config
+from ....config_store import apply_registry_config, export_client_config, validate_client_config
 from ....match_modes import MatchModeConfig
-from ....model import CONTROL_SLOT_ORDER, PRIMARY_GUI_MODE, Module, normalize_gui_mode
+from ....model import CONTROL_RESERVED_KEYS, CONTROL_SLOT_ORDER, PRIMARY_GUI_MODE, Module, normalize_gui_mode
 from ....robot_profiles import (
     apply_profile_to_state,
     profile_by_key,
     profiles_for_match,
     resolve_performance,
+    robot_id_for_alliance,
 )
 from ....ui_audio import UiAudioManager
 
@@ -83,6 +85,9 @@ class PersistenceMixin:
         )
 
     def apply_match_mode(self, key: str, close_home: bool, announce: bool = True) -> None:
+        self.backend.lock_control("match mode changed")
+        self.control.release_all(self.state, self.registry)
+        self.control.clear_pending()
         config = self.match_mode_manager.set_mode(key)
         self.match_mode_manager.apply_to_registry(self.registry)
         self.seed_match_state(config)
@@ -92,6 +97,7 @@ class PersistenceMixin:
             role_setting.options = [profile.key for profile in profiles_for_match(config.key)]
             if str(role_setting.value) not in role_setting.options:
                 role_setting.value = role_setting.options[0]
+        self.apply_robot_profile(self.current_robot_profile_key(), close_home=False, announce=False)
         if close_home:
             self.home_visible = False
             self.gui_visible = False
@@ -110,9 +116,56 @@ class PersistenceMixin:
             role.value = profile.key
         performance = self.current_robot_performance(profile.key)
         level = int(self.get_setting_number(module, "Level", 1))
+        side = self.alliance_side()
+        robot_id = robot_id_for_alliance(profile, side)
+        if int(self.state.robot_id) != robot_id or str(self.backend.mqtt.client_id) != str(robot_id):
+            # Revoke the old epoch before changing either identity. Never
+            # inherit armed outputs merely because the operator chose Blue.
+            self.backend.lock_control("robot profile/alliance changed")
+            self.control.mock_output = bool(self.backend.mqtt.mock_output)
+            self.control.release_all(self.state, self.registry)
+            self.control.clear_pending()
+            if any(
+                bool(getattr(transport, flag, False))
+                for transport in (self.backend.mqtt, getattr(self.backend, "polar", None), getattr(self.backend, "serial", None))
+                for flag in ("_started", "_running", "connected")
+            ):
+                # Private spin/gimbal intent is independent of the official
+                # match lock. A running identity switch therefore latches the
+                # existing all-output E-stop until the operator releases it.
+                self.backend.trigger_estop()
+                self.toast("身份已切换到停用状态；核对机器人后需操作员解除急停", kind="warning")
+        try:
+            self.backend.set_client_id(robot_id)
+        except Exception as exc:
+            self.backend.lock_control("robot identity update failed")
+            if str(self.backend.mqtt.client_id) == str(robot_id):
+                # A reconnect can fail after the configured identity changed.
+                # Keep the local identity aligned, but do not unlock outputs.
+                self.state.alliance_color = side
+                apply_profile_to_state(self.state, profile, performance, level)
+            else:
+                side = self.state.alliance_color
+                selected_side = self.registry.get("AllianceProfile")
+                selected_side = selected_side.get_setting("Side") if selected_side else None
+                if selected_side is not None:
+                    selected_side.value = side
+                if role is not None:
+                    role.value = getattr(self.state, "robot_profile", role.value)
+            match = self.registry.get("MatchMode")
+            legacy_side = match.get_setting("Alliance") if match else None
+            if legacy_side is not None:
+                legacy_side.value = side
+            self.toast(f"身份更新失败，输出保持锁定：{exc}", kind="warning")
+            if self.config_loading:
+                raise
+            return
+        self.state.alliance_color = side
+        match = self.registry.get("MatchMode")
+        legacy_side = match.get_setting("Alliance") if match else None
+        if legacy_side is not None:
+            legacy_side.value = side
         apply_profile_to_state(self.state, profile, performance, level)
-        # 机器人档案变更同步 MQTT client_id（裁判按 client_id 识别本机）
-        self.backend.set_client_id(self.state.robot_id)
         if close_home:
             self.home_visible = False
             self.gui_visible = False
@@ -130,9 +183,7 @@ class PersistenceMixin:
         self.state.start_time = time.perf_counter()
         # 赛制选择只初始化展示数据，不能冒充权威裁判的比赛阶段。
         self.state.current_stage = "NOT_STARTED"
-        match_module = self.registry.get("MatchMode")
-        alliance = match_module.get_setting("Alliance") if match_module else None
-        self.state.alliance_color = str(alliance.value) if alliance else "Red"
+        self.state.alliance_color = self.alliance_side()
         if config.key == "RMUL3v3":
             self.state.ally_victory_points = 200
             self.state.enemy_victory_points = 200
@@ -293,13 +344,103 @@ class PersistenceMixin:
 
     def load_startup_config(self) -> None:
         module = self.registry.get("ConfigManager")
+        preferences = self.config_store.load_startup_preferences()
+        profile_setting = module.get_setting("Profile") if module else None
+        load_setting = module.get_setting("Load On Start") if module else None
+        if preferences is not None:
+            if profile_setting is not None:
+                profile_setting.value = preferences["profile"]
+            if load_setting is not None:
+                load_setting.value = preferences["load_on_start"]
+            if not preferences["load_on_start"]:
+                return
+        data = self.config_store.load(self.current_profile())
+        if preferences is None and data is not None:
+            # Migrate the old in-profile preference without applying any of
+            # the profile first. False must work on the very next launch.
+            saved = data.get("modules", {}).get("ConfigManager", {}).get("settings", {})
+            if saved.get("Load On Start") is False:
+                if load_setting is not None:
+                    load_setting.value = False
+                return
         if not self.setting_bool(module, "Load On Start", True):
             return
-        data = self.config_store.load(self.current_profile())
         if data:
             self.apply_config_data(data, announce=False)
 
     def apply_config_data(self, data: dict[str, Any], announce: bool = True) -> None:
+        try:
+            validate_client_config(data, self.registry)
+        except ValueError as exc:
+            self.toast(f"配置加载失败，原配置未更改：{exc}", kind="warning")
+            return
+        previous = deepcopy(self.current_config_data())
+        # Mode options and keyboard bindings can change while loading. Save
+        # their exact prior values so a rollback cannot silently coerce an old
+        # RMUC-only role into a new RMUL role or retain half-applied key swaps.
+        registry_snapshot = [
+            (module, module.enabled, module.keybind,
+             [(setting, deepcopy(setting.value), list(setting.options)) for setting in module.settings])
+            for module in self.registry.modules
+        ]
+        previous_binds = dict(self.control.binds)
+        previous_home = self.home_visible
+        previous_step = self.startup_step
+        spin = self.registry.get("SpinMode")
+        candidate_spin = data.get("modules", {}).get("SpinMode", {})
+        spin_stops = candidate_spin.get("enabled") is False or (
+            candidate_spin.get("settings", {}).get("Mock Output") is True
+            and not self.setting_bool(spin, "Mock Output", True)
+        )
+        if spin is not None and spin.enabled and spin_stops:
+            # Publish only the falling edge on the old transport/identity.
+            # This notification never publishes a new live enable command.
+            self.publish_spin_control_state(False, source="config_reload")
+        self.backend.lock_control("configuration reload")
+        self.control.release_all(self.state, self.registry)
+        self.control.clear_pending()
+        try:
+            self._apply_config_data(data)
+        except Exception as exc:
+            # Disk/driver errors can still occur after preflight. Restore the
+            # operator's values while keeping transport stopped and locked.
+            restore_error = None
+            try:
+                for module, enabled, keybind, settings in registry_snapshot:
+                    module.set_enabled(enabled)
+                    module.keybind = keybind
+                    for setting, value, options in settings:
+                        setting.value = value
+                        setting.options = options
+                self._apply_config_data(previous, sync_runtime=False)
+                scenario = self.registry.get("Scenario")
+                old_key = self.setting_mode(scenario, "Mode", "LabDebug")
+                self.scenario_manager.set_scenario(old_key)
+                match = self.registry.get("MatchMode")
+                old_match = self.match_mode_manager.set_mode(self.setting_mode(match, "Mode", "RMUC7v7"))
+                old_profile = profile_by_key(old_match.key, self.current_robot_profile_key())
+                old_id = robot_id_for_alliance(old_profile, self.alliance_side())
+                self.backend.apply_scenario(old_key, start=False, registry=self.registry, robot_id=old_id)
+                self.seed_match_state(old_match)
+                self.apply_robot_profile(self.current_robot_profile_key(), close_home=False, announce=False)
+            except Exception as rollback_exc:
+                restore_error = rollback_exc
+            finally:
+                self.control.binds = previous_binds
+                self.control.mock_output = bool(self.backend.mqtt.mock_output)
+                self.home_visible = previous_home
+                self.startup_step = previous_step
+                self.backend.trigger_estop()
+                self.backend.lock_control("configuration reload failed")
+            if restore_error is None:
+                self.toast(f"配置加载失败，已恢复设置并锁定输出；需操作员解除急停：{exc}", kind="warning")
+            else:
+                self.toast(f"配置加载失败，输出已锁定；恢复未完成：{exc}; {restore_error}", kind="warning")
+            return
+        if announce:
+            self.toast(f"配置已加载：{self.current_profile()}")
+
+    def _apply_config_data(self, data: dict[str, Any], *, sync_runtime: bool = True) -> None:
         self.config_loading = True
         try:
             self.refresh_wallpaper_profiles()
@@ -335,14 +476,13 @@ class PersistenceMixin:
                 self.apply_quick_action_wheel_to_settings()
             else:
                 self.sync_quick_action_wheel_settings()
-            self.sync_runtime_from_registry()
+            if sync_runtime:
+                self.sync_runtime_from_registry()
             self.sync_mode_setting()
             self.refresh_config_profiles()
             self.refresh_wallpaper_profiles()
         finally:
             self.config_loading = False
-        if announce:
-            self.toast(f"配置已加载：{self.current_profile()}")
 
     def sync_control_binds(self) -> None:
         """把 ClickGUI 里的“Bind <槽位>”同步到键盘控制桥。
@@ -359,6 +499,10 @@ class PersistenceMixin:
             if setting is None:
                 continue
             wanted = str(setting.value or slot)
+            if wanted.lower() in CONTROL_RESERVED_KEYS:
+                setting.value = self.control.binds.get(slot, slot)
+                self.toast(f"{wanted} 是界面保留键，未更改控制绑定", kind="warning")
+                continue
             if str(self.control.binds.get(slot, "")).lower() == wanted.lower():
                 continue
             if not self.control.set_bind(slot, wanted):
@@ -367,34 +511,48 @@ class PersistenceMixin:
 
     def sync_runtime_from_registry(self) -> None:
         self.sync_control_binds()
+        match_mode = self.registry.get("MatchMode")
+        match_setting = match_mode.get_setting("Mode") if match_mode else None
+        if match_setting:
+            self.match_mode_manager.set_mode(str(match_setting.value))
+        profile = profile_by_key(self.match_mode_manager.current.key, self.current_robot_profile_key())
+        robot_id = robot_id_for_alliance(profile, self.alliance_side())
         scenario = self.registry.get("Scenario")
         scenario_setting = scenario.get_setting("Mode") if scenario else None
         if scenario_setting:
             start_backend = not self.setting_bool(scenario, "Show Startup", True)
             self.scenario_manager.set_scenario(str(scenario_setting.value))
-            # A scenario owns its transport endpoints and safety defaults.
-            # Re-applying them on load migrates old OfficialEvent profiles
-            # whose economy path was incorrectly persisted in mock mode.
-            self.scenario_manager.apply_to_registry(self.registry)
-            self.scenario_manager.apply_to_runtime(self.mqtt, self.udp, self.control)
+            # Defaults belong to an explicit scenario switch. A profile load
+            # preserves its saved endpoints and conservative mock choices.
             # Loading a profile must configure the selected backend but must
             # not bypass the startup screen and open network links early.
             self.backend.apply_scenario(
                 self.scenario_manager.current.key,
                 start=start_backend,
+                registry=self.registry,
+                robot_id=robot_id,
             )
-        match_mode = self.registry.get("MatchMode")
-        match_setting = match_mode.get_setting("Mode") if match_mode else None
+            self.control.mock_output = bool(self.backend.mqtt.mock_output)
         if match_setting:
-            config = self.match_mode_manager.set_mode(str(match_setting.value))
-            self.seed_match_state(config)
+            self.seed_match_state(self.match_mode_manager.current)
         self.apply_robot_profile(self.current_robot_profile_key(), close_home=False, announce=False)
         self.home_visible = not start_backend if scenario_setting else self.home_visible
         self.startup_step = "scenario" if self.home_visible else "done"
 
     def save_current_config(self, announce: bool = True) -> None:
+        try:
+            path = self.config_store.save(self.current_profile(), self.current_config_data())
+            module = self.registry.get("ConfigManager")
+            self.config_store.save_startup_preferences(self.current_profile(), self.setting_bool(module, "Load On Start", True))
+        except (OSError, ValueError) as exc:
+            self._auto_save_pending = True
+            self._auto_save_due_at = time.perf_counter() + 5.0
+            if announce or not getattr(self, "_config_save_error", False):
+                self.toast(f"配置保存失败，将重试：{exc}", kind="warning")
+            self._config_save_error = True
+            return
         self._auto_save_pending = False
-        path = self.config_store.save(self.current_profile(), self.current_config_data())
+        self._config_save_error = False
         self.refresh_config_profiles()
         if announce:
             self.toast(f"配置已保存：{path.name}")
@@ -411,7 +569,7 @@ class PersistenceMixin:
         if not path:
             return
         try:
-            profile = self.config_store.import_file(Path(path))
+            profile = self.config_store.import_file(Path(path), registry=self.registry)
         except (OSError, ValueError) as exc:
             self.toast(f"Import failed: {exc}")
             return
@@ -539,6 +697,7 @@ _QUALNAME_PINNED_MEMBERS = (
     PersistenceMixin.current_config_data,
     PersistenceMixin.load_startup_config,
     PersistenceMixin.apply_config_data,
+    PersistenceMixin._apply_config_data,
     PersistenceMixin.sync_runtime_from_registry,
     PersistenceMixin.save_current_config,
     PersistenceMixin.reload_current_config,

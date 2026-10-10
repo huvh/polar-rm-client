@@ -1078,8 +1078,8 @@ class CompanionHud:
 class MatchProgressRenderer:
     """战地风格比分推进条：敌方/我方基地血量消耗进度 + 红蓝比分。
 
-    RM 规则下胜利条件是打空对方基地血量，因此推进度直接取
-    GlobalUnitStatus 的基地血量占比（1 - hp/max），比分数字取
+    保留既有左右映射：左=己方基地已损失比例，右=敌方基地已损失比例。
+    这不是比赛时间进度、胜利点或 CS 回合数。比例为 1 - hp/max；比分数字取
     GameStatus 的 red_score/blue_score。条的位置跟随灵动岛下边缘
     （anchor_bottom 传入时），岛展开/收起时一起灵动。
     """
@@ -1099,17 +1099,26 @@ class MatchProgressRenderer:
         now: float,
         scale: float,
         *,
-        own_base_health: float,
+        own_base_health: float | None,
         own_base_max: float,
-        enemy_base_health: float,
+        enemy_base_health: float | None,
         enemy_base_max: float,
-        red_score: int,
-        blue_score: int,
+        red_score: int | None,
+        blue_score: int | None,
         own_blue: bool,
         anchor_bottom: float | None = None,
+        minimum_y: float | None = None,
     ) -> None:
-        own_progress = 0.0 if own_base_max <= 0 else 1.0 - max(0.0, min(1.0, own_base_health / own_base_max))
-        enemy_progress = 0.0 if enemy_base_max <= 0 else 1.0 - max(0.0, min(1.0, enemy_base_health / enemy_base_max))
+        own_known = (own_base_health is not None and math.isfinite(own_base_health)
+                     and math.isfinite(own_base_max) and 0 <= own_base_health <= own_base_max and own_base_max > 0)
+        enemy_known = (enemy_base_health is not None and math.isfinite(enemy_base_health)
+                       and math.isfinite(enemy_base_max) and 0 <= enemy_base_health <= enemy_base_max and enemy_base_max > 0)
+        own_progress = 1.0 - max(0.0, min(1.0, own_base_health / own_base_max)) if own_known else 0.0
+        enemy_progress = 1.0 - max(0.0, min(1.0, enemy_base_health / enemy_base_max)) if enemy_known else 0.0
+        if not own_known:
+            self.shown_own = 0.0
+        if not enemy_known:
+            self.shown_enemy = 0.0
         # 平滑推进，血量跳变时条不闪跳
         factor = 1.0 - math.exp(-(1.0 / 60.0) / 0.35)
         self.shown_own += (own_progress - self.shown_own) * factor
@@ -1123,6 +1132,10 @@ class MatchProgressRenderer:
             y_factor = 1.0 - math.exp(-(1.0 / 60.0) / 0.22)
             self.shown_y += (target_y - self.shown_y) * y_factor
 
+        # The integrated CS row owns the space above this bound. Clamp during
+        # expanding-island/layout transitions rather than easing through cards.
+        if minimum_y is not None:
+            self.shown_y = max(self.shown_y, minimum_y)
         bar_w = min(430.0, width * 0.42) * scale
         bar_h = 7.0 * scale
         y = self.shown_y
@@ -1133,27 +1146,36 @@ class MatchProgressRenderer:
 
         own_color = QColor("#4FA3FF") if own_blue else QColor("#FF5A4F")
         enemy_color = QColor("#FF5A4F") if own_blue else QColor("#4FA3FF")
-        # 左条恒为己方推进（打对方基地的进度），右条为敌方推进
+        # 历史实现的左条为己方基地损失，右条为敌方基地损失（不反转数据）。
         own_rect, enemy_rect = (left_rect, right_rect)
-        for rect, color, progress in ((own_rect, own_color, self.shown_own), (enemy_rect, enemy_color, self.shown_enemy)):
+        for rect, color, progress, known in ((own_rect, own_color, self.shown_own, own_known), (enemy_rect, enemy_color, self.shown_enemy, enemy_known)):
             track = QColor("#FFFFFF")
             track.setAlphaF(0.10)
             p.fillRect(rect, track)
             fill = QRectF(rect)
             fill.setWidth(rect.width() * max(0.0, min(1.0, progress)))
             p.fillRect(fill, color)
+            if not known:
+                p.setPen(QPen(QColor(190, 198, 204, 150), 1.0, Qt.PenStyle.DotLine))
+                p.drawLine(rect.topLeft(), rect.bottomRight())
 
         row_y = y + bar_h + 4 * scale
         p.setFont(QFont("Poppins", max(7, int(10 * scale)), QFont.Weight.Bold))
         own_score = blue_score if own_blue else red_score
         enemy_score = red_score if own_blue else blue_score
         # T4：比分逐帧喂目标（目标未变时 no-op），显示值走数字滚动。
-        self.own_score_scroll.update_target(own_score, now)
-        self.enemy_score_scroll.update_target(enemy_score, now)
+        if own_score is not None:
+            self.own_score_scroll.update_target(own_score, now)
+        else:
+            self.own_score_scroll.reset()
+        if enemy_score is not None:
+            self.enemy_score_scroll.update_target(enemy_score, now)
+        else:
+            self.enemy_score_scroll.reset()
         p.setPen(own_color)
-        p.drawText(QRectF(cx - gap - bar_w, row_y, bar_w, 18 * scale), Qt.AlignmentFlag.AlignRight, str(self.own_score_scroll.value(now)))
+        p.drawText(QRectF(cx - gap - bar_w, row_y, bar_w, 18 * scale), Qt.AlignmentFlag.AlignRight, str(self.own_score_scroll.value(now)) if own_score is not None else "—")
         p.setPen(enemy_color)
-        p.drawText(QRectF(cx + gap, row_y, bar_w, 18 * scale), Qt.AlignmentFlag.AlignLeft, str(self.enemy_score_scroll.value(now)))
+        p.drawText(QRectF(cx + gap, row_y, bar_w, 18 * scale), Qt.AlignmentFlag.AlignLeft, str(self.enemy_score_scroll.value(now)) if enemy_score is not None else "—")
         p.setPen(QColor("#FFFFFF"))
         small = QFont("Poppins", max(5, int(7 * scale)))
         p.setFont(small)

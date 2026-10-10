@@ -3,7 +3,11 @@ from pathlib import Path
 from PyInstaller.utils.hooks import collect_all
 
 root = Path(SPECPATH).parent
-datas = []
+# Keep data beside its importing frozen module, independent of the launch cwd.
+datas = [
+    (str(root / "rm_client/backend/polar_protocol.json"), "rm_client/backend"),
+    (str(root / "configs/cc_key_usage.json"), "configs"),
+]
 binaries = []
 hiddenimports = []
 # Public exports are lazy to keep schema imports free of Qt/OpenCV. Explicit

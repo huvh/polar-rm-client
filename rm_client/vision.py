@@ -211,6 +211,7 @@ def _observation_from_tongji(payload: dict[str, Any], *, force_aim: bool = False
         "light_strength": payload.get("light_strength", 0.0),
         "light_state": payload.get("light_state", "unknown"),
         "target_id": payload.get("target_id", payload.get("id", -1)),
+        "held": payload.get("held", False),
     })
 
 

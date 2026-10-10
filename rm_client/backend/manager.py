@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 import json
 import time
+from dataclasses import replace
 from typing import Any, Callable
 
 from ..model import RobotState
@@ -149,6 +150,10 @@ class BackendManager:
         self._last_estop_zero_reason = "not run"
         self._input_clear_generation = 0
         self.input_clear_hook: Callable[[str], None] | None = None
+        # Optional presentation-only observer, called after authoritative apply.
+        # It never owns/drains a queue and errors cannot affect control state.
+        self.referee_view_observer: Callable[[str, dict[str, Any], float], None] | None = None
+        self._referee_view_error = ""
         self._last_logged_stage = ""
         self.field_log = RotatingJsonlLogger(self.paths.logs_root)
         self._last_spin_note = ''
@@ -193,7 +198,47 @@ class BackendManager:
             self.state.mock_simulation_enabled = config.key == "LabDebug"
             if config.key != "LabDebug" and not self.state.official_state_active:
                 self._clear_mock_frontend_state(self.state)
-        self.set_active_video_source(config.connection.video_source)
+        # Configuration must be side-effect free with respect to starting
+        # transports; apply_scenario starts them only after final endpoints.
+        self.set_active_video_source(config.connection.video_source, start=False)
+
+    @staticmethod
+    def _config_from_registry(config: Any, registry: Any) -> Any:
+        if registry is None:
+            return config
+
+        def value(module_name: str, setting_name: str, default: Any) -> Any:
+            module = registry.get(module_name)
+            setting = module.get_setting(setting_name) if module is not None else None
+            return setting.value if setting is not None else default
+
+        connection = config.connection
+        changes = {
+            "mqtt_host": str(value("MQTTLink", "Host", connection.mqtt_host)).strip(),
+            "mqtt_port": int(value("MQTTLink", "Port", connection.mqtt_port)),
+            "udp_host": str(value("UDPVideo", "Host", connection.udp_host)).strip(),
+            "udp_port": int(value("UDPVideo", "Port", connection.udp_port)),
+            "serial_port": str(value("SerialBridge", "Port", connection.serial_port)),
+            "serial_baud": int(value("SerialBridge", "Baud", connection.serial_baud)),
+            "video_source": str(value("CameraFeed", "Source", connection.video_source)),
+        }
+        for name in ("mqtt_host", "udp_host"):
+            if not changes[name] or any(ch.isspace() for ch in changes[name]):
+                raise ValueError(f"Invalid configured {name}")
+        for name in ("mqtt_port", "udp_port"):
+            if not 1 <= changes[name] <= 65535:
+                raise ValueError(f"Invalid configured {name}")
+        if not 1200 <= changes["serial_baud"] <= 3_000_000:
+            raise ValueError("Invalid configured serial baud")
+        port = str(value("RobotLink", "Port", PORT_DEFAULT)).strip()
+        baud = int(value("RobotLink", "Baud", BAUD_DEFAULT))
+        if port and port != PORT_DEFAULT:
+            changes["polar_port"] = port
+        if baud != BAUD_DEFAULT:
+            if not 1200 <= baud <= 3_000_000:
+                raise ValueError("Invalid configured robot baud")
+            changes["polar_baud"] = baud
+        return replace(config, connection=replace(connection, **changes))
 
     def sync_mqtt_link(self, registry: Any) -> str:
         """让 MQTTLink 的 Host/Port **真的决定**连到哪个 broker。
@@ -240,7 +285,7 @@ class BackendManager:
             print(f"[mqtt] broker 改为 {self.mqtt.host}:{self.mqtt.port}")
         return note
 
-    def set_referee_profile(self, profile_id: str) -> None:
+    def set_referee_profile(self, profile_id: str, *, start_video: bool = True) -> None:
         """A profile switch creates a locked receive/evidence epoch, never motion."""
         try:
             profile = get_profile(profile_id)
@@ -269,7 +314,7 @@ class BackendManager:
         if self.state is not None:
             self._reset_state_for_scenario(self.state)
             self.state.referee_profile = profile.profile_id
-        self.set_active_video_source(self.config.connection.video_source)
+        self.set_active_video_source(self.config.connection.video_source, start=start_video)
         self.field_log.emit("referee_profile", profile=profile.profile_id, version=profile.protocol_version)
 
     @staticmethod
@@ -291,20 +336,46 @@ class BackendManager:
         state.official_state_active = True
         state.official_state_at = max(float(state.official_state_at), float(timestamp))
 
-    def apply_scenario(self, key: str, *, start: bool = True) -> None:
+    def apply_scenario(self, key: str, *, start: bool = True, registry: Any = None,
+                       robot_id: int | None = None) -> None:
         key = key if key in SCENARIOS else "LabDebug"
+        was_estopped = bool(getattr(self.safety, "estop_active", False))
         self.shutdown(restart=True)
+        if robot_id is not None:
+            # Apply identity while stopped, before any new endpoint connects.
+            self.set_client_id(robot_id)
         self.scenario_key = key
         self._hero_native_override = False
         self._normal_video_source = ""
         if self.state is not None:
             self._reset_state_for_scenario(self.state)
-        config = SCENARIOS[key]
+        config = self._config_from_registry(SCENARIOS[key], registry)
         self._apply_config(config)
+        if registry is not None:
+            mqtt_module = registry.get("MQTTLink")
+            profile_setting = mqtt_module.get_setting("Referee Profile") if mqtt_module else None
+            if profile_setting is not None:
+                self.set_referee_profile(str(profile_setting.value), start_video=False)
+            robot_module = registry.get("RobotLink")
+            if robot_module is not None:
+                def setting(name: str, default: Any) -> Any:
+                    item = robot_module.get_setting(name)
+                    return item.value if item is not None else default
+                mode = str(setting("Link Mode", "serial")).strip().lower()
+                if mode not in {"serial", "tcp"}:
+                    raise ValueError("Invalid configured robot transport")
+                self.polar.transport = mode
+                self.polar.host = str(setting("Bridge Host", "")).strip()
+                self.polar.tcp_port = int(setting("Bridge Port", 50570))
+                if not 1 <= self.polar.tcp_port <= 65535:
+                    raise ValueError("Invalid configured robot bridge port")
         # shutdown() deliberately latches local E-stop.  A scenario switch has
         # already emitted the neutral frame and now creates a fresh fail-closed
         # safety epoch; it must not inherit the old software latch forever.
-        self.safety.release_estop()
+        # A shutdown-created latch can be cleared for a fresh locked epoch,
+        # but an operator's pre-existing E-stop is never cleared by a reload.
+        if not was_estopped:
+            self.safety.release_estop()
         if not start:
             return
         # 三种模式都启动 MQTT（可收裁判数据；发布按场景门控）
@@ -332,7 +403,9 @@ class BackendManager:
 
         # 重试的判据是“用户给这条链路配了真端口”，而不是场景名：
         # 否则在大疆官方场景下选了 COM3 也永远不会重连。
-        if str(self.polar.port or "").strip() in ("", "Stub", "None"):
+        tcp_mode = str(self.polar.transport).lower() in {"tcp", "wifi", "bridge"}
+        if (tcp_mode and not str(self.polar.host).strip()) or (
+                not tcp_mode and str(self.polar.port or "").strip().lower() in {"", "stub", "none"}):
             return
         if self.polar.connected or self.polar._running:
             return
@@ -340,6 +413,7 @@ class BackendManager:
         if now - self._polar_last_connect_attempt < POLAR_RETRY_S:
             return
         self._polar_last_connect_attempt = now
+        self._invalidate_polar_epoch("robot transport reconnect; fresh telemetry required")
         was_connected = self.polar.connected
         self.polar.start()
         if self.polar.connected and not was_connected:
@@ -354,6 +428,13 @@ class BackendManager:
             if self.polar.last_error and self.polar.last_error != self._polar_last_logged_error:
                 self._polar_last_logged_error = self.polar.last_error
                 self.field_log.emit("polar_link_unavailable", error=self.polar.last_error)
+
+    def _invalidate_polar_epoch(self, reason: str) -> None:
+        self.safety.lock_control(reason)
+        self.polar_bridge.reset()
+        self.polar.clear_intent()
+        self._polar_gimbal_last = None
+        self.polar_chassis_state_seen = False
 
     #: 没有 0x1F 回读时，OFF 指令最多压制这么久然后放手。
     #: 必须有限：无限发 OFF 会永久锁死驾驶员用物理遥控器开自转的能力。
@@ -429,7 +510,6 @@ class BackendManager:
             return {"active": False}
         if control is not None:
             self._dt7_control_ref = control
-        self._retry_polar_connect()
         for segment in self.polar.drain_segments():
             self.polar_bridge.apply(segment)
             if segment.segment_id == SEG_ROBOT_MOTION:
@@ -501,9 +581,9 @@ class BackendManager:
             want_port = str(port_setting.value or "").strip()
             if want_port and want_port != PORT_DEFAULT:
                 if want_port != str(self.polar.port or ""):
+                    self._invalidate_polar_epoch("robot port changed; fresh telemetry required")
+                    self.polar.stop()
                     self.polar.port = want_port
-                    if self.polar.connected:
-                        self.polar.stop()
                     self.polar.last_error = ""
                     self.polar.last_error_code = ""
         baud_setting = settings.get("Baud")
@@ -516,9 +596,9 @@ class BackendManager:
             # 界面既然给了这个框，后端就得读它 —— 但同样只在被显式改过时才覆盖场景。
             if want_baud != BAUD_DEFAULT and 1200 <= want_baud <= 3_000_000 \
                     and want_baud != int(self.polar.baud):
+                self._invalidate_polar_epoch("robot baud changed; fresh telemetry required")
+                self.polar.stop()
                 self.polar.baud = want_baud
-                if self.polar.connected:
-                    self.polar.stop()
         # 驾驶授权与队内写入开关都属于模块自己，**不能**取场景标志：
         # 大疆官方场景的 allow_polar_drive=False 只表示“本场景不自动授权”，
         # 开不了“操作员手动开了”的情形。早期版本拿它当闸门，导致官方场景下
@@ -550,17 +630,14 @@ class BackendManager:
             if (self.polar.transport, self.polar.host, self.polar.tcp_port) != (
                     want_mode, want_host, want_port):
                 # 换链路等于换一条连接：旧句柄必须关，否则还在往老地方写
+                self._invalidate_polar_epoch("robot bridge endpoint changed; fresh telemetry required")
+                self.polar.stop()
+                self.polar.transport = want_mode
+                self.polar.host = want_host
+                self.polar.tcp_port = want_port
                 if want_mode == "tcp" and not want_host:
                     self.polar.last_error = "TCP 模式要先填桥接主机地址"
                     self.polar.last_error_code = "NO_BRIDGE_HOST"
-                else:
-                    was_running = bool(self.polar.connected or self.polar._running)
-                    self.polar.stop()
-                    self.polar.transport = want_mode
-                    self.polar.host = want_host
-                    self.polar.tcp_port = want_port
-                    if was_running:
-                        self.polar.start()
         hz_setting = settings.get("Send Hz")
         if hz_setting is not None:
             try:
@@ -578,6 +655,11 @@ class BackendManager:
                 "virtual_rc",
                 "both",
             ) else "robot_cmd"
+
+        # Only attempt connection after all current endpoints have been read;
+        # never briefly retry the previous target while a setting is changing.
+        self._retry_polar_connect()
+        target.polar_link_active = bridge.active
 
         self.polar_arbiter.request_takeover(
             client_gimbal_enabled=bool(
@@ -810,28 +892,7 @@ class BackendManager:
                 control.release_direct_dt7()
             control.dt7_enabled = False
         self._dt7_was_enabled = bool(control is not None and control.dt7_enabled)
-        cc_setting = settings.get("Custom Controller Egress")
-        cc_wanted = bool(cc_setting is not None and cc_setting.value)
-        if control is not None and cc_wanted:
-            link_obj = self._cc_link_for(settings)
-            control.cc_link = link_obj
-            control.cc_enabled = bool(not estopped and allow_drive
-                                      and module is not None and module.enabled)
-            spin = settings.get("Allow Spin Key")
-            control.cc_key_mask = 0x0F | (0x10 if (spin is not None and bool(spin.value)) else 0)
-            if estopped and getattr(self, "_cc_was_enabled", False):
-                # 急停必须把选手端那侧的键鼠也归零。放在写原因**之前**：
-                # release 成功时会清 cc_last_error，先写原因就被它抹掉了。
-                control.release_custom_controller()
-            if not control.cc_enabled:
-                control.cc_last_error = (
-                    "自定义控制器出口未生效："
-                    + ("急停激活" if estopped else
-                       ("模块 RobotLink 未启用" if not (module is not None and module.enabled)
-                        else "未授予 Allow Drive")))
-        elif control is not None:
-            control.cc_enabled = False
-        self._cc_was_enabled = bool(control is not None and control.cc_enabled)
+        self._configure_cc_egress(control, settings, module, allow_drive, estopped)
         if drive_armed and command is not None:
             speed_scale = float(settings["Speed Scale %"].value or 100) / 100.0
             yaw_scale = float(settings["Yaw Scale %"].value or 100) / 100.0
@@ -1210,6 +1271,12 @@ class BackendManager:
             control.dt7_send_paused = False
             control.dt7_enabled = False
             control.reset_inputs()
+            # tick_polar_link reads this cached snapshot independently of
+            # key_state. Clearing keys alone can replay the last held W as
+            # soon as the new connection supplies fresh telemetry.
+            control.last_command = None
+            control.last_payload = b""
+            control.clear_pending()
         link = getattr(self, "_dt7_link", None)
         if link is not None and not link.wire_neutral:
             try:
@@ -1237,7 +1304,8 @@ class BackendManager:
             callback_installed=hook is not None,
         )
 
-    def set_active_video_source(self, source_mode: str, *, _hero_transition: bool = False) -> None:
+    def set_active_video_source(self, source_mode: str, *, _hero_transition: bool = False,
+                                start: bool = True) -> None:
         normalized = str(source_mode or "").strip().lower()
         normalized = {
             "shark udp": "udp hevc",
@@ -1262,7 +1330,7 @@ class BackendManager:
         ):
             return
         self._active_video_source = normalized
-        if udp_selected and not self.udp.running:
+        if start and udp_selected and not self.udp.running:
             # The socket and decoder are both lazy. This avoids an unused HEVC
             # process and an unnecessary UDP bind in Webcam/Native sessions.
             self.udp.start()
@@ -1281,13 +1349,20 @@ class BackendManager:
 
     def set_client_id(self, robot_id: int) -> None:
         """机器人档案变更后同步 MQTT client_id 并重建连接。"""
-        new_id = self.referee.validate_client_id(str(robot_id))
+        try:
+            new_id = self.referee.validate_client_id(str(robot_id))
+        except (ValueError, TypeError):
+            self.safety.lock_control("invalid referee robot identity")
+            self.safety.current_stage = "0"
+            self.safety._stage_seen = False
+            self.mqtt.stop(publish_status=False)
+            raise
         if new_id == self.mqtt.client_id:
             return
-        self.mqtt.publish_estop_zero()
         self.safety.lock_control("referee robot identity changed")
         self.safety.current_stage = "0"
         self.safety._stage_seen = False
+        self.mqtt.publish_estop_zero()
         was_started = self.mqtt._started
         self.mqtt.stop(publish_status=False)
         self.mqtt.client_id = new_id
@@ -1299,9 +1374,26 @@ class BackendManager:
         # robot-side watchdog or F12 E-stop, but prevents an ordinary app exit
         # or scenario switch from leaving the last movement key latched.
         if self.mqtt.connected and not self.mqtt.mock_output:
-            self.mqtt.publish_estop_zero()
+            try:
+                self.mqtt.publish_estop_zero()
+            except Exception as exc:
+                # Failed network cleanup must never skip local E-stop, the
+                # robot neutral burst, or closing the remaining transports.
+                self._last_estop_zero_ok = False
+                self._last_estop_zero_reason = f"shutdown zero publish failed: {exc}"
         self.safety.trigger_estop()
         self.serial.trigger_estop()
+        cc_handle = getattr(self, "_cc_link", None)
+        if cc_handle is not None and not getattr(cc_handle, "wire_neutral", True):
+            try:
+                ok, why = cc_handle.release_all()
+            except Exception as exc:
+                ok, why = False, str(exc)
+            control = getattr(self, "_dt7_control_ref", None)
+            if control is not None:
+                control.cc_enabled = False
+                control.cc_release_pending = not ok
+                control.cc_last_error = "" if ok else str(why)
         # 队内链路：固件侧没有断流归零，必须主动发零帧覆盖最后一条指令。
         self.polar.trigger_estop()
         # Compatibility keyword only: official MQTT never emits retained
@@ -1552,6 +1644,25 @@ class BackendManager:
     # ------------------------------------------------------------------
     # 下行消息 → RobotState
     # ------------------------------------------------------------------
+    def _notify_referee_view(self, name: str, data: dict[str, Any], timestamp: float) -> None:
+        try:
+            observer = getattr(self, "referee_view_observer", None)
+            if observer is None:
+                return
+            observer(name, dict(data), float(timestamp))
+            self._referee_view_error = ""
+        except Exception as exc:
+            try:
+                error = f"{type(exc).__name__}: {exc}"
+            except Exception:
+                error = type(exc).__name__
+            if error != getattr(self, "_referee_view_error", ""):
+                self._referee_view_error = error
+                try:
+                    _LOG.warning("read-only referee view observer failed: %s", error)
+                except Exception:
+                    pass  # Even a broken display-error logger cannot affect apply.
+
     def apply_updates(self, state: RobotState) -> int:
         """消费解码队列并写入 RobotState；返回本次应用的消息条数。"""
         messages = self.mqtt.drain_decoded()
@@ -1563,6 +1674,7 @@ class BackendManager:
                 # of clearing it immediately after it was written.
                 self._begin_official_state(state, _ts)
                 self._apply_one(state, name, data)
+                self._notify_referee_view(name, data, _ts)
                 count += 1
                 self._official_state_updates_count += 1
             except Exception as exc:
@@ -1637,6 +1749,41 @@ class BackendManager:
             qualification_token=qualification_token,
         )
 
+    def _configure_cc_egress(self, control: Any, settings: dict, module: Any,
+                             allow_drive: bool, estopped: bool) -> None:
+        """Apply every CC falling edge before retiring the previous writer."""
+        cc_setting = settings.get("Custom Controller Egress")
+        cc_wanted = bool(cc_setting is not None and cc_setting.value)
+        if control is not None and cc_wanted:
+            link_obj = self._cc_link_for(settings)
+            control.cc_link = link_obj
+            control.cc_enabled = bool(not estopped and allow_drive
+                                      and module is not None and module.enabled
+                                      and not getattr(self, "_cc_reconfigure_blocked", False))
+            spin = settings.get("Allow Spin Key")
+            control.cc_key_mask = 0x0F | (0x10 if (spin is not None and bool(spin.value)) else 0)
+            if not control.cc_enabled and (getattr(self, "_cc_was_enabled", False)
+                                          or getattr(control, "cc_release_pending", False)):
+                # 急停必须把选手端那侧的键鼠也归零。放在写原因**之前**：
+                # release 成功时会清 cc_last_error，先写原因就被它抹掉了。
+                control.release_custom_controller()
+            if not control.cc_enabled:
+                release_failed = (getattr(control, "cc_release_pending", False)
+                                  or getattr(self, "_cc_reconfigure_blocked", False))
+                control.cc_last_error = (str(getattr(link_obj, "last_error", "")
+                                            or control.cc_last_error or "CC 中立帧尚未成功发送")
+                    if release_failed else
+                    "自定义控制器出口未生效："
+                    + ("急停激活" if estopped else
+                       ("模块 RobotLink 未启用" if not (module is not None and module.enabled)
+                        else "未授予 Allow Drive")))
+        elif control is not None:
+            control.cc_enabled = False
+            if (getattr(self, "_cc_was_enabled", False)
+                    or getattr(control, "cc_release_pending", False)):
+                control.release_custom_controller()
+        self._cc_was_enabled = bool(control is not None and control.cc_enabled)
+
     def _cc_link_for(self, settings: dict) -> "cc_link.CustomControllerLink":
         """按 RobotLink 的设置拿（并按需重建）自定义控制器发送器。
 
@@ -1649,7 +1796,19 @@ class BackendManager:
         hz = float(getattr(hz_s, "value", 30) or 30)
         mock = bool(getattr(mock_s, "value", True))
         link = getattr(self, "_cc_link", None)
+        self._cc_reconfigure_blocked = False
         if link is None or (link.port, float(link.max_hz), bool(link.mock_output)) != (port, hz, mock):
+            if link is not None and not getattr(link, "wire_neutral", True):
+                try:
+                    ok, why = link.release_all()
+                except Exception as exc:
+                    ok, why = False, str(exc)
+                if not ok:
+                    # Retain the old target for neutral retries. Never discard
+                    # it or send movement to a new port after uncertain release.
+                    self._cc_reconfigure_blocked = True
+                    self.safety.lock_control("CC previous writer did not release: " + str(why))
+                    return link
             link = cc_link.CustomControllerLink(port=port, max_hz=hz, mock_output=mock)
             self._cc_link = link
         return link
@@ -1790,15 +1949,21 @@ class BackendManager:
 
     def trigger_estop(self) -> tuple[bool, str]:
         """先尽力发送全零 KMC，再锁死所有上行；断网时仍立即本地锁止。"""
-        zero_result = self.mqtt.publish_estop_zero()
+        try:
+            zero_result = self.mqtt.publish_estop_zero()
+        except Exception as exc:
+            zero_result = (False, f"zero publish failed: {exc}")
         self._last_estop_zero_ok, self._last_estop_zero_reason = zero_result
         # 图传键鼠那本账也要同帧清掉。固件侧本来有 300ms 新鲜度超时兜底，
         # 但"等超时"意味着急停之后最多还有 300ms 车仍带着客户端键位——
         # 和 0x5A 那条一样，必须在这一刻就发零帧，而不是留给下一帧。
         # 必须排在 safety.trigger_estop() 之前：门一锁就发不出去了。
         if getattr(self, "_km_seq", 0) > 0:
-            self._last_km_release_ok, self._last_km_release_reason = (
-                self.publish_km_release())
+            try:
+                self._last_km_release_ok, self._last_km_release_reason = self.publish_km_release()
+            except Exception as exc:
+                self._last_km_release_ok = False
+                self._last_km_release_reason = str(exc)
         self._estop_triggered_at = time.perf_counter()
         self.safety.trigger_estop()
         self.serial.trigger_estop()

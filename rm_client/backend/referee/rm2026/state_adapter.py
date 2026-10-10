@@ -267,7 +267,8 @@ class Rm2026StateAdapter:
                 "label": chr(int(clean.get("ascii", 0))) if 32 <= int(clean.get("ascii", 0)) <= 126 else "MARK",
                 "x": float(clean.get("map_x", 0.0)),
                 "y": float(clean.get("map_y", 0.0)),
-                "kind": "attack" if int(clean.get("type", 0)) == 1 else "marker",
+                "kind": {1: "attack", 2: "defense", 3: "warning", 4: "custom"}.get(
+                    int(clean.get("mode", 0)), "marker"),
                 "pulse": True,
                 **clean,
             }

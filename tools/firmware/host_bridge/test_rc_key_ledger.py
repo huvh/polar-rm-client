@@ -25,9 +25,10 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+import os
 
 HERE = Path(__file__).resolve().parent
-REPO = HERE.parents[3] / "tmp_polarbear" / "StandardRobotpp"
+REPO = Path(os.environ.get("POLAR_FIRMWARE_ROOT") or str(HERE.parents[3] / "tmp_polarbear" / "StandardRobotpp")).resolve()
 USB_REL = "application/communication/usb_task.c"
 RC_REL = "application/other/remote_control.c"
 MECA_REL = "application/chassis/chassis_mecanum.c"
@@ -60,9 +61,12 @@ def extract(text: str, pattern: str, label: str) -> str:
 
 
 def main() -> int:
+    global REPO
+    if len(sys.argv) > 1 and not sys.argv[1].startswith("-"):
+        REPO = Path(sys.argv[1]).expanduser().resolve()
     if not REPO.exists() or not (REPO / ".git").exists():
         print(f"SKIP: 固件副本不存在（{REPO}）")
-        return 0
+        return 77
     def patched() -> bool:
         u = (REPO / USB_REL).read_text(encoding="utf-8", errors="ignore")
         r = (REPO / RC_REL).read_text(encoding="utf-8", errors="ignore")
@@ -70,6 +74,9 @@ def main() -> int:
 
     owns_revert = False
     if not patched():
+        if os.environ.get("POLAR_FIRMWARE_READ_ONLY") == "1":
+            print("[INCOMPLETE] Required prepared files are absent; read-only checks never install patches")
+            return 77
         # 以前这里直接 SKIP 并 return 0：兄弟测试把树还原过，本项就一声不响地
         # 变成"通过"，verify_all 报 GO 却压根没测键位。现在改成自己装上再测。
         # 但"装"与"撤"都必须只在自己拍过快照的那几个文件里发生：

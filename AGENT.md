@@ -209,7 +209,7 @@ python tests/polar_spec_test.py   # 含“改 JSON 确实改变行为”的回�
 python tests/polar_link_test.py
 python tests/polar_bridge_test.py
 python tests/polar_integration_test.py
-python tests/team_bench_entry_check.py
+python tests/test_transport_safety_regressions.py
 
 # 无头自检（不需要 GUI，能连真机器人时最有价值）
 python main.py --polar-selftest --polar-enable-drive --polar-confirm-motion

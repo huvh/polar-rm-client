@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from collections import defaultdict
+import logging
 import os
 from pathlib import Path
 import shutil
 from typing import Iterable
+
+from .runtime_paths import RuntimePaths
 
 from PySide6.QtCore import QObject, QUrl
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer, QSoundEffect
@@ -13,9 +16,11 @@ from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer, QSoundEffect
 class ReliableAudioPool(QObject):
     """预加载短音效，并在 Qt 短音效后端失败时回退到媒体播放器。"""
 
-    def __init__(self, root: Path, voices_per_sound: int = 2, fallback_voices: int = 6) -> None:
+    def __init__(self, root: Path, voices_per_sound: int = 2, fallback_voices: int = 6,
+                 *, custom_root: Path | None = None) -> None:
         super().__init__()
         self.root = Path(root)
+        self.custom_root = Path(custom_root) if custom_root is not None else None
         self.voices_per_sound = max(1, voices_per_sound)
         self._effects: dict[str, list[QSoundEffect]] = {}
         self._pending: dict[str, list[float]] = defaultdict(list)
@@ -28,9 +33,19 @@ class ReliableAudioPool(QObject):
         self.last_error = ""
         self.backend = "QSoundEffect"
 
+    def _sound_path(self, name: str) -> Path:
+        # Custom selections keep their portable "custom/<filename>" config key.
+        # Resolve them outside the immutable, manifest-hashed resource tree.
+        if name.startswith("custom/") and self.custom_root is not None:
+            filename = name[len("custom/"):]
+            if not filename or "/" in filename or "\\" in filename or ":" in filename or filename in {".", ".."}:
+                raise ValueError("Invalid custom sound name")
+            return self.custom_root / filename
+        return self.root / name
+
     def preload(self, names: Iterable[str]) -> None:
         for name in dict.fromkeys(str(item) for item in names):
-            path = self.root / name
+            path = self._sound_path(name)
             # Windows 的 QSoundEffect 后端对 OGG/Vorbis 支持不稳定；压缩音频统一交给 Qt FFmpeg 媒体后端。
             if not path.is_file() or path.suffix.lower() != ".wav" or name in self._effects:
                 continue
@@ -49,7 +64,7 @@ class ReliableAudioPool(QObject):
 
         voice_count = max(1, int(voices_per_sound))
         for name in dict.fromkeys(str(item) for item in names):
-            path = self.root / name
+            path = self._sound_path(name)
             if not path.is_file() or path.suffix.lower() == ".wav" or name in self._media_effects:
                 continue
             voices: list[tuple[QMediaPlayer, QAudioOutput]] = []
@@ -63,7 +78,7 @@ class ReliableAudioPool(QObject):
             self._media_effects[name] = voices
 
     def play(self, name: str, volume: float) -> bool:
-        path = self.root / name
+        path = self._sound_path(name)
         self.last_sound = name
         if not path.is_file():
             self.last_error = f"音效文件不存在: {path}"
@@ -97,7 +112,7 @@ class ReliableAudioPool(QObject):
         elif status == QSoundEffect.Status.Error:
             pending = self._pending.pop(name, [])
             for volume in pending:
-                self._play_fallback(self.root / name, volume, "QSoundEffect 加载失败")
+                self._play_fallback(self._sound_path(name), volume, "QSoundEffect 加载失败")
 
     def _play_fallback(self, path: Path, volume: float, reason: str) -> bool:
         try:
@@ -169,11 +184,33 @@ class UiAudioManager:
         },
     }
 
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, *, custom_root: Path | None = None) -> None:
         self.root = Path(root)
-        self.custom_dir = self.root / "custom"
+        self.custom_dir = (Path(custom_root) if custom_root is not None else
+                           RuntimePaths.discover().user_data_root / "ui_sounds" / "custom")
         self.custom_dir.mkdir(parents=True, exist_ok=True)
-        self.pool = ReliableAudioPool(self.root, voices_per_sound=2, fallback_voices=4)
+        # Preserve older installations' selections without modifying their
+        # resources or overwriting newer user-data copies.
+        legacy_custom = self.root / "custom"
+        self.migration_errors: list[str] = []
+        try:
+            legacy_files = (list(legacy_custom.iterdir())
+                            if legacy_custom.is_dir() and legacy_custom.resolve() != self.custom_dir.resolve()
+                            else [])
+        except OSError as exc:
+            legacy_files = []
+            self.migration_errors.append(f"Cannot read legacy custom sounds: {exc}")
+        for legacy in legacy_files:
+            target = self.custom_dir / legacy.name
+            try:
+                if legacy.is_file() and legacy.suffix.lower() in self.AUDIO_EXTENSIONS and not target.exists():
+                    shutil.copy2(legacy, target)
+            except OSError as exc:
+                self.migration_errors.append(f"Cannot migrate custom sound {legacy.name}: {exc}")
+        for message in self.migration_errors:
+            logging.getLogger("rm_client.ui_audio").warning(message)
+        self.pool = ReliableAudioPool(self.root, voices_per_sound=2, fallback_voices=4,
+                                      custom_root=self.custom_dir)
         self.pool.preload(name for theme in self.THEMES.values() for name in theme.values())
         # These are the two exact cues invoked by Sigma's ModListView.  Set
         # their media sources now so the first module click does not pay MP3
@@ -190,7 +227,7 @@ class UiAudioManager:
 
     def custom_sound_names(self) -> list[str]:
         sounds = [
-            path.relative_to(self.root).as_posix()
+            "custom/" + path.name
             for path in self.custom_dir.iterdir()
             if path.is_file() and path.suffix.lower() in self.AUDIO_EXTENSIONS
         ]
@@ -210,7 +247,7 @@ class UiAudioManager:
             index += 1
         if source.resolve() != target.resolve():
             shutil.copy2(source, target)
-        relative = target.relative_to(self.root).as_posix()
+        relative = "custom/" + target.name
         self.pool.preload((relative,))
         return relative
 
@@ -218,7 +255,11 @@ class UiAudioManager:
     def sound_name(cls, theme: str, kind: str, custom_sounds: dict[str, str] | None = None) -> str | None:
         if theme == cls.CUSTOM_THEME:
             selected = str((custom_sounds or {}).get(kind, cls.NO_SOUND))
-            return None if selected == cls.NO_SOUND or not selected.startswith("custom/") else selected
+            if selected == cls.NO_SOUND or not selected.startswith("custom/"):
+                return None
+            filename = selected[len("custom/"):]
+            return selected if (filename and filename not in {".", ".."}
+                                and "/" not in filename and "\\" not in filename and ":" not in filename) else None
         selected = cls.THEMES.get(theme, cls.THEMES["Polar UI"])
         return selected.get(kind, selected["invalid"])
 

@@ -216,14 +216,7 @@ def _apply_spec() -> tuple[dict[int, list[dict[str, Any]]], dict[int, list[str]]
     SPEC_STATUS["fell_back"] = False
     _SEGMENT_FORMATS.clear()
     _SEGMENT_FORMATS.update(loaded.segment_formats)
-    inputs: dict[int, list[str]] = {}
-    for entry in loaded.raw.get("downlink_segments") or []:
-        try:
-            seg_id = int(str(entry.get("id")), 16)
-        except (TypeError, ValueError):
-            continue
-        inputs[seg_id] = [str(n) for n in (entry.get("inputs") or [])]
-    return loaded.segment_outputs, inputs
+    return loaded.segment_outputs, loaded.segment_inputs
 
 
 # 注意：元组目标不能加类型标注（Python 语法限制），所以这里不写 : tuple[...]

@@ -48,6 +48,8 @@ class PolarSpec:
     segment_names: dict[int, str] = field(default_factory=dict)
     #: 段号 int -> 输出声明列表
     segment_outputs: dict[int, list[dict[str, Any]]] = field(default_factory=dict)
+    #: 段号 int -> inputs；只在规格校验时解析 ID，避免消费者重新猜进制。
+    segment_inputs: dict[int, list[str]] = field(default_factory=dict)
     #: 段号 int -> {解码字段名: RobotState/overlay 字段名}，供无专用处理器时通用落库
     segment_state_fields: dict[int, dict[str, str]] = field(default_factory=dict)
     #: 机器人编号 -> 兵种限幅字典
@@ -155,6 +157,7 @@ def _validate_segment(
     spec.segment_formats[seg_id] = fmt
     spec.segment_names[seg_id] = name
     spec.segment_outputs[seg_id] = outputs
+    spec.segment_inputs[seg_id] = inputs
     # state_fields：让新段不改 Python 也能落库。
     # 它的键是**解码后的输出字段名**（通用落库时查的是 segment.fields），
     # 不是 struct 的原始 inputs；没声明 outputs 时才回退到按 inputs 校。

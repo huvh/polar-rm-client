@@ -715,10 +715,9 @@ class TacticalMapMixin:
     def tactical_map_hold_amount(self) -> float:
         return self.tactical_map_morph_progress()
 
-    #: `Mark Type` 选项 -> MapClickCmd 字段 6（type）的取值。
+    #: `Mark Type` 选项 -> MapClickCmd 字段 3（type）的取值。
     #: 按选项顺序 1..4 映射；默认 "Attack"=1，与接线前硬写的 mark_type=1 一致，
-    #: 所以默认配置下发出的字节不变。官方协议注释确认 3=mode、6=type，
-    #: 但没列各取值语义 —— 上线前应与裁判协议版本表交叉核对。
+    #: 字段 6 是 mode（此处固定为 1，地图标记）；后端按官方字段序编码。
     MAP_MARKER_TYPE_CODES: dict[str, int] = {
         "Attack": 1,
         "Defense": 2,
@@ -749,7 +748,7 @@ class TacticalMapMixin:
         Only active while the Tab hold has the tactical map expanded; during
         normal combat every left click belongs to KMC and must not leak a
         referee event command. The backend safety layer still enforces
-        MATCH_ARMED capability and the 10 Hz event-command rate limit.
+        MATCH_ARMED capability and a conservative three-second mark interval.
         """
 
         if not self.tactical_map_hold:
@@ -816,7 +815,7 @@ class TacticalMapMixin:
                         self.toast(f"Dart {'sent' if ok_pub else reason}")
             elif choice.startswith("Sentry"):
                 command_id, accepted = QInputDialog.getInt(
-                    self, "SentryCtrlCommand", "Command ID (0=N/A,1=allow,2=deny):", 1, 0, 2
+                    self, "SentryCtrlCommand", "Command ID (consult the selected referee protocol):", 1, 0, 2
                 )
                 if accepted:
                     ok_pub, reason = self.backend.publish_sentry_command(command_id)

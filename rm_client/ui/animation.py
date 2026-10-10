@@ -42,6 +42,11 @@ def step_damped_spring(
     target = float(target)
     displacement = float(value) - target
     velocity = float(velocity)
+    # A settled spring is an exact fixed point. UI owners still tick while
+    # idle; avoid exponent/trigonometric work without changing thresholds or
+    # suppressing a new target or residual momentum.
+    if displacement == 0.0 and velocity == 0.0:
+        return target, velocity
     omega = math.sqrt(stiffness / mass)
 
     if damping_ratio < 1.0 - 1.0e-5:
@@ -418,7 +423,11 @@ class ReversibleExpoTimeline:
         self.target = clamp01(target)
 
     def update(self, dt: float) -> float:
-        dt = max(0.0, min(0.05, float(dt)))
+        # The exponential step is analytical, just like the container spring.
+        # Consume the same elapsed UI time after a missed frame; a 50 ms cap
+        # left child opacity behind geometry after a 80-200 ms render stall.
+        # Retain the same one-second suspend guard as step_damped_spring.
+        dt = max(0.0, min(1.0, float(dt)))
         difference = self.target - self.progress
         if abs(difference) <= 0.0005:
             self.progress = self.target

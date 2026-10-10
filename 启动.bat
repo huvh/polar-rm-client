@@ -37,7 +37,8 @@ if not exist "main.py" (
 
 set "PYEXE="
 set "BASE="
-set "PYQUOTED="
+set "PYARGS="
+set "BASEARGS="
 
 rem ---- 1) look for an interpreter that already has the dependencies ------
 if exist "%~dp0.venv-polar\Scripts\python.exe" (
@@ -52,11 +53,13 @@ if exist "%~dp0.venv\Scripts\python.exe" (
 )
 if defined PYEXE goto ready
 
-set "CAND=py -3"
+set "CAND=py"
+set "CANDARGS=-3"
 call :probe_bare
 if defined PYEXE goto ready
 
 set "CAND=python"
+set "CANDARGS="
 call :probe_bare
 if defined PYEXE goto ready
 
@@ -75,7 +78,7 @@ echo [X] Automatic dependency installation failed - usually no network access
 echo     or no reachable package index. Run these once by hand, then double-click
 echo     this launcher again (the third line uses a China mirror):
 echo.
-echo         "%BASE%" -m venv "%~dp0.venv-polar"
+echo         "%BASE%" %BASEARGS% -m venv "%~dp0.venv-polar"
 echo         "%~dp0.venv-polar\Scripts\python.exe" -m pip install -r requirements-core.txt
 echo         "%~dp0.venv-polar\Scripts\python.exe" -m pip install -r requirements-core.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 echo.
@@ -114,7 +117,7 @@ move "%~dp0.venv-polar" "%BROKEN%" >nul 2>nul
 if exist "%~dp0.venv-polar\Scripts\python.exe" exit /b 1
 
 :provision_create
-%BASE% -m venv "%~dp0.venv-polar" >nul 2>nul
+"%BASE%" %BASEARGS% -m venv "%~dp0.venv-polar" >nul 2>nul
 if not exist "%~dp0.venv-polar\Scripts\python.exe" exit /b 1
 
 :provision_pip
@@ -131,11 +134,11 @@ echo            Default index failed, retrying with the Tsinghua mirror ...
 if errorlevel 1 exit /b 1
 
 :provision_verify
-"%VPY%" -c "import PySide6" >nul 2>nul || exit /b 1
+"%VPY%" -c "import PySide6, cv2, numpy, paho.mqtt.client, serial" >nul 2>nul || exit /b 1
 rem Never write set "PYEXE="%VPY%"" - nested quotes leak a trailing quote
 rem into the variable. Store the bare path and quote it at :ready instead.
 set "PYEXE=%VPY%"
-set "PYQUOTED=1"
+set "PYARGS="
 exit /b 0
 
 rem ====================================================================
@@ -144,25 +147,29 @@ rem   runs "import sys"      -> remembered as BASE (can create a venv)
 rem   also runs "import PySide6" -> used as PYEXE (ready to launch)
 rem ====================================================================
 :probe_path
-"%CAND%" -c "import sys" >nul 2>nul || exit /b 0
-if not defined BASE set "BASE="%CAND%""
-"%CAND%" -c "import PySide6" >nul 2>nul && (set "PYEXE=%CAND%"& set "PYQUOTED=1")
+set "CANDARGS="
+call :probe_bare
 exit /b 0
 
 :probe_bare
-%CAND% -c "import sys" >nul 2>nul || exit /b 0
-if not defined BASE set "BASE=%CAND%"
-%CAND% -c "import PySide6" >nul 2>nul && (set "PYEXE=%CAND%"& set "PYQUOTED=")
+"%CAND%" %CANDARGS% -c "import sys; assert sys.version_info >= (3, 10)" >nul 2>nul || exit /b 0
+if not defined BASE (
+    set "BASE=%CAND%"
+    set "BASEARGS=%CANDARGS%"
+)
+"%CAND%" %CANDARGS% -c "import PySide6, cv2, numpy, paho.mqtt.client, serial" >nul 2>nul && (
+    set "PYEXE=%CAND%"
+    set "PYARGS=%CANDARGS%"
+)
 exit /b 0
 
 rem ====================================================================
 rem Launch
 rem ====================================================================
 :ready
-rem Quote bare commands (py -3 / python) but leave already-quoted paths alone.
-if not defined PYQUOTED set "PYEXE="%PYEXE%""
+rem Executable and launcher arguments are separate. Quote only the executable.
 
-echo [POLAR-RM] Source mode: %PYEXE% main.py %*
+echo [POLAR-RM] Source mode: "%PYEXE%" %PYARGS% main.py %*
 
 rem The app only looks at bin\ffmpeg.exe or %POLAR_FFMPEG%. Reuse an ffmpeg
 rem already installed on this machine; nothing is downloaded. Without it the
@@ -172,7 +179,7 @@ if not exist "%~dp0bin\ffmpeg.exe" (
         if not defined POLAR_FFMPEG set "POLAR_FFMPEG=%%F"
     )
 )
-%PYEXE% "%~dp0main.py" %*
+"%PYEXE%" %PYARGS% "%~dp0main.py" %*
 set "RC=%errorlevel%"
 if not "%RC%"=="0" (
     echo POLAR-RM exited with code %RC%. Scroll up for the log.

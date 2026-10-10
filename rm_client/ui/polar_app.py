@@ -73,6 +73,7 @@ from ..model import (
 )
 from ..match_modes import MATCH_MODES, MATCH_MODE_KEYS, FieldLayout, MatchModeConfig, MatchModeManager
 from ..robot_profiles import (
+    robot_id_for_alliance,
     apply_profile_to_state,
     profile_by_key,
     profiles_for_match,
@@ -124,6 +125,7 @@ from .jello_locale import (
 )
 from .hero_deploy import HeroDeployInterfaceState, HeroDeployRenderer
 from .minecraft_hud import MinecraftCombatHudRenderer
+from .top_match_bar_controller import TopMatchBarController
 from .gpu_frame_compositor import GlassOwner, GpuFrameCompositor, LensMaterial
 from .island_icon_gpu import IslandIconCommand, IslandIconGpuRenderer
 from .economy_glass import draw_economy_glass, draw_economy_glass_capsule, draw_economy_glass_well
@@ -403,12 +405,15 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             scenario_key=self.scenario_manager.current.key,
         )
         self.mqtt = self.backend.mqtt
+        self.top_match_bar = TopMatchBarController(self)
+        self.backend.referee_view_observer = self.top_match_bar.observe_referee
         self.official_feed = OfficialMatchFeed()
         self.vision_kill_detector = VisionKillDetector()
         self._official_state_updates: dict[str, Any] = {}
         self.kill_fx = KillFxRenderer(self.paths.asset("kill_fx", "gd656"))
         self.ui_audio = UiAudioManager(
-            self.paths.asset("ui_sounds")
+            self.paths.asset("ui_sounds"),
+            custom_root=self.paths.user_data_root / "ui_sounds" / "custom",
         )
         self.registry.add_toggle_listener(self.on_module_toggled)
         # P6: ModuleRegistry 在 toggle/set/direct assignment 三条 enabled
@@ -723,7 +728,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         self.sync_mode_setting()
         if not self.home_visible:
             # 自动启动/跳过启动页时按当前场景启动后端（MQTT/UDP/串口）
-            self.backend.apply_scenario(self.scenario_manager.current.key)
+            self.backend.apply_scenario(self.scenario_manager.current.key, registry=self.registry)
             self.refresh_vision_runtime()
         self.toast("ClickGUI 已就绪：Jello Sigma")
 
@@ -1055,7 +1060,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             # construction fails during that state transition, draw the
             # established compatibility workspace for this frame while the GPU
             # caches are rebuilt on the next tick.
-            self.paint_overlay(None, force_economy_compat=True)
+            self._paint_compatibility_frame()
         presented = time.perf_counter()
         present_dt = max(0.001, min(0.25, presented - self._last_present_time))
         self._last_present_time = presented
@@ -2278,6 +2283,22 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                     break
         self.render_fps_target = allowed[current]
 
+    def _paint_compatibility_frame(self) -> bool:
+        """Complete the same close generation after a successful CPU frame."""
+        generation = self._economy_restore_pending_generation
+        restore = bool(
+            generation is not None
+            and generation == self._economy_generation
+            and self.economy_phase == EconomyScenePhase.CLOSING
+            and self.economy_island.progress <= 0.001
+            and not self.home_visible
+        )
+        painted = self.paint_overlay(None, force_economy_compat=True)
+        if painted and restore:
+            self.invalidate_transient_overlay_scene()
+            self._finalize_economy_restore(generation)
+        return bool(painted)
+
     def paint_overlay(
         self,
         _event: QPaintEvent | None,
@@ -2290,9 +2311,11 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         split_motion_layer: bool = False,
         capture_module_list: bool = False,
         force_economy_compat: bool = False,
-    ) -> None:
+    ) -> bool:
         owns_painter = painter is None
         p = painter or QPainter(self)
+        if not p.isActive():
+            return False
         p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         p.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
         self.hotspots.clear()
@@ -2308,9 +2331,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                 self.draw_startup_page_transition(p, width, height)
             if self.hover_tooltip:
                 self.draw_tooltip(p, self.hover_point, self.hover_tooltip)
-            if owns_painter:
-                p.end()
-            return
+            return bool(p.end()) if owns_painter else True
 
         if not hud_background_ready:
             p.setCompositionMode(QPainter.CompositionMode.CompositionMode_Clear)
@@ -2352,9 +2373,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             self.draw_tooltip(p, self.hover_point, self.hover_tooltip)
 
         if not include_interactive:
-            if owns_painter:
-                p.end()
-            return
+            return bool(p.end()) if owns_painter else True
 
         self.paint_clickgui_overlay(
             p,
@@ -2363,8 +2382,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             force_economy_compat=force_economy_compat,
         )
         self.draw_student_frontend(p, width, height)
-        if owns_painter:
-            p.end()
+        return bool(p.end()) if owns_painter else True
 
     def menu_overlay_active(self) -> bool:
         """True while ClickGUI or Economy workspace is open (or animating)."""
@@ -2502,6 +2520,10 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             )
         if self.setting_bool(hud, "Dynamic Island", True) and not held_tab_list:
             self.draw_dynamic_island(p, logical_width)
+        # Pure display layer, no widget/focus/input ownership. Kept outside the
+        # static video/HUD cache so stale observations expire without new video.
+        if not minecraft_active and not held_tab_list:
+            self.top_match_bar.paint(p, logical_width, logical_height, now)
         tactical_map = self.registry.get("TacticalMap")
         # Always show map while tuning ClickGUI unless caller forces it off.
         draw_map = True if include_map is None else include_map
@@ -3158,24 +3180,44 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             return False
 
     def closeEvent(self, event: QCloseEvent) -> None:
-        self.control.mock_output = bool(self.backend.mqtt.mock_output)
-        self.control.release_all(self.state, self.registry)
-        self.flush_auto_save(force=True)
-        if self.context() is not None:
-            self.makeCurrent()
-            self.clickgui_gpu.release()
-            self.vision_wire_gpu.release()
-            self.gpu_compositor.release()
-            self.startup_gpu.release()
-            self.hud_video_gpu.release()
-            self.doneCurrent()
-        self.startup_wallpaper.release()
-        self.camera_worker.stop()
-        self.local_vision.stop()
-        self.tongji_receiver.stop()
-        self.tongji_bridge.stop()
-        self.backend.shutdown()
-        super().closeEvent(event)
+        failures = []
+
+        def cleanup(label, action):
+            try:
+                action()
+            except Exception as exc:
+                failures.append(f"{label}: {exc}")
+
+        # A save or one broken resource must never prevent the other safety
+        # and teardown actions. Stop the timer and outputs before disk/GL work.
+        try:
+            cleanup("timer", self.timer.stop)
+            cleanup("control lock", lambda: self.backend.lock_control("window closing"))
+            self.control.mock_output = bool(self.backend.mqtt.mock_output)
+            cleanup("control release", lambda: self.control.release_all(self.state, self.registry))
+            cleanup("emergency stop", self.backend.trigger_estop)
+            cleanup("backend", self.backend.shutdown)
+            cleanup("configuration", lambda: self.flush_auto_save(force=True))
+            try:
+                has_context = self.context() is not None
+            except Exception as exc:
+                has_context = False
+                failures.append(f"GL context: {exc}")
+            if has_context:
+                try:
+                    self.makeCurrent()
+                    for name in ("clickgui_gpu", "vision_wire_gpu", "island_icon_gpu", "quick_action_wheel_gpu", "gpu_compositor", "startup_gpu", "hud_video_gpu"):
+                        cleanup(name, getattr(self, name).release)
+                except Exception as exc:
+                    failures.append(f"GL context: {exc}")
+                finally:
+                    cleanup("GL done", self.doneCurrent)
+            for name, method in (("startup_wallpaper", "release"), ("camera_worker", "stop"), ("local_vision", "stop"), ("tongji_receiver", "stop"), ("tongji_bridge", "stop")):
+                cleanup(name, getattr(getattr(self, name), method))
+        finally:
+            if failures:
+                self.state.push_event("Exit cleanup warnings: " + "; ".join(failures))
+            super().closeEvent(event)
 
     def focusOutEvent(self, event) -> None:
         """A lost foreground window is an unconditional control epoch break."""
@@ -3302,7 +3344,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         if self.setting_bool(hud, "Watermark", True):
             self.draw_watermark(p)
         match_timer = self.registry.get("MatchTimer")
-        if match_timer is not None and match_timer.enabled:
+        if match_timer is not None and match_timer.enabled and not self.top_match_bar.enabled():
             self.draw_match_header(p, scaled_width)
         chat_reserve = self.match_chat_reserved_height(now=time.perf_counter()) / hud_scale
         bottom_left = HudAnchorStack(
@@ -4184,7 +4226,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             commands.rect(icon, 14 * scale, self.gpu_alpha(with_alpha(accent, 0.74), opacity), self.gpu_alpha(color("#ffffff", 0.26), opacity), 0.8)
             commands.text(icon, profile.icon, self.font("poppins_bold", 15 * scale), self.gpu_alpha(THEME.text, opacity), Qt.AlignmentFlag.AlignCenter)
             commands.text(QRectF(icon.right() + 11 * scale, rect.top() + 14 * scale, rect.right() - icon.right() - 20 * scale, 23 * scale), profile.short_title, self.font("poppins_bold", 10 * scale), self.gpu_alpha(THEME.text, opacity))
-            commands.text(QRectF(icon.right() + 11 * scale, rect.top() + 38 * scale, rect.right() - icon.right() - 20 * scale, 17 * scale), f"ID {profile.robot_id}", self.font("poppins_medium", 6.8 * scale), self.gpu_alpha(accent, opacity))
+            commands.text(QRectF(icon.right() + 11 * scale, rect.top() + 38 * scale, rect.right() - icon.right() - 20 * scale, 17 * scale), f"ID {robot_id_for_alliance(profile, self.alliance_side())}", self.font("poppins_medium", 6.8 * scale), self.gpu_alpha(accent, opacity))
             commands.text(rect.adjusted(13 * scale, 67 * scale, -13 * scale, -12 * scale), profile.description, self.font("poppins_regular", 7.1 * scale), self.gpu_alpha(color("#dce6ec", 0.86), opacity), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
             self.add_hotspot(rect, "select_robot_profile", profile.key, tooltip=f"选择{profile.title}并进入战斗 HUD")
 
@@ -4202,7 +4244,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             refraction_amount_px=min(24.0 * scale, panel.height() * 0.16),
         )
         commands.text(panel.adjusted(20 * scale, 18 * scale, -20 * scale, -panel.height() + 48 * scale), profile.title, self.font("poppins_bold", 15 * scale), self.gpu_alpha(THEME.text, active))
-        commands.text(panel.adjusted(20 * scale, 49 * scale, -20 * scale, -panel.height() + 70 * scale), f"Robot ID {profile.robot_id} · {profile.short_title}", self.font("poppins_medium", 7.4 * scale), self.gpu_alpha(THEME.cyan, active))
+        commands.text(panel.adjusted(20 * scale, 49 * scale, -20 * scale, -panel.height() + 70 * scale), f"Robot ID {robot_id_for_alliance(profile, self.alliance_side())} · {profile.short_title}", self.font("poppins_medium", 7.4 * scale), self.gpu_alpha(THEME.cyan, active))
         metrics = [
             ("MAX HP", str(performance.max_health) if performance.max_health else "N/A"),
             ("POWER", f"{performance.power_limit_w} W" if performance.power_limit_w else "N/A"),
@@ -4394,8 +4436,8 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
     # 阶段 3c 大域 mixin 化：active_clickgui_mode / gui_mode_label（staticmethod，D5 模式工具）已机械迁至 rm_client/ui/polar/mixins/clickgui_builders_mixin.py 的 ClickGuiBuildersMixin，由本类继承提供，__qualname__ 已钉回 PolarRMWindow.<name>，冻结面不变。
     # ------------------------------------------------------------------
 
-    def toast(self, message: str) -> None:
-        self.toasts.append({"message": message, "created": time.perf_counter()})
+    def toast(self, message: str, *, kind: str = "info") -> None:
+        self.toasts.append({"message": message, "created": time.perf_counter(), "kind": kind})
         self.state.push_event(message)
 
     # ------------------------------------------------------------------

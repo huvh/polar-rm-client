@@ -20,6 +20,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+import os
 
 HERE = Path(__file__).resolve().parent
 PATCH = HERE / "polar-virtual-rc-drive-keys.patch"
@@ -46,7 +47,7 @@ def extract_block(text: str, start_pat: str, end_pat: str) -> str:
     return rest[: e.end()]
 
 
-REPO = HERE.parents[2] / "tmp_polarbear" / "StandardRobotpp"
+REPO = Path(os.environ.get("POLAR_FIRMWARE_ROOT") or str(HERE.parents[2] / "tmp_polarbear" / "StandardRobotpp")).resolve()
 # 临时打桥要按字节快照还原，不能用 git checkout -- .（会把别的脚本写好的东西一起冲掉）
 sys.path.insert(0, str(HERE.parent))
 import bridge_fixture as bf  # noqa: E402
@@ -217,6 +218,9 @@ def build_patch_code() -> tuple[str, str]:
 
 
 def main() -> int:
+    if os.environ.get("POLAR_FIRMWARE_READ_ONLY") == "1":
+        print("[INCOMPLETE] Legacy baseline patch test requires installation; excluded from read-only target validation")
+        return 77
     if not PATCH.exists():
         print(f"[FAIL] 找不到补丁 {PATCH}")
         return 1

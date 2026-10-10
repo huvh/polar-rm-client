@@ -1500,19 +1500,25 @@ def test_pyside_animation_import() -> None:
     assert layout.available_height == 1044.0
     assert "VendingMachine4K" in window.startup_wallpaper.profile_names()
     vending = ROOT / "assets" / "wallpapers" / "builtin" / "vending-machine.mp4"
-    assert vending.exists() and vending.stat().st_size > 1_000_000
-    window.startup_wallpaper.video_player.configure((1280, 720), "Smooth60")
-    assert window.startup_wallpaper.video_player.load(vending) is True
-    deadline = time.perf_counter() + 3.0
-    snapshot = window.startup_wallpaper.video_player.snapshot()
-    while snapshot.path != vending.resolve() and time.perf_counter() < deadline:
-        app.processEvents()
-        time.sleep(0.02)
+    if vending.is_file():
+        assert vending.exists() and vending.stat().st_size > 1_000_000
+        window.startup_wallpaper.video_player.configure((1280, 720), "Smooth60")
+        assert window.startup_wallpaper.video_player.load(vending) is True
+        deadline = time.perf_counter() + 3.0
         snapshot = window.startup_wallpaper.video_player.snapshot()
-    assert snapshot.path == vending.resolve()
-    assert not snapshot.image.isNull()
-    assert not snapshot.soft_glass.isNull()
-    assert not snapshot.glass.isNull()
+        while snapshot.path != vending.resolve() and time.perf_counter() < deadline:
+            app.processEvents()
+            time.sleep(0.02)
+            snapshot = window.startup_wallpaper.video_player.snapshot()
+        assert snapshot.path == vending.resolve()
+        assert not snapshot.image.isNull()
+        assert not snapshot.soft_glass.isNull()
+        assert not snapshot.glass.isNull()
+    elif os.environ.get("POLAR_REQUIRE_VIDEO_FIXTURE") == "1":
+        window.close()
+        raise AssertionError("Required video fixture is missing: vending-machine.mp4")
+    else:
+        print("SKIP optional built-in wallpaper decode: vending-machine.mp4 not supplied")
     window.wallpaper_picker_visible = True
     rendered = QImage(1280, 720, QImage.Format.Format_ARGB32_Premultiplied)
     rendered.fill(0)
@@ -4151,68 +4157,17 @@ def test_estop_zero_frame_bypass_and_backend_readiness() -> None:
     manager.shutdown()
 
 
+def run_all_smoke_tests() -> None:
+    # Definition-order discovery includes every module-level test, including
+    # regressions added after the original manually maintained entry point.
+    tests = [(name, value) for name, value in globals().items()
+             if name.startswith("test_") and callable(value)
+             and getattr(value, "__module__", None) == __name__]
+    for name, test in tests:
+        print(f"RUN {name}", flush=True)
+        test()
+    print(f"smoke checks completed: {len(tests)} test functions; see explicit optional-fixture SKIP output")
+
+
 if __name__ == "__main__":
-    test_registry()
-    test_audio_feedback_and_kill_sound_mapping()
-    test_gui_motion_reversal_and_layer_cache()
-    test_vision_render_interpolation_and_presence()
-    test_kill_fx_combat_focus_layout_and_migration()
-    test_kill_fx_assets_and_dual_evidence()
-    test_vision_kill_miss_after_lit()
-    test_vision_kill_dark_loss_requires_prior_dimming()
-    test_vision_kill_bright_or_exiting_loss_never_eliminates()
-    test_vision_kill_external_missing_data_never_eliminates()
-    test_gd656_renderer_presets()
-    test_wallpaper_pkg_index_reader()
-    test_wallpaper_profiles_and_user_import()
-    test_wallpaper_primes_cv2_before_worker_start()
-    test_hud_modes_and_rmui_modules()
-    test_match_modes_and_official_map_assets()
-    test_match_mode_manager()
-    test_config_store_roundtrip()
-    test_jello_mode_migration()
-    test_tongji_bridge_protocol()
-    test_tongji_udp_protocol()
-    test_local_prediction_snapshot()
-    test_tongji_local_yolo_demo()
-    test_calibration_export()
-    test_armor_3d_esp_render()
-    test_setting_clamp()
-    test_udp_reassembly()
-    test_video_pipeline_reassembly()
-    test_referee_frame_codec()
-    test_keyboard_control_bridge()
-    test_registry_tick_enabled_modules_only()
-    test_scenario_manager()
-    test_official_mqtt_bridge_mock_publish()
-    test_robot_state_tick()
-    test_pyside_animation_import()
-    test_android_liquid_spring_is_refresh_rate_invariant()
-    test_clickgui_offscreen_modes()
-    test_jello_clickgui_layout_and_old_group()
-    test_prediction_geometry_is_bounded()
-    test_robot_profiles_and_economy_rules()
-    test_economy_workspace_top_anchor_and_reversal()
-    test_control_center_backdrop_treatment_only_invalidates_blur_when_needed()
-    test_economy_respawn_close_and_reopen_restores_hud_scene()
-    test_official_economy_status_decode()
-    test_robot_launcher_and_polar_inertial_scroll()
-    test_small_text_policy_and_island_icon_alpha()
-    test_texture_origin_and_combined_backdrop()
-    test_island_animation_reversal_and_hud_stack()
-    test_combat_target_hud_math_and_rendering()
-    test_ordered_gpu_commands_and_line_only_vision_batch()
-    test_overlay_coordinator_wheel_and_match_chat()
-    test_native_viewer_telemetry_and_video_0310()
-    test_hero_lob_solver_and_fail_closed_readiness()
-    test_projectile_hit_auto_spin_uses_cumulative_deltas()
-    test_hero_deploy_console_state_and_responsive_render()
-    test_hero_native_video_isolation_and_authoritative_lock()
-    test_normal_backend_video_freshness_and_source_ownership()
-    test_minecraft_hud_assets_layout_and_render()
-    test_minecraft_hud_keeps_client_overlay_stack()
-    test_estop_zero_frame_bypass_and_backend_readiness()
-    test_liquid_glass_snapshot_stability()
-    test_gpu_glass_commands_do_not_accumulate_between_frames()
-    test_hud_liquid_glass_snapshot_stability()
-    print("smoke tests passed")
+    run_all_smoke_tests()

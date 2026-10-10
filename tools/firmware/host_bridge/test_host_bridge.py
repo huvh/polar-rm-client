@@ -13,7 +13,7 @@
 跑法：
     python tools/firmware/host_bridge/test_host_bridge.py
 
-固件副本不存在时跳过（返回 0）。
+固件副本不存在时跳过（返回 77，不计通过）。
 """
 
 from __future__ import annotations
@@ -23,9 +23,10 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+import os
 
 HERE = Path(__file__).resolve().parent
-REPO = HERE.parents[3] / "tmp_polarbear" / "StandardRobotpp"
+REPO = Path(os.environ.get("POLAR_FIRMWARE_ROOT") or str(HERE.parents[3] / "tmp_polarbear" / "StandardRobotpp")).resolve()
 USB_REL = "application/communication/usb_task.c"
 RC_REL = "application/other/remote_control.c"
 MECA_REL = "application/chassis/chassis_mecanum.c"
@@ -80,7 +81,7 @@ def compile_tu(tu: str, inc_dirs: list[str], name: str) -> tuple[int, list[str],
 def main() -> int:
     if not REPO.exists() or not (REPO / ".git").exists():
         print(f"SKIP: 固件副本不存在（{REPO}）")
-        return 0
+        return 77
 
     # 判"已打桥"要看 .c 内容：头文件是未跟踪文件，兄弟测试 git checkout 之后
     # .c 已回到基线、头文件却还留着，那时若因为"文件存在"就跳过安装，
@@ -93,6 +94,9 @@ def main() -> int:
     if already:
         print("[info] 桥接已存在于工作树，直接校验当前内容（不动 git）")
     else:
+        if os.environ.get("POLAR_FIRMWARE_READ_ONLY") == "1":
+            print("[INCOMPLETE] Required prepared files are absent; read-only checks never install patches")
+            return 77
         # 顺序很重要：**先拍快照**，再把要改的文件放回干净状态。
         # 反过来做的话 checkout 丢掉的东西（prepare_hero_build 写的桥、别的自检装的补丁）
         # 就再也 restore 不回来了。收尾只认这份快照，绝不用 git checkout -- .

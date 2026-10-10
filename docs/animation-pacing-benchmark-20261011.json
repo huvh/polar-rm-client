@@ -1,0 +1,121 @@
+{
+  "scope": "Pure helper CPU microbenchmarks and deterministic traces, not application FPS, Qt timer or GPU validation",
+  "python": "3.12.14",
+  "platform": "Linux-6.18.44-x86_64-with-glibc2.41",
+  "source_sha256": {
+    "before": {
+      "rm_client/ui/animation.py": "9349151fbdab0fcaff91431f77cf9592309eb50b02c2b82f00cb9605ae23a036",
+      "rm_client/ui/polar/primitives.py": "73ed001a422d3521bc40ce261d08e9091528769fd4dd31bee3d0395ed3d0e344"
+    },
+    "after": {
+      "rm_client/ui/animation.py": "18c60c14bb867ba254f1fad1b50d02baca70674f4f279f218eb735a2366b504f",
+      "rm_client/ui/polar/primitives.py": "821053d17f13e72f93de42b46bc96218e62f39c17150513779177f555de688aa"
+    }
+  },
+  "benchmarks": {
+    "64_settled_springs": {
+      "before": {
+        "median_us": 70.13764599999999,
+        "min_us": 58.882418,
+        "max_us": 91.431675
+      },
+      "after": {
+        "median_us": 50.839273,
+        "min_us": 41.974292999999996,
+        "max_us": 66.686542
+      },
+      "iterations_per_sample": 1000,
+      "samples": 9,
+      "cpu_change_percent": -27.514999576689526
+    },
+    "64_moving_springs": {
+      "before": {
+        "median_us": 64.44206,
+        "min_us": 55.010699,
+        "max_us": 89.950544
+      },
+      "after": {
+        "median_us": 67.817673,
+        "min_us": 56.407885,
+        "max_us": 102.85459
+      },
+      "iterations_per_sample": 1000,
+      "samples": 9,
+      "cpu_change_percent": 5.238213986331286
+    },
+    "settled_island_update_5_springs_plus_content": {
+      "before": {
+        "median_us": 10.261245333333335,
+        "min_us": 7.883667,
+        "max_us": 12.354491
+      },
+      "after": {
+        "median_us": 7.829872666666667,
+        "min_us": 7.234089666666667,
+        "max_us": 13.469037666666667
+      },
+      "iterations_per_sample": 3000,
+      "samples": 9,
+      "cpu_change_percent": -23.694713338238095
+    },
+    "144_normal_scheduler_callbacks": {
+      "before": {
+        "median_us": 52.580836000000005,
+        "min_us": 48.142807,
+        "max_us": 111.687128
+      },
+      "after": {
+        "median_us": 51.512297,
+        "min_us": 45.200674,
+        "max_us": 79.395985
+      },
+      "iterations_per_sample": 1000,
+      "samples": 9,
+      "cpu_change_percent": -2.032183360492801
+    },
+    "scheduler_resume_after_60_seconds": {
+      "before": {
+        "median_us": 318.722,
+        "min_us": 272.53933333333333,
+        "max_us": 863.702
+      },
+      "after": {
+        "median_us": 0.8313333333333334,
+        "min_us": 0.543,
+        "max_us": 2.1333333333333333
+      },
+      "iterations_per_sample": 3,
+      "samples": 9,
+      "cpu_change_percent": -99.73916663006214
+    },
+    "scheduler_resume_after_28800_seconds": {
+      "before": {
+        "median_us": 188076.44,
+        "min_us": 155996.177,
+        "max_us": 234817.808
+      },
+      "after": {
+        "median_us": 15.005,
+        "min_us": 1.259,
+        "max_us": 15.94
+      },
+      "iterations_per_sample": 1,
+      "samples": 9,
+      "cpu_change_percent": -99.99202186089869
+    }
+  },
+  "verification": {
+    "spring_exact_numeric_matches": 10000,
+    "normal_exponential_samples_exact": 7000,
+    "before_120ms_alpha": {
+      "one_delayed_update": 0.7930616800287973,
+      "twelve_10ms_updates": 0.9771956233487274
+    },
+    "after_120ms_alpha": {
+      "one_delayed_update": 0.9771956233487274,
+      "twelve_10ms_updates": 0.9771956233487274
+    },
+    "scheduler_callback_decisions_equal": 140000,
+    "scheduler_max_deadline_difference_seconds": 4.547473508864641e-13
+  }
+}

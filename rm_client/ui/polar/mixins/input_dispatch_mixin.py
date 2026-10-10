@@ -354,7 +354,7 @@ def _on_action_startup_back_match(self, payload: Any, point: QPointF, button: in
 
 def _on_action_startup_open_gui(self, payload: Any, point: QPointF, button: int, rect: QRectF) -> None:
     # 启动页快捷入口与正常场景入口必须启动同一套真实后端。
-    self.backend.apply_scenario(self.scenario_manager.current.key)
+    self.backend.apply_scenario(self.scenario_manager.current.key, registry=self.registry)
     self.home_visible = False
     self.startup_step = "done"
     self.set_clickgui_visible(True, announce=False)
@@ -362,7 +362,7 @@ def _on_action_startup_open_gui(self, payload: Any, point: QPointF, button: int,
 
 
 def _on_action_startup_open_config(self, payload: Any, point: QPointF, button: int, rect: QRectF) -> None:
-    self.backend.apply_scenario(self.scenario_manager.current.key)
+    self.backend.apply_scenario(self.scenario_manager.current.key, registry=self.registry)
     config_module = self.registry.get("ConfigManager")
     self.selected_category = "System"
     if config_module:
@@ -531,10 +531,11 @@ class InputDispatchMixin:
 
         以前这个钩子只清本地、把补帧推给"调用方"，但调用方从来没补过：
         DT7/选手端会把最后一帧重复到永远，锁定比赛控制反而成了踩油门。
-        0x5A 与 0x0311 那两条自己有新鲜度超时（150ms），不需要这里操心。
+        0x5A 与 0x0311 的链路中立化由后端负责；这里不能保留可重放的旧意图。
         """
 
         self.control.reset_inputs()
+        self.control.last_command = None
         # 清空本地不等于车上松手。DT7 与官方选手端那两侧都**没有**"过期自动清零"
         # 的兜底：把最后一帧原样重复到永远。而下面 clear_pending() 正好取消掉
         # reset_inputs() 立起来的 _dirty，于是心跳从此一帧都不发。

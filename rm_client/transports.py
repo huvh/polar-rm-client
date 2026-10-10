@@ -26,12 +26,20 @@ class FrameAssembler:
         self.dropped_count = 0
         self.invalid_count = 0
         self.buffered_bytes = 0
+        self.last_completed_frame_id: int | None = None
+        self.stale_packet_count = 0
+        self.sequence_discontinuities = 0
+        self._last_completed_at = 0.0
 
     def clear(self) -> None:
         self.frames.clear()
         self.buffered_bytes = 0
         self.dropped_count = 0
         self.invalid_count = 0
+        self.last_completed_frame_id = None
+        self.stale_packet_count = 0
+        self.sequence_discontinuities = 0
+        self._last_completed_at = 0.0
 
     def push_packet(self, packet: bytes) -> bytes | None:
         if len(packet) < self.HEADER_BYTES:
@@ -42,6 +50,22 @@ class FrameAssembler:
         total_bytes = int.from_bytes(packet[4:8], "big")
         payload = packet[self.HEADER_BYTES:]
         self._drop_old_frames()
+        previous = self.last_completed_frame_id
+        if previous is not None and time.monotonic() - self._last_completed_at > self.STALE_SECONDS:
+            # A sender may restart its uint16 counter without restarting our
+            # socket. After a bounded no-progress interval begin a new epoch,
+            # dropping partial frames and forcing video keyframe recovery.
+            for old_id in list(self.frames):
+                self._remove_frame(old_id, dropped=True)
+            self.last_completed_frame_id = previous = None
+            self.sequence_discontinuities += 1
+        if previous is not None and not 0 < ((frame_id - previous) & 0xFFFF) < 0x8000:
+            # Completion order is not stream order. Never feed an older frame
+            # (or a completed duplicate) after a newer one. Half-range serial
+            # arithmetic also handles the 65535 -> 0 wrap unambiguously.
+            self.stale_packet_count += 1
+            self._remove_frame(frame_id, dropped=True)
+            return None
         if (
             not payload
             or not (1 <= total_bytes <= self.MAX_FRAME_BYTES)
@@ -99,6 +123,14 @@ class FrameAssembler:
             complete = b"".join(ordered)
             if len(complete) == total_bytes:
                 self._remove_frame(frame_id)
+                previous = self.last_completed_frame_id
+                if previous is not None and ((frame_id - previous) & 0xFFFF) != 1:
+                    self.sequence_discontinuities += 1
+                self.last_completed_frame_id = frame_id
+                self._last_completed_at = time.monotonic()
+                for old_id in list(self.frames):
+                    if not 0 < ((old_id - frame_id) & 0xFFFF) < 0x8000:
+                        self._remove_frame(old_id, dropped=True)
                 return complete
             self._remove_frame(frame_id, dropped=True)
             self.invalid_count += 1
@@ -173,6 +205,9 @@ class UDPVideoReceiver:
     def start(self) -> None:
         if self.running:
             return
+        # An explicit receiver restart is a new frame-ID epoch. Sender resets
+        # cannot safely be inferred from late packets on an active socket.
+        self._assembler.clear()
         self.running = True
         self._thread = threading.Thread(target=self._run, name="udp-video", daemon=True)
         self._thread.start()

@@ -102,8 +102,17 @@ class FrameScheduler:
         if now + early_allowance < self.next_request:
             return False
         self.last_request = now
-        while self.next_request <= now + early_allowance:
-            self.next_request += interval
+        # The usual one-deadline path stays unchanged. After suspend/debugger
+        # pauses, skip the backlog arithmetically instead of iterating once
+        # per missed display frame (millions of iterations after one night).
+        self.next_request += interval
+        deadline = now + early_allowance
+        if self.next_request <= deadline:
+            skipped = int((deadline - self.next_request) / interval) + 1
+            self.next_request += skipped * interval
+            # Floating-point multiplication can round onto the boundary.
+            if self.next_request <= deadline:
+                self.next_request += interval
         return True
 
     def force(self) -> None:

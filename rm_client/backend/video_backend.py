@@ -149,14 +149,22 @@ class AnnexBRecoveryGate:
         self._tail = b""
         while data:
             if self._pending_parameter_type is not None:
-                next_start = self._find_start(data)
+                # A following start code may begin in the previous parameter's
+                # last three bytes. Search across that boundary, not only in
+                # the newly received transport block.
+                tail_len = min(3, len(self._pending_parameter))
+                boundary = bytes(self._pending_parameter[-tail_len:]) + data
+                next_start = self._find_start(boundary)
                 if next_start is None:
                     self._append_pending_parameter(data)
                     return None
                 offset, _prefix = next_start
-                self._append_pending_parameter(data[:offset])
+                if offset < tail_len:
+                    del self._pending_parameter[-(tail_len - offset):]
+                else:
+                    self._append_pending_parameter(data[:offset - tail_len])
                 self._commit_pending_parameter()
-                data = data[offset:]
+                data = boundary[offset:]
                 continue
 
             start = self._find_start(data)
@@ -265,6 +273,7 @@ class RmVideoBackend(UDPVideoReceiver):
         # bundled binary becoming available before runtime is picked up.
         self.h265_decoder: ContinuousMjpegDecoder | None = ContinuousMjpegDecoder("h265")
         self.h265_recovery = AnnexBRecoveryGate("h265")
+        self._udp_sequence_discontinuities = 0
         self._started_at = 0.0
         self._frame_times: list[float] = []
         self._bytes_this_second = 0
@@ -316,12 +325,17 @@ class RmVideoBackend(UDPVideoReceiver):
             self._h265_next_restart_at = 0.0
             self._h265_restart_backoff_s = 0.5
             self._assembler.clear()
+            self._udp_sequence_discontinuities = 0
         super().start()
 
     def _on_assembled_frame(self, frame: bytes) -> None:
         now = time.perf_counter()
         codec = "unknown"
         with self._lock:
+            discontinuities = self._assembler.sequence_discontinuities
+            if discontinuities != self._udp_sequence_discontinuities:
+                self._udp_sequence_discontinuities = discontinuities
+                self.h265_recovery.reset()
             codec = detect_frame_codec(frame)
             # 官方 UDP 源为连续 HEVC；VPS/SPS 只在关键帧出现。锁定后，普通
             # type 0..31 P/B slices 不能被当成 unknown 丢弃。
@@ -567,6 +581,8 @@ class RmVideoBackend(UDPVideoReceiver):
                 "frames_received": self.frames_received,
                 "dropped_frames": self.dropped_frames + self._assembler.dropped_count,
                 "invalid_fragments": self._assembler.invalid_count,
+                "stale_fragments": self._assembler.stale_packet_count,
+                "sequence_discontinuities": self._assembler.sequence_discontinuities,
                 "codec": self.codec,
                 "fps": round(self.fps, 1),
                 "bitrate": round(self.bitrate, 1),
@@ -629,6 +645,7 @@ class ContinuousMjpegDecoder:
         self.quality = int(quality)
         self.available = False
         self.last_error = ""
+        self.dependency_error = ""
         self.frames_decoded = 0
         self._proc: Any = None
         self._reader: threading.Thread | None = None
@@ -668,6 +685,17 @@ class ContinuousMjpegDecoder:
         # instance so recovery never leaks ffmpeg children or stale queues.
         if self._proc is not None:
             self.stop(clear_latest=False)
+        try:
+            # FFmpeg output alone is not a decoded frontend frame. Detect
+            # missing Python image dependencies before claiming readiness.
+            import cv2  # type: ignore  # noqa: F401
+            import numpy  # type: ignore  # noqa: F401
+        except Exception as exc:
+            self.dependency_error = f"video decode dependency unavailable: {type(exc).__name__}: {exc}"
+            self.last_error = self.dependency_error
+            self.available = False
+            return False
+        self.dependency_error = ""
         ffmpeg = resolve_ffmpeg_executable()
         if not ffmpeg:
             self.last_error = "ffmpeg 不可用"
@@ -825,8 +853,8 @@ class ContinuousMjpegDecoder:
                 self._frame_w, self._frame_h = w, h
                 self.frames_decoded += 1
                 self._process_frames_decoded += 1
-        except Exception:
-            pass
+        except Exception as exc:
+            self.last_error = f"frame decode failed: {type(exc).__name__}: {exc}"
 
     def latest(self, timeout_s: float = 0.5) -> Any:
         frame, _timestamp = self.latest_with_timestamp(timeout_s)
@@ -867,6 +895,7 @@ class ContinuousMjpegDecoder:
         latest = self.latest_timestamp()
         return {
             "available": self.available,
+            "dependency_error": self.dependency_error,
             "first_frame_timeout": bool(
                 self._running and self._process_frames_decoded == 0
                 and self.started_at > 0.0 and current - self.started_at > self.FIRST_FRAME_TIMEOUT_S
