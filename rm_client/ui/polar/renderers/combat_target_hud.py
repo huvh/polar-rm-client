@@ -55,6 +55,8 @@ from ...animation import Easings
 from ...layout import HudAnchorStack
 from ...paint import draw_bar, glow_rect, rounded_rect
 from ...theme import THEME, color
+from ...jello_locale import chinese_enabled
+from ...hud_locale import hud_text
 from ...vision_motion import TargetHudPresenceFrame
 
 __all__ = [
@@ -332,8 +334,8 @@ class CombatTargetHudMixin:
         if visual == "Classic":
             health_text = f"HP {float(self.state.current_health):.1f}"
             heat_text = f"HEAT {heat:.0f}%"
-            self.draw_text(p, QRectF(center.x() - 70, center.y() + 22, 140, 14), health_text, self.font("poppins_medium", 7.2), color("#ffffff"), Qt.AlignmentFlag.AlignCenter)
-            self.draw_text(p, QRectF(center.x() - 70, center.y() + 34, 140, 14), heat_text, self.font("poppins_medium", 6.8), heat_color, Qt.AlignmentFlag.AlignCenter)
+            self.draw_text(p, QRectF(center.x() - 70, center.y() + 22, 140, 14), hud_text(health_text, chinese_enabled(self.registry)), self.font("poppins_medium", 7.2), color("#ffffff"), Qt.AlignmentFlag.AlignCenter)
+            self.draw_text(p, QRectF(center.x() - 70, center.y() + 34, 140, 14), hud_text(heat_text, chinese_enabled(self.registry)), self.font("poppins_medium", 6.8), heat_color, Qt.AlignmentFlag.AlignCenter)
         elif show_bars:
             self.draw_combat_target_card(
                 p,
@@ -425,8 +427,8 @@ class CombatTargetHudMixin:
         p.drawPath(card_path)
         pad = 10.0
         aim_label = "LOCK" if frame.aim_anim >= 80.0 else ("TRACK" if frame.aim_anim >= 40.0 else "IDLE")
-        self.draw_text(p, QRectF(rect.left() + pad, rect.top() + 5, 95, 15), f"AIM  {aim_label}", self.font("poppins_medium", 7.2), color("#ffffff"))
-        self.draw_text(p, QRectF(rect.right() - 50, rect.top() + 5, 40, 15), f"{frame.aim_anim:.0f}%", self.font("poppins_medium", 6.8), color("#ffc896", 0.90), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self.draw_text(p, QRectF(rect.left() + pad, rect.top() + 5, 95, 15), hud_text(f"AIM  {aim_label}", chinese_enabled(self.registry)), self.font("poppins_medium", 7.2), color("#ffffff"))
+        self.draw_text(p, QRectF(rect.right() - 50, rect.top() + 5, 40, 15), hud_text(f"{frame.aim_anim:.0f}%", chinese_enabled(self.registry)), self.font("poppins_medium", 6.8), color("#ffc896", 0.90), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         aim_bar = QRectF(rect.left() + pad, rect.top() + 24, rect.width() - pad * 2.0, 8.0)
         rounded_rect(p, aim_bar, 3.0, color("#000000", 0.45))
         aim_fill = QRectF(aim_bar)
@@ -441,7 +443,7 @@ class CombatTargetHudMixin:
 
         ammo = max(0, int(self.state.remaining_ammo))
         ammo_max = max(0, int(self.state.ammo_capacity))
-        self.draw_text(p, QRectF(rect.left() + pad, rect.top() + 35, rect.width() - pad * 2.0, 15), f"AMMO  {ammo}/{ammo_max}", self.font("poppins_medium", 7.2), color("#ffffff"))
+        self.draw_text(p, QRectF(rect.left() + pad, rect.top() + 35, rect.width() - pad * 2.0, 15), hud_text(f"AMMO  {ammo}/{ammo_max}", chinese_enabled(self.registry)), self.font("poppins_medium", 7.2), color("#ffffff"))
         ammo_bar = QRectF(rect.left() + pad, rect.top() + 49, rect.width() - pad * 2.0, 8.0)
         rounded_rect(p, ammo_bar, 3.0, color("#000000", 0.45))
         if enhanced and frame.ammo_ghost > frame.ammo_anim + 0.5:
@@ -454,7 +456,7 @@ class CombatTargetHudMixin:
             rounded_rect(p, ammo_fill, 3.0, color("#ff5555") if ammo <= 0 else color("#5ec8ff"))
         if show_status_line:
             status = f"HEAT {heat:.0f}%  |  HP {int(self.state.current_health)}/{int(self.state.max_health)}"
-            self.draw_text(p, QRectF(rect.left() + pad, rect.bottom() - 11, rect.width() - pad * 2.0, 10), status, self.font("poppins_regular", 5.8), color("#ffffff", 0.55))
+            self.draw_text(p, QRectF(rect.left() + pad, rect.bottom() - 11, rect.width() - pad * 2.0, 10), hud_text(status, chinese_enabled(self.registry)), self.font("poppins_regular", 5.8), color("#ffffff", 0.55))
     def draw_target_hud_by_style(
         self,
         p: QPainter,
@@ -483,8 +485,8 @@ class CombatTargetHudMixin:
             rounded_rect(p, rect, 6, self.hud_surface(0.52), self.hud_panel_outline(0.11))
         name = self.target_short_name(target)
         value = f"{hp_ratio * 100:.0f}%"
-        self.draw_glass_text(p, QRectF(rect.left() + 8, rect.top() + 4, rect.width() - 55, 14), name, self.font("poppins_medium", 8.4), THEME.text)
-        self.draw_glass_text(p, QRectF(rect.right() - 46, rect.top() + 4, 38, 14), value, self.font("poppins_medium", 8.2), self.hud_accent(), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self.draw_glass_text(p, QRectF(rect.left() + 8, rect.top() + 4, rect.width() - 55, 14), hud_text(name, chinese_enabled(self.registry)), self.font("poppins_medium", 8.4), THEME.text)
+        self.draw_glass_text(p, QRectF(rect.right() - 46, rect.top() + 4, 38, 14), hud_text(value, chinese_enabled(self.registry)), self.font("poppins_medium", 8.2), self.hud_accent(), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         bar = QRectF(rect.left() + 8, rect.top() + 23, rect.width() - 16, 4.2)
         rounded_rect(p, bar, 2.1, color("#ffffff", 0.12))
         lag = QRectF(bar)
@@ -494,7 +496,7 @@ class CombatTargetHudMixin:
         filled.setWidth(max(bar.height(), bar.width() * max(0.0, min(1.0, main_ratio))))
         draw_bar(p, bar, main_ratio, self.hud_accent(), color("#ffffff", 0.0), 2.1)
         info = self.target_compact_info(target)
-        self.draw_glass_text(p, QRectF(rect.left() + 8, rect.bottom() - 13, rect.width() - 16, 10), info, self.font("poppins_regular", 6.8), THEME.muted)
+        self.draw_glass_text(p, QRectF(rect.left() + 8, rect.bottom() - 13, rect.width() - 16, 10), hud_text(info, chinese_enabled(self.registry)), self.font("poppins_regular", 6.8), THEME.muted)
         p.restore()
 
     def draw_target_bar_only(self, p: QPainter, rect: QRectF, target: VisionTarget) -> None:
@@ -503,9 +505,9 @@ class CombatTargetHudMixin:
         active = self.anim.value(f"hud.target.bar.active.{target.kind}", 1.0, self.anim_duration(0.20), Easings.ease_out_pow4, initial=0.0)
         p.save()
         p.setOpacity(active)
-        self.draw_text(p, QRectF(rect.left(), rect.top(), rect.width(), 11), self.target_short_name(target), self.font("poppins_medium", 7.4), THEME.text)
+        self.draw_text(p, QRectF(rect.left(), rect.top(), rect.width(), 11), hud_text(self.target_short_name(target), chinese_enabled(self.registry)), self.font("poppins_medium", 7.4), THEME.text)
         draw_bar(p, QRectF(rect.left(), rect.bottom() - 7, rect.width(), 4.0), main_ratio, self.hud_accent(), color("#ffffff", 0.13), 2.0)
-        self.draw_text(p, QRectF(rect.right() - 42, rect.top(), 42, 11), f"{hp_ratio * 100:.0f}%", self.font("poppins_medium", 7.4), self.hud_accent(), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self.draw_text(p, QRectF(rect.right() - 42, rect.top(), 42, 11), hud_text(f"{hp_ratio * 100:.0f}%", chinese_enabled(self.registry)), self.font("poppins_medium", 7.4), self.hud_accent(), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         p.restore()
 
     def target_ratio(self, target: VisionTarget) -> float:
@@ -529,7 +531,7 @@ class CombatTargetHudMixin:
         p.setOpacity(active)
         glow_rect(p, rect, 9, 0.07 if self.hud_clean() else 0.18)
         rounded_rect(p, rect, 8, self.hud_surface(0.76), self.hud_panel_outline(0.10))
-        self.draw_text(p, rect.adjusted(13, 9, -13, -54), title, self.font("poppins_bold", 10), THEME.text)
+        self.draw_text(p, rect.adjusted(13, 9, -13, -54), hud_text(title, chinese_enabled(self.registry)), self.font("poppins_bold", 10), THEME.text)
         if target.kind == "energy":
             ratio = self.state.energy_rune_progress / 100.0
             draw_bar(p, QRectF(rect.left() + 13, rect.top() + 43, rect.width() - 26, 7), ratio, self.hud_accent(), color("#ffffff", 0.14))
@@ -540,8 +542,8 @@ class CombatTargetHudMixin:
             draw_bar(p, QRectF(rect.left() + 13, rect.top() + 43, rect.width() - 26, 7), hp_ratio, self.hud_accent(), color("#ffffff", 0.14))
             info = f"ID {self.state.target_id} | {self.state.target_distance_m:.1f}m | LOCK {str(self.state.target_locked).upper()}"
             value = f"{target.confidence:.0%}"
-        self.draw_text(p, rect.adjusted(13, 56, -13, -8), info, self.font("poppins_regular", 8.2), THEME.muted)
-        self.draw_text(p, QRectF(rect.right() - 73, rect.top() + 10, 58, 18), value, self.font("poppins_medium", 9), self.hud_accent(), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self.draw_text(p, rect.adjusted(13, 56, -13, -8), hud_text(info, chinese_enabled(self.registry)), self.font("poppins_regular", 8.2), THEME.muted)
+        self.draw_text(p, QRectF(rect.right() - 73, rect.top() + 10, 58, 18), hud_text(value, chinese_enabled(self.registry)), self.font("poppins_medium", 9), self.hud_accent(), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         p.restore()
 
 

@@ -15,6 +15,8 @@ from ..robot_profiles import profiles_for_match
 from ..top_match_bar import LifeState, TopMatchBarFeed
 from .top_match_bar import TopMatchBarOptions, TopMatchBarRenderer
 from .overlay_coordinator import OverlayCoordinator
+from .jello_locale import chinese_enabled
+from .match_strip_locale import match_role_text, match_strip_text
 
 _LOG = logging.getLogger(__name__)
 
@@ -176,7 +178,7 @@ class TopMatchBarController:
         self.last_progress_bounds = QRectF(left, renderer.shown_y, available, 30)
 
     @staticmethod
-    def _paint_systems(painter: Any, frame: Any, layout: Any) -> float:
+    def _paint_systems(painter: Any, frame: Any, layout: Any, *, chinese: bool = False) -> float:
         if not frame.left.systems and not frame.right.systems:
             return layout.bounds.bottom
         y = layout.bounds.bottom + 2.0
@@ -189,8 +191,8 @@ class TopMatchBarController:
                     (frame.left, layout.bounds.x, layout.center.x - layout.bounds.x - 8, Qt.AlignRight),
                     (frame.right, layout.center.right + 8, layout.bounds.right - layout.center.right - 8, Qt.AlignLeft)):
                 painter.setPen(QColor("#B5D4EE") if team.alliance == "Blue" else QColor("#EAD18A"))
-                text = "  ·  ".join(f"{card.label} {card.robot_id}: " +
-                                    {LifeState.ALIVE: "ALIVE", LifeState.DEAD: "DOWN", LifeState.UNKNOWN: "—"}[card.life]
+                text = "  ·  ".join(f"{match_role_text(card, chinese)} {card.robot_id}: " +
+                                    match_strip_text({LifeState.ALIVE: "ALIVE", LifeState.DEAD: "DOWN", LifeState.UNKNOWN: "—"}[card.life], chinese)
                                     for card in team.systems)
                 painter.drawText(QRectF(x, y, max(0, w), 16), align | Qt.AlignVCenter, text)
         finally:
@@ -282,10 +284,12 @@ class TopMatchBarController:
                 reduced_motion=not bool(self._setting("Source Motion Preview", False)),
                 show_kills=bool(self._setting("Show Kills", True)),
                 show_scores=bool(self._setting("Show Scores", True)),
-                show_health=bool(self._setting("Show Health", True)))
+                show_health=bool(self._setting("Show Health", True)),
+                chinese=chinese_enabled(owner.registry),
+                custom_roster_label=self._custom_rosters is not None)
             self.last_layout = self.renderer.paint(painter, frame, width, now=now, options=options)
             if self.last_layout is not None:
-                bottom = self._paint_systems(painter, frame, self.last_layout)
+                bottom = self._paint_systems(painter, frame, self.last_layout, chinese=options.chinese)
                 self._paint_progress(painter, frame, width, now, left, right, bottom, safe.bottom)
             self._last_error = ""
         except Exception as exc:

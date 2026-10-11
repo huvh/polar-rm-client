@@ -75,6 +75,8 @@ from typing import Any
 from PySide6.QtCore import QRectF, Qt, QTimer
 from PySide6.QtWidgets import QFileDialog, QInputDialog
 
+from ...jello_locale import chinese_enabled, ui_text
+
 # 相对导入层级：rm_client/ui/polar/mixins/ → ... = rm_client.ui、.... = rm_client
 from ....combat_events import CombatEvent
 from ....control import (build_dt7_selftest_report, evaluate_dt7_hold,
@@ -425,11 +427,11 @@ class ConfigActionsMixin:
         qualification = self.backend.qualification
         try:
             if action_name == "New Qualification Session":
-                operator, ok = QInputDialog.getText(self, "Field qualification", "Operator name:")
+                operator, ok = QInputDialog.getText(self, ui_text("Field qualification", chinese_enabled(self.registry)), ui_text("Operator name:", chinese_enabled(self.registry)))
                 if not ok:
                     return
                 firmware_hash, ok = QInputDialog.getText(
-                    self, "Field qualification", "Robot firmware SHA-256:"
+                    self, ui_text("Field qualification", chinese_enabled(self.registry)), ui_text("Robot firmware SHA-256:", chinese_enabled(self.registry))
                 )
                 if not ok:
                     return
@@ -550,8 +552,8 @@ class ConfigActionsMixin:
                     return
                 phrase, accepted = QInputDialog.getText(
                     self,
-                    "Physical firmware watchdog observation",
-                    "After physically observing neutral output, type ZERO OBSERVED:",
+                    ui_text("Physical firmware watchdog observation", chinese_enabled(self.registry)),
+                    ui_text("After physically observing neutral output, type ZERO OBSERVED:", chinese_enabled(self.registry)),
                 )
                 if not accepted or phrase.strip() != "ZERO OBSERVED":
                     self.toast("Firmware zero observation cancelled")
@@ -647,15 +649,15 @@ class ConfigActionsMixin:
                 }
                 reviewer, accepted = QInputDialog.getText(
                     self,
-                    "PRM1 capability evidence",
-                    "Named schema reviewer / bench safety observer:",
+                    ui_text("PRM1 capability evidence", chinese_enabled(self.registry)),
+                    ui_text("Named schema reviewer / bench safety observer:", chinese_enabled(self.registry)),
                 )
                 if not accepted or not reviewer.strip():
                     return
                 phrase, accepted = QInputDialog.getText(
                     self,
-                    "PRM1 capability evidence",
-                    "Type OBSERVED ON FIXTURE to confirm supervised evidence:",
+                    ui_text("PRM1 capability evidence", chinese_enabled(self.registry)),
+                    ui_text("Type OBSERVED ON FIXTURE to confirm supervised evidence:", chinese_enabled(self.registry)),
                 )
                 passed = bool(accepted and phrase.strip() == "OBSERVED ON FIXTURE")
                 qualification.record_supervised_prm1(
@@ -682,12 +684,12 @@ class ConfigActionsMixin:
                 )
                 self.toast("Soak PASS" if elapsed >= required else "Soak stopped too early")
             elif action_name == "Export Evidence":
-                destination = QFileDialog.getExistingDirectory(self, "Export field evidence")
+                destination = QFileDialog.getExistingDirectory(self, ui_text("Export field evidence", chinese_enabled(self.registry)))
                 if destination:
                     target = qualification.store.export_current(Path(destination))
                     self.toast(f"Evidence exported: {target.name}")
             elif action_name == "Field Sign-off":
-                lead, ok = QInputDialog.getText(self, "Dual sign-off", "Safety lead name:")
+                lead, ok = QInputDialog.getText(self, ui_text("Dual sign-off", chinese_enabled(self.registry)), ui_text("Safety lead name:", chinese_enabled(self.registry)))
                 if ok:
                     qualification.sign_off(lead)
                     self.toast("Dual sign-off recorded")

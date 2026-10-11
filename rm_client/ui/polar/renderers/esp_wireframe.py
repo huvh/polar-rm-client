@@ -63,15 +63,31 @@ from PySide6.QtGui import (
 # 相对导入层级：rm_client/ui/polar/renderers/ → .... = rm_client、... = rm_client.ui
 from ....model import Module
 from ....vision import VisionResult, VisionTarget
-from ...paint import draw_bar, text_width, with_alpha
+from ...paint import draw_bar, rounded_rect, text_width, with_alpha
 # 注意：text_metrics 与本模块同属 ui/polar 子包（阶段 1 迁入），故为单级 ..
 from ..text_metrics import painter_device_scale
 from ...theme import color
+from ...jello_locale import chinese_enabled
+from ...hud_locale import hud_template, HudDisplayText
 from ...vision_wire_gpu import VisionWireBatch
 
 __all__ = [
     "EspWireframeMixin",
 ]
+
+
+def _draw_localized_pill(host, painter, point, raw_text, display_text, tint):
+    """Keep the shared pill's original bounds; translate its text only."""
+    font = host.font("poppins_medium", 8.0)
+    painter.setFont(font)
+    width = max(92.0, host.text_advance(font, raw_text) + 18.0)
+    rect = QRectF(point.x(), point.y(), width, 20)
+    rounded_rect(painter, rect, 7, color("#090a0d", 0.86), tint, 1.1)
+    host.draw_text(painter, rect.adjusted(8, 0, -8, 0), display_text, font, tint)
+
+
+def _distance_label(raw_text, registry):
+    return hud_template("DIST {value}", chinese_enabled(registry), value=raw_text[5:])
 
 
 class EspWireframeMixin:
@@ -1032,7 +1048,7 @@ class EspWireframeMixin:
                     label_width,
                     13.0 * label_scale,
                 ),
-                label,
+                getattr(label, "display", label),
                 font,
                 QColor(255, 255, 255, round(245 * alpha)),
             )
@@ -1121,7 +1137,7 @@ class EspWireframeMixin:
                 width=line_width + 0.35 * scale,
                 alpha=1.0,
                 predicted=False,
-                label=label,
+                label=HudDisplayText(label, _distance_label(label, self.registry)) if label else None,
                 label_scale=scale,
             )
             emitted.add(aim_key)
@@ -1538,12 +1554,12 @@ class EspWireframeMixin:
                     self.draw_text(
                         p,
                         QRectF(box.left(), box.top() - 16, label_width, 13),
-                        label,
+                        _distance_label(label, self.registry),
                         self.font("poppins_medium", 6.4),
                         color("#ffffff", 0.96),
                     )
                 else:
-                    self.draw_pill(p, QPointF(box.left(), box.top() - 24), label, aim_color)
+                    _draw_localized_pill(self, p, QPointF(box.left(), box.top() - 24), label, _distance_label(label, self.registry), aim_color)
         if local_pnp and not calibrated:
             self._bottom_left_diagnostics.append(("DESKTOP PNP | APPROX FOV", self.hud_accent(), 1))
         elif not calibrated:
@@ -1670,16 +1686,17 @@ def _heli_gimbal_lock_draw(host, p: QPainter, rect: QRectF, target: VisionTarget
     host.draw_text(
         p,
         QRectF(rect.center().x() - 70.0, rect.bottom() + 6.0, 140.0, 14.0),
-        f"DIST {distance:.1f}M",
+        hud_template("DIST {value}", chinese_enabled(host.registry), value=f"{distance:.1f}M"),
         host.font("poppins_medium", 7.0),
         color("#ffffff", 0.92 if locked else 0.66),
     )
 
     # 顶部 AIR LOCK 小 pill（沿用现有 pill 标签槽位）。
-    host.draw_pill(
-        p,
-        QPointF(rect.left(), rect.top() - 27),
+    _draw_localized_pill(
+        host, p, QPointF(rect.left(), rect.top() - 27),
         f"AIR LOCK · {target.label.upper()} {target.confidence:.0%}",
+        hud_template("AIR LOCK · {label} {confidence}", chinese_enabled(host.registry),
+                     label=target.label.upper(), confidence=f"{target.confidence:.0%}"),
         main,
     )
     p.restore()

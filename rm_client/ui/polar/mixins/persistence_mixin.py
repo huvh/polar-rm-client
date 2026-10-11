@@ -44,6 +44,8 @@ from typing import Any
 
 from PySide6.QtWidgets import QFileDialog
 
+from ...jello_locale import chinese_enabled, ui_text
+
 # 相对导入层级：rm_client/ui/polar/mixins/ → .... = rm_client、... = rm_client.ui
 from ....config_store import apply_registry_config, export_client_config, validate_client_config
 from ....match_modes import MatchModeConfig
@@ -243,8 +245,8 @@ class PersistenceMixin:
         if kind not in UiAudioManager.CUSTOM_KINDS:
             return
         start = str(self.ui_audio.custom_dir)
-        filters = "Audio files (*.wav *.ogg *.mp3 *.flac *.m4a *.aac)"
-        path, _ = QFileDialog.getOpenFileName(self, f"Import {kind} sound", start, filters)
+        filters = ui_text("Audio files (*.wav *.ogg *.mp3 *.flac *.m4a *.aac)", chinese_enabled(self.registry))
+        path, _ = QFileDialog.getOpenFileName(self, ui_text(f"Import {kind} sound", chinese_enabled(self.registry)), start, filters)
         if not path:
             return
         try:
@@ -262,8 +264,8 @@ class PersistenceMixin:
 
     def import_wallpaper_from_dialog(self) -> None:
         start = str(self.paths.asset("wallpapers"))
-        filters = "Wallpaper media (*.mp4 *.webm *.mov *.avi *.mkv *.gif *.png *.jpg *.jpeg)"
-        path, _ = QFileDialog.getOpenFileName(self, "Import startup wallpaper", start, filters)
+        filters = ui_text("Wallpaper media (*.mp4 *.webm *.mov *.avi *.mkv *.gif *.png *.jpg *.jpeg)", chinese_enabled(self.registry))
+        path, _ = QFileDialog.getOpenFileName(self, ui_text("Import startup wallpaper", chinese_enabled(self.registry)), start, filters)
         if not path:
             return
         try:

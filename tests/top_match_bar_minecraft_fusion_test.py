@@ -152,6 +152,9 @@ class MinecraftFusionTests(unittest.TestCase):
         """Use production ActiveMods geometry, font and raster path; no app startup."""
         scope = production_methods("rm_client/ui/polar/renderers/module_list.py", "ModuleListMixin",
             {"draw_minecraft_module_list", "draw_module_list_debug_white"})
+        from rm_client.ui.hud_locale import hud_module_name
+        from rm_client.ui.jello_locale import chinese_enabled
+        scope.update(hud_module_name=hud_module_name, chinese_enabled=chinese_enabled)
         scope.update(math=math, **{name: getattr(QtGui, name) for name in
             ("QFontMetricsF", "QImage", "QTransform", "QPainter", "QColor")},
             QRectF=QtCore.QRectF, QPointF=QtCore.QPointF, Qt=QtCore.Qt)

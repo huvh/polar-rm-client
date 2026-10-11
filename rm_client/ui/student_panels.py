@@ -16,7 +16,7 @@ from ..student_ui import active_buffs, damage_rows, device_rows, number, present
 from .clickgui_gpu import ClickGuiDrawList
 from .animation import Easings
 from .jello_clickgui import JelloMainTimeline
-from .jello_locale import module_label, chinese_enabled
+from .jello_locale import module_label, setting_label, option_label, chinese_enabled
 from .minecraft_presentation import MinecraftItemAtlas
 
 
@@ -319,7 +319,7 @@ class StudentPanelRenderer:
         mod=host.registry.get("SkillConfiguration")
         for i,(name,item) in enumerate((("Chassis Points","ChassisAssist"),("Shooter Points","FrictionWheel"),("Shooter Draft","ArmorAutoAim"),("Chassis Draft","PowerGuard"))):
             col,row=i%2,i//2;cell=r(98+18*col,18+18*row,16,16)
-            p.drawImage(cell,self.items.image(item));hits.append(PanelHit(cell,"student_open","skills",name))
+            p.drawImage(cell,self.items.image(item));hits.append(PanelHit(cell,"student_open","skills",setting_label(name,chinese_enabled(host.registry))))
         output=r(154,28,16,16);p.drawImage(output,self.items.image("SkillConfiguration"))
         hits.append(PanelHit(output,"student_open","skills","打开技能 / 性能配置"))
         self.text(host,p,r(95,56,77,12),"可分配点: "+value_text(presentation_data(host.state).get("assignable_points")),3.7,s)
@@ -340,7 +340,7 @@ class StudentPanelRenderer:
                 p.drawImage(cell,self.items.image(name,module.category if module else "System"))
             if i==host.student_ui.selected_slot:
                 p.setBrush(Qt.BrushStyle.NoBrush);p.setPen(QPen(QColor("#55ffff"),max(1,s/2)));p.drawRect(cell)
-            hits.append(PanelHit(cell,"student_slot",i,f"{i+1}: {module_label(name,chinese_enabled(host.registry))} · 点击分配，右键清空"))
+            hits.append(PanelHit(cell,"student_slot",i,f"{i+1}: {option_label(name,chinese_enabled(host.registry))} · 点击分配，右键清空"))
         self.button(host,p,QRectF(7*s,205*s,30*s,12*s),"上一页",s,hits,"student_page",-1,pixel=True)
         self.text(host,p,QRectF(40*s,205*s,110*s,12*s),f"{host.student_ui.page+1}/{max_page+1}  E / Esc 关闭",4,s,"#ffffff",align=Qt.AlignmentFlag.AlignCenter)
         self.button(host,p,QRectF(153*s,205*s,30*s,12*s),"下一页",s,hits,"student_page",1,pixel=True)

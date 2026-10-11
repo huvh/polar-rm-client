@@ -24,6 +24,8 @@ from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QFont, QFontMetricsF, QPainter, QPainterPath, QPen
 
 from .economy_workspace import EconomyIslandState
+from .hero_locale import hero_diagnostic, hero_phase, hero_target, hero_text
+from .jello_locale import chinese_enabled
 
 
 GlassDrawer = Callable[..., None]
@@ -453,6 +455,7 @@ class HeroDeployRenderer:
         text_drawer: TextDrawer | None = None,
         island_icon_drawer: IslandIconDrawer | None = None,
         pointer: QPointF | None = None,
+        registry: Any = None,
     ) -> tuple[HeroDeployHitTarget, ...]:
         # Presentation is advanced exactly once by PolarClientWindow.on_tick.
         # Direct tests/tools explicitly advance the state before drawing.
@@ -461,10 +464,11 @@ class HeroDeployRenderer:
         if progress <= 0.001 and not interface.visible:
             return ()
 
+        chinese = chinese_enabled(registry)
         scale = layout.scale
         status = int(getattr(state, "deploy_mode", 0))
         deployed = status == 1
-        phase = interface.phase(status, now)
+        phase = hero_phase(interface.phase(status, now), chinese)
         ready = bool(getattr(readiness, "ready", False))
         reachable = bool(getattr(solution, "reachable", False))
         pending = interface.pending_mode is not None
@@ -538,7 +542,7 @@ class HeroDeployRenderer:
             self._text(
                 p,
                 QRectF(title_left, layout.header.top(), title_w, layout.header.height()),
-                "HERO LOB",
+                hero_text("HERO LOB", chinese),
                 self._font(font_factory, "poppins_bold", 10.2 * scale),
                 QColor("#ffffff"),
                 text_drawer=text_drawer,
@@ -547,7 +551,7 @@ class HeroDeployRenderer:
             self._text(
                 p,
                 QRectF(title_left, layout.header.top() + 2.0 * scale, title_w, 22.0 * scale),
-                "HERO LOB",
+                hero_text("HERO LOB", chinese),
                 self._font(font_factory, "poppins_bold", 13.0 * scale),
                 QColor("#ffffff"),
                 text_drawer=text_drawer,
@@ -555,7 +559,7 @@ class HeroDeployRenderer:
             self._text(
                 p,
                 QRectF(title_left, layout.header.top() + 24.0 * scale, title_w, 18.0 * scale),
-                "Range deployment · ballistic assist",
+                hero_text("Range deployment · ballistic assist", chinese),
                 self._font(font_factory, "poppins_regular", 7.2 * scale),
                 QColor("#c8d4dc"),
                 text_drawer=text_drawer,
@@ -629,6 +633,7 @@ class HeroDeployRenderer:
                 solution=solution,
                 deployed=deployed,
                 scale=scale,
+                chinese=chinese,
                 font_factory=font_factory,
                 glass_drawer=glass_drawer,
                 text_drawer=text_drawer,
@@ -643,6 +648,7 @@ class HeroDeployRenderer:
                 interface=interface,
                 now=now,
                 scale=scale,
+                chinese=chinese,
                 font_factory=font_factory,
                 glass_drawer=glass_drawer,
                 text_drawer=text_drawer,
@@ -653,6 +659,7 @@ class HeroDeployRenderer:
                 layout.rule_card,
                 deployed=deployed,
                 scale=scale,
+                chinese=chinese,
                 font_factory=font_factory,
                 glass_drawer=glass_drawer,
                 text_drawer=text_drawer,
@@ -707,7 +714,8 @@ class HeroDeployRenderer:
                     _alpha(accent, (0.54 if hovered else 0.32) if action_enabled else 0.12),
                     max(0.7, 0.8 * scale),
                 )
-                button_label = f"CONFIRM {label}" if confirm else label
+                display_label = hero_text(label, chinese)
+                button_label = hero_text("CONFIRM {label}", chinese, label=display_label) if confirm else display_label
                 self._text(
                     p,
                     rect.adjusted(6.0 * scale, 0.0, -6.0 * scale, 0.0),
@@ -741,7 +749,7 @@ class HeroDeployRenderer:
                 "hero_deploy_close",
             )
             hits.extend(
-                HeroDeployHitTarget(QRectF(rect), action, False, label)
+                HeroDeployHitTarget(QRectF(rect), action, False, hero_text(label, chinese))
                 for rect, action, label in zip(layout.buttons, actions, labels)
             )
         p.restore()
@@ -757,6 +765,7 @@ class HeroDeployRenderer:
         solution: Any,
         deployed: bool,
         scale: float,
+        chinese: bool,
         font_factory: Callable[[str, float], QFont] | None,
         glass_drawer: GlassDrawer | None,
         text_drawer: TextDrawer | None,
@@ -775,7 +784,7 @@ class HeroDeployRenderer:
         self._text(
             p,
             title,
-            "BALLISTIC PREVIEW",
+            hero_text("BALLISTIC PREVIEW", chinese),
             self._font(font_factory, "poppins_bold", 8.6 * scale),
             QColor("#f3f8fb"),
             text_drawer=text_drawer,
@@ -809,7 +818,7 @@ class HeroDeployRenderer:
             self._text(
                 p,
                 viewport,
-                "NO VALID BALLISTIC SOLUTION",
+                hero_text("NO VALID BALLISTIC SOLUTION", chinese),
                 self._font(font_factory, "poppins_bold", 10.0 * scale),
                 QColor("#ff817a"),
                 Qt.AlignmentFlag.AlignCenter,
@@ -821,9 +830,10 @@ class HeroDeployRenderer:
         target = str(target_setting.value) if target_setting is not None else "Enemy Base"
         distance = float(distance_setting.value) if distance_setting is not None else 0.0
         footer_text = (
-            "OFFICIAL VIDEO CUT · CUSTOM UI + MAP STAY ACTIVE"
+            hero_text("OFFICIAL VIDEO CUT · CUSTOM UI + MAP STAY ACTIVE", chinese)
             if deployed
-            else f"TARGET {target.upper()}  ·  RANGE {distance:.1f} m"
+            else hero_text("TARGET {target}  ·  RANGE {distance} m", chinese,
+                           target=hero_target(target, chinese), distance=f"{distance:.1f}")
         )
         self._text(
             p,
@@ -846,6 +856,7 @@ class HeroDeployRenderer:
         interface: HeroDeployInterfaceState,
         now: float,
         scale: float,
+        chinese: bool,
         font_factory: Callable[[str, float], QFont] | None,
         glass_drawer: GlassDrawer | None,
         text_drawer: TextDrawer | None,
@@ -863,7 +874,7 @@ class HeroDeployRenderer:
         self._text(
             p,
             rect.adjusted(14.0 * scale, 6.0 * scale, -14.0 * scale, -rect.height() + 30.0 * scale),
-            "DEPLOY / GIMBAL",
+            hero_text("DEPLOY / GIMBAL", chinese),
             self._font(font_factory, "poppins_bold", 8.0 * scale),
             QColor("#f3f8fb"),
             text_drawer=text_drawer,
@@ -888,7 +899,7 @@ class HeroDeployRenderer:
             self._text(
                 p,
                 QRectF(row.left(), row.top(), row.width() * 0.43, row.height()),
-                label,
+                hero_text(label, chinese),
                 self._font(font_factory, "poppins_medium", 6.7 * scale),
                 QColor("#9eabb3"),
                 text_drawer=text_drawer,
@@ -897,7 +908,7 @@ class HeroDeployRenderer:
             self._text(
                 p,
                 QRectF(row.left() + row.width() * 0.40, row.top(), row.width() * 0.60, row.height()),
-                value,
+                hero_phase(value, chinese),
                 self._font(font_factory, "poppins_bold", 6.8 * scale),
                 value_colour,
                 Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
@@ -910,7 +921,7 @@ class HeroDeployRenderer:
             self._text(
                 p,
                 rect.adjusted(14.0 * scale, rect.height() - 21.0 * scale, -14.0 * scale, -3.0 * scale),
-                str(reasons[0]),
+                hero_diagnostic(str(reasons[0]), chinese),
                 self._font(font_factory, "poppins_medium", 6.3 * scale),
                 QColor("#ffac84"),
                 text_drawer=text_drawer,
@@ -923,6 +934,7 @@ class HeroDeployRenderer:
         *,
         deployed: bool,
         scale: float,
+        chinese: bool,
         font_factory: Callable[[str, float], QFont] | None,
         glass_drawer: GlassDrawer | None,
         text_drawer: TextDrawer | None,
@@ -942,7 +954,7 @@ class HeroDeployRenderer:
         self._text(
             p,
             rect.adjusted(14.0 * scale, 5.0 * scale, -14.0 * scale, -rect.height() + 28.0 * scale),
-            "RM2026 DEPLOY MODE",
+            hero_text("RM2026 DEPLOY MODE", chinese),
             self._font(font_factory, "poppins_bold", 7.7 * scale),
             QColor("#ffd878"),
             text_drawer=text_drawer,
@@ -962,7 +974,7 @@ class HeroDeployRenderer:
             self._text(
                 p,
                 QRectF(rect.left() + 14.0 * scale, y + index * row_h, rect.width() - 28.0 * scale, row_h),
-                line,
+                hero_text(line, chinese),
                 self._font(font_factory, "poppins_medium", 6.4 * scale),
                 colour,
                 text_drawer=text_drawer,

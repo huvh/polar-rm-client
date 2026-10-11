@@ -63,7 +63,7 @@ python -m venv .venv
 
 - 主 HUD 按 `Esc` 打开 Jello 二级菜单：继续、返回启动页、退出客户端（二次确认）；再次 `Esc` 关闭。已有输入框/弹窗优先处理 Esc。菜单不暂停遥测或安全监控，菜单键鼠不会下发为控制输入。见 [Esc 菜单说明](docs/escape_menu.md)。
 
-- `Right Shift` 或 `F8`：打开/关闭 ClickGUI。
+- `Right Shift` 或 `F8`：打开/关闭配置界面（ClickGUI）。Jello 界面左键点击面板外空白处也可关闭；面板标题、留白、控件和拖动不会误关。
 - `F9`：已停用，不再轮换 ClickGUI。
 - 长按 `Tab`：放大 `TacticalMap`；松开 `Tab` 后回到缩略小地图。修改 `TacticalMap` 模块绑定键后，新的绑定键也会作为长按查看键。
 - 启动页：`1/2/3` 选择运行场景，然后 `1/2` 选择 `RMUC7v7/RMUL3v3`；`Backspace` 返回场景选择。

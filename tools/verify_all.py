@@ -45,6 +45,15 @@ PYTHON_SUITES = (
     "test_dt7_worker_dispatch",  # bounded UI-safe DT7 mailbox and fault lifecycle
     "test_cc_worker_dispatch",   # bounded UI-safe custom-controller worker
     "test_gpu_warmup_budget",  # queued warmup and UI-thread timing ownership
+    "test_background_display_locale",  # text-bearing GPU backgrounds/blur invalidate on locale
+    "test_hero_display_locale",  # display-only Hero safety/phase text and invariant controls
+    "test_hud_display_locale",  # HUD/map labels with immutable raw state and commands
+    "test_status_display_locale",  # dynamic island/watermark/DT7 display and cache languages
+    "test_match_strip_locale",  # CS strip aliases, models, layout and portrait cache
+    "test_economy_display_locale",  # economy/inventory display and opaque diagnostic data
+    "test_ui_localization",  # Chinese labels, stable stored IDs and explicit English
+    "test_startup_display_locale",  # production startup geometry, cache and toast display
+    "test_clickgui_background_dismiss",  # issue #8: blank clicks, controls, drag and hotkeys
     "test_escape_menu",  # modal input precedence, safe Esc actions and real Qt rendering
     "test_kill_selector_regressions",  # clipped preset popup wheel/touchpad routing
     "test_kill_audio_regressions",  # nonblocking PCM cache, Ready gating and errors; no audio output

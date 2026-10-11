@@ -25,6 +25,7 @@ from .jello_locale import (
     action_label,
     category_label,
     chinese_enabled,
+    description_label,
     module_label,
     option_label,
     profile_language_badge,
@@ -656,6 +657,7 @@ class JelloClickGuiRenderer:
         alpha: float,
     ) -> ClickGuiDrawList:
         host._hotspot_clip = None
+        hotspot_start = len(host.hotspots)
         click_gui = host.registry.get("ClickGui")
         scale_setting = click_gui.get_setting("Scale") if click_gui else None
         requested_scale = float(scale_setting.value) if scale_setting else 1.0
@@ -704,6 +706,9 @@ class JelloClickGuiRenderer:
             0.0,
             self._argb(DEEP_TEAL, 0.20 * main_visual),
         )
+
+        # Lowest-priority hit target: panel/control targets added below mask it.
+        host.add_hotspot(QRectF(0.0, 0.0, float(width), float(height)), "jello_dismiss_background")
 
         settings_raw = state.settings_background_animation.progress if state.settings_active else 0.0
         settings_ease = 0.0
@@ -777,6 +782,11 @@ class JelloClickGuiRenderer:
                 commands.default_text_device_snap = previous_snap
         if hasattr(host, "append_minecraft_drop_overlay"):
             host.append_minecraft_drop_overlay(commands)
+        if not getattr(host, "gui_visible", True):
+            # Closing animation is display-only, even if its last frame stays
+            # cached after the timer reaches zero and before the next paint.
+            del host.hotspots[hotspot_start:]
+            host.gui_scroll_viewports = []
         return commands
 
     def _build_shadow(
@@ -816,6 +826,8 @@ class JelloClickGuiRenderer:
         scale: float,
         alpha: float,
     ) -> None:
+        # Empty panel padding and headers are still inside the configuration UI.
+        host.add_hotspot(panel, "jello_noop")
         self._build_shadow(commands, panel, 20.0 * scale, alpha)
 
         # PanelGroup uses separate top/body primitives. Compositing the body as
@@ -1085,7 +1097,7 @@ class JelloClickGuiRenderer:
 
         backdrop = QRectF(0.0, 0.0, float(width), float(height))
         commands.rect(backdrop, 0.0, self._argb(DEEP_TEAL, 0.45 * raw))
-        host.add_hotspot(backdrop, "jello_close_settings")
+        host.add_hotspot(backdrop, "jello_dismiss_background")
         host.add_hotspot(panel, "jello_noop")
 
         commands.rect(panel, 10.0 * scale, self._argb(LIGHT_GREYISH_BLUE, raw))
@@ -1095,6 +1107,7 @@ class JelloClickGuiRenderer:
             width,
             height,
         )
+        host.add_hotspot(title, "jello_noop")
         commands.text(
             title,
             self._elided_module_name(
@@ -1122,7 +1135,7 @@ class JelloClickGuiRenderer:
         )
         commands.text(
             description_rect,
-            module.description or "",
+            description_label(module.description or "", chinese_enabled(host.registry)),
             self._font(host, "jello_light", 20.0),
             self._argb(DEEP_TEAL, 0.7 * raw),
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop,
@@ -1294,7 +1307,7 @@ class JelloClickGuiRenderer:
         if rect.contains(host.hover_point):
             state._setting_hovered_this_frame = True
             state.hovered_setting_name = localized_name
-            state.hovered_setting_description = setting.description or ""
+            state.hovered_setting_description = description_label(setting.description or "", chinese_enabled(host.registry))
 
     def _build_setting(
         self,
@@ -1538,7 +1551,7 @@ class JelloClickGuiRenderer:
                     )
                     commands.rect(option, 0.0, background, clip=options_clip)
                     is_legacy = setting.name == "Old ClickGUIs"
-                    legacy_label = _LEGACY_LABELS.get(mode, mode) if is_legacy else mode
+                    legacy_label = _LEGACY_LABELS.get(mode, mode) if is_legacy else action_label(mode, chinese_enabled(host.registry))
                     if chinese_enabled(host.registry) and is_legacy:
                         legacy_label = f"旧版 {legacy_label}"
                     commands.text(

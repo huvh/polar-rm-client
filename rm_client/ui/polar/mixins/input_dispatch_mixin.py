@@ -236,6 +236,15 @@ def _on_action_jello_return(self, payload: Any, point: QPointF, button: int, rec
     self.return_to_jello_clickgui()
 
 
+def _on_action_jello_dismiss_background(self, payload: Any, point: QPointF, button: int, rect: QRectF) -> None:
+    # Commit only on a matching release. A drag starting outside a panel must
+    # not dismiss it, and the closing click must never reach combat controls.
+    if button == 1 and self.gui_visible and not self.drag:
+        self._jello_background_press = QPointF(point)
+        self._jello_background_dragged = False
+        self._jello_background_release_owned = True
+
+
 def _on_action_jello_noop(self, payload: Any, point: QPointF, button: int, rect: QRectF) -> None:
     return
 
@@ -484,6 +493,7 @@ _DISPATCH_HANDLERS = {
     "jello_open_legacy": _on_action_jello_open_legacy,
     "jello_return": _on_action_jello_return,
     "jello_noop": _on_action_jello_noop,
+    "jello_dismiss_background": _on_action_jello_dismiss_background,
     "hero_deploy_open": _on_action_hero_deploy_open,
     "hero_deploy_enter": _on_action_hero_deploy_enter,
     "hero_deploy_exit": _on_action_hero_deploy_exit,
@@ -553,6 +563,9 @@ class InputDispatchMixin:
         self._combat_input_was_allowed = False
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
+        self._jello_background_press = None
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._jello_background_release_owned = False
         if self.handle_escape_menu_mouse(event, "press"):
             return
         if self.handle_student_mouse(event, "press"):
@@ -562,6 +575,14 @@ class InputDispatchMixin:
             return
         button = self.qt_button(event)
         point = event.position()
+        if (not self.gui_visible
+                and getattr(getattr(self, "gui_timeline", None), "progress", 0.0) > 0.0):
+            # The exit animation may render old GUI hit targets again. They
+            # are display-only once closed; consume clicks until it finishes.
+            if button == 1:
+                self._jello_background_release_owned = True
+            event.accept()
+            return
         if self.quick_action_wheel.active or self.overlay_coordinator.radial_active:
             if button == 2:
                 self.cancel_quick_action_wheel()
@@ -579,6 +600,13 @@ class InputDispatchMixin:
             if hotspot.rect.contains(point):
                 self.dispatch(hotspot.action, hotspot.payload, point, button, hotspot.rect)
                 return
+        # Opening/rebuilding a GUI may leave no current hit targets for one
+        # frame. The modal still owns that click; never publish it to the map.
+        if self.gui_visible:
+            if button == 1:
+                self._jello_background_release_owned = True
+            event.accept()
+            return
         if button == 1 and self.publish_map_click_from_screen(point):
             event.accept()
             return
@@ -590,6 +618,13 @@ class InputDispatchMixin:
             self.search_focus = False
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
+        background_press = getattr(self, "_jello_background_press", None)
+        if getattr(self, "_jello_background_release_owned", False):
+            if (background_press is not None
+                    and (event.position() - background_press).manhattanLength() > 6.0):
+                self._jello_background_dragged = True
+            event.accept()
+            return
         if self.handle_escape_menu_mouse(event, "move"):
             return
         if self.handle_student_mouse(event, "move"):
@@ -659,6 +694,21 @@ class InputDispatchMixin:
             panel["y"] = point.y() - self.drag["offset_y"]
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+        background_press = getattr(self, "_jello_background_press", None)
+        if (getattr(self, "_jello_background_release_owned", False)
+                and event.button() == Qt.MouseButton.LeftButton):
+            self._jello_background_release_owned = False
+            self._jello_background_press = None
+            point = event.position()
+            target = next((h for h in reversed(self.hotspots)
+                           if h.button in (None, 1) and h.rect.contains(point)), None)
+            if (background_press is not None and self.gui_visible and target is not None
+                    and target.action == "jello_dismiss_background"
+                    and not getattr(self, "_jello_background_dragged", False)
+                    and (point - background_press).manhattanLength() <= 6.0):
+                self.set_clickgui_visible(False)
+            event.accept()
+            return
         if self.handle_escape_menu_mouse(event, "release"):
             return
         if self.handle_student_mouse(event, "release"):
@@ -814,6 +864,9 @@ class InputDispatchMixin:
             event.accept()
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
+        # A keyboard navigation/close action supersedes a pending mouse click,
+        # but the GUI still owns that click's eventual motion and release.
+        self._jello_background_press = None
         if not self.escape_menu_visible and not event.isAutoRepeat():
             # A new physical press supersedes any menu key-up lost on focus
             # change; its later release must reach the normal control owner.
@@ -1134,6 +1187,7 @@ class InputDispatchMixin:
             and not self.student_ui.visible
             and not self.home_visible
             and not self.gui_visible
+            and getattr(getattr(self, "gui_timeline", None), "progress", 0.0) <= 0.0
             and not self.economy_visible
             and not self.hero_deploy_ui.visible
             and not self.match_chat.input_open

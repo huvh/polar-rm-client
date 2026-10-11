@@ -1,4 +1,4 @@
-﻿"""阶段 2f 渲染器提取：启动场景渲染族（D4）→ StartupSceneMixin。
+"""阶段 2f 渲染器提取：启动场景渲染族（D4）→ StartupSceneMixin。
 
 （REFACTOR_BLUEPRINT §5 阶段 2 表 2f 行 / §2 D4 节 / §5.6 冻结面 / §6 性能红线）
 
@@ -81,6 +81,7 @@ from ...gpu_frame_compositor import LensMaterial
 from ...startup_gl import TextureOrigin
 from ...paint import accent_color, glow_rect, glow_text, rounded_rect, text_width, with_alpha
 from ...theme import THEME, color
+from ...jello_locale import chinese_enabled, ui_text
 
 __all__ = [
     "StartupSceneMixin",
@@ -476,7 +477,7 @@ class StartupSceneMixin:
 
         logo_y = max(72.0 * scale, y - 92.0 * scale)
         glow_text(p, "POLAR-RM", x, logo_y, title_font, THEME.text, THEME.cyan, 8 * scale)
-        self.draw_text(p, QRectF(x, logo_y + 10 * scale, menu_w, 44 * scale), "CUSTOM CLIENT", body_font, THEME.muted, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self.draw_text(p, QRectF(x, logo_y + 10 * scale, menu_w, 44 * scale), ui_text("CUSTOM CLIENT", chinese_enabled(self.registry)), body_font, THEME.muted, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
 
         order = ["OfficialEvent", "CampusSimulation", "LabDebug"]
         for index, key in enumerate(order):
@@ -490,17 +491,17 @@ class StartupSceneMixin:
             glow_rect(p, draw_rect, 9 * scale, 0.12 + 0.10 * hover_v)
             rounded_rect(p, draw_rect, 8 * scale, color("#09090d", 0.88 + 0.05 * hover_v), color("#ffffff", 0.10 + 0.16 * hover_v))
             # 死代码区段（函数头部无条件 return）：原左缘方角 accent 条已删（圆角卫生项）
-            self.draw_text(p, draw_rect.adjusted(18 * scale, 9 * scale, -104 * scale, -28 * scale), config.title, self.font("poppins_bold", 13.2 * scale), THEME.text)
-            self.draw_text(p, draw_rect.adjusted(18 * scale, 31 * scale, -18 * scale, -8 * scale), config.subtitle, small_font, THEME.muted)
+            self.draw_text(p, draw_rect.adjusted(18 * scale, 9 * scale, -104 * scale, -28 * scale), ui_text(config.title, chinese_enabled(self.registry)), self.font("poppins_bold", 13.2 * scale), THEME.text)
+            self.draw_text(p, draw_rect.adjusted(18 * scale, 31 * scale, -18 * scale, -8 * scale), ui_text(config.subtitle, chinese_enabled(self.registry)), small_font, THEME.muted)
             safety = "MOCK" if config.safety.mock_writes else "LIVE"
             chip = QRectF(draw_rect.right() - 82 * scale, draw_rect.center().y() - 11 * scale, 64 * scale, 22 * scale)
             rounded_rect(p, chip, 7 * scale, color("#ffffff", 0.055), color("#ffffff", 0.10 + 0.12 * hover_v))
-            self.draw_text(p, chip, safety, self.font("poppins_medium", 7.3 * scale), accent, Qt.AlignmentFlag.AlignCenter)
-            self.add_hotspot(draw_rect, "select_scenario", key, tooltip=config.description)
+            self.draw_text(p, chip, ui_text(safety, chinese_enabled(self.registry)), self.font("poppins_medium", 7.3 * scale), accent, Qt.AlignmentFlag.AlignCenter)
+            self.add_hotspot(draw_rect, "select_scenario", key, tooltip=ui_text(config.description, chinese_enabled(self.registry)))
 
         current = self.scenario_manager.current
         footer = f"{current.title} | MQTT {current.connection.mqtt_host}:{current.connection.mqtt_port} | UDP {current.connection.udp_port}"
-        self.draw_text(p, QRectF(x, y + total_h + 22 * scale, menu_w, 18 * scale), f"Step 1/3 | {footer}", small_font, color("#888890"), Qt.AlignmentFlag.AlignCenter)
+        self.draw_text(p, QRectF(x, y + total_h + 22 * scale, menu_w, 18 * scale), ui_text(f"Step 1/3 | {footer}", chinese_enabled(self.registry)), small_font, color("#888890"), Qt.AlignmentFlag.AlignCenter)
         p.restore()
 
     def draw_robot_profile_screen(self, p: QPainter, width: int, height: int) -> None:
@@ -514,17 +515,17 @@ class StartupSceneMixin:
         usable_w = width - margin * 2
         card_w = (usable_w - gap * (columns - 1)) / columns
         card_h = min(135 * scale, (height - top - 90 * scale) / max(1, math.ceil(len(profiles) / columns)) - gap)
-        self.draw_text(p, QRectF(0, 38 * scale, width, 30 * scale), "ROBOT PROFILE · STEP 3/3", self.font("poppins_bold", 12 * scale), THEME.text, Qt.AlignmentFlag.AlignCenter)
+        self.draw_text(p, QRectF(0, 38 * scale, width, 30 * scale), ui_text("ROBOT PROFILE · STEP 3/3", chinese_enabled(self.registry)), self.font("poppins_bold", 12 * scale), THEME.text, Qt.AlignmentFlag.AlignCenter)
         for index, profile in enumerate(profiles):
             rect = QRectF(margin + (index % columns) * (card_w + gap), top + (index // columns) * (card_h + gap), card_w, card_h)
             accent = self.startup_menu_accent(index + 1)
             self.draw_liquid_glass_panel(p, rect, 12 * scale, accent=accent, hover=0.55 if profile.key == selected else 0.0, scale=scale)
-            self.draw_text(p, rect.adjusted(18 * scale, 14 * scale, -18 * scale, -rect.height() + 40 * scale), f"{profile.short_title}  ·  ID {robot_id_for_alliance(profile, self.alliance_side())}", self.font("poppins_bold", 10 * scale), THEME.text)
-            self.draw_text(p, rect.adjusted(18 * scale, 49 * scale, -18 * scale, -12 * scale), profile.description, self.font("poppins_regular", 7.4 * scale), THEME.muted, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+            self.draw_text(p, rect.adjusted(18 * scale, 14 * scale, -18 * scale, -rect.height() + 40 * scale), ui_text(f"{profile.short_title}  ·  ID {robot_id_for_alliance(profile, self.alliance_side())}", chinese_enabled(self.registry)), self.font("poppins_bold", 10 * scale), THEME.text)
+            self.draw_text(p, rect.adjusted(18 * scale, 49 * scale, -18 * scale, -12 * scale), ui_text(profile.description, chinese_enabled(self.registry)), self.font("poppins_regular", 7.4 * scale), THEME.muted, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
             self.add_hotspot(rect, "select_robot_profile", profile.key)
         back = QRectF(margin, height - 55 * scale, 110 * scale, 34 * scale)
         self.draw_liquid_glass_panel(p, back, 11 * scale, accent=THEME.cyan, hover=0.0, scale=scale)
-        self.draw_text(p, back, "<  BACK", self.font("poppins_bold", 7.5 * scale), THEME.text, Qt.AlignmentFlag.AlignCenter)
+        self.draw_text(p, back, ui_text("<  BACK", chinese_enabled(self.registry)), self.font("poppins_bold", 7.5 * scale), THEME.text, Qt.AlignmentFlag.AlignCenter)
         self.add_hotspot(back, "startup_back_match")
 
     def draw_match_mode_screen(self, p: QPainter, width: int, height: int) -> None:
@@ -553,7 +554,7 @@ class StartupSceneMixin:
 
         logo_y = max(74.0 * scale, y - 104.0 * scale)
         glow_text(p, "MATCH MODE", x, logo_y, title_font, THEME.text, THEME.cyan, 8 * scale)
-        self.draw_text(p, QRectF(x, logo_y + 10 * scale, menu_w, 44 * scale), self.scenario_manager.current.title.upper(), body_font, THEME.muted, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self.draw_text(p, QRectF(x, logo_y + 10 * scale, menu_w, 44 * scale), ui_text(self.scenario_manager.current.title.upper(), chinese_enabled(self.registry)), body_font, THEME.muted, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
 
         for index, key in enumerate(MATCH_MODE_KEYS):
             config = MATCH_MODES[key]
@@ -565,17 +566,17 @@ class StartupSceneMixin:
             glow_rect(p, draw_rect, 10 * scale, 0.14 + 0.10 * hover_v)
             rounded_rect(p, draw_rect, 8 * scale, color("#09090d", 0.90 + 0.05 * hover_v), color("#ffffff", 0.10 + 0.16 * hover_v))
             # 死代码区段（函数头部无条件 return）：原左缘方角 accent 条已删（圆角卫生项）
-            self.draw_text(p, draw_rect.adjusted(18 * scale, 8 * scale, -140 * scale, -45 * scale), config.title, self.font("poppins_bold", 13.6 * scale), THEME.text)
+            self.draw_text(p, draw_rect.adjusted(18 * scale, 8 * scale, -140 * scale, -45 * scale), ui_text(config.title, chinese_enabled(self.registry)), self.font("poppins_bold", 13.6 * scale), THEME.text)
             details = f"{config.field.width_m:g}m x {config.field.height_m:g}m | official map asset | {config.duration_sec // 60}:{config.duration_sec % 60:02d}"
-            self.draw_text(p, draw_rect.adjusted(18 * scale, 34 * scale, -18 * scale, -24 * scale), config.subtitle, small_font, THEME.muted)
-            self.draw_text(p, draw_rect.adjusted(18 * scale, 52 * scale, -18 * scale, -6 * scale), details, small_font, color("#9fa7ad"))
+            self.draw_text(p, draw_rect.adjusted(18 * scale, 34 * scale, -18 * scale, -24 * scale), ui_text(config.subtitle, chinese_enabled(self.registry)), small_font, THEME.muted)
+            self.draw_text(p, draw_rect.adjusted(18 * scale, 52 * scale, -18 * scale, -6 * scale), ui_text(details, chinese_enabled(self.registry)), small_font, color("#9fa7ad"))
             chip = QRectF(draw_rect.right() - 110 * scale, draw_rect.center().y() - 12 * scale, 88 * scale, 24 * scale)
             rounded_rect(p, chip, 7 * scale, color("#ffffff", 0.055), color("#ffffff", 0.10 + 0.12 * hover_v))
-            self.draw_text(p, chip, "NEXT", self.font("poppins_medium", 7.3 * scale), accent, Qt.AlignmentFlag.AlignCenter)
-            self.add_hotspot(draw_rect, "select_match_mode", key, tooltip=f"载入 {config.title} 官方地图和默认 HUD。")
+            self.draw_text(p, chip, ui_text("NEXT", chinese_enabled(self.registry)), self.font("poppins_medium", 7.3 * scale), accent, Qt.AlignmentFlag.AlignCenter)
+            self.add_hotspot(draw_rect, "select_match_mode", key, tooltip=ui_text(f"载入 {config.title} 官方地图和默认 HUD。", chinese_enabled(self.registry)))
 
         footer = "Step 2/3 | Backspace: scenario | Enter: robot selection"
-        self.draw_text(p, QRectF(x, y + total_h + 22 * scale, menu_w, 18 * scale), footer, small_font, color("#888890"), Qt.AlignmentFlag.AlignCenter)
+        self.draw_text(p, QRectF(x, y + total_h + 22 * scale, menu_w, 18 * scale), ui_text(footer, chinese_enabled(self.registry)), small_font, color("#888890"), Qt.AlignmentFlag.AlignCenter)
         p.restore()
 
     def draw_startup_scene_launcher(self, p: QPainter, width: int, height: int, active: float) -> None:
@@ -598,8 +599,8 @@ class StartupSceneMixin:
 
         logo_y = max(78.0 * scale, y - 112.0 * scale)
         glow_text(p, "POLAR-RM", x, logo_y, title_font, THEME.text, THEME.cyan, 9 * scale)
-        self.draw_text(p, QRectF(x, logo_y + 11 * scale, total_w, 42 * scale), "LAUNCHER / SCENE SELECT", body_font, THEME.muted, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        self.draw_text(p, QRectF(x, logo_y + 46 * scale, total_w, 18 * scale), "选择运行环境", self.font("poppins_medium", 8.5 * scale), color("#c9d6dc", 0.90))
+        self.draw_text(p, QRectF(x, logo_y + 11 * scale, total_w, 42 * scale), ui_text("LAUNCHER / SCENE SELECT", chinese_enabled(self.registry)), body_font, THEME.muted, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self.draw_text(p, QRectF(x, logo_y + 46 * scale, total_w, 18 * scale), ui_text("选择运行环境", chinese_enabled(self.registry)), self.font("poppins_medium", 8.5 * scale), color("#c9d6dc", 0.90))
 
         for index, key in enumerate(("OfficialEvent", "CampusSimulation", "LabDebug")):
             config = SCENARIOS[key]
@@ -626,8 +627,8 @@ class StartupSceneMixin:
             )
 
         current_meta = self.startup_scenario_meta(self.scenario_manager.current.key)
-        footer = f"Step 1/3 | 当前: {current_meta['title']} | 按 1/2/3 快速选择"
-        self.draw_text(p, QRectF(x, y + card_h + 27 * scale, total_w, 18 * scale), footer, small_font, color("#aeb7bd", 0.88), Qt.AlignmentFlag.AlignCenter)
+        footer = ui_text("Step 1/3 | 当前: {title} | 按 1/2/3 快速选择", chinese_enabled(self.registry), title=ui_text(current_meta["title"], chinese_enabled(self.registry)))
+        self.draw_text(p, QRectF(x, y + card_h + 27 * scale, total_w, 18 * scale), ui_text(footer, chinese_enabled(self.registry)), small_font, color("#aeb7bd", 0.88), Qt.AlignmentFlag.AlignCenter)
         p.restore()
 
     def draw_startup_match_launcher(self, p: QPainter, width: int, height: int, active: float) -> None:
@@ -650,8 +651,8 @@ class StartupSceneMixin:
         scenario_meta = self.startup_scenario_meta(self.scenario_manager.current.key)
         logo_y = max(78.0 * scale, y - 116.0 * scale)
         glow_text(p, "MATCH MODE", x, logo_y, title_font, THEME.text, THEME.cyan, 9 * scale)
-        self.draw_text(p, QRectF(x, logo_y + 11 * scale, total_w, 42 * scale), scenario_meta["title"].upper(), body_font, THEME.muted, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        self.draw_text(p, QRectF(x, logo_y + 46 * scale, total_w, 18 * scale), "选择比赛制式", self.font("poppins_medium", 8.5 * scale), color("#c9d6dc", 0.90))
+        self.draw_text(p, QRectF(x, logo_y + 11 * scale, total_w, 42 * scale), ui_text(scenario_meta["title"].upper(), chinese_enabled(self.registry)), body_font, THEME.muted, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self.draw_text(p, QRectF(x, logo_y + 46 * scale, total_w, 18 * scale), ui_text("选择比赛制式", chinese_enabled(self.registry)), self.font("poppins_medium", 8.5 * scale), color("#c9d6dc", 0.90))
 
         for index, key in enumerate(MATCH_MODE_KEYS):
             config = MATCH_MODES[key]
@@ -677,7 +678,7 @@ class StartupSceneMixin:
             )
 
         footer = "Step 2/3 | Backspace 返回 | Enter 选择机器人"
-        self.draw_text(p, QRectF(x, y + card_h + 27 * scale, total_w, 18 * scale), footer, small_font, color("#aeb7bd", 0.88), Qt.AlignmentFlag.AlignCenter)
+        self.draw_text(p, QRectF(x, y + card_h + 27 * scale, total_w, 18 * scale), ui_text(footer, chinese_enabled(self.registry)), small_font, color("#aeb7bd", 0.88), Qt.AlignmentFlag.AlignCenter)
         p.restore()
 
     def draw_startup_vignette(self, p: QPainter, width: int, height: int) -> None:
@@ -730,7 +731,7 @@ class StartupSceneMixin:
         scale = max(0.74, min(1.14, self.get_auto_ui_scale(width, height, strength=0.45)))
         menu_x, menu_y, button_w, button_h, gap = self.liquid_menu_layout(width, height, 3, scale)
         scenario_meta = self.startup_scenario_meta(self.scenario_manager.current.key)
-        self.draw_liquid_menu_header(p, width, height, scale, "MATCH MODE", f"{scenario_meta['title']} profile", active)
+        self.draw_liquid_menu_header(p, width, height, scale, "MATCH MODE", ui_text("{title} profile", chinese_enabled(self.registry), title=ui_text(scenario_meta["title"], chinese_enabled(self.registry))), active)
 
         for index, key in enumerate(MATCH_MODE_KEYS):
             config = MATCH_MODES[key]
@@ -948,19 +949,19 @@ class StartupSceneMixin:
         p.save()
         p.setOpacity(active * max(0.0, min(1.0, enter)))
         glow_text(p, "POLAR-RM", x, y, self.font("museo", 28.0 * scale, QFont.Weight.Bold), THEME.text, THEME.cyan, 8.0 * scale)
-        self.draw_text(p, QRectF(x, y + 11.0 * scale, 330.0 * scale, 24.0 * scale), "CUSTOM CLIENT", self.font("poppins_medium", 8.5 * scale), THEME.muted)
+        self.draw_text(p, QRectF(x, y + 11.0 * scale, 330.0 * scale, 24.0 * scale), ui_text("CUSTOM CLIENT", chinese_enabled(self.registry)), self.font("poppins_medium", 8.5 * scale), THEME.muted)
 
         notice_w = min(420.0 * scale, width * 0.36)
         notice = QRectF(width / 2.0 - notice_w / 2.0, 28.0 * scale, notice_w, 40.0 * scale)
         self.draw_liquid_glass_panel(p, notice, 15.0 * scale, accent=THEME.cyan, hover=0.0, scale=scale)
-        self.draw_glass_text(p, notice.adjusted(18.0 * scale, 4.0 * scale, -18.0 * scale, -19.0 * scale), title, self.font("poppins_bold", 9.0 * scale), THEME.text, Qt.AlignmentFlag.AlignCenter)
-        self.draw_glass_text(p, notice.adjusted(18.0 * scale, 19.0 * scale, -18.0 * scale, -4.0 * scale), subtitle, self.font("poppins_regular", 7.0 * scale), THEME.muted, Qt.AlignmentFlag.AlignCenter)
+        self.draw_glass_text(p, notice.adjusted(18.0 * scale, 4.0 * scale, -18.0 * scale, -19.0 * scale), ui_text(title, chinese_enabled(self.registry)), self.font("poppins_bold", 9.0 * scale), THEME.text, Qt.AlignmentFlag.AlignCenter)
+        self.draw_glass_text(p, notice.adjusted(18.0 * scale, 19.0 * scale, -18.0 * scale, -4.0 * scale), ui_text(subtitle, chinese_enabled(self.registry)), self.font("poppins_regular", 7.0 * scale), THEME.muted, Qt.AlignmentFlag.AlignCenter)
 
         profile = self.current_profile()
         profile_w = min(230.0 * scale, width * 0.22)
         profile_rect = QRectF(width - profile_w - 50.0 * scale, 34.0 * scale, profile_w, 28.0 * scale)
         self.draw_liquid_glass_panel(p, profile_rect, 10.0 * scale, accent=THEME.cyan, hover=0.0, scale=scale)
-        self.draw_glass_text(p, profile_rect.adjusted(12.0 * scale, 0, -12.0 * scale, 0), f"PROFILE  {profile}", self.font("poppins_medium", 7.2 * scale), color("#d8e5ec", 0.92), Qt.AlignmentFlag.AlignCenter)
+        self.draw_glass_text(p, profile_rect.adjusted(12.0 * scale, 0, -12.0 * scale, 0), ui_text("PROFILE  {profile}", chinese_enabled(self.registry), profile=profile), self.font("poppins_medium", 7.2 * scale), color("#d8e5ec", 0.92), Qt.AlignmentFlag.AlignCenter)
         p.restore()
 
     def draw_liquid_main_button(
@@ -1022,23 +1023,23 @@ class StartupSceneMixin:
 
         text_left = icon_rect.right() + 24.0 * scale
         title_rect = QRectF(text_left, draw_rect.top() + 21.0 * scale, draw_rect.width() - (text_left - draw_rect.left()) - 126.0 * scale, 28.0 * scale)
-        self.draw_glass_text(p, title_rect, title, self.font("poppins_bold", 18.0 * scale), THEME.text)
-        self.draw_glass_text(p, QRectF(text_left, draw_rect.top() + 50.0 * scale, draw_rect.width() - (text_left - draw_rect.left()) - 42.0 * scale, 20.0 * scale), subtitle, self.font("poppins_regular", 9.0 * scale), color("#e1e8ee", 0.88))
-        self.draw_glass_text(p, QRectF(text_left, draw_rect.bottom() - 31.0 * scale, draw_rect.width() - (text_left - draw_rect.left()) - 42.0 * scale, 18.0 * scale), detail, self.font("poppins_regular", 7.3 * scale), color("#aeb7bd", 0.90))
+        self.draw_glass_text(p, title_rect, ui_text(title, chinese_enabled(self.registry)), self.font("poppins_bold", 18.0 * scale), THEME.text)
+        self.draw_glass_text(p, QRectF(text_left, draw_rect.top() + 50.0 * scale, draw_rect.width() - (text_left - draw_rect.left()) - 42.0 * scale, 20.0 * scale), ui_text(subtitle, chinese_enabled(self.registry)), self.font("poppins_regular", 9.0 * scale), color("#e1e8ee", 0.88))
+        self.draw_glass_text(p, QRectF(text_left, draw_rect.bottom() - 31.0 * scale, draw_rect.width() - (text_left - draw_rect.left()) - 42.0 * scale, 18.0 * scale), ui_text(detail, chinese_enabled(self.registry)), self.font("poppins_regular", 7.3 * scale), color("#aeb7bd", 0.90))
 
         shortcut = QRectF(draw_rect.right() - 78.0 * scale, draw_rect.top() + 20.0 * scale, 26.0 * scale, 22.0 * scale)
         rounded_rect(p, shortcut, 6.0 * scale, color("#ffffff", 0.08), color("#ffffff", 0.11 + 0.11 * hover_v))
-        self.draw_text(p, shortcut, str(index + 1) if action != "startup_back" else "B", self.font("poppins_bold", 7.3 * scale), icon_text if hover_v > 0.55 else accent, Qt.AlignmentFlag.AlignCenter)
+        self.draw_text(p, shortcut, ui_text(str(index + 1) if action != "startup_back" else "B", chinese_enabled(self.registry)), self.font("poppins_bold", 7.3 * scale), icon_text if hover_v > 0.55 else accent, Qt.AlignmentFlag.AlignCenter)
 
         chip_w = min(98.0 * scale, max(62.0 * scale, text_width(p, self.font("poppins_medium", 7.2 * scale), chip_text) + 22.0 * scale))
         chip = QRectF(draw_rect.right() - chip_w - 26.0 * scale, draw_rect.bottom() - 34.0 * scale, chip_w, 22.0 * scale)
         rounded_rect(p, chip, 7.0 * scale, color("#ffffff", 0.055 + 0.04 * hover_v), with_alpha(accent, 0.25 + 0.25 * hover_v))
-        self.draw_text(p, chip, chip_text, self.font("poppins_medium", 7.2 * scale), icon_text if hover_v > 0.72 else accent, Qt.AlignmentFlag.AlignCenter)
+        self.draw_text(p, chip, ui_text(chip_text, chinese_enabled(self.registry)), self.font("poppins_medium", 7.2 * scale), icon_text if hover_v > 0.72 else accent, Qt.AlignmentFlag.AlignCenter)
 
-        self.draw_text(p, QRectF(draw_rect.right() - 43.0 * scale, draw_rect.center().y() - 13.0 * scale, 18.0 * scale, 26.0 * scale), ">", self.font("poppins_bold", 15.0 * scale), THEME.text if hovered else THEME.muted, Qt.AlignmentFlag.AlignCenter)
+        self.draw_text(p, QRectF(draw_rect.right() - 43.0 * scale, draw_rect.center().y() - 13.0 * scale, 18.0 * scale, 26.0 * scale), ui_text(">", chinese_enabled(self.registry)), self.font("poppins_bold", 15.0 * scale), THEME.text if hovered else THEME.muted, Qt.AlignmentFlag.AlignCenter)
         p.restore()
 
-        self.add_hotspot(draw_rect.adjusted(-3.0 * scale, -3.0 * scale, 3.0 * scale, 3.0 * scale), action, payload, tooltip=tooltip)
+        self.add_hotspot(draw_rect.adjusted(-3.0 * scale, -3.0 * scale, 3.0 * scale, 3.0 * scale), action, payload, tooltip=ui_text(tooltip, chinese_enabled(self.registry)))
 
     def draw_liquid_bottom_bar(self, p: QPainter, width: int, height: int, scale: float, active: float) -> None:
         enter = self.startup_stagger_value(0, 0.70, 0.22)
@@ -1100,7 +1101,7 @@ class StartupSceneMixin:
         p.fillRect(full, color("#02050a", 0.54 * open_v))
         # Backdrop close is registered first; the panel blocks it; the footer
         # Close button is registered last so it always wins hit-testing.
-        self.add_hotspot(full, "wallpaper_close", tooltip="关闭壁纸库")
+        self.add_hotspot(full, "wallpaper_close", tooltip=ui_text("关闭壁纸库", chinese_enabled(self.registry)))
 
         scale = max(0.76, min(1.18, self.get_auto_ui_scale(width, height, strength=0.38)))
         panel_w = min(width - 64.0 * scale, 1120.0 * scale)
@@ -1114,14 +1115,14 @@ class StartupSceneMixin:
         self.draw_text(
             p,
             QRectF(panel.left() + 28.0 * scale, panel.top() + 19.0 * scale, panel.width() - 56.0 * scale, 28.0 * scale),
-            "WALLPAPER LIBRARY",
+            ui_text("WALLPAPER LIBRARY", chinese_enabled(self.registry)),
             self.font("poppins_bold", 15.0 * scale),
             THEME.text,
         )
         self.draw_text(
             p,
             QRectF(panel.left() + 28.0 * scale, panel.top() + 47.0 * scale, panel.width() - 56.0 * scale, 18.0 * scale),
-            "选择内置壁纸，或导入自己的 MP4 / GIF / 图片",
+            ui_text("选择内置壁纸，或导入自己的 MP4 / GIF / 图片", chinese_enabled(self.registry)),
             self.font("poppins_regular", 8.2 * scale),
             color("#c8d5de", 0.78),
         )
@@ -1178,7 +1179,7 @@ class StartupSceneMixin:
             self.draw_text(
                 p,
                 QRectF(nav_right - nav_w * 2.0 - 8.0 * scale, footer_y - 21.0 * scale, nav_w * 2.0 + 8.0 * scale, 16.0 * scale),
-                f"{self.wallpaper_picker_page + 1} / {page_count}",
+                ui_text(f"{self.wallpaper_picker_page + 1} / {page_count}", chinese_enabled(self.registry)),
                 self.font("poppins_medium", 7.5 * scale),
                 THEME.muted,
                 Qt.AlignmentFlag.AlignCenter,
@@ -1205,7 +1206,7 @@ class StartupSceneMixin:
             fallback.setColorAt(0.0, color("#16354a", 0.92))
             fallback.setColorAt(1.0, color("#071018", 0.96))
             p.fillRect(preview, fallback)
-            self.draw_text(p, preview, "LOADING" if profile != "ParticleGrid" else "GRID", self.font("poppins_bold", 9.0 * scale), color("#bdefff", 0.66), Qt.AlignmentFlag.AlignCenter)
+            self.draw_text(p, preview, ui_text("LOADING" if profile != "ParticleGrid" else "GRID", chinese_enabled(self.registry)), self.font("poppins_bold", 9.0 * scale), color("#bdefff", 0.66), Qt.AlignmentFlag.AlignCenter)
         p.fillRect(preview, color("#02050a", 0.10 if hovered else 0.20))
         p.restore()
 
@@ -1216,8 +1217,8 @@ class StartupSceneMixin:
         label = self.startup_wallpaper.profile_label(profile)
         kind = self.startup_wallpaper.profile_kind(profile)
         self.draw_text(p, QRectF(draw_rect.left() + 11.0 * scale, preview.bottom() + 8.0 * scale, draw_rect.width() - 22.0 * scale, 20.0 * scale), label, self.font("poppins_bold", 9.0 * scale), THEME.text)
-        self.draw_text(p, QRectF(draw_rect.left() + 11.0 * scale, preview.bottom() + 29.0 * scale, draw_rect.width() - 22.0 * scale, 16.0 * scale), kind, self.font("poppins_medium", 6.9 * scale), accent if selected else THEME.muted)
-        self.add_hotspot(draw_rect, "wallpaper_select", profile, tooltip=f"切换到 {label}")
+        self.draw_text(p, QRectF(draw_rect.left() + 11.0 * scale, preview.bottom() + 29.0 * scale, draw_rect.width() - 22.0 * scale, 16.0 * scale), ui_text(kind, chinese_enabled(self.registry)), self.font("poppins_medium", 6.9 * scale), accent if selected else THEME.muted)
+        self.add_hotspot(draw_rect, "wallpaper_select", profile, tooltip=ui_text(f"切换到 {label}", chinese_enabled(self.registry)))
 
     @staticmethod
     def draw_image_cover(p: QPainter, rect: QRectF, image: QImage) -> None:
@@ -1258,8 +1259,8 @@ class StartupSceneMixin:
             p.setPen(Qt.PenStyle.NoPen)
             p.drawRoundedRect(rect, 6.0 * scale, 6.0 * scale)
             p.restore()
-        self.draw_glass_text(p, rect.adjusted(10.0 * scale, 0, -10.0 * scale, 0), label, self.font("poppins_medium", 8.2 * scale), THEME.text if hover_v > 0.35 else color("#d2d9df", 0.90), Qt.AlignmentFlag.AlignCenter)
-        self.add_hotspot(rect, action, payload, tooltip=tooltip)
+        self.draw_glass_text(p, rect.adjusted(10.0 * scale, 0, -10.0 * scale, 0), ui_text(label, chinese_enabled(self.registry)), self.font("poppins_medium", 8.2 * scale), THEME.text if hover_v > 0.35 else color("#d2d9df", 0.90), Qt.AlignmentFlag.AlignCenter)
+        self.add_hotspot(rect, action, payload, tooltip=ui_text(tooltip, chinese_enabled(self.registry)))
 
     def draw_liquid_status_panel(self, p: QPainter, menu_x: float, menu_y: float, button_w: float, height: int, scale: float, page: str, active: float) -> None:
         right_x = menu_x + button_w + 48.0 * scale
@@ -1279,7 +1280,7 @@ class StartupSceneMixin:
         p.setBrush(QBrush(grad))
         p.setPen(Qt.PenStyle.NoPen)
         p.drawRoundedRect(top_line, 1.0 * scale, 1.0 * scale)
-        self.draw_glass_text(p, QRectF(panel.left() + 18.0 * scale, panel.top() + 26.0 * scale, panel.width() - 36.0 * scale, 23.0 * scale), "SESSION", self.font("poppins_bold", 11.0 * scale), THEME.text)
+        self.draw_glass_text(p, QRectF(panel.left() + 18.0 * scale, panel.top() + 26.0 * scale, panel.width() - 36.0 * scale, 23.0 * scale), ui_text("SESSION", chinese_enabled(self.registry)), self.font("poppins_bold", 11.0 * scale), THEME.text)
 
         scenario = self.startup_scenario_meta(self.scenario_manager.current.key)
         match = self.startup_match_meta(self.match_mode_manager.current.key)
@@ -1295,15 +1296,15 @@ class StartupSceneMixin:
             c = accent_color(index, 0.08)
             row = QRectF(panel.left() + 18.0 * scale, row_y + index * 34.0 * scale, panel.width() - 36.0 * scale, 24.0 * scale)
             self.draw_liquid_glass_panel(p, row, 6.0 * scale, accent=c, hover=0.0, scale=scale, sample_background=False, surface="SubGlass")
-            self.draw_glass_text(p, QRectF(row.left() + 10.0 * scale, row.top(), 58.0 * scale, row.height()), label, self.font("poppins_bold", 7.0 * scale), c, Qt.AlignmentFlag.AlignVCenter)
-            self.draw_glass_text(p, row.adjusted(72.0 * scale, 0, -10.0 * scale, 0), value, self.font("poppins_medium", 8.1 * scale), color("#dce7ed", 0.92), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight)
+            self.draw_glass_text(p, QRectF(row.left() + 10.0 * scale, row.top(), 58.0 * scale, row.height()), ui_text(label, chinese_enabled(self.registry)), self.font("poppins_bold", 7.0 * scale), c, Qt.AlignmentFlag.AlignVCenter)
+            self.draw_glass_text(p, row.adjusted(72.0 * scale, 0, -10.0 * scale, 0), (value if label == "CONFIG" else ui_text(value, chinese_enabled(self.registry))), self.font("poppins_medium", 8.1 * scale), color("#dce7ed", 0.92), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight)
 
         tip_y = panel.bottom() - 56.0 * scale
         if tip_y > row_y + len(rows) * 34.0 * scale:
             tip = QRectF(panel.left() + 18.0 * scale, tip_y, panel.width() - 36.0 * scale, 37.0 * scale)
             self.draw_liquid_glass_panel(p, tip, 10.0 * scale, accent=THEME.cyan, hover=0.0, scale=scale, sample_background=False, surface="SubGlass")
             msg = "Press 1/2/3 to select. Enter continues." if page == "scenario" else "Press 1/2 to load. Backspace returns."
-            self.draw_glass_text(p, tip.adjusted(12.0 * scale, 0, -12.0 * scale, 0), msg, self.font("poppins_regular", 7.2 * scale), THEME.muted, Qt.AlignmentFlag.AlignCenter)
+            self.draw_glass_text(p, tip.adjusted(12.0 * scale, 0, -12.0 * scale, 0), ui_text(msg, chinese_enabled(self.registry)), self.font("poppins_regular", 7.2 * scale), THEME.muted, Qt.AlignmentFlag.AlignCenter)
         p.restore()
 
     def draw_startup_icon_card(
@@ -1361,26 +1362,26 @@ class StartupSceneMixin:
         p.setPen(QPen(with_alpha(accent, 0.52 + 0.24 * hover_v), 1.2 * scale))
         p.drawEllipse(icon_rect.adjusted(-4 * scale, -4 * scale, 4 * scale, 4 * scale))
         rounded_rect(p, icon_rect, icon_size * 0.50, color("#050609", 0.72), with_alpha(accent, 0.78 + 0.16 * hover_v), 1.2 * scale)
-        self.draw_text(p, icon_rect, icon, self.font("poppins_bold", min(17.5 * scale, icon_size * 0.34), QFont.Weight.Bold), THEME.text, Qt.AlignmentFlag.AlignCenter)
+        self.draw_text(p, icon_rect, ui_text(icon, chinese_enabled(self.registry)), self.font("poppins_bold", min(17.5 * scale, icon_size * 0.34), QFont.Weight.Bold), THEME.text, Qt.AlignmentFlag.AlignCenter)
 
         shortcut = QRectF(draw_rect.right() - 38 * scale, draw_rect.top() + 26 * scale, 22 * scale, 20 * scale)
         rounded_rect(p, shortcut, 7 * scale, color("#ffffff", 0.06), color("#ffffff", 0.11 + 0.12 * hover_v))
-        self.draw_text(p, shortcut, str(index + 1), self.font("poppins_bold", 7.4 * scale), accent, Qt.AlignmentFlag.AlignCenter)
+        self.draw_text(p, shortcut, ui_text(str(index + 1), chinese_enabled(self.registry)), self.font("poppins_bold", 7.4 * scale), accent, Qt.AlignmentFlag.AlignCenter)
 
         text_left = icon_rect.right() + 13 * scale
         text_w = draw_rect.right() - text_left - 46 * scale
-        self.draw_text(p, QRectF(text_left, draw_rect.top() + 31 * scale, text_w, 26 * scale), title, self.font("poppins_bold", 14.0 * scale), THEME.text)
-        self.draw_text(p, QRectF(text_left, draw_rect.top() + 57 * scale, draw_rect.right() - text_left - 18 * scale, 19 * scale), subtitle, self.font("poppins_regular", 8.0 * scale), color("#d0d5db", 0.86))
+        self.draw_text(p, QRectF(text_left, draw_rect.top() + 31 * scale, text_w, 26 * scale), ui_text(title, chinese_enabled(self.registry)), self.font("poppins_bold", 14.0 * scale), THEME.text)
+        self.draw_text(p, QRectF(text_left, draw_rect.top() + 57 * scale, draw_rect.right() - text_left - 18 * scale, 19 * scale), ui_text(subtitle, chinese_enabled(self.registry)), self.font("poppins_regular", 8.0 * scale), color("#d0d5db", 0.86))
 
         detail_rect = QRectF(draw_rect.left() + 18 * scale, draw_rect.bottom() - 49 * scale, draw_rect.width() - 36 * scale, 17 * scale)
-        self.draw_text(p, detail_rect, detail, self.font("poppins_regular", 7.6 * scale), color("#aeb7bd", 0.84))
+        self.draw_text(p, detail_rect, ui_text(detail, chinese_enabled(self.registry)), self.font("poppins_regular", 7.6 * scale), color("#aeb7bd", 0.84))
 
         chip = QRectF(draw_rect.left() + 18 * scale, draw_rect.bottom() - 28 * scale, min(88.0 * scale, draw_rect.width() * 0.36), 18 * scale)
         rounded_rect(p, chip, 7 * scale, color("#ffffff", 0.055), with_alpha(accent, 0.25 + 0.25 * hover_v))
-        self.draw_text(p, chip, chip_text, self.font("poppins_medium", 6.9 * scale), accent, Qt.AlignmentFlag.AlignCenter)
+        self.draw_text(p, chip, ui_text(chip_text, chinese_enabled(self.registry)), self.font("poppins_medium", 6.9 * scale), accent, Qt.AlignmentFlag.AlignCenter)
 
         arrow = QRectF(draw_rect.right() - 38 * scale, draw_rect.bottom() - 30 * scale, 22 * scale, 20 * scale)
-        self.draw_text(p, arrow, ">", self.font("poppins_bold", 12.0 * scale), THEME.text if hovered else THEME.muted, Qt.AlignmentFlag.AlignCenter)
+        self.draw_text(p, arrow, ui_text(">", chinese_enabled(self.registry)), self.font("poppins_bold", 12.0 * scale), THEME.text if hovered else THEME.muted, Qt.AlignmentFlag.AlignCenter)
         p.restore()
 
         self.add_hotspot(rect.adjusted(-4 * scale, -5 * scale, 4 * scale, 6 * scale), action, payload, tooltip="")

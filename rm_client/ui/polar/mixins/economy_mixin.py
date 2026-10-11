@@ -61,6 +61,8 @@ from PySide6.QtGui import QPainter, QPainterPath
 
 # 相对导入层级：rm_client/ui/polar/mixins/ → .. = polar、... = rm_client.ui、.... = rm_client
 from ...animation import Easings
+from ...jello_locale import chinese_enabled
+from ...economy_locale import economy_text
 from ...clickgui_gpu import ClickGuiDrawList
 from ...gpu_frame_compositor import LensMaterial
 from ...overlay_coordinator import OverlayKind
@@ -102,7 +104,7 @@ class EconomyMixin:
         current_w = collapsed_w + (island_w - collapsed_w) * morph
         island = QRectF(width / 2 - current_w / 2, 34 * scale, current_w, 52 * scale)
         self.draw_liquid_glass_panel(p, island, 22 * scale, accent=THEME.cyan, hover=0.25, scale=scale, surface="ModalGlass")
-        self.draw_glass_text(p, island.adjusted(22 * scale, 0, -22 * scale, 0), f"ECONOMY  ·  {self.state.remaining_economy} GOLD", self.font("poppins_bold", 10 * scale), THEME.text, Qt.AlignmentFlag.AlignCenter)
+        self.draw_glass_text(p, island.adjusted(22 * scale, 0, -22 * scale, 0), economy_text("ECONOMY  ·  {gold} GOLD", chinese_enabled(self.registry), gold=self.state.remaining_economy), self.font("poppins_bold", 10 * scale), THEME.text, Qt.AlignmentFlag.AlignCenter)
 
         panel_w = min(1080 * scale, width - 70 * scale)
         panel_h = min(520 * scale, height - 150 * scale)
@@ -110,7 +112,7 @@ class EconomyMixin:
         self.draw_liquid_glass_panel(p, panel, 20 * scale, accent=THEME.cyan, hover=0.12, scale=scale, surface="ModalGlass")
         self.draw_glass_text(p, panel.adjusted(28 * scale, 20 * scale, -28 * scale, -panel.height() + 54 * scale), "战斗经济操作", self.font("poppins_bold", 16 * scale), THEME.text)
         profile = profile_by_key(self.match_mode_manager.current.key, self.current_robot_profile_key())
-        self.draw_glass_text(p, panel.adjusted(28 * scale, 54 * scale, -28 * scale, -panel.height() + 76 * scale), f"{self.match_mode_manager.current.title} · {profile.title} · 默认 MOCK", self.font("poppins_regular", 8 * scale), THEME.muted)
+        self.draw_glass_text(p, panel.adjusted(28 * scale, 54 * scale, -28 * scale, -panel.height() + 76 * scale), economy_text("{match} · {profile} · 默认 MOCK", chinese_enabled(self.registry), match=self.match_mode_manager.current.title, profile=profile.title), self.font("poppins_regular", 8 * scale), THEME.muted)
 
         count = len(actions)
         columns = min(3, max(1, count))
@@ -131,7 +133,7 @@ class EconomyMixin:
             title_color = THEME.text if action.enabled else color("#b8bec3", 0.74)
             self.draw_glass_text(p, rect.adjusted(16 * scale, 14 * scale, -16 * scale, -rect.height() + 38 * scale), action.short_title, self.font("poppins_bold", 11 * scale), title_color)
             self.draw_glass_text(p, rect.adjusted(16 * scale, 42 * scale, -16 * scale, -rect.height() + 65 * scale), action.title, self.font("poppins_medium", 8 * scale), title_color)
-            self.draw_glass_text(p, rect.adjusted(16 * scale, 76 * scale, -16 * scale, -15 * scale), f"{action.cost} GOLD  ·  {action.unit}", self.font("poppins_bold", 8 * scale), accent)
+            self.draw_glass_text(p, rect.adjusted(16 * scale, 76 * scale, -16 * scale, -15 * scale), economy_text("{cost} GOLD  ·  {unit}", chinese_enabled(self.registry), cost=action.cost, unit=action.unit), self.font("poppins_bold", 8 * scale), accent)
             if not action.enabled:
                 self.draw_glass_text(p, rect.adjusted(16 * scale, 98 * scale, -16 * scale, -5 * scale), action.reason or "当前不可用", self.font("poppins_regular", 6.5 * scale), color("#ffb66e", 0.82))
             self.add_hotspot(rect, "economy_select", index, tooltip=action.reason or action.title)
@@ -140,11 +142,11 @@ class EconomyMixin:
         submit = QRectF(footer.right() - 184 * scale, footer.top(), 184 * scale, footer.height())
         close = QRectF(footer.left(), footer.top(), 104 * scale, footer.height())
         self.draw_liquid_glass_panel(p, close, 13 * scale, accent=color("#ffffff", 0.66), hover=0.0, scale=scale, surface="SubGlass")
-        self.draw_glass_text(p, close, "CLOSE  [B]", self.font("poppins_bold", 7.5 * scale), THEME.text, Qt.AlignmentFlag.AlignCenter)
+        self.draw_glass_text(p, close, economy_text("CLOSE  [B]", chinese_enabled(self.registry)), self.font("poppins_bold", 7.5 * scale), THEME.text, Qt.AlignmentFlag.AlignCenter)
         selected_action = actions[self.economy_selected]
         submit_accent = THEME.cyan if selected_action.enabled else color("#8a9298", 0.58)
         self.draw_liquid_glass_panel(p, submit, 13 * scale, accent=submit_accent, hover=0.35 if selected_action.enabled else 0.0, scale=scale, surface="ProminentGlass")
-        self.draw_glass_text(p, submit, "SEND MOCK REQUEST", self.font("poppins_bold", 8 * scale), THEME.text if selected_action.enabled else THEME.muted, Qt.AlignmentFlag.AlignCenter)
+        self.draw_glass_text(p, submit, economy_text("SEND MOCK REQUEST", chinese_enabled(self.registry)), self.font("poppins_bold", 8 * scale), THEME.text if selected_action.enabled else THEME.muted, Qt.AlignmentFlag.AlignCenter)
         self.add_hotspot(close, "economy_close")
         self.add_hotspot(submit, "economy_submit", self.economy_selected)
         p.restore()
@@ -540,7 +542,7 @@ class EconomyMixin:
             rounded_rect(p, top_hi, 0.5, color("#ffffff", 0.14 * content_alpha))
 
         if morph < 0.88:
-            island_label = f"经济  ·  {context.gold} G"
+            island_label = economy_text("经济  ·  {gold} G", chinese_enabled(self.registry), gold=context.gold)
             if morph < 0.52:
                 self.draw_glass_text(
                     p,
@@ -574,7 +576,7 @@ class EconomyMixin:
             self.draw_glass_text(
                 p,
                 gold_chip,
-                f"{context.gold} G",
+                economy_text("{gold} G", chinese_enabled(self.registry), gold=context.gold),
                 self.font("poppins_bold", 10.0 * scale),
                 color("#ffd56a"),
                 Qt.AlignmentFlag.AlignCenter,
@@ -625,7 +627,7 @@ class EconomyMixin:
         self.draw_glass_text(
             p,
             QRectF(gold_rect.left() + text_width(p, gold_font, gold_text) + 6.0 * scale, gold_rect.top() + 14.0 * scale, 24.0 * scale, 24.0 * scale),
-            "G",
+            economy_text("G", chinese_enabled(self.registry)),
             self.font("poppins_bold", 11.0 * scale),
             color("#ffd56a"),
         )
@@ -1046,7 +1048,7 @@ class EconomyMixin:
             gold_chip.height() * 0.5,
             color("#ffffff", 0.08 * header_alpha),
         )
-        commands.text(gold_chip, f"{context.gold} G", self.font("poppins_bold", 10.0 * scale), color("#ffd56a", header_alpha), Qt.AlignmentFlag.AlignCenter)
+        commands.text(gold_chip, economy_text("{gold} G", chinese_enabled(self.registry), gold=context.gold), self.font("poppins_bold", 10.0 * scale), color("#ffd56a", header_alpha), Qt.AlignmentFlag.AlignCenter)
 
         # --- Close button (circle) ---
         close = layout.close_button
@@ -1142,7 +1144,7 @@ class EconomyMixin:
             gold_tile, hp_tile, ammo_tile = status_tiles
             commands.text(
                 QRectF(gold_tile.left() + pad, gold_tile.top() + 7.0, gold_tile.width() - pad * 2.0, 20.0),
-                f"{context.gold} G", self.font("poppins_bold", 12.0 * scale), color("#ffd56a", category_alpha), clip=strip_clip,
+                economy_text("{gold} G", chinese_enabled(self.registry), gold=context.gold), self.font("poppins_bold", 12.0 * scale), color("#ffd56a", category_alpha), clip=strip_clip,
             )
             commands.text(
                 QRectF(gold_tile.left() + pad, gold_tile.top() + 31.0, gold_tile.width() - pad * 2.0, 15.0),
@@ -1157,7 +1159,7 @@ class EconomyMixin:
             ):
                 commands.text(
                     QRectF(tile.left() + pad, tile.top() + 8.0, tile.width() - pad * 2.0, 14.0),
-                    label, self.font("poppins_bold", 6.6 * scale), color("#aebcc8", 0.82 * category_alpha), clip=strip_clip,
+                    economy_text(label, chinese_enabled(self.registry)), self.font("poppins_bold", 6.6 * scale), color("#aebcc8", 0.82 * category_alpha), clip=strip_clip,
                 )
                 commands.text(
                     QRectF(tile.left() + pad, tile.top() + 7.0, tile.width() - pad * 2.0, 15.0),

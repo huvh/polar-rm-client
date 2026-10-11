@@ -4,6 +4,8 @@ from __future__ import annotations
 from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import QColor, QFont, QPen
 
+from ...jello_locale import chinese_enabled, ui_label
+
 
 class EscapeMenuMixin:
     @property
@@ -31,8 +33,10 @@ class EscapeMenuMixin:
         self.update()
 
     def escape_menu_choices(self):
-        return ("Cancel", "Exit client") if getattr(self, "_escape_menu_confirm_exit", False) else (
+        labels = ("Cancel", "Exit client") if getattr(self, "_escape_menu_confirm_exit", False) else (
             "Continue", "Return to startup", "Exit client")
+        chinese = chinese_enabled(getattr(self, "registry", None))
+        return tuple(ui_label(label, chinese) for label in labels)
 
     def activate_escape_menu_choice(self, index: int) -> None:
         if not self.escape_menu_visible:
@@ -126,11 +130,12 @@ class EscapeMenuMixin:
         painter.setFont(font)
         painter.setPen(QColor(254, 254, 254))
         confirm = getattr(self, "_escape_menu_confirm_exit", False)
-        painter.drawText(QRectF(panel.x(), panel.y() + 24 * scale, panel.width(), 45 * scale), Qt.AlignmentFlag.AlignCenter, "Exit client?" if confirm else "POLAR · Jello")
+        chinese = chinese_enabled(getattr(self, "registry", None))
+        painter.drawText(QRectF(panel.x(), panel.y() + 24 * scale, panel.width(), 45 * scale), Qt.AlignmentFlag.AlignCenter, ui_label("Exit client?", chinese) if confirm else "POLAR · Jello")
         font.setPointSize(max(8, round(10 * scale)))
         painter.setFont(font)
         painter.setPen(QColor(195, 202, 213))
-        painter.drawText(QRectF(panel.x(), panel.y() + 75 * scale, panel.width(), 24 * scale), Qt.AlignmentFlag.AlignCenter, "Controls will lock before shutdown" if confirm else "Telemetry and safety monitoring remain active")
+        painter.drawText(QRectF(panel.x(), panel.y() + 75 * scale, panel.width(), 24 * scale), Qt.AlignmentFlag.AlignCenter, ui_label("Controls will lock before shutdown" if confirm else "Telemetry and safety monitoring remain active", chinese))
         for index, (rect, label) in enumerate(zip(rows, self.escape_menu_choices())):
             selected = index == self._escape_menu_selected
             painter.setPen(QPen(QColor(255, 255, 255, 95 if selected else 25), 1))
@@ -143,5 +148,5 @@ class EscapeMenuMixin:
         font.setPointSize(max(8, round(10 * scale)))
         painter.setFont(font)
         painter.setPen(QColor(180, 188, 200))
-        painter.drawText(QRectF(panel.x(), panel.bottom() - 36 * scale, panel.width(), 22 * scale), Qt.AlignmentFlag.AlignCenter, "Esc  Back     ↑ ↓  Select     Enter  Confirm")
+        painter.drawText(QRectF(panel.x(), panel.bottom() - 36 * scale, panel.width(), 22 * scale), Qt.AlignmentFlag.AlignCenter, ui_label("Esc  Back     ↑ ↓  Select     Enter  Confirm", chinese))
         painter.restore()

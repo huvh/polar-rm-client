@@ -94,6 +94,8 @@ from ....vision import (
 from ..primitives import EconomyScenePhase
 from ...clickgui_gpu import ClickGuiDrawList
 from ...gpu_frame_compositor import GlassOwner
+from ...hero_locale import hero_text
+from ...jello_locale import chinese_enabled
 from ...overlay_coordinator import OverlayKind
 from ...paint import glow_rect, rounded_rect
 from ...theme import color
@@ -134,6 +136,7 @@ class VideoBackendMixin:
             self.font("jello_medium", max(6.0, 4.5 * scale)),
             override,
             multiplier,
+            registry=self.registry,
         )
 
     def assign_minecraft_function_slot(self, index: int, module_name: str) -> bool:
@@ -396,12 +399,12 @@ class VideoBackendMixin:
                 self.draw_glass_text(
                     p,
                     banner.adjusted(34.0, 0.0, -10.0, 0.0),
-                    "DEPLOYED · VIDEO CUT · K TO OPEN",
+                    hero_text("DEPLOYED · VIDEO CUT · K TO OPEN", chinese_enabled(self.registry)),
                     self.font("poppins_bold", 7.5),
                     QColor("#f4fbff"),
                     Qt.AlignmentFlag.AlignCenter,
                 )
-                self.add_hotspot(banner, "hero_deploy_open", tooltip="Open Hero deploy console")
+                self.add_hotspot(banner, "hero_deploy_open", tooltip=hero_text("Open Hero deploy console", chinese_enabled(self.registry)))
             return
         module = self.registry.get("HeroLob")
         solution, readiness = HeroLobPlanner.preview_from_state(
@@ -426,6 +429,7 @@ class VideoBackendMixin:
                 text_drawer=self.draw_glass_text,
                 island_icon_drawer=self.draw_dynamic_island_icon,
                 pointer=self.hover_point,
+                registry=self.registry,
             )
         finally:
             self.gpu_compositor.pop_glass_owner()
@@ -442,7 +446,7 @@ class VideoBackendMixin:
             self.add_hotspot(
                 layout.close_button,
                 "hero_deploy_close",
-                tooltip="Close Hero deploy controls",
+                tooltip=hero_text("Close Hero deploy controls", chinese_enabled(self.registry)),
             )
 
     def hero_lob_preview(self, *, announce: bool = True) -> tuple[Any, Any]:
@@ -671,7 +675,7 @@ class VideoBackendMixin:
             else "NATIVE 0x0310 VIDEO LOST · NO CAMERA FALLBACK"
         )
         painter.setFont(self.font("poppins_bold", 10.0))
-        painter.drawText(canvas, Qt.AlignmentFlag.AlignCenter, status)
+        painter.drawText(canvas, Qt.AlignmentFlag.AlignCenter, hero_text(status, chinese_enabled(self.registry)))
         return state
 
     def consume_capture_frame(self) -> None:
@@ -825,7 +829,7 @@ class VideoBackendMixin:
         painter.drawText(
             canvas,
             Qt.AlignmentFlag.AlignCenter,
-            "VIDEO SIGNAL LOST · WAITING FOR FRESH DECODED FRAME",
+            hero_text("VIDEO SIGNAL LOST · WAITING FOR FRESH DECODED FRAME", chinese_enabled(self.registry)),
         )
 
     def active_tongji_result(self) -> VisionResult | None:

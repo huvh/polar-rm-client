@@ -115,6 +115,10 @@ from .gui_cache import ClickGuiLayerCache
 from .clickgui_gpu import ClickGuiDrawList, ClickGuiGpuRenderer
 from .jello_clickgui import JelloClickGuiRenderer, JelloClickGuiState, JelloMainTimeline
 from .jello_locale import (
+    chinese_enabled,
+    description_label as jello_description_label,
+    action_label as jello_action_label,
+    ui_text,
     LANGUAGE_CHINESE,
     LANGUAGE_ENGLISH,
     LANGUAGE_SETTING,
@@ -124,6 +128,7 @@ from .jello_locale import (
     setting_label as jello_setting_label,
 )
 from .hero_deploy import HeroDeployInterfaceState, HeroDeployRenderer
+from .status_locale import dt7_display_token, status_text
 from .minecraft_hud import MinecraftCombatHudRenderer
 from .top_match_bar_controller import TopMatchBarController
 from .gpu_frame_compositor import GlassOwner, GpuFrameCompositor, LensMaterial
@@ -138,7 +143,7 @@ from .student_panels import StudentPanelRenderer
 from .minecraft_chat import MinecraftServerChatRenderer
 from .polar.mixins.student_frontend_mixin import StudentFrontendMixin
 from .polar.mixins.escape_menu_mixin import EscapeMenuMixin
-from .quick_action_wheel import ACTION_LABELS, DEFAULT_ACTIONS, QuickActionWheelState
+from .quick_action_wheel import ACTION_LABELS, DEFAULT_ACTIONS, SECTOR_INDEXES, QuickActionWheelState
 from .quick_action_wheel_gpu import QuickActionWheelCommand, QuickActionWheelGpuRenderer
 from .startup_gl import StartupGpuCompositor, TextureOrigin
 
@@ -382,7 +387,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         self._gpu_prewarm_timer = QTimer(self)
         self._gpu_prewarm_timer.setSingleShot(True)
         self._gpu_prewarm_timer.timeout.connect(self._run_gpu_prewarm_slice)
-        self.setWindowTitle("POLAR-RM Custom Client")
+        self.setWindowTitle(ui_text("POLAR-RM Custom Client", True))
         self.resize(1280, 720)
         self.setMinimumSize(1000, 620)
         self.setMouseTracking(True)
@@ -731,6 +736,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         self.refresh_custom_ui_sound_options()
         self.config_store.ensure_default(self.current_config_data())
         self.load_startup_config()
+        self.setWindowTitle(ui_text("POLAR-RM Custom Client", chinese_enabled(self.registry)))
         elimination_fx = self.registry.get("EliminationFX")
         self.kill_fx.preload_preset_sounds(
             self.setting_mode(elimination_fx, "Preset", "Default Scrolling")
@@ -1172,7 +1178,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         pages: dict[float, set[str]] = {
             14.0: set(),
             18.0: {">", "Run", "Show all", "Hide", "执行", "显示全部", "收起"},
-            20.0: {module.description},
+            20.0: {module.description, jello_description_label(module.description, True)},
             25.0: set(),
             40.0: {module.name, jello_module_label(module.name, True)},
         }
@@ -1186,12 +1192,17 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         }
         for setting in module.settings:
             localized_setting = jello_setting_label(setting.name, True)
-            pages[14.0].update((setting.name, localized_setting, setting.description))
+            pages[14.0].update((setting.name, localized_setting, setting.description, jello_description_label(setting.description, True)))
             pages[25.0].update((setting.name, localized_setting))
             if setting.kind == "action_group":
                 for option in setting.options:
                     legacy = legacy_labels.get(str(option), str(option))
-                    pages[14.0].update((legacy, f"旧版 {legacy}"))
+                    if str(option) in legacy_labels:
+                        pages[14.0].update((legacy, f"旧版 {legacy}"))
+                    else:
+                        for label in (str(option), jello_action_label(str(option), True)):
+                            pages[14.0].add(label)
+                            pages[14.0].add(self.jello_clickgui._elided_module_name(fonts[14.0], label, 107.0))
             if setting.kind != "mode":
                 continue
             values = {str(setting.value), *(str(option) for option in setting.options)}
@@ -1270,6 +1281,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             # Chinese panel subtitle glyphs (配置 / 缩放) + common toast fragments.
             "配置", "缩放", "已就绪", "已保存", "已加载", "导入",
         }
+        labels.update(ui_text(label, True) for label in tuple(labels))
         jello_labels_by_size: dict[float, set[str]] = {
             14.0: set(),
             18.0: {">", "Run", "Show all", "Hide", "执行", "显示全部", "收起"},
@@ -1676,7 +1688,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                 # 2K displays and exposed the previous page for one more frame.
                 cache_ready = not transition_active
                 if cache_ready:
-                    launcher_key = (*static_key, self.scenario_manager.current.key, self.match_mode_manager.current.key)
+                    launcher_key = (*static_key, self.scenario_manager.current.key, self.match_mode_manager.current.key, chinese_enabled(self.registry))
                     if launcher_key != self._startup_static_page_key:
                         self.hotspots.clear()
                         self.gpu_compositor.clear_static_glass()
@@ -2118,6 +2130,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                 width,
                 height,
                 round(ratio, 3),
+                chinese_enabled(self.registry),
                 self.startup_step,
                 self.wallpaper_picker_visible,
                 self._startup_page_epoch,
@@ -2136,6 +2149,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             width,
             height,
             round(ratio, 3),
+            chinese_enabled(self.registry),
             self.match_mode_manager.current.key,
             self.state.current_stage,
             self.state.stage_countdown_sec,
@@ -2204,6 +2218,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             hero_frame_state = self.hero_native_frame_state()
             background_key = (
                 "hero-deploy-video-cut",
+                chinese_enabled(self.registry),
                 int(self.state.deploy_status_revision),
                 self._hero_native_sequence,
                 hero_frame_state,
@@ -2215,6 +2230,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             self.gpu_compositor.set_scene_uv_offset(0.0, 0.0)
             blur_source_key = (
                 "hero-deploy-video-cut-blur",
+                chinese_enabled(self.registry),
                 int(self.state.deploy_status_revision),
                 self._hero_native_sequence,
                 hero_frame_state,
@@ -2225,6 +2241,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         elif self.backend_video_source_selected() and not self.normal_backend_video_fresh():
             background_key = (
                 "backend-video-lost",
+                chinese_enabled(self.registry),
                 self.setting_mode(self.registry.get("CameraFeed"), "Source", ""),
                 width,
                 height,
@@ -2744,6 +2761,17 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             radius * 2.0,
         )
         sectors = state.sectors()
+        # Translate stock captions only. Custom labels and action IDs remain opaque.
+        sector_labels = {
+            sector.index: (
+                ui_text(ACTION_LABELS.get(sector.action, sector.label), True)
+                if chinese_enabled(self.registry)
+                and sector.label
+                and not state.custom_labels[SECTOR_INDEXES[state.sector_count][sector.index]]
+                else sector.label
+            )
+            for sector in sectors
+        }
 
         if self._collect_gpu_quick_action_wheel and self.quick_action_wheel_gpu.available:
             self._gpu_quick_action_wheel_command = QuickActionWheelCommand(
@@ -2775,7 +2803,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                 if state.show_labels and sector.label:
                     labels.text(
                         QRectF(content.x() - 44.0, content.y() + 1.0, 88.0, 28.0),
-                        sector.label.replace("\n", " "),
+                        sector_labels[sector.index].replace("\n", " "),
                         self.font("poppins_medium", 7.0),
                         color("#ffffff", eased * (0.98 if selected else 0.74)),
                         Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop,
@@ -2787,7 +2815,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                     inner_radius * 2.0,
                     inner_radius * 2.0,
                 ),
-                "CANCEL" if state.selected_index < 0 else "RELEASE",
+                ui_text("CANCEL" if state.selected_index < 0 else "RELEASE", chinese_enabled(self.registry)),
                 self.font("poppins_medium", 6.4),
                 color("#ffffff", eased * 0.72),
                 Qt.AlignmentFlag.AlignCenter,
@@ -2851,7 +2879,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                 self.draw_text(
                     p,
                     label_rect,
-                    sector.label,
+                    sector_labels[sector.index],
                     self.font("poppins_medium", 7.1),
                     color("#ffffff", 0.98 if selected else 0.76),
                     Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop,
@@ -2869,7 +2897,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         self.draw_text(
             p,
             dead_rect,
-            "CANCEL" if state.selected_index < 0 else "RELEASE",
+            ui_text("CANCEL" if state.selected_index < 0 else "RELEASE", chinese_enabled(self.registry)),
             self.font("poppins_medium", 6.5),
             color("#ffffff", 0.70),
             Qt.AlignmentFlag.AlignCenter,
@@ -3001,6 +3029,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                             backend.value = "Compatibility Painter"
                         direct_gpu = False
             if not direct_gpu:
+                gui_hotspot_start = len(self.hotspots)
                 p.save()
                 mode = self.active_clickgui_mode()
                 if mode == PRIMARY_GUI_MODE:
@@ -3031,6 +3060,9 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                     if self.hover_tooltip:
                         self.draw_tooltip(p, self.hover_point, self.hover_tooltip)
                 p.restore()
+                if not self.gui_visible:
+                    del self.hotspots[gui_hotspot_start:]
+                    self.gui_scroll_viewports = []
 
         if (
             self.binding_module is not None
@@ -3588,6 +3620,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         return self.setting_bool(module, name, fallback)
 
     def draw_watermark(self, p: QPainter) -> None:
+        chinese = chinese_enabled(self.registry)
         z_font = self.font("museo", 18, QFont.Weight.Bold)
         body = self.font("poppins_medium", 10.5)
         glow_radius = 8 if not self.hud_clean() else 4
@@ -3604,11 +3637,11 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             min(4.0, transform_scale * max(1.0, float(self.devicePixelRatioF()))),
         )
         accent = self.hud_accent()
-        status = "CAM" if self.state.camera_connected else "SYN"
+        status = status_text("CAM" if self.state.camera_connected else "SYN", chinese)
         scene = self.scenario_manager.current.title
-        match = self.match_mode_manager.current.title
-        mqtt = "MQTT mock" if getattr(self.mqtt, "mock_output", True) else "MQTT live"
-        serial = "SERIAL mock" if self.control.mock_output else "SERIAL live"
+        match = status_text(self.match_mode_manager.current.title, chinese)
+        mqtt = status_text("MQTT mock" if getattr(self.mqtt, "mock_output", True) else "MQTT live", chinese)
+        serial = status_text("SERIAL mock" if self.control.mock_output else "SERIAL live", chinese)
         # 无线键鼠出口必须在脸上看得见：它决定"插不插 USB 线车动不动"，
         # 出问题时最忌讳的就是界面上找不到任何痕迹。
         # 只放状态、不放计数（计数会每帧变，会打掉这块 4Hz 光栅缓存）。
@@ -3621,13 +3654,14 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             "off": "KM off",
             "blocked": "KM blocked",
             "no-readback": "KM on(?)",
-            "live": f"KM live\u2191{km_rx}",
+            "live": "KM live\u2191{count}",
             "silent": "KM NO-RX!!",
-            "stalled": f"KM stall@{km_rx}",
+            "stalled": "KM stall@{count}",
         }.get(km_state, "KM ?")
+        km = status_text(km, chinese, count=km_rx)
         # 自定义控制器出口也要同屏可见：它是"选手端在跑才有意义"的一条路，
         # 关掉选手端后界面上必须立刻看出来，否则会被当成链路故障。
-        cc = "CC on" if getattr(self.control, "cc_enabled", False) else "CC off"
+        cc = status_text("CC on" if getattr(self.control, "cc_enabled", False) else "CC off", chinese)
         # 直连 DT7：开着但一帧都没发出去，是现场最难查的一种"看起来没问题"。
         # 所以状态与原因必须同屏可见（命令号没定案时是故意不发，不是坏了）。
         dt7_link_obj = getattr(self.control, "dt7_link", None)
@@ -3642,6 +3676,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                 wire_neutral=bool(getattr(dt7_link_obj, "wire_neutral", True)),
                 release_pending=bool(getattr(self.control, "dt7_release_pending", False)),
                 last_error=str(getattr(self.control, "dt7_last_error", "") or ""))
+            dt7 = dt7_display_token(dt7, chinese, resolved_port=str(getattr(dt7_link_obj, "resolved_port", "") or ""))
             gm = str(getattr(self.control, "dt7_mouse_note", "") or "")
             if gm:
                 # 不是故障，是固件仲裁：鼠标这条路被上位机云台请求顶掉了
@@ -3658,6 +3693,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         status_line = (f"{status} | {scene} | {match} | {mqtt} | {serial} | {km} | {cc}"
                        + ((" | " + dt7) if dt7 else ""))
         static_key = (
+            chinese,
             round(raster_scale, 3),
             z_font.toString(),
             body.toString(),
@@ -3851,7 +3887,8 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         gimbal_yaw = self.animated_angle("hud.chassis_gimbal.gimbal", self.state.gimbal_yaw_deg, smooth)
         relative_yaw = normalize_angle_deg(gimbal_yaw - chassis_yaw)
         spin = bool(self.registry.get("SpinMode") and self.registry.get("SpinMode").enabled)
-        mode_text = "SPIN" if spin else self.chassis_follow_mode()
+        chinese = chinese_enabled(self.registry)
+        mode_text = status_text("SPIN" if spin else self.chassis_follow_mode(), chinese)
         alert = min(1.0, abs(relative_yaw) / 90.0)
         pulse = 0.5 + 0.5 * math.sin(time.perf_counter() * 4.0)
         micro = self.hud_density() == "CombatCompact"
@@ -3943,7 +3980,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         self.draw_gimbal_turret_direction(ip, center, size, gimbal_yaw, alert)
 
         if show_angle:
-            angle_text = f"REL {relative_yaw:+.0f}°"
+            angle_text = status_text("REL {angle}", chinese, angle=f"{relative_yaw:+.0f}°")
             self.draw_glass_text(
                 ip,
                 QRectF(rect.left() + 11, rect.bottom() - 24, rect.width() * 0.56, 16),
@@ -3984,7 +4021,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                 inner = self.direction_point(center, angle, radius - (8.0 if index % 2 == 0 else 5.0))
                 p.setPen(QPen(color("#ffffff", 0.30 if index % 2 == 0 else 0.16), 1.1))
                 p.drawLine(inner, outer)
-            self.draw_text(p, QRectF(center.x() - 8, center.y() - radius - 17, 16, 12), "N", self.font("poppins_bold", 6.8), THEME.muted, Qt.AlignmentFlag.AlignCenter)
+            self.draw_text(p, QRectF(center.x() - 8, center.y() - radius - 17, 16, 12), status_text("N", chinese_enabled(self.registry)), self.font("poppins_bold", 6.8), THEME.muted, Qt.AlignmentFlag.AlignCenter)
         if spin:
             spin_radius = radius + 7.0 + 2.0 * pulse
             p.setPen(QPen(with_alpha(self.hud_warning(), 0.30 + 0.22 * pulse), 1.2))
@@ -4226,22 +4263,22 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         is_match = selected_page == "match"
         title = "MATCH MODE" if is_match else "SCENE SELECT"
         subtitle = (
-            f"{self.startup_scenario_meta(self.scenario_manager.current.key)['title']} profile"
+            ui_text("{title} profile", chinese_enabled(self.registry), title=ui_text(self.startup_scenario_meta(self.scenario_manager.current.key)["title"], chinese_enabled(self.registry)))
             if is_match
             else "Choose runtime environment"
         )
         header_y = 42.0 * scale
         commands.text(QRectF(50.0 * scale, header_y - 20.0 * scale, 330.0 * scale, 32.0 * scale), "POLAR-RM", self.font("museo", 28.0 * scale, QFont.Weight.Bold), self.gpu_alpha(THEME.text, active))
-        commands.text(QRectF(50.0 * scale, header_y + 10.0 * scale, 330.0 * scale, 18.0 * scale), "CUSTOM CLIENT", self.font("poppins_medium", 8.5 * scale), self.gpu_alpha(THEME.muted, active))
+        commands.text(QRectF(50.0 * scale, header_y + 10.0 * scale, 330.0 * scale, 18.0 * scale), ui_text("CUSTOM CLIENT", chinese_enabled(self.registry)), self.font("poppins_medium", 8.5 * scale), self.gpu_alpha(THEME.muted, active))
         notice_w = min(420.0 * scale, width * 0.36)
         notice = QRectF(width / 2.0 - notice_w / 2.0, 28.0 * scale, notice_w, 40.0 * scale)
         self.build_gpu_glass_rect(commands, notice, 15.0 * scale, active, THEME.cyan)
-        commands.text(notice.adjusted(18.0 * scale, 4.0 * scale, -18.0 * scale, -19.0 * scale), title, self.font("poppins_bold", 9.0 * scale), self.gpu_alpha(THEME.text, active), Qt.AlignmentFlag.AlignCenter)
-        commands.text(notice.adjusted(18.0 * scale, 19.0 * scale, -18.0 * scale, -4.0 * scale), subtitle, self.font("poppins_regular", 7.0 * scale), self.gpu_alpha(THEME.muted, active), Qt.AlignmentFlag.AlignCenter)
+        commands.text(notice.adjusted(18.0 * scale, 4.0 * scale, -18.0 * scale, -19.0 * scale), ui_text(title, chinese_enabled(self.registry)), self.font("poppins_bold", 9.0 * scale), self.gpu_alpha(THEME.text, active), Qt.AlignmentFlag.AlignCenter)
+        commands.text(notice.adjusted(18.0 * scale, 19.0 * scale, -18.0 * scale, -4.0 * scale), ui_text(subtitle, chinese_enabled(self.registry)), self.font("poppins_regular", 7.0 * scale), self.gpu_alpha(THEME.muted, active), Qt.AlignmentFlag.AlignCenter)
         profile_w = min(230.0 * scale, width * 0.22)
         profile = QRectF(width - profile_w - 50.0 * scale, 34.0 * scale, profile_w, 28.0 * scale)
         self.build_gpu_glass_rect(commands, profile, 10.0 * scale, active, THEME.cyan)
-        commands.text(profile.adjusted(12.0 * scale, 0, -12.0 * scale, 0), f"PROFILE  {self.current_profile()}", self.font("poppins_medium", 7.2 * scale), self.gpu_alpha(color("#d8e5ec", 0.92), active), Qt.AlignmentFlag.AlignCenter)
+        commands.text(profile.adjusted(12.0 * scale, 0, -12.0 * scale, 0), ui_text("PROFILE  {profile}", chinese_enabled(self.registry), profile=self.current_profile()), self.font("poppins_medium", 7.2 * scale), self.gpu_alpha(color("#d8e5ec", 0.92), active), Qt.AlignmentFlag.AlignCenter)
 
         if is_match:
             entries = []
@@ -4275,8 +4312,8 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         island_w = min(470 * scale, width * 0.42)
         island = QRectF(width / 2 - island_w / 2, 27 * scale, island_w, 44 * scale)
         self.build_gpu_glass_rect(commands, island, 17 * scale, active, THEME.cyan)
-        commands.text(island.adjusted(16 * scale, 3 * scale, -16 * scale, -21 * scale), "ROBOT PROFILE", self.font("poppins_bold", 9 * scale), self.gpu_alpha(THEME.text, active), Qt.AlignmentFlag.AlignCenter)
-        commands.text(island.adjusted(16 * scale, 22 * scale, -16 * scale, -3 * scale), f"{self.match_mode_manager.current.title} · Step 3/3", self.font("poppins_regular", 7 * scale), self.gpu_alpha(THEME.muted, active), Qt.AlignmentFlag.AlignCenter)
+        commands.text(island.adjusted(16 * scale, 3 * scale, -16 * scale, -21 * scale), ui_text("ROBOT PROFILE", chinese_enabled(self.registry)), self.font("poppins_bold", 9 * scale), self.gpu_alpha(THEME.text, active), Qt.AlignmentFlag.AlignCenter)
+        commands.text(island.adjusted(16 * scale, 22 * scale, -16 * scale, -3 * scale), ui_text("{title} · Step 3/3", chinese_enabled(self.registry), title=self.match_mode_manager.current.title), self.font("poppins_regular", 7 * scale), self.gpu_alpha(THEME.muted, active), Qt.AlignmentFlag.AlignCenter)
 
         margin = 46 * scale
         top = 112 * scale
@@ -4326,10 +4363,10 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             icon = QRectF(rect.left() + 13 * scale, rect.top() + 14 * scale, 42 * scale, 42 * scale)
             commands.rect(icon, 14 * scale, self.gpu_alpha(with_alpha(accent, 0.74), opacity), self.gpu_alpha(color("#ffffff", 0.26), opacity), 0.8)
             commands.text(icon, profile.icon, self.font("poppins_bold", 15 * scale), self.gpu_alpha(THEME.text, opacity), Qt.AlignmentFlag.AlignCenter)
-            commands.text(QRectF(icon.right() + 11 * scale, rect.top() + 14 * scale, rect.right() - icon.right() - 20 * scale, 23 * scale), profile.short_title, self.font("poppins_bold", 10 * scale), self.gpu_alpha(THEME.text, opacity))
-            commands.text(QRectF(icon.right() + 11 * scale, rect.top() + 38 * scale, rect.right() - icon.right() - 20 * scale, 17 * scale), f"ID {robot_id_for_alliance(profile, self.alliance_side())}", self.font("poppins_medium", 6.8 * scale), self.gpu_alpha(accent, opacity))
-            commands.text(rect.adjusted(13 * scale, 67 * scale, -13 * scale, -12 * scale), profile.description, self.font("poppins_regular", 7.1 * scale), self.gpu_alpha(color("#dce6ec", 0.86), opacity), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
-            self.add_hotspot(rect, "select_robot_profile", profile.key, tooltip=f"选择{profile.title}并进入战斗 HUD")
+            commands.text(QRectF(icon.right() + 11 * scale, rect.top() + 14 * scale, rect.right() - icon.right() - 20 * scale, 23 * scale), ui_text(profile.short_title, chinese_enabled(self.registry)), self.font("poppins_bold", 10 * scale), self.gpu_alpha(THEME.text, opacity))
+            commands.text(QRectF(icon.right() + 11 * scale, rect.top() + 38 * scale, rect.right() - icon.right() - 20 * scale, 17 * scale), ui_text("ID {id}", chinese_enabled(self.registry), id=robot_id_for_alliance(profile, self.alliance_side())), self.font("poppins_medium", 6.8 * scale), self.gpu_alpha(accent, opacity))
+            commands.text(rect.adjusted(13 * scale, 67 * scale, -13 * scale, -12 * scale), ui_text(profile.description, chinese_enabled(self.registry)), self.font("poppins_regular", 7.1 * scale), self.gpu_alpha(color("#dce6ec", 0.86), opacity), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+            self.add_hotspot(rect, "select_robot_profile", profile.key, tooltip=ui_text(f"选择{profile.title}并进入战斗 HUD", chinese_enabled(self.registry)))
 
         profile = profile_by_key(self.match_mode_manager.current.key, selected_key)
         performance = self.current_robot_performance(selected_key)
@@ -4344,8 +4381,8 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             refraction_height_px=min(18.0 * scale, panel.height() * 0.12),
             refraction_amount_px=min(24.0 * scale, panel.height() * 0.16),
         )
-        commands.text(panel.adjusted(20 * scale, 18 * scale, -20 * scale, -panel.height() + 48 * scale), profile.title, self.font("poppins_bold", 15 * scale), self.gpu_alpha(THEME.text, active))
-        commands.text(panel.adjusted(20 * scale, 49 * scale, -20 * scale, -panel.height() + 70 * scale), f"Robot ID {robot_id_for_alliance(profile, self.alliance_side())} · {profile.short_title}", self.font("poppins_medium", 7.4 * scale), self.gpu_alpha(THEME.cyan, active))
+        commands.text(panel.adjusted(20 * scale, 18 * scale, -20 * scale, -panel.height() + 48 * scale), ui_text(profile.title, chinese_enabled(self.registry)), self.font("poppins_bold", 15 * scale), self.gpu_alpha(THEME.text, active))
+        commands.text(panel.adjusted(20 * scale, 49 * scale, -20 * scale, -panel.height() + 70 * scale), ui_text("Robot ID {id} · {title}", chinese_enabled(self.registry), id=robot_id_for_alliance(profile, self.alliance_side()), title=ui_text(profile.short_title, chinese_enabled(self.registry))), self.font("poppins_medium", 7.4 * scale), self.gpu_alpha(THEME.cyan, active))
         metrics = [
             ("MAX HP", str(performance.max_health) if performance.max_health else "N/A"),
             ("POWER", f"{performance.power_limit_w} W" if performance.power_limit_w else "N/A"),
@@ -4357,8 +4394,8 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         for index, (label, value) in enumerate(metrics):
             row = QRectF(panel.left() + 16 * scale, y + index * 43 * scale, panel.width() - 32 * scale, 32 * scale)
             commands.rect(row, 8 * scale, color("#e8f5ff", 0.075 * active), color("#ffffff", 0.12 * active), 0.7)
-            commands.text(row.adjusted(11 * scale, 0, -100 * scale, 0), label, self.font("poppins_bold", 6.8 * scale), self.gpu_alpha(THEME.muted, active), Qt.AlignmentFlag.AlignVCenter)
-            commands.text(row.adjusted(100 * scale, 0, -11 * scale, 0), value, self.font("poppins_medium", 8.5 * scale), self.gpu_alpha(THEME.text, active), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            commands.text(row.adjusted(11 * scale, 0, -100 * scale, 0), ui_text(label, chinese_enabled(self.registry)), self.font("poppins_bold", 6.8 * scale), self.gpu_alpha(THEME.muted, active), Qt.AlignmentFlag.AlignVCenter)
+            commands.text(row.adjusted(100 * scale, 0, -11 * scale, 0), ui_text(value, chinese_enabled(self.registry)), self.font("poppins_medium", 8.5 * scale), self.gpu_alpha(THEME.text, active), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
 
         back = QRectF(margin, height - 53 * scale, 106 * scale, 34 * scale)
         self.build_gpu_glass_rect(
@@ -4371,8 +4408,8 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             refraction_height_px=back.height() * 0.375,
             refraction_amount_px=back.height() * 0.50,
         )
-        commands.text(back, "<  BACK", self.font("poppins_bold", 7.5 * scale), self.gpu_alpha(THEME.text, active), Qt.AlignmentFlag.AlignCenter)
-        self.add_hotspot(back, "startup_back_match", None, tooltip="返回比赛模式选择")
+        commands.text(back, ui_text("<  BACK", chinese_enabled(self.registry)), self.font("poppins_bold", 7.5 * scale), self.gpu_alpha(THEME.text, active), Qt.AlignmentFlag.AlignCenter)
+        self.add_hotspot(back, "startup_back_match", None, tooltip=ui_text("返回比赛模式选择", chinese_enabled(self.registry)))
         return commands
 
     # ------------------------------------------------------------------
@@ -4495,6 +4532,10 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
 
     def invalidate_gui_cache(self) -> None:
         self.gui_cache.clear()
+        if hasattr(self, "setWindowTitle") and hasattr(self, "windowTitle"):
+            title = ui_text("POLAR-RM Custom Client", chinese_enabled(self.registry))
+            if self.windowTitle() != title:
+                self.setWindowTitle(title)
 
     def get_gui_scale_for_bounds(
         self,
