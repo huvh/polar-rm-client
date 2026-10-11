@@ -378,7 +378,7 @@ def _on_action_startup_open_config(self, payload: Any, point: QPointF, button: i
 def _on_action_startup_open_wallpaper(self, payload: Any, point: QPointF, button: int, rect: QRectF) -> None:
     profiles = self.startup_wallpaper.profile_names()
     visual_module = self.registry.get("StartupVisual")
-    current = self.setting_mode(visual_module, "Wallpaper Profile", "TexasMP4")
+    current = self.setting_mode(visual_module, "Wallpaper Profile", "BlackHole")
     self.wallpaper_picker_page = profiles.index(current) // 4 if current in profiles else 0
     self.set_wallpaper_picker_visible(True)
 

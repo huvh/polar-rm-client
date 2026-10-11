@@ -99,7 +99,7 @@ class StartupSceneMixin:
             return False
         module = self.registry.get("StartupVisual")
         mode = self.setting_mode(module, "Background Mode", "VideoParallax")
-        profile = self.setting_mode(module, "Wallpaper Profile", "TexasMP4")
+        profile = self.setting_mode(module, "Wallpaper Profile", "BlackHole")
         if mode in ("ParticleGrid", "PkgScene") or profile in ("ParticleGrid", "Default3000925581Pkg"):
             return False
         width, height = self.width(), self.height()
@@ -328,7 +328,7 @@ class StartupSceneMixin:
     def startup_needs_high_rate(self) -> bool:
         module = self.registry.get("StartupVisual")
         mode = self.setting_mode(module, "Background Mode", "VideoParallax")
-        profile = self.setting_mode(module, "Wallpaper Profile", "TexasMP4")
+        profile = self.setting_mode(module, "Wallpaper Profile", "BlackHole")
         if mode in ("ParticleGrid", "VideoParallax"):
             return True
         if profile not in ("ParticleGrid", "Default3000925581Pkg"):
@@ -337,7 +337,7 @@ class StartupSceneMixin:
     def draw_startup_background(self, p: QPainter, width: int, height: int) -> None:
         module = self.registry.get("StartupVisual")
         mode = self.setting_mode(module, "Background Mode", "VideoParallax")
-        profile = self.setting_mode(module, "Wallpaper Profile", "TexasMP4")
+        profile = self.setting_mode(module, "Wallpaper Profile", "BlackHole")
         parallax = self.get_setting_number(module, "Parallax Strength", 22.0)
         zoom = self.get_setting_number(module, "Background Zoom", 1.00)
         dim = self.get_setting_number(module, "Dim Overlay", 0.28)
@@ -366,6 +366,8 @@ class StartupSceneMixin:
                         lens=self.startup_wallpaper.glass_frame,
                     )
                 return
+        if profile == "BlackHole":
+            self.liquid_glass.discard("startup")
         self.draw_particle_grid_background(p, width, height)
 
     def draw_particle_grid_background(self, p: QPainter, width: int, height: int) -> None:
@@ -1125,7 +1127,7 @@ class StartupSceneMixin:
         )
 
         module = self.registry.get("StartupVisual")
-        current = self.setting_mode(module, "Wallpaper Profile", "TexasMP4")
+        current = self.setting_mode(module, "Wallpaper Profile", "BlackHole")
         profiles = self.startup_wallpaper.profile_names()
         per_page = 4
         page_count = max(1, math.ceil(len(profiles) / per_page))
@@ -1147,7 +1149,7 @@ class StartupSceneMixin:
         x = panel.left() + 26.0 * scale
         actions = [
             ("Import", "wallpaper_import", None, color("#54c7ff"), "导入视频、GIF 或图片壁纸。"),
-            ("Reset", "wallpaper_reset", None, THEME.cyan, "恢复德克萨斯默认壁纸。"),
+            ("Reset", "wallpaper_reset", None, THEME.cyan, "恢复默认黑洞壁纸。"),
         ]
         if self.startup_wallpaper.can_remove(current):
             actions.append(("Remove", "wallpaper_remove", current, color("#ff6b70"), "删除当前用户壁纸。"))

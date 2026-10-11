@@ -640,6 +640,9 @@ class StartupWallpaperManager:
         self.workspace = Path(workspace)
         self.assets_dir = Path(assets_dir) if assets_dir is not None else self.workspace / "rm_custom_client" / "assets" / "wallpapers"
         self.builtin_dir = self.assets_dir / "builtin"
+        self.black_hole_image = self.builtin_dir / "black-hole.png"
+        self._black_hole_frame: VideoFrameSnapshot | None = None
+        self._black_hole_load_attempted = False
         self.texas_video = self.builtin_dir / "texas.mp4"
         self.vending_video = self.builtin_dir / "vending-machine.mp4"
         self.user_dir = Path(user_dir) if user_dir is not None else self.assets_dir / "user"
@@ -667,8 +670,36 @@ class StartupWallpaperManager:
         self.selected_profile = ""
         self.static_glass_key = 0
 
+    def _black_hole_snapshot(self) -> VideoFrameSnapshot | None:
+        """Load the bundled still once; no codec, decoder thread or per-frame blur."""
+        if self._black_hole_frame is None and not self._black_hole_load_attempted:
+            self._black_hole_load_attempted = True
+            image = QImage(str(self.black_hole_image))
+            if image.isNull():
+                return None
+            soft = image.scaledToWidth(384, Qt.TransformationMode.SmoothTransformation)
+            lens = image.scaledToWidth(96, Qt.TransformationMode.SmoothTransformation)
+            lens = lens.scaledToWidth(384, Qt.TransformationMode.SmoothTransformation)
+            self._black_hole_frame = VideoFrameSnapshot(
+                self.black_hole_image.resolve(), image, soft, lens, -2, 1.0, 0.0, 1.0,
+            )
+        return self._black_hole_frame
+
+    def _clear_wallpaper_frames(self) -> None:
+        """A missing built-in must not leak the previous wallpaper into glass."""
+        self.last_frame = QImage()
+        self.last_draw_rect = QRectF()
+        self.soft_glass_frame = QImage()
+        self.glass_frame = QImage()
+        self.glass_sequence = -1
+        self.transition_frame = QImage()
+        self._frame_pixmap = QPixmap()
+        self._frame_pixmap_key = 0
+        self._transition_pixmap = QPixmap()
+        self._transition_pixmap_key = 0
+
     def profile_names(self) -> list[str]:
-        names = ["TexasMP4", "VendingMachine4K", "Default3000925581Pkg", "ParticleGrid"]
+        names = ["BlackHole", "TexasMP4", "VendingMachine4K", "Default3000925581Pkg", "ParticleGrid"]
         if self.user_dir.exists():
             for path in sorted(self.user_dir.iterdir()):
                 if path.is_file() and path.suffix.lower() in PLAYABLE_EXTENSIONS:
@@ -676,6 +707,8 @@ class StartupWallpaperManager:
         return names
 
     def resolve_media_profile(self, profile: str) -> Path | None:
+        if profile == "BlackHole":
+            return self.black_hole_image if self.black_hole_image.exists() else None
         if profile == "TexasMP4" and self.texas_video.exists():
             return self.texas_video
         if profile == "VendingMachine4K" and self.vending_video.exists():
@@ -684,6 +717,7 @@ class StartupWallpaperManager:
 
     def profile_label(self, profile: str) -> str:
         return {
+            "BlackHole": "黑洞 · Event Horizon",
             "TexasMP4": "德克萨斯",
             "VendingMachine4K": "Vending Machine",
             "Default3000925581Pkg": "Wallpaper Engine Scene",
@@ -754,6 +788,13 @@ class StartupWallpaperManager:
         cached = self.thumbnail_cache.get(profile)
         if cached is not None:
             return cached
+        if profile == "BlackHole":
+            snapshot = self._black_hole_snapshot()
+            if snapshot is not None:
+                image = snapshot.image.scaledToWidth(480, Qt.TransformationMode.SmoothTransformation)
+                self.thumbnail_cache[profile] = image
+                return image
+            return QImage()
         future = self.thumbnail_futures.get(profile)
         if future is not None:
             if future.done():
@@ -811,6 +852,9 @@ class StartupWallpaperManager:
     ) -> bool:
         self.fast_background_sampling = bool(high_res)
         if profile != self.selected_profile:
+            if profile == "BlackHole":
+                self.transition_frame = self.last_frame
+                self.transition_started = time.perf_counter()
             self.selected_profile = profile
             self.failed_media = None
         if mode == "ParticleGrid" or profile == "ParticleGrid":
@@ -821,6 +865,15 @@ class StartupWallpaperManager:
             self.soft_glass_frame = QImage()
             self.glass_frame = QImage()
             return False
+        if profile == "BlackHole":
+            self.video_player.set_active(False)
+            self.requested_media = None
+            snapshot = self._black_hole_snapshot()
+            if snapshot is None:
+                self._clear_wallpaper_frames()
+                return False
+            self._update_glass_frame(snapshot, motion_quality)
+            return self._draw_image_parallax(p, rect, mouse, snapshot.image, dt, parallax, zoom, dim)
         media_path = self.resolve_media_profile(profile)
         if media_path is None and profile not in {"Default3000925581Pkg", "ParticleGrid"} and self.texas_video.exists():
             media_path = self.texas_video
@@ -929,7 +982,7 @@ class StartupWallpaperManager:
         if snapshot.soft_glass.isNull() or snapshot.glass.isNull():
             return
         # 只接收完整发布的源帧快照；绝不在 UI 帧内重新混合纹理。
-        if snapshot.sequence != self.glass_sequence:
+        if snapshot.sequence != self.glass_sequence or self.soft_glass_frame.isNull() or self.glass_frame.isNull():
             self.soft_glass_frame = snapshot.soft_glass
             self.glass_frame = snapshot.glass
             self.glass_sequence = snapshot.sequence
@@ -952,25 +1005,36 @@ class StartupWallpaperManager:
         if mode in ("ParticleGrid", "PkgScene") or profile in ("ParticleGrid", "Default3000925581Pkg"):
             return None
         if profile != self.selected_profile:
+            if profile == "BlackHole":
+                self.transition_frame = self.last_frame
+                self.transition_started = time.perf_counter()
             self.selected_profile = profile
             self.failed_media = None
-        media_path = self.resolve_media_profile(profile)
-        if media_path is None and self.texas_video.exists():
-            media_path = self.texas_video
-        if media_path is None:
-            return None
-        resolved = media_path.resolve()
-        if self.requested_media != resolved:
-            self.requested_media = resolved
-            self.transition_frame = self.last_frame
-            self.transition_started = time.perf_counter()
-        self.video_player.configure((round(rect.width()), round(rect.height())), motion_quality)
-        self.video_player.set_active(True)
-        if not self.video_player.load(resolved):
-            return None
-        snapshot = self.video_player.snapshot()
-        if snapshot.path != resolved or snapshot.image.isNull():
-            return None
+        if profile == "BlackHole":
+            self.video_player.set_active(False)
+            self.requested_media = None
+            snapshot = self._black_hole_snapshot()
+            if snapshot is None:
+                self._clear_wallpaper_frames()
+                return None
+        else:
+            media_path = self.resolve_media_profile(profile)
+            if media_path is None and self.texas_video.exists():
+                media_path = self.texas_video
+            if media_path is None:
+                return None
+            resolved = media_path.resolve()
+            if self.requested_media != resolved:
+                self.requested_media = resolved
+                self.transition_frame = self.last_frame
+                self.transition_started = time.perf_counter()
+            self.video_player.configure((round(rect.width()), round(rect.height())), motion_quality)
+            self.video_player.set_active(True)
+            if not self.video_player.load(resolved):
+                return None
+            snapshot = self.video_player.snapshot()
+            if snapshot.path != resolved or snapshot.image.isNull():
+                return None
         self._update_glass_frame(snapshot, motion_quality)
         nx = (mouse.x() / max(1.0, rect.width()) - 0.5) * 2.0
         ny = (mouse.y() / max(1.0, rect.height()) - 0.5) * 2.0

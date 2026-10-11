@@ -204,6 +204,7 @@ def export_client_config(
         # one as the profile's startup surface, even when an older caller
         # passes a historical mode name.
         "gui_mode": "JelloSigma",
+        "startup_wallpaper_revision": 1,
         "selected_category": selected_category,
         "selected_module": selected_module,
         "module_expanded": sorted(module_expanded),
@@ -233,6 +234,16 @@ def apply_registry_config(registry: Any, data: dict[str, Any]) -> None:
     if not isinstance(modules, dict):
         return
     modules = dict(modules)
+    # One-time migration of shipped defaults. Imported wallpapers and generated
+    # modes are left alone; the revision makes later explicit choices persistent.
+    startup = modules.get("StartupVisual")
+    if data.get("startup_wallpaper_revision") != 1 and isinstance(startup, dict):
+        settings = startup.get("settings")
+        if isinstance(settings, dict) and settings.get("Wallpaper Profile") in {"TexasMP4", "VendingMachine4K"}:
+            if settings.get("Background Mode", "VideoParallax") not in {"ParticleGrid", "PkgScene"}:
+                startup = dict(startup)
+                startup["settings"] = {**settings, "Wallpaper Profile": "BlackHole"}
+                modules["StartupVisual"] = startup
     click_gui = modules.get("ClickGui")
     if isinstance(click_gui, dict) and isinstance(click_gui.get("settings"), dict):
         settings = dict(click_gui["settings"])

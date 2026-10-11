@@ -314,13 +314,13 @@ class PersistenceMixin:
             self.toast("删除壁纸失败")
             return
         self.refresh_wallpaper_profiles()
-        self.apply_wallpaper_profile("TexasMP4")
+        self.apply_wallpaper_profile("BlackHole")
         count = max(1, math.ceil(len(self.startup_wallpaper.profile_names()) / 4))
         self.wallpaper_picker_page = min(self.wallpaper_picker_page, count - 1)
         self.toast("用户壁纸已删除")
 
     def reset_wallpaper_profile(self) -> None:
-        self.apply_wallpaper_profile("TexasMP4")
+        self.apply_wallpaper_profile("BlackHole")
         self.wallpaper_picker_page = 0
 
     def current_profile(self) -> str:
