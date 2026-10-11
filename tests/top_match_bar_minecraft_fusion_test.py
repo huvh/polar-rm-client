@@ -6,6 +6,7 @@ bootstrap is a compatibility preview only; production uses PySide6.
 from pathlib import Path
 from types import SimpleNamespace as NS
 import ast
+import math
 import time
 import unittest
 from unittest.mock import Mock, patch
@@ -147,6 +148,115 @@ class MinecraftFusionTests(unittest.TestCase):
         self.owner.draw_chassis_gimbal_indicator.assert_not_called()
         self.owner.draw_telemetry_strip.assert_not_called()
 
+    def enable_real_jello(self):
+        """Use production ActiveMods geometry, font and raster path; no app startup."""
+        scope = production_methods("rm_client/ui/polar/renderers/module_list.py", "ModuleListMixin",
+            {"draw_minecraft_module_list", "draw_module_list_debug_white"})
+        scope.update(math=math, **{name: getattr(QtGui, name) for name in
+            ("QFontMetricsF", "QImage", "QTransform", "QPainter", "QColor")},
+            QRectF=QtCore.QRectF, QPointF=QtCore.QPointF, Qt=QtCore.Qt)
+        font_id = QtGui.QFontDatabase.addApplicationFont(str(ROOT / "assets/fonts/Jello-Helvetica-Neue-Light.ttf"))
+        self.assertGreaterEqual(font_id, 0)
+        family = QtGui.QFontDatabase.applicationFontFamilies(font_id)[0]
+        def font(_key, points):
+            result = QtGui.QFont(family)
+            result.setPointSizeF(points)
+            return result
+        self.owner.font = font
+        self.owner.font_line_height = lambda value: QtGui.QFontMetricsF(value).height()
+        self.owner._client_asset_path = lambda *parts: ROOT.joinpath(*parts)
+        self.owner._collect_gpu_hud_commands = False
+        self.owner._jello_active_mods_frame_index = -1
+        self.owner.registry.get("HUD").get_setting("Jello List Animations").value = False
+        for name in ("ArmorLock", "FrictionWheel", "ChassisAssist", "PowerGuard", "MapMarker"):
+            self.owner.registry.get(name).enabled = True
+        for name in ("draw_minecraft_module_list", "draw_module_list_debug_white"):
+            setattr(self.owner, name, scope[name].__get__(self.owner))
+
+    def test_removed_boss_bars_never_render_in_either_island_mode(self):
+        self.owner.registry.get("TopMatchBar").enabled = False
+        renderer = self.owner.minecraft_hud
+        for island in (False, True, False):
+            self.owner.registry.get("HUD").get_setting("Dynamic Island").value = island
+            with patch.object(renderer.font, "draw", wraps=renderer.font.draw) as draw_text:
+                image = self.draw()
+            self.assertEqual(self.owner._last_minecraft_hud_layout.boss_bars, ())
+            self.assertFalse(any("BASE  SHIELD" in str(call) or "TARGET " in str(call)
+                                 for call in draw_text.call_args_list))
+            # Exact former three-bar region, now transparent with CS disabled.
+            self.assertTrue(all(image.pixelColor(x, y).alpha() == 0
+                                for x in range(370, 910, 11) for y in range(15, 150, 7)))
+            for rect in (self.owner._last_minecraft_hud_layout.hotbar,
+                         self.owner._last_minecraft_hud_layout.armor[0],
+                         self.owner._last_minecraft_hud_layout.scoreboard):
+                self.assert_drawn(image, rect)
+
+    def test_removed_boss_bars_release_top_space_without_cache_churn(self):
+        self.owner.registry.get("HUD").get_setting("Dynamic Island").value = False
+        self.draw()
+        self.assertEqual(self.controller.last_layout.bounds.y, 5.0)
+        builds = self.owner.minecraft_hud.layer_rebuilds
+        self.owner.registry.get("HUD").get_setting("Dynamic Island").value = True
+        self.draw()
+        self.assertEqual(self.owner.minecraft_hud.layer_rebuilds, builds)
+        self.assertGreaterEqual(self.controller.last_layout.bounds.y, 55.0)
+
+    def test_removed_target_telemetry_does_not_rebuild_mc_but_scoreboard_still_updates(self):
+        self.owner.registry.get("HUD").get_setting("Dynamic Island").value = False
+        self.draw()
+        renderer = self.owner.minecraft_hud
+        builds = renderer.layer_rebuilds
+        self.owner.state.target_id = 107
+        self.owner.state.target_health = 50
+        self.owner.state.target_max_health = 600
+        renderer._layer_next_refresh_at = 0
+        self.draw()
+        self.assertEqual(renderer.layer_rebuilds, builds)
+        self.owner.state.base_shield = 25
+        renderer._layer_next_refresh_at = 0
+        self.draw()
+        self.assertEqual(renderer.layer_rebuilds, builds + 1)
+        self.assertTrue(any("25%" in text for text, _ in renderer.scoreboard_lines(self.owner.state)))
+
+    def test_mc_layout_and_hotbar_hit_testing_preserved_at_user_scales(self):
+        renderer = self.owner.minecraft_hud
+        for width, height in ((800, 600), (1280, 720), (1920, 1080), (2560, 1440)):
+            for multiplier in (.5, 1, 1.5, 2):
+                with self.subTest(width=width, multiplier=multiplier):
+                    self.owner.registry.get("MinecraftCombatHUD").get_setting("Scale Multiplier").value = multiplier
+                    image = self.draw(width, height)
+                    layout = self.owner._last_minecraft_hud_layout
+                    self.assertEqual(layout.boss_bars, ())
+                    self.assertEqual(layout.slot_at(layout.slots[4].center()), 4)
+                    # Existing ceil-to-logical-pixel transform may place the bottom
+                    # edge up to half a logical pixel beyond the viewport clip.
+                    tolerance = layout.scale * .5 + 1e-7
+                    self.assertTrue(QtCore.QRectF(0, 0, width, height).adjusted(
+                        -tolerance, -tolerance, tolerance, tolerance).contains(layout.hotbar))
+                    self.assert_drawn(image, layout.hotbar)
+                    self.assert_drawn(image, layout.hearts[0])
+                    self.assert_drawn(image, layout.armor[0])
+                    self.assert_drawn(image, layout.scoreboard)
+
+    def test_real_jello_active_mods_remains_visible_beside_cs_and_bf6(self):
+        self.enable_real_jello()
+        for width, height, scale in ((1280, 720, 1), (1920, 1080, 1.2)):
+            self.hud_scale = scale
+            for island in (False, True):
+                with self.subTest(width=width, island=island):
+                    self.owner.registry.get("HUD").get_setting("Dynamic Island").value = island
+                    image = self.draw(width, height)
+                    jello = self.screen_rect(QtCore.QRectF(width / scale - 240, 8, 230, 100))
+                    self.assert_drawn(image, jello)
+                    self.assertFalse(jello.intersects(self.screen_rect(self.controller.last_layout.bounds)))
+                    self.assertFalse(jello.intersects(self.screen_rect(self.controller.last_progress_bounds)))
+                    self.assertFalse(jello.intersects(self.owner._last_minecraft_hud_layout.scoreboard))
+                    self.assertIn("ChassisAssist", self.owner._jello_active_mods_rows)
+                    self.owner.registry.get("HUD").get_setting("Module List").value = False
+                    hidden = self.draw(width, height)
+                    self.assertNotEqual(image, hidden)
+                    self.owner.registry.get("HUD").get_setting("Module List").value = True
+
     def test_actual_activation_precedence_and_saved_config_need_no_migration(self):
         for module_on, preset, expected in ((True,"Polar",True),(False,"Minecraft 1.21.11",True),
                                           (True,"Minecraft 1.21.11",True),(False,"Polar",False)):
@@ -160,7 +270,7 @@ class MinecraftFusionTests(unittest.TestCase):
             self.assertEqual(self.owner._last_minecraft_hud_layout is not None, expected)
             self.assertTrue(self.controller.owns_progress())
 
-    def test_real_combined_bounds_resolution_dpi_scale_and_bossbar_modes(self):
+    def test_real_combined_bounds_resolution_dpi_scale_and_island_modes(self):
         for width,height,scale in ((800,600,.8),(1000,620,1.0),(1280,720,1.0),(1920,1080,1.2),(2560,1440,1.34)):
             for dpr in (1,2):
                 for island in (False,True):
@@ -177,15 +287,13 @@ class MinecraftFusionTests(unittest.TestCase):
                             self.assertFalse(rect.intersects(mc.scoreboard))
                             self.assertFalse(rect.intersects(mc.hotbar))
                             self.assertFalse(rect.intersects(self.screen_rect(self.owner.tactical_map_rect(width/scale,height/scale))))
-                            if not island:
-                                for boss in mc.boss_bars:
-                                    self.assertFalse(rect.intersects(boss.adjusted(0,-9*mc.scale,0,0)))
-                            else:
+                            self.assertEqual(mc.boss_bars, ())
+                            if island:
                                 self.assertGreaterEqual(rect.top(),47*scale+8*scale)
                         self.assertGreater(self.controller.last_progress_bounds.top(), cs.bounds.bottom)
                         self.assertAlmostEqual(cs.center.x+cs.center.width/2, int(width/scale)/2)
 
-    def test_lower_map_uses_final_bossbar_shifted_top(self):
+    def test_lower_map_uses_final_reserved_band(self):
         self.owner.registry.get("HUD").get_setting("Dynamic Island").value=False
         self.owner.tactical_map_rect=lambda w,h: QtCore.QRectF(12,200,400,110)
         self.draw()
@@ -298,8 +406,7 @@ class MinecraftFusionTests(unittest.TestCase):
                             self.assertTrue(QtCore.QRectF(0,0,1280,720).contains(rect))
                             self.assertFalse(rect.intersects(mc.scoreboard))
                             self.assertFalse(rect.intersects(mc.hotbar))
-                            if not island:
-                                self.assertGreaterEqual(rect.top()+1e-7,max(b.bottom() for b in mc.boss_bars)+8*scale)
+                            self.assertEqual(mc.boss_bars, ())
 
     def test_island_resize_clamps_eased_progress_inside_reserved_band(self):
         self.owner.dynamic_island_state.height=150

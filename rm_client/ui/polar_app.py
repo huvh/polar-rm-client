@@ -2472,7 +2472,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                 self.draw_watermark(p)
             # Match time/base/robot state already lives in the compact MC
             # sidebar.  Repainting POLAR's match header duplicates the same
-            # information over boss bars and Dynamic Island.
+            # information over the CS match bar and Dynamic Island.
 
         display_result = self.interpolated_vision_result(now)
         armor_module = self.registry.get("ArmorAutoAim")

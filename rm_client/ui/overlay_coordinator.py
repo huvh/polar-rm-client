@@ -53,11 +53,6 @@ class OverlayCoordinator:
         bottom = min(height - 12.0, height * .48)
         if minecraft_layout is None:
             return TopHudSafeArea(top, inset, bottom)
-        if not dynamic_island:
-            # Boss titles lie above the sprites; the last sprite's bottom is
-            # the bottom of the complete three-bar stack.
-            top = max(top, *(rect.bottom() / hud_scale + 8.0
-                             for rect in minecraft_layout.boss_bars))
         status_top = min(rect.top() for rect in minecraft_layout.armor)
         bottom = min(bottom, (status_top - 8.0 * minecraft_layout.scale) / hud_scale)
         score = minecraft_layout.scoreboard
