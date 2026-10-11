@@ -1,4 +1,5 @@
 {
+  "startup_wallpaper_revision": 1,
   "version": 1,
   "gui_mode": "JelloSigma",
   "selected_category": "System",
@@ -186,7 +187,7 @@
       "keybind": "None",
       "settings": {
         "Background Mode": "VideoParallax",
-        "Wallpaper Profile": "VendingMachine4K",
+        "Wallpaper Profile": "BlackHole",
         "Motion Quality": "Smooth60",
         "Glass Style": "LiquidGlass",
         "Glass Strength": 1.0,

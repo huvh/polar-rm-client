@@ -1,0 +1,13 @@
+POLAR-RM — Black Hole / Event Horizon
+
+black-hole.png is original procedural artwork created for this project.
+It contains no downloaded photographs, textures or third-party image assets.
+The project may use, modify, redistribute and package this artwork freely.
+
+Rebuild from the repository root:
+    python tools/generate_black_hole_wallpaper.py
+
+Rebuilding needs NumPy and Pillow, for development only. The application loads
+this bundled 2560 x 1440 PNG once through Qt and reuses the same image, glass
+samples and GPU texture. No network requests, video decoding, or procedural
+image generation occur during normal use.

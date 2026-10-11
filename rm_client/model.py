@@ -906,7 +906,7 @@ def build_default_registry() -> ModuleRegistry:
             "None",
             [
                 mode_setting("Background Mode", "VideoParallax", ["PkgScene", "VideoParallax", "ParticleGrid", "Static"]),
-                mode_setting("Wallpaper Profile", "TexasMP4", ["TexasMP4", "VendingMachine4K", "Default3000925581Pkg", "ParticleGrid"]),
+                mode_setting("Wallpaper Profile", "BlackHole", ["BlackHole", "TexasMP4", "VendingMachine4K", "Default3000925581Pkg", "ParticleGrid"]),
                 mode_setting("Motion Quality", "Smooth60", ["Smooth60", "Balanced30", "Source"]),
                 mode_setting("Glass Style", "LiquidGlass", ["LiquidGlass", "Legacy"]),
                 number_setting("Glass Strength", 1.00, 0.40, 1.40, 0.05),
@@ -914,7 +914,7 @@ def build_default_registry() -> ModuleRegistry:
                 number_setting("Background Zoom", 1.00, 1.0, 1.35, 0.01),
                 number_setting("Dim Overlay", 0.28, 0.0, 0.8, 0.01),
                 action_setting("Import Wallpaper", "导入 MP4/GIF/图片壁纸到客户端壁纸目录。"),
-                action_setting("Reset Wallpaper", "恢复默认德克萨斯视频壁纸。"),
+                action_setting("Reset Wallpaper", "恢复默认黑洞壁纸。"),
             ],
             enabled=True,
             description="启动页背景、pkg 壁纸、MP4 导入、视差和暗角管理。",

@@ -43,6 +43,7 @@ PYTHON_SUITES = (
     "polar_bridge_test",      # 段→HUD 映射、驾驶通道门控、改绑、云台出口互斥
     "polar_integration_test", # 端到端回环：官方场景开车、无 0x1E 的 sim2real、急停竞态
     "polar_selftest_test",    # 无头自检本身
+    "startup_black_hole_test", # cached wallpaper and one-time default migration
     "polar_startup_test",     # 真实窗口：链路 tick、HUD 渲染、改绑持久化
     "gimbal_host_request_test", # 云台直控请求位：电平语义、急停撤回、三条件闸门
     "autoaim_settings_test",  # 自瞄 Fov/Priority 接线：换算精确、未标定不加门、降级不谎报
@@ -400,3 +401,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
