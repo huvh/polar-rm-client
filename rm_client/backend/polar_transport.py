@@ -19,9 +19,11 @@
 from __future__ import annotations
 
 import threading
+import math
+import struct
 import time
 from collections import deque
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from typing import Any, Callable
 
 from ..serial_ports import describe_ports, resolve_port as resolve_polar_port
@@ -73,7 +75,7 @@ class PolarTimestamp:
                 virtual += floor + 1 - (virtual & self._MASK)
         self._virtual = virtual
         self._last_emitted = virtual & self._MASK
-        self.roll_detected = False
+        self.roll_detected = floor == self._MASK
 
     @property
     def current(self) -> int:
@@ -182,7 +184,8 @@ class PolarLinkTransport:
         self._stop = threading.Event()
 
         self._intent: PolarDriveIntent | None = None
-        self._intent_lock = threading.Lock()
+        self._intent_lock = threading.RLock()
+        self._lifecycle_lock = threading.RLock()
 
         self._rx: deque[PolarSegment] = deque(maxlen=256)
         self._rx_lock = threading.Lock()
@@ -232,7 +235,11 @@ class PolarLinkTransport:
 
     # ------------------------------------------------------------------
     def start(self) -> None:
-        if self._running:
+        with self._lifecycle_lock:
+            self._start_locked()
+
+    def _start_locked(self) -> None:
+        if self._running or (self._thread is not None and self._thread.is_alive()):
             return
         # "Auto" 在每次尝试连接时重新解析：操作员常常是先启动客户端、后插机器人。
         mode = str(self.transport or "serial").strip().lower()
@@ -276,6 +283,7 @@ class PolarLinkTransport:
                 return
             self.connected = bool(self._serial and getattr(self._serial, "is_open", False))
             if not self.connected:
+                self._close_failed_stream()
                 self.last_error = f"链路 {resolved} 打开失败"
                 self.last_error_code = "PORT_OPEN_FAILED"
                 return
@@ -287,13 +295,33 @@ class PolarLinkTransport:
             self.last_error_code = "PORT_BUSY"
             return
 
+        self._rx_buffer.clear()
+        with self._rx_lock:
+            self._rx.clear()
+        self.last_segment_at = 0.0
+        with self._intent_lock:
+            self._intent = None
+            self._spin_cmd = SPIN_CMD_NONE
+            self._gimbal_host_request = 0
+            self._drive_was_armed = False
         self._running = True
         self._stop.clear()
         self._thread = threading.Thread(target=self._loop, name="polar-link", daemon=True)
-        self._thread.start()
+        try:
+            self._thread.start()
+        except Exception as exc:
+            self._running = False
+            self._thread = None
+            self.last_error = str(exc)
+            self.last_error_code = "THREAD_START_FAILED"
+            self._close_failed_stream()
 
     def stop(self) -> None:
-        """**先归零再断开**：固件不会自己清零，直接关口会把最后指令冻在车上。"""
+        """先归零再断开；旧工作线程完全退出前禁止开启新连接。"""
+        with self._lifecycle_lock:
+            self._stop_locked()
+
+    def _stop_locked(self) -> None:
 
         if self._running or self._serial is not None:
             # Latch before flushing, so the background writer cannot put an
@@ -303,9 +331,11 @@ class PolarLinkTransport:
             self._flush_zero_burst(blocking=True)
         self._stop.set()
         self._running = False
-        if self._thread is not None and self._thread.is_alive():
-            self._thread.join(timeout=1.0)
-        self._thread = None
+        worker = self._thread
+        if worker is not None and worker.is_alive() and worker is not threading.current_thread():
+            worker.join(timeout=1.0)
+        if worker is None or not worker.is_alive():
+            self._thread = None
         if self._serial is not None:
             try:
                 self._serial.close()
@@ -318,8 +348,29 @@ class PolarLinkTransport:
     def submit(self, intent: PolarDriveIntent) -> None:
         """UI/tick 侧投递一帧意图；非阻塞，最后一帧覆盖前一行。"""
 
+        try:
+            values = {name: float(getattr(intent, name)) for name in (
+                "vx", "vy", "wz", "gimbal_pitch_rad", "gimbal_yaw_rad", "produced_at")}
+            if not all(math.isfinite(value) for value in values.values()):
+                raise ValueError("驾驶意图含非有限数值")
+            for name, value in values.items():
+                if name != "produced_at":
+                    struct.pack("<f", value)  # finite doubles may overflow the wire float32
+            if values["produced_at"] > time.perf_counter():
+                raise ValueError("驾驶意图时间不能在未来")
+            key_value = int(intent.key_value)
+            if not 0 <= key_value <= 0xFFFF:
+                raise ValueError("驾驶键位超出 uint16 范围")
+            snapshot = replace(intent, **values, key_value=key_value)
+        except (AttributeError, TypeError, ValueError, OverflowError) as exc:
+            # Rejecting a bad replacement must also neutralize the previous
+            # valid intent: firmware may retain the last accepted command.
+            self.trigger_estop()
+            self.last_error = str(exc)
+            self.last_error_code = "INVALID_INTENT"
+            return
         with self._intent_lock:
-            self._intent = intent
+            self._intent = snapshot
 
     def clear_intent(self) -> None:
         with self._intent_lock:
@@ -335,7 +386,10 @@ class PolarLinkTransport:
         未知取值归为 NONE（不干预），与编码器、固件三处一致。
         """
 
-        cmd = int(spin_cmd) & 0xFF
+        try:
+            cmd = int(spin_cmd)
+        except (TypeError, ValueError, OverflowError):
+            cmd = SPIN_CMD_NONE
         if cmd not in (SPIN_CMD_NONE, SPIN_CMD_ON, SPIN_CMD_OFF):
             cmd = SPIN_CMD_NONE
         with self._intent_lock:
@@ -378,7 +432,9 @@ class PolarLinkTransport:
         self._flush_zero_burst(blocking=False)
 
     def release_estop(self) -> None:
-        self._estop_active = False
+        with self._intent_lock:
+            if not self.timestamp.roll_detected:
+                self._estop_active = False
 
     def set_send_hz(self, hz: float) -> bool:
         """运行中改发送频率。返回是否真的变了。
@@ -400,51 +456,56 @@ class PolarLinkTransport:
         # 原来 `interval = 1.0 / self.send_hz` 写在 while 之前，意味着
         # 运行中改 send_hz 完全不生效——必须重启链路。而界面上的
         # “Send Hz” 滑块是一个运行期设置，算死了就等于那个滑块是装饰品。
-        next_send = time.perf_counter()
-        while not self._stop.is_set():
-            interval = 1.0 / self.send_hz
-            try:
-                self._drain_rx()
-            except Exception as exc:
-                self.last_error = str(exc)
-                self.last_error_code = "STREAM_DISCONNECTED"
-                break
-            now = time.perf_counter()
-            if now >= next_send:
-                next_send = now + interval
+        try:
+            next_send = time.perf_counter()
+            while not self._stop.is_set():
+                interval = 1.0 / self.send_hz
                 try:
-                    self._pump_tx(now)
+                    self._drain_rx()
                 except Exception as exc:
                     self.last_error = str(exc)
+                    self.last_error_code = "STREAM_DISCONNECTED"
                     break
-                if not self.connected:
-                    break
-            time.sleep(max(0.0, min(interval * 0.25, next_send - time.perf_counter())))
-        # Discard all receive/control state from this connection. Reconnect
-        # must not reuse a buffered partial frame or an old driving intent.
-        self.connected = False
-        self.last_segment_at = 0.0
-        self._rx_buffer.clear()
-        with self._rx_lock:
-            self._rx.clear()
-        with self._intent_lock:
-            self._intent = None
-            self._spin_cmd = SPIN_CMD_NONE
-            self._gimbal_host_request = 0
-            self._drive_was_armed = False
-        stream, self._serial = self._serial, None
-        if stream is not None:
-            try:
-                stream.close()
-            except Exception:
-                pass
-        self._running = False
+                now = time.perf_counter()
+                if now >= next_send:
+                    next_send = now + interval
+                    try:
+                        self._pump_tx(now)
+                    except Exception as exc:
+                        self.last_error = str(exc)
+                        break
+                    if not self.connected:
+                        break
+                time.sleep(max(0.0, min(interval * 0.25, next_send - time.perf_counter())))
+        finally:
+            # Discard all receive/control state from this connection. Reconnect
+            # must not reuse a buffered partial frame or an old driving intent.
+            self.connected = False
+            self.last_segment_at = 0.0
+            self._rx_buffer.clear()
+            with self._rx_lock:
+                self._rx.clear()
+            with self._intent_lock:
+                self._intent = None
+                self._spin_cmd = SPIN_CMD_NONE
+                self._gimbal_host_request = 0
+                self._drive_was_armed = False
+            stream, self._serial = self._serial, None
+            if stream is not None:
+                try:
+                    stream.close()
+                except Exception:
+                    pass
+            self._running = False
 
     def _drain_rx(self) -> None:
-        if self._serial is None:
+        stream = self._serial
+        if stream is None:
             return
-        chunk = self._serial.read(512)
-        if not getattr(self._serial, "is_open", True):
+        chunk = stream.read(512)
+        if self._serial is not stream or self._stop.is_set():
+            return
+        if not getattr(stream, "is_open", True):
             raise ConnectionError("机器人字节流已断开")
         if not chunk:
             return
@@ -475,7 +536,6 @@ class PolarLinkTransport:
             # 急停/归零突发窗口：有界（ZERO_BURST_S），故意把两路都按零
             self._flush_zero_burst(blocking=False)
             return
-        intent = self._take_intent_locked(now)
         # 持锁完成“取意图之后的全部写出”：与 trigger_estop 互斥，
         # 消除“已取到非零意图、写入前被急停插入”的窗口。
         # 注意：intent 为 None 不能在这里早退去无条件补发 0x03 归零帧——
@@ -484,6 +544,9 @@ class PolarLinkTransport:
         with self._intent_lock:
             if self._estop_active:
                 return
+            # Snapshot and freshness check belong to the same critical section
+            # as writes; clear_intent must invalidate an unsent snapshot.
+            intent = self._take_intent_locked(max(now, time.perf_counter()))
             self._write_after_intent_held(now, intent)
             # 0x04 与驾驶意图无关，即使 intent 为 None（没人推杆）也要发：
             # 否则“只开自转、不用客户端开车”这个诉求根本发不出去。
@@ -513,6 +576,13 @@ class PolarLinkTransport:
                 self._write(self._frame_for(intent))
         else:
             self._write(self._zero_frame())
+
+        if intent is not None and time.perf_counter() - intent.produced_at > DEADMAN_TIMEOUT_S:
+            # Even a successful write may have consumed the remaining intent
+            # lifetime. Never append stale RC keys after backpressure.
+            intent = None
+            armed = False
+            self._write(self._zero_frame(), zero_frame=True)
 
         # 0x03：会覆盖驾驶员真实摇杆，所以只在已授权期间发；
         # 松杆后仅在下降沿补一次全零，之后彻底不再占用该通道。
@@ -593,27 +663,49 @@ class PolarLinkTransport:
         if self._estop_active and not zero_frame:
             self.dropped_by_estop = getattr(self, "dropped_by_estop", 0) + 1
             return
+        if self.timestamp.roll_detected:
+            self._estop_active = True
+            self._intent = None
+            self.connected = False
+            self.last_error = "时间戳回绕，停止输出；需重启机器人后重新连接"
+            self.last_error_code = "TIMESTAMP_ROLLOVER"
+            return
         if self.mock_writes:
             return
         if self._serial is None or not self.connected:
-            self.last_error = "机器人串口未连接"
-            self.last_error_code = "NOT_CONNECTED"
+            if not self.last_error_code:
+                self.last_error = "机器人串口未连接"
+                self.last_error_code = "NOT_CONNECTED"
             return
         try:
             written = self._serial.write(payload)
             if written != len(payload):
                 self.last_error = f"串口短写 {written}/{len(payload)}"
                 self.last_error_code = "STREAM_SHORT_WRITE"
-                self.connected = False
+                self._close_failed_stream()
                 return
             self.frames_sent += 1
             self.last_send_at = time.perf_counter()
         except Exception as exc:  # pragma: no cover
             self.last_error = str(exc)
-            self.connected = False
+            self.last_error_code = "STREAM_WRITE_FAILED"
+            self._close_failed_stream()
+
+    def _close_failed_stream(self) -> None:
+        stream, self._serial = self._serial, None
+        self.connected = False
+        if stream is not None:
+            try:
+                stream.close()
+            except Exception:
+                pass
 
     def _flush_zero_burst(self, *, blocking: bool) -> None:
-        """连续发若干个零帧，保证固件控制量被覆盖回 0。"""
+        """尽力连续发送零帧；断链/短写时不能保证固件收到或执行停车。
+
+        硬件部署必须有独立的固件过期归零看门狗；时间戳回绕时停止发送
+        也不能证明最后一条执行器指令已清除。
+        """
 
         count = 3 if blocking else 1
         for _ in range(count):
@@ -642,7 +734,7 @@ class PolarLinkTransport:
 
     def stats(self) -> dict[str, Any]:
         # 注意：本 dataclass 带 slots=True，没 __dict__，必须走 asdict()
-        return asdict(
+        data = asdict(
             PolarLinkStats(
                 connected=self.connected,
                 mock_writes=self.mock_writes,

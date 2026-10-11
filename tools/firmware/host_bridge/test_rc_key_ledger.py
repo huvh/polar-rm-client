@@ -108,7 +108,8 @@ def main() -> int:
     fresh_def = extract(usb, r"#define\s+VRC_FRESH_TIMEOUT_MS\s+[^\n]*\n", "VRC_FRESH_TIMEOUT_MS")
 
     tu = f"""
-#include <stdint.h>
+/* Fixed-width types come from the actual firmware struct_typedef.h.
+ * Host LP64 stdint.h uses a conflicting long for int64_t; do not mix both. */
 #include <stdio.h>
 #include <stdbool.h>
 
@@ -362,3 +363,4 @@ int main(void)
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

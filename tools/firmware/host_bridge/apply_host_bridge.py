@@ -38,6 +38,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from host_usb_receiver import patch_usb_task, patch_cdc
+
 MARK = "POLAR-HOST-BRIDGE"
 HEADER_NAME = "host_chassis_bridge.h"
 HERE = Path(__file__).resolve().parent
@@ -81,12 +84,16 @@ USB_SEND_CALL = f"""    // 发送ChassisState数据（{MARK}：自转状态回�
 """
 
 USB_RX_CASE = f"""                    case CHASSIS_CMD_DATA_RECEIVE_ID: {{  /* {MARK} */
-                        memcpy(
-                            &RECEIVE_CHASSIS_CMD_DATA,
-                            sof_address,
-                            sizeof(ReceiveDataChassisCmd_s));
-                        /* 收到即刷新新鲜度时刻；掉线判定在 GetChassisCmdData 里做，
-                         * 这样底盘文件不必看见 HAL_GetTick。 */
+                        /* Upstream must bound-check and CRC-check the COMPLETE frame.
+                         * Reject short/oversized typed bodies before fixed-size copy. */
+                        if (sof_address[1] != (uint8_t)(sizeof(ReceiveDataChassisCmd_s) - 6U) ||
+                            sof_address[8] > HOST_SPIN_CMD_OFF ||
+                            (sof_address[9] & 0xFEU) != 0U || sof_address[10] != 0U ||
+                            sof_address[11] != 0U) {{
+                            break;
+                        }}
+                        memcpy(&RECEIVE_CHASSIS_CMD_DATA, sof_address,
+                               sizeof(ReceiveDataChassisCmd_s));
                         HOST_SPIN_CMD_TIME = HAL_GetTick();
                     }} break;
 """
@@ -331,6 +338,12 @@ def apply_usb_task(path: Path, log: list) -> str:
         "usb_task.c: UsbSendData 挂上 ChassisState",
         log,
     )
+    # Refresh old injected receiver cases too: an idempotent skip must not retain
+    # the previous unchecked fixed-size memcpy after a template upgrade.
+    text = re.sub(
+        r'                    case CHASSIS_CMD_DATA_RECEIVE_ID: \{  /\* POLAR-HOST-BRIDGE \*/'
+        r'[\s\S]*?                    \} break;\n',
+        lambda _: USB_RX_CASE, text)
     text = _sub_once(
         text,
         r'case\s+VIRTUAL_RC_DATA_RECEIVE_ID\s*:\s*\{[\s\S]{0,300}?\}\s*break;\s*\n',
@@ -373,6 +386,7 @@ def apply_usb_task(path: Path, log: list) -> str:
         "usb_task.c: 驾驶键位改为记账合并（修松键粘住）",
         log,
     )
+    text = patch_usb_task(text)
     return original if text == original else text
 
 
@@ -484,10 +498,11 @@ def main(argv: list[str] | None = None) -> int:
     root: Path = args.firmware_root.resolve()
     usb = root / "application" / "communication" / "usb_task.c"
     typedef_dir = root / "application" / "typedef"
+    cdc = root / "Src" / "usbd_cdc_if.c"
     meca = root / "application" / "chassis" / "chassis_mecanum.c"
     omni = root / "application" / "chassis" / "chassis_omni.c"
 
-    for p in (usb, typedef_dir):
+    for p in (usb, typedef_dir, cdc):
         if not p.exists():
             print(f"[FAIL] 找不到 {p}\n       请确认传入的是 StandardRobot++ 仓库根目录")
             return 2
@@ -507,6 +522,12 @@ def main(argv: list[str] | None = None) -> int:
 
     rcrel = root / "application" / "other" / "remote_control.c"
     changed: list[tuple[Path, str]] = []
+
+    cdc_original = cdc.read_text(encoding="utf-8", errors="surrogateescape")
+    cdc_new = patch_cdc(cdc_original)
+    if cdc_new != cdc_original:
+        changed.append((cdc, cdc_new))
+        log.append("  [ok]   CDC callback: enqueue only delivered bytes with actual length")
 
     new_usb = apply_usb_task(usb, log)
     if new_usb != usb.read_text(encoding="utf-8", errors="surrogateescape"):
@@ -578,3 +599,4 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+

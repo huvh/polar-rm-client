@@ -145,6 +145,12 @@ def main() -> int:
         check("rc_ctrl 在定义处不是 static（否则 extern 链接失败）",
               re.search(r"^\s*static\s+RC_ctrl_t\s+rc_ctrl", rc, re.M) is None)
 
+        # The no-key macro now clears the real driver mouse ledger. This is a
+        # compile-only TU: use its actual declaration rather than an invented stub.
+        mouse_proto = (extract(rc, r"void HostKmClearDriverMouse\(void\);",
+                               "HostKmClearDriverMouse declaration")
+                       if "HostKmClearDriverMouse();" in macro else "")
+
         # 用固件真实头文件编译：RC_ctrl_t / VIRTUAL_RC_CTRL 类型全部来自固件定义
         tu = f"""
 /* 只依赖固件真实头文件，不伪造寄存器 */
@@ -170,6 +176,7 @@ volatile uint16_t HOST_RC_HOST_KEYS = 0;
 
 {func}
 
+{mouse_proto}
 {macro}
 static void probe_sero(RC_ctrl_t *rc_ctrl) {{ SPECIAL_CHANNEL_SET_SERO(); }}
 
@@ -257,3 +264,4 @@ int probe(void)
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

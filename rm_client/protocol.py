@@ -7,6 +7,9 @@ import struct
 SOF = 0xA5
 CRC8_INIT = 0xFF
 CRC16_INIT = 0xFFFF
+# Largest documented RM2026 serial payload (0x0310 CustomByteBlock).
+# Reject impossible headers before waiting for their advertised payload.
+MAX_REFEREE_PAYLOAD = 300
 
 
 @dataclass
@@ -28,6 +31,11 @@ class RefereeFrameCodec:
         self.seq = 0
 
     def encode(self, cmd_id: int, data: bytes = b"", seq: int | None = None) -> bytes:
+        data = bytes(data)
+        if not 0 <= cmd_id <= 0xFFFF:
+            raise ValueError("cmd_id must fit uint16")
+        if len(data) > MAX_REFEREE_PAYLOAD:
+            raise ValueError("referee payload exceeds 300 bytes")
         seq_value = self._next_seq() if seq is None else seq & 0xFF
         header = bytearray([SOF])
         header.extend(len(data).to_bytes(2, "little"))
@@ -48,15 +56,20 @@ class RefereeFrameCodec:
         """解码完整帧，并返回已消费字节偏移（供流式读取保留半帧）。"""
         frames: list[RefereeFrame] = []
         index = 0
-        while index + 9 <= len(stream):
+        while index < len(stream):
             if stream[index] != SOF:
                 index += 1
                 continue
+            if index + 5 > len(stream):
+                break
             header = stream[index : index + 5]
             if crc8(header[:4]) != header[4]:
                 index += 1
                 continue
             data_len = int.from_bytes(header[1:3], "little")
+            if data_len > MAX_REFEREE_PAYLOAD:
+                index += 1
+                continue
             total_len = 5 + 2 + data_len + 2
             if index + total_len > len(stream):
                 break
@@ -114,7 +127,7 @@ def encode_custom_control_30(
     """官方 CustomControl / cmd_id 0x0311 使用的紧凑载荷。
 
     官方容器最多允许 30 字节。真实机器人固件协议定稿前，
-    这里先保留一份已记录的队内 13 字节本地格式。
+    这里先保留一份已记录的队内 12 字节本地格式，并补零到 30 字节。
     """
 
     flags = 0x01 if spin_mode else 0x00

@@ -118,7 +118,7 @@ typedef char HOST_KM_STATIC_ASSERT_pack[(sizeof(prm1_km_cmd_t) == 26) ? 1 : -1];
  * 与收包顺序），本文件的仲裁函数只读它做新鲜度判断。
  */
 extern volatile uint32_t HOST_KM_RX_TIME;
-extern volatile uint32_t HOST_KM_RX_COUNT;
+extern volatile uint32_t HOST_KM_RX_COUNT; /* accepted canonical PRM1 KM payloads only */
 
 /**
  * @brief 图传键鼠是否新鲜
@@ -148,8 +148,9 @@ void HostKmApplyDriverFrameMouse(RC_ctrl_t *rc);
 
 /**
  * @brief 从**别的来源**灌一帧 0x0311 载荷（给"包没走裁判口"这种情况留的接口）
- * @param payload 指向 30 字节以内的载荷（PRM1 kind=3），长度不足按实际长度拷
+ * @param payload 完整 PRM1 kind=3，26..30 字节；截断/非法帧不更新邮箱与新鲜度
  * @param len     字节数
+ * @return 1=accepted canonical KM payload (including alive=0), 0=rejected
  *
  * 为什么必须有这个口：官方《2026 通信协议》表 1-1 写 `图传发送端←→机器人 921600`，
  * 1.1 节写图传链路"从图传模块（发送端）的串口接收数据"，而本板裁判口是
@@ -158,10 +159,10 @@ void HostKmApplyDriverFrameMouse(RC_ctrl_t *rc);
  * 修法就是"把真正带着图传链路的那一路串口接进来，然后对它收到的载荷调用本函数"，
  * 不用动仲裁、不用动掩码、不用动客户端。
  *
- * 语义与 referee.c 收到 0x0311 完全一致：写收件箱 + 记到达时刻 + 计数，
+ * 语义与 referee.c 收到 0x0311 完全一致：仅合法 kind=3 写收件箱 + 记到达时刻 + 计数，
  * 新鲜度门控与五档仲裁照旧生效。
  */
-void HostKmFeed(const uint8_t *payload, uint16_t len);
+uint8_t HostKmFeed(const uint8_t *payload, uint16_t len);
 
 /**
  * @brief 字节流级接收：把"任何来源交给我的原始字节"喂进来，自己拆 0xA5 裁判帧。
@@ -260,3 +261,4 @@ extern void ModifyDebugDataPackage(uint8_t index, float data, const char *name);
 #endif
 
 #endif /* HOST_KM_LINK_H */
+

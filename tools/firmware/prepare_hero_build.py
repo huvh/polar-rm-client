@@ -29,9 +29,12 @@ import sys
 import tempfile
 from pathlib import Path
 
+HERE = Path(__file__).resolve().parent
+# Also support importlib callers outside this directory (offline DT7 review).
+if str(HERE) not in sys.path:
+    sys.path.insert(0, str(HERE))
 from file_guard import FileJournal, SnapshotError
 
-HERE = Path(__file__).resolve().parent
 PATCH = HERE / "polar-virtual-rc-drive-keys.patch"
 BASELINE_COMMIT = "2722e0d"
 ROBOT_PARAM_REL = "application/robot_param.h"
@@ -125,6 +128,7 @@ DEFAULT_MOUSE_SENS = "20000"
 
 OWNED = {
     ROBOT_PARAM_REL, USB_REL, RC_REL,
+    "Src/usbd_cdc_if.c",  # bounded USB RX callback ingress installed by host_bridge
     MECA_REL, OMNI_REL, HOST_BRIDGE_HEADER_REL, GIMBAL_REL,
     # km_link 会改 referee.c（记 0x0311 到达时刻）并新增一个头文件。
     # 不登记进 OWNED 的话，第二次跑 prepare 会被 check_clean 当成
@@ -601,8 +605,11 @@ def verify_changes(repo: Path, step: Step, want_rc: str = 'dt7',
          re.search(r"#define\s+VRC_DRIVE_KEY_MASK\s+\(\(uint16_t\)0x001F\)", usb) is not None),
         ("新鲜度门控存在（150ms）", "VRC_FRESH_TIMEOUT_MS 150" in usb),
         ("1ms 循环里调用了合并函数", "UsbMergeVirtualRcKeys();" in usb),
-        ("0x03 接收时记录新鲜时刻",
-         "VIRTUAL_RC_RECEIVE_TIME = HAL_GetTick();" in usb),
+        ("0x03 接收时记录真实回调到达时刻",
+         "VIRTUAL_RC_RECEIVE_TIME = received_at;" in usb
+         and "received_at = host_usb_queue_time[host_usb_tail];" in usb
+         and "host_usb_queue_time[host_usb_head] = received_at;" in usb
+         and "received_at = HAL_GetTick();" in usb),
         ("ET08A 置零宏不再抹 key.v（竞态修复）",
          re.search(r"#define\s+SPECIAL_CHANNEL_SET_SERO\(\)[^#]*?key\.v\s*=\s*0", rc, re.S) is None),
         ("同一宏仍保留鼠标置零", "rc_ctrl->mouse.press_r = 0;" in rc),
@@ -943,3 +950,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

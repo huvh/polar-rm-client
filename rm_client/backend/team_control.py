@@ -67,11 +67,13 @@ def encode_km_control_payload(
 def decode_km_control_payload(data: bytes) -> dict | None:
     """Mirror the firmware PRM1 gate and byte order, independent of referee year."""
     data = bytes(data)
-    if len(data) < TEAM_CONTROL_KM_SIZE:
+    if not TEAM_CONTROL_KM_SIZE <= len(data) <= 30:
         return None
     (magic, version, kind, seq, keys, mx, my, mz, buttons, flags,
      _res) = struct.unpack(TEAM_CONTROL_KM_FORMAT, data[:TEAM_CONTROL_KM_SIZE])
     if magic != TEAM_CONTROL_MAGIC or version != TEAM_CONTROL_VERSION or kind != TEAM_CONTROL_KM:
+        return None
+    if buttons & ~0x07 or flags & ~0x01 or any(_res) or any(data[TEAM_CONTROL_KM_SIZE:]):
         return None
     return {
         "sequence": seq,

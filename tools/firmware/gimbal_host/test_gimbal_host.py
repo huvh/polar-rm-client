@@ -77,7 +77,7 @@ def run_link_behavior(usb_text: str, inc_dirs: list[str]) -> None:
     fn = extract(usb_text, r"static void GetChassisCmdData\(void\)\s*\r?\n\{.*?\r?\n\}", "GetChassisCmdData")
     beh = """
 #include <stdio.h>
-#include <stdint.h>
+/* Fixed-width types come from the actual firmware headers (avoid LP64 conflicts). */
 #include "usb_typdef.h"
 #include "host_chassis_bridge.h"
 
@@ -292,3 +292,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

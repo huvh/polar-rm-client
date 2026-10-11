@@ -100,9 +100,9 @@ TELEMETRY_FIXED_BYTES = _FIXED.size  # 76 bytes; Rust's outer guard is 74.
 def parse_vehicle_telemetry(data: bytes | bytearray | memoryview) -> VehicleTelemetry | None:
     """Decode one strict ``PDL1`` record, returning ``None`` when malformed.
 
-    The validation mirrors rm-native-viewer's Rust parser: version 1 only,
-    a declared structure length of at least 74 bytes and no read beyond the
-    supplied block.  Non-finite floats are rejected here because downstream
+    Version 1 requires all 76 fixed bytes inside the declared structure,
+    even when an older producer's outer guard accepts 74 bytes. No field may
+    read beyond the declared record or supplied block. Non-finite floats are rejected because downstream
     aiming math must fail closed rather than propagate NaN/Inf.
     """
 
@@ -140,7 +140,7 @@ def parse_vehicle_telemetry(data: bytes | bytearray | memoryview) -> VehicleTele
     ) = unpacked
     if magic != TELEMETRY_MAGIC or version != TELEMETRY_VERSION:
         return None
-    if struct_bytes < TELEMETRY_MIN_BYTES or struct_bytes > len(view):
+    if struct_bytes < TELEMETRY_FIXED_BYTES or struct_bytes > len(view):
         return None
     floats = (yaw, yaw_vel, pitch, pitch_vel, bullet_speed, q0, q1, q2, q3)
     if not all(math.isfinite(value) for value in floats):

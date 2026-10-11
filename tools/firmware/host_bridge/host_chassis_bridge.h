@@ -45,6 +45,10 @@ extern "C" {
 /* 下行 0x01..0x1E 已被占用(见 usb_typdef.h:16-46)，0x1F 起空闲 */
 #define CHASSIS_STATE_DATA_SEND_ID ((uint8_t)0x1F)
 
+/* Called by the generated CDC callback bundle; no UART binding is implied. */
+void HostUsbRxPush(const uint8_t *bytes, uint32_t len);
+void HostUsbRxReset(void);
+
 /*--------------------------- 指令取值 ---------------------------*/
 /*
  * 只保留"开"和"关"两种，刻意不提供"翻转"。
@@ -83,7 +87,7 @@ extern "C" {
 typedef struct
 {
     uint8_t spin_cmd;  /* HOST_SPIN_CMD_* */
-    uint8_t param0;    /* 预留：自转方向 */
+    uint8_t param0;    /* bit0: optional gimbal-host request; all other bits reserved */
     uint8_t param1;    /* 预留：自转速度档 */
     uint8_t reserved;
 } __packed__ ChassisCmd_t;
@@ -247,3 +251,4 @@ extern volatile uint16_t HOST_RC_KM_KEYS;
 #endif
 
 #endif /* HOST_CHASSIS_BRIDGE_H */
+

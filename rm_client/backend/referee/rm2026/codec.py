@@ -399,21 +399,24 @@ def decode_message(name: str, payload: bytes) -> dict[str, Any]:
     - 成功时附带 __present__（实际出现的字段号集合），供状态层避免
       把“缺字段的默认值 0”当作有效数据覆盖本地状态
     """
-    decoder = _DOWNLINK_DECODERS.get(str(name).strip())
+    name = str(name).strip()
+    decoder = _DOWNLINK_DECODERS.get(name)
     if decoder is None:
         return {}
     try:
-        validate_message(str(name).strip(), bytes(payload), FIELDS)
+        validate_message(name, bytes(payload), FIELDS)
     except InvalidRefereePayload:
         return {}
     fields = decode_fields(bytes(payload))
-    if not fields or not set(fields).intersection(FIELDS[str(name).strip()]):
+    if not fields or not set(fields).intersection(FIELDS[name]):
         return {}
     # Unknown enum values are not authority to enter a phase/video mode.
     if name == "GameStatus" and 5 in fields and _u(fields, 5) not in range(6):
         return {}
     if name == "DeployModeStatusSync" and 1 in fields and _u(fields, 1) not in {0, 1}:
         return {}
+    if name == "CustomByteBlock" and len(_b(fields, 1)) > 300:
+        return {}  # 0x0310 is bounded independently of the protobuf envelope.
     data = decoder(fields)
     data["__present__"] = frozenset(fields.keys())
     return data

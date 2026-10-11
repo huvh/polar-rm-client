@@ -42,7 +42,7 @@
 
 环境前提（docstring 记录，见任务约束）
 --------------------------------------
-- Windows + 本仓 ``.venv``（Python 3.12/3.13，PySide6），QT_QPA_PLATFORM=
+- Windows / Linux + 本仓 ``.venv``（Python 3.12/3.13，PySide6），QT_QPA_PLATFORM=
   offscreen。offscreen 无 GL，QOpenGLWidget 会打
   ``QOpenGLWidget is not supported on this platform`` 警告，CPU 兼容路径
   可正常构造（与 tests/smoke_test.py 同一手法）；GL 相关成员以实际能构造
@@ -219,9 +219,11 @@ def _member_entry(window: object, name: str) -> dict:
 
     # 找到定义该名字的最派生类条目，用于区分 property / staticmethod / descriptor
     cls_attr = None
+    owner = None
     for klass in type(window).__mro__:
         if name in vars(klass):
             cls_attr = vars(klass)[name]
+            owner = klass
             break
 
     if isinstance(cls_attr, property):
@@ -241,7 +243,12 @@ def _member_entry(window: object, name: str) -> dict:
             kind = "callable"  # PySide6 SignalInstance / functools.partial 等
         qualname = getattr(value, "__qualname__", None)
         sig = qualname if qualname else _clean_repr(value)
-        return {"kind": kind, "type": type(value).__name__, "sig": sig}
+        entry = {"kind": kind, "type": type(value).__name__, "sig": sig}
+        if name in QT_OPTIONAL_MEMBERS:
+            # Legacy baseline predates provider metadata. New captures identify
+            # the defining class so an application override is never exempted.
+            entry["provider"] = getattr(owner, "__module__", "")
+        return entry
     if cls_attr is not None and hasattr(cls_attr, "__get__") and not hasattr(cls_attr, "__set__"):
         return _maybe_mark_volatile(
             name, value,
@@ -349,19 +356,54 @@ def collect_baseline_snapshot() -> dict:
 # 对比
 # ---------------------------------------------------------------------------
 
+# These exact built-in members vary across the Qt versions used to capture
+# the Windows baseline and run Linux CI. All other inherited APIs stay frozen.
+QT_OPTIONAL_MEMBERS = frozenset({
+    "accessibleIdentifier", "isQmlExposed", "setAccessibleIdentifier",
+})
+
+
+def _known_optional_qt_member(name: str, entry: dict) -> bool:
+    return (
+        name in QT_OPTIONAL_MEMBERS
+        and entry.get("kind") == "callable"
+        and entry.get("type") == "builtin_function_or_method"
+        and entry.get("sig") == f"PolarRMWindow.{name}"
+        and entry.get("provider", "PySide6.QtWidgets") in {
+            "PySide6.QtWidgets", "PySide6.QtCore",
+        }
+        and not entry.get("volatile")
+    )
+
+
+def _portable_member(name: str, entry: dict) -> dict:
+    # Only the workspace's concrete pathlib implementation is OS-dependent.
+    # Strings, other attributes, mismatched signatures, and kind changes fail.
+    if (name == "workspace" and entry.get("kind") == "plain-attribute"
+            and entry.get("type") in {"WindowsPath", "PosixPath"}
+            and entry.get("sig") == entry.get("type")):
+        return {**entry, "type": "Path", "sig": "Path"}
+    return entry
+
+
 def diff_snapshots(baseline: dict, current: dict) -> dict:
     """逐一报告 新增 / 缺失 / 类型种类变化 / 签名变化。"""
     base_members: dict = baseline.get("members", {})
     curr_members: dict = current.get("members", {})
-    added = sorted(set(curr_members) - set(base_members))
-    missing = sorted(set(base_members) - set(curr_members))
-    kind_changed, sig_changed = [], []
+    added = sorted(name for name in set(curr_members) - set(base_members)
+                   if not _known_optional_qt_member(name, curr_members[name]))
+    missing = sorted(name for name in set(base_members) - set(curr_members)
+                     if not _known_optional_qt_member(name, base_members[name]))
+    kind_changed, type_changed, sig_changed = [], [], []
     for name in sorted(set(base_members) & set(curr_members)):
-        b, c = base_members[name], curr_members[name]
+        b = _portable_member(name, base_members[name])
+        c = _portable_member(name, curr_members[name])
         volatile = b.get("volatile") or c.get("volatile")
         if not volatile and b.get("kind") != c.get("kind"):
             kind_changed.append((name, b.get("kind"), c.get("kind")))
-        elif not volatile and b.get("kind") == c.get("kind") and b.get("sig") != c.get("sig"):
+        if not volatile and b.get("type") != c.get("type"):
+            type_changed.append((name, b.get("type"), c.get("type")))
+        if not volatile and b.get("kind") == c.get("kind") and b.get("sig") != c.get("sig"):
             sig_changed.append((name, b.get("sig"), c.get("sig")))
 
     base_syms: dict = baseline.get("module_symbols", {})
@@ -378,6 +420,7 @@ def diff_snapshots(baseline: dict, current: dict) -> dict:
         "added": added,
         "missing": missing,
         "kind_changed": kind_changed,
+        "type_changed": type_changed,
         "sig_changed": sig_changed,
         "module_missing": sym_missing,
         "module_added": sym_added,
@@ -399,6 +442,8 @@ def format_diff(diffs: dict) -> str:
         lines.append(f"[成员缺失] {len(diffs['missing'])}: {diffs['missing']}")
     for name, b, c in diffs["kind_changed"]:
         lines.append(f"[类型种类变化] {name}: {b} -> {c}")
+    for name, b, c in diffs["type_changed"]:
+        lines.append(f"[类型变化] {name}: {b} -> {c}")
     for name, b, c in diffs["sig_changed"]:
         lines.append(f"[签名变化] {name}: {b!r} -> {c!r}")
     if not lines:
@@ -412,6 +457,7 @@ def is_clean(diffs: dict) -> bool:
             diffs["added"],
             diffs["missing"],
             diffs["kind_changed"],
+            diffs["type_changed"],
             diffs["sig_changed"],
             diffs["module_missing"],
             diffs["module_changed"],
@@ -550,3 +596,4 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

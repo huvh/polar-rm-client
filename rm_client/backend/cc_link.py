@@ -93,12 +93,13 @@ def load_key_usage(path: str | None = None) -> dict[str, int]:
         raw = json.loads(fp.read_text(encoding="utf-8-sig"))
     except FileNotFoundError:
         return table
-        raw = {}    # unreachable, kept for clarity
     except Exception:
         return table
-    for k, v in (raw or {}).items():
+    if not isinstance(raw, dict):
+        return table
+    for k, v in raw.items():
         key = str(k).upper()
-        if key.startswith("_") or not isinstance(v, int) or not 0 <= v <= 0xFF:
+        if key.startswith("_") or isinstance(v, bool) or not isinstance(v, int) or not 0 <= v <= 0xFF:
             continue
         table[key] = v
     return table
@@ -118,7 +119,7 @@ def encode_cc_frame(cmd_id: int, payload: bytes, seq: int) -> bytes:
     `data_length` 只算 cmd_id 之后的载荷（见模块文档里那步算术）。
     """
     payload = bytes(payload)
-    if not 0 <= cmd_id <= 0xFFFF:
+    if isinstance(cmd_id, bool) or not isinstance(cmd_id, int) or not 0 <= cmd_id <= 0xFFFF:
         raise ValueError(f"cmd_id 超出 2 字节：{cmd_id!r}")
     if len(payload) > MAX_DATA_LENGTH:
         raise ValueError(f"载荷 {len(payload)} 字节，超过 {MAX_DATA_LENGTH}")
@@ -140,7 +141,7 @@ def encode_keymouse_0306(*, key1: int = 0, key2: int = 0,
     注意两个坑，都是这份文档自己写明的：
       * 鼠标是**绝对像素坐标**（不是增量），所以调用方必须自己把
         相对位移攒成绝对位置，见 `VirtualCursor`；
-      * 只有 2 键无冲，按下第 3 个键必须丢掉一个（这里按"后到的赢"处理，
+      * 只有 2 键无冲，按下第 3 个键必须丢掉一个（这里保留先到的两个不同键值，
         并在 `keys_to_two_usages` 里把溢出报出来，绝不静默丢驾驶指令）。
     """
     if not (0 <= key1 <= 0xFF and 0 <= key2 <= 0xFF):
@@ -164,6 +165,7 @@ def keys_to_two_usages(names, table=None) -> tuple[int, int, list[str]]:
     静默丢掉第三个键 = 驾驶员想小陀螺却没进，现场极难查。
     """
     codes: list[int] = []
+    seen: set[int] = set()
     dropped: list[str] = []
     if table is None:
         table = load_key_usage()
@@ -175,13 +177,15 @@ def keys_to_two_usages(names, table=None) -> tuple[int, int, list[str]]:
         if code is None or code == 0:
             dropped.append(key)
             continue
-        if code not in codes:
-            codes.append(code)
-    if len(codes) > 2:
-        # 报**键名**：现场看日志的人要想知道"我按的哪个键没生效"，
-        # 给一个 HID 编码数字没用。
-        dropped.extend(str(n) for n in names[2:])
-        codes = codes[:2]
+        if isinstance(code, bool) or not isinstance(code, int) or not 0 <= code <= 0xFF:
+            dropped.append(key)
+            continue
+        if code not in seen:
+            seen.add(code)
+            if len(codes) < 2:
+                codes.append(code)
+            else:
+                dropped.append(key)
     while len(codes) < 2:
         codes.append(0)
     return codes[0], codes[1], dropped
@@ -349,7 +353,7 @@ def decode_cc_frame(frame: bytes) -> dict | None:
     if frame[0] != SOF:
         return None
     (data_len,) = struct.unpack_from("<H", frame, 1)
-    if crc8(frame[:4]) != frame[4]:
+    if data_len > MAX_DATA_LENGTH or crc8(frame[:4]) != frame[4]:
         return None
     total = HEADER_SIZE + CMD_ID_SIZE + data_len + CRC16_SIZE
     if len(frame) != total:

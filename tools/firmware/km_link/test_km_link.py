@@ -53,7 +53,7 @@ def grab(text: str, pattern: str, label: str) -> str:
 
 
 TU = r"""
-#include <stdint.h>
+/* Use firmware fixed-width typedefs from remote_control.h, not host LP64 stdint.h. */
 #include <stdio.h>
 #include <string.h>
 
@@ -124,6 +124,8 @@ static const char *dbg_name(uint8_t index)
     return "";
 }
 
+#define HOST_KM_CRITICAL_ENTER() 0U
+#define HOST_KM_CRITICAL_EXIT(saved) ((void)(saved))
 @@IMPL@@
 
 static int fails = 0;
@@ -158,7 +160,7 @@ static void put_km(uint16_t keys, int16_t mx, int16_t my, uint8_t btn)
     memset(&p, 0, sizeof(p));
     p.magic[0] = 'P'; p.magic[1] = 'R'; p.magic[2] = 'M'; p.magic[3] = '1';
     p.version = PRM1_VERSION; p.kind = PRM1_KIND_KM;
-    p.seq = 7; p.keys = keys; p.mouse_x = mx; p.mouse_y = my; p.buttons = btn;
+    p.flags = 1; p.seq = 7; p.keys = keys; p.mouse_x = mx; p.mouse_y = my; p.buttons = btn;
     put_bytes((const uint8_t *)&p, (int)sizeof(p));
 }
 
@@ -342,7 +344,7 @@ int main(void)
         via_feed.magic[0] = 'P'; via_feed.magic[1] = 'R';
         via_feed.magic[2] = 'M'; via_feed.magic[3] = '1';
         via_feed.version = PRM1_VERSION; via_feed.kind = PRM1_KIND_KM;
-        via_feed.seq = 99; via_feed.keys = (uint16_t)(K_W | K_SHIFT);
+        via_feed.flags = 1; via_feed.seq = 99; via_feed.keys = (uint16_t)(K_W | K_SHIFT);
         via_feed.mouse_x = 7; via_feed.mouse_y = -9;
         HostKmFeed((const uint8_t *)&via_feed, (uint16_t)sizeof(via_feed));
         eq("HostKmFeed 也记到达计数", (unsigned)HOST_KM_RX_COUNT, rx_before + 1u);
@@ -392,6 +394,9 @@ int main(void)
         frame[REF_PROTOCOL_HEADER_SIZE + REF_PROTOCOL_CMD_SIZE + 1] = 'R';
         frame[REF_PROTOCOL_HEADER_SIZE + REF_PROTOCOL_CMD_SIZE + 2] = 'M';
         frame[REF_PROTOCOL_HEADER_SIZE + REF_PROTOCOL_CMD_SIZE + 3] = '1';
+        frame[REF_PROTOCOL_HEADER_SIZE + REF_PROTOCOL_CMD_SIZE + 4] = PRM1_VERSION;
+        frame[REF_PROTOCOL_HEADER_SIZE + REF_PROTOCOL_CMD_SIZE + 5] = PRM1_KIND_KM;
+        frame[REF_PROTOCOL_HEADER_SIZE + REF_PROTOCOL_CMD_SIZE + 17] = 1U;
         append_CRC8_check_sum(frame, (unsigned int)REF_PROTOCOL_HEADER_SIZE);
         append_CRC16_check_sum(frame, (uint32_t)total);
 
@@ -413,10 +418,7 @@ int main(void)
         eq("一次一字节也要能拼出同一帧", (unsigned)HOST_KM_FRAME_OK, ok_before + 1u);
         eq("拼出来照样记账", (unsigned)HOST_KM_RX_COUNT, rx_before + 1u);
 
-        /* 噪声：垃圾字节 + 一个**自己就会失败掉**的坏帧头（crc8 不对）。
-         * 注意不能拿"以 0xA5 结尾的噪声"当用例：那会吃掉随后真帧的帧头，
-         * 而这是所有不回填的流式重同步的固有行为（官方 referee 接收机同样如此），
-         * 不是本实现的缺陷。坏头自己消化完，真帧才应该对齐。 */
+        /* Noise followed by a valid frame must recover without losing its SOF. */
         {
             static const uint8_t noise[13] = {'j', 'u', 'n', 'k', 'j', 'u', 'n', 'k',
                                               0xA5, 0x01, 0x02, 0x03, 0x04};
@@ -540,7 +542,7 @@ def build_tu(impl: str, hdr_defs: str, policy: str, fire: bool, negative: bool,
         n1 = body.count("rc_ctrl.key.v = HOST_RC_MERGED_KEYS();")
         body = body.replace("rc_ctrl.key.v = HOST_RC_MERGED_KEYS();",
                             "rc_ctrl.key.v = HOST_RC_KM_KEYS;")
-        body = body.replace("&& HOST_KM_IS_FRESH()", "&& (1)")
+        body = body.replace("(uint32_t)(now - received_at) > KM_LINK_VALID_MS", "0")
         assert n1 >= 1 and body != impl, "阴性对照没能改写实现（锚点变了）"
     mask = ("(KM_KEY_MASK_DRIVE | KM_KEY_MASK_FIRE)" if fire else "KM_KEY_MASK_DRIVE")
     from rm_client.backend import protocol as pr  # 真客户端编码器
@@ -727,3 +729,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+

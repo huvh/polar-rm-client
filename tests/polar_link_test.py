@@ -42,18 +42,17 @@ def check(name: str, ok: bool, detail: str = "") -> None:
 def load_team_crc():
     """尽力加载队内参考实现；缺失时返回 None（对拍降级为跳过，不算失败）。"""
 
-    candidates = [
+    explicit = os.environ.get("POLAR_TEAM_CRC_REFERENCE")
+    if explicit and not os.path.isfile(explicit):
+        raise FileNotFoundError(f"Configured POLAR_TEAM_CRC_REFERENCE does not exist: {explicit}")
+    candidates = [explicit] if explicit else [
         os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            os.pardir,
-            "tmp_polarbear",
-            "Serial_Port_Assistant",
-            "lib",
+            os.pardir, "tmp_polarbear", "Serial_Port_Assistant", "lib", "CRC8_CRC16.py",
         ),
     ]
-    for folder in candidates:
-        path = os.path.join(folder, "CRC8_CRC16.py")
-        if os.path.exists(path):
+    for path in candidates:
+        if os.path.isfile(path):
             import importlib.util
 
             spec = importlib.util.spec_from_file_location("team_crc_ref", path)
@@ -579,3 +578,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

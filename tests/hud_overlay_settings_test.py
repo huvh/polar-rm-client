@@ -180,23 +180,18 @@ def test_crosshair_heat_color_is_ratio_safe() -> None:
 
     # 开关缺失时按默认（开启）处理，不得抛异常。
     # 上一版这里写了 `check(..., True)` —— 恒真断言，无论代码怎么错都会 PASS。
-    removed = False
-    mod = self_crosshair = host.registry.get("Crosshair")
-    try:
-        mod.settings.pop("Heat Color")
-        removed = "Heat Color" not in dict(getattr(mod.settings, "items", lambda: {})())
-    except (TypeError, KeyError, ValueError, AttributeError):
-        pass
+    mod = host.registry.get("Crosshair")
+    setting = mod.get_setting("Heat Color")
+    assert setting is not None, "fixture must contain Heat Color before removal"
+    mod.settings.remove(setting)
+    assert mod.get_setting("Heat Color") is None, "missing-setting branch must really run"
     try:
         got = host.crosshair_color()
-        if removed:
-            # 真断言：必须拿到默认开启时的热量色，而不是返个 None 或抛异常
-            check("设置项缺失时回退到默认（热量色）而不抛异常",
-                  str(got).startswith("heat-color"), str(got))
-        else:
-            print("  [SKIP] 无法移除设置项（容器不支持 pop），本条未验证")
+        check("设置项缺失时回退到默认（热量色）而不抛异常",
+              str(got).startswith("heat-color"), str(got))
     except Exception as exc:  # noqa: BLE001
         check("设置项缺失时回退到默认（热量色）而不抛异常", False, repr(exc))
+
 
 
 def test_renderer_cpu_choice_blocks_gpu_path() -> None:
@@ -264,10 +259,11 @@ def test_armor_boxes_toggle_does_not_step_on_other_switches() -> None:
           host2.robot_armor_boxes_visible() is True)
 
     host3 = OverlayHost()
-    try:
-        host3.registry.get("RobotOverlay").settings.pop("Armor Boxes")
-    except (TypeError, KeyError, ValueError, AttributeError):
-        pass
+    mod = host3.registry.get("RobotOverlay")
+    setting = mod.get_setting("Armor Boxes")
+    assert setting is not None, "fixture must contain Armor Boxes before removal"
+    mod.settings.remove(setting)
+    assert mod.get_setting("Armor Boxes") is None, "missing-setting branch must really run"
     check("查不到设置项时保持显示（接线不改变现有观感）",
           host3.robot_armor_boxes_visible() is True)
 
@@ -333,3 +329,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
