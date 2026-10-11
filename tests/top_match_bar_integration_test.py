@@ -252,7 +252,8 @@ class ControllerIntegrationTests(unittest.TestCase):
         self.assertFalse(self.controller.visible())
         self.owner.overlay_coordinator.modal = None
         self.owner.minecraft_hud_active = lambda: True
-        self.assertFalse(self.controller.visible())
+        self.assertTrue(self.controller.visible())
+        self.assertTrue(self.controller.owns_progress())
 
     def test_layout_respects_map_and_dynamic_island(self):
         self.paint()

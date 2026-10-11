@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+import math
+from typing import Any
 
 
 class OverlayKind(str, Enum):
@@ -13,6 +15,15 @@ class OverlayKind(str, Enum):
     RADIAL = "radial"
 
 
+@dataclass(frozen=True)
+class TopHudSafeArea:
+    """A centered HUD-logical corridor, shared by CS cards and BF6 progress."""
+
+    top: float
+    inset: float
+    bottom: float
+
+
 @dataclass
 class OverlayCoordinator:
     """Own the input priority and exclusivity of interactive HUD overlays."""
@@ -20,6 +31,44 @@ class OverlayCoordinator:
     modal: OverlayKind | None = None
     chat_input: bool = False
     radial_active: bool = False
+
+    @staticmethod
+    def top_hud_safe_area(
+        width: float, height: float, *, top: float, inset: float,
+        minecraft_layout: Any = None, hud_scale: float = 1.0,
+        dynamic_island: bool = True, tactical_map: bool = True,
+    ) -> TopHudSafeArea:
+        """Reserve MC chrome without changing its pixels, cache or hit targets.
+
+        MC returns viewport coordinates before the HUD painter's transform.
+        Convert once by HUD scale; devicePixelRatio is already handled by Qt.
+        Keeping both side insets equal preserves the viewport-centered clock.
+        """
+        values = (width, height, top, inset, hud_scale)
+        if any(isinstance(v, bool) or not isinstance(v, (float, int)) or
+               not math.isfinite(v) for v in values):
+            raise ValueError("top HUD geometry must be finite")
+        if min(width, height, hud_scale) <= 0 or min(top, inset) < 0:
+            raise ValueError("invalid top HUD geometry")
+        bottom = min(height - 12.0, height * .48)
+        if minecraft_layout is None:
+            return TopHudSafeArea(top, inset, bottom)
+        if not dynamic_island:
+            # Boss titles lie above the sprites; the last sprite's bottom is
+            # the bottom of the complete three-bar stack.
+            top = max(top, *(rect.bottom() / hud_scale + 8.0
+                             for rect in minecraft_layout.boss_bars))
+        status_top = min(rect.top() for rect in minecraft_layout.armor)
+        bottom = min(bottom, (status_top - 8.0 * minecraft_layout.scale) / hud_scale)
+        score = minecraft_layout.scoreboard
+        if score.bottom() / hud_scale > top and score.top() / hud_scale < bottom:
+            inset = max(inset, width - score.left() / hud_scale + 10.0)
+        if not tactical_map:
+            # The six vanilla effect tiles are drawn only without TacticalMap.
+            effects = minecraft_layout.effects_origin
+            if (effects.y() + 24.0 * minecraft_layout.scale) / hud_scale > top and effects.y() / hud_scale < bottom:
+                inset = max(inset, (effects.x() + 154.0 * minecraft_layout.scale) / hud_scale + 10.0)
+        return TopHudSafeArea(top, inset, bottom)
 
     def request_modal(self, kind: OverlayKind) -> OverlayKind | None:
         previous = self.modal

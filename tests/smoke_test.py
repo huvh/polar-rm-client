@@ -3901,6 +3901,7 @@ def test_minecraft_hud_keeps_client_overlay_stack() -> None:
         window._vision_source = "Local"
 
         window.minecraft_hud.draw = lambda *_args, **_kwargs: calls.add("minecraft")
+        window.top_match_bar.paint = lambda *_args, **_kwargs: calls.add("top_match_bar")
         window.draw_watermark = lambda *_args, **_kwargs: calls.add("watermark")
         window.paint_combat_target_overlay = lambda *_args, **_kwargs: calls.add("target")
         window.draw_dynamic_island = lambda *_args, **_kwargs: calls.add("island")
@@ -3945,6 +3946,7 @@ def test_minecraft_hud_keeps_client_overlay_stack() -> None:
         assert len(window._elide_cache) <= 4096
         assert {
             "minecraft",
+            "top_match_bar",
             "watermark",
             "target",
             "island",
