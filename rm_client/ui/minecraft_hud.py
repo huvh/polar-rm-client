@@ -171,14 +171,6 @@ class MinecraftCombatHudRenderer:
         "food_half",
         "food_full",
         "effect_background",
-        "boss_red_background",
-        "boss_red_progress",
-        "boss_blue_background",
-        "boss_blue_progress",
-        "boss_yellow_background",
-        "boss_yellow_progress",
-        "boss_green_background",
-        "boss_green_progress",
     )
 
     def __init__(self, asset_root: Path) -> None:
@@ -221,7 +213,8 @@ class MinecraftCombatHudRenderer:
             QRectF(hotbar.right() - (index + 1) * 8 * scale - scale, hearts_y, 9 * scale, 9 * scale)
             for index in range(10)
         )
-        boss = tuple(QRectF((width - 182 * scale) // 2, (15 + index * 15) * scale, 182 * scale, 5 * scale) for index in range(3))
+        # Retain the layout field for consumers, but reserve no boss-bar space.
+        boss: tuple[QRectF, ...] = ()
         lines = tuple(str(line) for line in scoreboard_lines)
         logical_score_w = max((self.styled_font.width(line) for line in lines), default=104)
         score_w = max(112, logical_score_w + 8) * scale
@@ -231,9 +224,7 @@ class MinecraftCombatHudRenderer:
         # rather than vertically centring a tall diagnostics dump.
         score_y = max(40 * scale, min((height-score_h)*.5,height-score_h-52*scale))
         scoreboard = QRectF(width - score_w - 4 * scale, score_y, score_w, score_h)
-        # Keep effect tiles below the three boss bars.  At 2K/Auto scale 6 a
-        # vanilla 6-slot effect row is 936 px wide; placing it at y=4 clipped
-        # the ALLY BASE title even though every individual rect was on-screen.
+        # Preserve the existing effect-tile position independently of top HUD chrome.
         return MinecraftHudLayout(
             scale,
             hotbar,
@@ -446,19 +437,6 @@ class MinecraftCombatHudRenderer:
         label_scale = max(1, scale // 2)
         thermal_text = f"COOL {int(round(thermal_margin * 100.0))}%  -{int(getattr(state, 'heat_cooldown_rate', 0))}/S"
         power_text = f"PWR {int(getattr(state, 'chassis_power_w', 0))}/{int(getattr(state, 'power_limit', 0))}W"
-        hud_module = registry.get("HUD") if registry is not None else None
-        dynamic_setting = hud_module.get_setting("Dynamic Island") if hud_module is not None else None
-        dynamic_island_active = bool(dynamic_setting is None or dynamic_setting.value)
-        boss_key: tuple[int, ...] = ()
-        if not dynamic_island_active:
-            boss_key = tuple(
-                int(getattr(state, name, 0))
-                for name in (
-                    "base_health", "base_max_health", "base_shield",
-                    "enemy_base_health", "enemy_base_max_health", "enemy_base_shield",
-                    "target_health", "target_max_health", "target_id",
-                )
-            )
         # Buff 指示：优先裁判 Buff 解码（buff_indicator_state），
         # LabDebug mock 行无 buff_type 时回退旧演示布尔。
         buff_fn = getattr(state, "buff_indicator_state", None)
@@ -489,8 +467,6 @@ class MinecraftCombatHudRenderer:
             thermal_text,
             power_text,
             chassis_ratio >= 0.85,
-            dynamic_island_active,
-            boss_key,
             effects,
             tactical_map_enabled,
         )
@@ -504,7 +480,6 @@ class MinecraftCombatHudRenderer:
             logical_height,
             int(self.selected_slot),
             assignment_states,
-            dynamic_island_active,
             tactical_map_enabled,
         )
         now = time.perf_counter()
@@ -550,11 +525,6 @@ class MinecraftCombatHudRenderer:
             self.font.draw(layer_painter, layout.armor[0].left(), layout.armor[0].top() - 7 * label_scale, thermal_text, QColor("#55ffff"), label_scale)
             power_w = self.font.logical_width(power_text) * label_scale
             self.font.draw(layer_painter, layout.hotbar.right() - power_w, layout.food[-1].top() - 7 * label_scale, power_text, QColor("#55aaff") if chassis_ratio < 0.85 else QColor("#ffff55"), label_scale)
-
-            if not dynamic_island_active:
-                self._draw_boss_bar(layer_painter, layout.boss_bars[0], "blue", self._ratio(getattr(state, "base_health", 0), getattr(state, "base_max_health", 1)), f"ALLY BASE  SHIELD {int(getattr(state, 'base_shield', 0))}%")
-                self._draw_boss_bar(layer_painter, layout.boss_bars[1], "red", self._ratio(getattr(state, "enemy_base_health", 0), getattr(state, "enemy_base_max_health", 1)), f"ENEMY BASE  SHIELD {int(getattr(state, 'enemy_base_shield', 0))}%")
-                self._draw_boss_bar(layer_painter, layout.boss_bars[2], "yellow", self._ratio(getattr(state, "target_health", 0), getattr(state, "target_max_health", 1)), f"TARGET {int(getattr(state, 'target_id', 0))}")
 
             self._draw_scoreboard(layer_painter, layout.scoreboard, lines, scale)
             if not tactical_map_enabled:
@@ -648,17 +618,6 @@ class MinecraftCombatHudRenderer:
             active = QColor("#ffff55") if ratio >= 0.85 else QColor("#55aaff")
             painter.setBrush(active if fill >= 2 else QColor(active.red(), active.green(), active.blue(), 150))
             painter.drawPolygon(outline)
-
-    def _draw_boss_bar(self, painter: QPainter, rect: QRectF, palette: str, ratio: float, title: str) -> None:
-        self._sprite(painter, f"boss_{palette}_background", rect)
-        image = self.images[f"boss_{palette}_progress"]
-        source_width = max(0, min(image.width(), int(round(image.width() * ratio))))
-        if source_width:
-            destination = QRectF(rect.left(), rect.top(), source_width * rect.width() / image.width(), rect.height())
-            self._sprite(painter, f"boss_{palette}_progress", destination, QRect(0, 0, source_width, image.height()))
-        scale = max(1, int(round(rect.height() / 5.0)))
-        text_width = self.font.logical_width(title) * scale
-        self.font.draw(painter, rect.center().x() - text_width * 0.5, rect.top() - 9 * scale, title, QColor("#ffffff"), scale)
 
     def _draw_scoreboard(self, painter: QPainter, rect: QRectF, lines: tuple[tuple[str, QColor], ...], scale: int) -> None:
         row_h = 9 * scale

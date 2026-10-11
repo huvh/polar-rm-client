@@ -261,7 +261,7 @@ class TopMatchBarController:
             top = safe.top
             if map_visible:
                 rect = owner.tactical_map_rect(width, height)
-                # MC boss bars may have moved the row below its original top.
+                # Side overlays can intersect any part of the final reserved band.
                 # Test the final reserved band, not the old 180px estimate.
                 if rect.bottom() > top and rect.top() < safe.bottom:
                     left = right = max(left, float(rect.right()) + 10.0)
@@ -272,7 +272,7 @@ class TopMatchBarController:
             progress_height = (40.8 if bool(self._setting("BF6 Progress", True)) and
                                owner.state.match_mode == "RMUC7v7" else 0.0)
             # Use actual fitted row height, not a fixed 150px estimate. This
-            # matters when MC boss bars and HUD scale consume different units.
+            # keeps the complete row and progress inside the available space.
             available_scale = (safe.bottom - top - systems_height - progress_height) / 120.0
             if available_scale < .35:
                 return

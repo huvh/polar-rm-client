@@ -3781,7 +3781,7 @@ def test_minecraft_hud_assets_layout_and_render() -> None:
         effects_bottom = layout.effects_origin.y() + 24 * scale
         assert effects_right < layout.scoreboard.left()
         assert effects_bottom < layout.hotbar.top()
-        assert layout.effects_origin.y() > layout.boss_bars[-1].bottom()
+        assert layout.boss_bars == ()
         assert layout.slot_at(QPointF(layout.slots[4].center())) == 4
         image = QImage(width, height, QImage.Format.Format_ARGB32_Premultiplied)
         image.fill(0)
