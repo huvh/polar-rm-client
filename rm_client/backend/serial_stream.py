@@ -19,7 +19,7 @@ from typing import Any
 class TcpByteStream:
     """长得像 pyserial 对象的 TCP 字节流（polar_transport 只用到这几个成员）。"""
 
-    def __init__(self, host: str, port: int, timeout_s: float = 0.2,
+    def __init__(self, host: str, port: int, timeout_s: float = 0.02,
                  connect_timeout_s: float = 1.5) -> None:
         self.port = "tcp://{0}:{1}".format(host, port)
         self.host = str(host)
@@ -30,27 +30,35 @@ class TcpByteStream:
         self.is_open = False
 
     def open(self) -> None:
+        if self.is_open and self._sock is not None:
+            return
+        self.close()
         sock = socket.create_connection((self.host, self.tcp_port),
                                         timeout=self.connect_timeout)
-        sock.settimeout(self.timeout)
         try:
-            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-        except OSError:
-            pass
+            sock.settimeout(self.timeout)
+            try:
+                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            except OSError:
+                pass
+        except Exception:
+            sock.close()
+            raise
         self._sock = sock
         self.is_open = True
 
     def read(self, size: int = 512) -> bytes:
-        if self._sock is None:
+        sock = self._sock
+        if sock is None:
             raise ConnectionError("TCP 未连接")
         if int(size) <= 0:
             return b""
         try:
             # RX shares a thread with the control deadline. Never wait for
             # telemetry before allowing a TX/deadman/neutral check.
-            if not select.select([self._sock], [], [], 0)[0]:
+            if not select.select([sock], [], [], 0)[0]:
                 return b""
-            data = self._sock.recv(int(size))
+            data = sock.recv(int(size))
             if not data:
                 raise ConnectionError("TCP 对端已关闭连接")
             return data
@@ -61,13 +69,14 @@ class TcpByteStream:
             raise
 
     def write(self, data: bytes) -> int:
-        if self._sock is None:
+        sock = self._sock
+        if sock is None or not self.is_open:
             raise RuntimeError("TCP 未连接")
         payload = bytes(data)
         try:
-            self._sock.sendall(payload)
+            sock.sendall(payload)
         except OSError as exc:
-            self.is_open = False
+            self.close()
             raise RuntimeError("TCP 写入失败（链路已断）：{0}".format(exc)) from exc
         return len(payload)
 
@@ -85,7 +94,9 @@ class TcpByteStream:
 
 def open_serial(port: str, baud: int) -> Any:
     import serial                                  # 延迟导入：没硬件也能 import 本模块
-    return serial.Serial(port=port, baudrate=int(baud), timeout=0.02, write_timeout=0.2)
+    # RX and safety deadlines share one thread. Poll rather than filling a
+    # 512-byte read, and fail closed if a write consumes a whole 50 Hz tick.
+    return serial.Serial(port=port, baudrate=int(baud), timeout=0, write_timeout=0.02)
 
 
 def open_stream(transport: str, *, port: str = "", baud: int = 115200,
@@ -102,6 +113,8 @@ def open_stream(transport: str, *, port: str = "", baud: int = 115200,
         stream = TcpByteStream(target, int(tcp_port))
         stream.open()
         return stream
+    if mode != "serial":
+        raise ValueError("未知字节流模式：{0}".format(mode))
     if str(port or "").strip().lower() in ("", "stub", "none"):
         raise RuntimeError("没配置真实机器人串口（Port 还是 Stub）")
     if serial_opener is not None:

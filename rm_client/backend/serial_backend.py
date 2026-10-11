@@ -14,7 +14,7 @@ import time
 from collections import deque
 from typing import Any
 
-from ..protocol import RefereeFrameCodec
+from ..protocol import MAX_REFEREE_PAYLOAD, RefereeFrameCodec, crc8, crc16
 from ..transports import SerialBridgeStub
 
 
@@ -44,81 +44,140 @@ class RmSerialBackend(SerialBridgeStub):
         self._running = False
         self._rx: deque[Any] = deque(maxlen=64)
         self._rx_lock = threading.Lock()
+        self._lifecycle_lock = threading.RLock()
+        self._write_lock = threading.RLock()
 
     # ------------------------------------------------------------------
     def start(self) -> None:
-        if self._running:
-            return
-        if self.port in ("", "Stub", "stub", "None", "none"):
-            self.connected = False
-            self.last_error = "未配置真实串口端口（Stub）"
-            return
-        try:
-            import serial  # type: ignore
-            self._serial = serial.Serial(
-                port=self.port, baudrate=self.baud, timeout=0.1,
-                write_timeout=0.5,
-            )
-            self.connected = bool(self._serial and self._serial.is_open)
-            if not self.connected:
-                self.last_error = "串口打开失败"
+        with self._lifecycle_lock:
+            if self._running or (self._reader is not None and self._reader.is_alive()):
                 return
-            self._running = True
-            self._reader = threading.Thread(target=self._read_loop, name="rm-serial", daemon=True)
-            self._reader.start()
-        except Exception as exc:  # pragma: no cover - depends on hardware
-            self.connected = False
-            self.last_error = str(exc)
+            if str(self.port).strip().lower() in ("", "stub", "none"):
+                self.connected = False
+                self.last_error = "未配置真实串口端口（Stub）"
+                return
+            stream = None
+            try:
+                import serial  # type: ignore
+                stream = serial.Serial(port=self.port, baudrate=self.baud,
+                                       timeout=0.1, write_timeout=0.2)
+                if not getattr(stream, "is_open", False):
+                    raise ConnectionError("串口打开失败")
+                with self._rx_lock:
+                    self._rx.clear()
+                self.last_frame_at = 0.0
+                self._serial = stream
+                self.connected = True
+                self.last_error = ""
+                self._running = True
+                self._reader = threading.Thread(target=self._read_loop, name="rm-serial", daemon=True)
+                self._reader.start()
+            except Exception as exc:
+                self.connected = self._running = False
+                self.last_error = str(exc)
+                self._serial = None
+                if stream is not None:
+                    try:
+                        stream.close()
+                    except Exception:
+                        pass
 
     def stop(self) -> None:
+        with self._lifecycle_lock:
+            with self._write_lock:
+                self._running = False
+                self._disconnect_locked()
+            reader = self._reader
+            if reader is not None and reader.is_alive() and reader is not threading.current_thread():
+                reader.join(timeout=0.6)
+            # A timed-out reader still owns its epoch. Never open a replacement
+            # until it has actually exited.
+            if reader is None or not reader.is_alive():
+                self._reader = None
+            with self._rx_lock:
+                self._rx.clear()
+            self.last_frame_at = 0.0
+
+    def _disconnect_locked(self) -> None:
+        stream, self._serial = self._serial, None
+        self.connected = False
         self._running = False
-        if self._serial is not None:
+        if stream is not None:
             try:
-                self._serial.close()
+                stream.close()
             except Exception:
                 pass
-            self._serial = None
-        if self._reader is not None and self._reader.is_alive():
-            self._reader.join(timeout=0.6)
-        self._reader = None
-        self.connected = False
 
     # ------------------------------------------------------------------
     def write_frame(self, cmd_id: int, data: bytes = b"") -> tuple[bool, str]:
-        if int(cmd_id) == 0x0311:
+        if not isinstance(cmd_id, int) or isinstance(cmd_id, bool) or not 0 <= cmd_id <= 0xFFFF:
+            self.last_error = "cmd_id 必须是 uint16 整数"
+            return False, self.last_error
+        if cmd_id in (0x0310, 0x0311):
             self.last_error = (
-                "0x0311 属于 921600 图传链路；客户端上行必须经 MQTT "
+                "0x0310/0x0311 属于 921600 图传链路；客户端上行必须经 MQTT "
                 "CustomControl，禁止写入 115200 裁判/下位机串口"
             )
             return False, self.last_error
-        frame = self.codec.encode(cmd_id, data)
-        return self.write(frame)
+        with self._write_lock:
+            try:
+                if not isinstance(data, (bytes, bytearray, memoryview)):
+                    raise ValueError("data 必须是字节载荷")
+                frame = self.codec.encode(cmd_id, data)
+            except (TypeError, ValueError, OverflowError) as exc:
+                self.last_error = str(exc)
+                return False, self.last_error
+            return self.write(frame)
 
     def write(self, payload: bytes) -> tuple[bool, str]:
         return self._write_payload(payload, bypass_estop=False)
 
     def _write_payload(self, payload: bytes, *, bypass_estop: bool) -> tuple[bool, str]:
-        """Write one frame; only the internally-built stop frame can bypass E-stop."""
-        self.last_write = payload
-        if self.mock_writes:
-            return True, "mock"
-        if self.estop_active and not bypass_estop:
-            self.last_error = "急停激活，串口写入被禁止"
-            return False, self.last_error
-        if self._serial is None or not self.connected:
-            self.last_error = "串口未连接"
-            return False, self.last_error
-        try:
-            written = self._serial.write(payload)
-            if written != len(payload):
-                self.last_error = f"串口短写 {written}/{len(payload)} 字节"
+        # Every public/raw path must enforce the same route boundary. Reject
+        # incomplete/junk prefixes rather than allowing a decoder to skip them.
+        with self._write_lock:
+            try:
+                payload = bytes(payload)
+                offset = 0
+                if not payload:
+                    raise ValueError("串口帧为空")
+                while offset < len(payload):
+                    header = payload[offset:offset + 5]
+                    if len(header) != 5 or header[0] != 0xA5 or crc8(header[:4]) != header[4]:
+                        raise ValueError("串口帧头无效")
+                    length = int.from_bytes(header[1:3], "little") + 9
+                    if length > MAX_REFEREE_PAYLOAD + 9:
+                        raise ValueError("串口载荷过长")
+                    frame = payload[offset:offset + length]
+                    if len(frame) != length or crc16(frame[:-2]) != int.from_bytes(frame[-2:], "little"):
+                        raise ValueError("串口帧不完整或 CRC 无效")
+                    if int.from_bytes(frame[5:7], "little") in (0x0310, 0x0311):
+                        raise ValueError("0x0310/0x0311 属图传链路，禁止经 115200 串口发送")
+                    offset += length
+            except (TypeError, ValueError, OverflowError) as exc:
+                self.last_error = str(exc)
                 return False, self.last_error
-            self.frames_written += 1
-            self.last_write_at = time.perf_counter()
-            return True, "ok"
-        except Exception as exc:  # pragma: no cover
-            self.last_error = str(exc)
-            return False, str(exc)
+            self.last_write = payload
+            # No caller, including the legacy private argument, can bypass E-stop.
+            if self.estop_active:
+                self.last_error = "急停激活，串口写入被禁止"
+                return False, self.last_error
+            if self.mock_writes:
+                return True, "mock"
+            if self._serial is None or not self.connected:
+                self.last_error = "串口未连接"
+                return False, self.last_error
+            try:
+                written = self._serial.write(payload)
+                if written != len(payload):
+                    raise IOError(f"串口短写 {written}/{len(payload)} 字节")
+                self.frames_written += 1
+                self.last_write_at = time.perf_counter()
+                return True, "ok"
+            except Exception as exc:
+                self.last_error = str(exc)
+                self._disconnect_locked()
+                return False, self.last_error
 
     # ------------------------------------------------------------------
     # 心跳/急停
@@ -126,13 +185,16 @@ class RmSerialBackend(SerialBridgeStub):
     def tick(self, now: float | None = None) -> None:
         # 与 safety 双向同步急停状态（避免粘滞/矛盾）
         if self.safety is not None:
-            self.estop_active = bool(self.safety.estop_active)
+            with self._write_lock:
+                self.estop_active = bool(self.safety.estop_active)
 
     def trigger_estop(self) -> None:
-        self.estop_active = True
+        with self._write_lock:
+            self.estop_active = True
 
     def release_estop(self) -> None:
-        self.estop_active = False
+        with self._write_lock:
+            self.estop_active = False
 
     def write_stop_command(self) -> tuple[bool, str]:
         """拒绝伪造串口 0x0311；调用方应使用 BackendManager.trigger_estop。"""
@@ -142,9 +204,14 @@ class RmSerialBackend(SerialBridgeStub):
     # ------------------------------------------------------------------
     def _read_loop(self) -> None:
         buffer = bytearray()
+        stream = self._serial
         try:
-            while self._running and self._serial is not None:
-                chunk = self._serial.read(256)
+            while self._running and stream is not None and self._serial is stream:
+                chunk = stream.read(256)
+                if not self._running or self._serial is not stream:
+                    break
+                if not getattr(stream, "is_open", True):
+                    raise ConnectionError("串口已断开")
                 if not chunk:
                     continue
                 buffer.extend(chunk)
@@ -160,8 +227,12 @@ class RmSerialBackend(SerialBridgeStub):
         except Exception as exc:  # pragma: no cover - hardware dependent
             self.last_error = str(exc)
         finally:
-            self._running = False
-            self.connected = False
+            with self._write_lock:
+                if self._serial is stream:
+                    self._disconnect_locked()
+            with self._rx_lock:
+                self._rx.clear()
+            self.last_frame_at = 0.0
 
     def drain_frames(self) -> list[Any]:
         with self._rx_lock:

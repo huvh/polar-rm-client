@@ -21,7 +21,12 @@ from typing import Iterable
 def stage(repo: Path, rels: Iterable[str]) -> dict:
     """给将要被改动的文件拍快照；原本不存在的记 None。"""
     snap: dict = {}
-    for rel in rels:
+    owned = list(dict.fromkeys(rels))
+    # The host bridge now installs both the task parser and the CDC callback.
+    # Legacy callers naming usb_task must restore the ingress file as well.
+    if "application/communication/usb_task.c" in owned and "Src/usbd_cdc_if.c" not in owned:
+        owned.append("Src/usbd_cdc_if.c")
+    for rel in owned:
         p = Path(repo) / rel
         snap[rel] = p.read_bytes() if p.exists() else None
     return snap
@@ -42,3 +47,4 @@ def restore(snap: dict, repo: Path) -> int:
             p.write_bytes(data)
         n += 1
     return n
+

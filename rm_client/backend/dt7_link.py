@@ -204,11 +204,18 @@ def validate_layout(layout: str, fields: list) -> int:
         raise Dt7ConfigError(f"payload_layout 必须是小端 '<...'：{layout!r}")
     if not isinstance(fields, (list, tuple)) or not fields:
         raise Dt7ConfigError("payload_fields 必须是非空列表")
-    letters = [c for c in layout[1:] if not c.isdigit()]
+    # Profiles map one explicitly named field to one scalar format character.
+    # Repeat counts (including zero counts) otherwise pass this check but change
+    # the number of values required by struct.pack.
+    if any(c not in "hHB" for c in layout[1:]):
+        raise Dt7ConfigError("payload_layout 只支持逐字段 h/H/B，不支持重复计数或填充")
+    letters = list(layout[1:])
     if len(letters) != len(fields):
         raise Dt7ConfigError(f"字段数不匹配：layout {len(letters)} 个 vs fields {len(fields)} 个")
     for name, ch in zip(fields, letters):
-        allowed = FIELD_FMTS.get(str(name))
+        if not isinstance(name, str):
+            raise Dt7ConfigError(f"载荷字段名必须是字符串：{name!r}")
+        allowed = FIELD_FMTS.get(name)
         if allowed is None:
             raise Dt7ConfigError(f"未知载荷字段 {name!r}（可用：{sorted(FIELD_FMTS)}）")
         if ch not in allowed:
@@ -291,8 +298,11 @@ def load_profile(path: str | None = None) -> dict:
     if str(prof["frame_variant"]) not in FRAME_VARIANTS:
         prof["_profile_error"] = f"frame_variant 未知：{prof['frame_variant']!r}"
     ver = raw.get("protocol_version")
-    if isinstance(ver, int) and not isinstance(ver, bool) and 0 <= ver <= 255:
-        prof["protocol_version"] = ver
+    if "protocol_version" in raw:
+        if isinstance(ver, int) and not isinstance(ver, bool) and 0 <= ver <= 255:
+            prof["protocol_version"] = ver
+        else:
+            prof["_profile_error"] = prof["_profile_error"] or f"protocol_version 要取 0..255：{ver!r}"
     layout, fields = raw.get("payload_layout"), raw.get("payload_fields")
     if isinstance(layout, str):
         prof["payload_layout"] = layout
@@ -332,11 +342,12 @@ def load_profile(path: str | None = None) -> dict:
 def cmd_wire_of(prof: dict) -> int | None:
     """命令号折成 16 位线值。``cmd_wire`` 优先（直接给线值，绕开位域方向争议）。"""
     wire = prof.get("cmd_wire")
-    if isinstance(wire, int) and not isinstance(wire, bool):
-        return wire & 0xFFFF
+    if wire is not None:
+        return wire if (isinstance(wire, int) and not isinstance(wire, bool)
+                        and 0 <= wire <= 0xFFFF) else None
     cid, cset = prof.get("cmd_id_keyboard"), prof.get("cmd_set", 0)
     if (isinstance(cid, int) and not isinstance(cid, bool)
-            and isinstance(cset, int) and 0 <= cid <= 0xFF and 0 <= cset <= 0xFF):
+            and isinstance(cset, int) and not isinstance(cset, bool) and 0 <= cid <= 0xFF and 0 <= cset <= 0xFF):
         return (cset | (cid << 8)) & 0xFFFF
     return None
 
@@ -359,18 +370,27 @@ def build_frame(cmd_wire: int, payload: bytes, seq: int, *,
         raise Dt7ConfigError(f"crc_variant 未知：{crc_variant!r}")
     if frame_variant not in FRAME_VARIANTS:
         raise Dt7ConfigError(f"frame_variant 未知：{frame_variant!r}")
+    if isinstance(cmd_wire, bool) or not isinstance(cmd_wire, int) or not 0 <= cmd_wire <= 0xFFFF:
+        raise Dt7ConfigError(f"cmd_wire 超出 16 位：{cmd_wire!r}")
+    if (isinstance(protocol_version, bool) or not isinstance(protocol_version, int)
+            or not 0 <= protocol_version <= 0xFF):
+        raise Dt7ConfigError(f"protocol_version 超出 8 位：{protocol_version!r}")
     crc8_init, crc16_init = CRC_VARIANTS[crc_variant]
     if frame_variant == "dji_rc_v1":
         # 厂商现场：hdr = 5A | length | version | crc8(hdr[0..2])
         #             body = seq(u16) | cmd(u16) | payload
-        body = struct.pack("<HH", seq & 0xFFFF, cmd_wire & 0xFFFF) + payload
-        header = bytearray([SOF_RC, len(body) & 0xFF, protocol_version & 0xFF])
+        if len(payload) > 0xFF - 2 * CMD_SIZE:
+            raise Dt7ConfigError("dji_rc_v1 载荷超出 1 字节长度字段")
+        body = struct.pack("<HH", seq & 0xFFFF, cmd_wire) + payload
+        header = bytearray([SOF_RC, len(body), protocol_version])
         header.append(_crc8_init(bytes(header), crc8_init))
         frame = bytes(header) + body
         return frame + struct.pack("<H", _crc16_init(frame, crc16_init))
     datalen = len(payload) + (CMD_SIZE if datalen_includes_cmd else 0)
+    if datalen > 0xFFFF:
+        raise Dt7ConfigError("A5 载荷超出 2 字节长度字段")
     header = bytearray([SOF_A5])
-    header += struct.pack("<H", datalen & 0xFFFF)
+    header += struct.pack("<H", datalen)
     header.append(seq & 0xFF)
     header.append(_crc8_init(bytes(header), crc8_init))
     frame = bytes(header) + struct.pack("<H", cmd_wire & 0xFFFF) + payload
@@ -390,7 +410,7 @@ def decode_dt7_frame(frame: bytes, *, crc_variant: str = "rc_check",
     if frame[0] == SOF_RC:
         length = frame[1]
         total = RC_HEADER_SIZE + length + CRC16_SIZE
-        if len(frame) != total:
+        if length < 2 * CMD_SIZE or len(frame) != total:
             return None
         if _crc8_init(frame[:3], crc8_init) != frame[3]:
             return None
@@ -402,7 +422,7 @@ def decode_dt7_frame(frame: bytes, *, crc_variant: str = "rc_check",
                 "cmd_set": cmd & 0xFF, "cmd_id": cmd >> 8,
                 "protocol_version": frame[2],
                 "payload": frame[RC_HEADER_SIZE + 2 * CMD_SIZE: total - CRC16_SIZE]}
-    if frame[0] != SOF_A5:
+    if frame[0] != SOF_A5 or len(frame) < A5_HEADER_SIZE:
         return None
     (datalen,) = struct.unpack_from("<H", frame, 1)
     if _crc8_init(frame[:4], crc8_init) != frame[4]:
@@ -464,7 +484,13 @@ class Dt7KeyMouseLink:
         if err:
             return f"profile 有问题：{err}"
         try:
-            validate_layout(str(prof["payload_layout"]), list(prof["payload_fields"]))
+            validate_layout(prof.get("payload_layout"), prof.get("payload_fields"))
+            reserved = prof.get("reserved_value", 1024)
+            if isinstance(reserved, bool) or not isinstance(reserved, int):
+                raise Dt7ConfigError("reserved_value 必须是整数")
+            for name, fmt in zip(prof["payload_fields"], layout_letters(prof["payload_layout"])):
+                if name == "reserved" and not 0 <= reserved <= (255 if fmt == "B" else 65535):
+                    raise Dt7ConfigError("reserved_value 超出载荷字段位宽")
         except Dt7ConfigError as exc:
             return str(exc)
         if cmd_wire_of(prof) is None:
@@ -483,7 +509,8 @@ class Dt7KeyMouseLink:
     def encode(self, values: dict) -> bytes:
         """按 payload_fields 取值打包（字段名驱动，profile 换布局不用改代码）。"""
         prof = self.profile
-        layout = str(prof["payload_layout"])
+        validate_layout(prof.get("payload_layout"), prof.get("payload_fields"))
+        layout = prof["payload_layout"]
         fields = list(prof["payload_fields"])
         args = []
         clipped: list[str] = []
@@ -497,7 +524,7 @@ class Dt7KeyMouseLink:
                 # （CAN_communication.c:81/87），工程/企鹅一开就翻车。
                 # 所以默认填**通道中值**：DT7 若原样搬走 ⇒ 读到 0（中立）；
                 # 若不搬 ⇒ 我们这一位本来就没意义。两种情况都不比 0 坏。
-                args.append(int(prof.get("reserved_value", 1024)) & 0xFFFF)
+                args.append(int(prof.get("reserved_value", 1024)))
                 continue
             if name not in values:
                 raise Dt7ConfigError(f"载荷缺字段值：{name}")
@@ -513,7 +540,7 @@ class Dt7KeyMouseLink:
                             frame_variant=str(prof.get("frame_variant", "dji_rc_v1")),
                             datalen_includes_cmd=bool(prof.get("datalen_includes_cmd", True)),
                             crc_variant=str(prof.get("crc_variant", "rc_check")),
-                            protocol_version=int(prof.get("protocol_version", 1)))
+                            protocol_version=prof.get("protocol_version", 1))
         self.last_payload = payload
         if bool(prof.get("seq_increments")):
             self.seq = (self.seq + 1) & 0xFFFF

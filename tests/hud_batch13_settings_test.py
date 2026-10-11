@@ -113,8 +113,10 @@ def test_settings_change_the_actual_wire_fields() -> None:
     payload = proto.encode_map_click_cmd(
         is_send_all=send_all, mode=1, mark_type=mark_type, map_x=8.0, map_y=4.0
     )
-    check("编码结果里字段 6（type）确实是 3",
-          field(payload, 6) == 3, str(field(payload, 6)))
+    check("编码结果里字段 3（类别，proto mode）确实是 3",
+          field(payload, 3) == 3, str(field(payload, 3)))
+    check("字段 6（标记模式，proto type）保持 1",
+          field(payload, 6) == 1, str(field(payload, 6)))
     check("编码结果里字段 1（is_send_all）确实是 1",
           field(payload, 1) == 1, str(field(payload, 1)))
 
@@ -125,8 +127,9 @@ def test_settings_change_the_actual_wire_fields() -> None:
         is_send_all=send_all, mode=1, mark_type=mark_type, map_x=8.0, map_y=4.0
     )
     check("关掉广播后字段 1 变成 0", field(payload, 1) == 0, str(field(payload, 1)))
-    check("关掉广播不影响 type（字段之间不得串扰）",
-          field(payload, 6) == 3, str(field(payload, 6)))
+    check("关掉广播不影响类别（字段之间不得串扰）",
+          field(payload, 3) == 3, str(field(payload, 3)))
+    check("关掉广播不影响标记模式", field(payload, 6) == 1, str(field(payload, 6)))
 
 
 def test_unknown_or_missing_values_fall_back_to_legacy_bytes() -> None:
@@ -173,3 +176,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

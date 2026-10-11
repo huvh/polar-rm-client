@@ -337,6 +337,31 @@ class FirmwareToolIsolationTests(unittest.TestCase):
                     path = root / rel
                     path.parent.mkdir(parents=True, exist_ok=True)
                     path.write_text("fixture")
+                # The receive repair is a bundle: its CDC callback source is a
+                # required planning input even for an otherwise prepared tree.
+                cdc = root / "Src/usbd_cdc_if.c"
+                cdc.parent.mkdir()
+                cdc.write_text("""/* USER CODE BEGIN INCLUDE */
+static int8_t CDC_Init_FS(void)
+{
+  /* USER CODE BEGIN 3 */
+  return USBD_OK;
+}
+static int8_t CDC_DeInit_FS(void)
+{
+  /* USER CODE BEGIN 4 */
+  return USBD_OK;
+}
+static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
+{
+  /* USER CODE BEGIN 6 */
+  USBD_CDC_SetRxBuffer(&hUsbDeviceFS, &Buf[0]);
+  USBD_CDC_ReceivePacket(&hUsbDeviceFS);
+  return USBD_OK;
+}
+""")
+                cdc_tools = definitions("tools/firmware/host_bridge/host_usb_receiver.py",
+                                        {"patch_cdc", "balanced"}, {"re": re})
                 (root / "application/typedef").mkdir()
                 if prepared != "fresh": (root / usb_rel).write_text("UsbMergeVirtualRcKeys")
                 if prepared == "host-ready": (root / rc_rel).write_text("HOST_RC_MERGED_KEYS")
@@ -352,6 +377,7 @@ class FirmwareToolIsolationTests(unittest.TestCase):
                     "__doc__": "isolated file-safety test", "argparse": argparse, "Path": Path,
                     "HERE": source, "HEADER_NAME": "fixture.h", "USB_REL": usb_rel,
                     "DRIVE_KEYS_PATCH": source / "fixture.patch", "subprocess": SimpleNamespace(run=runner),
+                    "patch_cdc": cdc_tools["patch_cdc"],
                     "apply_usb_task": lambda path, log: path.read_text() + "planned",
                     "apply_remote_control": lambda path, log: path.read_text() + "planned",
                     "apply_chassis": lambda path, anchor, log: path.read_text() + "planned",
@@ -415,3 +441,4 @@ class FirmwareToolIsolationTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+

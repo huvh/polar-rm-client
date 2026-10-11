@@ -35,6 +35,10 @@ ROOT = Path(__file__).resolve().parents[1]
 PYTHON_SUITES = (
     "test_build_safety_regressions",  # isolated packaging / path / file-preservation guards
     "test_transport_safety_regressions",
+    "test_serial_codec_regressions",
+    "test_serial_lifecycle_regressions",
+    "test_controller_frame_regressions",
+    "test_api_freeze_platform_regressions",
     "test_ui_state_regressions",
     "student_frontend_test",  # MC 背包/Jello 学生面板：只读展示、草稿不发、模态与缓存
     "polar_spec_test",        # 协议规格：加载/校验/改 JSON 真能改行为/新增段零 Python
@@ -68,6 +72,12 @@ PYTHON_SUITES = (
 )
 
 C_CHECKS = (
+    ("tools/firmware/host_bridge/test_usb_receiver_portable.py",
+     "真实 USB 回调队列与有界外层解析（匹配源码 / CRC / 竞态 / 溢出）"),
+    ("tools/firmware/referee_rx/test_referee_rx.py",
+     "真实裁判分派长度边界（固定载荷 / 可变交互 / 未接收不更新新鲜度）"),
+    ("tools/firmware/km_link/test_serial_parsers_portable.py",
+     "便携串口解析器（编译生成 C / 分片 / 噪声 / 长度 / PRM1 校验）"),
     ("tools/firmware/test_patch_real_headers.py", "补丁代码用固件真实头文件编译"),
     ("tools/firmware/test_patch_logic.py", "补丁代码行为断言（含 tick 回绕、竞态）"),
     # 上位机<->底盘 桥接（上行 0x04 / 下行 0x1F）：把小陀螺从“借 SHIFT

@@ -55,9 +55,9 @@ volatile uint32_t HOST_KM_RX_TIME = 0;
 volatile uint32_t HOST_KM_RX_COUNT = 0;
 """
 
-REF_RX_STAMP = f"""            /* {MARK}: 记 0x0311 到达时刻，仲裁按它做新鲜度门控 */
-            HOST_KM_RX_TIME = HAL_GetTick();
-            HOST_KM_RX_COUNT++;
+REF_RX_STAMP = f"""            /* {MARK}: upstream must validate complete frame and both CRCs first. */
+            HostKmFeed(frame + index, (uint16_t)((uint16_t)frame[1] |
+                                                  ((uint16_t)frame[2] << 8)));
 """
 
 # ---------------------------------------------------------------------------
@@ -103,17 +103,58 @@ static uint8_t HOST_KM_DRV_SEEN = 0;  /* {MARK}: 有没有记过一笔（开机�
  * @note  version/kind 双校验是刻意的：客户端将来在同一通道上还会加别的
  *        指令（VISION=1 / SPIN=2 已经在发），键鼠这条不能被误当成别的包解。
  */
+/* Target default: CMSIS Cortex-M PRIMASK, restoring the caller's mask exactly.
+ * Host harnesses/other architectures must override both macros explicitly.
+ * Do not replace these with a mutex/spinlock in interrupt context. */
+#if defined(HOST_KM_CRITICAL_ENTER) != defined(HOST_KM_CRITICAL_EXIT)
+#error "Override both HOST_KM_CRITICAL_ENTER and HOST_KM_CRITICAL_EXIT"
+#endif
+#ifndef HOST_KM_CRITICAL_ENTER
+#if defined(__arm__) || defined(__thumb__) || defined(__ARMCC_VERSION)
+static uint32_t HostKmCriticalEnter(void)
+{{
+    uint32_t saved = __get_PRIMASK();
+    __disable_irq();
+    return saved;
+}}
+#define HOST_KM_CRITICAL_ENTER() HostKmCriticalEnter()
+#define HOST_KM_CRITICAL_EXIT(saved) __set_PRIMASK(saved)
+#else
+#error "Define HOST_KM_CRITICAL_ENTER/EXIT for this platform"
+#endif
+#endif
+
+static uint8_t HostKmPayloadValid(const uint8_t *raw, uint16_t len)
+{{
+    uint16_t i;
+    if (raw == 0 || len < (uint16_t)sizeof(prm1_km_cmd_t) || len > 30U) {{
+        return 0;
+    }}
+    if (raw[0] != PRM1_MAGIC_0 || raw[1] != PRM1_MAGIC_1 ||
+        raw[2] != PRM1_MAGIC_2 || raw[3] != PRM1_MAGIC_3 ||
+        raw[4] != PRM1_VERSION || raw[5] != PRM1_KIND_KM ||
+        (raw[16] & 0xF8U) != 0U || (raw[17] & 0xFEU) != 0U) {{
+        return 0;
+    }}
+    for (i = 18U; i < len; i++) {{
+        if (raw[i] != 0U) return 0;
+    }}
+    return 1;
+}}
+
 static uint8_t HostKmPeep(prm1_km_cmd_t *out)
 {{
-    const uint8_t *raw = robot_custom_data_3.data;
-
-    if (raw[0] != PRM1_MAGIC_0 || raw[1] != PRM1_MAGIC_1 ||
-        raw[2] != PRM1_MAGIC_2 || raw[3] != PRM1_MAGIC_3) {{
-        return 0;
-    }}
-    if (raw[4] != (uint8_t)PRM1_VERSION || raw[5] != (uint8_t)PRM1_KIND_KM) {{
-        return 0;
-    }}
+    uint8_t raw[30];
+    uint32_t saved, received_at, received_count, now;
+    saved = HOST_KM_CRITICAL_ENTER();
+    memcpy(raw, robot_custom_data_3.data, sizeof(raw));
+    received_at = HOST_KM_RX_TIME;
+    received_count = HOST_KM_RX_COUNT;
+    now = HAL_GetTick();
+    HOST_KM_CRITICAL_EXIT(saved);
+    /* Validate the snapshot, never the live mailbox followed by a second read. */
+    if (!HostKmPayloadValid(raw, 30U) || (raw[17] & 1U) == 0U ||
+        received_count == 0U || (uint32_t)(now - received_at) > KM_LINK_VALID_MS) return 0;
     memcpy(out, raw, sizeof(prm1_km_cmd_t));
     return 1;
 }}
@@ -142,7 +183,7 @@ static void HostKmMouseOut(RC_ctrl_t *rc)
         return;
     }}
 
-    km_ok = HostKmPeep(&km) && HOST_KM_IS_FRESH();
+    km_ok = HostKmPeep(&km);
 
     if (__CONTROL_LINK_KM == CL_KM_RC_VT && !km_ok) {{
         return;  /* 遥控器优先且图传不可用 -> 保持驾驶员这帧的鼠标 */
@@ -213,21 +254,22 @@ void HostKmApplyDriverFrameMouse(RC_ctrl_t *rc)
 /**
  * @brief 从别的来源灌一帧 0x0311 载荷（见头文件里那段"为什么必须有这个口"）
  *
- * 刻意做越界保护：len 超过载荷大小就截到载荷大小，绝不把外部字节溢出写进收件箱。
+ * Reject malformed/truncated typed payloads before changing mailbox or freshness.
  */
-void HostKmFeed(const uint8_t *payload, uint16_t len)
+uint8_t HostKmFeed(const uint8_t *payload, uint16_t len)
 {{
-    uint16_t n = len;
-
-    if (payload == 0 || n == 0U) {{   /* 不引 NULL，避免依赖 stddef 的包含顺序 */
-        return;
-    }}
-    if (n > (uint16_t)sizeof(robot_custom_data_3)) {{
-        n = (uint16_t)sizeof(robot_custom_data_3);
-    }}
-    memcpy(&robot_custom_data_3, payload, n);
+    uint8_t accepted[30];
+    uint32_t saved;
+    if (!HostKmPayloadValid(payload, len)) return 0;
+    /* Stage before clearing: payload may alias the previous mailbox. */
+    memset(accepted, 0, sizeof(accepted));
+    memcpy(accepted, payload, len);
+    saved = HOST_KM_CRITICAL_ENTER();
+    memcpy(robot_custom_data_3.data, accepted, sizeof(accepted));
     HOST_KM_RX_TIME = HAL_GetTick();
     HOST_KM_RX_COUNT++;
+    HOST_KM_CRITICAL_EXIT(saved);
+    return 1;
 }}
 
 /* ---- 字节流接收器：状态机的暂存与计数 ---- */
@@ -239,68 +281,60 @@ volatile uint32_t HOST_KM_FRAME_BAD = 0;
  * @brief 拆 0xA5 裁判帧并把 0x0311 的载荷交给 HostKmFeed()
  *
  * 与 referee_usart_task.c 的官方拆帧同一套字段与校验：
- *   verify_CRC8_check_sum(帧头 4 字节)
+ *   verify_CRC8_check_sum(帧头 5 字节)
  *   verify_CRC16_check_sum(整帧，长度 = REF_HEADER_CRC_CMDID_LEN + data_length)
  * 任何一级不对就丢掉重找帧头，绝不把坏帧往收件箱里塞。
  */
 void HostKmFeedBytes(const uint8_t *bytes, uint16_t len)
 {{
-    /* 必须是 static：这是**流式**解析，半帧留在缓冲里等下一次调用。
-       写成自动存储期的话，一帧被拆成两次调用就永远拼不起来。 */
-    static uint8_t buf[REF_PROTOCOL_FRAME_MAX_SIZE];
+    static uint8_t buf[309]; /* independent video framing: max 300-byte payload + 9 */
     static uint16_t host_km_fill = 0;
-    uint16_t i;
-    uint16_t data_len;
-    uint16_t total;
-    uint16_t cmd_id;
-
-    if (bytes == 0) {{
-        return;
+    static uint32_t last_byte_time = 0;
+    uint16_t i, data_len, total, cmd_id;
+    const uint16_t overhead = 9U; /* five-byte header + command + CRC16 */
+    if (bytes == 0 || len == 0U) return;
+    /* A stalled partial frame must not eat the first packet after reconnect. */
+    if (host_km_fill != 0U && (uint32_t)(HAL_GetTick() - last_byte_time) > KM_LINK_VALID_MS) {{
+        host_km_fill = 0;
+        HOST_KM_FRAME_BAD++;
     }}
+    last_byte_time = HAL_GetTick();
     for (i = 0; i < len; i++) {{
         HOST_KM_BYTES_IN++;
-        if (host_km_fill == 0U && bytes[i] != HEADER_SOF) {{
-            continue;                       /* 还没到帧头，扔掉 */
-        }}
-        if (host_km_fill >= (uint16_t)REF_PROTOCOL_FRAME_MAX_SIZE) {{
-            host_km_fill = 0;               /* 一条帧长到不可能，重开 */
-            HOST_KM_FRAME_BAD++;
-            continue;
-        }}
         buf[host_km_fill++] = bytes[i];
-        if (host_km_fill < (uint16_t)REF_PROTOCOL_HEADER_SIZE) {{
+        while (host_km_fill != 0U) {{
+            if (buf[0] != HEADER_SOF) goto host_km_discard;
+            if (host_km_fill < 5U) break;
+            if (verify_CRC8_check_sum(buf, 5U) == 0U) {{
+                HOST_KM_FRAME_BAD++;
+                goto host_km_discard;
+            }}
+            data_len = (uint16_t)((uint16_t)buf[1] | ((uint16_t)buf[2] << 8));
+            /* Check BEFORE addition: 65535 + overhead must never wrap. */
+            if (data_len > sizeof(buf) - overhead) {{
+                HOST_KM_FRAME_BAD++;
+                goto host_km_discard;
+            }}
+            total = (uint16_t)(data_len + overhead);
+            if (host_km_fill < 7U) break;
+            cmd_id = (uint16_t)((uint16_t)buf[5] | ((uint16_t)buf[6] << 8));
+            if (host_km_fill < total) break;
+            if (verify_CRC16_check_sum(buf, (unsigned int)total) == 0U) {{
+                HOST_KM_FRAME_BAD++;
+                goto host_km_discard;
+            }}
+            HOST_KM_FRAME_OK++;
+            if (cmd_id == (uint16_t)ROBOT_CUSTOM_DATA_3_CMD_ID) {{
+                HostKmFeed(&buf[7], data_len);
+            }}
+            host_km_fill = (uint16_t)(host_km_fill - total);
+            memmove(buf, buf + total, host_km_fill);
             continue;
+        host_km_discard:
+            /* Retain embedded SOFs after noise, bad CRC, or a truncated packet. */
+            host_km_fill--;
+            memmove(buf, buf + 1, host_km_fill);
         }}
-        if (verify_CRC8_check_sum(buf, (unsigned int)REF_PROTOCOL_HEADER_SIZE) == 0U) {{
-            /* 帧头校验不过：可能只是撞上半个头，退一字节继续找头 */
-            host_km_fill = 0U;
-            HOST_KM_FRAME_BAD++;
-            continue;
-        }}
-        data_len = (uint16_t)((uint16_t)buf[1] | ((uint16_t)buf[2] << 8));
-        total = (uint16_t)((uint16_t)REF_PROTOCOL_HEADER_SIZE + (uint16_t)REF_PROTOCOL_CMD_SIZE
-                           + data_len + (uint16_t)REF_PROTOCOL_CRC16_SIZE);
-        if (total > (uint16_t)REF_PROTOCOL_FRAME_MAX_SIZE) {{
-            host_km_fill = 0U;
-            HOST_KM_FRAME_BAD++;
-            continue;
-        }}
-        if (host_km_fill < total) {{
-            continue;                       /* 还没收满，等下一批字节 */
-        }}
-        if (verify_CRC16_check_sum(buf, (unsigned int)total) == 0U) {{
-            host_km_fill = 0U;
-            HOST_KM_FRAME_BAD++;
-            continue;
-        }}
-        HOST_KM_FRAME_OK++;
-        cmd_id = (uint16_t)((uint16_t)buf[REF_PROTOCOL_HEADER_SIZE]
-                            | ((uint16_t)buf[REF_PROTOCOL_HEADER_SIZE + 1] << 8));
-        if (cmd_id == (uint16_t)ROBOT_CUSTOM_DATA_3_CMD_ID
-                && data_len == (uint16_t)sizeof(robot_custom_data_3)) {{
-            HostKmFeed(&buf[REF_PROTOCOL_HEADER_SIZE + REF_PROTOCOL_CMD_SIZE], data_len);
-        }}
-        host_km_fill = 0U;
     }}
 }}
 
@@ -308,9 +342,8 @@ void HostKmFeedBytes(const uint8_t *bytes, uint16_t len)
  * @brief 把链路到达情况写进 0x5A Debug 上行（限流，默认 200ms 一次）
  *
  * 上报两件事，够现场判定：
- *   km_rx  = HOST_KM_RX_COUNT，C 板**实际**收到的 0x0311 帧数
- *            （计数在 referee 收到那一帧就加，Peep 只决定用不用它，
- *             所以"计数涨但键位不动"= 到了但载荷不对；"计数不涨"= 根本没到）；
+ *   km_rx  = HOST_KM_RX_COUNT，合法 PRM1 kind=3 载荷的接受计数
+ *            （非法 typed 载荷不刷新计数；CRC 完整帧到达由 km_ok 观测）；
  *   km_key = 当前合并后的 rc_ctrl.key.v，直接看见三本账现在是什么。
  * 没开 HOST_KM_DEBUG_UPLINK 时编出空函数，调用点不用改。
  */
@@ -369,7 +402,7 @@ static void HostKmLinkArbitrate(void)
         return;
     }}
 
-    km_ok = HostKmPeep(&km) && HOST_KM_IS_FRESH();
+    km_ok = HostKmPeep(&km);
 
     /* 键位门闸：只有"只认图传"那一档关驾驶员键位。关的**只是键位**，
      * 摇杆 ch[] 与拨杆 s[] 一律不动——图传当场断掉，驾驶员还能用摇杆
@@ -430,11 +463,18 @@ def apply_referee(path: Path, log: list) -> str:
                      "referee.c: include 图传键鼠头文件", log)
     text = _sub_once(text, r'robot_custom_data_3_t robot_custom_data_3;[^\n]*\n',
                      REF_GLOBALS, "referee.c: 定义到达时刻/计数", log)
-    text = _sub_once(text,
-                     r'memcpy\(&robot_custom_data_3,\s*frame \+ index,\s*'
-                     r'sizeof\(robot_custom_data_3_t\)\)\s*;\s*\n',
-                     REF_RX_STAMP, "referee.c: 0x0311 刷新到达时刻", log)
-    return text
+    import re
+    text = re.sub(r'            /\* POLAR-KM-LINK: 记 0x0311[^\n]*\n'
+                  r'            HOST_KM_RX_TIME = HAL_GetTick\(\);\n'
+                  r'            HOST_KM_RX_COUNT\+\+;\n', '', text)
+    if "if (!HostKmFeed(frame + index, payload_length)) return;" not in text:
+        text = _replace_once(text,
+                         r'memcpy\(&robot_custom_data_3,\s*frame \+ index,\s*'
+                         r'sizeof\(robot_custom_data_3_t\)\)\s*;\s*\n',
+                         REF_RX_STAMP, "referee.c: validated variable-length KM handoff", log)
+    sys.path.insert(0, str(FIRM_TOOL_DIR))
+    from referee_rx.apply_referee_rx import patch_referee_payload_dispatch
+    return patch_referee_payload_dispatch(text, log)
 
 
 def apply_remote_control(path: Path, log: list) -> str:
@@ -444,10 +484,16 @@ def apply_remote_control(path: Path, log: list) -> str:
                      RC_INCLUDE, "remote_control.c: include 图传键鼠头文件", log)
     text = _sub_once(text, r'rc_ctrl->key\.v = HOST_RC_MERGED_KEYS\(\);\s*\n',
                      RC_DT7_MOUSE, "remote_control.c: DT7 鼠标记账并仲裁", log)
-    text = _replace_once(
-        text,
-        r'[ \t]*HOST_RC_DRIVER_KEYS = 0;\s*/\* ' + BRIDGE_MARK + r'[^\n]*\\\n',
-        RC_NOKEY_MOUSE, "remote_control.c: 无鼠标遥控器清鼠标账", log)
+    # The old replacement probe was the already-existing key-clear line, so
+    # it falsely skipped the newly required mouse clear on first installation.
+    if "HostKmClearDriverMouse();" not in text:
+        import re
+        text, count = re.subn(
+            r'[ \t]*HOST_RC_DRIVER_KEYS = 0;\s*/\* ' + BRIDGE_MARK + r'[^\n]*\\\n',
+            lambda _: RC_NOKEY_MOUSE, text, count=1)
+        if count != 1:
+            raise RuntimeError("No-key receiver mouse-clear anchor not found")
+        log.append("  [ok]   no-key receiver clears driver mouse ledger")
     # 先收敛：模板更新必须落进树里（否则会出现"日志说装了、树里还是旧的"）
     text = refresh_marked_block(text, f"/* ==== {MARK}: 图传键鼠链路",
                                 f"/* ==== {MARK} 结束 ==== */", RC_IMPL,
@@ -525,3 +571,4 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+

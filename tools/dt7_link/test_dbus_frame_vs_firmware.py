@@ -90,7 +90,7 @@ def main() -> int:
     # 记账两行是 POLAR-HOST-BRIDGE 补丁注入的，本测试自己提供同语义的账量
     bridge = "HOST_RC_DRIVER_KEYS" in body
     tu_head = """
-#include <stdint.h>
+/* Fixed-width types come from the actual firmware remote_control.h include chain. */
 #include <stdio.h>
 #include <string.h>
 
@@ -220,3 +220,4 @@ int main(int argc, char **argv)
 
 if __name__ == "__main__":
     sys.exit(main())
+

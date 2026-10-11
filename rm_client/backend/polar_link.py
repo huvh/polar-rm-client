@@ -487,10 +487,12 @@ class PolarFrameCodec:
         index = 0
         total = len(stream)
 
-        while index + HEADER_SIZE + TIMESTAMP_SIZE + CRC16_SIZE <= total:
+        while index < total:
             if stream[index] != POLAR_SOF:
                 index += 1
                 continue
+            if index + HEADER_SIZE > total:
+                break
 
             header = stream[index : index + HEADER_SIZE]
             if crc8(header[:3]) != header[3]:
@@ -504,6 +506,15 @@ class PolarFrameCodec:
             if segment_len < TIMESTAMP_SIZE:
                 self.stats.length_errors += 1
                 self.stats.last_error = f"段 0x{segment_id:02X} 长度 {segment_len} 小于时间戳"
+                index += 1
+                continue
+            expected_spec = _SEGMENT_FORMATS.get(segment_id)
+            expected_body_len = (_DEBUG_PACKAGE_SIZE * _DEBUG_PACKAGE_NUM
+                                 if segment_id == SEG_DEBUG else
+                                 struct.calcsize(expected_spec) if expected_spec else None)
+            if expected_body_len is not None and segment_len != TIMESTAMP_SIZE + expected_body_len:
+                self.stats.length_errors += 1
+                self.stats.last_error = f"段 0x{segment_id:02X} 声明长度不符"
                 index += 1
                 continue
             if index + frame_len > total:
@@ -547,6 +558,9 @@ class PolarFrameCodec:
                 except struct.error:
                     self.stats.length_errors += 1
                     continue
+                if any(isinstance(v, float) and not math.isfinite(v) for v in values0):
+                    self.stats.last_error = f"段 0x{segment_id:02X} 包含非有限浮点值"
+                    continue
                 segments.append(
                     PolarSegment(
                         segment_id,
@@ -567,6 +581,9 @@ class PolarFrameCodec:
                 continue
             try:
                 values = struct.unpack(spec, body)
+                if any(isinstance(v, float) and not math.isfinite(v) for v in values):
+                    self.stats.last_error = f"段 0x{segment_id:02X} 包含非有限浮点值"
+                    continue
                 fields = decoder(values)
             except Exception as exc:  # pragma: no cover - 防御性
                 self.stats.last_error = f"段 0x{segment_id:02X} 解码异常: {exc}"
@@ -579,6 +596,8 @@ class PolarFrameCodec:
     # ------------------------------------------------------------------
     @staticmethod
     def _wrap(segment_id: int, raw_timestamp: int, body: bytes) -> bytes:
+        if not 0 <= segment_id <= 0xFF:
+            raise ValueError("segment_id must fit uint8")
         segment_len = TIMESTAMP_SIZE + len(body)
         if segment_len > MAX_SEGMENT_LEN:
             raise ValueError(f"数据段过长: {segment_len} > {MAX_SEGMENT_LEN}")
@@ -609,6 +628,11 @@ class PolarFrameCodec:
         无法通过参数置 1（签名不暴露 fire）。`polar_link_test` 有不变量断言。
         """
 
+        if not all(math.isfinite(float(value)) for value in (
+            chassis_vx, chassis_vy, chassis_wz, chassis_roll, chassis_pitch,
+            chassis_yaw, chassis_leg_length, gimbal_pitch_rad, gimbal_yaw_rad,
+        )):
+            raise ValueError("robot command requires finite values")
         body = _ROBOT_CMD_BODY.pack(
             float(chassis_vx),
             float(chassis_vy),
@@ -686,7 +710,7 @@ class PolarFrameCodec:
         未知取值一律归为 NONE（不干预），避免半包/串位导致误动作。
         """
 
-        cmd = int(spin_cmd) & 0xFF
+        cmd = int(spin_cmd)
         if cmd not in (SPIN_CMD_NONE, SPIN_CMD_ON, SPIN_CMD_OFF):
             cmd = SPIN_CMD_NONE
         body = struct.pack(
