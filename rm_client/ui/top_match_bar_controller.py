@@ -14,6 +14,7 @@ from PySide6.QtGui import QColor, QFont
 from ..robot_profiles import profiles_for_match
 from ..top_match_bar import LifeState, TopMatchBarFeed
 from .top_match_bar import TopMatchBarOptions, TopMatchBarRenderer
+from .overlay_coordinator import OverlayCoordinator
 
 _LOG = logging.getLogger(__name__)
 
@@ -42,6 +43,12 @@ class TopMatchBarController:
         TopMatchBarFeed(red, blue)  # Validate before replacing any current config.
         self._custom_rosters = (tuple(red), tuple(blue), str(label)[:14])
         self.reset()
+
+    def hide(self) -> None:
+        """Clear this frame's presentation without discarding fresh telemetry."""
+        self.last_layout = None
+        self.last_progress_bounds = None
+        self.renderer.reset_motion()
 
     def reset(self) -> None:
         self.feed = None
@@ -107,7 +114,7 @@ class TopMatchBarController:
         hud = owner.registry.get("HUD")
         if hud is not None and not hud.enabled:
             return False
-        if owner.minecraft_hud_active() or owner.menu_overlay_active():
+        if owner.menu_overlay_active():
             return False
         hero = getattr(owner, "hero_deploy_ui", None)
         if hero is not None and bool(getattr(hero, "active", False)):
@@ -123,10 +130,10 @@ class TopMatchBarController:
         This prevents the legacy path drawing over a menu, expanded map or HUD
         row. Disabling TopMatchBar restores the original EliminationFX path.
         """
-        return self.enabled() and not self.owner.minecraft_hud_active()
+        return self.enabled()
 
     def _paint_progress(self, painter: Any, frame: Any, width: int, now: float,
-                        left: float, right: float, bottom: float) -> None:
+                        left: float, right: float, bottom: float, maximum_bottom: float) -> None:
         if not bool(self._setting("BF6 Progress", True)) or self.owner.state.match_mode != "RMUC7v7":
             return  # RMUL victory points are a different metric.
         renderer = getattr(getattr(self.owner, "kill_fx", None), "match_progress", None)
@@ -146,6 +153,11 @@ class TopMatchBarController:
         painter.save()
         try:
             painter.translate(left, 0)
+            # A resize/MC toggle may introduce a lower obstacle while progress
+            # still eases from its previous position. Clamp only that unsafe
+            # tail; ordinary island-collapse easing remains unchanged.
+            if renderer.shown_y is not None:
+                renderer.shown_y = min(renderer.shown_y, maximum_bottom - 30.0)
             previous_y = renderer.shown_y if renderer.shown_y is not None else y
             # Keep the existing downward position visible while it eases up
             # after an island collapse; a fixed 64px clip would make it blink.
@@ -185,7 +197,9 @@ class TopMatchBarController:
             painter.restore()
         return y + 16.0
 
-    def paint(self, painter: Any, width: int, height: int, now: float) -> None:
+    def paint(self, painter: Any, width: int, height: int, now: float, *,
+              minecraft_layout: Any = None, hud_scale: float = 1.0,
+              include_map: bool = True) -> None:
         self.last_layout = None
         self.last_progress_bounds = None
         try:
@@ -193,7 +207,7 @@ class TopMatchBarController:
                 self.reset()
                 return
             if not self.visible():
-                self.renderer.reset_motion()
+                self.hide()
                 return
             feed = self._ensure_feed()
             if not self.owner.backend.mqtt.connected:
@@ -205,21 +219,19 @@ class TopMatchBarController:
             owner = self.owner
             hud = owner.registry.get("HUD")
             top = 5.0
-            if owner.setting_bool(hud, "Dynamic Island", True):
+            dynamic_island = owner.setting_bool(hud, "Dynamic Island", True)
+            if dynamic_island:
                 island = owner.dynamic_island_state
                 top = max(top, float(island.y) + float(island.height) + 8.0, 62.0)
             left = right = 12.0
             tactical = owner.registry.get("TacticalMap")
-            if tactical is not None and tactical.enabled:
-                rect = owner.tactical_map_rect(width, height)
-                if rect.bottom() > top and rect.top() < top + 180:
-                    left = max(left, float(rect.right()) + 10.0)
+            map_visible = include_map and tactical is not None and tactical.enabled
             if owner.setting_bool(hud, "Watermark", True) and top < 58:
                 left = max(left, min(290.0, width * .28))
             right_mode = owner.setting_mode(hud, "Right Display", "ModuleListHud")
             if owner.setting_bool(hud, "Module List", True):
                 right = max(right, 270.0)
-                if (right_mode in ("ModuleListHud", "TacticalMapHud") and
+                if (minecraft_layout is None and right_mode in ("ModuleListHud", "TacticalMapHud") and
                         owner.setting_mode(hud, "ModuleList Style", "PolarTextList") == "PolarTextList"):
                     # Bare Polar text uses x=18, width=260, independently of
                     # the right-side panels. Keep a 10px gap even without map.
@@ -233,17 +245,39 @@ class TopMatchBarController:
                             "StatusCardsHud": ("Status Cards", 204.0),
                             "RMIndicatorsHud": ("RM Indicators", 254.0)}
             panel = panel_insets.get(right_mode)
-            if panel and owner.setting_bool(hud, panel[0], True):
+            if minecraft_layout is None and panel and owner.setting_bool(hud, panel[0], True):
                 right = max(right, panel[1])
             if owner.setting_bool(hud, "KeyBinds", True):
                 right = max(right, 164.0)  # Compact strip: 136px + 18 margin + gap.
             # Symmetric corridor keeps the CS clock and BF6 midpoint on the
             # viewport center while leaving both existing side HUDs untouched.
-            left = right = max(left, right)
-            if left + right + 108 >= width or top + 150 >= height * .48:
+            safe = OverlayCoordinator.top_hud_safe_area(
+                width, height, top=top, inset=max(left, right),
+                minecraft_layout=minecraft_layout, hud_scale=hud_scale,
+                dynamic_island=dynamic_island,
+                # MC effect visibility follows the module, not include_map.
+                tactical_map=tactical is not None and tactical.enabled)
+            left = right = safe.inset
+            top = safe.top
+            if map_visible:
+                rect = owner.tactical_map_rect(width, height)
+                # MC boss bars may have moved the row below its original top.
+                # Test the final reserved band, not the old 180px estimate.
+                if rect.bottom() > top and rect.top() < safe.bottom:
+                    left = right = max(left, float(rect.right()) + 10.0)
+            if left + right + 108 >= width:
+                return
+            requested_scale = max(.35, min(1.4, float(self._setting("Scale", .72))))
+            systems_height = 18.0 if frame.left.systems or frame.right.systems else 0.0
+            progress_height = (40.8 if bool(self._setting("BF6 Progress", True)) and
+                               owner.state.match_mode == "RMUC7v7" else 0.0)
+            # Use actual fitted row height, not a fixed 150px estimate. This
+            # matters when MC boss bars and HUD scale consume different units.
+            available_scale = (safe.bottom - top - systems_height - progress_height) / 120.0
+            if available_scale < .35:
                 return
             options = TopMatchBarOptions(
-                enabled=True, scale=max(.35, min(1.4, float(self._setting("Scale", .72)))),
+                enabled=True, scale=min(requested_scale, available_scale),
                 top=top, safe_left=left, safe_right=right,
                 reduced_motion=not bool(self._setting("Source Motion Preview", False)),
                 show_kills=bool(self._setting("Show Kills", True)),
@@ -252,7 +286,7 @@ class TopMatchBarController:
             self.last_layout = self.renderer.paint(painter, frame, width, now=now, options=options)
             if self.last_layout is not None:
                 bottom = self._paint_systems(painter, frame, self.last_layout)
-                self._paint_progress(painter, frame, width, now, left, right, bottom)
+                self._paint_progress(painter, frame, width, now, left, right, bottom, safe.bottom)
             self._last_error = ""
         except Exception as exc:
             # A presentation fault cannot abort the shared HUD/control frame.

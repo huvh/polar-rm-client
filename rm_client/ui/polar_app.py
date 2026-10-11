@@ -2450,6 +2450,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         logical_width = max(1, int(width / scale))
         logical_height = max(1, int(height / scale))
         minecraft_active = self.minecraft_hud_active()
+        self._last_minecraft_hud_layout = None
         held_tab_list = self.student_ui.visible and self.student_ui.panel=="damage"
         if minecraft_active:
             # Original MC chrome is one low-resolution nearest-neighbour
@@ -2522,8 +2523,14 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             self.draw_dynamic_island(p, logical_width)
         # Pure display layer, no widget/focus/input ownership. Kept outside the
         # static video/HUD cache so stale observations expire without new video.
-        if not minecraft_active and not held_tab_list:
-            self.top_match_bar.paint(p, logical_width, logical_height, now)
+        if not held_tab_list:
+            self.top_match_bar.paint(
+                p, logical_width, logical_height, now,
+                minecraft_layout=self._last_minecraft_hud_layout,
+                hud_scale=scale, include_map=include_map is not False,
+            )
+        else:
+            self.top_match_bar.hide()
         tactical_map = self.registry.get("TacticalMap")
         # Always show map while tuning ClickGUI unless caller forces it off.
         draw_map = True if include_map is None else include_map
