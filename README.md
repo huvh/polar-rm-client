@@ -61,6 +61,8 @@ python -m venv .venv
 
 ## 快捷键
 
+- 主 HUD 按 `Esc` 打开 Jello 二级菜单：继续、返回启动页、退出客户端（二次确认）；再次 `Esc` 关闭。已有输入框/弹窗优先处理 Esc。菜单不暂停遥测或安全监控，菜单键鼠不会下发为控制输入。见 [Esc 菜单说明](docs/escape_menu.md)。
+
 - `Right Shift` 或 `F8`：打开/关闭 ClickGUI。
 - `F9`：已停用，不再轮换 ClickGUI。
 - 长按 `Tab`：放大 `TacticalMap`；松开 `Tab` 后回到缩略小地图。修改 `TacticalMap` 模块绑定键后，新的绑定键也会作为长按查看键。
@@ -235,3 +237,4 @@ FFmpeg 与 `BUILD_MANIFEST.json` 的哈希。
 详见 `FIELD_CANDIDATE.md`。构建完成仅表示“现场候选版”；缺少真车、正式
 裁判系统、正式图传和双人签字证据时，结论必须保持
 `NOT READY FOR REAL MATCH`。
+

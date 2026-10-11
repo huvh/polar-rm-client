@@ -40,6 +40,15 @@ PYTHON_SUITES = (
     "test_controller_frame_regressions",
     "test_api_freeze_platform_regressions",
     "test_ui_state_regressions",
+    "test_polar_async_connect",  # nonblocking connect, cancellation and shutdown ownership
+    "test_device_manager_nonblocking",  # frame never waits for driver locks or close
+    "test_dt7_worker_dispatch",  # bounded UI-safe DT7 mailbox and fault lifecycle
+    "test_cc_worker_dispatch",   # bounded UI-safe custom-controller worker
+    "test_gpu_warmup_budget",  # queued warmup and UI-thread timing ownership
+    "test_escape_menu",  # modal input precedence, safe Esc actions and real Qt rendering
+    "test_kill_selector_regressions",  # clipped preset popup wheel/touchpad routing
+    "test_kill_audio_regressions",  # nonblocking PCM cache, Ready gating and errors; no audio output
+    "test_kill_asset_filtering",  # real Qt raster DPR/filter/cache checks
     "student_frontend_test",  # MC 背包/Jello 学生面板：只读展示、草稿不发、模态与缓存
     "polar_spec_test",        # 协议规格：加载/校验/改 JSON 真能改行为/新增段零 Python
     "robot_roles_test",       # 兵种对齐：限幅、禁驾、不一致告警、键位分层

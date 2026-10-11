@@ -13,6 +13,8 @@ COM 号（COM7、COM12 都可能），因此选项列表不能写死，必须现
 from __future__ import annotations
 
 import re
+import threading
+import time
 
 # StandardRobot++ / STM32 常见 USB 虚拟串口身份。命中即优先选中。
 PREFERRED_USB_IDS: tuple[tuple[int, int], ...] = (
@@ -33,7 +35,7 @@ STUB_PORT = "Stub"
 AUTO_MIN_SCORE = 30
 
 
-def list_serial_ports() -> list[dict[str, object]]:
+def _scan_serial_ports() -> list[dict[str, object]]:
     """返回系统可用串口；没装 pyserial 或没插设备时返回空列表，绝不抛异常。"""
 
     try:
@@ -58,6 +60,54 @@ def list_serial_ports() -> list[dict[str, object]]:
         )
     ports.sort(key=lambda entry: _com_number(str(entry["device"])))
     return ports
+
+
+# Shared discovery snapshot: one scan per TTL across DT7, CC and UI menus.
+# Device-change notifications and failed handles invalidate this cache; neither
+# invalidation nor a GUI request performs device I/O on the calling thread.
+_PORT_CACHE_TTL = 1.0
+_port_cache = []
+_port_cache_at = float("-inf")
+_port_cache_generation = 0
+_port_scan_lock = threading.Lock()
+_port_refresh_running = False
+
+
+def invalidate_port_cache() -> None:
+    global _port_cache_at, _port_cache_generation
+    _port_cache_at = float("-inf")
+    _port_cache_generation += 1
+
+
+def list_serial_ports() -> list[dict[str, object]]:
+    """Cached discovery for hardware workers; use port_snapshot in the UI."""
+    global _port_cache, _port_cache_at
+    now = time.monotonic()
+    if now - _port_cache_at < _PORT_CACHE_TTL:
+        return [dict(entry) for entry in _port_cache]
+    with _port_scan_lock:
+        if time.monotonic() - _port_cache_at >= _PORT_CACHE_TTL:
+            generation = _port_cache_generation
+            result = _scan_serial_ports()
+            if generation == _port_cache_generation:
+                _port_cache = result
+                _port_cache_at = time.monotonic()
+    return [dict(entry) for entry in _port_cache]
+
+
+def port_snapshot() -> list[dict[str, object]]:
+    """Immediate GUI snapshot, asynchronously refreshed at most once per TTL."""
+    global _port_refresh_running
+    if time.monotonic() - _port_cache_at >= _PORT_CACHE_TTL and not _port_refresh_running:
+        _port_refresh_running = True
+        def refresh():
+            global _port_refresh_running
+            try:
+                list_serial_ports()
+            finally:
+                _port_refresh_running = False
+        threading.Thread(target=refresh, name="serial-discovery", daemon=True).start()
+    return [dict(entry) for entry in _port_cache]
 
 
 def _com_number(device: str) -> int:
@@ -93,15 +143,16 @@ def score_port(entry: dict[str, object]) -> int:
     return 30  # 其他带 VID/PID 的 USB 串口设备
 
 
-def candidate_port_names() -> list[str]:
-    return [str(entry["device"]) for entry in list_serial_ports()]
+def candidate_port_names(*, nonblocking=False) -> list[str]:
+    entries = port_snapshot() if nonblocking else list_serial_ports()
+    return [str(entry["device"]) for entry in entries]
 
 
-def port_choices() -> list[str]:
+def port_choices(*, nonblocking=False) -> list[str]:
     """ClickGUI 用的选项：固定值 + 当前探测到的口（去重、保持顺序）。"""
 
     choices = [STUB_PORT, AUTO_PORT, "COM1", "COM3", "COM5"]
-    for device in candidate_port_names():
+    for device in candidate_port_names(nonblocking=nonblocking):
         if device not in choices:
             choices.append(device)
     return choices
@@ -130,7 +181,7 @@ def describe_ports(limit: int = 6) -> list[str]:
     """给 HUD/预检用的人类可读清单。"""
 
     lines: list[str] = []
-    for entry in list_serial_ports()[:limit]:
+    for entry in port_snapshot()[:limit]:
         vid = int(entry.get("vid", 0) or 0)
         pid = int(entry.get("pid", 0) or 0)
         tag = f"USB {vid:04X}:{pid:04X}" if vid and pid else "非 USB"
@@ -183,10 +234,11 @@ def resolve_rc_port(port: str) -> str:
     return str(ranked[0]["device"])
 
 
-def rc_port_choices() -> list[str]:
+def rc_port_choices(*, nonblocking=False) -> list[str]:
     """DT7 专用下拉：Auto + 明确认得出的 DJI 口（不把机器人的口混进来）。"""
     choices = [AUTO_PORT]
-    for entry in list_serial_ports():
+    entries = port_snapshot() if nonblocking else list_serial_ports()
+    for entry in entries:
         if score_rc_port(entry) >= 70:
             device = str(entry["device"])
             if device not in choices:
@@ -229,7 +281,7 @@ def port_identity(device: str) -> dict:
             return entry
     return {}
 
-def refresh_port_options(registry) -> list[str]:
+def refresh_port_options(registry, *, nonblocking=False) -> list[str]:
     """重扫串口，把三个口下拉的 options 换成当前真值；返回人话形式的差异。
 
     为什么要专门做这件事：串口清单是 `build_default_registry()` 那一次算出来的
@@ -248,8 +300,9 @@ def refresh_port_options(registry) -> list[str]:
     module = registry.get("RobotLink") if hasattr(registry, "get") else None
     if module is None:
         return diffs
-    wanted = {"Port": port_choices(), "DT7 Port": rc_port_choices(),
-              "CC Port": port_choices()}
+    wanted = {"Port": port_choices(nonblocking=nonblocking),
+              "DT7 Port": rc_port_choices(nonblocking=nonblocking),
+              "CC Port": port_choices(nonblocking=nonblocking)}
     for name, opts in wanted.items():
         setting = module.get_setting(name)
         if setting is None:
@@ -270,3 +323,7 @@ def refresh_port_options(registry) -> list[str]:
         diffs.append(piece)
     return diffs
 
+
+
+def discovery_pending() -> bool:
+    return _port_refresh_running

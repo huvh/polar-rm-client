@@ -73,6 +73,7 @@ class ReliableAudioPool(QObject):
                 output = QAudioOutput(self)
                 player = QMediaPlayer(self)
                 player.setAudioOutput(output)
+                player.errorOccurred.connect(lambda error, message, voice=player: self._on_media_error(voice, message))
                 player.setSource(source)
                 voices.append((player, output))
             self._media_effects[name] = voices
@@ -99,6 +100,9 @@ class ReliableAudioPool(QObject):
             return True
         if any(voice.status() == QSoundEffect.Status.Loading for voice in voices):
             self._pending[name].append(volume)
+            # Each voice emits Ready only once. Keep at most that many cold
+            # requests so stale cues cannot remain queued indefinitely.
+            del self._pending[name][:-len(voices)]
             return True
         return self._play_fallback(path, volume, "QSoundEffect 无法解码该音效")
 
@@ -113,6 +117,10 @@ class ReliableAudioPool(QObject):
             pending = self._pending.pop(name, [])
             for volume in pending:
                 self._play_fallback(self._sound_path(name), volume, "QSoundEffect 加载失败")
+
+    def _on_media_error(self, player: QMediaPlayer, message: str) -> None:
+        self.last_error = f"音效播放失败: {player.source().toLocalFile()}: {message}"
+        logging.getLogger(__name__).warning(self.last_error)
 
     def _play_fallback(self, path: Path, volume: float, reason: str) -> bool:
         try:
@@ -134,15 +142,20 @@ class ReliableAudioPool(QObject):
             output = QAudioOutput(self)
             player = QMediaPlayer(self)
             player.setAudioOutput(output)
+            player.errorOccurred.connect(lambda error, message, voice=player: self._on_media_error(voice, message))
             self._fallback.append((player, output))
         player, output = self._fallback[self._fallback_index % len(self._fallback)]
         self._fallback_index = (self._fallback_index + 1) % len(self._fallback)
         player.stop()
         output.setVolume(max(0.0, min(1.0, volume / 100.0)))
-        player.setSource(QUrl.fromLocalFile(str(path.resolve())))
-        player.play()
+        source = QUrl.fromLocalFile(str(path.resolve()))
+        if player.source() != source:
+            player.setSource(source)
+        else:
+            player.setPosition(0)
         self.backend = "QMediaPlayer"
         self.last_error = reason
+        player.play()
         return True
 
 
@@ -318,3 +331,4 @@ def _media_preload_disabled() -> bool:
         "yes",
         "on",
     }
+

@@ -11,7 +11,7 @@ from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QFont, QImage, QPainter, QPen, QPixmap, QTransform
 
 from .combat_events import CombatEvent
-from .ui_audio import ReliableAudioPool
+from .kill_audio import KillSoundPool
 
 
 KILL_TYPES = ("NORMAL", "HEADSHOT", "EXPLOSION", "CRIT", "ASSIST", "DESTROY_VEHICLE")
@@ -324,11 +324,39 @@ class AssetBank:
         self.sound_root = root / "sounds"
         self.images: dict[str, QImage] = {}
         self.frames: dict[tuple[str, int, int], QImage] = {}
+        # Fixed power-of-two levels, not animation-size keys. Retaining the QImage
+        # and its cacheKey lets Qt reuse uploads instead of replacing them per frame.
+        self._minified: dict[tuple[int, int], QImage] = {}
 
     def image(self, name: str) -> QImage:
         if name not in self.images:
             self.images[name] = QImage(str(self.texture_root / name))
         return self.images[name]
+
+    def _filtered_image(self, p: QPainter, image: QImage, width: float, height: float) -> QImage:
+        """Choose an area-filtered level at least as large as its physical target.
+
+        deviceTransform includes painter scaling, rotation and device pixel ratio.
+        A final smooth draw handles the remaining <2x reduction. Each level is
+        computed once, from the original (never repeatedly blurred). All levels
+        together cost at most ~1/3 of the original pixels for square textures;
+        the 12-level cap also bounds pathological/extremely small animations.
+        """
+        transform = p.deviceTransform()
+        target_w = abs(width) * math.hypot(transform.m11(), transform.m12())
+        target_h = abs(height) * math.hypot(transform.m21(), transform.m22())
+        reduction = min(image.width() / max(1.0, target_w), image.height() / max(1.0, target_h))
+        level = min(12, max(0, int(math.floor(math.log2(max(1.0, reduction))))))
+        if level == 0:
+            return image
+        key = (image.cacheKey(), level)
+        if key not in self._minified:
+            divisor = 1 << level
+            self._minified[key] = image.scaled(
+                max(1, image.width() // divisor), max(1, image.height() // divisor),
+                Qt.AspectRatioMode.IgnoreAspectRatio, Qt.TransformationMode.SmoothTransformation,
+            )
+        return self._minified[key]
 
     def draw_centered(self, p: QPainter, name: str, center: QPointF, size: float, alpha: float = 1.0, rotation: float = 0.0, scale: float = 1.0, additive: bool = False, width_ratio: float = 1.0, height_ratio: float = 1.0) -> None:
         image = self.image(name)
@@ -343,7 +371,8 @@ class AssetBank:
         p.translate(center)
         p.rotate(rotation)
         p.scale(scale, scale)
-        p.drawImage(QRectF(-w / 2.0, -h / 2.0, w, h), image)
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+        p.drawImage(QRectF(-w / 2.0, -h / 2.0, w, h), self._filtered_image(p, image, w, h))
         p.restore()
 
     def draw_vertical_frame(self, p: QPainter, name: str, frame: int, count: int, center: QPointF, size: float, alpha: float, scale: float = 1.0, additive: bool = True) -> None:
@@ -364,7 +393,8 @@ class AssetBank:
         w, h = size, size / max(0.01, aspect)
         p.translate(center)
         p.scale(scale, scale)
-        p.drawImage(QRectF(-w / 2.0, -h / 2.0, w, h), frame_image)
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+        p.drawImage(QRectF(-w / 2.0, -h / 2.0, w, h), self._filtered_image(p, frame_image, w, h))
         p.restore()
 
     def draw_bottom_anchored(self, p: QPainter, name: str, anchor: QPointF, width: float, alpha: float, rotation: float, scale: float) -> None:
@@ -378,13 +408,14 @@ class AssetBank:
         p.translate(anchor)
         p.rotate(rotation)
         p.scale(scale, scale)
-        p.drawImage(QRectF(-width / 2.0, -height, width, height), image)
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+        p.drawImage(QRectF(-width / 2.0, -height, width, height), self._filtered_image(p, image, width, height))
         p.restore()
 
 
-class SoundPool(ReliableAudioPool):
+class SoundPool(KillSoundPool):
     def __init__(self, root: Path, count: int = 8) -> None:
-        super().__init__(root, voices_per_sound=2, fallback_voices=count)
+        super().__init__(root, count=count)
 
 
 class LockedTargetTracker:
@@ -1364,7 +1395,8 @@ class KillFxRenderer:
         if preset == "Combo":
             name = f"combokillsound_{max(1, min(6, combo))}_cf.ogg"
         elif preset == "Card":
-            name = f"cardkillsound_{'armorheadshot' if key == 'headshot' else key}_cs.ogg"
+            card_key = key if key in {"default", "headshot", "explosion", "crit"} else "default"
+            name = f"cardkillsound_{'armorheadshot' if card_key == 'headshot' else card_key}_cs.ogg"
         elif preset == "Battlefield 1":
             name = "headshotkillsound_bf1.ogg" if key == "headshot" else "killsound_bf1.ogg"
         elif preset == "Battlefield 5":
@@ -1389,7 +1421,7 @@ class KillFxRenderer:
             for kill_type in KILL_TYPES
             for combo in range(1, 7)
         }
-        names.add("addscore_df.ogg")
+        names.update(("addscore_df.ogg", "hitsound_bf6.ogg"))
         self.sounds.preload(names)
 
     def notify_hit(self, damage: int, kind: str, *, preset: str, visibility: str, sound_enabled: bool, volume: float, element_toggles: dict[str, bool] | None = None, now_override: float | None = None) -> None:

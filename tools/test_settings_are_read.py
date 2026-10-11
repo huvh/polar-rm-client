@@ -128,6 +128,7 @@ def main() -> int:
     from rm_client.model import RobotState, build_default_registry
     manager = BackendManager(workspace=tempfile.mkdtemp(prefix="set_read_"),
                              scenario_key="OfficialEvent", client_id="3")
+    manager.polar.request_start = lambda: None  # configuration-only test, never open hardware
     registry = build_default_registry()
     state = RobotState()
     manager.state = state
@@ -187,3 +188,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+

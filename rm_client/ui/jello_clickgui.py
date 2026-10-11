@@ -154,6 +154,7 @@ class JelloClickGuiState:
     )
     dropdown_key: str | None = None
     dropdown_opens_up: bool = False
+    dropdown_scroll: float = 0.0
     dropdown_animation: JelloReversibleAnimation = field(
         default_factory=lambda: JelloReversibleAnimation(0.220, 0.220)
     )
@@ -260,6 +261,7 @@ class JelloClickGuiState:
             self.dropdown_key = key
             self.dropdown_opens_up = False
             self.dropdown_animation.reset(0.0)
+        self.dropdown_scroll = 0.0
         self.dropdown_animation.set_target(1.0)
 
     def close_dropdown(self, *, immediate: bool = False) -> None:
@@ -1153,7 +1155,12 @@ class JelloClickGuiRenderer:
             for candidate in module.settings:
                 candidate_key = f"{module.name}:{candidate.name}"
                 if candidate_key == state.dropdown_key and candidate.kind == "mode":
-                    popup_height = (27.0 * len(candidate.options) + 1.0) * scale
+                    # Long mode lists get their own viewport. Never scroll
+                    # their header above the panel just to reveal every item.
+                    popup_height = min(
+                        (27.0 * len(candidate.options) + 1.0) * scale,
+                        max(0.0, content.height() - 32.0 * scale),
+                    )
                     header_bottom = (active_y + 32.0) * scale
                     required_scroll = header_bottom + popup_height - content.height()
                     if required_scroll > scroll:
@@ -1564,24 +1571,27 @@ class JelloClickGuiRenderer:
             return
         options = list(request.setting.options)
         height_factor = self._dropdown_height_factor(state.dropdown_animation)
-        visible_h = (27.0 * len(options) + 1.0) * request.scale * height_factor
         full_h = (27.0 * len(options) + 1.0) * request.scale
-        if request.opens_up:
-            popup_clip = QRectF(
-                request.rect.left(),
-                request.rect.top() - visible_h,
-                request.rect.width(),
-                visible_h,
-            ).intersected(request.clip)
-            popup_top = request.rect.top() - full_h
-        else:
-            popup_clip = QRectF(
-                request.rect.left(),
-                request.rect.bottom(),
-                request.rect.width(),
-                visible_h,
-            ).intersected(request.clip)
-            popup_top = request.rect.bottom()
+        available = (request.rect.top() - request.clip.top() if request.opens_up
+                     else request.clip.bottom() - request.rect.bottom())
+        viewport_h = min(full_h, max(0.0, available))
+        visible_h = viewport_h * height_factor
+        popup_top = (request.rect.top() - viewport_h if request.opens_up
+                     else request.rect.bottom())
+        popup_clip = QRectF(
+            request.rect.left(),
+            request.rect.top() - visible_h if request.opens_up else popup_top,
+            request.rect.width(), visible_h,
+        ).intersected(request.clip)
+        maximum = max(0.0, full_h - viewport_h)
+        state.dropdown_scroll = max(0.0, min(maximum, state.dropdown_scroll))
+        # Last registered viewport wins: a popup must consume wheel input
+        # before its settings panel, including when already at either limit.
+        if not popup_clip.isEmpty():
+            host.gui_scroll_viewports.append({
+                "mode": "jello_dropdown", "key": request.key,
+                "maximum": maximum, "rect": QRectF(popup_clip),
+            })
 
         # Dropdown.draw casts two exact Jello shadows around the header plus
         # currently revealed option height, then fades a white rounded header
@@ -1691,7 +1701,7 @@ class JelloClickGuiRenderer:
         for index, value in enumerate(options):
             option = QRectF(
                 request.rect.left(),
-                popup_top + index * 27.0 * request.scale,
+                popup_top + index * 27.0 * request.scale - state.dropdown_scroll,
                 request.rect.width(),
                 27.0 * request.scale,
             )

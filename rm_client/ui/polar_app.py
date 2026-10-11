@@ -137,6 +137,7 @@ from ..student_ui import StudentUiState, StudentNoticeAdapter
 from .student_panels import StudentPanelRenderer
 from .minecraft_chat import MinecraftServerChatRenderer
 from .polar.mixins.student_frontend_mixin import StudentFrontendMixin
+from .polar.mixins.escape_menu_mixin import EscapeMenuMixin
 from .quick_action_wheel import ACTION_LABELS, DEFAULT_ACTIONS, QuickActionWheelState
 from .quick_action_wheel_gpu import QuickActionWheelCommand, QuickActionWheelGpuRenderer
 from .startup_gl import StartupGpuCompositor, TextureOrigin
@@ -346,7 +347,7 @@ class PolarHudOverlay(QWidget):
         self.owner.wheelEvent(event)
 
 
-class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, ModuleListMixin, TacticalMapMixin, DynamicIslandMixin, StartupSceneMixin, PersistenceMixin, VideoBackendMixin, ClickGuiBuildersMixin, EconomyMixin, InputDispatchMixin, ConfigActionsMixin, StudentFrontendMixin, QOpenGLWidget):
+class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, ModuleListMixin, TacticalMapMixin, DynamicIslandMixin, StartupSceneMixin, PersistenceMixin, VideoBackendMixin, ClickGuiBuildersMixin, EconomyMixin, InputDispatchMixin, ConfigActionsMixin, StudentFrontendMixin, EscapeMenuMixin, QOpenGLWidget):
     """主窗口直接使用 Qt OpenGL 表面，所有 QPainter UI 都由 OpenGL 合成呈现。"""
 
     # ------------------------------------------------------------------
@@ -369,6 +370,18 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
 
     def __init__(self) -> None:
         super().__init__()
+        self._gpu_prewarm_jobs_pending = None
+        self._gpu_prewarm_last_ms = 0.0
+        self._gpu_prewarm_max_ms = 0.0
+        self._ui_tick_last_ms = 0.0
+        self._ui_tick_max_ms = 0.0
+        self._ui_tick_gap_ms = 0.0
+        self._ui_tick_gap_max_ms = 0.0
+        self._ui_tick_stages = {}
+        self._ui_tick_perf_log_at = 0.0
+        self._gpu_prewarm_timer = QTimer(self)
+        self._gpu_prewarm_timer.setSingleShot(True)
+        self._gpu_prewarm_timer.timeout.connect(self._run_gpu_prewarm_slice)
         self.setWindowTitle("POLAR-RM Custom Client")
         self.resize(1280, 720)
         self.setMinimumSize(1000, 620)
@@ -745,6 +758,8 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         self.gui_motion.begin_frame(now)
         self._ui_frame_index += 1
         elapsed = max(0.0, now - self.last_frame_time)
+        self._ui_tick_gap_ms = elapsed * 1000.0
+        self._ui_tick_gap_max_ms = max(self._ui_tick_gap_max_ms, self._ui_tick_gap_ms)
         # UI timelines follow the display clock.  A first-use glyph/FBO upload
         # can block one frame for more than 50 ms; truncating that elapsed time
         # made Jello's nominal 450 ms open take 700-900 ms and all HUD motion
@@ -933,10 +948,31 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         )
         if self.frame_scheduler.should_request(now, high_rate, self.render_fps_target):
             self.update()
+        self._ui_tick_last_ms = (time.perf_counter() - now) * 1000.0
+        self._ui_tick_max_ms = max(self._ui_tick_max_ms, self._ui_tick_last_ms)
+        if now - self._ui_tick_perf_log_at >= 5.0:
+            self._ui_tick_perf_log_at = now
+            metrics = {
+                "tick_ms": self._ui_tick_last_ms,
+                "tick_max_ms": self._ui_tick_max_ms,
+                "wakeup_gap_ms": self._ui_tick_gap_ms,
+                "wakeup_gap_max_ms": self._ui_tick_gap_max_ms,
+                "stages": {name: dict(stats) for name, stats in self._ui_tick_stages.items()},
+                "gpu_prewarm_last_ms": self._gpu_prewarm_last_ms,
+                "gpu_prewarm_max_ms": self._gpu_prewarm_max_ms,
+            }
+            self.state.backend_stats["ui_tick_performance"] = metrics
+            try:
+                self.backend.field_log.emit("ui_tick_timing", **metrics)
+            except Exception:
+                _LOG.warning("UI timing diagnostic could not be written", exc_info=True)
+            self._ui_tick_stages.clear()
+            self._ui_tick_max_ms = self._ui_tick_gap_max_ms = 0.0
 
     def _run_tick_stage(self, name: str, callback: Any, now: float | None = None) -> bool:
         """Keep one backend/vision fault from killing the Qt timer callback."""
 
+        started = time.perf_counter()
         try:
             callback()
             return True
@@ -959,6 +995,16 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                     count=self._tick_error_count,
                 )
             return False
+        finally:
+            # Preserve exception isolation while exposing work outside paintGL.
+            # Collection is cheap and bounded by the fixed list of tick stages.
+            stages = getattr(self, "_ui_tick_stages", None)
+            if stages is not None:
+                elapsed_ms = (time.perf_counter() - started) * 1000.0
+                stats = stages.setdefault(name, {"count": 0, "total_ms": 0.0, "max_ms": 0.0})
+                stats["count"] += 1
+                stats["total_ms"] += elapsed_ms
+                stats["max_ms"] = max(stats["max_ms"], elapsed_ms)
 
     def update_backend_readiness(self, now: float | None = None, *, force: bool = False) -> dict[str, Any]:
         """Publish the fail-closed audit into runtime state for UI/diagnostics."""
@@ -1047,13 +1093,8 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
 
     def paintGL(self) -> None:
         started = time.perf_counter()
-        if self._gpu_warm_pending and self.clickgui_gpu.available:
-            # Mark the request consumed before allocating resources. Texture
-            # uploads may dispatch native events on Windows; keeping the flag
-            # set allowed a re-entrant paint to execute the whole warmup twice.
-            self._gpu_warm_pending = False
-            self.prewarm_gpu_clickgui_resources()
-        if not self.paint_gpu_frame():
+        gpu_presented = self.paint_gpu_frame()
+        if not gpu_presented:
             # A modal renderer failure must never degrade into a camera-only
             # frame.  In particular, an economy offer can change availability
             # immediately after the referee/mock response.  If command-list
@@ -1061,6 +1102,14 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             # established compatibility workspace for this frame while the GPU
             # caches are rebuilt on the next tick.
             self._paint_compatibility_frame()
+        if gpu_presented and self._gpu_warm_pending and self.clickgui_gpu.available:
+            self._gpu_warm_pending = False
+            QTimer.singleShot(0, self.prewarm_gpu_clickgui_resources)
+        elif (gpu_presented and self._gpu_prewarm_jobs_pending is not None
+              and not self._gpu_prewarm_timer.isActive()):
+            # A hide or temporary invalid context pauses, rather than wedges,
+            # the generator. Resume only after a successful visible GPU frame.
+            self._gpu_prewarm_timer.start(16)
         presented = time.perf_counter()
         present_dt = max(0.001, min(0.25, presented - self._last_present_time))
         self._last_present_time = presented
@@ -1085,6 +1134,10 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                 fps=self.state.fps,
                 render_target_fps=self.render_fps_target,
                 compositor_ms=getattr(self.gpu_compositor, "frame_ms", 0.0),
+                ui_tick_ms=self._ui_tick_last_ms,
+                ui_wakeup_gap_ms=self._ui_tick_gap_ms,
+                gpu_prewarm_last_ms=self._gpu_prewarm_last_ms,
+                gpu_prewarm_max_ms=self._gpu_prewarm_max_ms,
             )
             self._field_frame_times_ms.clear()
             self._last_field_frame_log_at = presented
@@ -1189,6 +1242,13 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             self.doneCurrent()
 
     def prewarm_gpu_clickgui_resources(self) -> None:
+        """Queue incremental GL warmup; preserve event-loop turns between pages."""
+        if not self.clickgui_gpu.available or not self.gpu_compositor.available:
+            return
+        self._gpu_prewarm_jobs_pending = self._gpu_prewarm_jobs()
+        self._gpu_prewarm_timer.start(16)
+
+    def _gpu_prewarm_jobs(self):
         """Allocate shaders and glyph atlases while the launcher is idle.
 
         Right Shift must only change animation uniforms.  It must not compile a
@@ -1223,7 +1283,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             10.5: set(),
         }
         numeric_characters = set("0123456789.-+%/abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ ")
-        for module in self.registry.modules:
+        for module_index, module in enumerate(self.registry.modules):
             labels.add(module.name)
             labels.add(module.category)
             labels.add(module.keybind)
@@ -1238,6 +1298,8 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             for setting in module.settings:
                 labels.add(setting.name)
                 labels.add(setting.display_value())
+            if module_index % 8 == 7:
+                yield ("prepare", (), {})
         fonts = (
             self.font("poppins_regular", 8.0),
             self.font("poppins_medium", 8.0),
@@ -1251,7 +1313,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         jello_fonts = self._jello_gpu_fonts()
         profile = self.current_profile()
         jello_labels_by_size[20.0].update((profile, f"{profile} · EN", f"{profile} · 中文"))
-        for module in self.registry.modules:
+        for module_index, module in enumerate(self.registry.modules):
             # Disabled/enabled rows reserve 168/160 logical pixels
             # respectively.  Prewarm both terminal-ellipsis variants.
             jello_labels_by_size[20.0].add(
@@ -1275,7 +1337,10 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                     jello_fonts[20.0], localized_module, 160.0
                 )
             )
-        self.clickgui_gpu.prewarm(fonts, labels, self.devicePixelRatioF())
+            if module_index % 8 == 7:
+                yield ("prepare", (), {})
+        for font in fonts:
+            yield ("text", ((font,), labels, self.devicePixelRatioF()), {})
         click_gui = self.registry.get("ClickGui")
         if click_gui is not None:
             click_gui_pages = self._jello_module_text_pages(click_gui, jello_fonts)
@@ -1289,37 +1354,22 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             requested_scale,
         ).scale
         current_raster_scale = self.jello_clickgui.raster_scale_for(effective_scale)
-        # The ClickGui scale slider can select every quarter-density page while
-        # it is moving.  Warm those seven small main/Options pages up front;
-        # other module pages are warmed synchronously before their reveal
-        # target changes, never during an animation frame.
-        raster_scales = {0.50 + 0.25 * index for index in range(7)}
-        raster_scales.add(current_raster_scale)
+        # Warm only the current density. Other scales are prepared on demand,
+        # instead of spending seconds on six pages the user may never see.
+        raster_scales = (current_raster_scale,)
         for raster_scale in raster_scales:
-            self.clickgui_gpu.prewarm(
-                (jello_fonts[14.0],),
-                ("".join(sorted(numeric_characters)),),
-                self.devicePixelRatioF(),
-                raster_scale=raster_scale,
-                preserve_weight=True,
-            )
+            yield ("text", ((jello_fonts[14.0],), ("".join(sorted(numeric_characters)),),
+                            self.devicePixelRatioF()),
+                   {"raster_scale": raster_scale, "preserve_weight": True})
             for size, font in jello_fonts.items():
-                self.clickgui_gpu.prewarm(
-                    (font,),
-                    jello_labels_by_size[size],
-                    self.devicePixelRatioF(),
-                    raster_scale=raster_scale,
-                    preserve_weight=True,
-                    text_profile="jello",
-                )
-        self.clickgui_gpu.prewarm_images(self.jello_clickgui.image_assets)
-        self.clickgui_gpu.prewarm_images(
-            (
-                self.minecraft_hud.asset_root / "hotbar.png",
-                self.minecraft_hud.asset_root / "hotbar_selection.png",
-                self._client_asset_path("assets", "jello", "hud_shadow.png"),
-            )
-        )
+                yield ("text", ((font,), jello_labels_by_size[size], self.devicePixelRatioF()),
+                       {"raster_scale": raster_scale, "preserve_weight": True, "text_profile": "jello"})
+        for source in self.jello_clickgui.image_assets:
+            yield ("image", ((source,),), {})
+        for source in (self.minecraft_hud.asset_root / "hotbar.png",
+                       self.minecraft_hud.asset_root / "hotbar_selection.png",
+                       self._client_asset_path("assets", "jello", "hud_shadow.png")):
+            yield ("image", ((source,),), {})
 
         # The economy workspace uses responsive font sizes and substantially
         # more CJK glyphs than ClickGUI. Prewarm the exact pages for the
@@ -1381,11 +1431,42 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             self.font(family, size * economy_scale)
             for family, size in economy_font_specs
         )
-        self.clickgui_gpu.prewarm(
-            economy_fonts,
-            economy_labels,
-            self.devicePixelRatioF(),
-        )
+        for font in economy_fonts:
+            yield ("text", ((font,), economy_labels, self.devicePixelRatioF()), {})
+
+
+    def _run_gpu_prewarm_slice(self) -> None:
+        jobs = self._gpu_prewarm_jobs_pending
+        if jobs is None or not self.gpu_compositor.available or not self.isVisible():
+            return
+        context = self.context()
+        if context is None or not context.isValid():
+            return
+        started = time.perf_counter()
+        try:
+            self.makeCurrent()
+            # One atlas/image per turn. The 3 ms target is soft: a single
+            # driver upload cannot be preempted. Record real overruns instead
+            # of reporting the timer budget as measured frame time.
+            while time.perf_counter() - started < 0.003:
+                kind, args, kwargs = next(jobs)
+                if kind == "text":
+                    self.clickgui_gpu.prewarm(*args, **kwargs)
+                elif kind == "image":
+                    self.clickgui_gpu.prewarm_images(*args)
+                break
+        except StopIteration:
+            self._gpu_prewarm_jobs_pending = None
+        except Exception as exc:
+            self._gpu_prewarm_jobs_pending = None
+            self.backend.field_log.emit("gpu_prewarm_error", error=str(exc))
+        finally:
+            self.doneCurrent()
+            self._gpu_prewarm_last_ms = (time.perf_counter() - started) * 1000.0
+            self._gpu_prewarm_max_ms = max(self._gpu_prewarm_max_ms, self._gpu_prewarm_last_ms)
+        if self._gpu_prewarm_jobs_pending is not None:
+            self._gpu_prewarm_timer.start(16)
+
 
     def paint_direct_gpu_background(self) -> bool:
         """Use native GL only for the opaque source image, then hand the UI to Qt."""
@@ -1512,7 +1593,8 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                 self.gui_timeline.progress > 0.01 or self.gui_visible
             )
             student_active = not startup_scene and self.student_ui.visible
-            modal_backdrop_active = economy_active or clickgui_active or student_active
+            escape_active = not startup_scene and self.escape_menu_visible
+            modal_backdrop_active = economy_active or clickgui_active or student_active or escape_active
             economy_reveal = (
                 max(0.0, min(1.0, self.economy_island.progress))
                 if economy_active
@@ -1536,6 +1618,12 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                 backdrop_active = clickgui_reveal > 0.0
                 backdrop_progress = 1.0 if backdrop_active else 0.0
                 backdrop_blur = self.gui_timeline.blur_radius()
+                backdrop_dim = 0.0
+                backdrop_blur_kernel = "jello_box20"
+            elif escape_active:
+                backdrop_active = True
+                backdrop_progress = 1.0
+                backdrop_blur = 20.0
                 backdrop_dim = 0.0
                 backdrop_blur_kernel = "jello_box20"
             elif student_active:
@@ -1715,6 +1803,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                         self.quick_action_wheel.visible
                         or self.match_chat.input_open
                         or self.student_ui.visible
+                        or self.escape_menu_visible
                     )
                     now = time.perf_counter()
                     # The wheel is normally held for less than a second, so a
@@ -1723,7 +1812,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                     # caret continue at the display refresh rate.
                     base_refresh_interval = (
                         0.25
-                        if self.match_chat.input_open
+                        if (self.match_chat.input_open or self.escape_menu_visible)
                         and not self.quick_action_wheel.visible
                         else float("inf")
                     )
@@ -2382,6 +2471,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             force_economy_compat=force_economy_compat,
         )
         self.draw_student_frontend(p, width, height)
+        self.draw_escape_menu(p, width, height)
         return bool(p.end()) if owns_painter else True
 
     def menu_overlay_active(self) -> bool:
@@ -2392,6 +2482,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             or self.economy_visible
             or self.economy_island.progress > 0.01
             or self.student_ui.visible
+            or self.escape_menu_visible
         )
 
     def economy_stage_active(self) -> bool:
@@ -2595,6 +2686,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             if self.quick_action_wheel.visible:
                 self.draw_quick_action_wheel(painter, width, height)
             self.draw_student_frontend(painter, width, height)
+            self.draw_escape_menu(painter, width, height)
             painter.end()
             self.flush_gpu_quick_action_wheel(functions, width, height, ratio)
             self.gpu_compositor.last_dynamic_ms = (
@@ -3199,6 +3291,8 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         # and teardown actions. Stop the timer and outputs before disk/GL work.
         try:
             cleanup("timer", self.timer.stop)
+            if hasattr(self, "_gpu_prewarm_timer"):
+                cleanup("GPU warmup timer", self._gpu_prewarm_timer.stop)
             cleanup("control lock", lambda: self.backend.lock_control("window closing"))
             self.control.mock_output = bool(self.backend.mqtt.mock_output)
             cleanup("control release", lambda: self.control.release_all(self.state, self.registry))
@@ -4485,3 +4579,4 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
 # app_entry.py 模块 docstring。
 # ----------------------------------------------------------------------
 from .polar.app_entry import main  # noqa: E402  （阶段 4 兼容 re-export）
+

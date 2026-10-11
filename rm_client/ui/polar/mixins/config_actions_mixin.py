@@ -765,18 +765,32 @@ class ConfigActionsMixin:
         真正的逻辑在 rm_client/serial_ports.refresh_port_options()：那边是纯逻辑、
         可离线测；这里只负责提示与落盘。
         """
-        from rm_client.serial_ports import refresh_port_options
+        import rm_client.serial_ports as serial_ports
 
-        module = self.registry.get("RobotLink")
-        diffs = refresh_port_options(self.registry)
-        # 重扫完必须当场告诉他"DT7 现在到底认没认出来"，不然他还得自己去猜：
-        # Auto 只认 DJI 那对 VID/PID，认不出是**故意拒发**而不是乱开别人的口。
-        setting = module.get_setting("DT7 Port") if module is not None else None
-        seen = [str(x) for x in (getattr(setting, "options", None) or [])
-                if str(x) and str(x) != "Auto"]
-        self.toast("串口已重扫：" + ("；".join(diffs) if diffs else "候选口没有变化")
-                   + "｜DT7 可选 " + (", ".join(seen) if seen else "（没认出 DJI 口）"))
-        self.auto_save_config()
+        serial_ports.invalidate_port_cache()
+        serial_ports.port_snapshot()  # schedules the scan; never waits here
+        self.toast("正在后台重扫串口…")
+
+        def finish():
+            if serial_ports.discovery_pending():
+                QTimer.singleShot(50, finish)
+                return
+            module = self.registry.get("RobotLink")
+            diffs = serial_ports.refresh_port_options(self.registry, nonblocking=True)
+            setting = module.get_setting("DT7 Port") if module is not None else None
+            seen = [str(x) for x in (getattr(setting, "options", None) or [])
+                    if str(x) and str(x) != "Auto"]
+            # An explicit rescan can retry neutral on the original target.
+            # It never clears a failure latch or re-enables real motion.
+            for name in ("dt7_link", "cc_link"):
+                link = getattr(self.control, name, None)
+                if getattr(link, "release_pending", False) and hasattr(link, "retry_release"):
+                    link.retry_release()
+            self.toast("串口已重扫：" + ("；".join(diffs) if diffs else "候选口没有变化")
+                       + "｜DT7 可选 " + (", ".join(seen) if seen else "（没认出 DJI 口）"))
+            self.auto_save_config()
+
+        QTimer.singleShot(50, finish)
 
     def run_dt7_link_selftest(self) -> None:
         """Fresh baseline -> neutral/X probe -> no-send hold; token-bound."""
@@ -848,6 +862,9 @@ class ConfigActionsMixin:
                                   control.radio_km_robot_key_sequence, now)
                     phase = probe.advance(now, control.dt7_sent)
                     control.dt7_forced_keys = PROBE_BITS if phase == "press" else 0
+                    if phase == "hold" and hasattr(writer, "begin_qualification_hold"):
+                        if not writer.begin_qualification_hold(token.value, token.expires_at):
+                            probe.abort(detail="DT7 no-send hold authorization failed")
                     control.dt7_send_paused = phase == "hold"
                     control.dt7_paused_until = token.expires_at
             if probe.result is None:

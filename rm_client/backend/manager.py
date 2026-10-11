@@ -23,6 +23,7 @@ from .. import robot_roles
 from ..scenarios import SCENARIOS
 from . import cc_link
 from . import dt7_link
+from .dt7_worker import AsyncDt7KeyMouseLink
 from . import team_control as proto
 from .referee.registry import DEFAULT_PROFILE, get_profile
 from .referee.rm2026.state_adapter import Rm2026StateAdapter
@@ -390,7 +391,7 @@ class BackendManager:
         # 正式比赛本来就要同时用裁判系统（血量/增益/能量）和机器人 USB（驾驶与本体遥测）。
         # 所以按“有没有配真实端口”决定要不要起，而不是按场景名。
         # 端口为 ""/"Stub" 时 transport 自己会拒连，不会往任何串口写字节。
-        self.polar.start()
+        self.polar.request_start()
 
     def _retry_polar_connect(self) -> None:
         """操作员经常是先启动客户端、后插机器人，或者中途重启机器人。
@@ -415,7 +416,7 @@ class BackendManager:
         self._polar_last_connect_attempt = now
         self._invalidate_polar_epoch("robot transport reconnect; fresh telemetry required")
         was_connected = self.polar.connected
-        self.polar.start()
+        self.polar.request_start()
         if self.polar.connected and not was_connected:
             self.field_log.emit(
                 "polar_link_up",
@@ -432,7 +433,7 @@ class BackendManager:
     def _invalidate_polar_epoch(self, reason: str) -> None:
         self.safety.lock_control(reason)
         self.polar_bridge.reset()
-        self.polar.clear_intent()
+        self.polar.request_estop()
         self._polar_gimbal_last = None
         self.polar_chassis_state_seen = False
 
@@ -493,7 +494,155 @@ class BackendManager:
         self.polar.set_spin_command(cmd)
         return cmd
 
-    def tick_polar_link(
+    def tick_polar_link(self, state=None, registry=None, control=None) -> dict[str, Any]:
+        """Never wait for the transport's driver-held TX lock on a UI tick."""
+        if control is not None:
+            self._dt7_control_ref = control
+        self._poll_device_writers(control)
+        self._configure_device_egress(registry, control)
+        if getattr(self.polar, "_stopping", False):
+            return {"active": self.polar_bridge.active, "polar_status": "closing"}
+        lock = self.polar._intent_lock
+        if not lock.acquire(blocking=False):
+            self._polar_ui_busy_skips = getattr(self, "_polar_ui_busy_skips", 0) + 1
+            return {"active": self.polar_bridge.active, "polar_status": "writer busy"}
+        try:
+            return self._tick_polar_link_ready(state, registry, control)
+        finally:
+            lock.release()
+
+    def _prepare_polar_reconfigure(self, reason):
+        worker = self.polar._thread
+        if (not self.polar._stopping and not self.polar._connecting
+                and not self.polar._running and self.polar._serial is None
+                and (worker is None or not worker.is_alive())):
+            if not getattr(self, "_polar_reconfigure_pending", False):
+                self._invalidate_polar_epoch(reason)
+            self._polar_reconfigure_pending = False
+            return True
+        if not getattr(self, "_polar_reconfigure_pending", False):
+            self._polar_reconfigure_pending = True
+            self._invalidate_polar_epoch(reason)
+            self.polar.request_stop()
+        worker = self.polar._thread
+        if (self.polar._stopping or self.polar._connecting or self.polar._running
+                or (worker is not None and worker.is_alive())):
+            return False
+        self._polar_reconfigure_pending = False
+        return True
+
+    def _poll_device_writers(self, control):
+        dt7_writer = getattr(self, "_dt7_link", None)
+        if getattr(dt7_writer, "asynchronous", False):
+            dt7_writer.poll()
+            if control is not None:
+                control.dt7_sent = dt7_writer.sent
+                control.dt7_release_pending = dt7_writer.release_pending
+                if dt7_writer.last_error:
+                    control.dt7_last_error = dt7_writer.last_error
+        cc_writer = getattr(self, "_cc_link", None)
+        if control is not None and getattr(cc_writer, "asynchronous", False):
+            if cc_writer.faulted and getattr(self, "_cc_failure_seen", None) is not cc_writer:
+                self._cc_failure_seen = cc_writer
+                self.safety.lock_control("CC disconnected/write failed; explicit re-arm required")
+            control.cc_sent = cc_writer.sent
+            control.cc_release_pending = cc_writer.release_pending
+            if cc_writer.last_error:
+                control.cc_last_error = cc_writer.last_error
+
+    def _configure_device_egress(self, registry, control):
+        module = registry.get("RobotLink") if registry is not None else None
+        names = ("Direct DT7 Egress", "DT7 Port", "DT7 Real TX", "DT7 Allow Fire Keys",
+                 "Custom Controller Egress", "CC Port", "CC Hz", "CC Mock Writes",
+                 "Allow Spin Key", "Allow Drive")
+        settings = {name: module.get_setting(name) if module is not None else None for name in names}
+        allow_drive = bool(getattr(settings.get("Allow Drive"), "value", False))
+        estopped = bool(self.safety.estop_active)
+        # Independent writers must process every falling edge even while the
+        # other writer is still retiring an old target.
+        self._configure_cc_egress(control, settings, module, allow_drive, estopped)
+        dt7_setting = settings.get("Direct DT7 Egress")
+        dt7_wanted = bool(dt7_setting is not None and dt7_setting.value)
+        if control is not None:
+            control.dt7_selected = dt7_wanted
+        self._dt7_selected = bool(dt7_wanted and module is not None and module.enabled)
+        if control is not None and dt7_wanted:
+            prof = dt7_link.load_profile()
+            port = str(getattr(settings.get("DT7 Port"), "value", "Auto") or "Auto")
+            # "DT7 Real TX" 是显式硬件闸：不勾就只产帧不碰串口。原来这里连
+            # mock_output 都不传，等于 C 路在客户端里根本发不出一个字节。
+            real_tx = bool(getattr(settings.get("DT7 Real TX"), "value", False))
+            link = getattr(self, "_dt7_link", None)
+            if (link is None or getattr(link, "closed", False)
+                    or link.port != port or link.profile != prof
+                    or link.mock_output == real_tx):
+                if link is not None:
+                    change_key = (port, repr(prof), real_tx)
+                    if getattr(self, "_dt7_change_key", None) != change_key:
+                        self._dt7_change_key = change_key
+                        self.safety.lock_control("DT7 transport/profile/mode changed; requalification/re-arm required")
+                    # Never discard a non-neutral writer just because the UI
+                    # changed port, profile or mock mode.
+                    if not link.wire_neutral:
+                        ok, why = link.release()
+                        if not ok:
+                            control.dt7_link = link
+                            control.dt7_enabled = False
+                            control.dt7_release_pending = True
+                            return {"active": self.polar_bridge.active, "dt7_error": str(why)}
+                    try:
+                        link.close()
+                    except Exception:
+                        pass
+                    if getattr(link, "asynchronous", False) and not link.closed:
+                        control.dt7_enabled = False
+                        return {"active": self.polar_bridge.active, "dt7_error": "DT7 previous writer closing"}
+                writer_type = AsyncDt7KeyMouseLink if real_tx else dt7_link.Dt7KeyMouseLink
+                link = writer_type(port=port, profile=prof,
+                                   mock_output=not real_tx, safety=self.safety)
+                self._dt7_link = link
+                self._dt7_change_key = None
+            control.dt7_link = link
+            link.safety = self.safety
+            link.authorization_guard = self._dt7_evidence_gate
+            policy_ok, policy_reason = (True, "mock") if link.mock_output else self.safety.can_transmit_dt7(
+                qualification_token=getattr(control, "dt7_qualification_token", None))
+            dt7_live = bool(not estopped and allow_drive
+                            and module is not None and module.enabled and policy_ok)
+            # 松手帧要覆盖**每一条**降级路径：急停、撤 Allow Drive、模块停用。
+            # 旧代码只在急停时补，另外两条路是"直接停发" —— 而 DT7 那侧没有
+            # 过期自动清零，键会粘在车上继续控。
+            if getattr(self, "_dt7_was_enabled", False) and not dt7_live:
+                control.release_direct_dt7()
+            # 键位掩码按显式开关拼：默认只有驾驶四键；SHIFT 要 Allow Spin Key，
+            # Q/E 要单独的 DT7 Allow Fire Keys（默认关，开火权限不偷偷外送）
+            from ..control import (DT7_DEFAULT_KEY_MASK, DT7_FIRE_KEY_MASK,
+                                   DT7_SPIN_KEY_MASK)
+            mask = int(DT7_DEFAULT_KEY_MASK)
+            spin_setting = settings.get("Allow Spin Key")
+            if spin_setting is not None and bool(spin_setting.value):
+                mask |= int(DT7_SPIN_KEY_MASK)
+            fire_setting = settings.get("DT7 Allow Fire Keys")
+            if fire_setting is not None and bool(fire_setting.value):
+                mask |= int(DT7_FIRE_KEY_MASK)
+            control.dt7_allow_fire = bool(fire_setting is not None and fire_setting.value)
+            control.dt7_key_mask = mask
+            control.dt7_enabled = dt7_live
+            if not dt7_live:
+                control.dt7_last_error = (str(policy_reason) if not policy_ok else
+                    "直连 DT7 出口未生效（急停/未授权/模块未启用）")
+            elif str(prof.get("_profile_error") or ""):
+                control.dt7_last_error = "DT7 配置不可用：" + str(prof["_profile_error"])
+            else:
+                control.dt7_last_error = ""
+        elif control is not None:
+            if getattr(self, "_dt7_was_enabled", False):
+                # 开关被关掉：同样要松手，别让最后一次按键留在车上
+                control.release_direct_dt7()
+            control.dt7_enabled = False
+        self._dt7_was_enabled = bool(control is not None and control.dt7_enabled)
+
+    def _tick_polar_link_ready(
         self,
         state: RobotState | None = None,
         registry: Any = None,
@@ -581,8 +730,8 @@ class BackendManager:
             want_port = str(port_setting.value or "").strip()
             if want_port and want_port != PORT_DEFAULT:
                 if want_port != str(self.polar.port or ""):
-                    self._invalidate_polar_epoch("robot port changed; fresh telemetry required")
-                    self.polar.stop()
+                    if not self._prepare_polar_reconfigure("robot port changed; fresh telemetry required"):
+                        return {"active": bridge.active, "polar_status": "closing"}
                     self.polar.port = want_port
                     self.polar.last_error = ""
                     self.polar.last_error_code = ""
@@ -596,8 +745,8 @@ class BackendManager:
             # 界面既然给了这个框，后端就得读它 —— 但同样只在被显式改过时才覆盖场景。
             if want_baud != BAUD_DEFAULT and 1200 <= want_baud <= 3_000_000 \
                     and want_baud != int(self.polar.baud):
-                self._invalidate_polar_epoch("robot baud changed; fresh telemetry required")
-                self.polar.stop()
+                if not self._prepare_polar_reconfigure("robot baud changed; fresh telemetry required"):
+                    return {"active": bridge.active, "polar_status": "closing"}
                 self.polar.baud = want_baud
         # 驾驶授权与队内写入开关都属于模块自己，**不能**取场景标志：
         # 大疆官方场景的 allow_polar_drive=False 只表示“本场景不自动授权”，
@@ -606,8 +755,7 @@ class BackendManager:
         allow_setting = settings["Allow Drive"]
         allow_drive = bool(allow_setting.value) if allow_setting is not None else False
         mock_setting = settings["Mock Writes"]
-        if mock_setting is not None:
-            self.polar.mock_writes = bool(mock_setting.value)
+        want_mock = bool(mock_setting.value) if mock_setting is not None else self.polar.mock_writes
         slew_setting = settings["Gimbal Slew"]
         if slew_setting is not None and self.polar_arbiter.slew != float(slew_setting.value):
             self.polar_arbiter.slew = max(1.0, min(45.0, float(slew_setting.value)))
@@ -630,14 +778,23 @@ class BackendManager:
             if (self.polar.transport, self.polar.host, self.polar.tcp_port) != (
                     want_mode, want_host, want_port):
                 # 换链路等于换一条连接：旧句柄必须关，否则还在往老地方写
-                self._invalidate_polar_epoch("robot bridge endpoint changed; fresh telemetry required")
-                self.polar.stop()
+                if not self._prepare_polar_reconfigure("robot bridge endpoint changed; fresh telemetry required"):
+                    return {"active": bridge.active, "polar_status": "closing"}
                 self.polar.transport = want_mode
                 self.polar.host = want_host
                 self.polar.tcp_port = want_port
                 if want_mode == "tcp" and not want_host:
                     self.polar.last_error = "TCP 模式要先填桥接主机地址"
                     self.polar.last_error_code = "NO_BRIDGE_HOST"
+        if want_mock != self.polar.mock_writes:
+            # With no stream/open attempt there is no old output to retire.
+            # Do not revoke independent DT7/CC authorization just to establish
+            # POLAR's initial setting; reconnect owns its own fresh epoch.
+            if (self.polar._serial is not None or self.polar._running
+                    or self.polar._connecting or self.polar._stopping):
+                if not self._prepare_polar_reconfigure("robot output mode changed; fresh telemetry required"):
+                    return {"active": bridge.active, "polar_status": "closing"}
+            self.polar.mock_writes = want_mock
         hz_setting = settings.get("Send Hz")
         if hz_setting is not None:
             try:
@@ -676,7 +833,7 @@ class BackendManager:
         # 这里不提前 return：否则下面的诊断快照与授权字段会被跳过，HUD 会卡在旧值。
         estopped = bool(getattr(self.safety, "estop_active", False))
         if estopped:
-            self.polar.trigger_estop()
+            self.polar.request_estop()
             self._polar_gimbal_last = None
         else:
             self.polar.release_estop()
@@ -820,79 +977,6 @@ class BackendManager:
         # 所以 0x0311 判成 NO-RX 时它依然可用；代价是选手端必须在跑，
         # 且"键鼠来源"只能有一个（2026 协议 2.2.1）。
         # ---- 直连 DT7 出口：同样三道闸，但不要求选手端在跑、也不要求 0x5A 在线 ----
-        dt7_setting = settings.get("Direct DT7 Egress")
-        dt7_wanted = bool(dt7_setting is not None and dt7_setting.value)
-        if control is not None:
-            control.dt7_selected = dt7_wanted
-        self._dt7_selected = bool(dt7_wanted and module is not None and module.enabled)
-        if control is not None and dt7_wanted:
-            prof = dt7_link.load_profile()
-            port = str(getattr(settings.get("DT7 Port"), "value", "Auto") or "Auto")
-            # "DT7 Real TX" 是显式硬件闸：不勾就只产帧不碰串口。原来这里连
-            # mock_output 都不传，等于 C 路在客户端里根本发不出一个字节。
-            real_tx = bool(getattr(settings.get("DT7 Real TX"), "value", False))
-            link = getattr(self, "_dt7_link", None)
-            if (link is None or link.port != port or link.profile != prof
-                    or link.mock_output == real_tx):
-                if link is not None:
-                    self.safety.lock_control("DT7 transport/profile/mode changed; requalification/re-arm required")
-                    # Never discard a non-neutral writer just because the UI
-                    # changed port, profile or mock mode.
-                    if not link.wire_neutral:
-                        ok, why = link.release()
-                        if not ok:
-                            self.safety.lock_control("DT7 previous writer did not release: " + str(why))
-                            control.dt7_link = link
-                            control.dt7_enabled = False
-                            control.dt7_release_pending = True
-                            return {"active": bridge.active, "dt7_error": str(why)}
-                    try:
-                        link.close()
-                    except Exception:
-                        pass
-                link = dt7_link.Dt7KeyMouseLink(port=port, profile=prof,
-                                                mock_output=not real_tx, safety=self.safety)
-                self._dt7_link = link
-            control.dt7_link = link
-            link.safety = self.safety
-            link.authorization_guard = self._dt7_evidence_gate
-            policy_ok, policy_reason = (True, "mock") if link.mock_output else self.safety.can_transmit_dt7(
-                qualification_token=getattr(control, "dt7_qualification_token", None))
-            dt7_live = bool(not estopped and allow_drive
-                            and module is not None and module.enabled and policy_ok)
-            # 松手帧要覆盖**每一条**降级路径：急停、撤 Allow Drive、模块停用。
-            # 旧代码只在急停时补，另外两条路是"直接停发" —— 而 DT7 那侧没有
-            # 过期自动清零，键会粘在车上继续控。
-            if getattr(self, "_dt7_was_enabled", False) and not dt7_live:
-                control.release_direct_dt7()
-            # 键位掩码按显式开关拼：默认只有驾驶四键；SHIFT 要 Allow Spin Key，
-            # Q/E 要单独的 DT7 Allow Fire Keys（默认关，开火权限不偷偷外送）
-            from ..control import (DT7_DEFAULT_KEY_MASK, DT7_FIRE_KEY_MASK,
-                                   DT7_SPIN_KEY_MASK)
-            mask = int(DT7_DEFAULT_KEY_MASK)
-            spin_setting = settings.get("Allow Spin Key")
-            if spin_setting is not None and bool(spin_setting.value):
-                mask |= int(DT7_SPIN_KEY_MASK)
-            fire_setting = settings.get("DT7 Allow Fire Keys")
-            if fire_setting is not None and bool(fire_setting.value):
-                mask |= int(DT7_FIRE_KEY_MASK)
-            control.dt7_allow_fire = bool(fire_setting is not None and fire_setting.value)
-            control.dt7_key_mask = mask
-            control.dt7_enabled = dt7_live
-            if not dt7_live:
-                control.dt7_last_error = (str(policy_reason) if not policy_ok else
-                    "直连 DT7 出口未生效（急停/未授权/模块未启用）")
-            elif str(prof.get("_profile_error") or ""):
-                control.dt7_last_error = "DT7 配置不可用：" + str(prof["_profile_error"])
-            else:
-                control.dt7_last_error = ""
-        elif control is not None:
-            if getattr(self, "_dt7_was_enabled", False):
-                # 开关被关掉：同样要松手，别让最后一次按键留在车上
-                control.release_direct_dt7()
-            control.dt7_enabled = False
-        self._dt7_was_enabled = bool(control is not None and control.dt7_enabled)
-        self._configure_cc_egress(control, settings, module, allow_drive, estopped)
         if drive_armed and command is not None:
             speed_scale = float(settings["Speed Scale %"].value or 100) / 100.0
             yaw_scale = float(settings["Yaw Scale %"].value or 100) / 100.0
@@ -1270,6 +1354,7 @@ class BackendManager:
             control.dt7_forced_keys = None
             control.dt7_send_paused = False
             control.dt7_enabled = False
+            control.cc_enabled = False
             control.reset_inputs()
             # tick_polar_link reads this cached snapshot independently of
             # key_state. Clearing keys alone can replay the last held W as
@@ -1285,6 +1370,14 @@ class BackendManager:
                 ok = False
             if control is not None:
                 control.dt7_release_pending = not ok
+        cc_writer = getattr(self, "_cc_link", None)
+        if cc_writer is not None and not getattr(cc_writer, "wire_neutral", True):
+            try:
+                ok, _ = cc_writer.release_all()
+            except Exception:
+                ok = False
+            if control is not None:
+                control.cc_release_pending = not ok
         hook = self.input_clear_hook
         if hook is not None:
             try:
@@ -1394,8 +1487,10 @@ class BackendManager:
                 control.cc_enabled = False
                 control.cc_release_pending = not ok
                 control.cc_last_error = "" if ok else str(why)
+        if cc_handle is not None and hasattr(cc_handle, "close"):
+            cc_handle.close()
         # 队内链路：固件侧没有断流归零，必须主动发零帧覆盖最后一条指令。
-        self.polar.trigger_estop()
+        self.polar.request_estop()
         # Compatibility keyword only: official MQTT never emits retained
         # ClientStatus JSON on either scenario switches or application exit.
         self.mqtt.stop(publish_status=not restart)
@@ -1414,6 +1509,17 @@ class BackendManager:
                 dt7_handle.close()
             except Exception:                          # noqa: BLE001
                 pass
+        # This is the existing ordered shutdown path, not a frame callback.
+        # Give daemon writers a bounded chance to finish before Qt/process exit;
+        # accepted neutral requests must never masquerade as completed cleanup.
+        import time as shutdown_time
+        deadline = shutdown_time.perf_counter() + 2.5
+        for name, writer in (("DT7", dt7_handle), ("CC", cc_handle)):
+            if getattr(writer, "asynchronous", False):
+                closed = writer.wait_closed(max(0.0, deadline - shutdown_time.perf_counter()))
+                if not closed or not writer.wire_neutral:
+                    self.field_log.emit("device_shutdown_unconfirmed", device=name,
+                                        closed=closed, error=writer.last_error)
         self.field_log.emit("backend_shutdown", restart=restart)
 
     def apply_readiness(
@@ -1797,7 +1903,8 @@ class BackendManager:
         mock = bool(getattr(mock_s, "value", True))
         link = getattr(self, "_cc_link", None)
         self._cc_reconfigure_blocked = False
-        if link is None or (link.port, float(link.max_hz), bool(link.mock_output)) != (port, hz, mock):
+        if (link is None or getattr(link, "closed", False)
+                or (link.port, float(link.max_hz), bool(link.mock_output)) != (port, hz, mock)):
             if link is not None and not getattr(link, "wire_neutral", True):
                 try:
                     ok, why = link.release_all()
@@ -1807,10 +1914,20 @@ class BackendManager:
                     # Retain the old target for neutral retries. Never discard
                     # it or send movement to a new port after uncertain release.
                     self._cc_reconfigure_blocked = True
-                    self.safety.lock_control("CC previous writer did not release: " + str(why))
+                    change_key = (port, hz, mock)
+                    if getattr(self, "_cc_change_key", None) != change_key:
+                        self._cc_change_key = change_key
+                        self.safety.lock_control("CC previous writer did not release: " + str(why))
                     return link
-            link = cc_link.CustomControllerLink(port=port, max_hz=hz, mock_output=mock)
+            if link is not None and hasattr(link, "close"):
+                link.close()
+                if not getattr(link, "closed", True):
+                    self._cc_reconfigure_blocked = True
+                    return link
+            writer_type = cc_link.CustomControllerLink if mock else cc_link.AsyncCustomControllerLink
+            link = writer_type(port=port, max_hz=hz, mock_output=mock)
             self._cc_link = link
+            self._cc_change_key = None
         return link
 
     def publish_km_control(
@@ -1969,7 +2086,7 @@ class BackendManager:
         self.serial.trigger_estop()
         # 队内 0x5A 链路必须同帧锁死：固件侧没有断流归零，不能等下一帧的
         # tick_polar_link 才发现（那一帧之前本地看门狗要 0.2s，车上有速度时太慢）。
-        self.polar.trigger_estop()
+        self.polar.request_estop()
         self.field_log.emit(
             "estop",
             zero_publish_ok=self._last_estop_zero_ok,
@@ -1995,7 +2112,6 @@ class BackendManager:
     def release_estop(self) -> None:
         self.serial.release_estop()
         # 权威在 safety；这里只是把队内链路的本地锁存与之同步。
-        self.polar.release_estop()
         self.safety.release_estop()
 
     def lock_control(self, reason: str = "operator lock") -> None:
@@ -2070,6 +2186,12 @@ class BackendManager:
             self.safety.arm_match(capabilities)
         except ValueError as exc:
             return False, str(exc)
+        cc_writer = getattr(self, "_cc_link", None)
+        if getattr(cc_writer, "asynchronous", False) and cc_writer.faulted:
+            if not cc_writer.rearm(self.safety.last_transition_at):
+                self.safety.lock_control("CC neutral remains unconfirmed; retry neutral before re-arm")
+                return False, self.safety.last_reason
+            self._cc_failure_seen = None
         self.field_log.emit("control_arm", capabilities=sorted(capabilities))
         return True, "MATCH_ARMED"
 

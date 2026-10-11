@@ -553,6 +553,8 @@ class InputDispatchMixin:
         self._combat_input_was_allowed = False
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
+        if self.handle_escape_menu_mouse(event, "press"):
+            return
         if self.handle_student_mouse(event, "press"):
             return
         self.setFocus(Qt.FocusReason.MouseFocusReason)
@@ -588,6 +590,8 @@ class InputDispatchMixin:
             self.search_focus = False
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
+        if self.handle_escape_menu_mouse(event, "move"):
+            return
         if self.handle_student_mouse(event, "move"):
             return
         if self.quick_action_wheel.active or self.overlay_coordinator.radial_active:
@@ -655,6 +659,8 @@ class InputDispatchMixin:
             panel["y"] = point.y() - self.drag["offset_y"]
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+        if self.handle_escape_menu_mouse(event, "release"):
+            return
         if self.handle_student_mouse(event, "release"):
             return
         if self.quick_action_wheel.active or self.overlay_coordinator.radial_active:
@@ -702,13 +708,17 @@ class InputDispatchMixin:
             event.accept()
 
     def wheelEvent(self, event: QWheelEvent) -> None:
+        if self.escape_menu_visible:
+            event.accept()
+            return
         if self.student_ui.visible:
             if self.student_ui.panel == "inventory":
                 self.handle_student_action("student_page", -1 if event.angleDelta().y() > 0 else 1)
             event.accept()
             return
         point = event.position()
-        delta = -event.angleDelta().y() / 120.0 * 28.0
+        pixel_delta = event.pixelDelta().y()
+        delta = -float(pixel_delta) if pixel_delta else -event.angleDelta().y() / 120.0 * 28.0
         if self.match_chat.input_open:
             self.match_chat.scroll(-1 if event.angleDelta().y() > 0 else 1)
             self.frame_scheduler.force()
@@ -747,10 +757,18 @@ class InputDispatchMixin:
             if not viewport["rect"].contains(point):
                 continue
             mode, key, maximum = viewport["mode"], viewport["key"], float(viewport["maximum"])
-            if mode == "jello_panel":
+            if mode == "jello_dropdown":
+                jello_delta = -float(pixel_delta) if pixel_delta else -event.angleDelta().y() / 120.0 * 35.0
+                self.jello_state.dropdown_scroll = max(
+                    0.0, min(maximum, self.jello_state.dropdown_scroll + jello_delta)
+                )
+                self.frame_scheduler.force()
+                event.accept()
+                return
+            elif mode == "jello_panel":
                 # ScrollableContentPanel.scrollStep is the literal 35 in
                 # Sigma 5.1.0; retained Polar interfaces continue using 28.
-                jello_delta = -event.angleDelta().y() / 120.0 * 35.0
+                jello_delta = -float(pixel_delta) if pixel_delta else -event.angleDelta().y() / 120.0 * 35.0
                 current = float(self.jello_state.panel_scroll.get(key, 0.0))
                 self.jello_state.panel_scroll[key] = max(0.0, min(maximum, current + jello_delta))
                 self.jello_state.mark_scroll(f"panel:{key}")
@@ -758,7 +776,7 @@ class InputDispatchMixin:
                 event.accept()
                 return
             elif mode == "jello_settings":
-                jello_delta = -event.angleDelta().y() / 120.0 * 35.0
+                jello_delta = -float(pixel_delta) if pixel_delta else -event.angleDelta().y() / 120.0 * 35.0
                 self.jello_state.scroll_settings_by(key, jello_delta, maximum)
                 self.jello_state.mark_scroll(f"settings:{key}")
                 self.frame_scheduler.force()
@@ -796,6 +814,10 @@ class InputDispatchMixin:
             event.accept()
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
+        if not self.escape_menu_visible and not event.isAutoRepeat():
+            # A new physical press supersedes any menu key-up lost on focus
+            # change; its later release must reach the normal control owner.
+            getattr(self, "_escape_menu_key_releases", set()).discard(event.key())
         if event.key() == Qt.Key.Key_F12 and not event.isAutoRepeat():
             modifiers = event.modifiers()
             release = bool(
@@ -811,6 +833,8 @@ class InputDispatchMixin:
                 self.control.clear_pending()
                 self.toast("E-STOP ACTIVE" if ok else f"E-STOP ACTIVE ({reason})")
             event.accept()
+            return
+        if self.handle_escape_menu_key(event):
             return
         if self.binding_module is not None:
             self.handle_keybind_event(event)
@@ -992,6 +1016,11 @@ class InputDispatchMixin:
         if self.overlay_coordinator.blocks_combat_input:
             event.accept()
             return
+        if event.key() == Qt.Key.Key_Escape and not self.home_visible:
+            if not event.isAutoRepeat():
+                self.set_escape_menu_visible(True)
+            event.accept()
+            return
         if self.minecraft_hud_active() and not event.isAutoRepeat():
             number_keys = {
                 Qt.Key.Key_1: 0,
@@ -1020,6 +1049,15 @@ class InputDispatchMixin:
             return
 
     def keyReleaseEvent(self, event: QKeyEvent) -> None:
+        pending = getattr(self, "_escape_menu_key_releases", set())
+        if event.key() in pending:
+            if not event.isAutoRepeat():
+                pending.discard(event.key())
+            event.accept()
+            return
+        if self.escape_menu_visible or event.key() == Qt.Key.Key_Escape:
+            event.accept()
+            return
         if self.handle_student_key(event, False):
             event.accept()
             return
@@ -1092,7 +1130,8 @@ class InputDispatchMixin:
         """Only the unobstructed combat viewport owns robot key/mouse input."""
 
         return bool(
-            not self.student_ui.visible
+            not self.escape_menu_visible
+            and not self.student_ui.visible
             and not self.home_visible
             and not self.gui_visible
             and not self.economy_visible

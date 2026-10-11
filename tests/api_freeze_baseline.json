@@ -120,6 +120,11 @@
       "sig": "PolarRMWindow._append_vision_wire_armor",
       "type": "method"
     },
+    "_apply_config_data": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow._apply_config_data",
+      "type": "method"
+    },
     "_armor_distance_m": {
       "kind": "bound-method",
       "sig": "EspWireframeMixin._armor_distance_m",
@@ -145,11 +150,6 @@
       "sig": "*volatile*",
       "type": "float",
       "volatile": true
-    },
-    "_apply_config_data": {
-      "kind": "bound-method",
-      "sig": "PolarRMWindow._apply_config_data",
-      "type": "method"
     },
     "_auto_save_pending": {
       "kind": "plain-attribute",
@@ -375,6 +375,31 @@
       "type": "float",
       "volatile": true
     },
+    "_gpu_prewarm_jobs": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow._gpu_prewarm_jobs",
+      "type": "method"
+    },
+    "_gpu_prewarm_jobs_pending": {
+      "kind": "plain-attribute",
+      "sig": "None",
+      "type": "NoneType"
+    },
+    "_gpu_prewarm_last_ms": {
+      "kind": "plain-attribute",
+      "sig": "float",
+      "type": "float"
+    },
+    "_gpu_prewarm_max_ms": {
+      "kind": "plain-attribute",
+      "sig": "float",
+      "type": "float"
+    },
+    "_gpu_prewarm_timer": {
+      "kind": "plain-attribute",
+      "sig": "QTimer",
+      "type": "QTimer"
+    },
     "_gpu_quick_action_wheel_command": {
       "kind": "plain-attribute",
       "sig": "None",
@@ -580,6 +605,11 @@
       "sig": "PolarRMWindow._rounded_map_layer",
       "type": "method"
     },
+    "_run_gpu_prewarm_slice": {
+      "kind": "bound-method",
+      "sig": "PolarRMWindow._run_gpu_prewarm_slice",
+      "type": "method"
+    },
     "_run_tick_stage": {
       "kind": "bound-method",
       "sig": "PolarRMWindow._run_tick_stage",
@@ -651,6 +681,37 @@
       "kind": "plain-attribute",
       "sig": "0",
       "type": "int"
+    },
+    "_ui_tick_gap_max_ms": {
+      "kind": "plain-attribute",
+      "sig": "float",
+      "type": "float"
+    },
+    "_ui_tick_gap_ms": {
+      "kind": "plain-attribute",
+      "sig": "float",
+      "type": "float"
+    },
+    "_ui_tick_last_ms": {
+      "kind": "plain-attribute",
+      "sig": "float",
+      "type": "float"
+    },
+    "_ui_tick_max_ms": {
+      "kind": "plain-attribute",
+      "sig": "float",
+      "type": "float"
+    },
+    "_ui_tick_perf_log_at": {
+      "kind": "plain-attribute",
+      "sig": "*volatile*",
+      "type": "float",
+      "volatile": true
+    },
+    "_ui_tick_stages": {
+      "kind": "plain-attribute",
+      "sig": "dict",
+      "type": "dict"
     },
     "_vision_render_result": {
       "kind": "plain-attribute",
@@ -751,6 +812,11 @@
     "activate_economy_offer": {
       "kind": "bound-method",
       "sig": "PolarRMWindow.activate_economy_offer",
+      "type": "method"
+    },
+    "activate_escape_menu_choice": {
+      "kind": "bound-method",
+      "sig": "EscapeMenuMixin.activate_escape_menu_choice",
       "type": "method"
     },
     "activate_minecraft_function_slot": {
@@ -1744,6 +1810,11 @@
       "sig": "PolarRMWindow.draw_elimination_fx",
       "type": "method"
     },
+    "draw_escape_menu": {
+      "kind": "bound-method",
+      "sig": "EscapeMenuMixin.draw_escape_menu",
+      "type": "method"
+    },
     "draw_fluorescent_white_ellipse": {
       "kind": "bound-method",
       "sig": "PolarRMWindow.draw_fluorescent_white_ellipse",
@@ -2597,6 +2668,21 @@
       "sig": "PolarRMWindow.enterEvent",
       "type": "builtin_function_or_method"
     },
+    "escape_menu_choices": {
+      "kind": "bound-method",
+      "sig": "EscapeMenuMixin.escape_menu_choices",
+      "type": "method"
+    },
+    "escape_menu_layout": {
+      "kind": "bound-method",
+      "sig": "EscapeMenuMixin.escape_menu_layout",
+      "type": "method"
+    },
+    "escape_menu_visible": {
+      "kind": "property",
+      "sig": "False",
+      "type": "bool"
+    },
     "event": {
       "kind": "callable",
       "sig": "PolarRMWindow.event",
@@ -2945,6 +3031,16 @@
     "handle_control_key_event": {
       "kind": "bound-method",
       "sig": "PolarRMWindow.handle_control_key_event",
+      "type": "method"
+    },
+    "handle_escape_menu_key": {
+      "kind": "bound-method",
+      "sig": "EscapeMenuMixin.handle_escape_menu_key",
+      "type": "method"
+    },
+    "handle_escape_menu_mouse": {
+      "kind": "bound-method",
+      "sig": "EscapeMenuMixin.handle_escape_menu_mouse",
       "type": "method"
     },
     "handle_keybind_event": {
@@ -4921,6 +5017,11 @@
     "set_clickgui_visible": {
       "kind": "bound-method",
       "sig": "PolarRMWindow.set_clickgui_visible",
+      "type": "method"
+    },
+    "set_escape_menu_visible": {
+      "kind": "bound-method",
+      "sig": "EscapeMenuMixin.set_escape_menu_visible",
       "type": "method"
     },
     "set_wallpaper_picker_visible": {

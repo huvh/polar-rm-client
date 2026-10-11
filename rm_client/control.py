@@ -549,7 +549,8 @@ class KeyboardControlBridge:
             return
         self.cc_last_error = "" if ok else str(why)
         if ok:
-            self.cc_sent += 1
+            self.cc_sent = (self.cc_link.sent if getattr(self.cc_link, "asynchronous", False)
+                            else self.cc_sent + 1)
         elif not names and not command.left_button_down and not command.right_button_down:
             self.cc_release_pending = True
         self.cc_dropped_keys = list(getattr(self.cc_link, "dropped_keys", []) or [])
@@ -615,7 +616,10 @@ class KeyboardControlBridge:
             return
         self.dt7_last_error = "" if ok else str(why)
         if ok:
-            self.dt7_sent += 1
+            if getattr(self.dt7_link, "asynchronous", False):
+                self.dt7_sent = self.dt7_link.sent  # queued is not delivered
+            else:
+                self.dt7_sent += 1
             self.dt7_release_pending = False
         else:
             # "内容合法但没落地"（被 max_hz 挡 / 写口失败）的中立帧要一直补发；
