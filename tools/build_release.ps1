@@ -493,6 +493,12 @@ print(json.dumps({'default_profile': get_profile().profile_id, 'protocol_version
         "POLAR-RM.exe" = (Get-FileHash (Join-Path $portable "POLAR-RM.exe") -Algorithm SHA256).Hash
     }
     $resourceTreeHash = Get-TreeHash $python $sourceRoot (Join-Path $portable "resources")
+    if ($null -ne $cs2PackMetadata) {
+        $criticalFiles["user_data/cs2_ui_pack/manifest.json"] = (Get-FileHash -LiteralPath (Join-Path $packDestination "manifest.json") -Algorithm SHA256).Hash
+        foreach ($asset in $packManifest.assets.PSObject.Properties) {
+            $criticalFiles["user_data/cs2_ui_pack/$($asset.Value.file)"] = $asset.Value.sha256
+        }
+    }
     $manifest = [ordered]@{
         schema = 1
         product = "POLAR-RM Field Candidate"
@@ -582,6 +588,15 @@ print(json.dumps({'default_profile': get_profile().profile_id, 'protocol_version
         Get-ChildItem -LiteralPath (Join-Path $portable "user_data") -Recurse -File -Force
         Get-ChildItem -LiteralPath (Join-Path $portable "field_evidence") -Recurse -File -Force
     )
+    if ($null -ne $cs2PackMetadata) {
+        $allowedPackNames = @("manifest.json") + @($packManifest.assets.PSObject.Properties | ForEach-Object { $_.Value.file })
+        $runtimeStateFiles = @($runtimeStateFiles | Where-Object {
+            $_.DirectoryName -ne $packDestination -or $_.Name -notin $allowedPackNames
+        })
+        if ((Get-TreeHash $python $sourceRoot $packDestination) -ne $cs2PackMetadata.tree_sha256) {
+            throw "CS2 pack changed after verification"
+        }
+    }
     if ($runtimeStateFiles.Count -ne 0) {
         $relativeRuntimeFiles = $runtimeStateFiles | ForEach-Object {
             $_.FullName.Substring($portable.Length).TrimStart("\")

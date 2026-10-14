@@ -757,6 +757,7 @@ def _create_editor(host, *, embedded=False):
             page.setContentsMargins(12, 12, 12, 12)
             page.setSpacing(8)
             title = QLabel('CROSSHAIR / 准星')
+            title.setWordWrap(True)
             title.setObjectName('crosshair_title')
             title.setFont(title_font)
             page.addWidget(title)

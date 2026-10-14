@@ -231,6 +231,13 @@ class Host(QWidget):
 
 
 class EditorAndPaintTests(unittest.TestCase):
+    def test_small_editor_without_optional_cs2_fonts_has_no_horizontal_overflow(self):
+        # A clean portable package must also work without a local Valve pack.
+        # Arial's title is wider than Stratum2; never make the whole page overflow.
+        with patch('rm_client.ui.cs2_assets.local_cs2_assets', return_value=NS(families={})):
+            widget = self.embedded_in_host((300, 240))
+            self.assertEqual(widget.page_scroll.horizontalScrollBar().maximum(), 0)
+
     def setUp(self):
         self.host = Host()
         self.addCleanup(self.host.deleteLater)
