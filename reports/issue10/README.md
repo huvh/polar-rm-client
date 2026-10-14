@@ -38,3 +38,11 @@ All 21 failures reproduce on clean baseline: 20 missing PySide6, one missing pah
 - Mechanical safety assessment: existing SAFE inhibits output; it is not a validated gravity hold or brake for a loaded arm. Support the mechanism and inhibit actuators for initial bench verification.
 
 No hardware was actuated, no main-branch merge was performed, and Issue 10 remains open pending these gates.
+
+## Approved dependency-enabled rerun
+
+After approval, installed PySide6, paho-mqtt and pyserial into a task-local isolated venv; exact versions are in qa_requirements.freeze.txt. The 37 focused Python tests passed again (angle_tests_dependencies.txt).
+
+The new aggregate is still **NO-GO: 48 PASS / 4 FAIL / 17 INCOMPLETE (69 checks)**, retained in verify_all_dependencies.txt. All four remaining failures reproduce on clean bd2e590 in the same interpreter. Faulthandler identifies a matching native crash in ui_audio.py QSoundEffect preload for API/startup/student tests; the BuffTimeline child also crashes, preventing pixel assertions. PipeWire configuration errors precede these failures. See dependency_comparison for paired evidence. This is not proof of successful GUI rendering, and the environment does not provide a verified graphical/audio runtime.
+
+The isolated venv does not include cv2 or numpy; do not assume its skipped coverage is identical to the original interpreter. No aggregate check classified INCOMPLETE is promoted to PASS. Dependency installation is complete; remaining graphical-runtime, fixture, ARM and hardware acceptance gates remain open. Do not use the aggregate runner's process exit code alone: read its explicit NO-GO summary.

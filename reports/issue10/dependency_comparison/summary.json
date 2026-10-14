@@ -1,0 +1,91 @@
+{
+  "baseline_commit": "bd2e590b43b9cfecef61b09f0577a2ba0181578e",
+  "current_commit": "7d8bf919d9ac99e7b2d2a2eda488257ddba4e068",
+  "interpreter": "/tmp/polar-angle-qa-venv/bin/python",
+  "runs": [
+    {
+      "path": "tests/student_frontend_test.py",
+      "source": "baseline",
+      "exit": -11,
+      "seconds": 0.88,
+      "failures": [
+        "Fatal Python error: Segmentation fault"
+      ],
+      "log": "reports/issue10/dependency_comparison/student_frontend_test.baseline.txt"
+    },
+    {
+      "path": "tests/student_frontend_test.py",
+      "source": "current",
+      "exit": -11,
+      "seconds": 0.7,
+      "failures": [
+        "Fatal Python error: Segmentation fault"
+      ],
+      "log": "reports/issue10/dependency_comparison/student_frontend_test.current.txt"
+    },
+    {
+      "path": "tests/polar_startup_test.py",
+      "source": "baseline",
+      "exit": -11,
+      "seconds": 0.34,
+      "failures": [
+        "Fatal Python error: Segmentation fault"
+      ],
+      "log": "reports/issue10/dependency_comparison/polar_startup_test.baseline.txt"
+    },
+    {
+      "path": "tests/polar_startup_test.py",
+      "source": "current",
+      "exit": -11,
+      "seconds": 0.33,
+      "failures": [
+        "Fatal Python error: Segmentation fault"
+      ],
+      "log": "reports/issue10/dependency_comparison/polar_startup_test.current.txt"
+    },
+    {
+      "path": "tests/hud_batch19_bufftimeline_test.py",
+      "source": "baseline",
+      "exit": 1,
+      "seconds": 0.9,
+      "failures": [
+        "[FAIL] \u771f\u7a97\u53e3\u5b50\u8fdb\u7a0b\u8dd1\u5b8c\u6ca1\u5d29  -> exit=-11 out=[PASS] \u9ed8\u8ba4\u6709 BuffTimeline \u6a21\u5757\u4e14\u5f00\u7740",
+        "[FAIL] \u5e26\u91cc\u6709\u771f\u5b9e\u4eae\u50cf\u7d20\uff08\u771f\u5b57\u4f53\u3001\u771f\u5706\u89d2\u5e95\uff09  -> lit=None out=[PASS] \u9ed8\u8ba4\u6709 BuffTimeline \u6a21\u5757\u4e14\u5f00\u7740",
+        "[FAIL] \u771f\u7a97\u53e3\u4e0b\u5173\u6389\u6a21\u5757\u540e\u5e26\u6d88\u5931  -> .QtGui, PySide6.QtWidgets, PySide6.QtOpenGLWidgets, PySide6.QtNetwork, PySide6.QtMultimedia, PySide6.QtOpenGL (total: 8)"
+      ],
+      "log": "reports/issue10/dependency_comparison/hud_batch19_bufftimeline_test.baseline.txt"
+    },
+    {
+      "path": "tests/hud_batch19_bufftimeline_test.py",
+      "source": "current",
+      "exit": 1,
+      "seconds": 1.01,
+      "failures": [
+        "[FAIL] \u771f\u7a97\u53e3\u5b50\u8fdb\u7a0b\u8dd1\u5b8c\u6ca1\u5d29  -> exit=-11 out=[PASS] \u9ed8\u8ba4\u6709 BuffTimeline \u6a21\u5757\u4e14\u5f00\u7740",
+        "[FAIL] \u5e26\u91cc\u6709\u771f\u5b9e\u4eae\u50cf\u7d20\uff08\u771f\u5b57\u4f53\u3001\u771f\u5706\u89d2\u5e95\uff09  -> lit=None out=[PASS] \u9ed8\u8ba4\u6709 BuffTimeline \u6a21\u5757\u4e14\u5f00\u7740",
+        "[FAIL] \u771f\u7a97\u53e3\u4e0b\u5173\u6389\u6a21\u5757\u540e\u5e26\u6d88\u5931  -> .QtGui, PySide6.QtWidgets, PySide6.QtOpenGLWidgets, PySide6.QtNetwork, PySide6.QtMultimedia, PySide6.QtOpenGL (total: 8)"
+      ],
+      "log": "reports/issue10/dependency_comparison/hud_batch19_bufftimeline_test.current.txt"
+    },
+    {
+      "path": "tests/api_freeze_test.py",
+      "source": "baseline",
+      "exit": -11,
+      "seconds": 0.29,
+      "failures": [
+        "Fatal Python error: Segmentation fault"
+      ],
+      "log": "reports/issue10/dependency_comparison/api_freeze_test.baseline.txt"
+    },
+    {
+      "path": "tests/api_freeze_test.py",
+      "source": "current",
+      "exit": -11,
+      "seconds": 0.28,
+      "failures": [
+        "Fatal Python error: Segmentation fault"
+      ],
+      "log": "reports/issue10/dependency_comparison/api_freeze_test.current.txt"
+    }
+  ]
+}
