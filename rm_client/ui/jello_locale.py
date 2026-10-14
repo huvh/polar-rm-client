@@ -15,6 +15,26 @@ LANGUAGE_SETTING = "Language"
 LANGUAGE_ENGLISH = "English"
 LANGUAGE_CHINESE = "简体中文"
 
+# Crosshair editor/import identifiers only; persisted protocol keys stay English.
+_CROSSHAIR_ZH = {
+    "Crosshair Scale": "准星整体大小",
+    "Open Crosshair Editor": "打开CS准星编辑器", "Import Crosshair Code": "导入准星代码 / 文本",
+    "Import Crosshair File": "导入准星文件", "Crosshair Import Details": "准星导入参数与限制",
+    "CS2 Style": "CS准星样式编号", "Length": "准星长度", "Gap": "准星间距", "Thickness": "准星粗细",
+    "Center Dot": "中心点", "T Shape": "T形准星", "Geometry Units": "准星尺寸单位",
+    "Red": "红色通道", "Green": "绿色通道", "Blue": "蓝色通道", "Alpha": "不透明度",
+    "Color Mode": "颜色模式", "Use Alpha": "使用不透明度", "Outline Mode": "描边模式",
+    "Outline Width": "描边宽度", "Outline Red": "描边红色", "Outline Green": "描边绿色",
+    "Outline Blue": "描边蓝色", "Outline Alpha": "描边不透明度", "Follow Recoil": "跟随后坐力（仅保留）",
+    "Dynamic Spread Limit": "动态散布上限（仅保留）", "Split Distance": "散布分离距离（仅保留）",
+    "Inner Split Alpha": "内侧散布透明度（仅保留）", "Outer Split Alpha": "外侧散布透明度（仅保留）",
+    "Split Size Ratio": "散布分离比例（仅保留）", "Fixed Gap": "旧版固定间距（仅保留）",
+    "Weapon Gap": "武器间距（仅保留）", "Scope Dot Scale": "瞄准镜点缩放（仅保留）",
+    "Scope Dot Uses Color": "瞄准镜点使用准星颜色（仅保留）", "Source Format": "导入来源格式",
+    "Imported Code": "原始准星分享码", "Import Notes": "准星规范限幅说明",
+    "CS2": "CS准星", "Pixels": "参考分辨率像素", "Legacy": "旧版尺寸单位",
+}
+
 CATEGORY_ZH = {
     "Combat": "战斗",
     "Movement": "移动",
@@ -99,6 +119,8 @@ MODULE_ZH = {
 
 # Phrases whose natural Chinese order cannot be produced by token joining.
 SETTING_ZH = {
+    "Open Keybind Manager": "打开键盘绑定管理器",
+    "Mouse Sensitivity": "鼠标灵敏度", "Invert Mouse Y": "反转鼠标垂直方向", "Mouse Wheel Scale": "鼠标滚轮倍率",
     "Language": "界面语言",
     "Record DT7 Safety Test": "记录DT7物理安全测试",
     "Open Injury Statistics": "打开伤害计分板",
@@ -393,6 +415,8 @@ SETTING_ZH.update({
     "Shield": "护盾", "Show Bars": "显示条形图", "Show Health": "显示血量",
     "Show Kills": "显示击杀数", "Smooth": "平滑度", "Solve Calibration": "计算标定参数",
     "Source Motion Preview": "原始动画预览", "Special Mechanism": "特殊机构",
+    "Local CS2 Assets": "本机CS2素材", "CS2 Feedback": "CS2购买反馈", "CS2 Native": "CS2原生",
+    "Shop Layout": "购买页布局", "CS2 Grid": "CS2购买矩阵",
     "Speed Scale %": "速度比例（%）", "Square Size": "棋盘格边长", "Startup Style": "启动页样式",
     "Target": "目标", "Test Elimination": "测试击杀事件", "Timeline": "时间轴",
     "Trigger E-Stop": "触发急停", "UDP Port": "UDP 端口", "UDP Timeout": "UDP 超时",
@@ -495,7 +519,7 @@ DESCRIPTION_ZH = {
 
 UI_ZH = {
     "POLAR-RM Custom Client": "POLAR-RM 自定义客户端",
-    "Continue": "继续", "Return to startup": "返回启动页", "Exit client": "退出客户端",
+    "Continue": "继续", "Settings": "设置", "Return to startup": "返回启动页", "Exit client": "退出客户端",
     "Cancel": "取消", "Exit client?": "退出客户端？",
     "Controls will lock before shutdown": "退出前将锁止控制输出",
     "Telemetry and safety monitoring remain active": "遥测与安全监控继续运行",
@@ -827,3 +851,7 @@ def action_label(value: str, chinese: bool) -> str:
 
 def profile_language_badge(chinese: bool) -> str:
     return "中文" if chinese else "EN"
+
+# Added crosshair labels do not alter config/protocol identifiers.
+SETTING_ZH.update(_CROSSHAIR_ZH)
+OPTION_ZH.update(_CROSSHAIR_ZH)

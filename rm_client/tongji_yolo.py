@@ -18,6 +18,33 @@ def _sigmoid(value: float) -> float:
     return 1.0 / (1.0 + math.exp(-value)) if value >= 0 else math.exp(value) / (1.0 + math.exp(value))
 
 
+def _confidence_candidate_indices(logits: Any, score_threshold: float, min_confidence: float) -> Any:
+    """Reject only clearly low scores; scalar sigmoid remains authoritative."""
+    import numpy as np  # type: ignore
+
+    # NumPy scalar thresholds can round a Python confidence to float32/16 in
+    # the old comparison. Keep that path (and custom numeric types) untouched.
+    if type(score_threshold) is not float or type(min_confidence) is not float:
+        return np.arange(len(logits))
+    logits = np.asarray(logits, dtype=np.float64)
+    # Stable on both signs, including +/-inf, without exp overflow. NumPy's
+    # underflow must be as harmless as the original math.exp underflow.
+    with np.errstate(under="ignore", invalid="ignore"):
+        exponentials = np.exp(-np.abs(logits))
+        probabilities = np.where(
+            logits >= 0.0,
+            1.0 / (1.0 + exponentials),
+            exponentials / (1.0 + exponentials),
+        )
+        # This absolute slack is only for prefiltering: retain equality and
+        # nearby scores despite NumPy/libm rounding, then check them exactly in
+        # the old loop. Separate '<' tests also preserve NaN threshold/logit
+        # semantics (NaN never rejects), unlike max() or a '>=' mask.
+        upper_scores = probabilities + 1e-12
+        rejected = (upper_scores < score_threshold) | (upper_scores < min_confidence)
+    return np.flatnonzero(~rejected)
+
+
 @dataclass(frozen=True)
 class LocalDetection:
     name: str
@@ -213,7 +240,8 @@ class TongjiYoloV5:
         boxes: list[list[int]] = []
         confidences: list[float] = []
         candidates: list[LocalDetection] = []
-        for row in rows:
+        for row_index in _confidence_candidate_indices(rows[:, 8], score_threshold, min_confidence):
+            row = rows[row_index]
             confidence = _sigmoid(float(row[8]))
             if confidence < score_threshold or confidence < min_confidence:
                 continue

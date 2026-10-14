@@ -765,7 +765,7 @@ def test_wallpaper_profiles_and_user_import() -> None:
         source.write_bytes(b"custom")
         manager = StartupWallpaperManager(workspace)
         try:
-            assert manager.profile_names()[:4] == ["TexasMP4", "VendingMachine4K", "Default3000925581Pkg", "ParticleGrid"]
+            assert manager.profile_names()[:5] == ["BlackHole", "TexasMP4", "VendingMachine4K", "Default3000925581Pkg", "ParticleGrid"]
             assert manager.resolve_media_profile("VendingMachine4K") == builtin / "vending-machine.mp4"
             profile = manager.import_wallpaper(source)
             assert profile == "User:custom-wallpaper"

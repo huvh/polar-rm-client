@@ -131,6 +131,8 @@ from .hero_deploy import HeroDeployInterfaceState, HeroDeployRenderer
 from .status_locale import dt7_display_token, status_text
 from .minecraft_hud import MinecraftCombatHudRenderer
 from .top_match_bar_controller import TopMatchBarController
+from .cs2_feedback import play_buy_sound
+from .cs2_video_settings import render_target, smooth_video
 from .gpu_frame_compositor import GlassOwner, GpuFrameCompositor, LensMaterial
 from .island_icon_gpu import IslandIconCommand, IslandIconGpuRenderer
 from .economy_glass import draw_economy_glass, draw_economy_glass_capsule, draw_economy_glass_well
@@ -780,8 +782,9 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             requested_hz = float(refresh_setting.value) if refresh_setting else 144.0
         except (TypeError, ValueError):
             requested_hz = 144.0
-        self.render_fps_target = max(120.0, min(self.render_fps_cap, requested_hz))
-        requested_interval = max(4, int(round(1000.0 / self.render_fps_target)))
+        self.render_fps_target = render_target(max(120.0,min(self.render_fps_cap,requested_hz)),self.render_fps_cap)
+        # Paint caps must not lower the event/backend/KMC logic clock.
+        requested_interval = max(4,int(round(1000.0/max(120.0,self.render_fps_target))))
         if requested_interval != self._render_timer_interval_ms:
             self._render_timer_interval_ms = requested_interval
             self.timer.setInterval(requested_interval)
@@ -855,6 +858,9 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             and economy_transaction.sequence != self.economy_last_status_sequence
         ):
             self.economy_last_status_sequence = economy_transaction.sequence
+            cue = self.economy_workspace_layer.cs2_feedback.observe(economy_transaction, now)
+            if cue is not None:
+                play_buy_sound(self, cue)
             self.toast(economy_transaction.message)
             match_chat = self.registry.get("MatchChat")
             if (
@@ -1094,6 +1100,24 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                 backend.value = "Compatibility Painter"
         self.startup_gpu.initialize()
         self.hud_video_gpu.initialize()
+        # Record the actual driver, not the configured backend label. This
+        # distinguishes a failed GPU pass / slow compatibility paint from a
+        # software or different-adapter OpenGL context on the user's machine.
+        try:
+            context = self.context()
+            functions = context.extraFunctions()
+            driver = {}
+            for key, enum in (("vendor", 0x1F00), ("renderer", 0x1F01), ("version", 0x1F02)):
+                value = functions.glGetString(enum)
+                driver[key] = value.decode("utf-8", "replace") if isinstance(value, bytes) else str(value)
+            self.backend.field_log.emit(
+                "renderer_init", **driver,
+                stencil_bits=context.format().stencilBufferSize(),
+                gpu_available=self.gpu_compositor.available,
+                gpu_error=self.gpu_compositor.last_error,
+            )
+        except Exception:
+            _LOG.debug("OpenGL driver diagnostics unavailable", exc_info=True)
         # Native passes only draw into private FBOs. The window framebuffer is
         # touched once by GpuFrameCompositor, avoiding Qt/GL state collisions.
 
@@ -1139,7 +1163,20 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                 frame_ms_ema=self.render_frame_ms_ema,
                 fps=self.state.fps,
                 render_target_fps=self.render_fps_target,
-                compositor_ms=getattr(self.gpu_compositor, "frame_ms", 0.0),
+                # frame_ms never existed and previously reported a misleading
+                # constant zero. This legacy scalar is final-present CPU time;
+                # last_pass_ms exposes the individual cached/pass timings.
+                compositor_ms=self.gpu_compositor.last_present_ms,
+                render_path="unified_gpu" if gpu_presented else "compatibility",
+                gpu_error=self.gpu_compositor.last_error,
+                last_pass_ms={
+                    "background": self.gpu_compositor.last_background_ms,
+                    "blur": self.gpu_compositor.last_blur_ms,
+                    "glass": self.gpu_compositor.last_glass_ms,
+                    "overlay": self.gpu_compositor.last_overlay_ms,
+                    "dynamic": self.gpu_compositor.last_dynamic_ms,
+                    "present": self.gpu_compositor.last_present_ms,
+                },
                 ui_tick_ms=self._ui_tick_last_ms,
                 ui_wakeup_gap_ms=self._ui_tick_gap_ms,
                 gpu_prewarm_last_ms=self._gpu_prewarm_last_ms,
@@ -1378,6 +1415,11 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                        {"raster_scale": raster_scale, "preserve_weight": True, "text_profile": "jello"})
         for source in self.jello_clickgui.image_assets:
             yield ("image", ((source,),), {})
+        if "buy_icon" in self.kill_fx.cs2.assets.paths:
+            yield ("image", ((self.kill_fx.cs2.assets.paths["buy_icon"],),), {})
+        from .cs2_buy_menu import icon_path
+        for category in ("ammo", "recovery", "revive", "support"):
+            yield ("image", ((icon_path(self,category),),), {})
         for source in (self.minecraft_hud.asset_root / "hotbar.png",
                        self.minecraft_hud.asset_root / "hotbar_selection.png",
                        self._client_asset_path("assets", "jello", "hud_shadow.png")):
@@ -1445,6 +1487,25 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         )
         for font in economy_fonts:
             yield ("text", ((font,), economy_labels, self.devicePixelRatioF()), {})
+        # CS2 matrix has fixed typography. Warm resident numeric glyphs and
+        # static shaped lines separately: changing gold/ammo never uploads a
+        # new full-line texture during animation.
+        from .fonts import cjk_ui_font
+        from .cs2_buy_menu import grid_layout
+        matrix = grid_layout(self.economy_workspace_layer,self.width(),self.height(),1.0)
+        matrix_scale = max(.78,min(1.10,matrix.target_panel.width()/1500))
+        matrix_labels = set(economy_labels)
+        matrix_labels.update({"战斗购买","可用金币本次已确认模拟请求裁判系统", "1 弹丸","2 恢复","3 复活","4 支援","5 补给站",
+                              "发弹余量","弹药库储备","实体弹丸","补给位置","等待官方状态","已在补给区","未在补给区","本赛制无此商品",
+                              "Esc / B 返回  ·  选择商品后在右侧确认  ·  所有交易沿用裁判链路"})
+        for bold,size in ((True,20),(True,14),(False,9.1),(False,9.2),(False,9.3),
+                          (False,9.5),(True,9.5),(True,13.5),(True,10.5),(False,9),(True,10),(False,8.6)):
+            font = self.font("poppins_bold" if bold else "poppins_medium",size*matrix_scale)
+            yield ("text",((font,),matrix_labels,self.devicePixelRatioF()),
+                   {"preserve_weight":True,"text_profile":"jello"})
+        for bold,size in ((False,9.3),(True,9.5),(True,10.5)):
+            font = cjk_ui_font(self.font("poppins_bold" if bold else "poppins_medium",size*matrix_scale))
+            yield ("text",((font,),matrix_labels,self.devicePixelRatioF()),{"preserve_weight":True})
 
 
     def _run_gpu_prewarm_slice(self) -> None:
@@ -2330,7 +2391,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         if not raw_drawn:
             painter = QPainter(device)
             painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-            painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, not self.high_res_optimize(width, height))
+            painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, smooth_video(not self.high_res_optimize(width,height)))
             if self.home_visible:
                 self.draw_startup_background(painter, width, height)
             elif self.hero_deploy_video_cut_active():
@@ -3801,10 +3862,21 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
 
     def draw_crosshair(self, p: QPainter, width: int, height: int) -> None:
         module = self.registry.get("Crosshair")
+        if self.crosshair_style() == "CS2":
+            # Module-level renderer: no new Window API/state or paint-time I/O.
+            from ..cs2_crosshair import paint_crosshair
+            if paint_crosshair(p, module, width, height):
+                return
         size_setting = module.get_setting("Size") if module else None
         size = float(size_setting.value if size_setting else 18)
         cx = width / 2
         cy = height / 2
+        from ..cs2_crosshair import display_scale_from_module
+        multiplier = display_scale_from_module(module)
+        p.save()
+        p.translate(cx, cy)
+        p.scale(multiplier, multiplier)
+        p.translate(-cx, -cy)
         main = self.crosshair_color()
         p.setPen(QPen(main, 1.7))
         p.setBrush(main)
@@ -3820,6 +3892,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                 p.setBrush(main)
             else:
                 p.drawLine(QPointF(item[1], item[2]), QPointF(item[3], item[4]))
+        p.restore()
 
     def crosshair_color(self) -> QColor:
         """准星主色。`Crosshair / Heat Color` 决定它跟不跟枪管热量走。

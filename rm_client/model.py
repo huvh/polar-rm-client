@@ -34,6 +34,11 @@ CONTROL_BIND_OPTIONS = [
 # a binding which can never reach its slot (F12 must remain the E-stop).
 CONTROL_RESERVED_KEYS = frozenset({"rightshift", "tab", "f8", "f9", "f12"})
 CONTROL_BIND_OPTIONS = [key for key in CONTROL_BIND_OPTIONS if key.lower() not in CONTROL_RESERVED_KEYS]
+# Module shortcuts use the window's printable-key dispatcher, not the limited
+# driver-slot enum. Keep these distinct so a visual keyboard cannot invent an
+# unsupported physical-to-firmware control mapping.
+MODULE_BIND_OPTIONS = list(dict.fromkeys([*CONTROL_BIND_OPTIONS, *list("ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
+                                         *list("0123456789"), "`", "-", "=", "[", "]", "\\", ";", "'", ",", ".", "/", "Alt"]))
 
 PRIMARY_GUI_MODE = "JelloSigma"
 
@@ -1051,7 +1056,7 @@ def build_default_registry() -> ModuleRegistry:
             "None",
             [
                 mode_setting("Preset", "Default Scrolling", [
-                    "Default Scrolling", "Combo", "Card", "Battlefield 1", "Minimal", "PUBG Subtitle",
+                    "Default Scrolling", "Combo", "Card", "CS2 Native", "Battlefield 1", "Minimal", "PUBG Subtitle",
                     "Battlefield 5", "Battlefield 6", "Total Battlefield", "Valorant Prime", "Valorant Glitchpop",
                     "Valorant Singularity V1", "Valorant Singularity V2", "Valorant Singularity V3",
                     "Valorant Gaia", "Valorant Gaia V1", "Valorant Gaia V2", "Valorant Gaia V3",
@@ -1445,6 +1450,7 @@ def build_default_registry() -> ModuleRegistry:
                 bool_setting("BF6 Progress", True),
                 bool_setting("Source Motion Preview", False,
                              "原样式0.3s击杀标记缩放预览，尚未完成原版实录逐帧验收。"),
+                bool_setting("Local CS2 Assets", True, "使用本机私有CS2图标、纹理与字体；无素材包时回退原创绘制。"),
             ],
             enabled=True,
             description="CS式RM比赛顶部：车辆HP、独立系统状态和原BF6基地进度；缺失遥测保持未知。",
@@ -1494,6 +1500,8 @@ def build_default_registry() -> ModuleRegistry:
                 bool_setting("Tech Level", True),
                 bool_setting("Radar Level", True),
                 mode_setting("Open Style", "Dynamic Island", ["Dynamic Island", "Full Sheet"]),
+                mode_setting("Shop Layout", "CS2 Grid", ["CS2 Grid", "Classic"]),
+                bool_setting("CS2 Feedback", True, "CS2购买悬停、确认闪亮与本机原生音效；不改变液态玻璃或交易确认。"),
                 bool_setting("Mock Requests", False, "正式赛事默认通过 MQTT 发送；实验室/模拟场景仍强制 Mock。"),
             ],
             enabled=True,
@@ -1724,6 +1732,10 @@ def build_default_registry() -> ModuleRegistry:
                 number_setting("Speed Scale %", 100, 10, 100, 5),
                 number_setting("Yaw Scale %", 100, 10, 100, 5),
                 number_setting("Gimbal Slew", 8, 1, 45, 1),
+                number_setting("Mouse Sensitivity", 1.0, 0.05, 10.0, 0.05,
+                               description="本客户端鼠标位移倍率；不是车辆NUC的自瞄增益，不改变DT7原始输入。"),
+                bool_setting("Invert Mouse Y", False, "反转本客户端鼠标垂直控制方向。"),
+                number_setting("Mouse Wheel Scale", 1.0, 0.1, 4.0, 0.1),
                 # 驾驶上行通道。virtual_rc 复用固件已生效的 WASD 驾驶
                 # （chassis_omni.c 读 rc->key.v 直接产生斜坡速度，自带限幅与
                 # 低通），固件只需补一处 VIRTUAL_RC_CTRL → rc_ctrl 接线；
@@ -1803,9 +1815,47 @@ def build_default_registry() -> ModuleRegistry:
             "Render",
             "None",
             [
-                mode_setting("Style", "RM Dot", ["RM Dot", "Circle", "Cross"]),
+                mode_setting("Style", "RM Dot", ["RM Dot", "Circle", "Cross", "CS2"], "CS2为静态近似；动态散布、后坐力和开镜效果没有RM遥测，不会模拟。"),
                 number_setting("Size", 18, 4, 48, 1),
+                number_setting("Crosshair Scale", 1, .5, 8, .1, "x", "整体缩放准星（包括导入的CS2准星）；不改分享码参数或自瞄FOV。"),
                 bool_setting("Heat Color", True),
+                action_setting("Open Crosshair Editor", "CS式分组参数与多背景实时预览；支持双向分享码/JSON/CFG。"),
+                action_setting("Import Crosshair Code", "读取CS/CSGO分享码、准星JSON或白名单CFG，不执行命令。"),
+                action_setting("Import Crosshair File", "读取外部准星JSON/CFG/TXT；未知字段拒绝，不静默忽略。"),
+                action_setting("Crosshair Import Details", "查看保留的动态/scope参数、原始分享码及限幅说明。"),
+                number_setting("CS2 Style", 4, 0, 9, 1),
+                number_setting("Length", 5, 0, 255, .1),
+                number_setting("Gap", 3, -3840, 3840, .1),
+                number_setting("Thickness", 1, 0, 32, .1),
+                number_setting("Reference Height", 1080, 240, 65535, 1, "px"),
+                mode_setting("Geometry Units", "Pixels", ["Pixels", "Legacy"]),
+                bool_setting("Center Dot", False),
+                bool_setting("T Shape", False),
+                number_setting("Red", 80, 0, 255, 1),
+                number_setting("Green", 255, 0, 255, 1),
+                number_setting("Blue", 80, 0, 255, 1),
+                number_setting("Alpha", 255, 0, 255, 1),
+                number_setting("Color Mode", 5, 0, 5, 1),
+                bool_setting("Use Alpha", True),
+                number_setting("Outline Mode", 1, 0, 2, 1),
+                number_setting("Outline Width", 1, 0, 127.5, .5),
+                number_setting("Outline Red", 0, 0, 255, 1),
+                number_setting("Outline Green", 0, 0, 255, 1),
+                number_setting("Outline Blue", 0, 0, 255, 1),
+                number_setting("Outline Alpha", 255, 0, 255, 1),
+                bool_setting("Follow Recoil", False, "仅保留外部参数；无CS后坐力遥测，不驱动RM控制。"),
+                number_setting("Dynamic Spread Limit", 0, 0, 255, 1),
+                number_setting("Split Distance", 7, 0, 127, 1),
+                number_setting("Inner Split Alpha", 1, 0, 1, .01),
+                number_setting("Outer Split Alpha", .5, 0, 1, .01),
+                number_setting("Split Size Ratio", .3, 0, 1, .01),
+                number_setting("Fixed Gap", 3, -12.8, 12.7, .1),
+                bool_setting("Weapon Gap", False),
+                number_setting("Scope Dot Scale", 1, .1, 2, .01),
+                bool_setting("Scope Dot Uses Color", False),
+                Setting("Source Format", "text", "Custom"),
+                Setting("Imported Code", "text", ""),
+                Setting("Import Notes", "text", ""),
             ],
             enabled=True,
         ),
@@ -1872,6 +1922,7 @@ def build_default_registry() -> ModuleRegistry:
                 mode_setting("Language", "简体中文", ["English", "简体中文"], "切换界面显示语言；不改变配置键和协议值。"),
                 mode_setting("Render Backend", "Unified GPU", ["Unified GPU", "Compatibility Painter"]),
                 bool_setting("Save Layout", True),
+                action_setting("Open Keybind Manager", "打开 Jello 完整键盘；按键弹层查看、删除并添加模块快捷键。"),
                 action_group_setting(
                     "Old ClickGUIs",
                     LEGACY_GUI_MODES,

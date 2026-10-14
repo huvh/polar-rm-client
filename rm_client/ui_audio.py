@@ -10,7 +10,9 @@ from typing import Iterable
 from .runtime_paths import RuntimePaths
 
 from PySide6.QtCore import QObject, QUrl
-from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer, QSoundEffect
+from PySide6.QtGui import QGuiApplication
+from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer, QSoundEffect, QMediaDevices
+from .audio_preferences import POOLS, selected_output, cue_volume
 
 
 class ReliableAudioPool(QObject):
@@ -32,6 +34,30 @@ class ReliableAudioPool(QObject):
         self.last_sound = ""
         self.last_error = ""
         self.backend = "QSoundEffect"
+        POOLS.add(self)
+        self._devices = QMediaDevices(self)
+        self._devices.audioOutputsChanged.connect(self.apply_audio_preferences)
+        app = QGuiApplication.instance()
+        if app is not None:
+            app.applicationStateChanged.connect(self._on_focus_changed)
+
+    def _on_focus_changed(self, _state) -> None:
+        if cue_volume(100) <= 0:
+            self._pending.clear()
+            for voices in self._effects.values():
+                for voice in voices: voice.stop()
+            for player, _output in [*self._fallback, *(v for voices in self._media_effects.values() for v in voices)]:
+                player.stop()
+
+    def apply_audio_preferences(self) -> None:
+        selected_output.cache_clear()
+        device = selected_output()
+        self._pending.clear()
+        for voices in self._effects.values():
+            for voice in voices:
+                voice.stop(); voice.setAudioDevice(device)
+        for player, output in [*self._fallback, *(v for voices in self._media_effects.values() for v in voices)]:
+            player.stop(); output.setDevice(device)
 
     def _sound_path(self, name: str) -> Path:
         # Custom selections keep their portable "custom/<filename>" config key.
@@ -52,6 +78,7 @@ class ReliableAudioPool(QObject):
             voices: list[QSoundEffect] = []
             for _ in range(self.voices_per_sound):
                 effect = QSoundEffect(self)
+                effect.setAudioDevice(selected_output())
                 effect.statusChanged.connect(
                     lambda sound=name, voice=effect: self._on_status(sound, voice, voice.status())
                 )
@@ -71,6 +98,7 @@ class ReliableAudioPool(QObject):
             source = QUrl.fromLocalFile(str(path.resolve()))
             for _ in range(voice_count):
                 output = QAudioOutput(self)
+                output.setDevice(selected_output())
                 player = QMediaPlayer(self)
                 player.setAudioOutput(output)
                 player.errorOccurred.connect(lambda error, message, voice=player: self._on_media_error(voice, message))
@@ -79,6 +107,9 @@ class ReliableAudioPool(QObject):
             self._media_effects[name] = voices
 
     def play(self, name: str, volume: float) -> bool:
+        volume = cue_volume(volume)
+        if volume <= 0:
+            return True
         path = self._sound_path(name)
         self.last_sound = name
         if not path.is_file():
@@ -140,6 +171,7 @@ class ReliableAudioPool(QObject):
             return True
         if len(self._fallback) < self._fallback_voices:
             output = QAudioOutput(self)
+            output.setDevice(selected_output())
             player = QMediaPlayer(self)
             player.setAudioOutput(output)
             player.errorOccurred.connect(lambda error, message, voice=player: self._on_media_error(voice, message))

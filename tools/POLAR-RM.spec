@@ -44,5 +44,6 @@ exe = EXE(
     console=False,
     disable_windowed_traceback=False,
     target_arch="x86_64",
+    version=str(root / "BUILD_VERSION_INFO.txt") if (root / "BUILD_VERSION_INFO.txt").is_file() else None,
 )
 coll = COLLECT(exe, a.binaries, a.datas, strip=False, upx=False, name="POLAR-RM")

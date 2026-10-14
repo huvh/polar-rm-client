@@ -13,7 +13,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from PySide6.QtCore import QPointF, QRectF
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QFont, QImage, QPainter
 from PySide6.QtWidgets import QApplication
 from rm_client.config_store import apply_registry_config, export_client_config
 from rm_client.model import CATEGORIES, build_default_registry
@@ -25,8 +25,11 @@ from rm_client.ui.jello_locale import (
     module_label, option_label, setting_label, toast_text, ui_text,
 )
 from rm_client.ui.polar.mixins.escape_menu_mixin import EscapeMenuMixin
+from rm_client.ui.fonts import FontBook
 
 APP = QApplication.instance() or QApplication([])
+FONTS = FontBook()
+FONTS.load_from_project_assets(Path(__file__).resolve().parents[1])
 
 
 def snapshot(registry):
@@ -46,9 +49,7 @@ class DisplayHost(EscapeMenuMixin):
         self._escape_menu_selected = 0
 
     def font(self, family, size):
-        font = QFont("Sans Serif")
-        font.setPointSizeF(size)
-        return font
+        return FONTS.font(family, size)
 
     def add_hotspot(self, rect, action, payload=None, button=None, tooltip=""):
         self.hotspots.append(NS(rect=rect, action=action, payload=payload, button=button, tooltip=tooltip))
@@ -213,12 +214,12 @@ class LocalizationTests(unittest.TestCase):
                 PersistenceMixin.import_custom_ui_sound(host, "enable")
                 _, title, directory, filters = dialog.call_args.args
                 self.assertEqual(title, "导入开启音效" if language == LANGUAGE_CHINESE else "Import enable sound")
-                self.assertEqual(directory, "/tmp/Auto X")
+                self.assertEqual(Path(directory), host.ui_audio.custom_dir)
                 self.assertIn("(*.wav *.ogg *.mp3 *.flac *.m4a *.aac)", filters)
                 PersistenceMixin.import_wallpaper_from_dialog(host)
                 _, title, directory, filters = dialog.call_args.args
                 self.assertEqual(title, "导入启动壁纸" if language == LANGUAGE_CHINESE else "Import startup wallpaper")
-                self.assertEqual(directory, "/tmp/User Wallpapers")
+                self.assertEqual(Path(directory), host.paths.asset("wallpapers/user"))
                 self.assertIn("(*.mp4 *.webm *.mov *.avi *.mkv *.gif *.png *.jpg *.jpeg)", filters)
 
     def test_qualification_dialog_cancel_is_localized_and_has_no_side_effect(self):
@@ -246,12 +247,19 @@ class LocalizationTests(unittest.TestCase):
 
     def test_escape_menu_follows_language_without_changing_choice_order(self):
         host = DisplayHost()
-        self.assertEqual(host.escape_menu_choices(), ("继续", "返回启动页", "退出客户端"))
+        self.assertEqual(host.escape_menu_choices(), ("继续", "设置", "返回启动页", "退出客户端"))
         host._escape_menu_confirm_exit = True
         self.assertEqual(host.escape_menu_choices(), ("取消", "退出客户端"))
-        painter = Mock()
-        host.draw_escape_menu(painter, 1000, 620)
-        texts = [call.args[-1] for call in painter.drawText.call_args_list]
+        from rm_client.ui.polar.mixins import escape_menu_mixin as menu
+        image = QImage(1000, 620, QImage.Format_ARGB32_Premultiplied)
+        image.fill(0)
+        painter = QPainter(image)
+        try:
+            with patch.object(menu, "_menu_text", wraps=menu._menu_text) as labels:
+                host.draw_escape_menu(painter, 1000, 620)
+                texts = [call.args[-1] for call in labels.call_args_list]
+        finally:
+            painter.end()
         self.assertIn("退出客户端？", texts)
         self.assertIn("退出前将锁止控制输出", texts)
         self.assertIn("Esc 返回　↑ ↓ 选择　Enter 确认", texts)

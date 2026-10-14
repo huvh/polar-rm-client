@@ -6,7 +6,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import unittest
 from types import SimpleNamespace as NS
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 from PySide6.QtCore import Qt, QTimer, QPoint, QPointF
 from PySide6.QtGui import QPainter, QColor, QKeyEvent, QWheelEvent
 from PySide6.QtWidgets import QApplication, QWidget
@@ -141,11 +141,11 @@ class EscapeMenuTests(unittest.TestCase):
         self.w.close.assert_not_called()
         self.key(Qt.Key.Key_Return) # Safe default Cancel.
         self.assertFalse(self.w._escape_menu_confirm_exit)
-        self.w.activate_escape_menu_choice(2)
+        self.w.activate_escape_menu_choice(3)
         self.key(Qt.Key.Key_Escape)
         self.assertTrue(self.w.escape_menu_visible)
         self.assertFalse(self.w._escape_menu_confirm_exit)
-        self.w.activate_escape_menu_choice(2)
+        self.w.activate_escape_menu_choice(3)
         self.key(Qt.Key.Key_Down)
         self.key(Qt.Key.Key_Return)
         self.w.close.assert_called_once()
@@ -153,21 +153,44 @@ class EscapeMenuTests(unittest.TestCase):
         self.open()
         events = []
         self.w.backend.lock_control.side_effect = lambda reason: events.append(('lock', self.w.home_visible))
-        self.w.activate_escape_menu_choice(1)
+        self.w.activate_escape_menu_choice(2)
         self.assertEqual(events, [('lock',False)])
         self.assertTrue(self.w.home_visible)
         self.assertEqual(self.w.startup_step, 'scenario')
         self.assertFalse(self.w.escape_menu_visible)
         self.w.backend.shutdown.assert_not_called()
+
+    def test_real_settings_entry_lazy_dispatch_preserves_menu_and_safe_state(self):
+        import sys
+        self.open()
+        settings = Mock()
+        module = NS(open_settings_center=settings)
+        with patch.dict(sys.modules, {'rm_client.ui.cs2_settings_center': module}):
+            self.w.activate_escape_menu_choice(1)
+        settings.assert_called_once_with(self.w)
+        self.assertTrue(self.w.escape_menu_visible)
+        self.assertFalse(self.w.home_visible)
+        self.assertFalse(self.w._escape_menu_confirm_exit)
+        self.w.backend.shutdown.assert_not_called()
+        self.w.backend.arm_control.assert_not_called()
+
+    def test_cs_navigation_rows_are_horizontal_and_contained(self):
+        self.open()
+        panel, rows, scale = self.w.escape_menu_layout(1000, 620)
+        self.assertEqual(len(rows), 4)
+        self.assertTrue(all(panel.contains(rect) for rect in rows))
+        self.assertEqual(len({rect.y() for rect in rows}), 1)
+        self.assertEqual(rows[0].height(), 64 * scale)
+        self.assertTrue(all(a.right() < b.left() for a, b in zip(rows, rows[1:])))
     def test_mouse_capture_and_resize(self):
         self.open()
         for size in ((1000,620),(640,400),(2560,1440)):
             self.w.resize(*size)
             panel, rows, _ = self.w.escape_menu_layout(*size)
             self.assertTrue(self.w.rect().contains(panel.toRect()))
-            QTest.mouseRelease(self.w, Qt.MouseButton.LeftButton, pos=rows[2].center().toPoint())
+            QTest.mouseRelease(self.w, Qt.MouseButton.LeftButton, pos=rows[3].center().toPoint())
             self.assertFalse(self.w._escape_menu_confirm_exit)
-        QTest.mouseClick(self.w, Qt.MouseButton.LeftButton, pos=rows[2].center().toPoint())
+        QTest.mouseClick(self.w, Qt.MouseButton.LeftButton, pos=rows[3].center().toPoint())
         self.assertTrue(self.w._escape_menu_confirm_exit)
     def test_held_control_released_without_replay(self):
         from rm_client.control import KeyboardControlBridge

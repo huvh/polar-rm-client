@@ -24,6 +24,7 @@ from PySide6.QtWidgets import QApplication
 from rm_client.model import build_default_registry
 from rm_client.ui.hero_locale import hero_text
 from rm_client.ui.jello_locale import chinese_enabled
+from rm_client.ui.cs2_video_settings import smooth_video
 
 
 def production_methods(texts):
@@ -59,7 +60,7 @@ def production_methods(texts):
         ast.ClassDef(name="WindowMethods", bases=[], keywords=[], body=methods, decorator_list=[]),
     ], type_ignores=[])
     scope = dict(QRectF=QRectF, Qt=Qt, QColor=QColor, QPainter=RecordingPainter,
-                 time=time, chinese_enabled=chinese_enabled, hero_text=hero_text)
+                 time=time, chinese_enabled=chinese_enabled, hero_text=hero_text, smooth_video=smooth_video)
     exec(compile(ast.fix_missing_locations(module), "background_display_methods", "exec"), scope)
     return scope["WindowMethods"]
 

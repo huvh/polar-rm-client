@@ -22,6 +22,14 @@
 - 提取基准 JAR 的 SHA-256 为 `3ce1573562fa2c17394400d8c4cafcd9ac8d68ea128040c9eea5f3873bec7406`；提交中的 23 个 Jello 图片、字体和短音效文件均已逐文件哈希回查为该 JAR 内的原始字节。
 - 随项目保存的原始资源仅包括 Helvetica Neue Light/Medium 字体、Options/勾选/滚动条端帽/八方向阴影图片，以及 `activate`、`deactivate` 等八个短 UI 音效；相关权利归各自权利人所有。
 - 未迁移音乐播放器、小游戏、音乐、游戏逻辑或其他 Sigma 运行时代码与资源。
+- 新增的 `Jello-Regular.ttf` 为原始 JAR 的 `regular.ttf`（SHA-256 `462fa16c0bccee134ac8dcd5b0d5cbc4e992d5d32de620ce290ba784ba46638a`），用于键盘已绑定键的原版排版。字体权利归原权利人，不因本项目提交而变成开源授权。
+
+## 可选 CS2 本机素材包
+
+- 原生顶栏字体、击杀标记、购买图标及短音效通过离线白名单导入器从用户本机 CS2 资源只读提取；不修改 Steam 安装、游戏配置或运行进程。
+- 素材位于 `user_data/cs2_ui_pack`，不进入 Git；来源与逐文件 SHA-256 在该包的 `manifest.json` 中。普通构建不包含此包，显式传入 `-Cs2UiPackPath` 才复制其中声明的素材。
+- 这些 Valve/第三方素材并非本项目或解包工具的开源授权内容。公开再分发需要相应权利；有本地游戏文件不应被视为本项目已取得公开再分发授权。
+- 项目原创的 RM 购买图标位于 `assets/ui/cs2_buy`。CS2 准星代码由独立实现的格式解析器处理，不复制 CS2 引擎代码。
 
 ## Minecraft 1.21.11 HUD 资源
 

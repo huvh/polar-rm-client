@@ -163,6 +163,7 @@ class HudLocaleTests(unittest.TestCase):
                 ('draw_armor_3d_esp',"f'{armor.label.upper()} {armor.confidence:.0%}{self.robot_overlay_id_suffix(armor)}'"),
             },
             'module_list': {
+                ('draw_module_list_debug_white','display_text'),  # Pretranslated, then measured in its display font
                 ('draw_module_list_fast_rows','str(idx + 1)'),
                 ('draw_string_with_shadow_mc','text'),  # Generic unused legacy text primitive
                 ('draw_module_list_segmented',"'POLAR'"), ('draw_module_list_segmented',"'*'"),
@@ -281,13 +282,22 @@ class HudLocaleTests(unittest.TestCase):
                     h._gpu_hud_commands=Commands()
                     h.draw_module_list_debug_white(p,1280)
                 h,geometry,direct=self.capture(language,draw)
-                records.append((geometry,h._gpu_hud_commands if gpu else direct))
-            self.assertEqual(records[0][0],records[1][0])
+                records.append((geometry,h._gpu_hud_commands if gpu else direct + h.texts))
             if gpu:
-                self.assertEqual(records[0][1].geometry,records[1][1].geometry)
                 en,zh=records[0][1].texts,records[1][1].texts
             else:en,zh=records[0][1],records[1][1]
-            self.assertEqual([r for r,_ in en],[r for r,_ in zh])
+            # Translation changes advance, not the right anchor. Requiring
+            # equal English/Chinese rectangles preserved the original bug.
+            self.assertEqual(len(en), len(zh))
+            for (english_rect, _), (chinese_rect, _) in zip(en, zh):
+                self.assertAlmostEqual(english_rect[0] + english_rect[2],
+                                       chinese_rect[0] + chinese_rect[2], places=3)
+                self.assertEqual(english_rect[1], chinese_rect[1])
+                self.assertGreaterEqual(english_rect[0], 0)
+                self.assertGreaterEqual(chinese_rect[0], 0)
+                self.assertLessEqual(english_rect[0] + english_rect[2], 1280)
+                self.assertLessEqual(chinese_rect[0] + chinese_rect[2], 1280)
+            self.assertNotEqual(en[0][0][2], zh[0][0][2])
             self.assertEqual(en[0][1],'ArmorAutoAim')
             self.assertEqual(zh[0][1],'装甲自瞄')
 

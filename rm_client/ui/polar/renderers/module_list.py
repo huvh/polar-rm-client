@@ -76,12 +76,31 @@ from ...paint import (
 from ...theme import THEME, color
 from ...jello_locale import chinese_enabled, category_label
 from ...hud_locale import hud_text, hud_template, hud_module_name
+from ...fonts import ui_font_key
 # 注意：primitives 与本模块同属 ui/polar 子包（阶段 1 迁入），故为单级 ..
 from ..primitives import ModuleListLayout
 
 __all__ = [
     "ModuleListMixin",
 ]
+
+
+def _atlas_advance(renderer, font: QFont, text: str, dpr: float, fallback: float) -> float:
+    """Match the hinted line actually uploaded, not 1x metrics scaled by DPR.
+
+    This runs only on a width-cache miss and makes no GL call/texture upload.
+    In particular mixed Chinese/Latin labels can differ by a few device pixels
+    after the atlas rounds its raster size. Keep CPU-only hosts compatible.
+    """
+    shaper = getattr(renderer, "_jello_text_layout", None)
+    policy = getattr(renderer, "small_text_policy", None)
+    if not callable(shaper) or policy is None:
+        return fallback
+    pixels = font.pointSizeF() * 96.0 / 72.0 if font.pointSizeF() > 0 else font.pixelSize()
+    physical = max(1.0, pixels * dpr)
+    sample = policy.sample_scale_for(physical, preserve_weight=True)
+    raster_font = policy.prepare_font(font, physical, sample, preserve_weight=True)
+    return shaper(text, raster_font)[1] / (sample * dpr)
 
 
 class ModuleListMixin:
@@ -475,12 +494,10 @@ class ModuleListMixin:
         # Small/Tiny is selected.  Python's stable sort preserves the source
         # order when that comparator returns zero.
         sort_font = self.font("jello_light", 20.0 * 72.0 / 96.0)
-        # DirectWrite metrics queries are ~1.5 ms/frame when repeated; the
-        # heights are constant per font, and the metrics objects below are
-        # only needed on a width-cache miss.
+        # Keep Sigma's row pitch, animation and English face unchanged. CJK
+        # rows use the existing clear UI font at the same logical size; font
+        # resolution/measurement belongs to the shared typography layer.
         font_height = math.ceil(self.font_line_height(font))
-        metrics: QFontMetricsF | None = None
-        sort_metrics: QFontMetricsF | None = None
         animations = self.setting_bool(hud, "Jello List Animations", True)
         now = float(self.gui_motion.now)
         frame_index = int(getattr(self, "_ui_frame_index", 0))
@@ -533,40 +550,63 @@ class ModuleListMixin:
             if target <= 0.0 and progress <= 0.0001:
                 rows.pop(name, None)
 
-        render_rows: list[tuple[Module, float, float]] = []
-        width_cache: dict[tuple[str, str, str], tuple[float, float]] = getattr(
+        render_rows: list[tuple[str, QFont, float, float, float, bool]] = []
+        width_cache: dict[tuple[Any, ...], tuple[float, float]] = getattr(
             self,
             "_jello_active_mods_width_cache",
             {},
         )
         self._jello_active_mods_width_cache = width_cache
-        font_key = font.key()
-        sort_font_key = sort_font.key()
+        device = p.device()
+        logical_dpi = int(device.logicalDpiX()) if device is not None else 96
+        device_pixel_ratio = round(float(device.devicePixelRatioF()), 3) if device is not None else 1.0
+        gpu_widths = bool(self._collect_gpu_hud_commands and self.clickgui_gpu.available)
+        use_chinese = chinese_enabled(self.registry)
         for row in rows.values():
             module = row["module"]
-            cache_key = (font_key, sort_font_key, module.name)
+            display_text = hud_module_name(module.name, use_chinese)
+            localized = display_text != module.name
+            row_font = self.font("pingfang", pixel_size * 72.0 / 96.0) if localized else font
+            row_sort_font = self.font("pingfang", 20.0 * 72.0 / 96.0) if localized else sort_font
+            cache_key = (
+                ui_font_key(row_font, device),
+                ui_font_key(row_sort_font, device),
+                module.name,
+                display_text,
+                logical_dpi,
+                device_pixel_ratio,
+                gpu_widths,
+            )
             widths = width_cache.get(cache_key)
             if widths is None:
-                if metrics is None:
-                    metrics = QFontMetricsF(font)
-                if sort_metrics is None:
-                    sort_metrics = QFontMetricsF(sort_font)
                 widths = (
-                    float(metrics.horizontalAdvance(module.name)),
-                    float(sort_metrics.horizontalAdvance(module.name)),
+                    self.text_advance(row_font, display_text),
+                    self.text_advance(row_sort_font, display_text),
                 )
+                if gpu_widths and localized:
+                    widths = (
+                        _atlas_advance(self.clickgui_gpu, row_font, display_text, device_pixel_ratio, widths[0]),
+                        _atlas_advance(self.clickgui_gpu, row_sort_font, display_text, device_pixel_ratio, widths[1]),
+                    )
+                if len(width_cache) >= 2048:
+                    width_cache.clear()
                 width_cache[cache_key] = widths
             text_w, sort_w = widths
             render_rows.append(
-                (module, text_w, sort_w, max(0.0, min(1.0, float(row["progress"]))))
+                (display_text, row_font, text_w, sort_w, max(0.0, min(1.0, float(row["progress"]))), localized)
             )
-        render_rows.sort(key=lambda item: -item[2])
+        render_rows.sort(key=lambda item: -item[3])
         if max_rows is not None:
             render_rows = render_rows[:max(1, int(max_rows))]
         if not render_rows:
             return
 
-        shadow_path = self._client_asset_path("assets", "jello", "hud_shadow.png")
+        shadow_path = getattr(self, "_jello_hud_shadow_path", None)
+        if shadow_path is None:
+            # This bundled asset is immutable for a window's lifetime. Do not
+            # stat the same file on every display frame (including GPU frames).
+            shadow_path = self._client_asset_path("assets", "jello", "hud_shadow.png")
+            self._jello_hud_shadow_path = shadow_path
         gpu_commands = (
             self._gpu_hud_commands
             if self._collect_gpu_hud_commands and self.clickgui_gpu.available
@@ -591,7 +631,7 @@ class ModuleListMixin:
             p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
             p.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
             p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
-        for module, text_w, _sort_w, progress in render_rows:
+        for display_text, row_font, text_w, _sort_w, progress, localized in render_rows:
             if y + font_height > height_limit:
                 break
             scale = 0.86 + 0.14 * progress
@@ -625,8 +665,8 @@ class ModuleListMixin:
                 row_transform.translate(-pivot.x(), -pivot.y())
                 gpu_commands.text(
                     row_transform.mapRect(text_rect),
-                    hud_module_name(module.name, chinese_enabled(self.registry)),
-                    font,
+                    display_text,
+                    row_font,
                     QColor(254, 254, 254, round(255.0 * 0.95 * progress * base_opacity)),
                     Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop,
                     shadow=False,
@@ -642,13 +682,19 @@ class ModuleListMixin:
                 p.translate(pivot)
                 p.scale(scale, scale)
                 p.translate(-pivot)
-                p.setFont(font)
+                p.setFont(row_font)
                 p.setPen(QColor(254, 254, 254, 255))
-                p.drawText(
-                    text_rect,
-                    int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop),
-                    hud_module_name(module.name, chinese_enabled(self.registry)),
-                )
+                if localized:
+                    self.draw_text(
+                        p, text_rect, display_text, row_font, QColor(254, 254, 254, 255),
+                        Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop,
+                    )
+                else:
+                    p.drawText(
+                        text_rect,
+                        int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop),
+                        display_text,
+                    )
                 p.restore()
             ease_height = (
                 2.0 * progress * progress

@@ -57,7 +57,8 @@ def main() -> None:
         # 呈现节奏由 FrameScheduler 控制，视频纹理只在源帧变化时上传。
         # Present at the display cadence.  Unthrottled swaps were racing the
         # launcher FBO lifecycle on high-DPR Windows surfaces.
-        surface.setSwapInterval(1)
+        from ..cs2_video_settings import configure_surface
+        configure_surface(surface)
         surface.setDepthBufferSize(0)
         surface.setStencilBufferSize(0)
         QSurfaceFormat.setDefaultFormat(surface)
@@ -65,5 +66,7 @@ def main() -> None:
     app.setApplicationName("POLAR-RM Custom Client")
     window = PolarRMWindow()
     window.show()
+    from ..cs2_video_settings import restore_startup_window
+    restore_startup_window(window)
     if owns_app:
         raise SystemExit(app.exec())

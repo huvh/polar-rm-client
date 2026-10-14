@@ -658,6 +658,10 @@ class PersistenceMixin:
         return width * height >= 3_000_000
 
     def video_sample_size(self, width: int, height: int) -> tuple[int, int]:
+        from ...cs2_video_settings import sampled_video_size
+        override = sampled_video_size(width,height)
+        if override is not None:
+            return override
         if not self.high_res_optimize(width, height):
             return (width, height)
         max_pixels = 1920 * 1080

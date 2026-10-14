@@ -48,6 +48,7 @@ class MatchStripLocaleTests(unittest.TestCase):
         renderer = renderer or TopMatchBarRenderer()
         from rm_client.ui import top_match_bar as module
         original = module._text
+        cached_text = renderer._paint_cached_text
         text_calls = []
 
         def record(p, rect, text, font, color, **kwargs):
@@ -55,8 +56,15 @@ class MatchStripLocaleTests(unittest.TestCase):
             if not hide_text:
                 original(p, rect, text, font, color, **kwargs)
 
+        def record_request(p, rect, text, font, color, **kwargs):
+            # Record full caller-owned strings before fixed CS2 slots elide
+            # them. Portrait/actual raster calls remain recorded separately.
+            text_calls.append((rect.getRect(), text, font.toString(), color.name(), kwargs))
+            return cached_text(p, rect, text, font, color, **kwargs)
+
         try:
-            with patch.object(module, "_text", side_effect=record):
+            with patch.object(module, "_text", side_effect=record), \
+                 patch.object(renderer, "_paint_cached_text", side_effect=record_request):
                 layout = renderer.paint(painter, frame, 1280, now=10, options=options)
         finally:
             painter.end()
@@ -70,21 +78,22 @@ class MatchStripLocaleTests(unittest.TestCase):
         en = [call[1] for call in en_calls]
         zh = [call[1] for call in zh_calls]
         for english, chinese in (
-            ("HER", "英雄"), ("HERO 1", "英雄 1"), ("ENG 2", "工程 2"),
-            ("INF-1 3", "步兵1 3"), ("UAV 6", "空中 6"), ("SENTRY 107", "哨兵 107"),
-            ("HP —", "血量 —"), ("HP 90 / ?", "血量 90 / ?"), ("NO HP", "无血量属性"),
-            ("HP 0 / ?", "血量 0 / ?"), ("RM SCORE", "裁判比分"),
+            ("HER", "英雄"), ("ENG", "工程"), ("INF", "步兵1"),
+            ("UAV", "空中"), ("SEN", "哨兵"), ("RM SCORE", "裁判比分"),
             ("GROUND ALIVE", "地面存活"), ("RED", "红方"), ("BLUE", "蓝方"),
         ):
             self.assertIn(english, en)
             self.assertIn(chinese, zh)
             self.assertNotIn(english, zh)
-        for neutral in ("150/200", "1:25", "2", "0", "?"):
+        for neutral in ("1:25", "1", "2", "3", "6", "107", "90", "0", "?"):
             self.assertIn(neutral, en)
             self.assertIn(neutral, zh)
         self.assertEqual(en_layout, zh_layout)
-        # Text rectangles, font metrics and colours are all unchanged.
-        self.assertEqual([(c[0], *c[2:]) for c in en_calls], [(c[0], *c[2:]) for c in zh_calls])
+        # Locale changes the glyph run/font, never the strip's screen layout.
+        # Health is now a true proportional underline, not a verbose HP row.
+        self.assertEqual(frame.left.cards[0].health_ratio, .75)
+        for removed in ("HP —", "HP 90 / ?", "NO HP", "血量 —", "无血量属性"):
+            self.assertNotIn(removed, en + zh)
         self.assertNotEqual(en_image, zh_image)
         self.assertEqual(asdict(frame), raw)
         self.assertEqual(frame.left.cards[1].health_text, "HP —")
@@ -137,7 +146,7 @@ class MatchStripLocaleTests(unittest.TestCase):
                 texts = [call[1] for call in calls]
                 self.assertIn(label, texts)
                 self.assertIn("Redbirds", texts)
-                self.assertIn("My HERO 1", texts)
+                self.assertEqual(match_role_text(frame.left.cards[0], True), "My HERO")
                 self.assertEqual(asdict(frame), raw)
 
     def test_language_switch_rebuilds_cached_portrait_and_restores_english(self):
@@ -170,17 +179,29 @@ class MatchStripLocaleTests(unittest.TestCase):
             TeamStrip("Blue", systems=(RobotCard(108, "DART", L.UNKNOWN), RobotCard(109, "My RADAR", L.ALIVE))),
         )
         before = asdict(frame)
-        layout = compute_layout(1280, 0, 0)
-        en, zh = Mock(), Mock()
-        en_bottom = TopMatchBarController._paint_systems(en, frame, layout)
-        zh_bottom = TopMatchBarController._paint_systems(zh, frame, layout, chinese=True)
+        # Support rows use the two real portrait lanes, not a center-only strip.
+        layout = compute_layout(1280, 6, 6)
+        from rm_client.ui import top_match_bar_controller as module
+        def paint_systems(chinese):
+            image = QImage(1280, 220, QImage.Format_ARGB32_Premultiplied)
+            image.fill(Qt.transparent)
+            painter = QPainter(image)
+            recording = Mock(wraps=painter)
+            try:
+                with patch.object(module, "_systems_layer", wraps=module._systems_layer) as layers:
+                    bottom = TopMatchBarController._paint_systems(recording, frame, layout, chinese=chinese)
+                    calls = list(layers.call_args_list)
+            finally:
+                painter.end()
+            return image, bottom, calls, recording.drawImage.call_args_list
+        en_image, en_bottom, en_calls, en_blits = paint_systems(False)
+        zh_image, zh_bottom, zh_calls, zh_blits = paint_systems(True)
         self.assertEqual(en_bottom, zh_bottom)
-        en_calls = [c.args for c in en.drawText.call_args_list]
-        zh_calls = [c.args for c in zh.drawText.call_args_list]
-        self.assertEqual([c[:2] for c in en_calls], [c[:2] for c in zh_calls])
-        self.assertEqual(en_calls[0][2], "DART 8: ALIVE  ·  RADAR 9: DOWN")
-        self.assertEqual(zh_calls[0][2], "飞镖 8: 存活  ·  雷达 9: 已毁")
-        self.assertEqual(zh_calls[1][2], "飞镖 108: —  ·  My RADAR 109: 存活")
+        self.assertEqual([c.args[0] for c in en_blits], [c.args[0] for c in zh_blits])
+        self.assertEqual(en_calls[0].args[0], "DART 8: ALIVE  ·  RADAR 9: DOWN")
+        self.assertEqual(zh_calls[0].args[0], "飞镖 8: 存活  ·  雷达 9: 已毁")
+        self.assertEqual(zh_calls[1].args[0], "飞镖 108: —  ·  My RADAR 109: 存活")
+        self.assertNotEqual(en_image, zh_image)
         self.assertEqual(asdict(frame), before)
 
 
@@ -245,7 +266,7 @@ class MatchStripControllerLocaleTests(unittest.TestCase):
         self.controller.configure_rosters([1, 8], [101, 108], label="GROUND ALIVE")
         self.registry.get("ClickGui").get_setting("Language").value = "简体中文"
         from rm_client.ui import top_match_bar as module
-        with patch.object(module, "_text", wraps=module._text) as text:
+        with patch.object(self.controller.renderer, "_paint_cached_text", wraps=self.controller.renderer._paint_cached_text) as text:
             _, options, _ = self.paint()
         self.assertTrue(options.custom_roster_label)
         strings = [c.args[2] for c in text.call_args_list]

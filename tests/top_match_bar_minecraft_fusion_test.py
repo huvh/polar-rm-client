@@ -167,6 +167,16 @@ class MinecraftFusionTests(unittest.TestCase):
             return result
         self.owner.font = font
         self.owner.font_line_height = lambda value: QtGui.QFontMetricsF(value).height()
+        from rm_client.ui.fonts import ui_text_advance, draw_ui_text, ui_font_key
+        from rm_client.ui.polar.renderers.module_list import _atlas_advance
+        scope.update(ui_font_key=ui_font_key, _atlas_advance=_atlas_advance)
+        self.owner.text_advance = ui_text_advance
+        def draw_text(painter, rect, text, font, color, align):
+            painter.save()
+            painter.setPen(color)
+            draw_ui_text(painter, rect, text, font, align)
+            painter.restore()
+        self.owner.draw_text = draw_text
         self.owner._client_asset_path = lambda *parts: ROOT.joinpath(*parts)
         self.owner._collect_gpu_hud_commands = False
         self.owner._jello_active_mods_frame_index = -1

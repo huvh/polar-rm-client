@@ -69,6 +69,8 @@ from PySide6.QtGui import QCursor, QKeyEvent, QKeySequence, QMouseEvent, QWheelE
 
 # 相对导入层级：rm_client/ui/polar/mixins/ → ... = rm_client.ui、.... = rm_client
 from ...animation import Easings
+from ...cs2_buy_menu import grid_enabled, grid_layout
+from ...cs2_feedback import notify_buy_hover
 from ...jello_locale import LANGUAGE_CHINESE, LANGUAGE_ENGLISH, LANGUAGE_SETTING
 from ....model import Setting
 from ..primitives import InertialScroll
@@ -139,8 +141,9 @@ def _on_action_module_expand(self, payload: Any, point: QPointF, button: int, re
 def _on_action_module_bind(self, payload: Any, point: QPointF, button: int, rect: QRectF) -> None:
     module = self.registry.get(str(payload))
     if module:
-        self.binding_module = module
-        self.anim.value("keybind.overlay", 0.0, 0.01, Easings.linear, initial=0.0)
+        from ...jello_keybinds import open_module_keyboard
+        self.binding_module = None
+        open_module_keyboard(self,module.name)
 
 
 def _on_action_setting_toggle(self, payload: Any, point: QPointF, button: int, rect: QRectF) -> None:
@@ -442,6 +445,11 @@ def _on_action_economy_category(self, payload: Any, point: QPointF, button: int,
 
 
 def _on_action_economy_offer(self, payload: Any, point: QPointF, button: int, rect: QRectF) -> None:
+    if grid_enabled(self):
+        offer = next((o for o in self.economy_offers() if o.key==str(payload)),None)
+        if offer is None:
+            return
+        self.economy_category = offer.category
     self.select_economy_offer(str(payload))
 
 
@@ -645,7 +653,12 @@ class InputDispatchMixin:
             and self._control_mouse_point is not None
         ):
             delta = self.hover_point - self._control_mouse_point
-            self.control.add_mouse_motion(delta.x(), delta.y())
+            link = self.registry.get("RobotLink")
+            self.control.add_mouse_motion(
+                delta.x(), delta.y(),
+                self.get_setting_number(link, "Mouse Sensitivity", 1.0),
+                self.setting_bool(link, "Invert Mouse Y", False),
+            )
         self._control_mouse_point = (
             QPointF(self.hover_point)
             if self.combat_control_input_allowed()
@@ -653,11 +666,16 @@ class InputDispatchMixin:
         )
         self.hover_tooltip = ""
         hovered_action = ""
+        hovered_offer = ""
         for hotspot in reversed(self.hotspots):
             if hotspot.rect.contains(self.hover_point):
                 self.hover_tooltip = hotspot.tooltip
                 hovered_action = hotspot.action
+                if hovered_action=="economy_offer":
+                    hovered_offer = str(hotspot.payload)
                 break
+        if self.economy_visible:
+            notify_buy_hover(self,hovered_offer,time.perf_counter())
         # 启动页可见时渲染时钟已经按显示器刷新率运行；不再为每个原始
         # 鼠标事件强制整帧，仅在跨越热点、拖拽或提示变化时唤醒一帧。
         if (
@@ -775,7 +793,8 @@ class InputDispatchMixin:
             event.accept()
             return
         if self.economy_visible:
-            layout = self.economy_workspace_layer.layout(self.width(), self.height(), self.economy_island.progress)
+            layout = (grid_layout(self.economy_workspace_layer,self.width(),self.height(),self.economy_island.progress)
+                      if grid_enabled(self) else self.economy_workspace_layer.layout(self.width(),self.height(),self.economy_island.progress))
             if layout.offers_viewport.contains(point):
                 self.economy_offers_scroll.add_wheel(delta)
             elif layout.detail_viewport.contains(point):
@@ -858,7 +877,9 @@ class InputDispatchMixin:
             event.accept()
             return
         if self.combat_control_input_allowed():
-            self.control.add_wheel(event.angleDelta().y())
+            link = self.registry.get("RobotLink")
+            self.control.add_wheel(event.angleDelta().y() *
+                                   self.get_setting_number(link, "Mouse Wheel Scale", 1.0))
             self.control.mock_output = bool(self.backend.mqtt.mock_output)
             self.control.send_from_state(self.state, self.registry)
             event.accept()

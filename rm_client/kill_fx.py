@@ -12,6 +12,8 @@ from PySide6.QtGui import QColor, QFont, QImage, QPainter, QPen, QPixmap, QTrans
 
 from .combat_events import CombatEvent
 from .kill_audio import KillSoundPool
+from .ui.cs2_assets import local_cs2_assets
+from .ui.cs2_kill_feedback import Cs2KillFeedback
 
 
 KILL_TYPES = ("NORMAL", "HEADSHOT", "EXPLOSION", "CRIT", "ASSIST", "DESTROY_VEHICLE")
@@ -157,6 +159,7 @@ PRESET_ELEMENTS = {
     "Default Scrolling": ("kill_feed", "score", "bonus", "scrolling"),
     "Combo": ("kill_feed", "score", "bonus", "combo"),
     "Card": ("card_bar", "card"),
+    "CS2 Native": ("cs2",),
     "Battlefield 1": ("score", "bonus", "battlefield1", "match_progress"),
     "Minimal": ("score", "bonus"),
     "PUBG Subtitle": ("combo_subtitle", "kill_feed"),
@@ -1224,6 +1227,7 @@ class KillFxRenderer:
         self.texture_root = self.assets.texture_root
         self.sound_root = self.assets.sound_root
         self.sounds = SoundPool(self.assets.sound_root)
+        self.cs2 = Cs2KillFeedback(local_cs2_assets())
         self.scrolling = ScrollingRenderer(self.assets)
         self.combo = ComboRenderer(self.assets)
         self.card = CardRenderer(self.assets)
@@ -1251,6 +1255,7 @@ class KillFxRenderer:
         与其缓存全部保留。
         """
         self.scrolling.icons.clear()
+        self.cs2.clear()
         self.scrolling.pending.clear()
         self.scrolling.last_display = -1.0
         self.combo.context = None
@@ -1330,7 +1335,7 @@ class KillFxRenderer:
         else:
             elements = PRESET_ELEMENTS.get(preset, PRESET_ELEMENTS["Default Scrolling"])
         if visibility == "Icons Only":
-            return tuple(item for item in elements if item in ("scrolling", "scrolling_bf5", "scrolling_bf6", "combo", "card", "card_bar", "battlefield1", "valorant", "honor"))
+            return tuple(item for item in elements if item in ("cs2", "scrolling", "scrolling_bf5", "scrolling_bf6", "combo", "card", "card_bar", "battlefield1", "valorant", "honor"))
         if visibility == "Full HUD":
             companions = ("kill_feed", "combo_subtitle", "score", "bonus")
             return tuple(dict.fromkeys((*elements, *companions)))
@@ -1345,6 +1350,7 @@ class KillFxRenderer:
             return
         if event.kind == "death":
             self.combo_count = 0
+            self.cs2.clear()
             self.locked_targets.reset_engagement()
             return
         self.combo_count = self.combo_count + 1 if now - self.last_kill_at <= combo_window else 1
@@ -1365,6 +1371,8 @@ class KillFxRenderer:
         )
         self.last_context = context
         elements = self.effective_elements(preset, visibility, element_toggles)
+        if "cs2" in elements:
+            self.cs2.trigger(context, now)
         if "honor" in elements:
             self.honor.trigger(context, now)
         if "scrolling" in elements or "scrolling_bf5" in elements or "scrolling_bf6" in elements:
@@ -1384,6 +1392,8 @@ class KillFxRenderer:
             self._play_sound(context, preset, volume)
 
     def _play_sound(self, context: TriggerContext, preset: str, volume: float) -> None:
+        if preset == "CS2 Native" and self.cs2.assets.play("kill", volume / 100.0):
+            return
         if any(str(tag).lower() == LOCKED_TARGET_TAG for tag in context.tags):
             # LOCKED_TARGET 加分提示音优先（消化原零引用资产 addscore_df.ogg）。
             self.sounds.play("addscore_df.ogg", volume)
@@ -1416,6 +1426,7 @@ class KillFxRenderer:
         return name
 
     def preload_preset_sounds(self, preset: str) -> None:
+        self.cs2.assets.preload_audio()
         names = {
             self._sound_name(kill_type, combo, preset)
             for kill_type in KILL_TYPES
@@ -1458,6 +1469,8 @@ class KillFxRenderer:
         offset = QPointF(x_offset, y_offset) if anchor_policy == "Manual" else QPointF(0.0, 0.0)
         team_key = "ct" if team in ("Alliance", "CT Blue") else "t"
         bottom = layout.primary(120.0)
+        if "cs2" in elements:
+            self.cs2.draw(painter, bottom, now, layout.scale)
         if "scrolling" in elements:
             self.scrolling.draw(painter, bottom, now, layout.scale, "default")
         if "scrolling_bf5" in elements:

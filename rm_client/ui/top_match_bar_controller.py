@@ -5,26 +5,52 @@ The backend invokes observe_referee on its existing decoded-message/UI thread.
 """
 from __future__ import annotations
 from dataclasses import replace
+from functools import lru_cache
 import logging
+import math
 from typing import Any, Sequence
 
 from PySide6.QtCore import QRectF, Qt
-from PySide6.QtGui import QColor, QFont
+from PySide6.QtGui import QColor, QImage, QPainter
 
 from ..robot_profiles import profiles_for_match
 from ..top_match_bar import LifeState, TopMatchBarFeed
-from .top_match_bar import TopMatchBarOptions, TopMatchBarRenderer
+from .top_match_bar import TopMatchBarOptions, TopMatchBarRenderer, _font
+from .fonts import draw_ui_text, elide_ui_text
 from .overlay_coordinator import OverlayCoordinator
 from .jello_locale import chinese_enabled
 from .match_strip_locale import match_role_text, match_strip_text
+from .cs2_assets import local_cs2_assets
 
 _LOG = logging.getLogger(__name__)
+
+
+@lru_cache(maxsize=64)
+def _systems_layer(text: str, width: float, chinese: bool, blue: bool,
+                   align: Qt.AlignmentFlag, density: float, dpi: tuple[int, int]) -> QImage:
+    """Support status changes invalidate their glyph layer, not the whole strip."""
+    image = QImage(math.ceil(width * density), math.ceil(16 * density),
+                   QImage.Format_ARGB32_Premultiplied)
+    image.fill(Qt.transparent)
+    image.setDotsPerMeterX(round(dpi[0] / .0254))
+    image.setDotsPerMeterY(round(dpi[1] / .0254))
+    painter = QPainter(image)
+    try:
+        painter.scale(image.width() / width, image.height() / 16)
+        font = _font("DejaVu Sans", 12 if chinese else 9)
+        painter.setPen(QColor("#B5D4EE") if blue else QColor("#EAD18A"))
+        text = elide_ui_text(font, text, width, image)
+        draw_ui_text(painter, QRectF(0, 0, width, 16), text, font,
+                     align | Qt.AlignVCenter, ink_center=True)
+    finally:
+        painter.end()
+    return image
 
 
 class TopMatchBarController:
     def __init__(self, owner: Any) -> None:
         self.owner = owner
-        self.renderer = TopMatchBarRenderer()
+        self.renderer = TopMatchBarRenderer(local_cs2_assets())
         self.feed: TopMatchBarFeed | None = None
         self._context: tuple[object, ...] | None = None
         self._custom_rosters: tuple[tuple[int, ...], tuple[int, ...], str] | None = None
@@ -32,6 +58,8 @@ class TopMatchBarController:
         self.last_layout = None
         self.last_progress_bounds = None
         self._reset_progress = True
+        self._frame_cache_key: tuple[object, ...] | None = None
+        self._frame_cache = None
 
     def enabled(self) -> bool:
         module = self.owner.registry.get("TopMatchBar")
@@ -59,6 +87,32 @@ class TopMatchBarController:
         self.last_layout = None
         self.last_progress_bounds = None
         self._reset_progress = True
+        self._frame_cache_key = None
+        self._frame_cache = None
+
+    def _snapshot_frame(self, feed: TopMatchBarFeed, now: float, chinese: bool):
+        """Reuse only an identical projection, including exact expiry edges.
+
+        The feed has no revision API and is exposed to host integrations (kills,
+        reset, direct referee observations). Include *all* snapshot inputs,
+        not just the last packet timestamp or a quantized display-frame time.
+        Time only changes this feed's output at a per-field freshness boundary;
+        the wire countdown is deliberately not extrapolated here.
+        """
+        local_id = int(self.owner.state.robot_id)
+        scope_label = self._custom_rosters[2] if self._custom_rosters is not None else "GROUND ALIVE"
+        def observations(values):
+            return tuple((key, value, at, 0 <= now - at <= feed.freshness_s)
+                         for key, (value, at) in values.items())
+        key = (id(feed), self._context, local_id, scope_label, chinese,
+               tuple(feed.rosters.items()), feed.left_alliance, feed.score_label,
+               feed.freshness_s, observations(feed._health), observations(feed._hp),
+               observations(feed._max_hp), observations(feed._values), tuple(feed._kills.items()))
+        if key != self._frame_cache_key:
+            frame = feed.snapshot(now, local_robot_id=local_id)
+            self._frame_cache = replace(frame, roster_label=scope_label)
+            self._frame_cache_key = key
+        return self._frame_cache
 
     def _setting(self, name: str, default: object) -> object:
         module = self.owner.registry.get("TopMatchBar")
@@ -184,17 +238,20 @@ class TopMatchBarController:
         y = layout.bounds.bottom + 2.0
         painter.save()
         try:
-            font = QFont("DejaVu Sans")
-            font.setPixelSize(9)
-            painter.setFont(font)
+            transform = painter.deviceTransform()
+            density = max(1.0, math.hypot(transform.m11(), transform.m12()),
+                          math.hypot(transform.m21(), transform.m22()))
+            dpi = (painter.device().logicalDpiX(), painter.device().logicalDpiY())
             for team, x, w, align in (
                     (frame.left, layout.bounds.x, layout.center.x - layout.bounds.x - 8, Qt.AlignRight),
                     (frame.right, layout.center.right + 8, layout.bounds.right - layout.center.right - 8, Qt.AlignLeft)):
-                painter.setPen(QColor("#B5D4EE") if team.alliance == "Blue" else QColor("#EAD18A"))
+                if w <= 0 or not team.systems:
+                    continue
                 text = "  ·  ".join(f"{match_role_text(card, chinese)} {card.robot_id}: " +
                                     match_strip_text({LifeState.ALIVE: "ALIVE", LifeState.DEAD: "DOWN", LifeState.UNKNOWN: "—"}[card.life], chinese)
                                     for card in team.systems)
-                painter.drawText(QRectF(x, y, max(0, w), 16), align | Qt.AlignVCenter, text)
+                painter.drawImage(QRectF(x, y, w, 16), _systems_layer(
+                    text, w, chinese, team.alliance == "Blue", align, density, dpi))
         finally:
             painter.restore()
         return y + 16.0
@@ -214,10 +271,8 @@ class TopMatchBarController:
             feed = self._ensure_feed()
             if not self.owner.backend.mqtt.connected:
                 feed.reset()
-            frame = feed.snapshot(now, local_robot_id=int(self.owner.state.robot_id))
-            # Counts are ground-robot lives, never the nominal mode/team size.
-            scope_label = (self._custom_rosters[2] if self._custom_rosters is not None else "GROUND ALIVE")
-            frame = replace(frame, roster_label=scope_label)
+            chinese = chinese_enabled(self.owner.registry)
+            frame = self._snapshot_frame(feed, now, chinese)
             owner = self.owner
             hud = owner.registry.get("HUD")
             top = 5.0
@@ -267,7 +322,9 @@ class TopMatchBarController:
                 # Test the final reserved band, not the old 180px estimate.
                 if rect.bottom() > top and rect.top() < safe.bottom:
                     left = right = max(left, float(rect.right()) + 10.0)
-            if left + right + 108 >= width:
+            # Let the existing timer/count-only layout fit narrow corridors,
+            # rather than requiring a full unscaled center panel to be free.
+            if width - left - right < 108 * .36:
                 return
             requested_scale = max(.35, min(1.4, float(self._setting("Scale", .72))))
             systems_height = 18.0 if frame.left.systems or frame.right.systems else 0.0
@@ -282,12 +339,17 @@ class TopMatchBarController:
                 enabled=True, scale=min(requested_scale, available_scale),
                 top=top, safe_left=left, safe_right=right,
                 reduced_motion=not bool(self._setting("Source Motion Preview", False)),
+                local_assets=bool(self._setting("Local CS2 Assets", True)),
                 show_kills=bool(self._setting("Show Kills", True)),
                 show_scores=bool(self._setting("Show Scores", True)),
                 show_health=bool(self._setting("Show Health", True)),
-                chinese=chinese_enabled(owner.registry),
+                chinese=chinese,
                 custom_roster_label=self._custom_rosters is not None)
-            self.last_layout = self.renderer.paint(painter, frame, width, now=now, options=options)
+            # Optional host-owned QImages retain the renderer's authorized-avatar
+            # API. No member lookup, disk/network loading or invented identity.
+            self.last_layout = self.renderer.paint(
+                painter, frame, width, now=now, options=options,
+                avatars=getattr(owner, "top_match_bar_avatars", None))
             if self.last_layout is not None:
                 bottom = self._paint_systems(painter, frame, self.last_layout, chinese=options.chinese)
                 self._paint_progress(painter, frame, width, now, left, right, bottom, safe.bottom)

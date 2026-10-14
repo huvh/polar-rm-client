@@ -69,6 +69,8 @@ from ...overlay_coordinator import OverlayKind
 from ...paint import rounded_rect, text_width
 from ...theme import THEME, color
 from ...student_reload import append_reload_details, reload_detail_height, paint_reload_commands
+from ...cs2_feedback import BUY_HOVER_SECONDS, _css_ease_in_out, append_buy_feedback, buy_enabled, play_buy_sound
+from ...cs2_buy_menu import build_grid, grid_enabled
 from ...economy_glass import draw_economy_glass, draw_economy_glass_capsule, draw_economy_glass_well
 from ....economy import (
     CATEGORY_TITLES,
@@ -369,6 +371,7 @@ class EconomyMixin:
                 # Only wipe double-confirm arm when the selection *changes*.
                 # Clearing on re-select broke the second click on “再次确认”.
                 if key != self.economy_selected_key:
+                    play_buy_sound(self, "buy_select")
                     self.economy_armed_key = ""
                     self.economy_armed_until = 0.0
                 self.economy_selected = index
@@ -942,6 +945,8 @@ class EconomyMixin:
         island becomes a single downward sheet, then clips its controls into
         view.  Economy rules and command routing remain outside this renderer.
         """
+        if grid_enabled(self):
+            return build_grid(self, width, height)
         commands = ClickGuiDrawList()
         self.hotspots.clear()
         progress = self.economy_island.progress
@@ -1301,13 +1306,16 @@ class EconomyMixin:
             hover = self.anim.value(
                 f"economy.offer.hover.{offer.key}",
                 1.0 if hovered or active else 0.0,
-                self.anim_duration(0.14),
-                Easings.ease_out_expo,
+                self.anim_duration(BUY_HOVER_SECONDS if buy_enabled(self) else 0.14),
+                _css_ease_in_out if buy_enabled(self) else Easings.ease_out_expo,
             )
-            draw_rect = rect.translated(0.0, -1.4 * hover)
+            draw_rect = rect if buy_enabled(self) else rect.translated(0.0, -1.4 * hover)
+            append_buy_feedback(commands, self, offer.key, rect, viewport_clip,
+                                hover, offers_alpha, time.perf_counter())
+            title_inset = 48.0 if buy_enabled(self) else 18.0
             title_color = color("#ffffff", offers_alpha) if offer.enabled else color("#9aa3ac", 0.72 * offers_alpha)
             commands.text(
-                QRectF(draw_rect.left() + 18.0, draw_rect.top() + 8.0, draw_rect.width() - 110.0, 24.0),
+                QRectF(draw_rect.left() + title_inset, draw_rect.top() + 8.0, draw_rect.width() - title_inset - 92.0, 24.0),
                 offer.short_title, self.font("poppins_bold", 10.5 * scale), title_color,
                 clip=viewport_clip,
             )
@@ -1321,7 +1329,7 @@ class EconomyMixin:
             )
             secondary = offer.reason if not offer.enabled else offer.description
             commands.text(
-                QRectF(draw_rect.left() + 18.0, draw_rect.top() + 32.0, draw_rect.width() - 32.0, 20.0),
+                QRectF(draw_rect.left() + title_inset, draw_rect.top() + 32.0, draw_rect.width() - title_inset - 14.0, 20.0),
                 secondary, self.font("poppins_medium", 7.8 * scale),
                 color("#b8c8d8", (0.90 if offer.enabled else 0.55) * offers_alpha),
                 clip=viewport_clip,

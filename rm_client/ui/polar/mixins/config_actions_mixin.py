@@ -222,6 +222,19 @@ class ConfigActionsMixin:
         self.auto_save_config()
 
     def handle_config_action(self, action_name: str) -> None:
+        if action_name == "Open Keybind Manager":
+            from ...jello_keybinds import open_keyboard_manager
+            open_keyboard_manager(self)
+            return
+        if action_name in ("Open Crosshair Editor", "Import Crosshair Code", "Import Crosshair File", "Crosshair Import Details"):
+            from ....cs2_crosshair import import_dialog, open_crosshair_editor, show_import_details
+            if action_name == "Open Crosshair Editor":
+                open_crosshair_editor(self)
+            elif action_name == "Crosshair Import Details":
+                show_import_details(self)
+            else:
+                import_dialog(self, file=action_name == "Import Crosshair File")
+            return
         if self.handle_student_config_action(action_name):
             return
         qualification_actions = {
