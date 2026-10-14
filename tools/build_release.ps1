@@ -1,4 +1,4 @@
-param(
+﻿param(
     # Windows PowerShell 5.1 evaluates parameter default expressions before
     # $PSScriptRoot is populated. Resolve the default in the script body so
     # the checked-in release entry point works with powershell.exe -File.
@@ -57,34 +57,38 @@ function Invoke-RequiredTest([string]$Python, [string]$Script, [string]$Label, [
     # function before invocation and dumps every Python thread if progress
     # stalls, turning intermittent native/Qt hangs into actionable logs.
     $bootstrap = @'
-import faulthandler, os, runpy, sys, time
+import faulthandler, os, runpy, sys, threading
 path = sys.argv[1]
-# runpy does not remove the bootstrap's script argument. unittest.main()
-# would interpret that path as a test-name selector instead of running tests.
+# Keep unittest's argv and import path identical to direct script execution.
 sys.argv = [path]
 sys.path.insert(0, os.path.dirname(os.path.abspath(path)))
 faulthandler.enable(all_threads=True)
 faulthandler.dump_traceback_later(120, repeat=True)
 target = os.path.normcase(os.path.abspath(path))
-started = {}
-def profile(frame, event, _arg):
-    if os.path.normcase(os.path.abspath(frame.f_code.co_filename)) != target:
-        return profile
-    name = frame.f_code.co_name
-    if not name.startswith("test_"):
-        return profile
-    if event == "call":
-        started[id(frame)] = time.monotonic()
-        print(f"START {name}", flush=True)
-    elif event == "return":
-        elapsed = time.monotonic() - started.pop(id(frame), time.monotonic())
-        print(f"PASS {name} {elapsed:.3f}s", flush=True)
-    return profile
-sys.setprofile(profile)
+done = threading.Event()
+def sample_active_test():
+    previous = None
+    while not done.wait(1.0):
+        names = set()
+        for frame in sys._current_frames().values():
+            while frame is not None:
+                name = frame.f_code.co_name
+                if name.startswith('test_') and os.path.normcase(os.path.abspath(frame.f_code.co_filename)) == target:
+                    names.add(name)
+                frame = frame.f_back
+        active = ', '.join(sorted(names))
+        if active and active != previous:
+            print('ACTIVE ' + active, flush=True)
+        previous = active
+# Per-call profiling perturbs GIL/deadman timing. Sample stacks instead of
+# instrumenting every call; never relax production timeouts to pass a test.
+watcher = threading.Thread(target=sample_active_test, daemon=True)
+watcher.start()
 try:
     runpy.run_path(path, run_name="__main__")
 finally:
-    sys.setprofile(None)
+    done.set()
+    watcher.join(0.2)
 faulthandler.cancel_dump_traceback_later()
 '@
     $bootstrapPath = Join-Path $LogRoot "release_test_bootstrap.py"
