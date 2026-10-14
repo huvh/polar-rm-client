@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "/workspace/scratch/8fc313400f06/polar-controller-angle-fix/tests/student_frontend_test.py", line 23, in <module>
+    from PySide6.QtCore import QPointF, QRectF, Qt, QEvent
+ModuleNotFoundError: No module named 'PySide6'

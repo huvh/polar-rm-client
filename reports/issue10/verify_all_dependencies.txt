@@ -1,0 +1,104 @@
+==================================================================
+客户端侧就绪验证（离线）
+==================================================================
+
+[Python 测试套件]
+  [OK] test_controller_angle_integration 通过
+  [OK] test_controller_angle_safety_review 通过
+  [OK] test_build_safety_regressions 通过
+  [OK] test_transport_safety_regressions 通过
+  [OK] test_serial_codec_regressions 通过
+  [OK] test_serial_lifecycle_regressions 通过
+  [OK] test_controller_frame_regressions 通过
+  [OK] test_api_freeze_platform_regressions 通过
+  [OK] test_ui_state_regressions 通过
+  [XX] student_frontend_test    Fontconfig error: No writable cache directories | Fontconfig error: No writable cache directories | Fontconfig error: No writable cache directories
+  [OK] polar_spec_test          43 项通过
+  [OK] robot_roles_test         39 项通过
+  [XX] polar_link_test          INCOMPLETE: [SKIP] 未找到队内 CRC8_CRC16.py 参考实现，跳过三方对拍
+  [OK] polar_bridge_test        185 项通过
+  [OK] polar_integration_test   51 项通过
+  [OK] polar_selftest_test      43 项通过
+  [OK] startup_black_hole_test  通过
+  [XX] polar_startup_test       exit=-11
+  [OK] gimbal_host_request_test 9 项通过
+  [OK] autoaim_settings_test    31 项通过
+  [OK] hud_telemetry_settings_test 26 项通过
+  [OK] hud_status_settings_test 56 项通过
+  [OK] hud_batch16_killfx_test  16 项通过
+  [OK] hud_batch17_crosshair_test 19 项通过
+  [OK] hud_batch18_powerguard_test 39 项通过
+  [XX] hud_batch19_bufftimeline_test [FAIL] 真窗口子进程跑完没崩  -> exit=-11 out=[PASS] 默认有 BuffTimeline 模块且开着 | [FAIL] 带里有真实亮像素（真字体、真圆角底）  -> lit=None out=[PASS] 默认有 BuffTimeline 模块且开着 | [FAIL] 真窗口下关掉模块后带消失  ->      | [          conf.c: 1215 pw_conf_load_conf_for_context()] can't load config client.conf: No such file or directory
+  [OK] hud_batch20_robotoverlay_color_test 15 项通过
+  [OK] hud_batch21_radaroverlay_map_test 18 项通过
+  [OK] settings_doc_consistency_test 7 项通过
+  [OK] hud_batch14_settings_test 24 项通过
+  [OK] hud_batch13_settings_test 18 项通过
+  [OK] hud_batch10_settings_test 29 项通过
+  [OK] hud_batch9_settings_test 27 项通过
+  [OK] hud_batch8_settings_test 20 项通过
+  [OK] hud_overlay_settings_test 30 项通过
+  [XX] backend_protocol_test    INCOMPLETE: check not run
+  [OK] referee_integration_test 通过
+  [XX] api_freeze_test          exit=-11
+
+[固件补丁编译与行为校验]
+  [XX] Issue 10 angle firmware: exact source, independent timeout and sender bounds INCOMPLETE: SKIP: set POLAR_REFEREE_REFERENCE to a read-only StandardRobot++ checkout
+  [XX] 真实 USB 回调队列与有界外层解析（匹配源码 / CRC / 竞态 / 溢出） INCOMPLETE: SKIP: supply a disposable prepared StandardRobot++ fixture
+  [XX] 真实裁判分派长度边界（固定载荷 / 可变交互 / 未接收不更新新鲜度）    INCOMPLETE: SKIP: set POLAR_REFEREE_REFERENCE to the explicitly selected read-only firmware reference
+  [OK] 便携串口解析器（编译生成 C / 分片 / 噪声 / 长度 / PRM1 校验） 通过
+  [XX] 补丁代码用固件真实头文件编译                         INCOMPLETE: SKIP: 固件副本不存在（/workspace/scratch/8fc313400f06/polar-controller-angle-fix/.firmware-not-selected）
+  [XX] 补丁代码行为断言（含 tick 回绕、竞态）                 INCOMPLETE: [INCOMPLETE] Legacy baseline patch test requires installation; excluded from read-only target validation
+  [XX] 自转桥接（0x04/0x1F）编译 + 行为断言               INCOMPLETE: SKIP: 固件副本不存在（/workspace/scratch/8fc313400f06/polar-controller-angle-fix/.firmware-not-selected）
+  [XX] 速度回读桥（0x1E）编译 + 运动学往返断言                INCOMPLETE: SKIP: 固件副本不存在（/workspace/scratch/8fc313400f06/polar-controller-angle-fix/.firmware-not-selected）
+  [XX] 云台直控桥（0x04 param0）结构 + 编译 + 真值表断言      INCOMPLETE: SKIP: 固件副本不存在（/workspace/scratch/8fc313400f06/polar-controller-angle-fix/.firmware-not-selected）
+  [XX] 驾驶键位账本（DT7 不被抹 / 松键能归零）8 组行为断言         INCOMPLETE: SKIP: 固件副本不存在（/workspace/scratch/8fc313400f06/polar-controller-angle-fix/.firmware-not-selected）
+  [XX] DT7 官方 18 字节帧位序 == 固件真实解码（逐字段 + 常量守卫）  INCOMPLETE: SKIP: 找不到固件源码（/workspace/scratch/8fc313400f06/polar-controller-angle-fix/.firmware-not-selected/application/other/remote_control.c）
+  [XX] PRM1 键鼠载荷：C 结构体偏移 == 客户端 struct 打包（逐字段） INCOMPLETE: SKIP: 固件树里还没有 application/typedef/host_km_link.h（先跑 prepare_hero_build.py）
+  [XX] 图传键鼠五档仲裁 + 摇杆底线 + 开火权限（喂客户端真字节）        INCOMPLETE: SKIP: 固件树或头文件不齐（先跑 prepare_hero_build.py）
+  [OK] 无线键鼠出口客户端侧（默认关 / 不粘键 / 载荷 26B / UI 开关三道闸） 通过
+  [OK] DT7 VCP 旁听：空闲线分帧 + 键位 bit 跳变双位序判读      通过
+  [OK] DT7 抓包差分：键位字节/位序 判定（合成样本，含两类不许乱判）      通过
+  [XX] 自定义控制器 0x0306 出口（帧被固件 CRC 验收 + 三道闸 + 不静默丢键） INCOMPLETE: SKIP: 找不到 /workspace/scratch/8fc313400f06/polar-controller-angle-fix/.firmware-not-selected/components/support/CRC8_CRC16.c
+  [XX] DT7 直连出口（5A/22B 帧对厂商反汇编 + 两族 CRC 互不认 + 真发闸/互斥/松手） INCOMPLETE: [SKIP] 没有固件树 | [SKIP] 找不到 D:\rmbuild\dump12\dump.cs
+  [OK] 设置项接线审计（每个 RobotLink 项都被取用 + Port/Baud 优先级规则） 通过
+  [OK] Auto 挑口（DT7 只认 DJI VCOM / CC 只认 FTDI / 车的口一律判负） 通过
+  [OK] 车端桥裸管道（分片到达不改字节 / 上行拼回帧 / 断开后不再写串口）    通过
+  [OK] D 路接进传输层（tcp 模式不被 Stub 端口挡住 / 意图落到串口 / 连不上报错清楚） 通过
+  [OK] C 路端到端离线（按键到车上键位 / 松手 / 急停交还 / 互斥 / 鼠标截断） 通过
+  [OK] C 路扫帧型（只认得出那一种 / 清零帧 / 无回读不结论 / 未定案不写字节） 通过
+  [OK] prepare_hero_build 新选项（--mouse-sens 改得动且幂等 / 注释吞 define 能被体检抓住） 通过
+  [XX] C 路界面自检（X 探针无消费者 / 把手作用到发送 / 按钮不是空壳）   INCOMPLETE: [SKIP] 没有固件树：交叉核对未运行
+  [OK] C 路闭环自检（假车真回环 / NO-CHANGE 与 PARTIAL 不误判 / 假阳性防线） 通过
+  [OK] C 路复查三个坑（reserved=通道中值 / 限流不吃鼠标 / 镜头灵敏度量级） 通过
+  [OK] C 路松手帧（限流不许吃掉零键 / 写失败要补发 / 暂停与关出口不许空转 / 水印说实话） 通过
+  [OK] MQTT broker 地址接线（改设置就换地址 / 已连接会重连 / 非法值回写不骗人） 通过
+
+[前后端对齐审计]
+  [OK] 二级界面设置项孤儿数不超基线                         通过
+
+==================================================================
+结论：NO-GO —— 4 FAIL, 17 INCOMPLETE / 69 checks
+  - Python: student_frontend_test -> Fontconfig error: No writable cache directories | Fontconfig error: No writable cache directories | Fontconfig error: No writable cache directories
+  - Python: polar_startup_test -> exit=-11
+  - Python: hud_batch19_bufftimeline_test -> [FAIL] 真窗口子进程跑完没崩  -> exit=-11 out=[PASS] 默认有 BuffTimeline 模块且开着 | [FAIL] 带里有真实亮像素（真字体、真圆角底）  -> lit=None out=[PASS] 默认有 BuffTimeline 模块且开着
+  - Python: api_freeze_test -> exit=-11
+  - Python: polar_link_test -> INCOMPLETE: [SKIP] 未找到队内 CRC8_CRC16.py 参考实现，跳过三方对拍
+  - Python: backend_protocol_test -> INCOMPLETE: check not run
+  - C: Issue 10 angle firmware: exact source, independent timeout and sender bounds -> INCOMPLETE: SKIP: set POLAR_REFEREE_REFERENCE to a read-only StandardRobot++ checkout
+  - C: 真实 USB 回调队列与有界外层解析（匹配源码 / CRC / 竞态 / 溢出） -> INCOMPLETE: SKIP: supply a disposable prepared StandardRobot++ fixture
+  - C: 真实裁判分派长度边界（固定载荷 / 可变交互 / 未接收不更新新鲜度） -> INCOMPLETE: SKIP: set POLAR_REFEREE_REFERENCE to the explicitly selected read-only firmware reference
+  - C: 补丁代码用固件真实头文件编译 -> INCOMPLETE: SKIP: 固件副本不存在（/workspace/scratch/8fc313400f06/polar-controller-angle-fix/.firmware-not-selected）
+  - C: 补丁代码行为断言（含 tick 回绕、竞态） -> INCOMPLETE: [INCOMPLETE] Legacy baseline patch test requires installation; excluded from read-only target validation
+  - C: 自转桥接（0x04/0x1F）编译 + 行为断言 -> INCOMPLETE: SKIP: 固件副本不存在（/workspace/scratch/8fc313400f06/polar-controller-angle-fix/.firmware-not-selected）
+  - C: 速度回读桥（0x1E）编译 + 运动学往返断言 -> INCOMPLETE: SKIP: 固件副本不存在（/workspace/scratch/8fc313400f06/polar-controller-angle-fix/.firmware-not-selected）
+  - C: 云台直控桥（0x04 param0）结构 + 编译 + 真值表断言 -> INCOMPLETE: SKIP: 固件副本不存在（/workspace/scratch/8fc313400f06/polar-controller-angle-fix/.firmware-not-selected）
+  - C: 驾驶键位账本（DT7 不被抹 / 松键能归零）8 组行为断言 -> INCOMPLETE: SKIP: 固件副本不存在（/workspace/scratch/8fc313400f06/polar-controller-angle-fix/.firmware-not-selected）
+  - C: DT7 官方 18 字节帧位序 == 固件真实解码（逐字段 + 常量守卫） -> INCOMPLETE: SKIP: 找不到固件源码（/workspace/scratch/8fc313400f06/polar-controller-angle-fix/.firmware-not-selected/application/other/remote_con
+  - C: PRM1 键鼠载荷：C 结构体偏移 == 客户端 struct 打包（逐字段） -> INCOMPLETE: SKIP: 固件树里还没有 application/typedef/host_km_link.h（先跑 prepare_hero_build.py）
+  - C: 图传键鼠五档仲裁 + 摇杆底线 + 开火权限（喂客户端真字节） -> INCOMPLETE: SKIP: 固件树或头文件不齐（先跑 prepare_hero_build.py）
+  - C: 自定义控制器 0x0306 出口（帧被固件 CRC 验收 + 三道闸 + 不静默丢键） -> INCOMPLETE: SKIP: 找不到 /workspace/scratch/8fc313400f06/polar-controller-angle-fix/.firmware-not-selected/components/support/CRC8_CR
+  - C: DT7 直连出口（5A/22B 帧对厂商反汇编 + 两族 CRC 互不认 + 真发闸/互斥/松手） -> INCOMPLETE: [SKIP] 没有固件树 | [SKIP] 找不到 D:\rmbuild\dump12\dump.cs
+  - C: C 路界面自检（X 探针无消费者 / 把手作用到发送 / 按钮不是空壳） -> INCOMPLETE: [SKIP] 没有固件树：交叉核对未运行
+
+先解决上面这些，再去 Keil 编译。

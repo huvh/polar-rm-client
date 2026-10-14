@@ -1,0 +1,5 @@
+Traceback (most recent call last):
+  File "/workspace/scratch/8fc313400f06/polar-controller-angle-fix/tests/hud_batch17_crosshair_test.py", line 38, in <module>
+    from PySide6.QtGui import QColor, Qt  # noqa: E402
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ModuleNotFoundError: No module named 'PySide6'

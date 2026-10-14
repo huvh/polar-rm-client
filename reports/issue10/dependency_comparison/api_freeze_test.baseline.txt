@@ -1,0 +1,16 @@
+QOpenGLWidget is not supported on this platform.
+qt.multimedia.ffmpeg: Using Qt multimedia with FFmpeg version 9.0.1 LGPL version 2.1 or later
+[W][11:17:00.346266] pw.conf      | [          conf.c: 1182 try_load_conf()] can't load config client.conf: No such file or directory
+[E][11:17:00.346298] pw.conf      | [          conf.c: 1215 pw_conf_load_conf_for_context()] can't load config client.conf: No such file or directory
+Fatal Python error: Segmentation fault
+
+Current thread 0x00007f59b80f9740 (most recent call first):
+  File "/tmp/polar-issue10-baseline-Iwt5cE/rm_client/ui_audio.py", line 54 in preload
+  File "/tmp/polar-issue10-baseline-Iwt5cE/rm_client/ui_audio.py", line 214 in __init__
+  File "/tmp/polar-issue10-baseline-Iwt5cE/rm_client/ui/polar_app.py", line 414 in __init__
+  File "/tmp/polar-issue10-baseline-Iwt5cE/tests/api_freeze_test.py", line 289 in _build_window
+  File "/tmp/polar-issue10-baseline-Iwt5cE/tests/api_freeze_test.py", line 487 in run_compare
+  File "/tmp/polar-issue10-baseline-Iwt5cE/tests/api_freeze_test.py", line 594 in main
+  File "/tmp/polar-issue10-baseline-Iwt5cE/tests/api_freeze_test.py", line 598 in <module>
+
+Extension modules: shiboken6.Shiboken, PySide6.QtCore, PySide6.QtGui, PySide6.QtWidgets, PySide6.QtOpenGLWidgets, PySide6.QtNetwork, PySide6.QtMultimedia, PySide6.QtOpenGL (total: 8)

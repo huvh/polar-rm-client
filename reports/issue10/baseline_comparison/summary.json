@@ -1,0 +1,681 @@
+{
+  "baseline_commit": "bd2e590b43b9cfecef61b09f0577a2ba0181578e",
+  "baseline_export": "/tmp/polar-issue10-baseline-Iwt5cE",
+  "command": "python <test_path>, per-test fresh user-data directory, timeout 30 seconds; no installs/hardware",
+  "comparisons": [
+    {
+      "path": "tests/student_frontend_test.py",
+      "baseline_exit": 1,
+      "current_exit": 1,
+      "same_failure": true,
+      "baseline_failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "current_failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ]
+    },
+    {
+      "path": "tests/startup_black_hole_test.py",
+      "baseline_exit": 1,
+      "current_exit": 1,
+      "same_failure": true,
+      "baseline_failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "current_failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ]
+    },
+    {
+      "path": "tests/polar_startup_test.py",
+      "baseline_exit": 1,
+      "current_exit": 1,
+      "same_failure": true,
+      "baseline_failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "current_failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ]
+    },
+    {
+      "path": "tests/autoaim_settings_test.py",
+      "baseline_exit": 1,
+      "current_exit": 1,
+      "same_failure": true,
+      "baseline_failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "current_failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ]
+    },
+    {
+      "path": "tests/hud_telemetry_settings_test.py",
+      "baseline_exit": 1,
+      "current_exit": 1,
+      "same_failure": true,
+      "baseline_failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "current_failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ]
+    },
+    {
+      "path": "tests/hud_status_settings_test.py",
+      "baseline_exit": 1,
+      "current_exit": 1,
+      "same_failure": true,
+      "baseline_failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "current_failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ]
+    },
+    {
+      "path": "tests/hud_batch16_killfx_test.py",
+      "baseline_exit": 1,
+      "current_exit": 1,
+      "same_failure": true,
+      "baseline_failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "current_failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ]
+    },
+    {
+      "path": "tests/hud_batch17_crosshair_test.py",
+      "baseline_exit": 1,
+      "current_exit": 1,
+      "same_failure": true,
+      "baseline_failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "current_failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ]
+    },
+    {
+      "path": "tests/hud_batch18_powerguard_test.py",
+      "baseline_exit": 1,
+      "current_exit": 1,
+      "same_failure": true,
+      "baseline_failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "current_failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ]
+    },
+    {
+      "path": "tests/hud_batch19_bufftimeline_test.py",
+      "baseline_exit": 1,
+      "current_exit": 1,
+      "same_failure": true,
+      "baseline_failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "current_failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ]
+    },
+    {
+      "path": "tests/hud_batch20_robotoverlay_color_test.py",
+      "baseline_exit": 1,
+      "current_exit": 1,
+      "same_failure": true,
+      "baseline_failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "current_failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ]
+    },
+    {
+      "path": "tests/hud_batch21_radaroverlay_map_test.py",
+      "baseline_exit": 1,
+      "current_exit": 1,
+      "same_failure": true,
+      "baseline_failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "current_failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ]
+    },
+    {
+      "path": "tests/hud_batch14_settings_test.py",
+      "baseline_exit": 1,
+      "current_exit": 1,
+      "same_failure": true,
+      "baseline_failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "current_failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ]
+    },
+    {
+      "path": "tests/hud_batch13_settings_test.py",
+      "baseline_exit": 1,
+      "current_exit": 1,
+      "same_failure": true,
+      "baseline_failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "current_failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ]
+    },
+    {
+      "path": "tests/hud_batch10_settings_test.py",
+      "baseline_exit": 1,
+      "current_exit": 1,
+      "same_failure": true,
+      "baseline_failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "current_failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ]
+    },
+    {
+      "path": "tests/hud_batch9_settings_test.py",
+      "baseline_exit": 1,
+      "current_exit": 1,
+      "same_failure": true,
+      "baseline_failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "current_failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ]
+    },
+    {
+      "path": "tests/hud_batch8_settings_test.py",
+      "baseline_exit": 1,
+      "current_exit": 1,
+      "same_failure": true,
+      "baseline_failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "current_failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ]
+    },
+    {
+      "path": "tests/hud_overlay_settings_test.py",
+      "baseline_exit": 1,
+      "current_exit": 1,
+      "same_failure": true,
+      "baseline_failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "current_failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ]
+    },
+    {
+      "path": "tests/referee_integration_test.py",
+      "baseline_exit": 1,
+      "current_exit": 1,
+      "same_failure": true,
+      "baseline_failures": [
+        "AssertionError: real paho subscribe completed"
+      ],
+      "current_failures": [
+        "AssertionError: real paho subscribe completed"
+      ]
+    },
+    {
+      "path": "tests/api_freeze_test.py",
+      "baseline_exit": 1,
+      "current_exit": 1,
+      "same_failure": true,
+      "baseline_failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "current_failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ]
+    },
+    {
+      "path": "tools/dt7_link/test_dt7_review_fixes.py",
+      "baseline_exit": 1,
+      "current_exit": 1,
+      "same_failure": true,
+      "baseline_failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "current_failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ]
+    }
+  ],
+  "runs": [
+    {
+      "source": "baseline",
+      "path": "tests/student_frontend_test.py",
+      "exit": 1,
+      "seconds": 0.042,
+      "failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "log": "reports/issue10/baseline_comparison/student_frontend_test.baseline.txt"
+    },
+    {
+      "source": "current",
+      "path": "tests/student_frontend_test.py",
+      "exit": 1,
+      "seconds": 0.077,
+      "failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "log": "reports/issue10/baseline_comparison/student_frontend_test.current.txt"
+    },
+    {
+      "source": "baseline",
+      "path": "tests/startup_black_hole_test.py",
+      "exit": 1,
+      "seconds": 0.135,
+      "failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "log": "reports/issue10/baseline_comparison/startup_black_hole_test.baseline.txt"
+    },
+    {
+      "source": "current",
+      "path": "tests/startup_black_hole_test.py",
+      "exit": 1,
+      "seconds": 0.188,
+      "failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "log": "reports/issue10/baseline_comparison/startup_black_hole_test.current.txt"
+    },
+    {
+      "source": "baseline",
+      "path": "tests/polar_startup_test.py",
+      "exit": 1,
+      "seconds": 0.075,
+      "failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "log": "reports/issue10/baseline_comparison/polar_startup_test.baseline.txt"
+    },
+    {
+      "source": "current",
+      "path": "tests/polar_startup_test.py",
+      "exit": 1,
+      "seconds": 0.072,
+      "failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "log": "reports/issue10/baseline_comparison/polar_startup_test.current.txt"
+    },
+    {
+      "source": "baseline",
+      "path": "tests/autoaim_settings_test.py",
+      "exit": 1,
+      "seconds": 0.129,
+      "failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "log": "reports/issue10/baseline_comparison/autoaim_settings_test.baseline.txt"
+    },
+    {
+      "source": "current",
+      "path": "tests/autoaim_settings_test.py",
+      "exit": 1,
+      "seconds": 0.082,
+      "failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "log": "reports/issue10/baseline_comparison/autoaim_settings_test.current.txt"
+    },
+    {
+      "source": "baseline",
+      "path": "tests/hud_telemetry_settings_test.py",
+      "exit": 1,
+      "seconds": 0.073,
+      "failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "log": "reports/issue10/baseline_comparison/hud_telemetry_settings_test.baseline.txt"
+    },
+    {
+      "source": "current",
+      "path": "tests/hud_telemetry_settings_test.py",
+      "exit": 1,
+      "seconds": 0.068,
+      "failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "log": "reports/issue10/baseline_comparison/hud_telemetry_settings_test.current.txt"
+    },
+    {
+      "source": "baseline",
+      "path": "tests/hud_status_settings_test.py",
+      "exit": 1,
+      "seconds": 0.088,
+      "failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "log": "reports/issue10/baseline_comparison/hud_status_settings_test.baseline.txt"
+    },
+    {
+      "source": "current",
+      "path": "tests/hud_status_settings_test.py",
+      "exit": 1,
+      "seconds": 0.07,
+      "failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "log": "reports/issue10/baseline_comparison/hud_status_settings_test.current.txt"
+    },
+    {
+      "source": "baseline",
+      "path": "tests/hud_batch16_killfx_test.py",
+      "exit": 1,
+      "seconds": 0.076,
+      "failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "log": "reports/issue10/baseline_comparison/hud_batch16_killfx_test.baseline.txt"
+    },
+    {
+      "source": "current",
+      "path": "tests/hud_batch16_killfx_test.py",
+      "exit": 1,
+      "seconds": 0.056,
+      "failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "log": "reports/issue10/baseline_comparison/hud_batch16_killfx_test.current.txt"
+    },
+    {
+      "source": "baseline",
+      "path": "tests/hud_batch17_crosshair_test.py",
+      "exit": 1,
+      "seconds": 0.034,
+      "failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "log": "reports/issue10/baseline_comparison/hud_batch17_crosshair_test.baseline.txt"
+    },
+    {
+      "source": "current",
+      "path": "tests/hud_batch17_crosshair_test.py",
+      "exit": 1,
+      "seconds": 0.028,
+      "failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "log": "reports/issue10/baseline_comparison/hud_batch17_crosshair_test.current.txt"
+    },
+    {
+      "source": "baseline",
+      "path": "tests/hud_batch18_powerguard_test.py",
+      "exit": 1,
+      "seconds": 0.062,
+      "failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "log": "reports/issue10/baseline_comparison/hud_batch18_powerguard_test.baseline.txt"
+    },
+    {
+      "source": "current",
+      "path": "tests/hud_batch18_powerguard_test.py",
+      "exit": 1,
+      "seconds": 0.066,
+      "failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "log": "reports/issue10/baseline_comparison/hud_batch18_powerguard_test.current.txt"
+    },
+    {
+      "source": "baseline",
+      "path": "tests/hud_batch19_bufftimeline_test.py",
+      "exit": 1,
+      "seconds": 0.029,
+      "failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "log": "reports/issue10/baseline_comparison/hud_batch19_bufftimeline_test.baseline.txt"
+    },
+    {
+      "source": "current",
+      "path": "tests/hud_batch19_bufftimeline_test.py",
+      "exit": 1,
+      "seconds": 0.036,
+      "failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "log": "reports/issue10/baseline_comparison/hud_batch19_bufftimeline_test.current.txt"
+    },
+    {
+      "source": "baseline",
+      "path": "tests/hud_batch20_robotoverlay_color_test.py",
+      "exit": 1,
+      "seconds": 0.025,
+      "failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "log": "reports/issue10/baseline_comparison/hud_batch20_robotoverlay_color_test.baseline.txt"
+    },
+    {
+      "source": "current",
+      "path": "tests/hud_batch20_robotoverlay_color_test.py",
+      "exit": 1,
+      "seconds": 0.025,
+      "failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "log": "reports/issue10/baseline_comparison/hud_batch20_robotoverlay_color_test.current.txt"
+    },
+    {
+      "source": "baseline",
+      "path": "tests/hud_batch21_radaroverlay_map_test.py",
+      "exit": 1,
+      "seconds": 0.026,
+      "failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "log": "reports/issue10/baseline_comparison/hud_batch21_radaroverlay_map_test.baseline.txt"
+    },
+    {
+      "source": "current",
+      "path": "tests/hud_batch21_radaroverlay_map_test.py",
+      "exit": 1,
+      "seconds": 0.022,
+      "failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "log": "reports/issue10/baseline_comparison/hud_batch21_radaroverlay_map_test.current.txt"
+    },
+    {
+      "source": "baseline",
+      "path": "tests/hud_batch14_settings_test.py",
+      "exit": 1,
+      "seconds": 0.064,
+      "failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "log": "reports/issue10/baseline_comparison/hud_batch14_settings_test.baseline.txt"
+    },
+    {
+      "source": "current",
+      "path": "tests/hud_batch14_settings_test.py",
+      "exit": 1,
+      "seconds": 0.066,
+      "failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "log": "reports/issue10/baseline_comparison/hud_batch14_settings_test.current.txt"
+    },
+    {
+      "source": "baseline",
+      "path": "tests/hud_batch13_settings_test.py",
+      "exit": 1,
+      "seconds": 0.071,
+      "failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "log": "reports/issue10/baseline_comparison/hud_batch13_settings_test.baseline.txt"
+    },
+    {
+      "source": "current",
+      "path": "tests/hud_batch13_settings_test.py",
+      "exit": 1,
+      "seconds": 0.056,
+      "failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "log": "reports/issue10/baseline_comparison/hud_batch13_settings_test.current.txt"
+    },
+    {
+      "source": "baseline",
+      "path": "tests/hud_batch10_settings_test.py",
+      "exit": 1,
+      "seconds": 0.058,
+      "failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "log": "reports/issue10/baseline_comparison/hud_batch10_settings_test.baseline.txt"
+    },
+    {
+      "source": "current",
+      "path": "tests/hud_batch10_settings_test.py",
+      "exit": 1,
+      "seconds": 0.061,
+      "failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "log": "reports/issue10/baseline_comparison/hud_batch10_settings_test.current.txt"
+    },
+    {
+      "source": "baseline",
+      "path": "tests/hud_batch9_settings_test.py",
+      "exit": 1,
+      "seconds": 0.053,
+      "failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "log": "reports/issue10/baseline_comparison/hud_batch9_settings_test.baseline.txt"
+    },
+    {
+      "source": "current",
+      "path": "tests/hud_batch9_settings_test.py",
+      "exit": 1,
+      "seconds": 0.054,
+      "failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "log": "reports/issue10/baseline_comparison/hud_batch9_settings_test.current.txt"
+    },
+    {
+      "source": "baseline",
+      "path": "tests/hud_batch8_settings_test.py",
+      "exit": 1,
+      "seconds": 0.057,
+      "failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "log": "reports/issue10/baseline_comparison/hud_batch8_settings_test.baseline.txt"
+    },
+    {
+      "source": "current",
+      "path": "tests/hud_batch8_settings_test.py",
+      "exit": 1,
+      "seconds": 0.058,
+      "failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "log": "reports/issue10/baseline_comparison/hud_batch8_settings_test.current.txt"
+    },
+    {
+      "source": "baseline",
+      "path": "tests/hud_overlay_settings_test.py",
+      "exit": 1,
+      "seconds": 0.066,
+      "failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "log": "reports/issue10/baseline_comparison/hud_overlay_settings_test.baseline.txt"
+    },
+    {
+      "source": "current",
+      "path": "tests/hud_overlay_settings_test.py",
+      "exit": 1,
+      "seconds": 0.066,
+      "failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "log": "reports/issue10/baseline_comparison/hud_overlay_settings_test.current.txt"
+    },
+    {
+      "source": "baseline",
+      "path": "tests/referee_integration_test.py",
+      "exit": 1,
+      "seconds": 3.171,
+      "failures": [
+        "AssertionError: real paho subscribe completed"
+      ],
+      "log": "reports/issue10/baseline_comparison/referee_integration_test.baseline.txt"
+    },
+    {
+      "source": "current",
+      "path": "tests/referee_integration_test.py",
+      "exit": 1,
+      "seconds": 3.361,
+      "failures": [
+        "AssertionError: real paho subscribe completed"
+      ],
+      "log": "reports/issue10/baseline_comparison/referee_integration_test.current.txt"
+    },
+    {
+      "source": "baseline",
+      "path": "tests/api_freeze_test.py",
+      "exit": 1,
+      "seconds": 0.084,
+      "failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "log": "reports/issue10/baseline_comparison/api_freeze_test.baseline.txt"
+    },
+    {
+      "source": "current",
+      "path": "tests/api_freeze_test.py",
+      "exit": 1,
+      "seconds": 0.04,
+      "failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "log": "reports/issue10/baseline_comparison/api_freeze_test.current.txt"
+    },
+    {
+      "source": "baseline",
+      "path": "tools/dt7_link/test_dt7_review_fixes.py",
+      "exit": 1,
+      "seconds": 0.198,
+      "failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "log": "reports/issue10/baseline_comparison/test_dt7_review_fixes.baseline.txt"
+    },
+    {
+      "source": "current",
+      "path": "tools/dt7_link/test_dt7_review_fixes.py",
+      "exit": 1,
+      "seconds": 0.182,
+      "failures": [
+        "ModuleNotFoundError: No module named 'PySide6'"
+      ],
+      "log": "reports/issue10/baseline_comparison/test_dt7_review_fixes.current.txt"
+    }
+  ]
+}

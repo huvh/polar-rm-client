@@ -33,6 +33,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 PYTHON_SUITES = (
+    "test_controller_angle_integration",  # Issue 10: UI/manager wiring and safety gates
+    "test_controller_angle_safety_review",  # Independent parser/lifecycle regressions
     "test_build_safety_regressions",  # isolated packaging / path / file-preservation guards
     "test_transport_safety_regressions",
     "test_serial_codec_regressions",
@@ -72,6 +74,8 @@ PYTHON_SUITES = (
 )
 
 C_CHECKS = (
+    ("tools/firmware/controller_angle/test_controller_angle.py",
+     "Issue 10 angle firmware: exact source, independent timeout and sender bounds"),
     ("tools/firmware/host_bridge/test_usb_receiver_portable.py",
      "真实 USB 回调队列与有界外层解析（匹配源码 / CRC / 竞态 / 溢出）"),
     ("tools/firmware/referee_rx/test_referee_rx.py",
