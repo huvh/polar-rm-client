@@ -59,6 +59,10 @@ function Invoke-RequiredTest([string]$Python, [string]$Script, [string]$Label, [
     $bootstrap = @'
 import faulthandler, os, runpy, sys, time
 path = sys.argv[1]
+# runpy does not remove the bootstrap's script argument. unittest.main()
+# would interpret that path as a test-name selector instead of running tests.
+sys.argv = [path]
+sys.path.insert(0, os.path.dirname(os.path.abspath(path)))
 faulthandler.enable(all_threads=True)
 faulthandler.dump_traceback_later(120, repeat=True)
 target = os.path.normcase(os.path.abspath(path))
