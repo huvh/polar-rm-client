@@ -1,0 +1,14 @@
+[PASS] 仅有传统 COM1 时 Auto 不乱连
+[PASS] Auto 选中机器人而非 COM1
+[PASS] COM12 出现在选项列表里
+[PASS] 蓝牙串口被排除
+[PASS] 两候选同分时不猜
+[PASS] 显式 COM7 原样返回
+[PASS] 显式 Stub 原样返回
+Traceback (most recent call last):
+  File "/workspace/scratch/8fc313400f06/polar-controller-angle-fix/tests/polar_startup_test.py", line 715, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/workspace/scratch/8fc313400f06/polar-controller-angle-fix/tests/polar_startup_test.py", line 471, in main
+    from PySide6.QtWidgets import QApplication
+ModuleNotFoundError: No module named 'PySide6'

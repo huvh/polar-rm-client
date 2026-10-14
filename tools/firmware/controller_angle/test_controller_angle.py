@@ -144,7 +144,7 @@ int main(void) {
         memcpy(data+4*i,&expected[i],4);
     }
     memcpy(km_data,"PRM1",4);km_data[4]=1;km_data[5]=3;km_data[17]=1;
-    for(now=100;now<=400;now+=100) {
+    for(now=100;now<=200;now+=100) {
         valid_count=HOST_KM_RX_COUNT;
         dispatch(ROBOT_CUSTOM_DATA_3_CMD_ID,km_data,30);
         assert(HOST_KM_RX_COUNT==valid_count+1 && HOST_KM_RX_TIME==now);
@@ -156,6 +156,13 @@ int main(void) {
     now=300;memcpy(actual,untouched,sizeof(actual));
     assert(!GetCustomControllerAngles(actual) && !memcmp(actual,untouched,sizeof(actual)));
     assert(!controller_angle_valid && GetCustomControllerPos(1)==0);
+    for(now=300;now<=400;now+=100) {
+        dispatch(ROBOT_CUSTOM_DATA_3_CMD_ID,km_data,30);
+        dispatch(ROBOT_CUSTOM_DATA_CMD_ID,data,30);
+        dispatch(GAME_RESULT_CMD_ID,data,sizeof(game_result_t));
+        assert(referee_online_time==now && controller_angle_time==stamp);
+        assert(!GetCustomControllerOnline());
+    }
     /* Fresh angles recover; old unrelated payloads do not. */
     now=600;dispatch(CUSTOM_CONTROLLER_CMD_ID,data,30);
     assert(GetCustomControllerAngles(actual) && !memcmp(actual,expected,sizeof(actual)));
@@ -167,6 +174,12 @@ int main(void) {
     now=3;dispatch(CUSTOM_CONTROLLER_CMD_ID,data,30);assert(GetCustomControllerOnline());
     init_referee_struct_data();assert(!GetCustomControllerOnline());
     assert(!CustomControllerAnglesAccept(NULL,30));
+    memcpy(data,controller_angle_min,sizeof(controller_angle_min));
+    assert(CustomControllerAnglesAccept(data,30));
+    assert(GetCustomControllerAngles(actual) && !memcmp(actual,controller_angle_min,sizeof(actual)));
+    memcpy(data,controller_angle_max,sizeof(controller_angle_max));
+    assert(CustomControllerAnglesAccept(data,30));
+    assert(GetCustomControllerAngles(actual) && !memcmp(actual,controller_angle_max,sizeof(actual)));
     puts("PASS: real 0x0302 dispatch, finite checks, independent timeout, KM isolation, startup, wrap and recovery");
     return 0;
 }
@@ -240,6 +253,75 @@ int main(void){
     lastTick=UINT32_MAX-10U;now=22;tick();assert(send_count==2);
     now=23;tick();assert(send_count==3&&lastTick==23);
     puts("PASS: sender reads only six floats, zeroes reserved tail, preserves frame ABI, enforces 34 ms across wrap");
+    return 0;
+}
+'''
+        self.compile_run(body)
+
+    def test_real_arm_snapshot_and_output_expiry(self):
+        patched=angle.patch_arm((ROOT/angle.OWNED[2]).read_text())
+        reference=function(patched,"MechanicalArmReference")
+        start=reference.index("        case MECHANICAL_ARM_FOLLOW: {")
+        end=reference.index("        case MECHANICAL_ARM_CALIBRATE:",start)
+        follow=reference[start:end]
+        console=function(patched,"MechanicalArmConsole")
+        gate=console[console.index("{")+1:console.index("    switch (MECHANICAL_ARM.mode)")]
+        body=r'''
+#include <stdint.h>
+#include <stdbool.h>
+#include <math.h>
+#include <string.h>
+#include <stdio.h>
+#include <assert.h>
+static uint32_t now,irq;
+static uint32_t HAL_GetTick(void){return now;}
+static uint32_t __get_PRIMASK(void){return irq;}
+static void __disable_irq(void){irq=1;}
+static void __set_PRIMASK(uint32_t value){irq=value;}
+'''
+        body+=angle.DECLARATIONS+angle.IMPLEMENTATION
+        body+=r'''
+enum {J0,J1,J2,J3,J4,J5};
+enum {MECHANICAL_ARM_SAFE,MECHANICAL_ARM_FOLLOW};
+#define CUSTOM_CONTROLLER_DATA_ERROR_OFFSET 4U
+static struct {
+    bool custom_controller_ready;
+    unsigned mode,error_code;
+    struct {struct {float angle;}joint[6];}ref;
+    struct {struct {float pos[6],vj4_pos,vj5_pos;}min,max;}limit;
+}MECHANICAL_ARM;
+#define MA MECHANICAL_ARM
+static float fp32_constrain(float value,float min,float max){return value<min?min:(value>max?max:value);}
+'''
+        body+="static void reference(void){switch(MA.mode){\n"+follow+"\ndefault:break;}}\n"
+        body+="static void output_gate(void){\n"+gate+"\n}\n"
+        body+=r'''
+int main(void){
+    float joints[6]={0.1f,0.2f,-0.3f,0.4f,0.5f,-0.6f};
+    uint8_t payload[30]={0};unsigned i;
+    for(i=0;i<6;i++){MA.limit.min.pos[i]=-30;MA.limit.max.pos[i]=30;MA.ref.joint[i].angle=0;}
+    MA.limit.min.vj4_pos=-1;MA.limit.max.vj4_pos=1;
+    MA.limit.min.vj5_pos=-2;MA.limit.max.vj5_pos=2;
+    CustomControllerAnglesReset();MA.mode=MECHANICAL_ARM_FOLLOW;
+    reference();assert(!MA.custom_controller_ready && MA.mode==MECHANICAL_ARM_SAFE);
+    for(i=0;i<6;i++)assert(MA.ref.joint[i].angle==0);
+    memcpy(payload,joints,24);assert(CustomControllerAnglesAccept(payload,30));
+    MA.mode=MECHANICAL_ARM_FOLLOW;reference();
+    assert(MA.custom_controller_ready && MA.mode==MECHANICAL_ARM_FOLLOW && MA.error_code==0);
+    for(i=0;i<6;i++)assert(fabsf(MA.ref.joint[i].angle-joints[i])<0.00001f);
+    now=299;output_gate();assert(MA.mode==MECHANICAL_ARM_FOLLOW);
+    now=300;output_gate();assert(MA.mode==MECHANICAL_ARM_SAFE && !MA.custom_controller_ready);
+    for(i=0;i<6;i++)assert(fabsf(MA.ref.joint[i].angle-joints[i])<0.00001f);
+    MA.mode=MECHANICAL_ARM_FOLLOW;reference();assert(MA.mode==MECHANICAL_ARM_SAFE);
+    now=301;joints[0]=0.2f;memcpy(payload,joints,24);
+    assert(CustomControllerAnglesAccept(payload,30));MA.mode=MECHANICAL_ARM_FOLLOW;
+    reference();output_gate();assert(MA.mode==MECHANICAL_ARM_FOLLOW && MA.custom_controller_ready);
+    assert(MA.ref.joint[J0].angle==0.2f);
+    /* Existing position-jump error remains latched and is not cleared by RX. */
+    joints[0]=2.0f;memcpy(payload,joints,24);assert(CustomControllerAnglesAccept(payload,30));
+    reference();assert(MA.error_code & CUSTOM_CONTROLLER_DATA_ERROR_OFFSET);
+    assert(MA.ref.joint[J0].angle==0.2f);
+    puts("PASS: actual arm FOLLOW branch uses one fresh snapshot; startup/stale reaches existing SAFE and valid frames recover without bypassing jump gate");
     return 0;
 }
 '''

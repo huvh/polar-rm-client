@@ -1,0 +1,13 @@
+Traceback (most recent call last):
+  File "/tmp/polar-issue10-baseline-Iwt5cE/tests/api_freeze_test.py", line 598, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/tmp/polar-issue10-baseline-Iwt5cE/tests/api_freeze_test.py", line 594, in main
+    return run_compare(args.baseline)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/polar-issue10-baseline-Iwt5cE/tests/api_freeze_test.py", line 487, in run_compare
+    _, window = _build_window()
+                ^^^^^^^^^^^^^^^
+  File "/tmp/polar-issue10-baseline-Iwt5cE/tests/api_freeze_test.py", line 284, in _build_window
+    from PySide6.QtWidgets import QApplication
+ModuleNotFoundError: No module named 'PySide6'

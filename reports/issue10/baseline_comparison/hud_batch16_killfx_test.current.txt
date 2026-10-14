@@ -1,0 +1,6 @@
+Traceback (most recent call last):
+  File "/workspace/scratch/8fc313400f06/polar-controller-angle-fix/tests/hud_batch16_killfx_test.py", line 37, in <module>
+    from rm_client.kill_fx import (  # noqa: E402
+  File "/workspace/scratch/8fc313400f06/polar-controller-angle-fix/rm_client/kill_fx.py", line 10, in <module>
+    from PySide6.QtCore import QPointF, QRectF, Qt
+ModuleNotFoundError: No module named 'PySide6'

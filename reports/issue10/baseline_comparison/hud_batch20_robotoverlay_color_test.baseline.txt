@@ -1,0 +1,5 @@
+Traceback (most recent call last):
+  File "/tmp/polar-issue10-baseline-Iwt5cE/tests/hud_batch20_robotoverlay_color_test.py", line 35, in <module>
+    from PySide6.QtCore import QPointF  # noqa: E402
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ModuleNotFoundError: No module named 'PySide6'

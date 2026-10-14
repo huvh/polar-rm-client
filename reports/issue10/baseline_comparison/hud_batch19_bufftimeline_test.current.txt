@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "/workspace/scratch/8fc313400f06/polar-controller-angle-fix/tests/hud_batch19_bufftimeline_test.py", line 40, in <module>
+    from PySide6.QtCore import QRectF
+ModuleNotFoundError: No module named 'PySide6'

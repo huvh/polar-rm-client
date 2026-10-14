@@ -268,5 +268,19 @@ def refresh_port_options(registry) -> list[str]:
         if gone:
             piece += "（消失 " + ", ".join(gone) + "）"
         diffs.append(piece)
+    angles = registry.get("ControllerAngles")
+    if angles is not None:
+        base = ["Stub"] + [p for p in port_choices() if p not in {"Stub", "Auto"}]
+        for name in ("Angle RX Port", "Angle TX Port"):
+            setting = angles.get_setting(name)
+            if setting is None:
+                continue
+            choices = list(base)
+            current = str(setting.value or "")
+            if current and current != "Auto" and current not in choices:
+                choices.append(current)
+            if list(setting.options or []) != choices:
+                setting.options = choices
+                diffs.append(name + ": " + ", ".join(choices))
     return diffs
 

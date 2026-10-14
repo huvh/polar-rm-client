@@ -230,7 +230,12 @@ def render(root: Path) -> dict[str, str]:
     result = {}
     for relative, patcher in zip(OWNED, PATCHERS):
         path = root / relative
-        if path.is_symlink() or not path.is_file():
+        for component in (path, *path.parents):
+            if component == root:
+                break
+            if component.is_symlink():
+                raise RuntimeError(f"Symlinked firmware source path: {relative}")
+        if not path.is_file():
             raise RuntimeError(f"Missing or symlinked firmware source: {relative}")
         result[relative] = patcher(path.read_text(encoding="utf-8"))
     return result
