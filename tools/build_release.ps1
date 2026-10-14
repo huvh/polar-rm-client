@@ -409,6 +409,8 @@ print('polar spec OK: %d segments, %d roles, %d warnings'
     Copy-Item -LiteralPath (Join-Path $sourceRoot "configs\dt7_profile.json") -Destination (Join-Path $portable "defaults\dt7_profile.json") -Force
     Get-ChildItem -LiteralPath (Join-Path $sourceRoot "licenses") -Force |
         Copy-Item -Destination (Join-Path $portable "licenses") -Recurse -Force
+    & $python (Join-Path $sourceRoot "tools\collect_release_licenses.py") --out (Join-Path $portable "licenses\python")
+    if ($LASTEXITCODE -ne 0) { throw "Dependency license collection failed" }
     Copy-Item -LiteralPath (Join-Path $sourceRoot "THIRD_PARTY_NOTICES.md") -Destination (Join-Path $portable "licenses\THIRD_PARTY_NOTICES.md") -Force
     Copy-Item -LiteralPath (Join-Path $sourceRoot "FIELD_CANDIDATE.md") -Destination (Join-Path $portable "FIELD_CANDIDATE.md") -Force
     Copy-Item -LiteralPath (Join-Path $sourceRoot "REFEREE_INTEGRATION.md") -Destination (Join-Path $portable "REFEREE_INTEGRATION.md") -Force
