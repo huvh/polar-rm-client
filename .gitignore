@@ -53,13 +53,14 @@ release/**/*.zip
 # --- User-imported wallpapers (local only) ---
 assets/wallpapers/user/
 
-# --- Large built-in video wallpapers (keep on disk, not in git) ---
-# Re-add with Git LFS later if you need them in the remote.
+# --- Imported video wallpapers stay local; reviewed built-ins are versioned ---
 assets/wallpapers/**/*.mp4
 assets/wallpapers/**/*.webm
 assets/wallpapers/**/*.mov
 assets/wallpapers/**/*.mkv
 assets/wallpapers/**/*.avi
+!assets/wallpapers/builtin/texas.mp4
+!assets/wallpapers/builtin/vending-machine.mp4
 
 # --- Machine-local calibration data ---
 calibrations/*

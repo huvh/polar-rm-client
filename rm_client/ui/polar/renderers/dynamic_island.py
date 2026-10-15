@@ -34,6 +34,8 @@ from ...animation import Easings
 from ...paint import rounded_rect, with_alpha
 from ...theme import THEME, color
 from ...island_icon_gpu import IslandIconCommand
+from ...jello_locale import chinese_enabled
+from ...status_locale import status_event_text, status_text
 
 __all__ = ["DynamicIslandMixin"]
 
@@ -58,6 +60,7 @@ class DynamicIslandMixin:
 
     def dynamic_island_payload(self) -> dict[str, Any]:
         now = time.perf_counter()
+        chinese = chinese_enabled(self.registry)
         if self.state.last_event != self.dynamic_island_last_event:
             self.dynamic_island_last_event = self.state.last_event
             self.dynamic_island_event_started = now
@@ -78,7 +81,7 @@ class DynamicIslandMixin:
                 "kind": kind,
                 "color": main,
                 "title": self.dynamic_message_title(message, kind),
-                "description": message,
+                "description": status_event_text(message, chinese),
                 "progress": max(0.0, 1.0 - age / 3.0),
             }
 
@@ -90,8 +93,8 @@ class DynamicIslandMixin:
                 "active": True,
                 "kind": kind,
                 "color": main,
-                "title": self.match_mode_manager.current.title,
-                "description": self.state.last_event,
+                "title": status_text(self.match_mode_manager.current.title, chinese),
+                "description": status_event_text(self.state.last_event, chinese),
                 "progress": max(0.0, min(1.0, self.state.stage_countdown_sec / duration)),
             }
 
@@ -101,9 +104,10 @@ class DynamicIslandMixin:
         if rune and rune.enabled and self.setting_bool(rune, "Show in Island", True) and summary:
             return {"active": True, "kind": "info", "color": self.hud_accent(),
                     "title": "能量机关", "description": summary, "progress": 1.0}
-        mqtt = "MQTT live" if self.state.mqtt_connected else "MQTT mock"
-        serial = "SERIAL live" if self.state.serial_connected else "SERIAL mock"
-        text = f"{self.scenario_manager.current.title} | {self.match_mode_manager.current.title} | {self.state.fps:.0f} FPS | {mqtt} | {serial}"
+        mqtt = status_text("MQTT live" if self.state.mqtt_connected else "MQTT mock", chinese)
+        serial = status_text("SERIAL live" if self.state.serial_connected else "SERIAL mock", chinese)
+        match = status_text(self.match_mode_manager.current.title, chinese)
+        text = f"{self.scenario_manager.current.title} | {match} | {self.state.fps:.0f} FPS | {mqtt} | {serial}"
         return {"active": False, "kind": "info", "color": self.hud_accent(), "title": "POLAR-RM", "description": text, "progress": 1.0}
 
     def dynamic_message_kind(self, message: str) -> tuple[str, QColor]:
@@ -117,14 +121,15 @@ class DynamicIslandMixin:
         return "info", self.hud_accent()
 
     def dynamic_message_title(self, message: str, kind: str) -> str:
+        chinese = chinese_enabled(self.registry)
         if kind == "warning":
-            return "Warning"
+            return status_text("Warning", chinese)
         if kind == "success":
-            return "Success"
+            return status_text("Success", chinese)
         if kind == "module":
-            return "Client State"
+            return status_text("Client State", chinese)
         if "Radar" in message or "雷达" in message:
-            return "Radar"
+            return status_text("Radar", chinese)
         return "POLAR-RM"
 
     def draw_dynamic_island(self, p: QPainter, width: int) -> None:

@@ -387,7 +387,8 @@ class TransportSafetyTests(unittest.TestCase):
             _apply_config=lambda config: events.append("configure"),
             safety=SimpleNamespace(release_estop=lambda: events.append("release_latch")))
         for name in ("mqtt", "udp", "serial", "polar"):
-            setattr(backend, name, SimpleNamespace(start=lambda name=name: events.append(("start", name))))
+            setattr(backend, name, SimpleNamespace(start=lambda name=name: events.append(("start", name)),
+                request_start=lambda name=name: events.append(("start", name))))
         manager_method("apply_scenario", SCENARIOS=SCENARIOS)(backend, "OfficialEvent", robot_id=103)
         self.assertEqual(events[:4], ["shutdown", ("identity", 103), "configure", "release_latch"])
         self.assertEqual(len([event for event in events if isinstance(event, tuple) and event[0] == "start"]), 4)
@@ -434,7 +435,7 @@ class TransportSafetyTests(unittest.TestCase):
         events = []
         backend = SimpleNamespace(safety=SimpleNamespace(lock_control=lambda reason: events.append("lock")),
             polar_bridge=SimpleNamespace(reset=lambda: events.append("telemetry")),
-            polar=SimpleNamespace(clear_intent=lambda: events.append("intent")),
+            polar=SimpleNamespace(request_estop=lambda: events.append("intent")),
             _polar_gimbal_last=(1, 2), polar_chassis_state_seen=True)
         manager_method("_invalidate_polar_epoch")(backend, "changed")
         self.assertEqual(events, ["lock", "telemetry", "intent"])
@@ -448,7 +449,7 @@ class TransportSafetyTests(unittest.TestCase):
         def start():
             events.append("start")
             polar.connected = True
-        polar.start = start
+        polar.request_start = start
         backend = SimpleNamespace(polar=polar, _polar_last_connect_attempt=0.0,
             _invalidate_polar_epoch=lambda reason: events.append("reset"),
             field_log=SimpleNamespace(emit=lambda *args, **kwargs: None))
@@ -462,7 +463,7 @@ class TransportSafetyTests(unittest.TestCase):
             mqtt=SimpleNamespace(publish_estop_zero=lambda: (_ for _ in ()).throw(OSError("MQTT unavailable"))),
             publish_km_release=lambda: (_ for _ in ()).throw(OSError("KM unavailable")),
             serial=SimpleNamespace(trigger_estop=lambda: calls.append("serial")),
-            polar=SimpleNamespace(trigger_estop=lambda: calls.append("polar")),
+            polar=SimpleNamespace(request_estop=lambda: calls.append("polar")),
             field_log=SimpleNamespace(emit=lambda *args, **kwargs: None))
         result = manager_method("trigger_estop", time=time)(backend)
         self.assertFalse(result[0])
@@ -478,7 +479,7 @@ class TransportSafetyTests(unittest.TestCase):
         bridge.reset = lambda: setattr(bridge, "active", False)
         backend = SimpleNamespace(_input_clear_generation=0, _dt7_control_ref=control, input_clear_hook=None,
             field_log=SimpleNamespace(emit=lambda *args, **kwargs: None), safety=safety,
-            polar_bridge=bridge, polar=SimpleNamespace(clear_intent=lambda: None))
+            polar_bridge=bridge, polar=SimpleNamespace(request_estop=lambda: None))
         safety.input_clear_hook = lambda reason: manager_method("_request_input_clear")(backend, reason)
         manager_method("_invalidate_polar_epoch")(backend, "endpoint changed")
         bridge.active = True  # First fresh telemetry on the new connection.
@@ -520,7 +521,7 @@ class TransportSafetyTests(unittest.TestCase):
                 publish_estop_zero=lambda: (_ for _ in ()).throw(OSError("MQTT unavailable")),
                 stop=lambda **kwargs: calls.append("mqtt stop")),
             serial=SimpleNamespace(trigger_estop=lambda: calls.append("serial zero"), stop=lambda: calls.append("serial stop")),
-            polar=SimpleNamespace(trigger_estop=lambda: calls.append("polar zero"), stop=lambda: calls.append("polar stop")),
+            polar=SimpleNamespace(request_estop=lambda: calls.append("polar zero"), stop=lambda: calls.append("polar stop")),
             udp=SimpleNamespace(stop=lambda: calls.append("udp stop")),
             native_decoder=SimpleNamespace(stop=lambda: calls.append("decoder stop")),
             _native_recovery=SimpleNamespace(reset=lambda: None),
@@ -546,3 +547,4 @@ class TransportSafetyTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

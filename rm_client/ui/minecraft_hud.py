@@ -12,6 +12,7 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from datetime import datetime
 import math
+import re
 from pathlib import Path
 import time
 from typing import Any, Iterable
@@ -19,6 +20,8 @@ from typing import Any, Iterable
 from PySide6.QtCore import QPointF, QRect, QRectF, QSize, Qt
 from PySide6.QtGui import QColor, QImage, QPainter, QPolygonF
 from .minecraft_presentation import MinecraftItemAtlas, MinecraftStyledFont
+from .jello_locale import chinese_enabled
+from .hud_locale import hud_text, hud_template, hud_module_name, HudDisplayText
 
 
 FUNCTION_SLOT_NAMES = tuple(f"Slot {index}" for index in range(1, 10))
@@ -157,6 +160,25 @@ class MinecraftBitmapFont:
         return float(image.width())
 
 
+def _scoreboard_display(text: str, chinese: bool) -> str:
+    # Formatting controls are not vocabulary and must remain byte-for-byte.
+    parts = re.split(r"(§.)", text)
+    translated = "".join(part if part.startswith("§") else hud_text(part, chinese) for part in parts)
+    return translated.replace("§aA §f", "§a我 §f").replace("§cE §f", "§c敌 §f") if chinese else translated
+
+
+def _draw_display_text(renderer, painter, x, y, raw, tint, scale):
+    """Keep ASCII sprites, but measure translated Unihex text before drawing."""
+    display = getattr(raw, "display", raw)
+    if display == raw and all(ord(char) < 128 for char in display):
+        return renderer.font.draw(painter, x, y, raw, tint, scale)
+    measure = getattr(renderer.styled_font, "width", renderer.font.logical_width)
+    height = getattr(renderer.styled_font, "height", lambda text: 9)
+    rect = QRectF(x, y, (measure(display) + 1) * scale, height(display) * scale)
+    renderer.styled_font.draw(painter, rect, display, scale, base=tint)
+    return rect.width()
+
+
 class MinecraftCombatHudRenderer:
     SPRITES = (
         "hotbar",
@@ -184,6 +206,10 @@ class MinecraftCombatHudRenderer:
         self.items = MinecraftItemAtlas(self.asset_root)
         self.selected_slot = 0
         self._layer_image = QImage()
+        self._present_image = QImage()
+        self._present_bounds = QRectF()
+        self._native_crop_bounds = QRectF()
+        self._present_key = None
         self._layer_key: tuple[Any, ...] | None = None
         self._layer_priority_key: tuple[Any, ...] | None = None
         self._layer_next_refresh_at = 0.0
@@ -192,6 +218,24 @@ class MinecraftCombatHudRenderer:
     @property
     def available(self) -> bool:
         return self.font.available and all(not image.isNull() for image in self.images.values())
+
+    def _scoreboard_metrics(self, lines: tuple[str, ...]) -> tuple[float, float]:
+        # Reserve actual display extents, including provider ascents/shadows.
+        # Reserving both localizations keeps language changes from moving the
+        # interaction geometry while never clipping a wider translated line.
+        widths = []
+        heights = []
+        for index, text in enumerate(lines):
+            display = text if index in (0, len(lines)-1) else _scoreboard_display(text, True)
+            widths.append(max(self.styled_font.width(text), self.styled_font.width(display)))
+            heights.append(max(self.styled_font.height(text), self.styled_font.height(display)))
+        return max(112, max(widths, default=104) + 8), max(12, sum(heights) + 5)
+
+    def _display_text_width(self, raw: str) -> float:
+        display = getattr(raw, "display", raw)
+        if display == raw and all(ord(char) < 128 for char in display):
+            return float(self.font.logical_width(raw) + 1)
+        return self.styled_font.width(display) + 1
 
     def _logical_layout(
         self,
@@ -216,9 +260,9 @@ class MinecraftCombatHudRenderer:
         # Retain the layout field for consumers, but reserve no boss-bar space.
         boss: tuple[QRectF, ...] = ()
         lines = tuple(str(line) for line in scoreboard_lines)
-        logical_score_w = max((self.styled_font.width(line) for line in lines), default=104)
-        score_w = max(112, logical_score_w + 8) * scale
-        score_h = max(12, len(lines) * 9 + 5) * scale
+        score_width, score_height = self._scoreboard_metrics(lines)
+        score_w = score_width * scale
+        score_h = score_height * scale
         # Hypixel-style sidebars keep the upper-right clear for ArrayList/mod
         # overlays.  Anchor match information above the status/hotbar band,
         # rather than vertically centring a tall diagnostics dump.
@@ -263,9 +307,7 @@ class MinecraftCombatHudRenderer:
         multiplier = max(0.50, min(2.00, float(scale_multiplier)))
         requested = max(0.25, base_scale * multiplier)
 
-        logical_score_width = max((self.styled_font.width(line) for line in lines), default=112)
-        score_width = max(112, logical_score_width + 8)
-        score_height = max(12, len(lines) * 9 + 5)
+        score_width, score_height = self._scoreboard_metrics(lines)
         # Content-aware safety cap, not Minecraft's conservative 320x240 cap:
         # user scaling remains useful while the actual hotbar/effects/score
         # extents are guaranteed to stay inside the framebuffer.
@@ -422,6 +464,11 @@ class MinecraftCombatHudRenderer:
         logical_width, logical_height = screen_layout.logical_size
         layout = self._logical_layout(logical_width, logical_height, (text for text, _ in lines))
         scale = layout.scale
+        chinese = chinese_enabled(registry)
+        display_lines = tuple(
+            (text if index in (0, len(lines) - 1) else _scoreboard_display(text, chinese), tint)
+            for index, (text, tint) in enumerate(lines)
+        )
         assignments = self.assignments(module)
         def assignment_state(name: str) -> tuple[str, bool]:
             target = registry.get(name) if registry is not None and name != "Empty" else None
@@ -437,6 +484,8 @@ class MinecraftCombatHudRenderer:
         label_scale = max(1, scale // 2)
         thermal_text = f"COOL {int(round(thermal_margin * 100.0))}%  -{int(getattr(state, 'heat_cooldown_rate', 0))}/S"
         power_text = f"PWR {int(getattr(state, 'chassis_power_w', 0))}/{int(getattr(state, 'power_limit', 0))}W"
+        thermal_display = HudDisplayText(thermal_text, hud_text(thermal_text, chinese))
+        power_display = HudDisplayText(power_text, hud_text(power_text, chinese))
         # Buff 指示：优先裁判 Buff 解码（buff_indicator_state），
         # LabDebug mock 行无 buff_type 时回退旧演示布尔。
         buff_fn = getattr(state, "buff_indicator_state", None)
@@ -455,9 +504,22 @@ class MinecraftCombatHudRenderer:
         )
         tactical_map = registry.get("TacticalMap") if registry is not None else None
         tactical_map_enabled = bool(tactical_map and tactical_map.enabled)
+        transform = painter.deviceTransform()
+        # Cropped nearest images need the same device-pixel phase as the full
+        # canvas. Fractional DPR/HUD transforms may change that phase even when
+        # GUI Scale itself is an integer; retain the full image in that case.
+        crop_aligned = (
+            abs(screen_layout.scale - round(screen_layout.scale)) < 1e-9
+            and abs(transform.m12()) < 1e-9 and abs(transform.m21()) < 1e-9
+            and all(abs(value - round(value)) < 1e-9 for value in (
+                screen_layout.scale * abs(transform.m11()),
+                screen_layout.scale * abs(transform.m22()),
+            ))
+        )
         layer_key: tuple[Any, ...] = (
             logical_width,
             logical_height,
+            chinese,
             tuple((text, int(text_color.rgba())) for text, text_color in lines),
             int(self.selected_slot),
             assignment_states,
@@ -476,6 +538,7 @@ class MinecraftCombatHudRenderer:
         # 60-144 times per second for sub-pixel telemetry changes.  The cached
         # image remains composited every display frame with nearest sampling.
         priority_key: tuple[Any, ...] = (
+            chinese,
             logical_width,
             logical_height,
             int(self.selected_slot),
@@ -483,17 +546,24 @@ class MinecraftCombatHudRenderer:
             tactical_map_enabled,
         )
         now = time.perf_counter()
-        image_size_changed = self._layer_image.size() != QSize(logical_width, logical_height)
+        # Unihex's 16 rows occupy 8 GUI units. Rasterize the cached HUD at 2x
+        # too: drawing its DPR=2 text onto a 1x layer irreversibly erased every
+        # other row/column before the final nearest enlargement. This native
+        # density is independent of host DPR; the final screen transform is
+        # still shared by hit testing and every vanilla sprite.
+        raster_scale = self.styled_font.raster_scale
+        image_size_changed = self._layer_image.size() != QSize(logical_width*raster_scale, logical_height*raster_scale)
         priority_changed = priority_key != self._layer_priority_key
         telemetry_due = now >= self._layer_next_refresh_at
 
         if image_size_changed or priority_changed or (layer_key != self._layer_key and telemetry_due):
             if image_size_changed:
                 self._layer_image = QImage(
-                    logical_width,
-                    logical_height,
+                    logical_width*raster_scale,
+                    logical_height*raster_scale,
                     QImage.Format.Format_ARGB32_Premultiplied,
                 )
+                self._layer_image.setDevicePixelRatio(raster_scale)
             self._layer_image.fill(Qt.GlobalColor.transparent)
             layer_painter = QPainter(self._layer_image)
             layer_painter.save()
@@ -522,13 +592,15 @@ class MinecraftCombatHudRenderer:
             # familiar two-row read while giving RM telemetry its own semantics.
             self._draw_coolant_cells(layer_painter, layout.armor, thermal_margin)
             self._draw_power_pips(layer_painter, layout.food, chassis_ratio)
-            self.font.draw(layer_painter, layout.armor[0].left(), layout.armor[0].top() - 7 * label_scale, thermal_text, QColor("#55ffff"), label_scale)
-            power_w = self.font.logical_width(power_text) * label_scale
-            self.font.draw(layer_painter, layout.hotbar.right() - power_w, layout.food[-1].top() - 7 * label_scale, power_text, QColor("#55aaff") if chassis_ratio < 0.85 else QColor("#ffff55"), label_scale)
+            thermal_h = self.styled_font.height(thermal_display.display) * label_scale
+            power_h = self.styled_font.height(power_display.display) * label_scale
+            _draw_display_text(self, layer_painter, layout.armor[0].left(), layout.armor[0].top() - thermal_h - label_scale, thermal_display, QColor("#55ffff"), label_scale)
+            power_w = self._display_text_width(power_display) * label_scale
+            _draw_display_text(self, layer_painter, layout.hotbar.right() - power_w, layout.food[-1].top() - power_h - label_scale, power_display, QColor("#55aaff") if chassis_ratio < 0.85 else QColor("#ffff55"), label_scale)
 
-            self._draw_scoreboard(layer_painter, layout.scoreboard, lines, scale)
+            self._draw_scoreboard(layer_painter, layout.scoreboard, display_lines, scale)
             if not tactical_map_enabled:
-                self._draw_effects(layer_painter, layout.effects_origin, effects, scale)
+                self._draw_effects(layer_painter, layout.effects_origin, tuple((HudDisplayText(label, hud_text(label, chinese)), active) for label, active in effects), scale)
             layer_painter.restore()
             layer_painter.end()
             self._layer_key = layer_key
@@ -536,21 +608,75 @@ class MinecraftCombatHudRenderer:
             self._layer_next_refresh_at = now + (1.0 / 30.0)
             self.layer_rebuilds += 1
 
+            # Upload/composite only the populated part of the native-density
+            # canvas. With the tactical map on, MC effects are owned by that
+            # map and the MC image contains just sidebar + bottom hotbar. A
+            # full-screen 2x CJK texture otherwise uploads mostly transparent
+            # pixels every telemetry tick. This is a lossless source crop,
+            # not a smaller raster, reduced refresh rate or material change.
+            bounds = QRectF(0, 0, logical_width, logical_height)
+            if tactical_map_enabled:
+                bounds = QRectF(layout.hotbar).adjusted(-4, -4, 4, 4)
+                for rect in (*layout.hearts, *layout.armor, *layout.food):
+                    bounds = bounds.united(rect.adjusted(-4, -4, 4, 4))
+                thermal_w = self._display_text_width(thermal_display) * label_scale
+                bounds = bounds.united(QRectF(
+                    layout.armor[0].left(), layout.armor[0].top() - thermal_h - label_scale,
+                    thermal_w, thermal_h + 2 * label_scale,
+                ).adjusted(-4, -4, 4, 4))
+                bounds = bounds.united(QRectF(
+                    layout.hotbar.right() - power_w, layout.food[-1].top() - power_h - label_scale,
+                    power_w, power_h + 2 * label_scale,
+                ).adjusted(-4, -4, 4, 4))
+                bounds = bounds.united(layout.scoreboard.adjusted(-4, -4, 4, 4))
+                # Preserve nearest-neighbour phase at every cropped edge.
+                # Fractional fit-to-window scales retain the full image above.
+                bounds = QRectF(
+                    math.floor(bounds.left()), math.floor(bounds.top()),
+                    math.ceil(bounds.right()) - math.floor(bounds.left()),
+                    math.ceil(bounds.bottom()) - math.floor(bounds.top()),
+                )
+                bounds = bounds.intersected(QRectF(0, 0, logical_width, logical_height))
+            self._native_crop_bounds = QRectF(bounds)
+
+        # DPR affects only presentation, not the native Unihex canvas. Reuse
+        # that canvas across monitor/DPR changes instead of reshaping text and
+        # rerasterizing all gameplay pixels merely to choose a different crop.
+        present_key = (self.layer_rebuilds, crop_aligned)
+        if present_key != self._present_key:
+            bounds = (self._native_crop_bounds if crop_aligned
+                      else QRectF(0, 0, logical_width, logical_height))
+            pixel_bounds = QRect(
+                math.floor(bounds.left() * raster_scale), math.floor(bounds.top() * raster_scale),
+                math.ceil(bounds.right() * raster_scale) - math.floor(bounds.left() * raster_scale),
+                math.ceil(bounds.bottom() * raster_scale) - math.floor(bounds.top() * raster_scale),
+            ).intersected(self._layer_image.rect())
+            self._present_bounds = QRectF(
+                pixel_bounds.x() / raster_scale, pixel_bounds.y() / raster_scale,
+                pixel_bounds.width() / raster_scale, pixel_bounds.height() / raster_scale,
+            )
+            self._present_image = (
+                self._layer_image if pixel_bounds == self._layer_image.rect()
+                else self._layer_image.copy(pixel_bounds)
+            )
+            self._present_key = present_key
+
         destination_painter = painter
         destination_painter.save()
         destination_painter.setRenderHint(QPainter.RenderHint.Antialiasing, False)
         destination_painter.setRenderHint(QPainter.RenderHint.TextAntialiasing, False)
         destination_painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, False)
         origin_x, origin_y = screen_layout.origin
+        source_bounds = self._present_bounds
         destination_painter.drawImage(
             QRectF(
-                origin_x,
-                origin_y,
-                logical_width * screen_layout.scale,
-                logical_height * screen_layout.scale,
+                origin_x + source_bounds.x() * screen_layout.scale,
+                origin_y + source_bounds.y() * screen_layout.scale,
+                source_bounds.width() * screen_layout.scale,
+                source_bounds.height() * screen_layout.scale,
             ),
-            self._layer_image,
-            QRectF(self._layer_image.rect()),
+            self._present_image,
+            QRectF(self._present_image.rect()),
         )
         destination_painter.restore()
         return screen_layout
@@ -620,20 +746,21 @@ class MinecraftCombatHudRenderer:
             painter.drawPolygon(outline)
 
     def _draw_scoreboard(self, painter: QPainter, rect: QRectF, lines: tuple[tuple[str, QColor], ...], scale: int) -> None:
-        row_h = 9 * scale
         y = rect.top() + 2 * scale
         for index, (text, text_color) in enumerate(lines):
-            row = QRectF(rect.left(), y + index * row_h, rect.width(), row_h)
+            row_h = self.styled_font.height(text) * scale
+            row = QRectF(rect.left(), y, rect.width(), row_h)
             painter.fillRect(row, QColor(0, 0, 0, 105 if index else 150))
             self.styled_font.draw(painter,row.adjusted(3*scale,0,-3*scale,0),text,scale,
-                                  Qt.AlignHCenter if index==0 else Qt.AlignLeft)
+                                  Qt.AlignHCenter if index==0 else Qt.AlignLeft, base=text_color)
+            y += row_h
 
     def _draw_effects(self, painter: QPainter, origin: QPointF, effects: tuple[tuple[str, bool], ...], scale: int) -> None:
         for index, (label, active) in enumerate(effects):
             rect = QRectF(origin.x() + index * 26 * scale, origin.y(), 24 * scale, 24 * scale)
             self._sprite(painter, "effect_background", rect)
-            label_w = self.font.logical_width(label) * scale
-            self.font.draw(painter, rect.center().x() - label_w * 0.5, rect.top() + 8 * scale, label, QColor("#55ff55") if active else QColor("#ff5555"), scale)
+            label_w = self._display_text_width(label) * scale
+            _draw_display_text(self, painter, rect.center().x() - label_w * 0.5, rect.top() + 8 * scale, label, QColor("#55ff55") if active else QColor("#ff5555"), scale)
 
     def append_drop_overlay(
         self,
@@ -646,6 +773,8 @@ class MinecraftCombatHudRenderer:
         font: Any,
         scale_override: str = "Auto",
         scale_multiplier: float = 1.0,
+        *,
+        registry: Any = None,
     ) -> MinecraftHudLayout:
         """Append an exact hotbar drop target to either GPU/compat draw list."""
 
@@ -676,5 +805,5 @@ class MinecraftCombatHudRenderer:
             commands.text(QRectF(slot.left(), slot.top(), 8 * scale, 8 * scale), str(index + 1), font, QColor("#ffff55"), Qt.AlignmentFlag.AlignCenter)
         ghost = QRectF(point.x() + 14.0, point.y() + 10.0, 190.0, 28.0)
         commands.rect(ghost, 3.0, QColor(0, 0, 0, 175), QColor(255, 255, 255, 90), 1.0)
-        commands.text(ghost.adjusted(8.0, 0.0, -8.0, 0.0), f"DROP {dragged_name}", font, QColor("#ffffff"), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        commands.text(ghost.adjusted(8.0, 0.0, -8.0, 0.0), hud_template("DROP {name}", chinese_enabled(registry), name=hud_module_name(dragged_name, chinese_enabled(registry))), font, QColor("#ffffff"), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         return layout

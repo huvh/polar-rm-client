@@ -6,18 +6,20 @@ the existing GPU target layer. No glass material, shader or video path changes.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from collections import OrderedDict
 from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import QPointF, QRectF, Qt
-from PySide6.QtGui import QColor, QFont, QImage, QPainter, QPen
+from PySide6.QtGui import QColor, QFont, QImage, QPainter, QPen, QTextLayout, QTextOption
 
 from ..student_ui import active_buffs, damage_rows, device_rows, number, presentation_data, settlement_rows, value_text
 from .clickgui_gpu import ClickGuiDrawList
 from .animation import Easings
 from .jello_clickgui import JelloMainTimeline
-from .jello_locale import module_label, chinese_enabled
+from .jello_locale import module_label, setting_label, option_label, chinese_enabled
 from .minecraft_presentation import MinecraftItemAtlas
+from .fonts import draw_ui_text, elide_ui_text, has_cjk, ui_font_key
 
 
 @dataclass(frozen=True)
@@ -81,6 +83,24 @@ class StudentPanelRenderer:
         self._status_key = None
         self._status_image = QImage()
         self.status_rebuilds = 0
+        self._inventory_tooltips = OrderedDict()
+
+    @staticmethod
+    def inventory_font(size: float, scale: float) -> QFont:
+        """Readable CJK at destination DPI, never a shrunken 16-row bitmap.
+
+        ASCII-only labels/items retain the game bitmap below. Chinese inventory
+        labels use a real Regular face, shaped as a whole line. Pixel size avoids
+        the old point-size -> 8px atlas conversion and accidental double scaling.
+        """
+        font = QFont()
+        font.setFamilies(["Microsoft YaHei UI", "Microsoft YaHei", "DengXian", "sans-serif"])
+        font.setStyleName("Regular")
+        font.setWeight(QFont.Weight.Normal)
+        font.setPixelSize(max(14 if size <= 6 else 16, round(8*scale if size <= 6 else size*scale*96/72)))
+        font.setStyleStrategy(QFont.StyleStrategy.PreferAntialias)
+        font.setHintingPreference(QFont.HintingPreference.PreferFullHinting)
+        return font
 
     @staticmethod
     def font(host: Any, size: float, medium: bool = False) -> QFont:
@@ -95,6 +115,10 @@ class StudentPanelRenderer:
             module = host.registry.get("MinecraftCombatHUD")
             desired = host.minecraft_hud.layout(width, height, host.setting_mode(module, "GUI Scale", "Auto"),
                 scale_multiplier=host.get_setting_number(module, "Scale Multiplier", 1.0)).scale
+            if state.panel == "inventory":
+                # A modal editor must remain readable even with a tiny combat
+                # HUD multiplier. Only this editor gets the 2x readability floor.
+                desired = max(2.0, desired)
             logical_w,logical_h = (190,220) if state.panel=="inventory" else (280,170)
             scale = min(desired, (width - 32) / logical_w, (height - 32) / logical_h)
             w, h = logical_w * scale, logical_h * scale
@@ -113,6 +137,8 @@ class StudentPanelRenderer:
         offset = (1 - progress) * 18 * scale
         panel = panel.translated(0, offset)
         dpr = host.devicePixelRatioF()
+        if state.panel in {"inventory", "damage"} and state.progress >= 0.999:
+            panel.moveTopLeft(QPointF(round(panel.x()*dpr)/dpr, round(panel.y()*dpr)/dpr))
         module = host.registry.get("SkillConfiguration")
         key = (state.panel, round(panel.width(), 2), round(panel.height(), 2), round(dpr, 2),
                state.page, state.category, state.selected, state.selected_slot, state.gate, state.quantity, state.dart_target, state.note,
@@ -158,7 +184,12 @@ class StudentPanelRenderer:
                     # SourceIn recolouring would wrongly create a white glow.
                     self._shadow_images[item.source] = QImage(item.source)
                 p.drawImage(item.rect,self._shadow_images[item.source])
-        p.drawImage(image_rect, self._cache_image)
+        if state.panel in {"inventory", "damage"}:
+            # Blit the DPR-tagged cache 1:1. Stretching a rounded physical image
+            # back to a fractional logical rect resampled already-rasterized text.
+            p.drawImage(image_rect.topLeft(), self._cache_image)
+        else:
+            p.drawImage(image_rect, self._cache_image)
         host.hotspots.clear()
         if state.opened and state.progress >= 0.65:
             # A student modal owns the complete hit list. Background hotkeys and
@@ -184,10 +215,13 @@ class StudentPanelRenderer:
         elif state.opened and state.progress >= 0.99:
             hit = next((h for h in reversed(host.hotspots) if h.rect.contains(host.hover_point) and h.tooltip),None)
             if hit:
-                tooltip=QRectF(min(host.hover_point.x()+12,max(4,width-474)),
-                               min(host.hover_point.y()+22,height-44),min(470,width-8),32)
-                p.fillRect(tooltip,QColor(16,0,28,242))
-                self.text(host,p,tooltip.adjusted(8,0,-8,0),hit.tooltip,10,1,"#ffffff")
+                if state.panel == "inventory" and has_cjk(hit.tooltip):
+                    self.inventory_tooltip(p, hit.tooltip, host.hover_point, width, height)
+                else:
+                    tooltip=QRectF(min(host.hover_point.x()+12,max(4,width-474)),
+                                   min(host.hover_point.y()+22,height-44),min(470,width-8),32)
+                    p.fillRect(tooltip,QColor(16,0,28,242))
+                    self.text(host,p,tooltip.adjusted(8,0,-8,0),hit.tooltip,10,1,"#ffffff")
         p.restore()
 
     def content_rows(self, host: Any) -> tuple[tuple[str, str], ...]:
@@ -213,6 +247,16 @@ class StudentPanelRenderer:
         return ()
 
     def text(self, host: Any, p: QPainter, rect: QRectF, text: str, size: float, scale: float, color: str = "#333333", medium: bool = False, align=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter) -> None:
+        if host.student_ui.panel == "inventory" and has_cjk(text):
+            font = self.inventory_font(size, scale)
+            visible = elide_ui_text(font, text, rect.width(), p.device())
+            p.save()
+            p.setClipRect(rect, Qt.ClipOperation.IntersectClip)
+            p.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
+            p.setPen(QColor(color))
+            draw_ui_text(p, rect, visible, font, align, ink_center=True)
+            p.restore()
+            return
         if host.student_ui.panel in {"inventory", "damage"}:
             pixel_scale=scale if host.student_ui.panel=="inventory" and size<=6 else size*scale*96/72/8
             host.minecraft_hud.styled_font.draw(p,rect,text,pixel_scale,align,
@@ -225,6 +269,57 @@ class StudentPanelRenderer:
             font.setStyleName("Regular")
             font.setWeight(QFont.Weight.Normal)
         host.draw_text(p, rect, text, font, QColor(color), align)
+
+    def inventory_tooltip(self, p: QPainter, text: str, point: QPointF, width: int, height: int) -> QRectF:
+        """Bounded, wrapped MC tooltip with native-DPI CJK and its dark border."""
+        font = self.inventory_font(12, 1)
+        content_width = max(32.0, min(480.0, width-32.0))
+        key = (text, content_width, ui_font_key(font, p.device()))
+        cached = self._inventory_tooltips.get(key)
+        if cached is None:
+            layout = QTextLayout(text, font, p.device())
+            layout.setCacheEnabled(True)
+            option = QTextOption()
+            option.setWrapMode(QTextOption.WrapMode.WrapAtWordBoundaryOrAnywhere)
+            layout.setTextOption(option)
+            layout.beginLayout()
+            y, used_width = 0.0, 0.0
+            while True:
+                line = layout.createLine()
+                if not line.isValid():
+                    break
+                line.setLineWidth(content_width)
+                line.setPosition(QPointF(0, y))
+                used_width = max(used_width, line.naturalTextWidth())
+                y += line.height()+2
+            layout.endLayout()
+            cached = layout, used_width, y
+            self._inventory_tooltips[key] = cached
+            while len(self._inventory_tooltips) > 32:
+                self._inventory_tooltips.popitem(last=False)
+        self._inventory_tooltips.move_to_end(key)
+        layout, text_width, text_height = cached
+        box = QRectF(0, 0, min(width-8, text_width+16), min(height-8, text_height+12))
+        x, y = point.x()+12, point.y()+18
+        if x+box.width() > width-4: x = point.x()-box.width()-12
+        if y+box.height() > height-4: y = point.y()-box.height()-12
+        dpr = p.device().devicePixelRatioF()
+        box.moveTopLeft(QPointF(round(max(4, min(width-box.width()-4, x))*dpr)/dpr,
+                               round(max(4, min(height-box.height()-4, y))*dpr)/dpr))
+        p.save()
+        p.fillRect(box, QColor(16, 0, 28, 248))
+        p.setPen(QPen(QColor("#502080"), 1))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawRect(box.adjusted(.5, .5, -.5, -.5))
+        p.setClipRect(box.adjusted(7, 5, -7, -5), Qt.ClipOperation.IntersectClip)
+        p.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
+        origin = box.topLeft()+QPointF(8, 6)
+        p.setPen(QColor("#303030"))
+        layout.draw(p, origin+QPointF(1, 1))
+        p.setPen(QColor("#ffffff"))
+        layout.draw(p, origin)
+        p.restore()
+        return box
 
     def button(self, host: Any, p: QPainter, rect: QRectF, label: str, scale: float, hits: list[PanelHit], action: str, payload: Any = None, primary: bool = False, pixel: bool = False) -> None:
         p.setPen(Qt.PenStyle.NoPen)
@@ -315,11 +410,11 @@ class StudentPanelRenderer:
         # Keep the original survival inventory silhouette/slots. Replace the
         # crafting recipes with a clearly labelled skill-workbench shortcut.
         # The original player well stays empty: no Steve, portrait or mascot.
-        self.text(host,p,r(94,5,76,10),"技能/性能",4,s)
+        self.text(host,p,r(94,4,76,12),"技能/性能",4,s,"#252525")
         mod=host.registry.get("SkillConfiguration")
         for i,(name,item) in enumerate((("Chassis Points","ChassisAssist"),("Shooter Points","FrictionWheel"),("Shooter Draft","ArmorAutoAim"),("Chassis Draft","PowerGuard"))):
             col,row=i%2,i//2;cell=r(98+18*col,18+18*row,16,16)
-            p.drawImage(cell,self.items.image(item));hits.append(PanelHit(cell,"student_open","skills",name))
+            p.drawImage(cell,self.items.image(item));hits.append(PanelHit(cell,"student_open","skills",setting_label(name,chinese_enabled(host.registry))))
         output=r(154,28,16,16);p.drawImage(output,self.items.image("SkillConfiguration"))
         hits.append(PanelHit(output,"student_open","skills","打开技能 / 性能配置"))
         self.text(host,p,r(95,56,77,12),"可分配点: "+value_text(presentation_data(host.state).get("assignable_points")),3.7,s)
@@ -340,7 +435,7 @@ class StudentPanelRenderer:
                 p.drawImage(cell,self.items.image(name,module.category if module else "System"))
             if i==host.student_ui.selected_slot:
                 p.setBrush(Qt.BrushStyle.NoBrush);p.setPen(QPen(QColor("#55ffff"),max(1,s/2)));p.drawRect(cell)
-            hits.append(PanelHit(cell,"student_slot",i,f"{i+1}: {module_label(name,chinese_enabled(host.registry))} · 点击分配，右键清空"))
+            hits.append(PanelHit(cell,"student_slot",i,f"{i+1}: {option_label(name,chinese_enabled(host.registry))} · 点击分配，右键清空"))
         self.button(host,p,QRectF(7*s,205*s,30*s,12*s),"上一页",s,hits,"student_page",-1,pixel=True)
         self.text(host,p,QRectF(40*s,205*s,110*s,12*s),f"{host.student_ui.page+1}/{max_page+1}  E / Esc 关闭",4,s,"#ffffff",align=Qt.AlignmentFlag.AlignCenter)
         self.button(host,p,QRectF(153*s,205*s,30*s,12*s),"下一页",s,hits,"student_page",1,pixel=True)

@@ -407,7 +407,13 @@ def test_bridge_gates_mutex() -> None:
         check("换真发闸不该每 tick 重建句柄",
               (manager.tick_polar_link(state, registry, br3), br3.dt7_link is manager._dt7_link)[1])
         module.get_setting("DT7 Real TX").value = False      # 回到 mock，测试绝不碰硬件
+        retiring = br3.dt7_link
         manager.tick_polar_link(state, registry, br3)
+        # Real writers retire on their owning worker, never by blocking a UI
+        # tick. Wait only in this offline test, then process the next tick.
+        if getattr(retiring, "asynchronous", False):
+            check("异步写线程有界退出", retiring.wait_closed(2.0))
+            manager.tick_polar_link(state, registry, br3)
         live = br3.dt7_link
         live._next_due = 0.0
         n0 = live.sent

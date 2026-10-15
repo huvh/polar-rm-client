@@ -286,6 +286,7 @@ class KeyboardControlBridge:
         self.mouse_x = 0
         self.mouse_y = 0
         self.mouse_z = 0
+        self._mouse_remainder = (0.0, 0.0)
         self.left_button_down = False
         self.right_button_down = False
         self.mid_button_down = False
@@ -371,10 +372,21 @@ class KeyboardControlBridge:
         self._dirty = True
         return self.send_from_state(state, registry)
 
-    def add_mouse_motion(self, dx: float, dy: float) -> None:
-        self.mouse_x = self._clamp_i32(self.mouse_x + int(round(dx)))
+    def add_mouse_motion(self, dx: float, dy: float, sensitivity: float = 1.0,
+                         invert_y: bool = False) -> None:
+        # Only local Qt motion uses this transform. DT7/native input remains raw.
+        # Retain fractions so low sensitivity does not discard each 1px event.
+        if not all(math.isfinite(float(v)) for v in (dx, dy, sensitivity)):
+            return
+        gain = max(0.05, min(10.0, float(sensitivity)))
+        rx, ry = self._mouse_remainder
+        x = rx + float(dx) * gain
+        y = ry + float(dy) * gain * (-1.0 if invert_y else 1.0)
+        ix, iy = int(round(x)), int(round(y))
+        self._mouse_remainder = (x - ix, y - iy)
+        self.mouse_x = self._clamp_i32(self.mouse_x + ix)
         # Qt y 向下为正；官方协议 y 负值表示向下，故取反。
-        self.mouse_y = self._clamp_i32(self.mouse_y - int(round(dy)))
+        self.mouse_y = self._clamp_i32(self.mouse_y - iy)
         self._dirty = True
 
     def add_wheel(self, delta: float) -> None:
@@ -385,6 +397,7 @@ class KeyboardControlBridge:
         for key in self.key_state:
             self.key_state[key] = False
         self.mouse_x = self.mouse_y = self.mouse_z = 0
+        self._mouse_remainder = (0.0, 0.0)
         self.left_button_down = self.right_button_down = self.mid_button_down = False
         self._dirty = True
 
@@ -549,7 +562,8 @@ class KeyboardControlBridge:
             return
         self.cc_last_error = "" if ok else str(why)
         if ok:
-            self.cc_sent += 1
+            self.cc_sent = (self.cc_link.sent if getattr(self.cc_link, "asynchronous", False)
+                            else self.cc_sent + 1)
         elif not names and not command.left_button_down and not command.right_button_down:
             self.cc_release_pending = True
         self.cc_dropped_keys = list(getattr(self.cc_link, "dropped_keys", []) or [])
@@ -615,7 +629,10 @@ class KeyboardControlBridge:
             return
         self.dt7_last_error = "" if ok else str(why)
         if ok:
-            self.dt7_sent += 1
+            if getattr(self.dt7_link, "asynchronous", False):
+                self.dt7_sent = self.dt7_link.sent  # queued is not delivered
+            else:
+                self.dt7_sent += 1
             self.dt7_release_pending = False
         else:
             # "内容合法但没落地"（被 max_hz 挡 / 写口失败）的中立帧要一直补发；

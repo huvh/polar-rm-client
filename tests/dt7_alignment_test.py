@@ -260,13 +260,29 @@ def test_integration(root):
     manager.tick_polar_link(state, registry, control)
     check(keys(output[-1]) == 0 and manager.safety.control_state == ControlState.LOCKED, "port replacement neutralizes old writer then locks")
     check(manager._dt7_link is not link and not control.dt7_enabled, "new port remains locked")
-    manager._dt7_link.write_bytes = output.append  # no real port on cleanup
+    current = manager._dt7_link
+    # Port replacement now creates the production async facade. Inject the
+    # writer into its codec, not a shadow attribute on the facade; no COM opens.
+    getattr(current, "_link", current).write_bytes = output.append
     manager.safety.arm_match({"core_kmc", "dt7_control"})
     manager.tick_polar_link(state, registry, control)
-    manager.qualification.session.tests["dt7_robot_safety_test"].recorded_at = time.time()-86401
-    check(not manager._dt7_link.send(pressed_bits=1)[0], "expiry checked again at each physical send")
-    check(manager.safety.control_state == ControlState.LOCKED, "expiry locks without waiting for next manager tick")
+    before = len(output)
+    # Queue acceptance is NOT physical delivery. Advance the wall clock while
+    # retaining authenticated records, then observe the actual worker outcome.
+    with patch("rm_client.backend.qualification.time.time", return_value=time.time()+86401):
+        accepted, _ = current.send(pressed_bits=1)
+        if getattr(current, "asynchronous", False):
+            deadline = time.perf_counter()+2
+            while time.perf_counter() < deadline and manager.safety.control_state != ControlState.LOCKED:
+                current.poll()
+                time.sleep(.005)
+        else:
+            check(not accepted, "synchronous writer refuses expired evidence immediately")
+    check(all(keys(frame) == 0 for frame in output[before:]), "expired evidence emits no physical motion frame")
+    check(manager.safety.control_state == ControlState.LOCKED, "worker expiry notification locks without a manager tick")
     manager.shutdown()
+    if getattr(current, "asynchronous", False):
+        check(current.wait_closed(2), "async fixture worker exits after neutral cleanup")
 
 
 def test_lab_debug_drive(root):

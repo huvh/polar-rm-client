@@ -6,6 +6,7 @@ from pathlib import Path
 import math
 import struct
 import sys
+import threading
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
@@ -171,6 +172,35 @@ class ControllerAngleIntegrationTests(unittest.TestCase):
                                                self.robot, True, False)
         self.assertFalse(control.cc_enabled)
         self.assertIn("串口", control.cc_last_error)
+
+    def test_angle_sync_precedes_egress_even_when_polar_is_busy_or_closing(self):
+        # Integration of PR 9's nonblocking UI path and PR 11's independent
+        # angle relay: an occupied POLAR lock must not bypass angle revocation.
+        tick = manager_method("tick_polar_link")
+        for closing in (False, True):
+            with self.subTest(closing=closing):
+                self.enable(mock=True)
+                self.angles.enabled = False
+                events = []
+                lock = threading.Lock()
+                self.manager.polar = SimpleNamespace(_stopping=closing, _intent_lock=lock)
+                self.manager.polar_bridge = SimpleNamespace(active=False)
+                self.manager._poll_device_writers = lambda control: events.append("poll")
+
+                def sync(registry):
+                    events.append("angles")
+                    return self.sync(self.manager, registry)
+
+                self.manager._sync_controller_angles = sync
+                self.manager._configure_device_egress = lambda registry, control: events.append("egress")
+                self.manager._tick_polar_link_ready = lambda *args: self.fail("busy transport was entered")
+                lock.acquire()
+                try:
+                    tick(self.manager, registry=self.registry)
+                finally:
+                    lock.release()
+                self.assertEqual(events, ["poll", "angles", "egress"])
+                self.assertFalse(self.link.stats()["enabled"])
 
     def test_ui_action_dispatch_arms_and_disarms_real_relay_in_mock(self):
         # Exercise the actual UI method without creating a Qt window.

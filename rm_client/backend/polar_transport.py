@@ -186,6 +186,12 @@ class PolarLinkTransport:
         self._intent: PolarDriveIntent | None = None
         self._intent_lock = threading.RLock()
         self._lifecycle_lock = threading.RLock()
+        self._connect_generation = 0
+        self._connecting = False
+        self._stopping = False
+        self._request_lock = threading.Lock()
+        self._stopper_thread: threading.Thread | None = None
+        self._connector_thread: threading.Thread | None = None
 
         self._rx: deque[PolarSegment] = deque(maxlen=256)
         self._rx_lock = threading.Lock()
@@ -234,87 +240,175 @@ class PolarLinkTransport:
         return self.connected and self.last_segment_at > 0.0 and self.link_age_s <= 2.0
 
     # ------------------------------------------------------------------
+    def _connection_config(self) -> tuple[Any, ...]:
+        return (str(self.transport or "serial").strip().lower(), self.port,
+                self.baud, self.host, self.tcp_port, self.stream_opener,
+                self.mock_writes)
+
+    def _claim_start_locked(self) -> tuple[int, tuple[Any, ...]] | None:
+        if (self._stopping or self._connecting or self._running
+                or (self._thread is not None and self._thread.is_alive())):
+            return None
+        self._connecting = True
+        self._connect_generation += 1
+        return self._connect_generation, self._connection_config()
+
     def start(self) -> None:
+        """Synchronous compatibility API; UI callers should use request_start()."""
         with self._lifecycle_lock:
-            self._start_locked()
+            attempt = self._claim_start_locked()
+        if attempt is not None:
+            self._connect_attempt(*attempt)
 
-    def _start_locked(self) -> None:
-        if self._running or (self._thread is not None and self._thread.is_alive()):
+    def request_start(self) -> None:
+        """Request connection without doing enumeration or I/O on the caller.
+
+        At most one connector owns an open attempt, including after cancellation.
+        Callers may retry once it finishes; requests never queue additional opens.
+        """
+        if not self._lifecycle_lock.acquire(blocking=False):
             return
-        # "Auto" 在每次尝试连接时重新解析：操作员常常是先启动客户端、后插机器人。
-        mode = str(self.transport or "serial").strip().lower()
-        if mode in ("tcp", "wifi", "bridge"):
-            # TCP 模式下"没配串口端口"不是错误：地址才是它的路。
-            # 以前这里会被上面的 Stub 判断直接挡掉，于是 D 路永远连不上。
-            if not str(self.host or "").strip():
-                self.connected = False
-                self.resolved_port = ""
-                self.last_error = "TCP 模式要填桥接主机地址（车上小电脑的 IP）"
-                self.last_error_code = "NO_BRIDGE_HOST"
-                return
-            resolved = f"tcp://{self.host}:{self.tcp_port}"
-        else:
-            resolved = resolve_polar_port(self.port)
-            if resolved in ("", "Stub", "stub", "None", "none"):
-                self.connected = False
-                self.resolved_port = ""
-                if str(self.port).strip().lower() == "auto":
-                    self.last_error = "未找到机器人 USB 串口（可重试，或在 RobotLink.Port 里显式选口）"
-                    self.last_error_code = "NO_ROBOT_USB"
-                else:
-                    self.last_error = "未配置真实机器人串口（Stub）"
-                    self.last_error_code = "PORT_STUB"
-                return
-        self.resolved_port = resolved
         try:
-            from . import serial_stream as stream
+            attempt = self._claim_start_locked()
+            if attempt is None:
+                return
+            worker = threading.Thread(target=self._connect_attempt, args=attempt,
+                                      name="polar-connect", daemon=True)
+            self._connector_thread = worker
             try:
-                self._serial = stream.open_stream(
-                    mode, port=resolved, baud=self.baud, host=self.host,
-                    tcp_port=self.tcp_port, serial_opener=self.stream_opener)
+                worker.start()
             except Exception as exc:
-                if mode in ("tcp", "wifi", "bridge"):
-                    self.last_error = f"连不上车端桥 {resolved}：{exc}"
-                    self.last_error_code = "BRIDGE_UNREACHABLE"
-                else:
-                    self.last_error = f"{resolved}: {exc}"
-                    self.last_error_code = "PORT_BUSY"
-                self.connected = False
-                return
-            self.connected = bool(self._serial and getattr(self._serial, "is_open", False))
-            if not self.connected:
-                self._close_failed_stream()
-                self.last_error = f"链路 {resolved} 打开失败"
-                self.last_error_code = "PORT_OPEN_FAILED"
-                return
-            self.last_error = ""
-            self.last_error_code = ""
-        except Exception as exc:  # pragma: no cover - 依赖硬件
-            self.connected = False
-            self.last_error = f"{resolved}: {exc}"
-            self.last_error_code = "PORT_BUSY"
-            return
+                self._connecting = False
+                self._connector_thread = None
+                self.last_error = str(exc)
+                self.last_error_code = "THREAD_START_FAILED"
+        finally:
+            self._lifecycle_lock.release()
 
-        self._rx_buffer.clear()
-        with self._rx_lock:
-            self._rx.clear()
-        self.last_segment_at = 0.0
-        with self._intent_lock:
-            self._intent = None
-            self._spin_cmd = SPIN_CMD_NONE
-            self._gimbal_host_request = 0
-            self._drive_was_armed = False
-        self._running = True
-        self._stop.clear()
-        self._thread = threading.Thread(target=self._loop, name="polar-link", daemon=True)
+    def _connect_attempt(self, generation: int, config: tuple[Any, ...]) -> None:
+        mode, port, baud, host, tcp_port, opener, _mock = config
+        opened = None
+        resolved = ""
+        error = ""
+        code = ""
         try:
-            self._thread.start()
+            # Both USB enumeration and TCP connect can block. Neither may hold
+            # the lifecycle lock needed by stop() to invalidate this attempt.
+            if mode in ("tcp", "wifi", "bridge"):
+                if not str(host or "").strip():
+                    error = "TCP 模式要填桥接主机地址（车上小电脑的 IP）"
+                    code = "NO_BRIDGE_HOST"
+                else:
+                    resolved = f"tcp://{host}:{tcp_port}"
+            else:
+                resolved = resolve_polar_port(port)
+                if resolved in ("", "Stub", "stub", "None", "none"):
+                    resolved = ""
+                    if str(port).strip().lower() == "auto":
+                        error = "未找到机器人 USB 串口（可重试，或在 RobotLink.Port 里显式选口）"
+                        code = "NO_ROBOT_USB"
+                    else:
+                        error = "未配置真实机器人串口（Stub）"
+                        code = "PORT_STUB"
+            if not code:
+                from . import serial_stream as stream
+                opened = stream.open_stream(mode, port=resolved, baud=baud,
+                                            host=host, tcp_port=tcp_port,
+                                            serial_opener=opener)
+                if not (opened and getattr(opened, "is_open", False)):
+                    error = f"链路 {resolved} 打开失败"
+                    code = "PORT_OPEN_FAILED"
         except Exception as exc:
-            self._running = False
-            self._thread = None
-            self.last_error = str(exc)
-            self.last_error_code = "THREAD_START_FAILED"
-            self._close_failed_stream()
+            if mode in ("tcp", "wifi", "bridge"):
+                error = f"连不上车端桥 {resolved}：{exc}"
+                code = "BRIDGE_UNREACHABLE"
+            else:
+                error = f"{resolved}: {exc}"
+                code = "PORT_BUSY"
+        try:
+            with self._lifecycle_lock:
+                # A stop or configuration change revokes ownership. The local
+                # handle has never been visible to TX and must simply close.
+                if (self._stopping or generation != self._connect_generation
+                        or config != self._connection_config()):
+                    return
+                self.resolved_port = resolved
+                self.last_error = error
+                self.last_error_code = code
+                if code:
+                    self.connected = False
+                    return
+                self._serial, opened = opened, None
+                self.connected = True
+                self._rx_buffer.clear()
+                with self._rx_lock:
+                    self._rx.clear()
+                self.last_segment_at = 0.0
+                with self._intent_lock:
+                    self._intent = None
+                    self._spin_cmd = SPIN_CMD_NONE
+                    self._gimbal_host_request = 0
+                    self._drive_was_armed = False
+                self._running = True
+                self._stop.clear()
+                self._thread = threading.Thread(target=self._loop, name="polar-link", daemon=True)
+                try:
+                    self._thread.start()
+                except Exception as exc:
+                    self._running = False
+                    self._thread = None
+                    self.last_error = str(exc)
+                    self.last_error_code = "THREAD_START_FAILED"
+                    self._close_failed_stream()
+        finally:
+            # Keep ownership until the rejected/failed handle has been closed.
+            if opened is not None:
+                try:
+                    opened.close()
+                except Exception:
+                    pass
+            with self._lifecycle_lock:
+                self._connecting = False
+                self._connector_thread = None
+
+    def request_estop(self) -> None:
+        """Latch neutral output without waiting for a stream write or flushing.
+
+        A write already inside the driver cannot be recalled. The TX worker
+        observes this latch before subsequent writes and sends the zero burst.
+        Do not take _intent_lock here: that lock deliberately spans driver I/O.
+        """
+        self._estop_active = True
+        self._intent = None
+        self._spin_cmd = SPIN_CMD_OFF
+        self._gimbal_host_request = 0
+        self._zeros_until = time.perf_counter() + ZERO_BURST_S
+
+    def request_stop(self) -> None:
+        """Latch now and close on one bounded cleanup worker, never on the UI."""
+        self.request_estop()
+        with self._request_lock:
+            if self._stopping:
+                return
+            self._stopping = True
+            worker = threading.Thread(target=self._finish_requested_stop,
+                                      name="polar-close", daemon=True)
+            self._stopper_thread = worker
+            try:
+                worker.start()
+            except Exception as exc:
+                self._stopping = False
+                self._stopper_thread = None
+                self.last_error = str(exc)
+                self.last_error_code = "THREAD_START_FAILED"
+
+    def _finish_requested_stop(self) -> None:
+        try:
+            self.stop()
+        finally:
+            with self._request_lock:
+                self._stopping = False
+                self._stopper_thread = None
 
     def stop(self) -> None:
         """先归零再断开；旧工作线程完全退出前禁止开启新连接。"""
@@ -322,6 +416,12 @@ class PolarLinkTransport:
             self._stop_locked()
 
     def _stop_locked(self) -> None:
+        self._connect_generation += 1
+        # Also discard controls submitted while an open was in flight.
+        with self._intent_lock:
+            self._intent = None
+            self._spin_cmd = SPIN_CMD_NONE
+            self._gimbal_host_request = 0
 
         if self._running or self._serial is not None:
             # Latch before flushing, so the background writer cannot put an

@@ -208,7 +208,8 @@ class NativePainterTests(unittest.TestCase):
         colors = []
         with patch("rm_client.ui.top_match_bar._skull", side_effect=lambda p, x, y, size, color: colors.append(color.name())):
             self.render()
-        self.assertEqual(colors, ["#f9faf7", "#f9faf7", "#dddddd"])
+        # Two live kill markers, plus the gray death badge and dead kill marker.
+        self.assertEqual(colors, ["#f9faf7", "#f9faf7", "#dddddd", "#dddddd"])
 
     def test_cached_avatar_change_takes_effect(self):
         a = QtGui.QImage(30, 10, QtGui.QImage.Format_ARGB32_Premultiplied)

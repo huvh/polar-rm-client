@@ -23,6 +23,7 @@ from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import QColor, QFont, QFontMetricsF, QImage, QPainter, QTransform
 
 from ..theme import color
+from ..fonts import draw_ui_text, elide_ui_text, has_cjk, ui_font_key, ui_text_advance
 
 __all__ = [
     "TextMetricsMixin",
@@ -121,26 +122,28 @@ class TextMetricsMixin:
     与文本/DPI），跨实例共享无正确性影响。原 __init__ 中三处赋值已删除。
     """
 
-    _text_metric_cache: dict[tuple[str, str], float] = {}
-    _font_height_cache: dict[str, float] = {}
-    _elide_cache: dict[tuple[str, str, int, int, int], str] = {}
+    _text_metric_cache: dict[tuple[object, ...], float] = {}
+    _font_height_cache: dict[tuple[object, ...], float] = {}
+    _elide_cache: dict[tuple[object, ...], str] = {}
 
     def font(self, key: str, size: float, weight: QFont.Weight | None = None) -> QFont:
         return self.fonts.font(key, max(1.0, size), weight)
 
     def text_advance(self, font: QFont, text: str) -> float:
-        """Cached QFontMetricsF.horizontalAdvance.
+        """Cached shaped CJK width, or original QFontMetricsF Latin advance.
 
         A DirectWrite metrics query costs a fraction of a millisecond, and the
-        island/toasts/modlist re-measured the same strings every frame. The
-        value only depends on the font identity and the text, so cache it.
+        island/toasts/modlist re-measured the same strings every frame.
+        Include the full font identity and default-screen DPI in the key;
+        painter-specific elision uses that painter's device instead.
         """
 
         cache = self._text_metric_cache
-        key = (font.key(), text)
+        key = (ui_font_key(font), text)
         value = cache.get(key)
         if value is None:
-            value = float(QFontMetricsF(font).horizontalAdvance(text))
+            value = (ui_text_advance(font, text) if has_cjk(text) else
+                     float(QFontMetricsF(font).horizontalAdvance(text)))
             if len(cache) >= 8192:
                 cache.clear()
             cache[key] = value
@@ -148,7 +151,7 @@ class TextMetricsMixin:
 
     def font_line_height(self, font: QFont) -> float:
         """Cached QFontMetricsF.height — identical reasoning to text_advance."""
-        key = font.key()
+        key = ui_font_key(font)
         cache = self._font_height_cache
         value = cache.get(key)
         if value is None:
@@ -168,7 +171,10 @@ class TextMetricsMixin:
         p.setFont(font)
         p.setPen(c)
         clipped = self.elide(p, font, text, rect.width())
-        p.drawText(rect, int(flags), clipped)
+        if has_cjk(text):
+            draw_ui_text(p, rect, clipped, font, flags)
+        else:
+            p.drawText(rect, int(flags), clipped)
 
     def draw_glass_text(
         self,
@@ -215,6 +221,9 @@ class TextMetricsMixin:
                 raster_scale=1.0,
                 preserve_weight=True,
                 device_pixel_snap=True,
+                # The existing line atlas supports explicit Regular CJK runs
+                # with the same shaping policy as our CPU metrics/drawing.
+                text_profile="jello" if has_cjk(text) else None,
             )
             self._gpu_hud_commands.text(
                 mapped_main,
@@ -228,6 +237,7 @@ class TextMetricsMixin:
                 raster_scale=1.0,
                 preserve_weight=True,
                 device_pixel_snap=True,
+                text_profile="jello" if has_cjk(text) else None,
             )
             return
         self.draw_text(p, rect.translated(0.80, 0.95), text, font, color("#071018", 0.68), flags)
@@ -235,19 +245,19 @@ class TextMetricsMixin:
 
     def elide(self, p: QPainter, font: QFont, text: str, width: float) -> str:
         p.setFont(font)
-        width_px = max(1, int(width))
         device = p.device()
-        logical_dpi = int(device.logicalDpiX()) if device is not None else 96
-        device_ratio = int(round((device.devicePixelRatioF() if device is not None else 1.0) * 100.0))
-        key = (font.key(), str(text), width_px, logical_dpi, device_ratio)
+        key = (ui_font_key(font, device), str(text), float(width))
         cached = self._elide_cache.get(key)
         if cached is not None:
             return cached
-        result = p.fontMetrics().elidedText(
-            str(text),
-            Qt.TextElideMode.ElideRight,
-            width_px,
-        )
+        if width <= 0:
+            result = ""
+        elif has_cjk(str(text)):
+            result = elide_ui_text(font, str(text), width, device)
+        else:
+            result = p.fontMetrics().elidedText(
+                str(text), Qt.TextElideMode.ElideRight, max(1, int(width)),
+            )
         if len(self._elide_cache) >= 4096:
             self._elide_cache.pop(next(iter(self._elide_cache)), None)
         self._elide_cache[key] = result

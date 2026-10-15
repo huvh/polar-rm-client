@@ -65,7 +65,9 @@ python -m venv .venv
 
 ## 快捷键
 
-- `Right Shift` 或 `F8`：打开/关闭 ClickGUI。
+- 主 HUD 按 `Esc` 打开 Jello 二级菜单：继续、返回启动页、退出客户端（二次确认）；再次 `Esc` 关闭。已有输入框/弹窗优先处理 Esc。菜单不暂停遥测或安全监控，菜单键鼠不会下发为控制输入。见 [Esc 菜单说明](docs/escape_menu.md)。
+
+- `Right Shift` 或 `F8`：打开/关闭配置界面（ClickGUI）。Jello 界面左键点击面板外空白处也可关闭；面板标题、留白、控件和拖动不会误关。
 - `F9`：已停用，不再轮换 ClickGUI。
 - 长按 `Tab`：放大 `TacticalMap`；松开 `Tab` 后回到缩略小地图。修改 `TacticalMap` 模块绑定键后，新的绑定键也会作为长按查看键。
 - 启动页：`1/2/3` 选择运行场景，然后 `1/2` 选择 `RMUC7v7/RMUL3v3`；`Backspace` 返回场景选择。
@@ -224,6 +226,14 @@ PRM1 自瞄/小陀螺仍是独立 `LOCKED MOCK` 能力；客户端不提供自�
 
 ## 自包含现场候选包
 
+### 随源素材
+
+`assets/` 已包含客户端使用的 Jello/Minecraft 字体、图片、音效、GD656 特效、
+经用户确认再分发授权的 CS2 素材包，以及 Texas/Vending Machine 两段内置视频壁纸。
+正常 Git 克隆即可取得，无需额外复制开发机 `user_data`；CS2 本机覆盖包仍可选。
+版权与来源见 `THIRD_PARTY_NOTICES.md` 及各素材清单。个人配置、标定、日志、
+现场资格证据、自定义导入素材与 Release 压缩包不混入源代码提交。
+
 发布脚本以 PyInstaller 6.21 one-folder 方式构建，无需现场 Python、venv、
 pip 或网络。运行时只认可便携包 `bin/ffmpeg.exe`，OfficialEvent 还会校验
 FFmpeg 与 `BUILD_MANIFEST.json` 的哈希。
@@ -239,3 +249,4 @@ FFmpeg 与 `BUILD_MANIFEST.json` 的哈希。
 详见 `FIELD_CANDIDATE.md`。构建完成仅表示“现场候选版”；缺少真车、正式
 裁判系统、正式图传和双人签字证据时，结论必须保持
 `NOT READY FOR REAL MATCH`。
+

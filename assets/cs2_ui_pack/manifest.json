@@ -1,0 +1,277 @@
+{
+  "schema": 1,
+  "scope": "authorized-distribution",
+  "assets": {
+    "dots": {
+      "file": "dots.png",
+      "sha256": "cd1b24ddf365d84584b7317fbcc7ce8d04245be7c899b88efaea06768f73087b",
+      "source": "panorama/images/backgrounds/bluedots_large_png.vtex_c",
+      "source_sha256": "5021da9bb0c0fd542625abef4fc83b5da1c265a587212fbea55c46ff4bf34c91"
+    },
+    "skull": {
+      "file": "skull.png",
+      "sha256": "8a3b7b0693fa7f3b7737b49447478e3ee368de6b3c411397cdd39130e09f4c8b",
+      "source": "panorama/images/hud/teamcounter/teamcounter_skull_png.vtex_c",
+      "source_sha256": "953bb454591f992e004bd46bfeaad4ad30d4d68fb983ed6b94e7ad5aa59e3303"
+    },
+    "skull_teammate": {
+      "file": "skull_teammate.png",
+      "sha256": "01549d4e7c4476c3237e788ed00b0f6fb11f3394d2b41bbd2959fc4ef9b7a89f",
+      "source": "panorama/images/hud/teamcounter/teamcounter_skull-teammate_png.vtex_c",
+      "source_sha256": "19804f3465f325fd97a5661f31bde834a55dfa83464d52788a57293f2b1a4e88"
+    },
+    "alive_skull": {
+      "file": "alive_skull.png",
+      "sha256": "2f297fe3624ae22a6f99fb5a673c9fdb37ba647e3dbdfbe09ee1654bd477b6b7",
+      "source": "panorama/images/hud/teamcounter/teamcounter_aliveskull_png.vtex_c",
+      "source_sha256": "6f94b3ecc167e8a2b957bb4bac1f18fdbf0a5a632418358befe7af636d50644f"
+    },
+    "alive_blue": {
+      "file": "alive_blue.png",
+      "sha256": "343b7f96c82f98dac339ea0506ec3ef922b7b3c9717b94d454aa178d90ed9379",
+      "source": "panorama/images/hud/teamcounter/teamcounter_alivebgct_png.vtex_c",
+      "source_sha256": "3e61f9a38c9f05b7ae5baac8f8d9b9b17f470c15f3b832ef083723db96828d4e"
+    },
+    "alive_gold": {
+      "file": "alive_gold.png",
+      "sha256": "76af3f4baef4f54b40b2372aedbec07a27d6502ae04d0840b5d49c59fcd7e4cd",
+      "source": "panorama/images/hud/teamcounter/teamcounter_alivebgt_png.vtex_c",
+      "source_sha256": "d853c1d33566f992e8b2d9cfb230c8e3f4e127353bd8f259d9042cd90c069993"
+    },
+    "money": {
+      "file": "money.png",
+      "sha256": "ce036ab0968b41be12db8f2dadd4b29d7c40ce1aa32296e2342c34c3e90822a2",
+      "source": "panorama/images/hud/chevron_money.vsvg_c",
+      "source_sha256": "bb19e17ddff32bb7e27a1d7f16710ad79b8012d4495901ccd1c288785649bac1"
+    },
+    "buy_icon": {
+      "file": "buy_icon.png",
+      "sha256": "447eb4ff4a52b6cf8bd91b38aba3dbadab381b21493ebf9ff8c3383ccd21a6ce",
+      "source": "panorama/images/icons/ui/buyzone.vsvg_c",
+      "source_sha256": "de3579e05f81e244b2a8b409f1a8b2bf2495ba922232430126c1dd3568df365f"
+    },
+    "buy_ammo": {
+      "file": "buy_ammo.png",
+      "sha256": "dabb72e34f82a06f2f401f10aafc8556812d1878c2bbae70b877b10ccb6f0839",
+      "source": "panorama/images/icons/equipment/ammobox.vsvg_c",
+      "source_sha256": "19809e4b7ea0fdab0138878f5c4272ee64336a10ba5a392bbc6f3e804966b784"
+    },
+    "buy_recovery": {
+      "file": "buy_recovery.png",
+      "sha256": "570315331912c63553abe165803c3269773be46780fe129dd709784d51d392f3",
+      "source": "panorama/images/icons/equipment/healthshot.vsvg_c",
+      "source_sha256": "025af28d2595c7e55c2e2a44a5eba039388510ec305639865dc6867da3d1444a"
+    },
+    "buy_revive": {
+      "file": "buy_revive.png",
+      "sha256": "db0515577421de5cf852bce1a65fca251d6e209bd33c50e5a9138f539c96dd51",
+      "source": "panorama/images/icons/ui/refresh.vsvg_c",
+      "source_sha256": "e60a5a0f069ee97c01359765dcaabb9024be8f6e42a3f5269b9e213ee765b347"
+    },
+    "kill_flag": {
+      "file": "kill_flag.png",
+      "sha256": "99b94e05e574930319cec007e0c9f3f95444367479c5e45004a9bfcee929c34d",
+      "source": "panorama/images/icons/ui/kill.vsvg_c",
+      "source_sha256": "a5b12b597fdac54b822302fed20c79026b28e0cece06022d316c5d548af8e19a"
+    },
+    "elimination": {
+      "file": "elimination.png",
+      "sha256": "9442255f54c40168d9d00579e853872058466f7d0230c666111b9a2e0b64b9bd",
+      "source": "panorama/images/icons/ui/elimination.vsvg_c",
+      "source_sha256": "4a96a4bf1bf7fa8580be16683f276d476e0dcd4f3458b9ab4c871da3a7a58cb8"
+    },
+    "person": {
+      "file": "person.png",
+      "sha256": "33067be3b8dcd782e3b8a0ffecdf5ae596a36ecac079c68ed9a35afcc115f263",
+      "source": "panorama/images/icons/person.vsvg_c",
+      "source_sha256": "c3308aef2c3cd2ebeda119b248b90681f597dd0c9dd010a6329c3ed32c68ccc3"
+    },
+    "kill_mask": {
+      "file": "kill_mask.png",
+      "sha256": "98fd2a4ec65f7fb80e63be5f10e81326bc202231578b69a091c8b8517dfe8894",
+      "source": "panorama/images/hud/kill_mask.vsvg_c",
+      "source_sha256": "23cb820b4bb679b7bc17792d01f672f5a0ed9889f08b2a93db4adb2014cde5b1"
+    },
+    "kill_1": {
+      "file": "kill_1.png",
+      "sha256": "4ff5892759d232cd23d510a9267d842f5e469e5f258961bc5b44a6a890dd615d",
+      "source": "panorama/images/hud/kill_1.vsvg_c",
+      "source_sha256": "29f0dceeb0f6f153d92a5604655a0ee1a167194e63a0818348d7c9d89dde5b4b"
+    },
+    "kill_2": {
+      "file": "kill_2.png",
+      "sha256": "4ff5892759d232cd23d510a9267d842f5e469e5f258961bc5b44a6a890dd615d",
+      "source": "panorama/images/hud/kill_2.vsvg_c",
+      "source_sha256": "d45b28fa5d15ab3b3bec0da8f062af55e8185dae712ccf1d07da498d5acf9722"
+    },
+    "kill_3": {
+      "file": "kill_3.png",
+      "sha256": "4ff5892759d232cd23d510a9267d842f5e469e5f258961bc5b44a6a890dd615d",
+      "source": "panorama/images/hud/kill_3.vsvg_c",
+      "source_sha256": "d60d52bbfaac2134ea276309e581ef2bf952daed5fcff3ce3142ea980d0cfe40"
+    },
+    "kill_4": {
+      "file": "kill_4.png",
+      "sha256": "4ff5892759d232cd23d510a9267d842f5e469e5f258961bc5b44a6a890dd615d",
+      "source": "panorama/images/hud/kill_4.vsvg_c",
+      "source_sha256": "e7b9e7f3dbf9948219e21a58793dbb82b91de7418d66dbc6d9f18b6feb1367bc"
+    },
+    "kill_5": {
+      "file": "kill_5.png",
+      "sha256": "4ff5892759d232cd23d510a9267d842f5e469e5f258961bc5b44a6a890dd615d",
+      "source": "panorama/images/hud/kill_5.vsvg_c",
+      "source_sha256": "309c4f7347cf97881a3fc1a2aecd5c81c8c3674dd7086afca80a266e802c3e45"
+    },
+    "kill_extra": {
+      "file": "kill_extra.png",
+      "sha256": "4ff5892759d232cd23d510a9267d842f5e469e5f258961bc5b44a6a890dd615d",
+      "source": "panorama/images/hud/kill_extra.vsvg_c",
+      "source_sha256": "ba00886c039df6f88ed7c9d8ecbc656ca9a8756950606dcb957201109682d1c6"
+    },
+    "kill_default": {
+      "file": "kill_default.png",
+      "sha256": "dc261688e8db4e646a0d44954ebf0b3ffb53236b56590db32d612569701db729",
+      "source": "panorama/images/hud/kill_pip_default.vsvg_c",
+      "source_sha256": "6596b8f2571eef8f5ef326b4eba1a6aa2c2f99d1760dfe480d802807ab002278"
+    },
+    "kill_headshot": {
+      "file": "kill_headshot.png",
+      "sha256": "e10e6e5b6ab68989813e267fac635a907116460d68074d250bed9f5a545103ac",
+      "source": "panorama/images/hud/kill_pip_headshot.vsvg_c",
+      "source_sha256": "e15319cf085e9b5dc9b24d74965925fd3033c7fbfaca6c4831f8c9df83ff9c26"
+    },
+    "kill_blast": {
+      "file": "kill_blast.png",
+      "sha256": "1f8593d9f219403122e0207e8883f18cfd3af15e6f9126193cc3a171dc8666e1",
+      "source": "panorama/images/hud/kill_pip_blast.vsvg_c",
+      "source_sha256": "fa98e1711a45d14833f91e78ac93e45c7e6ff76a8f861e9836937fa85c5bd6d1"
+    },
+    "kill": {
+      "file": "kill.wav",
+      "sha256": "f284301928c657d81d8ed21eed9c4b4be5785c9f0d01801427addcd25d70e1b6",
+      "source": "sounds/player/kill_doof_01.vsnd_c",
+      "source_sha256": "ce2d99e28b0806634934a3ac589f730afb67651caab43b68aedead11ef8ffae1"
+    },
+    "purchase": {
+      "file": "purchase.wav",
+      "sha256": "2d3fc480c9efefdb44ffe6a789689de3060a41e1b021e50164c0dbf01fcfa0c5",
+      "source": "sounds/ui/panorama/radial_menu_buy_03.vsnd_c",
+      "source_sha256": "0a24b6c647f3853578a80c37dd3e66c925dd2653c6c7241c4a04304603a9429b"
+    },
+    "cant_buy": {
+      "file": "cant_buy.wav",
+      "sha256": "47914d932e24745d712ac70c0f1d0c2153e8409a5e231035374eb2a8a48fe7f6",
+      "source": "sounds/ui/weapon_cant_buy.vsnd_c",
+      "source_sha256": "0f420da575dfb33d3c71c5a7f67f2a039ec2c432d084897309091a11ac54104e"
+    },
+    "buy_select": {
+      "file": "buy_select.wav",
+      "sha256": "542ab008b87f7108d267cae2cc50cc37d24c670040661bf565dd2d9a57dc125d",
+      "source": "sounds/ui/panorama/inventory_item_select_01.vsnd_c",
+      "source_sha256": "663d4ab826325a07a1bde34319014e377975d642400bbcbf9510a440294ecd6c"
+    },
+    "buy_hover": {
+      "file": "buy_hover.wav",
+      "sha256": "4e5016fb0ceddcaf5e1da8e58c0a9b142dfdd4913aac60c6b39c88907697e520",
+      "source": "sounds/ui/panorama/itemtile_rollover_09.vsnd_c",
+      "source_sha256": "594119514ff3081428bd48d11147084753cd8bc28e6d29ef1be1553174603940"
+    },
+    "font_regular": {
+      "file": "stratum2-regular.otf",
+      "sha256": "90ecdd027715d2132467e0fbe74052cbc04188771c932b1a3a86d0cf957ecce7",
+      "source": "game/csgo/panorama/fonts/stratum2.uifont",
+      "source_sha256": "d646bea1eb757ef5bfae083bfc721566098725d4d9fb82c75dbe0d802be05b02"
+    },
+    "font_bold": {
+      "file": "stratum2-bold.otf",
+      "sha256": "9c755aea2cd521482294b61dee5f74b25072d492698581f8cd7bd52020da5cbc",
+      "source": "game/csgo/panorama/fonts/stratum2.uifont",
+      "source_sha256": "d646bea1eb757ef5bfae083bfc721566098725d4d9fb82c75dbe0d802be05b02"
+    },
+    "font_condensed": {
+      "file": "stratum2condensed-bold.otf",
+      "sha256": "477da0d5e5d8be8765ecb9f347b431666527794dda589f0bba45fe0fa25d17cb",
+      "source": "game/csgo/panorama/fonts/stratum2.uifont",
+      "source_sha256": "d646bea1eb757ef5bfae083bfc721566098725d4d9fb82c75dbe0d802be05b02"
+    },
+    "font_mono": {
+      "file": "stratum2mono-bold.otf",
+      "sha256": "1c4cd53140d54b00dcbdbf5a85d689b7b1ccb357c4118c05acc72ed03731fa22",
+      "source": "game/csgo/panorama/fonts/stratum2.uifont",
+      "source_sha256": "d646bea1eb757ef5bfae083bfc721566098725d4d9fb82c75dbe0d802be05b02"
+    },
+    "font_timer": {
+      "file": "stratum2_tf_bold.otf",
+      "sha256": "297a5708f324dc7219ba85d652b4c8d6a63d04f93bfa63080691ae972f3e3df8",
+      "source": "game/csgo/panorama/fonts/stratum2.uifont",
+      "source_sha256": "d646bea1eb757ef5bfae083bfc721566098725d4d9fb82c75dbe0d802be05b02"
+    }
+  },
+  "source_files_before": {
+    "game\\csgo\\pak01_118.vpk": "229aab2b66e482042a3a27805232c3b91ba0a874c222b1db66c6385fffd95332",
+    "game\\csgo\\pak01_178.vpk": "58df885fab0db08f45d7a5aa805eb29a3f0f09e2437c9a157cdd040e6014757f",
+    "game\\csgo\\pak01_182.vpk": "90ab8b9f2fb1eab0e170c26ba0b4d4f20677946b0afbdd9c7ca72493d7147440",
+    "game\\csgo\\pak01_240.vpk": "b643de7b7e025b72394b77020382c5cc2c8e50768a58a7b598b4e5ef38b19e1c",
+    "game\\csgo\\pak01_255.vpk": "3b6b98b7e414eca11c08f01d43da3669661e1b9d1d8792c0fcd9a9ca54869eed",
+    "game\\csgo\\pak01_262.vpk": "b99af2bcc63631dba83007468636cb540be1e7d3236e711081b471ebd3f4153b",
+    "game\\csgo\\pak01_263.vpk": "23b296bb04ce622afe736f65d0658a7e0b6ea2bdc0894a8b3f8222519149c031",
+    "game\\csgo\\pak01_269.vpk": "a04dcb846d2775903ae3b2b610c4500b1d15eef14f468f836f48fda8f2e4b2dd",
+    "game\\csgo\\pak01_335.vpk": "150eb0dede0304ba745fed08383f411ebf8387dc2787c3b20d0ac5817196bc2b",
+    "game\\csgo\\pak01_353.vpk": "5596320e51a736757ce29ef5e18c62550e18118973d82555c2aa3aae3748e6ca",
+    "game\\csgo\\pak01_360.vpk": "4f5c2384c6903d68d89f672e576b8c959d450a4711acf0c5ea7797f2f07fd6ab",
+    "game\\csgo\\pak01_376.vpk": "be1760a4bdd7d3f1e950668bd5bf8be0309b34310f32b3c567eca0da5b0d2392",
+    "game\\csgo\\pak01_386.vpk": "ee1827b2c6db1d54f65e495cfa8e433f515c0f9732657ffc6236bbebfc041103",
+    "game\\csgo\\pak01_407.vpk": "878aed9d1e901f18909a019a908c02e047cabf6e35af7adf9342abb4ab77384f",
+    "game\\csgo\\pak01_408.vpk": "4ee5ee68225984871a50e547bdf6a51d69cab15bf92605c79cb7405eab2399b7",
+    "game\\csgo\\pak01_502.vpk": "f42799aa20148f38699bd676099ec4428a6463f4588e4abcf14c9c6544719865",
+    "game\\csgo\\pak01_dir.vpk": "48018be3f8da306ce9b48bf746bce08ceff19fe4dff15c9d5e2e53b3c3e9bbad",
+    "game\\csgo\\panorama\\fonts\\stratum2.uifont": "d646bea1eb757ef5bfae083bfc721566098725d4d9fb82c75dbe0d802be05b02"
+  },
+  "source_files_after": {
+    "game\\csgo\\pak01_118.vpk": "229aab2b66e482042a3a27805232c3b91ba0a874c222b1db66c6385fffd95332",
+    "game\\csgo\\pak01_178.vpk": "58df885fab0db08f45d7a5aa805eb29a3f0f09e2437c9a157cdd040e6014757f",
+    "game\\csgo\\pak01_182.vpk": "90ab8b9f2fb1eab0e170c26ba0b4d4f20677946b0afbdd9c7ca72493d7147440",
+    "game\\csgo\\pak01_240.vpk": "b643de7b7e025b72394b77020382c5cc2c8e50768a58a7b598b4e5ef38b19e1c",
+    "game\\csgo\\pak01_255.vpk": "3b6b98b7e414eca11c08f01d43da3669661e1b9d1d8792c0fcd9a9ca54869eed",
+    "game\\csgo\\pak01_262.vpk": "b99af2bcc63631dba83007468636cb540be1e7d3236e711081b471ebd3f4153b",
+    "game\\csgo\\pak01_263.vpk": "23b296bb04ce622afe736f65d0658a7e0b6ea2bdc0894a8b3f8222519149c031",
+    "game\\csgo\\pak01_269.vpk": "a04dcb846d2775903ae3b2b610c4500b1d15eef14f468f836f48fda8f2e4b2dd",
+    "game\\csgo\\pak01_335.vpk": "150eb0dede0304ba745fed08383f411ebf8387dc2787c3b20d0ac5817196bc2b",
+    "game\\csgo\\pak01_353.vpk": "5596320e51a736757ce29ef5e18c62550e18118973d82555c2aa3aae3748e6ca",
+    "game\\csgo\\pak01_360.vpk": "4f5c2384c6903d68d89f672e576b8c959d450a4711acf0c5ea7797f2f07fd6ab",
+    "game\\csgo\\pak01_376.vpk": "be1760a4bdd7d3f1e950668bd5bf8be0309b34310f32b3c567eca0da5b0d2392",
+    "game\\csgo\\pak01_386.vpk": "ee1827b2c6db1d54f65e495cfa8e433f515c0f9732657ffc6236bbebfc041103",
+    "game\\csgo\\pak01_407.vpk": "878aed9d1e901f18909a019a908c02e047cabf6e35af7adf9342abb4ab77384f",
+    "game\\csgo\\pak01_408.vpk": "4ee5ee68225984871a50e547bdf6a51d69cab15bf92605c79cb7405eab2399b7",
+    "game\\csgo\\pak01_502.vpk": "f42799aa20148f38699bd676099ec4428a6463f4588e4abcf14c9c6544719865",
+    "game\\csgo\\pak01_dir.vpk": "48018be3f8da306ce9b48bf746bce08ceff19fe4dff15c9d5e2e53b3c3e9bbad",
+    "game\\csgo\\panorama\\fonts\\stratum2.uifont": "d646bea1eb757ef5bfae083bfc721566098725d4d9fb82c75dbe0d802be05b02"
+  },
+  "decompiler_sha256": "a4bb4f9945db985efb2cad90a90d06867de5ba7e0447a2a4a69a07dace781028",
+  "decompiler": "ValveResourceFormat / Source2Viewer",
+  "style_hashes": {
+    "panorama/styles/hud/hudteamcounter.vcss_c": "a50e0b16a6870ae09d99f3db2f2be2ea4cb16b753219ed2223a24a1684e3907c",
+    "panorama/styles/hud/hudhealthammocenter.vcss_c": "1f3576771cb60015e44f74b650f4d4b814a711322d1a8af8a13b67069f724d92",
+    "panorama/styles/hud/huddeathnotice.vcss_c": "7a244a1e4b3a11f2650e41a9d5203beb158f3244be1b38bf49c2b2fde353592d",
+    "panorama/styles/buymenu.vcss_c": "d8a608e60e0024ecf821334e12d453b0f22fa463ad23ebe10d02057fbd4c4fc7",
+    "soundevents/game_sounds_ui.vsndevts_c": "b83fe9d339479c838b3b575cdaf9cb95875f19c4c5509d84336f73a8ee1b8c35"
+  },
+  "redistribution": {
+    "authorization": "Repository owner confirmed public redistribution rights for the supplied assets.",
+    "rights": "Original copyrights, trademarks and third-party license terms remain with their respective rights holders."
+  },
+  "additional_files": {
+    "buy_close.wav": {
+      "sha256": "2d3fc480c9efefdb44ffe6a789689de3060a41e1b021e50164c0dbf01fcfa0c5",
+      "usage": "Preserved offline-export variant; not loaded by the runtime allowlist."
+    },
+    "buy_open.wav": {
+      "sha256": "107d08b3ec73b95d7333e7c39315a4a545fd95553a6c127f6f8a7a1b9f21dc09",
+      "usage": "Preserved offline-export variant; not loaded by the runtime allowlist."
+    },
+    "kill_alt.wav": {
+      "sha256": "6326080f1bd9a11c6bf3d7e26eb6fdf6ad083606b4e403de7e280d4a1183a58e",
+      "usage": "Preserved offline-export variant; not loaded by the runtime allowlist."
+    }
+  }
+}

@@ -1,12 +1,13 @@
 """CS-style compact match strip rendered natively with PySide6/QPainter.
 
-Original vector robot portraits and glyphs; no Valve images, Steam avatars,
-web view, sockets, event handlers, focus, or actuator/control dependencies.
+Original robot portraits, optionally dressed with a preloaded personal CS2 UI
+pack. No Steam access, web view, input or actuator/control dependencies.
 """
 from __future__ import annotations
 
 from collections import OrderedDict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from functools import lru_cache
 import math
 from typing import Mapping
 
@@ -15,6 +16,9 @@ from PySide6.QtGui import QColor, QFont, QImage, QLinearGradient, QPainter, QPen
 
 from ..top_match_bar import LifeState, MatchBarFrame, MatchBarLayout, Rect, RobotCard, compute_layout
 from ..top_match_bar_motion import DEAD_CONTRAST, DEAD_OPACITY, kill_pop_scale
+from .match_strip_locale import match_alliance_text, match_role_text, match_strip_text
+from .fonts import cjk_ui_font, draw_ui_text, elide_ui_text, has_cjk, ui_text_advance
+from .cs2_assets import Cs2Assets
 
 
 @dataclass(frozen=True)
@@ -27,8 +31,11 @@ class TopMatchBarOptions:
     reduced_motion: bool = True  # Source motion requires an explicit preview opt-in.
     show_kills: bool = True
     show_scores: bool = True
-    show_health: bool = False  # Controller opts in for the integrated RM vehicle HUD.
+    show_health: bool = False  # Thin HP underline; no per-card telemetry paragraphs.
     font_family: str = "DejaVu Sans"
+    chinese: bool = False  # Standalone callers retain the original English view.
+    custom_roster_label: bool = False
+    local_assets: bool = True
 
 
 _ACCENTS = ("#eddb45", "#8ad8ee", "#ba81dd", "#54b494", "#e69548", "#bce074", "#df889f", "#7b94ce", "#d8bb90")
@@ -42,18 +49,48 @@ def _qr(rect: Rect) -> QRectF:
     return QRectF(rect.x, rect.y, rect.width, rect.height)
 
 
-def _font(family: str, size: float, *, bold: bool = False, condensed: bool = False) -> QFont:
+@lru_cache(maxsize=128)
+def _strip_layout(width: float, left_count: int, right_count: int, scale: float,
+                  top: float, safe_left: float, safe_right: float) -> MatchBarLayout:
+    # Only immutable geometry is cached. Telemetry and motion are painted live.
+    return compute_layout(width, left_count, right_count, scale=scale, top=top,
+                          safe_left=safe_left, safe_right=safe_right)
+
+
+@lru_cache(maxsize=256)
+def _cached_font(family: str, size: float, bold: bool, condensed: bool) -> QFont:
     font = QFont(family)
     font.setPixelSize(max(1, round(size)))
     font.setWeight(QFont.Bold if bold else QFont.Normal)
     if condensed:
-        font.setStretch(82)
+        if family == "Stratum2":
+            font.setStyleName("Bold Condensed" if bold else "Regular")
+        else:
+            font.setStretch(82)
     return font
+
+
+def _font(family: str, size: float, *, bold: bool = False, condensed: bool = False) -> QFont:
+    return QFont(_cached_font(family, size, bold, condensed))
+
+
+@lru_cache(maxsize=1024)
+def _label_font(family: str, size: float, text: str) -> QFont:
+    font = _font(family, size)
+    return cjk_ui_font(font) if has_cjk(text) else font
 
 
 def _text(p: QPainter, rect: QRectF, text: str, font: QFont, color: QColor, *, shadow: bool = True) -> None:
     p.setFont(font)
     flags = Qt.AlignCenter | Qt.TextSingleLine
+    if has_cjk(text):
+        text = elide_ui_text(font, text, rect.width(), p.device())
+        if shadow:
+            p.setPen(QColor(0, 0, 0, 210))
+            draw_ui_text(p, rect.translated(0, 1), text, font, flags, ink_center=True)
+        p.setPen(color)
+        draw_ui_text(p, rect, text, font, flags, ink_center=True)
+        return
     if shadow:
         p.setPen(QColor(0, 0, 0, 210))
         p.drawText(rect.translated(0, 1), flags, text)
@@ -98,18 +135,74 @@ class TopMatchBarRenderer:
     file/URL loading here. Recreating the renderer/reset_motion() clears animation
     state on source, match or scene transitions. No QTimer runs in the background.
     """
-    def __init__(self) -> None:
+    def __init__(self, assets: Cs2Assets | None = None) -> None:
+        self.resources = assets or Cs2Assets()
+        self._native = False
         self._portraits: OrderedDict[tuple[object, ...], tuple[QImage, QImage]] = OrderedDict()
+        self._avatar_layers: OrderedDict[tuple[object, ...], QImage] = OrderedDict()
+        self._text_layers: OrderedDict[tuple[object, ...], QImage] = OrderedDict()
         self._transitions: dict[int, LifeState] = {}
         self._kill_pops: dict[int, tuple[int, int, float]] = {}
-        self._panel: QImage | None = None
+        self._panels: dict[bool, QImage] = {}
+
+    def _skull(self, p: QPainter, x: float, y: float, size: float, color: QColor, *, dead=False) -> None:
+        asset = self.resources.tinted("elimination" if dead else "kill_flag", color) if self._native else QImage()
+        if not asset.isNull():
+            p.drawImage(QRectF(x, y, size, size), asset)
+        else:
+            _skull(p, x, y, size, color)
 
     def reset_motion(self) -> None:
         self._transitions.clear()
         self._kill_pops.clear()
 
-    def _portrait(self, card: RobotCard, supplied: QImage | None) -> tuple[QImage, QImage]:
-        key = (card.robot_id, card.label, supplied.cacheKey() if supplied is not None else 0)
+    def _paint_cached_text(self, p: QPainter, rect: QRectF, text: str, font: QFont,
+                           color: QColor, *, shadow: bool = True, fit: bool = False) -> None:
+        """Cache glyph pixels, not model fields; every call uses the live value.
+
+        Two logical pixels of padding preserve shadow/ink at small CJK sizes.
+        Effective painter density includes both HUD transforms and device DPR.
+        """
+        transform = p.deviceTransform()
+        density = max(1.0, math.hypot(transform.m11(), transform.m12()),
+                      math.hypot(transform.m21(), transform.m22()))
+        width, height = rect.width() + 4, rect.height() + 4
+        pixels = (math.ceil(width * density), math.ceil(height * density))
+        dpi = (p.device().logicalDpiX(), p.device().logicalDpiY())
+        key = (text, font.toString(), color.rgba(), shadow, fit, width, height, pixels, dpi)
+        layer = self._text_layers.get(key)
+        if layer is None:
+            layer = QImage(*pixels, QImage.Format_ARGB32_Premultiplied)
+            layer.fill(Qt.transparent)
+            layer.setDotsPerMeterX(round(dpi[0] / .0254))
+            layer.setDotsPerMeterY(round(dpi[1] / .0254))
+            ink = QPainter(layer)
+            try:
+                ink.setRenderHint(QPainter.Antialiasing)
+                ink.scale(pixels[0] / width, pixels[1] / height)
+                if fit:
+                    # Numeric model values must stay complete, including the
+                    # unknown clock's wide em dashes and a six-digit RM score.
+                    advance = ui_text_advance(font, text, layer)
+                    if advance > rect.width():
+                        font = QFont(font)
+                        font.setPixelSize(max(6, math.floor(font.pixelSize() * rect.width() / advance)))
+                    display = text
+                else:
+                    display = elide_ui_text(font, text, rect.width(), layer)
+                _text(ink, QRectF(2, 2, rect.width(), rect.height()), display,
+                      font, color, shadow=shadow)
+            finally:
+                ink.end()
+            self._text_layers[key] = layer
+            while len(self._text_layers) > 128:
+                self._text_layers.popitem(last=False)
+        else:
+            self._text_layers.move_to_end(key)
+        p.drawImage(rect.adjusted(-2, -2, 2, 2), layer)
+
+    def _portrait(self, card: RobotCard, supplied: QImage | None, *, chinese: bool = False) -> tuple[QImage, QImage]:
+        key = (card.robot_id, card.label, supplied.cacheKey() if supplied is not None else 0, chinese)
         if key in self._portraits:
             self._portraits.move_to_end(key)
             return self._portraits[key]
@@ -121,7 +214,7 @@ class TopMatchBarRenderer:
                                    (supplied.height() - edge) // 2, edge, edge)
             image = square.scaled(140, 140, Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
         else:
-            image = self._robot_portrait(card)
+            image = self._robot_portrait(card, chinese=chinese)
         gray = image.convertToFormat(QImage.Format_Grayscale8).convertToFormat(QImage.Format_ARGB32_Premultiplied)
         effect = QPainter(gray)
         try:
@@ -139,7 +232,7 @@ class TopMatchBarRenderer:
         return pair
 
     @staticmethod
-    def _robot_portrait(card: RobotCard) -> QImage:
+    def _robot_portrait(card: RobotCard, *, chinese: bool = False) -> QImage:
         """Original role-coded robot head/bust, generated by vector primitives."""
         image = QImage(140, 140, QImage.Format_ARGB32_Premultiplied)
         image.fill(QColor("#172027"))
@@ -183,31 +276,33 @@ class TopMatchBarRenderer:
             p.setPen(Qt.NoPen)
             p.setBrush(QColor("#17222b"))
             p.drawRoundedRect(QRectF(25, 53, 24, 19), 4, 4)
-            _text(p, QRectF(25, 52, 24, 19), card.label[:3], _font("DejaVu Sans", 13, bold=True), accent, shadow=False)
-            _text(p, QRectF(3, 2, 19, 10), str(card.robot_id), _font("DejaVu Sans", 8, bold=True), QColor(255, 255, 255, 170), shadow=False)
+            role_text = match_role_text(card, chinese)[:3]
+            _text(p, QRectF(24, 0, 43, 14), role_text,
+                  _label_font("DejaVu Sans", 10, role_text), accent, shadow=False)
         finally:
             p.end()
         return image
 
     def _center_panel(self) -> QImage:
-        if self._panel is None:
+        if self._native not in self._panels:
             image = QImage(108, 120, QImage.Format_ARGB32_Premultiplied)
             image.fill(Qt.transparent)
             p = QPainter(image)
             try:
                 gradient = QLinearGradient(0, 0, 0, 120)
-                gradient.setColorAt(0, QColor(4, 6, 7, 218))
-                gradient.setColorAt(.78, QColor(4, 6, 7, 204))
+                gradient.setColorAt(0, QColor(4, 6, 7, 170))
+                gradient.setColorAt(.62, QColor(4, 6, 7, 125))
                 gradient.setColorAt(1, QColor(4, 6, 7, 0))
                 p.fillRect(QRectF(0, 0, 108, 120), gradient)
-                p.setPen(QPen(QColor(255, 255, 255, 12), 1))
-                for y in range(2, 105, 3):
-                    for x in range(2, 108, 3):
-                        p.drawPoint(x, y)
+                if self._native:
+                    dots = self.resources.image("dots")
+                    if not dots.isNull():
+                        p.setOpacity(.05)
+                        p.drawImage(QRectF(0, 0, 108, 120), dots)
             finally:
                 p.end()
-            self._panel = image
-        return self._panel
+            self._panels[self._native] = image
+        return self._panels[self._native]
 
     def _kill_scale(self, card: RobotCard, icon_index: int, now: float, reduced: bool) -> float:
         count = max(0, card.kills or 0)
@@ -229,14 +324,16 @@ class TopMatchBarRenderer:
               options: TopMatchBarOptions | None = None,
               avatars: Mapping[str, QImage] | None = None) -> MatchBarLayout | None:
         options = options or TopMatchBarOptions()
+        self._native = options.local_assets and self.resources.available
+        if self._native and "font_regular" in self.resources.families:
+            options = replace(options, font_family=self.resources.families["font_regular"])
         if not options.enabled:
             self.reset_motion()
             return None
         if not math.isfinite(now):
             raise ValueError("now must be finite")
-        layout = compute_layout(width, len(frame.left.cards), len(frame.right.cards),
-                                scale=options.scale, top=options.top,
-                                safe_left=options.safe_left, safe_right=options.safe_right)
+        layout = _strip_layout(width, len(frame.left.cards), len(frame.right.cards),
+                               options.scale, options.top, options.safe_left, options.safe_right)
         ids = {c.robot_id for team in (frame.left, frame.right) for c in team.cards}
         self._transitions = {key: value for key, value in self._transitions.items() if key in ids}
         self._kill_pops = {key: value for key, value in self._kill_pops.items() if key in ids}
@@ -247,8 +344,8 @@ class TopMatchBarRenderer:
             p.setClipRect(_qr(layout.bounds), Qt.IntersectClip)
             # A low-opacity fade gives the original floating strip its contrast.
             shade = QLinearGradient(0, layout.bounds.y, 0, layout.bounds.bottom)
-            shade.setColorAt(0, QColor(5, 8, 10, 70))
-            shade.setColorAt(.65, QColor(5, 8, 10, 90))
+            shade.setColorAt(0, QColor(5, 8, 10, 55))
+            shade.setColorAt(.65, QColor(5, 8, 10, 65))
             shade.setColorAt(1, QColor(5, 8, 10, 0))
             visible_left = layout.left_cards[0].x if layout.left_cards else layout.center.x
             visible_right = layout.right_cards[-1].right if layout.right_cards else layout.center.right
@@ -269,51 +366,91 @@ class TopMatchBarRenderer:
             p.restore()
         return layout
 
+    def _avatar_layer(self, card: RobotCard, options: TopMatchBarOptions,
+                      supplied: QImage | None, density: float) -> QImage:
+        """Reusable square only; never bake HP, kills or a clock into this layer.
+
+        Rasterize at the effective painter density, including HUD scale and DPR,
+        so caching cannot turn high-DPI glyphs/borders into a low-res thumbnail.
+        Generic robot art denotes a role, not an invented member photograph.
+        """
+        portrait, gray = self._portrait(card, supplied, chinese=options.chinese)
+        pixels = max(70, math.ceil(70 * density))
+        key = (self._native, portrait.cacheKey(), card.robot_id, card.life, options.font_family,
+               options.chinese, pixels)
+        if key in self._avatar_layers:
+            self._avatar_layers.move_to_end(key)
+            return self._avatar_layers[key]
+        image = QImage(pixels, pixels, QImage.Format_ARGB32_Premultiplied)
+        image.setDevicePixelRatio(pixels / 70)
+        image.fill(Qt.transparent)
+        p = QPainter(image)
+        try:
+            p.setRenderHint(QPainter.Antialiasing)
+            p.setRenderHint(QPainter.SmoothPixmapTransform)
+            r = QRectF(0, 0, 70, 70)
+            if card.life == LifeState.UNKNOWN:
+                # Unknown is not desaturated/dead. An authorized portrait stays
+                # in colour; otherwise use a clean, neutral question-mark well.
+                if supplied is not None and not supplied.isNull():
+                    p.drawImage(r, portrait)
+                    p.fillRect(r, QColor(5, 8, 10, 65))
+                else:
+                    p.fillRect(r, QColor("#172126"))
+                border = QColor("#70838e")
+                _text(p, QRectF(0, 3, 70, 51), "?",
+                      _font(options.font_family, 40, bold=True), _WHITE)
+            elif card.life == LifeState.DEAD:
+                p.setOpacity(DEAD_OPACITY)
+                p.drawImage(r, gray)
+                border = QColor(120, 120, 120, 115)
+            else:
+                p.drawImage(r, portrait)
+                border = QColor(_ACCENTS[(card.robot_id % 100 - 1) % len(_ACCENTS)])
+            p.setBrush(Qt.NoBrush)
+            p.setPen(QPen(border, 2))
+            p.drawRect(r.adjusted(1, 1, -1, -1))
+            p.setOpacity(1)
+            # Identity fits inside the avatar, not another card-label row.
+            p.fillRect(QRectF(2, 54, 27, 14), QColor(4, 6, 7, 175))
+            _text(p, QRectF(2, 54, 27, 14), str(card.robot_id),
+                  _font(options.font_family, 10, bold=True), QColor("#d4dee3"))
+            if card.life == LifeState.DEAD:
+                # Death is an explicit marker even with Show Kills disabled.
+                p.fillRect(QRectF(45, 3, 22, 26), QColor(4, 6, 7, 170))
+                self._skull(p, 48, 5, 16, _DEAD_WHITE, dead=True)
+        finally:
+            p.end()
+        self._avatar_layers[key] = image
+        while len(self._avatar_layers) > 64:
+            self._avatar_layers.popitem(last=False)
+        return image
+
     def _paint_card(self, p: QPainter, card: RobotCard, now: float,
                     options: TopMatchBarOptions, supplied: QImage | None) -> None:
-        portrait, gray = self._portrait(card, supplied)
-        inherited_opacity = p.opacity()
         self._transitions[card.robot_id] = card.life
-        blend = 1.0 if card.life == LifeState.DEAD else 0.0
+        dead = card.life == LifeState.DEAD
         self._kill_scale(card, 0, now, True)
-        r = QRectF(0, 0, 70, 70)
-        if card.life == LifeState.UNKNOWN:
-            p.fillRect(r, QColor(14, 24, 30, 210))
-            p.setOpacity(inherited_opacity * .15)
-            p.drawImage(r, gray)
-            p.setOpacity(inherited_opacity)
-            pen = QPen(QColor("#9ba8ae"), 1.4, Qt.DashLine)
-            p.setPen(pen)
-            p.setBrush(Qt.NoBrush)
-            p.drawRect(r.adjusted(1, 1, -1, -1))
-            _text(p, QRectF(0, 4, 70, 53), "?", _font(options.font_family, 46, bold=True), _WHITE)
-            _text(p, QRectF(0, 56, 70, 11), str(card.robot_id), _font(options.font_family, 8), QColor("#aebdc5"))
-        else:
-            p.setOpacity(inherited_opacity * (1 - blend))
-            p.drawImage(r, portrait)
-            p.setOpacity(inherited_opacity * blend * DEAD_OPACITY)
-            p.drawImage(r, gray)
-            p.setOpacity(inherited_opacity * (DEAD_OPACITY if blend else 1.0))
-            border = QColor("#000000") if blend else QColor(_ACCENTS[(card.robot_id % 100 - 1) % len(_ACCENTS)])
-            p.setBrush(Qt.NoBrush)
-            p.setPen(QPen(border, 2 if blend else 3))
-            p.drawRect(r.adjusted(1.5, 1.5, -1.5, -1.5))
-            p.setOpacity(inherited_opacity)
+        transform = p.deviceTransform()
+        density = max(math.hypot(transform.m11(), transform.m12()),
+                      math.hypot(transform.m21(), transform.m22()))
+        p.drawImage(QRectF(0, 0, 70, 70), self._avatar_layer(card, options, supplied, density))
         # A real denominator is required for a proportional HP underline.
         # HP without max is still useful as a number, never a fabricated ratio.
         if options.show_health:
             ratio = card.health_ratio
             track = QRectF(0, 73, 70, 3)
-            if card.health_applicable:
+            if card.life != LifeState.UNKNOWN and ratio is not None and 0 <= ratio <= 1:
                 p.fillRect(track, QColor(255, 255, 255, 36))
-                if ratio is not None:
-                    hp_color = QColor("#FF796B") if ratio <= .25 else QColor("#c7eab7")
-                    p.fillRect(QRectF(0, 73, 70 * ratio, 3), hp_color)
-            _text(p, QRectF(-3, 78, 76, 14), card.health_text,
-                  _font(options.font_family, 10, bold=True), _WHITE)
-            role_text = f"{card.label} {card.robot_id}"
-            _text(p, QRectF(-3, 93, 76, 13), role_text,
-                  _font(options.font_family, 9, bold=True), QColor("#bdc9ce"))
+                hp_color = QColor("#FF796B") if ratio <= .25 else QColor("#c7eab7")
+                p.fillRect(QRectF(0, 73, 70 * ratio, 3), hp_color)
+            elif card.health_applicable and card.health is not None and card.life != LifeState.UNKNOWN:
+                # A number without a denominator is useful, but not a ratio.
+                # This small in-avatar badge cannot masquerade as a full bar.
+                p.fillRect(QRectF(31, 54, 37, 14), QColor(4, 6, 7, 175))
+                value = str(card.health)
+                self._paint_cached_text(p, QRectF(31, 54, 37, 14), value,
+                                        _font(options.font_family, min(10, 54 / max(1, len(value))), bold=True), _WHITE)
         if options.show_kills and card.kills is not None and card.kills > 0:
             count = min(card.kills, 5)
             start = 35 - (count * 12 - 2) / 2
@@ -321,35 +458,63 @@ class TopMatchBarRenderer:
                 pop = self._kill_scale(card, i, now, options.reduced_motion)
                 p.save()
                 try:
-                    p.translate(start + i * 12 + 4.5, 112.5 if options.show_health else 85.5)
+                    p.translate(start + i * 12 + 4.5, 85.5)
                     p.scale(pop, pop)
-                    _skull(p, -4.5, -4.5, 9, _DEAD_WHITE if blend else _WHITE)
+                    self._skull(p, -4.5, -4.5, 9, _DEAD_WHITE if dead else _WHITE)
                 finally:
                     p.restore()
-            if card.kills > 5 and not options.show_health:
-                _text(p, QRectF(0, 94, 70, 12), f"×{card.kills}", _font(options.font_family, 9, bold=True), _WHITE)
+            if card.kills > 5:
+                self._paint_cached_text(p, QRectF(0, 94, 70, 12), f"×{card.kills}",
+                                        _font(options.font_family, 9, bold=True), _WHITE)
 
     def _paint_center(self, p: QPainter, frame: MatchBarFrame,
                       options: TopMatchBarOptions, now: float) -> None:
         p.drawImage(QRectF(0, 0, 108, 120), self._center_panel())
         timer_color = QColor(_WHITE)
-        _text(p, QRectF(1, 0, 106, 36 if options.show_health else 43), frame.clock_text,
-              _font(options.font_family, min(32, 160 / max(5, len(frame.clock_text))), bold=True, condensed=True), timer_color)
+        timer_font = _font(options.font_family, min(36, 180 / max(5, len(frame.clock_text))), bold=True, condensed=True)
+        if self._native and "font_timer" in self.resources.families:
+            timer_font.setStyleName("Bold TF")
+        self._paint_cached_text(p, QRectF(1, 0, 106, 39), frame.clock_text,
+                                timer_font, timer_color, fit=True)
+        # Only these exact metric/roster labels belong to the built-in feed.
+        # Other caller-owned labels may themselves contain UI vocabulary.
+        score_label = (match_strip_text(frame.score_label, options.chinese)
+                       if frame.score_label == "RM SCORE" else frame.score_label)
         if options.show_health and options.show_scores:
-            _text(p, QRectF(0, 37, 108, 10), frame.score_label or "SCORE —",
-                  _font(options.font_family, 8), QColor("#aab0b4"))
-        for team, x in ((frame.left, 7), (frame.right, 61)):
+            metric = score_label or match_strip_text("SCORE —", options.chinese)
+            self._paint_cached_text(p, QRectF(0, 75, 108, 14), metric,
+                                    _label_font(options.font_family, 12 if options.chinese else 9, metric), QColor("#aab0b4"))
+        for team, x in ((frame.left, 6), (frame.right, 60)):
             tint = _BLUE if team.alliance == "Blue" else _GOLD
             value = str(team.score) if team.score is not None and options.show_scores and frame.score_label else "—"
-            size = 30 if len(value) <= 2 else max(13, 58 / len(value))
-            _text(p, QRectF(x, 47, 40, 38), value,
-                  _font(options.font_family, size, bold=True, condensed=True), tint)
-            _person(p, x + 3, 98, tint)
-            _text(p, QRectF(x + 12, 94, 32, 24), team.alive_text,
-                  _font(options.font_family, 16 if len(team.alive_text) < 3 else 12, bold=True, condensed=True), tint)
+            size = 30 if len(value) <= 2 else max(9, 58 / len(value))
+            score_font = _font(options.font_family, size, bold=True, condensed=True)
+            if self._native and "font_timer" in self.resources.families:
+                score_font.setStyleName("Bold TF")
+            self._paint_cached_text(p, QRectF(x, 39, 40, 36), value, score_font, tint, fit=True)
+            person = self.resources.tinted("person", tint) if self._native else QImage()
+            if person.isNull():
+                _person(p, x + 15, 103, tint)
+            else:
+                p.drawImage(QRectF(x + 15, 103, 8, 14), person)
+            self._paint_cached_text(p, QRectF(x + 23, 99, 25, 21), team.alive_text,
+                                    _font(options.font_family, 14 if len(team.alive_text) < 3 else 10, bold=True, condensed=True), tint, fit=True)
             # RM team identities stay explicit even with the reference's blue/gold palette.
-            _text(p, QRectF(x, 114, 40, 6), team.alliance.upper(), _font(options.font_family, 6, bold=True), tint, shadow=False)
-        label = "PAUSED" if frame.paused else (frame.roster_label if options.show_health else (frame.score_label if options.show_scores else ""))
+            alliance = match_alliance_text(team.alliance, options.chinese)
+            if self._native:
+                # Reserve separate space for the exact person SVG and count.
+                # A one-character identity keeps RM's red/blue meaning without
+                # the old two-character label colliding with the CS2 pictogram.
+                alliance = alliance[:1]
+            self._paint_cached_text(p, QRectF(x - 5, 101, 22, 17), alliance,
+                                    _label_font(options.font_family, 10 if options.chinese else 7, alliance), tint, shadow=False, fit=True)
+        roster_label = (match_strip_text(frame.roster_label, options.chinese)
+                        if not options.custom_roster_label and frame.roster_label == "GROUND ALIVE"
+                        else frame.roster_label)
+        label = (match_strip_text("PAUSED", options.chinese) if frame.paused else
+                 (roster_label if options.show_health else
+                  (score_label if options.show_scores else "")))
         if not label:
-            label = "NO DATA" if frame.countdown is None else frame.roster_label
-        _text(p, QRectF(0, 82, 108, 12), label[:20], _font(options.font_family, 8), QColor("#aab0b4"))
+            label = match_strip_text("NO DATA", options.chinese) if frame.countdown is None else roster_label
+        self._paint_cached_text(p, QRectF(0, 89, 108, 14), label,
+                                _label_font(options.font_family, 11 if options.chinese else 9, label), QColor("#aab0b4"))

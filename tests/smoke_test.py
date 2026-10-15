@@ -134,7 +134,7 @@ def test_registry() -> None:
     assert click_gui.get_setting("Render Backend").value == "Unified GPU"
     assert click_gui.get_setting("Scale").max_value == 2.0
     assert click_gui.get_setting("Scale").step == 0.05
-    assert click_gui.get_setting("Language").value == LANGUAGE_ENGLISH
+    assert click_gui.get_setting("Language").value == LANGUAGE_CHINESE
     assert click_gui.get_setting("Language").options == [LANGUAGE_ENGLISH, LANGUAGE_CHINESE]
     hero_lob = registry.get("HeroLob")
     assert hero_lob is not None
@@ -205,8 +205,8 @@ def test_registry() -> None:
     assert startup_visual.enabled is True
     assert startup_visual.get_setting("Background Mode").options == ["PkgScene", "VideoParallax", "ParticleGrid", "Static"]
     assert startup_visual.get_setting("Background Mode").value == "VideoParallax"
-    assert startup_visual.get_setting("Wallpaper Profile").value == "TexasMP4"
-    assert startup_visual.get_setting("Wallpaper Profile").options == ["TexasMP4", "VendingMachine4K", "Default3000925581Pkg", "ParticleGrid"]
+    assert startup_visual.get_setting("Wallpaper Profile").value == "BlackHole"
+    assert startup_visual.get_setting("Wallpaper Profile").options == ["BlackHole", "TexasMP4", "VendingMachine4K", "Default3000925581Pkg", "ParticleGrid"]
     assert startup_visual.get_setting("Motion Quality").options == ["Smooth60", "Balanced30", "Source"]
     assert startup_visual.get_setting("Motion Quality").value == "Smooth60"
     assert startup_visual.get_setting("Glass Style").options == ["LiquidGlass", "Legacy"]
@@ -765,7 +765,7 @@ def test_wallpaper_profiles_and_user_import() -> None:
         source.write_bytes(b"custom")
         manager = StartupWallpaperManager(workspace)
         try:
-            assert manager.profile_names()[:4] == ["TexasMP4", "VendingMachine4K", "Default3000925581Pkg", "ParticleGrid"]
+            assert manager.profile_names()[:5] == ["BlackHole", "TexasMP4", "VendingMachine4K", "Default3000925581Pkg", "ParticleGrid"]
             assert manager.resolve_media_profile("VendingMachine4K") == builtin / "vending-machine.mp4"
             profile = manager.import_wallpaper(source)
             assert profile == "User:custom-wallpaper"

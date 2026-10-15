@@ -1,5 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 from pathlib import Path
+import sys
 from PyInstaller.utils.hooks import collect_all
 
 root = Path(SPECPATH).parent
@@ -34,6 +35,15 @@ a = Analysis(
     excludes=["tkinter", "pytest", "IPython", "matplotlib"],
     noarchive=False,
 )
+# Qt 6.11 on Windows uses the OS ICU forwarding DLLs (unversioned exports).
+# An unrelated Poppler/Conda icuuc.dll on the build PATH exports *_78 instead;
+# bundling it shadows the Windows shim and QtCore fails with WinError 127.
+# The portable target is Windows 11: resolve its inbox ICU, never redistribute
+# OS DLLs or pick up another application's ICU through the developer's PATH.
+if sys.platform == "win32":
+    a.binaries = [entry for entry in a.binaries
+                  if Path(entry[0]).name.lower() not in {"icu.dll", "icuuc.dll", "icuin.dll"}
+                  and not Path(entry[0]).name.lower().startswith("icudt")]
 pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
@@ -44,5 +54,6 @@ exe = EXE(
     console=False,
     disable_windowed_traceback=False,
     target_arch="x86_64",
+    version=str(root / "BUILD_VERSION_INFO.txt") if (root / "BUILD_VERSION_INFO.txt").is_file() else None,
 )
 coll = COLLECT(exe, a.binaries, a.datas, strip=False, upx=False, name="POLAR-RM")

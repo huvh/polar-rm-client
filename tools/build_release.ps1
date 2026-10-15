@@ -1,12 +1,16 @@
-param(
+﻿param(
     # Windows PowerShell 5.1 evaluates parameter default expressions before
     # $PSScriptRoot is populated. Resolve the default in the script body so
     # the checked-in release entry point works with powershell.exe -File.
     [string]$Output = "",
     [string]$GitRef = "HEAD",
+    [string]$Version = "0.1.0",
     [Parameter(Mandatory=$true)][string]$FfmpegPath,
     [Parameter(Mandatory=$true)][string]$TexasWallpaperPath,
     [Parameter(Mandatory=$true)][string]$VendingWallpaperPath,
+    # Explicit local input, never scoop up the rest of a developer's user_data.
+    # Public redistribution of this third-party pack requires separate rights.
+    [string]$Cs2UiPackPath = "",
     [switch]$UseWorkingTree
 )
 
@@ -25,6 +29,11 @@ $portable = Join-Path $distRoot "POLAR-RM"
 $expectedFfmpeg = "79BDD4C65ADC74D4CA937B6A9D939349806D6C66C8A42C848B0E866BCBDF4EB7"
 $expectedTexas = "42B5DD4223DD280A925580709E5C62A9CA835721274FD21934DF38FEBFA03B5E"
 $expectedVending = "E005A9A4BB84EB88280978F86135EB6121F826F6FA2680E19F05A15850539985"
+if ($Version -notmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$') {
+    throw "Version must be a numeric semantic version, for example 0.1.0"
+}
+$versionParts = @($Version.Split('.') | ForEach-Object { [int]$_ })
+if (@($versionParts | Where-Object { $_ -gt 65535 }).Count -ne 0) { throw "Windows version components must fit uint16" }
 
 function Assert-Hash([string]$Path, [string]$Expected, [string]$Label) {
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { throw "$Label missing: $Path" }
@@ -48,30 +57,38 @@ function Invoke-RequiredTest([string]$Python, [string]$Script, [string]$Label, [
     # function before invocation and dumps every Python thread if progress
     # stalls, turning intermittent native/Qt hangs into actionable logs.
     $bootstrap = @'
-import faulthandler, os, runpy, sys, time
+import faulthandler, os, runpy, sys, threading
 path = sys.argv[1]
+# Keep unittest's argv and import path identical to direct script execution.
+sys.argv = [path]
+sys.path.insert(0, os.path.dirname(os.path.abspath(path)))
 faulthandler.enable(all_threads=True)
 faulthandler.dump_traceback_later(120, repeat=True)
 target = os.path.normcase(os.path.abspath(path))
-started = {}
-def profile(frame, event, _arg):
-    if os.path.normcase(os.path.abspath(frame.f_code.co_filename)) != target:
-        return profile
-    name = frame.f_code.co_name
-    if not name.startswith("test_"):
-        return profile
-    if event == "call":
-        started[id(frame)] = time.monotonic()
-        print(f"START {name}", flush=True)
-    elif event == "return":
-        elapsed = time.monotonic() - started.pop(id(frame), time.monotonic())
-        print(f"PASS {name} {elapsed:.3f}s", flush=True)
-    return profile
-sys.setprofile(profile)
+done = threading.Event()
+def sample_active_test():
+    previous = None
+    while not done.wait(1.0):
+        names = set()
+        for frame in sys._current_frames().values():
+            while frame is not None:
+                name = frame.f_code.co_name
+                if name.startswith('test_') and os.path.normcase(os.path.abspath(frame.f_code.co_filename)) == target:
+                    names.add(name)
+                frame = frame.f_back
+        active = ', '.join(sorted(names))
+        if active and active != previous:
+            print('ACTIVE ' + active, flush=True)
+        previous = active
+# Per-call profiling perturbs GIL/deadman timing. Sample stacks instead of
+# instrumenting every call; never relax production timeouts to pass a test.
+watcher = threading.Thread(target=sample_active_test, daemon=True)
+watcher.start()
 try:
     runpy.run_path(path, run_name="__main__")
 finally:
-    sys.setprofile(None)
+    done.set()
+    watcher.join(0.2)
 faulthandler.cancel_dump_traceback_later()
 '@
     $bootstrapPath = Join-Path $LogRoot "release_test_bootstrap.py"
@@ -201,6 +218,19 @@ try {
         $sourceKind = "immutable-git-commit"
     }
     Set-Content -LiteralPath (Join-Path $sourceRoot "BUILD_COMMIT.txt") -Value $commit -Encoding ASCII
+    Set-Content -LiteralPath (Join-Path $sourceRoot "BUILD_VERSION.txt") -Value $Version -Encoding ASCII
+    $windowsVersion = @"
+VSVersionInfo(
+  ffi=FixedFileInfo(filevers=($($versionParts[0]), $($versionParts[1]), $($versionParts[2]), 0),
+    prodvers=($($versionParts[0]), $($versionParts[1]), $($versionParts[2]), 0), mask=0x3f,
+    flags=0x0, OS=0x40004, fileType=0x1, subtype=0x0, date=(0, 0)),
+  kids=[StringFileInfo([StringTable('040904B0', [
+    StringStruct('FileDescription', 'POLAR-RM Field Candidate'),
+    StringStruct('FileVersion', '$Version'), StringStruct('ProductVersion', '$Version'),
+    StringStruct('ProductName', 'POLAR-RM'), StringStruct('OriginalFilename', 'POLAR-RM.exe')])]),
+    VarFileInfo([VarStruct('Translation', [1033, 1200])])])
+"@
+    Set-Content -LiteralPath (Join-Path $sourceRoot "BUILD_VERSION_INFO.txt") -Value $windowsVersion -Encoding UTF8
 
     # Legacy user imports are private runtime data, even in a working-tree build.
     # Remove them only from this disposable staging tree, never from the checkout.
@@ -286,6 +316,9 @@ print('polar spec OK: %d segments, %d roles, %d warnings'
         Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\test_build_safety_regressions.py") "build_safety_regressions" 120 $testLogRoot
         Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\test_transport_safety_regressions.py") "transport_safety_regressions" 120 $testLogRoot
         Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\test_ui_state_regressions.py") "ui_state_regressions" 120 $testLogRoot
+        Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\test_inventory_text_crosshair_scale.py") "inventory_crosshair" 120 $testLogRoot
+        Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\test_cs2_crosshair_import.py") "cs2_crosshair" 120 $testLogRoot
+        Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\test_jello_settings_keyboard.py") "jello_settings_keyboard" 120 $testLogRoot
         Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\backend_protocol_test.py") "backend_protocol" 240 $testLogRoot
         Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\referee_integration_test.py") "referee_integration" 180 $testLogRoot
         # Team StandardRobot++ 0x5A link: framing/CRC parity with the team's own
@@ -376,9 +409,43 @@ print('polar spec OK: %d segments, %d roles, %d warnings'
     Copy-Item -LiteralPath (Join-Path $sourceRoot "configs\dt7_profile.json") -Destination (Join-Path $portable "defaults\dt7_profile.json") -Force
     Get-ChildItem -LiteralPath (Join-Path $sourceRoot "licenses") -Force |
         Copy-Item -Destination (Join-Path $portable "licenses") -Recurse -Force
+    & $python (Join-Path $sourceRoot "tools\collect_release_licenses.py") --out (Join-Path $portable "licenses\python")
+    if ($LASTEXITCODE -ne 0) { throw "Dependency license collection failed" }
     Copy-Item -LiteralPath (Join-Path $sourceRoot "THIRD_PARTY_NOTICES.md") -Destination (Join-Path $portable "licenses\THIRD_PARTY_NOTICES.md") -Force
     Copy-Item -LiteralPath (Join-Path $sourceRoot "FIELD_CANDIDATE.md") -Destination (Join-Path $portable "FIELD_CANDIDATE.md") -Force
     Copy-Item -LiteralPath (Join-Path $sourceRoot "REFEREE_INTEGRATION.md") -Destination (Join-Path $portable "REFEREE_INTEGRATION.md") -Force
+    $cs2PackMetadata = $null
+    if (-not [string]::IsNullOrWhiteSpace($Cs2UiPackPath)) {
+        # Validate exactly the same allowlist, bounds and per-file hashes as the
+        # runtime loader. Copy declared assets only (not obsolete exports, Steam
+        # files, configuration, calibration, credentials or user media).
+        & $python -c @"
+import sys
+sys.path.insert(0, r'$sourceRoot')
+from pathlib import Path
+from PySide6.QtGui import QGuiApplication
+from rm_client.ui.cs2_assets import Cs2Assets
+app = QGuiApplication([])
+pack = Cs2Assets(Path(sys.argv[1]))
+if not pack.available or pack.error:
+    raise SystemExit('invalid CS2 local pack: ' + pack.error)
+print('Verified CS2 asset pack:', len(pack.paths), 'assets')
+"@ $Cs2UiPackPath
+        if ($LASTEXITCODE -ne 0) { throw "CS2 pack validation failed" }
+        $packManifestPath = Join-Path $Cs2UiPackPath "manifest.json"
+        $packManifest = Get-Content -LiteralPath $packManifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        $packDestination = Join-Path $portable "user_data\cs2_ui_pack"
+        New-Item -ItemType Directory -Force $packDestination | Out-Null
+        Copy-Item -LiteralPath $packManifestPath -Destination (Join-Path $packDestination "manifest.json")
+        foreach ($asset in $packManifest.assets.PSObject.Properties) {
+            Copy-Item -LiteralPath (Join-Path $Cs2UiPackPath $asset.Value.file) -Destination (Join-Path $packDestination $asset.Value.file)
+        }
+        $cs2PackMetadata = [ordered]@{
+            scope = "third-party-local-pack"
+            asset_count = @($packManifest.assets.PSObject.Properties).Count
+            tree_sha256 = Get-TreeHash $python $sourceRoot $packDestination
+        }
+    }
 
     $ffVersion = (& $FfmpegPath -hide_banner -version) -join "`n"
     Set-Content -LiteralPath (Join-Path $portable "licenses\FFMPEG-BUILD.txt") -Value $ffVersion -Encoding UTF8
@@ -432,9 +499,16 @@ print(json.dumps({'default_profile': get_profile().profile_id, 'protocol_version
         "POLAR-RM.exe" = (Get-FileHash (Join-Path $portable "POLAR-RM.exe") -Algorithm SHA256).Hash
     }
     $resourceTreeHash = Get-TreeHash $python $sourceRoot (Join-Path $portable "resources")
+    if ($null -ne $cs2PackMetadata) {
+        $criticalFiles["user_data/cs2_ui_pack/manifest.json"] = (Get-FileHash -LiteralPath (Join-Path $packDestination "manifest.json") -Algorithm SHA256).Hash
+        foreach ($asset in $packManifest.assets.PSObject.Properties) {
+            $criticalFiles["user_data/cs2_ui_pack/$($asset.Value.file)"] = $asset.Value.sha256
+        }
+    }
     $manifest = [ordered]@{
         schema = 1
         product = "POLAR-RM Field Candidate"
+        version = $Version
         verdict = "NOT READY FOR REAL MATCH"
         git_commit = $commit
         source_kind = $sourceKind
@@ -443,6 +517,7 @@ print(json.dumps({'default_profile': get_profile().profile_id, 'protocol_version
         referee = $refereeMetadata
         python = "$pythonVersion"
         dependencies = $dependencyLines
+        optional_cs2_pack = $cs2PackMetadata
         critical_files = $criticalFiles
         ffmpeg = [ordered]@{
             version = ($ffVersion -split "`n")[0]
@@ -462,6 +537,9 @@ print(json.dumps({'default_profile': get_profile().profile_id, 'protocol_version
             field_candidate = "PASS"
             dt7_alignment = "PASS"
             ui_backend_regression = "PASS"
+            inventory_crosshair = "PASS"
+            cs2_crosshair = "PASS"
+            jello_settings_keyboard = "PASS"
             gpu_compositor = "PASS"
             gpu_renderer_runtime = "PASS"
             startup_gpu_runtime = "PASS"
@@ -516,6 +594,15 @@ print(json.dumps({'default_profile': get_profile().profile_id, 'protocol_version
         Get-ChildItem -LiteralPath (Join-Path $portable "user_data") -Recurse -File -Force
         Get-ChildItem -LiteralPath (Join-Path $portable "field_evidence") -Recurse -File -Force
     )
+    if ($null -ne $cs2PackMetadata) {
+        $allowedPackNames = @("manifest.json") + @($packManifest.assets.PSObject.Properties | ForEach-Object { $_.Value.file })
+        $runtimeStateFiles = @($runtimeStateFiles | Where-Object {
+            $_.DirectoryName -ne $packDestination -or $_.Name -notin $allowedPackNames
+        })
+        if ((Get-TreeHash $python $sourceRoot $packDestination) -ne $cs2PackMetadata.tree_sha256) {
+            throw "CS2 pack changed after verification"
+        }
+    }
     if ($runtimeStateFiles.Count -ne 0) {
         $relativeRuntimeFiles = $runtimeStateFiles | ForEach-Object {
             $_.FullName.Substring($portable.Length).TrimStart("\")

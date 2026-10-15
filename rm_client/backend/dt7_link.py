@@ -476,6 +476,8 @@ class Dt7KeyMouseLink:
     time_fn: object = time.perf_counter
     safety: object | None = None
     authorization_guard: object | None = None
+    pre_write_guard: object | None = None
+    _handle_requested_port: str = ""
 
     def _gate(self) -> str:
         """能不能发。任何一条不满足就返回原因，调用方据此拒发。"""
@@ -695,39 +697,49 @@ class Dt7KeyMouseLink:
 
     def _emit(self, frame: bytes) -> None:
         if self.write_bytes is not None:
+            if self.pre_write_guard is not None and not self.pre_write_guard():
+                raise RuntimeError("stale DT7 intent cancelled before write")
             written = self.write_bytes(frame)
             if written is not None and written != len(frame):
                 raise RuntimeError(f"short write {written}/{len(frame)}")
             return
-        target, why = self._open_target()
-        if not target:
-            self.resolved_port = ""
-            raise RuntimeError(why)
+        # Backoff precedes all discovery. A missing Auto target must back off
+        # too; enumeration can take tens of milliseconds on Windows.
         now = float(self.time_fn())
         if now < self._open_backoff_until:
-            raise RuntimeError(f"端口暂时不重试（{self._open_backoff_until - now:.1f}s 后），"
-                               f"上次原因：{self._open_last_error}")
+            raise RuntimeError(f"DT7 端口暂时不重试: {self._open_last_error}")
         handle = self._handle
-        if handle is None or getattr(handle, "port", None) != target:
+        target = self.resolved_port
+        if handle is None or self._handle_requested_port != str(self.port):
+            ports.invalidate_port_cache()  # validate current identity on every new handle
+            target, why = self._open_target()
+            if not target:
+                self.resolved_port = ""
+                self._open_last_error = why
+                self._open_backoff_until = now + float(self.profile.get("open_retry_s", 0.5))
+                raise RuntimeError(why)
             self._drop_handle()
             import serial
             try:
                 handle = serial.Serial(target, int(self.profile.get("baudrate", 961200)),
-                                       timeout=0.2, write_timeout=1.0)
+                                       timeout=0.2, write_timeout=0.2)
             except Exception as exc:
-                # 打不开就退避一会儿再试：30Hz 一直砸同一个不存在的口会把日志刷满，
-                # 也可能让 Windows 的串口枚举更慢恢复
                 self._open_backoff_until = now + float(self.profile.get("open_retry_s", 0.5))
                 self._open_last_error = str(exc)
                 raise
             self._handle = handle
+            self._handle_requested_port = str(self.port)
         self.resolved_port = target
         self._open_last_error = ""
         try:
+            if self.pre_write_guard is not None and not self.pre_write_guard():
+                raise RuntimeError("stale DT7 intent cancelled before write")
             written = handle.write(frame)
             if written != len(frame):
                 raise RuntimeError(f"short write {written}/{len(frame)}")
         except Exception as exc:
+            self._open_last_error = str(exc)
+            ports.invalidate_port_cache()
             self._drop_handle()          # 关键：死句柄必须扔，否则从此永久失效
             self._open_backoff_until = now + float(self.profile.get("open_retry_s", 0.5))
             raise RuntimeError(f"{target} 写入失败（句柄已丢弃，下一帧重开）：{exc}")

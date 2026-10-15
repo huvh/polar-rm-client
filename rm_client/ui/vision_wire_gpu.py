@@ -27,6 +27,22 @@ _GL_SCISSOR_TEST = 0x0C11
 _GL_TRIANGLES = 0x0004
 
 
+def armor_corner_segments(
+    points: list[QPointF] | tuple[QPointF, ...], *, limit: float = 22.0,
+) -> list[tuple[QPointF, QPointF]]:
+    """Short corner ticks along the actual quad, never its axis-aligned bounds."""
+    if len(points) != 4:
+        return []
+    segments = []
+    for index, origin in enumerate(points):
+        for neighbor in (points[(index - 1) % 4], points[(index + 1) % 4]):
+            delta = neighbor - origin
+            length = math.hypot(delta.x(), delta.y())
+            if length > 0.01:
+                segments.append((origin, origin + delta * (min(limit, length * 0.24) / length)))
+    return segments
+
+
 @dataclass(frozen=True)
 class VisionWireLine:
     start: QPointF
@@ -111,6 +127,8 @@ class VisionWireBatch:
         """
         alpha = max(0.0, min(1.0, float(alpha)))
         glow = max(0.0, min(1.0, float(glow)))
+        if alpha <= 0.0:
+            return
         base_w = max(0.5, float(width))
         dash = 7.0 if dashed else 0.0
         gap = 5.0 if dashed else 0.0
@@ -159,43 +177,8 @@ class VisionWireBatch:
         glow: float = 0.85,
     ) -> None:
         """Single-edge fluorescent white (same formula as fluorescent_polyline)."""
-        alpha = max(0.0, min(1.0, float(alpha)))
-        glow = max(0.0, min(1.0, float(glow)))
-        base_w = max(0.5, float(width))
-        dash = 7.0 if dashed else 0.0
-        gap = 5.0 if dashed else 0.0
-        if glow > 0.01:
-            self.line(
-                start,
-                end,
-                QColor(255, 255, 255, max(1, round(255 * 0.06 * glow * alpha))),
-                base_w + 8.0 * glow,
-                dash_length=dash,
-                gap_length=gap,
-            )
-            self.line(
-                start,
-                end,
-                QColor(255, 255, 255, max(1, round(255 * 0.14 * glow * alpha))),
-                base_w + 3.5 * glow,
-                dash_length=dash,
-                gap_length=gap,
-            )
-            self.line(
-                start,
-                end,
-                QColor(255, 255, 255, max(1, round(255 * 0.30 * glow * alpha))),
-                base_w + 1.5 * glow,
-                dash_length=dash,
-                gap_length=gap,
-            )
-        self.line(
-            start,
-            end,
-            QColor(255, 255, 255, max(1, round(255 * alpha))),
-            base_w,
-            dash_length=dash,
-            gap_length=gap,
+        self.fluorescent_polyline(
+            (start, end), width=width, alpha=alpha, dashed=dashed, glow=glow,
         )
 
 

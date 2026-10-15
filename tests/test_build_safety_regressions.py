@@ -23,6 +23,7 @@ import sys
 import tempfile
 from types import SimpleNamespace, ModuleType
 import unittest
+import weakref
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -46,6 +47,12 @@ verify = load_file("build_safety_verify", "tools/verify_all.py")
 def definitions(relative, names, namespace):
     """Load only named definitions, never the firmware tool's entry point."""
     tree = ast.parse((ROOT / relative).read_text(encoding="utf-8"))
+    if relative == "rm_client/ui_audio.py":
+        # These AST-only build tests intentionally do not construct Qt/media.
+        namespace.update(POOLS=weakref.WeakSet(), selected_output=lambda: None,
+                         cue_volume=lambda value: value,
+                         QMediaDevices=lambda parent: SimpleNamespace(audioOutputsChanged=SimpleNamespace(connect=lambda cb: None)),
+                         QGuiApplication=SimpleNamespace(instance=lambda: None))
     tree.body = [node for node in tree.body if isinstance(node, (ast.FunctionDef, ast.ClassDef))
                  and node.name in names]
     exec(compile(tree, relative, "exec", flags=__import__("__future__").annotations.compiler_flag), namespace)

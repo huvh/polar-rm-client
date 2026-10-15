@@ -316,18 +316,26 @@ class GpuFrameCompositor:
             fmt = QOpenGLFramebufferObjectFormat()
             fmt.setAttachment(QOpenGLFramebufferObject.Attachment.NoAttachment)
             fmt.setInternalTextureFormat(_GL_RGBA8)
-            self.background_fbo = QOpenGLFramebufferObject(size, fmt)
-            self.control_fbo = QOpenGLFramebufferObject(size, fmt)
+            # QPainter's OpenGL engine uses stencil for path fills, strokes and
+            # nonrectangular clips. A colour-only target turns rounded outlines
+            # into bounding-box fragments on Windows and corrupts glyph masks.
+            # Pure shader/blur/lens targets remain colour-only; their material
+            # and sampling parameters are unchanged.
+            painter_fmt = QOpenGLFramebufferObjectFormat()
+            painter_fmt.setAttachment(QOpenGLFramebufferObject.Attachment.CombinedDepthStencil)
+            painter_fmt.setInternalTextureFormat(_GL_RGBA8)
+            self.background_fbo = QOpenGLFramebufferObject(size, painter_fmt)
+            self.control_fbo = QOpenGLFramebufferObject(size, painter_fmt)
             self.blur_temp_fbo = QOpenGLFramebufferObject(size, fmt)
             self.blur_fbo = QOpenGLFramebufferObject(size, fmt)
             self.treated_blur_temp_fbo = QOpenGLFramebufferObject(size, fmt)
             self.treated_blur_fbo = QOpenGLFramebufferObject(size, fmt)
             self.hud_glass_fbo = QOpenGLFramebufferObject(size, fmt)
             self.glass_fbo = QOpenGLFramebufferObject(size, fmt)
-            self.overlay_fbo = QOpenGLFramebufferObject(size, fmt)
+            self.overlay_fbo = QOpenGLFramebufferObject(size, painter_fmt)
             self.vision_fbo = QOpenGLFramebufferObject(size, fmt)
-            self.dynamic_fbo = QOpenGLFramebufferObject(size, fmt)
-            self.target_fbo = QOpenGLFramebufferObject(size, fmt)
+            self.dynamic_fbo = QOpenGLFramebufferObject(size, painter_fmt)
+            self.target_fbo = QOpenGLFramebufferObject(size, painter_fmt)
             if not all(
                 fbo.isValid()
                 for fbo in (

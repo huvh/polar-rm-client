@@ -63,15 +63,52 @@ from PySide6.QtGui import (
 # 相对导入层级：rm_client/ui/polar/renderers/ → .... = rm_client、... = rm_client.ui
 from ....model import Module
 from ....vision import VisionResult, VisionTarget
-from ...paint import draw_bar, text_width, with_alpha
+from ...paint import draw_bar, rounded_rect, text_width, with_alpha
 # 注意：text_metrics 与本模块同属 ui/polar 子包（阶段 1 迁入），故为单级 ..
 from ..text_metrics import painter_device_scale
 from ...theme import color
-from ...vision_wire_gpu import VisionWireBatch
+from ...jello_locale import chinese_enabled
+from ...hud_locale import hud_template, HudDisplayText
+from ...vision_wire_gpu import VisionWireBatch, armor_corner_segments
 
 __all__ = [
     "EspWireframeMixin",
 ]
+
+
+def _draw_localized_pill(host, painter, point, raw_text, display_text, tint):
+    """Keep the shared pill's original bounds; translate its text only."""
+    font = host.font("poppins_medium", 8.0)
+    painter.setFont(font)
+    width = max(92.0, host.text_advance(font, raw_text) + 18.0)
+    rect = QRectF(point.x(), point.y(), width, 20)
+    rounded_rect(painter, rect, 7, color("#090a0d", 0.86), tint, 1.1)
+    host.draw_text(painter, rect.adjusted(8, 0, -8, 0), display_text, font, tint)
+
+
+def _distance_label(raw_text, registry):
+    return hud_template("DIST {value}", chinese_enabled(registry), value=raw_text[5:])
+
+
+def _display_armor_points(host, points, result, width, height):
+    """Video projection for drawing only; keep the FOV/selector contract intact.
+
+    Normal camera video fills the canvas. Native Hero video is aspect-fit;
+    YOLO/bridge quads are already in source pixels, not the model's 640 pad.
+    Both CPU logical HUD sizes and GPU canvas sizes use this same mapping.
+    """
+    native_cut = getattr(host, "hero_deploy_video_cut_active", None)
+    if native_cut is None or not native_cut():
+        return host.armor_esp_points(points, result, width, height)
+    source_w = max(1.0, float(result.source_width))
+    source_h = max(1.0, float(result.source_height))
+    scale = min(width / source_w, height / source_h)
+    left = (width - source_w * scale) * 0.5
+    top = (height - source_h * scale) * 0.5
+    # Native 0x0310 is drawn unmirrored by draw_hero_native_background;
+    # CameraFeed's mirror setting only applies to the normal video path.
+    return [QPointF(left + x * scale, top + y * scale)
+            for x, y in points]
 
 
 class EspWireframeMixin:
@@ -397,6 +434,10 @@ class EspWireframeMixin:
         setting = module.get_setting("Lock Style") if module else None
         style = str(setting.value) if setting else "Polar Corner"
         main = self.hud_accent() if locked else self.hud_danger()
+        if target.kind == "armor" and style == "Polar Corner":
+            # Armor locks share the Jello/FOV white family, not team tints.
+            self.draw_white_outline_lock(p, rect, target, locked)
+            return
         if style == "White Outline":
             self.draw_white_outline_lock(p, rect, target, locked)
             return
@@ -643,7 +684,9 @@ class EspWireframeMixin:
         # 开脉冲时在 0.94 基础上向下呼吸；不开时就是原来的常量 0.94。
         base_alpha = 0.94 if locked else 0.62
         alpha = max(0.30, base_alpha - 0.30 * self.lock_pulse_strength(locked))
-        accent = self.hud_accent() if locked else self.hud_danger()
+        accent = color("#ffffff", alpha) if target.kind == "armor" else (
+            self.hud_accent() if locked else self.hud_danger()
+        )
         p.save()
         p.setBrush(Qt.BrushStyle.NoBrush)
         # Full fluorescent white box outline (Debug Box ESP recipe).
@@ -656,26 +699,29 @@ class EspWireframeMixin:
         self.draw_fluorescent_white_polyline(
             p, corners, closed=True, line_width=1.0, glow=0.85, alpha=alpha,
         )
-        corner = min(22.0, rect.width() * 0.22)
-        corner_segs: list[tuple[QPointF, QPointF]] = []
-        for start, dx, dy in (
-            (rect.topLeft(), corner, 0),
-            (rect.topLeft(), 0, corner),
-            (rect.topRight(), -corner, 0),
-            (rect.topRight(), 0, corner),
-            (rect.bottomLeft(), corner, 0),
-            (rect.bottomLeft(), 0, -corner),
-            (rect.bottomRight(), -corner, 0),
-            (rect.bottomRight(), 0, -corner),
-        ):
-            corner_segs.append((start, start + QPointF(dx, dy)))
+        if target.kind == "armor":
+            corner_segs = armor_corner_segments(corners)
+        else:
+            # Keep the energy reticle's original corner length/origin.
+            corner = min(22.0, rect.width() * 0.22)
+            corner_segs = [
+                (point, point + delta)
+                for point, dx, dy in (
+                    (rect.topLeft(), corner, corner),
+                    (rect.topRight(), -corner, corner),
+                    (rect.bottomLeft(), corner, -corner),
+                    (rect.bottomRight(), -corner, -corner),
+                )
+                for delta in (QPointF(dx, 0), QPointF(0, dy))
+            ]
         self.draw_fluorescent_white_segments(
             p, corner_segs, line_width=1.15, glow=0.85, alpha=alpha,
         )
-        check_origin = QPointF(rect.right() - 18, rect.top() + 12)
-        p.setPen(QPen(accent, 1.8))
-        p.drawLine(check_origin + QPointF(-7, 0), check_origin + QPointF(-2, 5))
-        p.drawLine(check_origin + QPointF(-2, 5), check_origin + QPointF(8, -7))
+        if target.kind != "armor":
+            check_origin = QPointF(rect.right() - 18, rect.top() + 12)
+            p.setPen(QPen(accent, 1.8))
+            p.drawLine(check_origin + QPointF(-7, 0), check_origin + QPointF(-2, 5))
+            p.drawLine(check_origin + QPointF(-2, 5), check_origin + QPointF(8, -7))
         self.draw_pill(
             p,
             QPointF(rect.left(), rect.top() - 27),
@@ -685,6 +731,15 @@ class EspWireframeMixin:
         p.restore()
 
     def draw_minimal_bracket_lock(self, p: QPainter, rect: QRectF, target: VisionTarget, locked: bool) -> None:
+        if target.kind == "armor":
+            points = [rect.topLeft(), rect.topRight(), rect.bottomRight(), rect.bottomLeft()]
+            alpha = 0.88
+            self.draw_fluorescent_white_segments(
+                p, armor_corner_segments(points, limit=30.0),
+                line_width=1.0, glow=0.85, alpha=alpha,
+            )
+            self.draw_pill(p, QPointF(rect.left(), rect.top() - 27), self.target_overlay_label(target), color("#ffffff", alpha))
+            return
         main = color("#ffffff", 0.88) if locked else with_alpha(self.hud_danger(), 0.88)
         corner = min(30.0, rect.width() * 0.24)
         inset = 2.0
@@ -742,8 +797,8 @@ class EspWireframeMixin:
 
     def armor_esp_back_points(self, armor, result: VisionResult, width: int, height: int, depth: float) -> list[QPointF]:
         if len(armor.back_points) == 4:
-            return self.armor_esp_points(armor.back_points, result, width, height)
-        front = self.armor_esp_points(armor.points, result, width, height)
+            return _display_armor_points(self, armor.back_points, result, width, height)
+        front = _display_armor_points(self, armor.points, result, width, height)
         if len(front) != 4:
             return []
         center = QPolygonF(front).boundingRect().center()
@@ -912,6 +967,10 @@ class EspWireframeMixin:
         self.draw_fluorescent_white_polyline(
             p, front, closed=True, line_width=base_w, glow=glow, alpha=alpha, dashed=predicted,
         )
+        if not predicted:
+            self.draw_fluorescent_white_segments(
+                p, armor_corner_segments(front), line_width=max(1.0, base_w * 1.2), glow=glow, alpha=alpha,
+            )
 
         edge_lengths = [
             math.hypot(front[(index + 1) % 4].x() - front[index].x(), front[(index + 1) % 4].y() - front[index].y())
@@ -967,7 +1026,7 @@ class EspWireframeMixin:
         # jar lineWidth 1.0; module Line Width default 2.0 → base ~1.0.
         core_width = max(0.75, float(width) * 0.5 * (0.85 if predicted else 1.0))
         glow = 0.85
-        if len(back) == 4:
+        if len(back) == 4 and self.armor_depth_visible():
             batch.fluorescent_polyline(
                 back,
                 width=max(0.6, core_width * 0.85),
@@ -993,6 +1052,9 @@ class EspWireframeMixin:
             dashed=predicted,
             glow=glow,
         )
+        if not predicted:
+            for start, end in armor_corner_segments(front, limit=22.0 * label_scale):
+                batch.fluorescent_line(start, end, width=max(1.0, core_width * 1.2), alpha=alpha, glow=glow)
 
         def lerp(a: QPointF, b: QPointF, amount: float) -> QPointF:
             return QPointF(
@@ -1032,7 +1094,7 @@ class EspWireframeMixin:
                     label_width,
                     13.0 * label_scale,
                 ),
-                label,
+                getattr(label, "display", label),
                 font,
                 QColor(255, 255, 255, round(245 * alpha)),
             )
@@ -1067,7 +1129,7 @@ class EspWireframeMixin:
         observed = [armor for armor in result.detections if len(armor.points) == 4]
         predicted = [armor for armor in result.predicted_armors if len(armor.points) == 4]
         aim = result.aim_armor if result.aim_armor and len(result.aim_armor.points) == 4 else None
-        aim_front = self.armor_esp_points(aim.points, result, width, height) if aim is not None else []
+        aim_front = _display_armor_points(self, aim.points, result, width, height) if aim is not None else []
         aim_box = QPolygonF(aim_front).boundingRect() if aim_front else QRectF()
         emitted: set[tuple[int, int, bool]] = set()
 
@@ -1081,7 +1143,7 @@ class EspWireframeMixin:
             key = self._vision_wire_key(armor)
             if key in emitted:
                 continue
-            front = self.armor_esp_points(armor.points, result, width, height)
+            front = _display_armor_points(self, armor.points, result, width, height)
             if len(front) != 4:
                 continue
             if aim is not None and not armor.predicted:
@@ -1121,7 +1183,7 @@ class EspWireframeMixin:
                 width=line_width + 0.35 * scale,
                 alpha=1.0,
                 predicted=False,
-                label=label,
+                label=HudDisplayText(label, _distance_label(label, self.registry)) if label else None,
                 label_scale=scale,
             )
             emitted.add(aim_key)
@@ -1221,19 +1283,15 @@ class EspWireframeMixin:
     def draw_armor_quad(self, p: QPainter, points: list[QPointF], c: QColor, line_width: float, *, dashed: bool = False, aim: bool = False) -> None:
         if len(points) != 4:
             return
-        polygon = QPolygonF(points)
-        p.save()
-        p.setBrush(Qt.BrushStyle.NoBrush)
-        p.setPen(QPen(color("#000000", 0.72), line_width + 2.0, Qt.PenStyle.DashLine if dashed else Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
-        p.drawPolygon(polygon)
-        p.setPen(QPen(c, line_width, Qt.PenStyle.DashLine if dashed else Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
-        p.drawPolygon(polygon)
+        alpha = c.alphaF()
+        self.draw_fluorescent_white_polyline(
+            p, points, line_width=max(0.75, line_width * 0.5),
+            glow=0.85, alpha=alpha, dashed=dashed,
+        )
         if aim:
-            center = polygon.boundingRect().center()
-            p.setPen(QPen(c, max(1.0, line_width), Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
-            p.drawLine(center + QPointF(-7, 0), center + QPointF(7, 0))
-            p.drawLine(center + QPointF(0, -7), center + QPointF(0, 7))
-        p.restore()
+            self.draw_fluorescent_white_segments(
+                p, armor_corner_segments(points), line_width=max(1.0, line_width * 0.6), glow=0.85, alpha=alpha,
+            )
 
     def smooth_armor_geometry(self, armor, result: VisionResult):
         """只平滑连续结果的几何位置；没有结果时不保留任何绘制状态。"""
@@ -1403,47 +1461,15 @@ class EspWireframeMixin:
             aim_color = self.robot_overlay_armor_color(aim, 1.0)
 
         if style == "JelloShadow":
-            # Sigma ShadowESP: LIGHT_GREYISH_BLUE (#fefefe), literal 2 px
-            # outline and the original alt/shadow.png billboard.  The host
-            # bridge exposes projected armor quads rather than a Minecraft
-            # entity mesh, so each quad is the available silhouette source;
-            # labels, prediction racks and POLAR mechanical decorations are
-            # intentionally omitted.
-            shadow = getattr(self, "_jello_esp_shadow", None)
-            if shadow is None:
-                shadow = QImage(
-                    str(self._client_asset_path("assets", "jello", "hud_shadow.png"))
-                ).convertToFormat(QImage.Format.Format_ARGB32_Premultiplied)
-                self._jello_esp_shadow = shadow
-            p.save()
-            p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-            p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+            # Sigma's outline uses an entity silhouette/stencil. Its HUD
+            # shadow sprite is not an armor silhouette: scaling that black
+            # billboard covers the camera. Bloom only the actual quad edges,
+            # using the same pure-white recipe as FOV/3D ESP, with no texture.
             for armor in observed[:max_targets]:
-                points = self.armor_esp_points(armor.points, result, width, height)
+                points = _display_armor_points(self, armor.points, result, width, height)
                 if len(points) != 4:
                     continue
-                polygon = QPolygonF(points)
-                box = polygon.boundingRect()
-                billboard_w = max(42.0, box.width() * 2.8)
-                billboard_h = billboard_w * (411.0 / 330.0)
-                billboard = QRectF(
-                    box.center().x() - billboard_w * 0.5,
-                    box.center().y() - billboard_h * 0.42,
-                    billboard_w,
-                    billboard_h,
-                )
-                if shadow is not None and not shadow.isNull():
-                    p.save()
-                    p.setOpacity(max(0.0, min(1.0, 0.80 * opacity)))
-                    p.drawImage(billboard, shadow)
-                    p.restore()
-                pen = QPen(QColor(254, 254, 254, max(0, min(255, int(255 * opacity)))), line_width)
-                pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
-                pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-                p.setPen(pen)
-                p.setBrush(Qt.BrushStyle.NoBrush)
-                p.drawPolygon(polygon)
-            p.restore()
+                self.draw_armor_quad(p, points, color("#ffffff", opacity), line_width, aim=armor.aim)
             return
 
         def prediction_alpha(armor) -> float:
@@ -1456,7 +1482,7 @@ class EspWireframeMixin:
         if overlay_style == "Polar Outline" or style == "PolarOutline2D":
             source = observed if observed or not calibrated else predicted
             for armor in source:
-                points = self.armor_esp_points(armor.points, result, width, height)
+                points = _display_armor_points(self, armor.points, result, width, height)
                 xs = [point.x() for point in points]
                 ys = [point.y() for point in points]
                 rect = QRectF(min(xs), min(ys), max(4.0, max(xs) - min(xs)), max(4.0, max(ys) - min(ys)))
@@ -1469,14 +1495,14 @@ class EspWireframeMixin:
             return
 
         glass = overlay_style == "3D Glass"
-        aim_front = self.armor_esp_points(aim.points, result, width, height) if aim is not None else []
+        aim_front = _display_armor_points(self, aim.points, result, width, height) if aim is not None else []
         for armor in (observed + (predicted if show_prediction else []))[:max_targets]:
-            front = self.armor_esp_points(armor.points, result, width, height)
+            front = _display_armor_points(self, armor.points, result, width, height)
             if len(front) != 4:
                 continue
             box = QPolygonF(front).boundingRect()
             if aim is not None and not armor.predicted:
-                aim_box = QPolygonF(self.armor_esp_points(aim.points, result, width, height)).boundingRect()
+                aim_box = QPolygonF(aim_front).boundingRect()
                 if math.dist((box.center().x(), box.center().y()), (aim_box.center().x(), aim_box.center().y())) < max(12.0, aim_box.width() * 0.45):
                     # 主目标由下方的 Aim Face 单独绘制，不能再作为 RobotOverlay 重复画一次。
                     continue
@@ -1538,12 +1564,12 @@ class EspWireframeMixin:
                     self.draw_text(
                         p,
                         QRectF(box.left(), box.top() - 16, label_width, 13),
-                        label,
+                        _distance_label(label, self.registry),
                         self.font("poppins_medium", 6.4),
                         color("#ffffff", 0.96),
                     )
                 else:
-                    self.draw_pill(p, QPointF(box.left(), box.top() - 24), label, aim_color)
+                    _draw_localized_pill(self, p, QPointF(box.left(), box.top() - 24), label, _distance_label(label, self.registry), aim_color)
         if local_pnp and not calibrated:
             self._bottom_left_diagnostics.append(("DESKTOP PNP | APPROX FOV", self.hud_accent(), 1))
         elif not calibrated:
@@ -1670,16 +1696,17 @@ def _heli_gimbal_lock_draw(host, p: QPainter, rect: QRectF, target: VisionTarget
     host.draw_text(
         p,
         QRectF(rect.center().x() - 70.0, rect.bottom() + 6.0, 140.0, 14.0),
-        f"DIST {distance:.1f}M",
+        hud_template("DIST {value}", chinese_enabled(host.registry), value=f"{distance:.1f}M"),
         host.font("poppins_medium", 7.0),
         color("#ffffff", 0.92 if locked else 0.66),
     )
 
     # 顶部 AIR LOCK 小 pill（沿用现有 pill 标签槽位）。
-    host.draw_pill(
-        p,
-        QPointF(rect.left(), rect.top() - 27),
+    _draw_localized_pill(
+        host, p, QPointF(rect.left(), rect.top() - 27),
         f"AIR LOCK · {target.label.upper()} {target.confidence:.0%}",
+        hud_template("AIR LOCK · {label} {confidence}", chinese_enabled(host.registry),
+                     label=target.label.upper(), confidence=f"{target.confidence:.0%}"),
         main,
     )
     p.restore()

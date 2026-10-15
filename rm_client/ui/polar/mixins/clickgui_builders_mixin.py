@@ -103,6 +103,7 @@ from ...paint import (
     with_alpha,
 )
 from ...theme import THEME, color
+from ...jello_locale import chinese_enabled, ui_text, toast_text, description_label
 from ....match_modes import MATCH_MODE_KEYS
 from ....model import (
     CATEGORIES,
@@ -155,6 +156,7 @@ class ClickGuiBuildersMixin:
         play_sound: bool = True,
     ) -> None:
         visible = bool(visible)
+        self._jello_background_press = None
         if visible:
             self.close_student_panel(immediate=True)
         if visible and self.hero_deploy_video_cut_active():
@@ -193,6 +195,7 @@ class ClickGuiBuildersMixin:
                 self.update()
             return
         self.gui_visible = visible
+        self.hotspots = []
         self.gui_timeline.set_target(1.0 if visible else 0.0)
         self.invalidate_transient_overlay_scene()
         # Sigma's ClickGuiScreen itself has no open/close cue.  Preserve the
@@ -206,6 +209,7 @@ class ClickGuiBuildersMixin:
 
     def build_gpu_clickgui(self, width: int, height: int, alpha: float) -> ClickGuiDrawList:
         started = time.perf_counter()
+        hotspot_start = len(self.hotspots)
         self.gui_scroll_viewports = []
         mode = self.active_clickgui_mode()
         if mode == PRIMARY_GUI_MODE:
@@ -233,6 +237,9 @@ class ClickGuiBuildersMixin:
                 self.build_gpu_tooltip(commands, self.hover_point, self.hover_tooltip)
             if self.binding_module is not None:
                 self.build_gpu_keybind_overlay(commands, width, height)
+        if not self.gui_visible:
+            del self.hotspots[hotspot_start:]
+            self.gui_scroll_viewports = []
         self.clickgui_gpu_layout_ms = (time.perf_counter() - started) * 1000.0
         return commands
 
@@ -314,17 +321,17 @@ class ClickGuiBuildersMixin:
         commands.text(icon_rect, icon_glyph, self.font("material" if len(icon_glyph) == 1 and ord(icon_glyph) >= 0xE000 else "poppins_bold", min(25.0 * scale, icon_size * 0.42), QFont.Weight.Bold), self.gpu_alpha(icon_text, opacity), Qt.AlignmentFlag.AlignCenter)
         text_left = icon_rect.right() + 24.0 * scale
         title_rect = QRectF(text_left, draw_rect.top() + 21.0 * scale, draw_rect.width() - (text_left - draw_rect.left()) - 126.0 * scale, 28.0 * scale)
-        commands.text(title_rect, title, self.font("poppins_bold", 18.0 * scale), self.gpu_alpha(THEME.text, opacity))
-        commands.text(QRectF(text_left, draw_rect.top() + 50.0 * scale, draw_rect.width() - (text_left - draw_rect.left()) - 42.0 * scale, 20.0 * scale), subtitle, self.font("poppins_regular", 9.0 * scale), self.gpu_alpha(color("#e1e8ee", 0.88), opacity))
-        commands.text(QRectF(text_left, draw_rect.bottom() - 31.0 * scale, draw_rect.width() - (text_left - draw_rect.left()) - 42.0 * scale, 18.0 * scale), detail, self.font("poppins_regular", 7.3 * scale), self.gpu_alpha(color("#aeb7bd", 0.90), opacity))
+        commands.text(title_rect, ui_text(title, chinese_enabled(self.registry)), self.font("poppins_bold", 18.0 * scale), self.gpu_alpha(THEME.text, opacity))
+        commands.text(QRectF(text_left, draw_rect.top() + 50.0 * scale, draw_rect.width() - (text_left - draw_rect.left()) - 42.0 * scale, 20.0 * scale), ui_text(subtitle, chinese_enabled(self.registry)), self.font("poppins_regular", 9.0 * scale), self.gpu_alpha(color("#e1e8ee", 0.88), opacity))
+        commands.text(QRectF(text_left, draw_rect.bottom() - 31.0 * scale, draw_rect.width() - (text_left - draw_rect.left()) - 42.0 * scale, 18.0 * scale), ui_text(detail, chinese_enabled(self.registry)), self.font("poppins_regular", 7.3 * scale), self.gpu_alpha(color("#aeb7bd", 0.90), opacity))
         shortcut = QRectF(draw_rect.right() - 78.0 * scale, draw_rect.top() + 20.0 * scale, 26.0 * scale, 22.0 * scale)
         commands.rect(shortcut, 6.0 * scale, self.gpu_alpha(color("#ffffff", 0.08), opacity), self.gpu_alpha(color("#ffffff", 0.16), opacity), 0.7)
-        commands.text(shortcut, str(index + 1) if action != "startup_back" else "B", self.font("poppins_bold", 7.3 * scale), self.gpu_alpha(icon_text if hover > 0.55 else accent, opacity), Qt.AlignmentFlag.AlignCenter)
+        commands.text(shortcut, ui_text(str(index + 1) if action != "startup_back" else "B", chinese_enabled(self.registry)), self.font("poppins_bold", 7.3 * scale), self.gpu_alpha(icon_text if hover > 0.55 else accent, opacity), Qt.AlignmentFlag.AlignCenter)
         chip = QRectF(draw_rect.right() - 98.0 * scale - 26.0 * scale, draw_rect.bottom() - 34.0 * scale, 98.0 * scale, 22.0 * scale)
         commands.rect(chip, 7.0 * scale, self.gpu_alpha(color("#ffffff", 0.07 + hover * 0.04), opacity), self.gpu_alpha(with_alpha(accent, 0.30 + hover * 0.20), opacity), 0.7)
-        commands.text(chip, chip_text, self.font("poppins_medium", 7.2 * scale), self.gpu_alpha(icon_text if hover > 0.72 else accent, opacity), Qt.AlignmentFlag.AlignCenter)
-        commands.text(QRectF(draw_rect.right() - 43.0 * scale, draw_rect.center().y() - 13.0 * scale, 18.0 * scale, 26.0 * scale), ">", self.font("poppins_bold", 15.0 * scale), self.gpu_alpha(THEME.text if hovered else THEME.muted, opacity), Qt.AlignmentFlag.AlignCenter)
-        self.add_hotspot(draw_rect.adjusted(-3.0 * scale, -3.0 * scale, 3.0 * scale, 3.0 * scale), action, payload, tooltip=tooltip)
+        commands.text(chip, ui_text(chip_text, chinese_enabled(self.registry)), self.font("poppins_medium", 7.2 * scale), self.gpu_alpha(icon_text if hover > 0.72 else accent, opacity), Qt.AlignmentFlag.AlignCenter)
+        commands.text(QRectF(draw_rect.right() - 43.0 * scale, draw_rect.center().y() - 13.0 * scale, 18.0 * scale, 26.0 * scale), ui_text(">", chinese_enabled(self.registry)), self.font("poppins_bold", 15.0 * scale), self.gpu_alpha(THEME.text if hovered else THEME.muted, opacity), Qt.AlignmentFlag.AlignCenter)
+        self.add_hotspot(draw_rect.adjusted(-3.0 * scale, -3.0 * scale, 3.0 * scale, 3.0 * scale), action, payload, tooltip=ui_text(tooltip, chinese_enabled(self.registry)))
 
     def build_gpu_startup_session(self, commands: ClickGuiDrawList, menu_x: float, menu_y: float, button_w: float, height: int, scale: float, active: float, is_match: bool) -> None:
         right_x = menu_x + button_w + 48.0 * scale
@@ -343,7 +350,7 @@ class ClickGuiBuildersMixin:
             refraction_amount_px=min(24.0 * scale, panel.height() * 0.16),
         )
         commands.rect(QRectF(panel.left() + 14.0 * scale, panel.top() + 12.0 * scale, panel.width() - 28.0 * scale, 2.0 * scale), 1.0, self.gpu_alpha(THEME.cyan, active), None, 0.0, self.gpu_alpha(color("#ffffff", 0.24), active))
-        commands.text(QRectF(panel.left() + 18.0 * scale, panel.top() + 26.0 * scale, panel.width() - 36.0 * scale, 23.0 * scale), "SESSION", self.font("poppins_bold", 11.0 * scale), self.gpu_alpha(THEME.text, active))
+        commands.text(QRectF(panel.left() + 18.0 * scale, panel.top() + 26.0 * scale, panel.width() - 36.0 * scale, 23.0 * scale), ui_text("SESSION", chinese_enabled(self.registry)), self.font("poppins_bold", 11.0 * scale), self.gpu_alpha(THEME.text, active))
         scenario = self.startup_scenario_meta(self.scenario_manager.current.key)
         match = self.startup_match_meta(self.match_mode_manager.current.key)
         rows = [("ENV", scenario["title"]), ("MATCH", match["title"]), ("CONFIG", self.current_profile()), ("MQTT", "mock" if not self.mqtt.connected else "live"), ("SERIAL", "mock" if not self.serial.connected else "live")]
@@ -359,8 +366,8 @@ class ClickGuiBuildersMixin:
                 self.gpu_alpha(color("#ffffff", 0.10), active),
                 0.65,
             )
-            commands.text(QRectF(row.left() + 10.0 * scale, row.top(), 58.0 * scale, row.height()), label, self.font("poppins_bold", 7.0 * scale), self.gpu_alpha(accent, active), Qt.AlignmentFlag.AlignVCenter)
-            commands.text(row.adjusted(72.0 * scale, 0, -10.0 * scale, 0), value, self.font("poppins_medium", 8.1 * scale), self.gpu_alpha(color("#dce7ed", 0.92), active), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight)
+            commands.text(QRectF(row.left() + 10.0 * scale, row.top(), 58.0 * scale, row.height()), ui_text(label, chinese_enabled(self.registry)), self.font("poppins_bold", 7.0 * scale), self.gpu_alpha(accent, active), Qt.AlignmentFlag.AlignVCenter)
+            commands.text(row.adjusted(72.0 * scale, 0, -10.0 * scale, 0), (value if label == "CONFIG" else ui_text(value, chinese_enabled(self.registry))), self.font("poppins_medium", 8.1 * scale), self.gpu_alpha(color("#dce7ed", 0.92), active), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight)
         tip = QRectF(panel.left() + 18.0 * scale, panel.bottom() - 56.0 * scale, panel.width() - 36.0 * scale, 37.0 * scale)
         commands.rect(
             tip,
@@ -369,7 +376,7 @@ class ClickGuiBuildersMixin:
             self.gpu_alpha(color("#ffffff", 0.10), active),
             0.65,
         )
-        commands.text(tip.adjusted(12.0 * scale, 0, -12.0 * scale, 0), "Press 1/2 to load. Backspace returns." if is_match else "Press 1/2/3 to select. Enter continues.", self.font("poppins_regular", 7.2 * scale), self.gpu_alpha(THEME.muted, active), Qt.AlignmentFlag.AlignCenter)
+        commands.text(tip.adjusted(12.0 * scale, 0, -12.0 * scale, 0), ui_text("Press 1/2 to load. Backspace returns." if is_match else "Press 1/2/3 to select. Enter continues.", chinese_enabled(self.registry)), self.font("poppins_regular", 7.2 * scale), self.gpu_alpha(THEME.muted, active), Qt.AlignmentFlag.AlignCenter)
 
     def build_gpu_startup_bottom_bar(self, commands: ClickGuiDrawList, width: int, height: int, scale: float, active: float, is_match: bool, *, settled: bool = False) -> None:
         actions = [("Config", "startup_open_config", None, THEME.cyan), ("Import", "config_action", "Import Config", THEME.pink), ("Wallpaper", "startup_open_wallpaper", None, color("#4677ff")), ("ClickGUI", "startup_open_gui", None, color("#a98aff")), ("Exit", "startup_exit", None, color("#ff6464"))]
@@ -385,8 +392,8 @@ class ClickGuiBuildersMixin:
             hovered = rect.contains(self.hover_point)
             hover = 0.0 if settled else self.anim.value(f"startup.gpu.bottom.{label}", 1.0 if hovered else 0.0, self.anim_duration(0.16), Easings.ease_out_expo)
             commands.rect(rect, 6.0 * scale, self.gpu_alpha(with_alpha(accent, 0.08 + hover * 0.12), active), self.gpu_alpha(with_alpha(accent, 0.20 + hover * 0.25), active), 0.8)
-            commands.text(rect, label, self.font("poppins_medium", 8.2 * scale), self.gpu_alpha(THEME.text, active), Qt.AlignmentFlag.AlignCenter)
-            self.add_hotspot(rect, action, payload, tooltip=label)
+            commands.text(rect, ui_text(label, chinese_enabled(self.registry)), self.font("poppins_medium", 8.2 * scale), self.gpu_alpha(THEME.text, active), Qt.AlignmentFlag.AlignCenter)
+            self.add_hotspot(rect, action, payload, tooltip=ui_text(label, chinese_enabled(self.registry)))
             x += button_w + gap
 
     def build_gpu_startup_hover_layer(self, width: int, height: int) -> ClickGuiDrawList:
@@ -489,7 +496,7 @@ class ClickGuiBuildersMixin:
                 self.gui_primary_text(alpha) if category == self.selected_category else self.gui_secondary_text(alpha * 0.92),
                 Qt.AlignmentFlag.AlignCenter,
             )
-            self.add_hotspot(box, "select_category", category, tooltip=category)
+            self.add_hotspot(box, "select_category", category, tooltip=ui_text(category, chinese_enabled(self.registry)))
 
         module_rect = QRectF(panel.left() + 12 * scale, panel.top() + 43 * scale, 160 * scale, 316 * scale)
         settings_rect = QRectF(panel.left() + 187 * scale, panel.top() + 43 * scale, 401 * scale, 316 * scale)
@@ -498,7 +505,7 @@ class ClickGuiBuildersMixin:
         commands.rect(module_rect, 4 * scale, color("#ffffff", 0.055 * alpha), color("#ffffff", 0.035 * alpha), 1.0)
         commands.text(
             module_rect.adjusted(10 * scale, 7 * scale, -10 * scale, -module_rect.height() + 30 * scale),
-            self.selected_category,
+            ui_text(self.selected_category, chinese_enabled(self.registry)),
             self.font("poppins_bold", 12.4 * scale),
             self.gui_primary_text(alpha),
         )
@@ -527,7 +534,7 @@ class ClickGuiBuildersMixin:
         commands.rect(settings_rect, 4 * scale, color("#ffffff", 0.075 * alpha), color("#ffffff", 0.08 * alpha), 1.0)
         commands.text(
             settings_rect.adjusted(12 * scale, 9 * scale, -72 * scale, -settings_rect.height() + 38 * scale),
-            self.selected_module.name,
+            ui_text(self.selected_module.name, chinese_enabled(self.registry)),
             self.font("poppins_bold", 13.5 * scale),
             self.gui_primary_text(alpha),
         )
@@ -539,7 +546,7 @@ class ClickGuiBuildersMixin:
         commands.rect(search, search.height() / 2, color("#16161b", 0.94 * alpha), color("#ffffff", 0.16 * alpha), 1.0)
         commands.text(
             search.adjusted(12 * scale, 0, -12 * scale, 0),
-            self.search_query or "Search modules...",
+            self.search_query or ui_text("Search modules...", chinese_enabled(self.registry)),
             self.font("poppins_medium", 8.2 * scale),
             self.gui_primary_text(alpha) if self.search_query else self.gui_secondary_text(alpha * 0.9),
         )
@@ -555,9 +562,9 @@ class ClickGuiBuildersMixin:
             x, y = float(data["x"]), float(data["y"])
             header = QRectF(x, y, panel_w, row_h)
             commands.rect(header, 3 * scale, color("#101014", 0.94 * alpha), color("#ffffff", 0.12 * alpha), 1.0)
-            commands.text(header.adjusted(8 * scale, 0, -8 * scale, 0), f"{self.category_icon(category)}  {category}", self.font("poppins_bold", 8.2 * scale), self.gpu_alpha(THEME.text, alpha))
-            self.add_hotspot(header, "old_drag", category, button=1, tooltip="拖动面板")
-            self.add_hotspot(header, "old_expand", category, button=3, tooltip="展开分类")
+            commands.text(header.adjusted(8 * scale, 0, -8 * scale, 0), f"{self.category_icon(category)}  {ui_text(category, chinese_enabled(self.registry))}", self.font("poppins_bold", 8.2 * scale), self.gpu_alpha(THEME.text, alpha))
+            self.add_hotspot(header, "old_drag", category, button=1, tooltip=ui_text("拖动面板", chinese_enabled(self.registry)))
+            self.add_hotspot(header, "old_expand", category, button=3, tooltip=ui_text("展开分类", chinese_enabled(self.registry)))
             open_v = self.gui_motion.value(f"old.panel.{category}", 1.0 if data["expanded"] else 0.0, self.anim_duration(0.34), Easings.ease_out_expo)
             modules = self.registry.by_category(category)
             body_top = y + row_h
@@ -596,8 +603,8 @@ class ClickGuiBuildersMixin:
             # teal accent line; it is not the blue-grey POLAR panel surface.
             commands.rect(rect, 7 * scale, color("#171717", 0.96 * alpha * enter), color("#ffffff", 0.08 * alpha * enter), 1.0)
             commands.rect(QRectF(rect.left(), rect.top(), rect.width(), max(1.0, scale)), 0, color("#2de8ca", 0.88 * alpha * enter), clip=rect)
-            commands.text(rect.adjusted(8 * scale, 3 * scale, -8 * scale, -rect.height() + 25 * scale), category, self.font("poppins_bold", 8 * scale), self.gpu_alpha(THEME.text, alpha * enter))
-            self.add_hotspot(QRectF(rect.left(), rect.top(), rect.width(), 24 * scale), "select_category", category, tooltip=category)
+            commands.text(rect.adjusted(8 * scale, 3 * scale, -8 * scale, -rect.height() + 25 * scale), ui_text(category, chinese_enabled(self.registry)), self.font("poppins_bold", 8 * scale), self.gpu_alpha(THEME.text, alpha * enter))
+            self.add_hotspot(QRectF(rect.left(), rect.top(), rect.width(), 24 * scale), "select_category", category, tooltip=ui_text(category, chinese_enabled(self.registry)))
             clip = rect.adjusted(0, 26 * scale, 0, -4 * scale)
             content_h = sum(self.module_draw_height(module, scale, True) for module in modules)
             maximum = max(0.0, content_h - clip.height())
@@ -632,8 +639,8 @@ class ClickGuiBuildersMixin:
             rect = QRectF(x0 + index * (panel_w + gap), y0, panel_w, header_h + body_h * open_v)
             commands.rect(rect, 5 * scale, color("#0c0c0c", 0.57 * alpha), color("#ffffff", 0.07 * alpha), 1.0)
             commands.rect(QRectF(rect.left(), rect.top(), rect.width(), header_h), 5 * scale, color("#2a2a2a", 0.76 * alpha), clip=rect)
-            commands.text(QRectF(rect.left() + 12 * scale, rect.top(), rect.width() - 24 * scale, header_h), f"{self.category_icon(category)}  {category}", self.font("poppins_bold", 10 * scale), self.gpu_alpha(THEME.text, alpha))
-            self.add_hotspot(QRectF(rect.left(), rect.top(), rect.width(), header_h), "dropdown_expand", category, button=3, tooltip="展开分类")
+            commands.text(QRectF(rect.left() + 12 * scale, rect.top(), rect.width() - 24 * scale, header_h), f"{self.category_icon(category)}  {ui_text(category, chinese_enabled(self.registry))}", self.font("poppins_bold", 10 * scale), self.gpu_alpha(THEME.text, alpha))
+            self.add_hotspot(QRectF(rect.left(), rect.top(), rect.width(), header_h), "dropdown_expand", category, button=3, tooltip=ui_text("展开分类", chinese_enabled(self.registry)))
             clip = QRectF(rect.left(), rect.top() + header_h, rect.width(), body_h * open_v)
             self.register_gui_scroll_viewport("dropdown", category, clip, content_h, body_h)
             yy = rect.top() + header_h - scroll
@@ -699,7 +706,7 @@ class ClickGuiBuildersMixin:
         reveal = max(0.0, min(1.0, (progress - 0.16) / 0.84)) * alpha
         header = QRectF(panel.left(), panel.top(), panel.width(), 42.0 * scale)
         commands.text(header.adjusted(17 * scale, 0, -120 * scale, 0), "POLAR-RM", self.font("poppins_bold", 13.0 * scale), self.gpu_alpha(color("#f2fff6"), reveal))
-        commands.text(QRectF(header.right() - 98 * scale, header.top(), 82 * scale, header.height()), "POLAR VIEW", self.font("poppins_bold", 7.0 * scale), self.gpu_alpha(color("#73f9ad"), reveal), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        commands.text(QRectF(header.right() - 98 * scale, header.top(), 82 * scale, header.height()), ui_text("POLAR VIEW", chinese_enabled(self.registry)), self.font("poppins_bold", 7.0 * scale), self.gpu_alpha(color("#73f9ad"), reveal), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         commands.rect(QRectF(panel.left() + 12 * scale, header.bottom() - 1, panel.width() - 24 * scale, 1), 0.5, color("#9bffca", 0.26 * reveal))
 
         sidebar = QRectF(panel.left() + 12 * scale, header.bottom() + 10 * scale, 54 * scale, panel.height() - header.height() - 22 * scale)
@@ -713,7 +720,7 @@ class ClickGuiBuildersMixin:
             if selected or hover > 0.01:
                 commands.rect(item, 8 * scale, color("#75f7ac", (0.20 + 0.10 * hover) * reveal), color("#ccffe0", (0.24 + 0.20 * hover) * reveal), 0.8)
             commands.text(item, self.category_icon(category) if category != "Profile" else "@", self.font("poppins_bold", 10 * scale), self.gpu_alpha(color("#e9fff1") if selected else color("#b8c9bf"), reveal), Qt.AlignmentFlag.AlignCenter)
-            self.add_hotspot(item, "select_category", category, tooltip=category)
+            self.add_hotspot(item, "select_category", category, tooltip=ui_text(category, chinese_enabled(self.registry)))
 
         modules = self.polar_view_modules(self.selected_category)
         list_w = content.width() * 0.43
@@ -721,7 +728,7 @@ class ClickGuiBuildersMixin:
         setting_panel = QRectF(module_panel.right() + 10 * scale, content.top(), content.width() - list_w - 10 * scale, content.height())
         self.build_gpu_polar_glass(commands, module_panel, 16 * scale, reveal)
         self.build_gpu_polar_glass(commands, setting_panel, 16 * scale, reveal)
-        commands.text(module_panel.adjusted(11 * scale, 8 * scale, -11 * scale, -module_panel.height() + 27 * scale), self.selected_category, self.font("poppins_bold", 10 * scale), self.gpu_alpha(color("#f4fff7"), reveal))
+        commands.text(module_panel.adjusted(11 * scale, 8 * scale, -11 * scale, -module_panel.height() + 27 * scale), ui_text(self.selected_category, chinese_enabled(self.registry)), self.font("poppins_bold", 10 * scale), self.gpu_alpha(color("#f4fff7"), reveal))
         list_clip = module_panel.adjusted(6 * scale, 33 * scale, -6 * scale, -6 * scale)
         row_h = 32 * scale
         max_scroll = max(0.0, len(modules) * row_h - list_clip.height())
@@ -737,7 +744,7 @@ class ClickGuiBuildersMixin:
         if max_scroll > 0.5:
             self.build_gpu_scroll_island(commands, list_clip, scroll, max_scroll, reveal, scale)
 
-        commands.text(setting_panel.adjusted(12 * scale, 8 * scale, -60 * scale, -setting_panel.height() + 29 * scale), self.selected_module.name, self.font("poppins_bold", 11 * scale), self.gpu_alpha(color("#f4fff7"), reveal))
+        commands.text(setting_panel.adjusted(12 * scale, 8 * scale, -60 * scale, -setting_panel.height() + 29 * scale), ui_text(self.selected_module.name, chinese_enabled(self.registry)), self.font("poppins_bold", 11 * scale), self.gpu_alpha(color("#f4fff7"), reveal))
         toggle = QRectF(setting_panel.right() - 52 * scale, setting_panel.top() + 10 * scale, 34 * scale, 15 * scale)
         self.build_gpu_toggle(commands, toggle, self.selected_module.enabled, reveal, ("module_toggle", self.selected_module.name))
         settings_clip = setting_panel.adjusted(10 * scale, 36 * scale, -10 * scale, -8 * scale)
@@ -804,8 +811,8 @@ class ClickGuiBuildersMixin:
             panel = QRectF(x, y, panel_w, header_h + body_h)
             self.build_gpu_polar_glass(commands, panel, 16 * scale, alpha)
             header = QRectF(x, y, panel_w, header_h)
-            commands.text(header.adjusted(10 * scale, 0, -10 * scale, 0), f"{self.category_icon(category) if category != 'Profile' else '@'}  {category}", self.font("poppins_bold", 9 * scale), self.gpu_alpha(color("#f1fff5"), alpha))
-            self.add_hotspot(header, "polar_drag", category, button=1, tooltip="Drag category window")
+            commands.text(header.adjusted(10 * scale, 0, -10 * scale, 0), f"{self.category_icon(category) if category != 'Profile' else '@'}  {ui_text(category, chinese_enabled(self.registry))}", self.font("poppins_bold", 9 * scale), self.gpu_alpha(color("#f1fff5"), alpha))
+            self.add_hotspot(header, "polar_drag", category, button=1, tooltip=ui_text("Drag category window", chinese_enabled(self.registry)))
             clip = QRectF(x + 5 * scale, y + header_h, panel_w - 10 * scale, body_h)
             self.register_gui_scroll_viewport("polar_multi", category, clip, content_h, body_h)
             yy = clip.top() - scroll
@@ -822,13 +829,13 @@ class ClickGuiBuildersMixin:
         commands.rect(row, 5 * scale, fill, color("#effff4", (0.07 + 0.13 * hover) * alpha), 0.8, clip=clip)
         # 启用指示条贴行左缘通高：行圆角 r=5s 处弧线内收，方角条会在角部外伸 ~2.2s px，补同半径 SDF 裁剪。
         commands.rect(QRectF(row.left(), row.top(), 2 * scale, row.height()), 1 * scale, color("#72f7a9", (0.25 + 0.65 * enabled) * alpha), clip=clip, clip_radius=5 * scale)
-        commands.text(row.adjusted(8 * scale, 0, -50 * scale, 0), self.elide_for_gpu(self.font("poppins_medium", 7.6 * scale), module.name, row.width() - 56 * scale), self.font("poppins_medium", 7.6 * scale), self.gpu_alpha(color("#f3fff7"), alpha), clip=clip)
+        commands.text(row.adjusted(8 * scale, 0, -50 * scale, 0), self.elide_for_gpu(self.font("poppins_medium", 7.6 * scale), ui_text(module.name, chinese_enabled(self.registry)), row.width() - 56 * scale), self.font("poppins_medium", 7.6 * scale), self.gpu_alpha(color("#f3fff7"), alpha), clip=clip)
         key = QRectF(row.right() - 39 * scale, row.top() + 4 * scale, 33 * scale, row.height() - 8 * scale)
         commands.rect(key, 4 * scale, color("#b7ffd2", 0.10 * alpha), clip=clip)
         commands.text(key, self.compact_keybind(module.keybind), self.font("poppins_bold", 6.0 * scale), self.gpu_alpha(color("#d9ffe7"), alpha), Qt.AlignmentFlag.AlignCenter, clip)
         self._hotspot_clip = clip
-        self.add_hotspot(row.adjusted(0, 0, -42 * scale, 0), "module_select" if select_only else "module_toggle", module.name, tooltip=module.description)
-        self.add_hotspot(key, "module_bind", module.name, tooltip="Bind key")
+        self.add_hotspot(row.adjusted(0, 0, -42 * scale, 0), "module_select" if select_only else "module_toggle", module.name, tooltip=description_label(module.description, chinese_enabled(self.registry)))
+        self.add_hotspot(key, "module_bind", module.name, tooltip=ui_text("Bind key", chinese_enabled(self.registry)))
         self._hotspot_clip = None
 
     def build_gpu_module_row(
@@ -886,7 +893,7 @@ class ClickGuiBuildersMixin:
             name_font = self.font("poppins_medium", (7.6 if compact else 8.6) * scale)
             key_w = 20 * scale
             name_rect = row.adjusted(7 * scale, 0, -32 * scale, 0)
-        label = self.elide_for_gpu(name_font, module.name, name_rect.width())
+        label = self.elide_for_gpu(name_font, ui_text(module.name, chinese_enabled(self.registry)), name_rect.width())
         commands.text(name_rect, label, name_font, self.gpu_alpha(text_color, alpha), clip=clip)
         if style == "panel":
             key = QRectF(row.right() - 34 * scale, row.top() + 2 * scale, 30 * scale, max(10 * scale, row.height() - 4 * scale))
@@ -896,18 +903,18 @@ class ClickGuiBuildersMixin:
         # PanelClickGui always labels the bind chip "KEY" (see draw_panel_module_list).
         # Other GPU modes keep the compact bind / placeholder.
         if style == "panel":
-            key_label = "KEY"
+            key_label = ui_text("KEY", chinese_enabled(self.registry))
         else:
             key_label = self.compact_keybind(module.keybind) if module.keybind and module.keybind != "None" else "--"
         commands.text(key, key_label, self.font("poppins_medium", 6.8 * scale), self.gui_secondary_text(alpha), Qt.AlignmentFlag.AlignCenter, clip)
         self._hotspot_clip = clip
         if style == "panel":
-            self.add_hotspot(row.adjusted(0, 0, -36 * scale, 0), "module_toggle" if not select_only else "module_select", module.name, button=1, tooltip=module.description)
-            self.add_hotspot(row.adjusted(0, 0, -36 * scale, 0), "module_expand", module.name, button=3, tooltip="展开设置")
+            self.add_hotspot(row.adjusted(0, 0, -36 * scale, 0), "module_toggle" if not select_only else "module_select", module.name, button=1, tooltip=description_label(module.description, chinese_enabled(self.registry)))
+            self.add_hotspot(row.adjusted(0, 0, -36 * scale, 0), "module_expand", module.name, button=3, tooltip=ui_text("展开设置", chinese_enabled(self.registry)))
         else:
-            self.add_hotspot(row.adjusted(0, 0, -25 * scale, 0), "module_toggle" if not select_only else "module_select", module.name, button=1, tooltip=module.description)
-            self.add_hotspot(row.adjusted(0, 0, -25 * scale, 0), "module_expand", module.name, button=3, tooltip="展开设置")
-        self.add_hotspot(key, "module_bind", module.name, tooltip="绑定按键")
+            self.add_hotspot(row.adjusted(0, 0, -25 * scale, 0), "module_toggle" if not select_only else "module_select", module.name, button=1, tooltip=description_label(module.description, chinese_enabled(self.registry)))
+            self.add_hotspot(row.adjusted(0, 0, -25 * scale, 0), "module_expand", module.name, button=3, tooltip=ui_text("展开设置", chinese_enabled(self.registry)))
+        self.add_hotspot(key, "module_bind", module.name, tooltip=ui_text("绑定按键", chinese_enabled(self.registry)))
 
         self._hotspot_clip = None
 
@@ -916,11 +923,11 @@ class ClickGuiBuildersMixin:
         self._hotspot_clip = content
         bind = QRectF(content.left(), y, content.width(), 28 * scale)
         commands.rect(bind.adjusted(0, 2 * scale, 0, -3 * scale), 5 * scale, color("#ffffff", 0.05 * alpha), color("#ffffff", 0.08 * alpha), 1.0, clip=content)
-        commands.text(bind.adjusted(8 * scale, 0, -112 * scale, 0), "Keybind", self.font("poppins_medium", 8.8 * scale), self.gui_secondary_text(alpha), clip=content)
+        commands.text(bind.adjusted(8 * scale, 0, -112 * scale, 0), ui_text("Keybind", chinese_enabled(self.registry)), self.font("poppins_medium", 8.8 * scale), self.gui_secondary_text(alpha), clip=content)
         key = QRectF(bind.right() - 103 * scale, bind.top() + 5 * scale, 96 * scale, 18 * scale)
         commands.rect(key, 5 * scale, color("#ffffff", 0.08 * alpha), color("#ffffff", 0.14 * alpha), 1.0, clip=content)
         commands.text(key, module.keybind, self.font("poppins_medium", 8.2 * scale), self.gui_primary_text(alpha), Qt.AlignmentFlag.AlignCenter, content)
-        self.add_hotspot(key, "module_bind", module.name, tooltip="打开按键绑定")
+        self.add_hotspot(key, "module_bind", module.name, tooltip=ui_text("打开按键绑定", chinese_enabled(self.registry)))
         y = bind.bottom()
         for setting in module.settings:
             row = QRectF(content.left(), y, content.width(), 31 * scale)
@@ -934,7 +941,7 @@ class ClickGuiBuildersMixin:
         # Setting names are the densest text — keep them bright and a bit larger.
         commands.text(
             body.adjusted(8 * scale, 0, -120 * scale, 0),
-            setting.name,
+            ui_text(setting.name, chinese_enabled(self.registry)),
             self.font("poppins_medium", 8.8 * scale),
             self.gui_primary_text(alpha),
             clip=clip,
@@ -944,7 +951,7 @@ class ClickGuiBuildersMixin:
         elif setting.kind == "number":
             commands.text(
                 QRectF(body.right() - 78 * scale, body.top(), 70 * scale, body.height() * 0.48),
-                setting.display_value(),
+                ui_text(setting.display_value(), chinese_enabled(self.registry)),
                 self.font("poppins_medium", 8.2 * scale),
                 self.gui_primary_text(alpha),
                 Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
@@ -981,13 +988,13 @@ class ClickGuiBuildersMixin:
         elif setting.kind == "mode":
             box = QRectF(body.right() - 112 * scale, body.top() + 5 * scale, 103 * scale, body.height() - 10 * scale)
             commands.rect(box, 5 * scale, color("#303036", 0.95 * alpha), color("#ffffff", 0.12 * alpha), 1.0, clip=clip)
-            commands.text(box.adjusted(5 * scale, 0, -5 * scale, 0), str(setting.value), self.font("poppins_medium", 7.6 * scale), self.gui_primary_text(alpha), Qt.AlignmentFlag.AlignCenter, clip)
-            self.add_hotspot(box, "setting_mode_next", setting, tooltip="左键/右键循环切换")
+            commands.text(box.adjusted(5 * scale, 0, -5 * scale, 0), ui_text(str(setting.value), chinese_enabled(self.registry)), self.font("poppins_medium", 7.6 * scale), self.gui_primary_text(alpha), Qt.AlignmentFlag.AlignCenter, clip)
+            self.add_hotspot(box, "setting_mode_next", setting, tooltip=ui_text("左键/右键循环切换", chinese_enabled(self.registry)))
         elif setting.kind == "action":
             button = body.adjusted(8 * scale, 4 * scale, -8 * scale, -4 * scale)
             commands.rect(button, 5 * scale, color("#ffffff", 0.94 * alpha), color("#56fff0", 0.40 * alpha), 1.0, clip=clip)
-            commands.text(button, setting.name, self.font("poppins_medium", 8.0 * scale), self.gpu_alpha(color("#090a0d"), alpha), Qt.AlignmentFlag.AlignCenter, clip)
-            self.add_hotspot(button, "config_action", setting.name, tooltip=setting.description)
+            commands.text(button, ui_text(setting.name, chinese_enabled(self.registry)), self.font("poppins_medium", 8.0 * scale), self.gpu_alpha(color("#090a0d"), alpha), Qt.AlignmentFlag.AlignCenter, clip)
+            self.add_hotspot(button, "config_action", setting.name, tooltip=description_label(setting.description, chinese_enabled(self.registry)))
 
     def build_gpu_inline_settings(self, commands: ClickGuiDrawList, module: Module, y: float, x: float, width: float, scale: float, alpha: float, clip: QRectF, key: str, max_rows: int) -> None:
         expand = self.gui_motion.value(key, 1.0 if module.name in self.module_expanded else 0.0, self.anim_duration(0.34), Easings.ease_out_expo)
@@ -1003,7 +1010,7 @@ class ClickGuiBuildersMixin:
             row = QRectF(x + (1 - reveal) * 7 * scale, y, width - (1 - reveal) * 7 * scale, h)
             if setting is None:
                 commands.rect(row, 5 * scale, color("#ffffff", 0.035 * alpha * reveal), clip=clip)
-                commands.text(row.adjusted(7 * scale, 0, -68 * scale, 0), "Keybind", self.font("poppins_regular", 7 * scale), self.gpu_alpha(THEME.muted, alpha * reveal), clip=clip)
+                commands.text(row.adjusted(7 * scale, 0, -68 * scale, 0), ui_text("Keybind", chinese_enabled(self.registry)), self.font("poppins_regular", 7 * scale), self.gpu_alpha(THEME.muted, alpha * reveal), clip=clip)
                 box = QRectF(row.right() - 62 * scale, row.top() + 4 * scale, 55 * scale, row.height() - 8 * scale)
                 commands.rect(box, 4 * scale, color("#ffffff", 0.06 * alpha * reveal), clip=clip)
                 commands.text(box, self.compact_keybind(module.keybind), self.font("poppins_medium", 6.7 * scale), self.gpu_alpha(THEME.text, alpha * reveal), Qt.AlignmentFlag.AlignCenter, clip)
@@ -1065,7 +1072,7 @@ class ClickGuiBuildersMixin:
             rect = QRectF(x + index * (chip_w + gap), y, chip_w, 18)
             active = mode == self.mode_manager.mode
             commands.rect(rect, 5, color("#ffffff", 0.92) if active else color("#1a1c22", 0.95), color("#ffffff", 0.10), 1.0)
-            commands.text(rect, self.gui_mode_label(mode), self.font("poppins_medium", 7.1), color("#08080a") if active else THEME.text, Qt.AlignmentFlag.AlignCenter)
+            commands.text(rect, ui_text(self.gui_mode_label(mode), chinese_enabled(self.registry)), self.font("poppins_medium", 7.1), color("#08080a") if active else THEME.text, Qt.AlignmentFlag.AlignCenter)
             self.add_hotspot(rect, "gui_mode", mode)
 
     def build_gpu_legacy_return(
@@ -1091,12 +1098,12 @@ class ClickGuiBuildersMixin:
         )
         commands.text(
             rect.adjusted(12.0, 0.0, -12.0, 0.0),
-            "←  Back to Jello Sigma",
+            ui_text("←  Back to Jello Sigma", chinese_enabled(self.registry)),
             self.font("jello_medium", 9.5),
             color("#010101", 0.72 * alpha),
             Qt.AlignmentFlag.AlignCenter,
         )
-        self.add_hotspot(rect, "jello_return", tooltip="Return to the main ClickGUI")
+        self.add_hotspot(rect, "jello_return", tooltip=ui_text("Return to the main ClickGUI", chinese_enabled(self.registry)))
 
     def build_gpu_toasts(self, commands: ClickGuiDrawList, width: int, height: int) -> None:
         now = time.perf_counter()
@@ -1104,7 +1111,7 @@ class ClickGuiBuildersMixin:
         for index, toast in enumerate(self.toasts[-5:]):
             age = now - toast["created"]
             fade = 1.0 if age < 2.35 else max(0.0, 1.0 - (age - 2.35) / 0.65)
-            message = str(toast["message"])
+            message = toast_text(str(toast["message"]), chinese_enabled(self.registry))
             rect = QRectF(width / 2 - 150, height - 82 - index * 42, 300, 36)
             commands.rect(rect, 10, color("#050506", 0.74 * fade), color("#ffffff", 0.08 * fade), 1.0)
             commands.text(rect.adjusted(14, 4, -14, -16), message, self.font("poppins_regular", 7.3), self.gpu_alpha(THEME.text, fade), Qt.AlignmentFlag.AlignCenter)
@@ -1131,9 +1138,9 @@ class ClickGuiBuildersMixin:
         scale = 0.96 + 0.04 * active
         rect = QRectF(width / 2 - 200 * scale, height / 2 - 90 * scale, 400 * scale, 180 * scale)
         commands.rect(rect, 11 * scale, color("#0b0b0f", 0.97 * active), color("#ffffff", 0.16 * active), 1.0)
-        commands.text(QRectF(rect.left(), rect.top() + 28 * scale, rect.width(), 24 * scale), "KEYBIND", self.font("poppins_bold", 18 * scale), self.gpu_alpha(THEME.text, active), Qt.AlignmentFlag.AlignCenter)
-        commands.text(QRectF(rect.left(), rect.top() + 67 * scale, rect.width(), 21 * scale), module.name, self.font("poppins_medium", 11 * scale), self.gpu_alpha(THEME.cyan, active), Qt.AlignmentFlag.AlignCenter)
-        commands.text(QRectF(rect.left(), rect.top() + 98 * scale, rect.width(), 20 * scale), "Press any key to bind", self.font("poppins_regular", 9 * scale), self.gpu_alpha(THEME.muted, active), Qt.AlignmentFlag.AlignCenter)
+        commands.text(QRectF(rect.left(), rect.top() + 28 * scale, rect.width(), 24 * scale), ui_text("KEYBIND", chinese_enabled(self.registry)), self.font("poppins_bold", 18 * scale), self.gpu_alpha(THEME.text, active), Qt.AlignmentFlag.AlignCenter)
+        commands.text(QRectF(rect.left(), rect.top() + 67 * scale, rect.width(), 21 * scale), ui_text(module.name, chinese_enabled(self.registry)), self.font("poppins_medium", 11 * scale), self.gpu_alpha(THEME.cyan, active), Qt.AlignmentFlag.AlignCenter)
+        commands.text(QRectF(rect.left(), rect.top() + 98 * scale, rect.width(), 20 * scale), ui_text("Press any key to bind", chinese_enabled(self.registry)), self.font("poppins_regular", 9 * scale), self.gpu_alpha(THEME.muted, active), Qt.AlignmentFlag.AlignCenter)
 
     def draw_panel_gui(self, p: QPainter, width: int, height: int, alpha: float) -> None:
         scale_setting = self.get_gui_scale_for_bounds(width, height, 600.0, 440.0, 76.0, 82.0)
@@ -1199,7 +1206,7 @@ class ClickGuiBuildersMixin:
                 THEME.text if active else color("#7e7e85"),
                 Qt.AlignmentFlag.AlignCenter,
             )
-            self.add_hotspot(box, "select_category", category, tooltip=category)
+            self.add_hotspot(box, "select_category", category, tooltip=ui_text(category, chinese_enabled(self.registry)))
 
     def draw_panel_module_list(self, p: QPainter, rect: QRectF, scale: float) -> None:
         self.draw_gui_cached_layer(
@@ -1208,7 +1215,7 @@ class ClickGuiBuildersMixin:
             ("panel.module-list.shell", round(scale, 3)),
             lambda layer, shell: rounded_rect(layer, shell, 4 * scale, color("#ffffff", 0.055), color("#ffffff", 0.035)),
         )
-        self.draw_text(p, rect.adjusted(10 * scale, 7 * scale, -10 * scale, -rect.height() + 30 * scale), self.selected_category, self.font("poppins_bold", 12.5 * scale), color("#f4f5f8"))
+        self.draw_text(p, rect.adjusted(10 * scale, 7 * scale, -10 * scale, -rect.height() + 30 * scale), ui_text(self.selected_category, chinese_enabled(self.registry)), self.font("poppins_bold", 12.5 * scale), color("#f4f5f8"))
         modules = self.panel_modules()
         top = rect.top() + 38 * scale
         row_h = 23 * scale
@@ -1244,17 +1251,17 @@ class ClickGuiBuildersMixin:
                 rounded_rect(p, row, 5 * scale, color("#ffffff", 0.05 * enabled_v))
             label_color = color("#ffffff") if module.enabled else color("#c6c8d0")
             label_font = self.font("poppins_medium", 9.3 * scale)
-            label = self.elide(p, label_font, module.name, row.width() - 42 * scale)
+            label = self.elide(p, label_font, ui_text(module.name, chinese_enabled(self.registry)), row.width() - 42 * scale)
             if enabled_v > 0.01:
                 glow_text(p, label, row.left() + 6 * scale, cap_center_y(p, label_font, row), label_font, label_color, accent_color(i), 3 * enabled_v)
             else:
                 self.draw_text(p, row.adjusted(6 * scale, 0, -42 * scale, 0), label, label_font, label_color)
             key_box = QRectF(row.right() - 34 * scale, row.top() + 2 * scale, 30 * scale, row.height() - 4 * scale)
             rounded_rect(p, key_box, 4 * scale, color("#ffffff", 0.06), color("#ffffff", 0.10))
-            self.draw_text(p, key_box, "KEY", self.font("poppins_medium", 6.8 * scale), color("#d0d2da"), Qt.AlignmentFlag.AlignCenter)
-            self.add_hotspot(row.adjusted(0, 0, -36 * scale, 0), "module_select", module.name, button=1, tooltip=module.description)
-            self.add_hotspot(row.adjusted(0, 0, -36 * scale, 0), "module_bind", module.name, button=3, tooltip="绑定按键")
-            self.add_hotspot(key_box, "module_bind", module.name, tooltip="绑定按键")
+            self.draw_text(p, key_box, ui_text("KEY", chinese_enabled(self.registry)), self.font("poppins_medium", 6.8 * scale), color("#d0d2da"), Qt.AlignmentFlag.AlignCenter)
+            self.add_hotspot(row.adjusted(0, 0, -36 * scale, 0), "module_select", module.name, button=1, tooltip=description_label(module.description, chinese_enabled(self.registry)))
+            self.add_hotspot(row.adjusted(0, 0, -36 * scale, 0), "module_bind", module.name, button=3, tooltip=ui_text("绑定按键", chinese_enabled(self.registry)))
+            self.add_hotspot(key_box, "module_bind", module.name, tooltip=ui_text("绑定按键", chinese_enabled(self.registry)))
         p.restore()
 
     def draw_settings_area(self, p: QPainter, rect: QRectF, module: Module, scale: float) -> None:
@@ -1266,7 +1273,7 @@ class ClickGuiBuildersMixin:
             lambda layer, shell: rounded_rect(layer, shell, 4 * scale, color("#1a1a20", 0.92), color("#ffffff", 0.08)),
         )
         header = QRectF(rect.left() + 12 * scale, rect.top() + 9 * scale, rect.width() - 24 * scale, 29 * scale)
-        self.draw_text(p, header.adjusted(0, 0, -72 * scale, 0), module.name, self.font("poppins_bold", 13.8 * scale), color("#f4f5f8"))
+        self.draw_text(p, header.adjusted(0, 0, -72 * scale, 0), ui_text(module.name, chinese_enabled(self.registry)), self.font("poppins_bold", 13.8 * scale), color("#f4f5f8"))
         self.draw_toggle_switch(p, QRectF(rect.right() - 57 * scale, rect.top() + 13 * scale, 36 * scale, 16 * scale), module.enabled, ("module_toggle", module.name))
 
         content = rect.adjusted(10 * scale, 43 * scale, -10 * scale, -10 * scale)
@@ -1284,7 +1291,7 @@ class ClickGuiBuildersMixin:
         for setting in module.settings:
             y = self.draw_setting_row(p, setting, QRectF(content.left(), y, content.width(), 31 * scale), scale)
         if not module.settings:
-            self.draw_text(p, QRectF(content.left(), y, content.width(), 44 * scale), module.description or "No settings", self.font("poppins_medium", 8.8 * scale), color("#d0d2da"))
+            self.draw_text(p, QRectF(content.left(), y, content.width(), 44 * scale), description_label(module.description, chinese_enabled(self.registry)) if module.description else ui_text("No settings", chinese_enabled(self.registry)), self.font("poppins_medium", 8.8 * scale), color("#d0d2da"))
         p.restore()
 
     def draw_bind_row(self, p: QPainter, rect: QRectF, module: Module, scale: float, clip_rect: QRectF | None = None, compact: bool = False) -> float:
@@ -1296,15 +1303,15 @@ class ClickGuiBuildersMixin:
                 box_w = min(74.0 * scale, max(48.0 * scale, content_rect.width() * 0.52))
                 box = QRectF(content_rect.right() - box_w - 6 * scale, content_rect.top() + 4 * scale, box_w, max(13.0 * scale, content_rect.height() - 8 * scale))
                 label_rect = QRectF(content_rect.left() + 7 * scale, content_rect.top(), max(18.0 * scale, box.left() - content_rect.left() - 11 * scale), content_rect.height())
-                self.draw_text(p, label_rect, "Keybind", self.font("poppins_medium", 7.6 * scale), color("#d0d2da"))
+                self.draw_text(p, label_rect, ui_text("Keybind", chinese_enabled(self.registry)), self.font("poppins_medium", 7.6 * scale), color("#d0d2da"))
                 key_text = self.compact_keybind(module.keybind)
             else:
-                self.draw_text(p, rect.adjusted(8 * scale, 0, -112 * scale, 0), "Keybind", self.font("poppins_medium", 8.8 * scale), color("#d0d2da"))
+                self.draw_text(p, rect.adjusted(8 * scale, 0, -112 * scale, 0), ui_text("Keybind", chinese_enabled(self.registry)), self.font("poppins_medium", 8.8 * scale), color("#d0d2da"))
                 box = QRectF(rect.right() - 103 * scale, rect.top() + 5 * scale, 96 * scale, 18 * scale)
                 key_text = module.keybind
             rounded_rect(p, box, 5 * scale, color("#ffffff", 0.07), color("#ffffff", 0.14))
             self.draw_text(p, box, key_text, self.font("poppins_medium", (7.4 if compact else 8.2) * scale), color("#f4f5f8"), Qt.AlignmentFlag.AlignCenter)
-            self.add_hotspot(box, "module_bind", module.name, tooltip="打开按键绑定覆盖层")
+            self.add_hotspot(box, "module_bind", module.name, tooltip=ui_text("打开按键绑定覆盖层", chinese_enabled(self.registry)))
         return rect.bottom()
 
     def draw_setting_row(self, p: QPainter, setting: Setting, rect: QRectF, scale: float, compact: bool = False) -> float:
@@ -1315,7 +1322,7 @@ class ClickGuiBuildersMixin:
         rounded_rect(p, content_rect, 5 * scale, color("#ffffff", 0.04 if not compact else 0.03))
         label_font = self.font("poppins_medium", (8.8 if not compact else 7.8) * scale)
         value_font = self.font("poppins_medium", (8.2 if not compact else 7.4) * scale)
-        self.draw_text(p, content_rect.adjusted(8 * scale, 0, -120 * scale, 0), setting.name, label_font, color("#f4f5f8"))
+        self.draw_text(p, content_rect.adjusted(8 * scale, 0, -120 * scale, 0), ui_text(setting.name, chinese_enabled(self.registry)), label_font, color("#f4f5f8"))
         if setting.kind == "bool":
             self.draw_toggle_switch(p, QRectF(content_rect.right() - 39 * scale, content_rect.top() + 6 * scale, 30 * scale, 13 * scale), bool(setting.value), ("setting_toggle", setting))
         elif setting.kind == "number":
@@ -1327,13 +1334,13 @@ class ClickGuiBuildersMixin:
         elif setting.kind == "mode":
             box = QRectF(content_rect.right() - 112 * scale, content_rect.top() + 5 * scale, 103 * scale, content_rect.height() - 10 * scale)
             rounded_rect(p, box, 5 * scale, color("#303036", 0.95), color("#ffffff", 0.12))
-            self.draw_text(p, box.adjusted(6 * scale, 0, -6 * scale, 0), str(setting.value), value_font, color("#f4f5f8"), Qt.AlignmentFlag.AlignCenter)
-            self.add_hotspot(box, "setting_mode_next", setting, tooltip="左键/右键循环切换")
+            self.draw_text(p, box.adjusted(6 * scale, 0, -6 * scale, 0), ui_text(str(setting.value), chinese_enabled(self.registry)), value_font, color("#f4f5f8"), Qt.AlignmentFlag.AlignCenter)
+            self.add_hotspot(box, "setting_mode_next", setting, tooltip=ui_text("左键/右键循环切换", chinese_enabled(self.registry)))
         elif setting.kind == "action":
             button = content_rect.adjusted(8 * scale, 4 * scale, -8 * scale, -4 * scale)
             rounded_rect(p, button, 5 * scale, color("#ffffff", 0.92), color("#56fff0", 0.35))
-            self.draw_text(p, button, setting.name, value_font, color("#090a0d"), Qt.AlignmentFlag.AlignCenter)
-            self.add_hotspot(button, "config_action", setting.name, tooltip=setting.description)
+            self.draw_text(p, button, ui_text(setting.name, chinese_enabled(self.registry)), value_font, color("#090a0d"), Qt.AlignmentFlag.AlignCenter)
+            self.add_hotspot(button, "config_action", setting.name, tooltip=description_label(setting.description, chinese_enabled(self.registry)))
         return rect.bottom()
 
     def draw_compact_setting_row(self, p: QPainter, setting: Setting, rect: QRectF, scale: float) -> float:
@@ -1347,7 +1354,7 @@ class ClickGuiBuildersMixin:
         if setting.kind == "bool":
             switch = QRectF(content_rect.right() - 37 * scale, content_rect.top() + 5 * scale, 29 * scale, 13 * scale)
             label_rect = QRectF(content_rect.left() + 7 * scale, content_rect.top(), max(16.0 * scale, switch.left() - content_rect.left() - 11 * scale), content_rect.height())
-            self.draw_text(p, label_rect, setting.name, label_font, color("#d7d7dc"))
+            self.draw_text(p, label_rect, ui_text(setting.name, chinese_enabled(self.registry)), label_font, color("#d7d7dc"))
             self.draw_toggle_switch(p, switch, bool(setting.value), ("setting_toggle", setting))
         elif setting.kind == "number":
             value = setting.display_value()
@@ -1355,7 +1362,7 @@ class ClickGuiBuildersMixin:
             value_w = min(58.0 * scale, max(36.0 * scale, content_rect.width() * 0.36))
             label_rect = QRectF(content_rect.left() + 7 * scale, content_rect.top() - 1 * scale, max(20.0 * scale, content_rect.width() - value_w - 18 * scale), content_rect.height() * 0.58)
             value_rect = QRectF(content_rect.right() - value_w - 7 * scale, content_rect.top() - 1 * scale, value_w, content_rect.height() * 0.58)
-            self.draw_text(p, label_rect, setting.name, label_font, color("#d7d7dc"))
+            self.draw_text(p, label_rect, ui_text(setting.name, chinese_enabled(self.registry)), label_font, color("#d7d7dc"))
             self.draw_text(p, value_rect, value, value_font, THEME.text, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             draw_bar(p, bar, setting.ratio(), THEME.pink, color("#ffffff", 0.17), 2.1 * scale)
             self.add_hotspot(bar.adjusted(-5 * scale, -8 * scale, 5 * scale, 8 * scale), "setting_slider", setting)
@@ -1363,21 +1370,21 @@ class ClickGuiBuildersMixin:
             box_w = min(78.0 * scale, max(50.0 * scale, content_rect.width() * 0.55))
             box = QRectF(content_rect.right() - box_w - 6 * scale, content_rect.top() + 4 * scale, box_w, max(13.0 * scale, content_rect.height() - 8 * scale))
             label_rect = QRectF(content_rect.left() + 7 * scale, content_rect.top(), max(18.0 * scale, box.left() - content_rect.left() - 11 * scale), content_rect.height())
-            self.draw_text(p, label_rect, setting.name, label_font, color("#d7d7dc"))
+            self.draw_text(p, label_rect, ui_text(setting.name, chinese_enabled(self.registry)), label_font, color("#d7d7dc"))
             rounded_rect(p, box, 5 * scale, color("#303036", 0.90), color("#ffffff", 0.08))
-            self.draw_text(p, box.adjusted(4 * scale, 0, -4 * scale, 0), str(setting.value), value_font, THEME.text, Qt.AlignmentFlag.AlignCenter)
-            self.add_hotspot(box, "setting_mode_next", setting, tooltip="左键/右键循环切换")
+            self.draw_text(p, box.adjusted(4 * scale, 0, -4 * scale, 0), ui_text(str(setting.value), chinese_enabled(self.registry)), value_font, THEME.text, Qt.AlignmentFlag.AlignCenter)
+            self.add_hotspot(box, "setting_mode_next", setting, tooltip=ui_text("左键/右键循环切换", chinese_enabled(self.registry)))
         elif setting.kind == "action":
             button = content_rect.adjusted(6 * scale, 4 * scale, -6 * scale, -4 * scale)
             rounded_rect(p, button, 5 * scale, color("#ffffff", 0.90), color("#56fff0", 0.28))
-            self.draw_text(p, button, setting.name, value_font, color("#090a0d"), Qt.AlignmentFlag.AlignCenter)
-            self.add_hotspot(button, "config_action", setting.name, tooltip=setting.description)
+            self.draw_text(p, button, ui_text(setting.name, chinese_enabled(self.registry)), value_font, color("#090a0d"), Qt.AlignmentFlag.AlignCenter)
+            self.add_hotspot(button, "config_action", setting.name, tooltip=description_label(setting.description, chinese_enabled(self.registry)))
         return rect.bottom()
 
     def draw_search_bar(self, p: QPainter, rect: QRectF, scale: float) -> None:
         focus_v = self.anim.value("panel.search.focus", 1.0 if self.search_focus else 0.0, self.anim_duration(0.18), Easings.ease_out_quad)
         rounded_rect(p, rect, rect.height() / 2, color("#16161b", 0.92 + 0.06 * focus_v), color("#ffffff", 0.12 + 0.18 * focus_v))
-        text = self.search_query if self.search_query else "Search modules..."
+        text = self.search_query if self.search_query else ui_text("Search modules...", chinese_enabled(self.registry))
         self.draw_text(p, rect.adjusted(12 * scale, 0, -12 * scale, 0), text, self.font("poppins_regular", 7.8 * scale), THEME.text if self.search_query else color("#77777d"))
         self.add_hotspot(rect, "search_focus", None)
 
@@ -1400,11 +1407,11 @@ class ClickGuiBuildersMixin:
                 lambda layer, _shell: (
                     glow_rect(layer, header, 4 * scale, 0.12),
                     rounded_rect(layer, header, 3 * scale, color("#101014", 0.94), color("#ffffff", 0.12)),
-                    self.draw_text(layer, header.adjusted(8 * scale, 0, -8 * scale, 0), f"{self.category_icon(category)}  {category}", self.font("poppins_bold", 8.2 * scale), THEME.text),
+                    self.draw_text(layer, header.adjusted(8 * scale, 0, -8 * scale, 0), f"{self.category_icon(category)}  {ui_text(category, chinese_enabled(self.registry))}", self.font("poppins_bold", 8.2 * scale), THEME.text),
                 ),
             )
-            self.add_hotspot(header, "old_drag", category, button=1, tooltip="拖动面板")
-            self.add_hotspot(header, "old_expand", category, button=3, tooltip="展开分类")
+            self.add_hotspot(header, "old_drag", category, button=1, tooltip=ui_text("拖动面板", chinese_enabled(self.registry)))
+            self.add_hotspot(header, "old_expand", category, button=3, tooltip=ui_text("展开分类", chinese_enabled(self.registry)))
 
             expanded = bool(panel_data["expanded"])
             open_v = self.gui_motion.value(f"old.panel.{category}", 1.0 if expanded else 0.0, self.anim_duration(0.34), Easings.ease_out_expo)
@@ -1432,12 +1439,12 @@ class ClickGuiBuildersMixin:
                 fill = color("#151515", 0.78 + 0.08 * enabled_v)
                 rounded_rect(p, row, 0, fill, color("#ffffff", 0.035))
                 fg = color("#b4f8ff") if module.enabled else color("#e5e5e8")
-                self.draw_text(p, row.adjusted(8 * scale, 0, -32 * scale, 0), module.name, self.font("poppins_regular", 7.4 * scale), fg)
+                self.draw_text(p, row.adjusted(8 * scale, 0, -32 * scale, 0), ui_text(module.name, chinese_enabled(self.registry)), self.font("poppins_regular", 7.4 * scale), fg)
                 key_box = QRectF(row.right() - 28 * scale, row.top() + 3 * scale, 23 * scale, row.height() - 6 * scale)
                 self.draw_text(p, key_box, self.compact_keybind(module.keybind) if module.keybind and module.keybind != "None" else "--", self.font("poppins_bold", 6.5 * scale), THEME.muted, Qt.AlignmentFlag.AlignCenter)
-                self.add_hotspot(row.adjusted(0, 0, -28 * scale, 0), "module_toggle", module.name, button=1, tooltip=module.description)
-                self.add_hotspot(row.adjusted(0, 0, -28 * scale, 0), "module_expand", module.name, button=3, tooltip="展开设置")
-                self.add_hotspot(key_box, "module_bind", module.name, tooltip="绑定按键")
+                self.add_hotspot(row.adjusted(0, 0, -28 * scale, 0), "module_toggle", module.name, button=1, tooltip=description_label(module.description, chinese_enabled(self.registry)))
+                self.add_hotspot(row.adjusted(0, 0, -28 * scale, 0), "module_expand", module.name, button=3, tooltip=ui_text("展开设置", chinese_enabled(self.registry)))
+                self.add_hotspot(key_box, "module_bind", module.name, tooltip=ui_text("绑定按键", chinese_enabled(self.registry)))
                 p.restore()
                 exp = self.gui_motion.value(f"old.expand.{module.name}", 1.0 if module.name in self.module_expanded else 0.0, self.anim_duration(0.36), Easings.ease_out_expo)
                 if exp > 0.01:
@@ -1476,7 +1483,7 @@ class ClickGuiBuildersMixin:
                 lambda layer, _shell: self.draw_new_panel_shell(layer, rect, category, scale),
             )
             p.restore()
-            self.add_hotspot(rect.adjusted(0, 0, 0, -rect.height() + 24 * scale), "select_category", category, tooltip=category)
+            self.add_hotspot(rect.adjusted(0, 0, 0, -rect.height() + 24 * scale), "select_category", category, tooltip=ui_text(category, chinese_enabled(self.registry)))
             p.save()
             clip = rect.adjusted(0, 26 * scale, 0, -4 * scale)
             p.setClipRect(clip)
@@ -1499,20 +1506,20 @@ class ClickGuiBuildersMixin:
         top_line.setColorAt(0.0, color("#2de8ca"))
         top_line.setColorAt(1.0, color("#166f62"))
         p.fillRect(QRectF(rect.left() + 3 * scale, rect.top() + 1 * scale, rect.width() - 6 * scale, 2 * scale), top_line)
-        self.draw_text(p, QRectF(rect.left() + 8 * scale, rect.top() + 3 * scale, rect.width() - 16 * scale, 22 * scale), category, self.font("poppins_bold", 8.0 * scale), THEME.text)
+        self.draw_text(p, QRectF(rect.left() + 8 * scale, rect.top() + 3 * scale, rect.width() - 16 * scale, 22 * scale), ui_text(category, chinese_enabled(self.registry)), self.font("poppins_bold", 8.0 * scale), THEME.text)
 
     def draw_new_module_block(self, p: QPainter, module: Module, origin: QRectF, scale: float) -> float:
         row = QRectF(origin.left() + 4 * scale, origin.top(), origin.width() - 8 * scale, 21 * scale)
         enabled_v = self.gui_motion.value(f"new.enabled.{module.name}", 1.0 if module.enabled else 0.0, self.anim_duration(0.18), Easings.ease_out_cubic)
         fill = color("#202020", 0.28 + 0.12 * enabled_v)
         rounded_rect(p, row, 0, fill, color("#ffffff", 0.025))
-        self.draw_text(p, row.adjusted(6 * scale, 0, -28 * scale, 0), module.name, self.font("poppins_regular", 7.2 * scale), color("#2de8ca") if module.enabled else color("#ffffff", 0.60))
+        self.draw_text(p, row.adjusted(6 * scale, 0, -28 * scale, 0), ui_text(module.name, chinese_enabled(self.registry)), self.font("poppins_regular", 7.2 * scale), color("#2de8ca") if module.enabled else color("#ffffff", 0.60))
         key_box = QRectF(row.right() - 24 * scale, row.top() + 3 * scale, 19 * scale, row.height() - 6 * scale)
         rounded_rect(p, key_box, 4 * scale, color("#ffffff", 0.04), color("#ffffff", 0.06))
         self.draw_text(p, key_box, self.compact_keybind(module.keybind) if module.keybind and module.keybind != "None" else "--", self.font("poppins_bold", 6.2 * scale), THEME.muted, Qt.AlignmentFlag.AlignCenter)
-        self.add_hotspot(row.adjusted(0, 0, -24 * scale, 0), "module_toggle", module.name, button=1, tooltip=module.description)
-        self.add_hotspot(row.adjusted(0, 0, -24 * scale, 0), "module_expand", module.name, button=3, tooltip="展开设置")
-        self.add_hotspot(key_box, "module_bind", module.name, tooltip="绑定按键")
+        self.add_hotspot(row.adjusted(0, 0, -24 * scale, 0), "module_toggle", module.name, button=1, tooltip=description_label(module.description, chinese_enabled(self.registry)))
+        self.add_hotspot(row.adjusted(0, 0, -24 * scale, 0), "module_expand", module.name, button=3, tooltip=ui_text("展开设置", chinese_enabled(self.registry)))
+        self.add_hotspot(key_box, "module_bind", module.name, tooltip=ui_text("绑定按键", chinese_enabled(self.registry)))
         yy = row.bottom()
         exp = self.gui_motion.value(f"new.expand.{module.name}", 1.0 if module.name in self.module_expanded else 0.0, self.anim_duration(0.34), Easings.ease_out_expo)
         if exp > 0.01:
@@ -1548,11 +1555,11 @@ class ClickGuiBuildersMixin:
                 glow_rect(layer, shell, 8 * scale, 0.13),
                 rounded_rect(layer, shell, 5 * scale, color("#0c0c0c", 0.57), color("#ffffff", 0.07)),
                 rounded_rect(layer, QRectF(shell.left(), shell.top(), shell.width(), header_h), 5 * scale, color("#2a2a2a", 0.76)),
-                self.draw_text(layer, QRectF(shell.left() + 12 * scale, shell.top(), shell.width() - 24 * scale, header_h), f"{self.category_icon(category)}  {category}", self.font("poppins_bold", 11.0 * scale), THEME.text),
+                self.draw_text(layer, QRectF(shell.left() + 12 * scale, shell.top(), shell.width() - 24 * scale, header_h), f"{self.category_icon(category)}  {ui_text(category, chinese_enabled(self.registry))}", self.font("poppins_bold", 11.0 * scale), THEME.text),
             ),
         )
         p.restore()
-        self.add_hotspot(QRectF(rect.left(), rect.top(), rect.width(), header_h), "dropdown_expand", category, button=3, tooltip="展开分类")
+        self.add_hotspot(QRectF(rect.left(), rect.top(), rect.width(), header_h), "dropdown_expand", category, button=3, tooltip=ui_text("展开分类", chinese_enabled(self.registry)))
         if open_v <= 0.01:
             return
         p.save()
@@ -1576,12 +1583,12 @@ class ClickGuiBuildersMixin:
                 p.fillRect(row, grad)
             else:
                 rounded_rect(p, row, 0, color("#101412", 0.98), color("#ffffff", 0.06))
-            self.draw_text(p, row.adjusted(12 * scale, 0, -34 * scale, 0), module.name, self.font("poppins_medium", 8.3 * scale), THEME.text)
+            self.draw_text(p, row.adjusted(12 * scale, 0, -34 * scale, 0), ui_text(module.name, chinese_enabled(self.registry)), self.font("poppins_medium", 8.3 * scale), THEME.text)
             key_box = QRectF(row.right() - 29 * scale, row.top() + 4 * scale, 23 * scale, row.height() - 8 * scale)
             self.draw_text(p, key_box, self.compact_keybind(module.keybind) if module.keybind and module.keybind != "None" else "--", self.font("poppins_bold", 6.8 * scale), THEME.text, Qt.AlignmentFlag.AlignCenter)
-            self.add_hotspot(row.adjusted(0, 0, -31 * scale, 0), "module_toggle", module.name, button=1, tooltip=module.description)
-            self.add_hotspot(row.adjusted(0, 0, -31 * scale, 0), "module_expand", module.name, button=3, tooltip="展开设置")
-            self.add_hotspot(key_box, "module_bind", module.name, tooltip="绑定按键")
+            self.add_hotspot(row.adjusted(0, 0, -31 * scale, 0), "module_toggle", module.name, button=1, tooltip=description_label(module.description, chinese_enabled(self.registry)))
+            self.add_hotspot(row.adjusted(0, 0, -31 * scale, 0), "module_expand", module.name, button=3, tooltip=ui_text("展开设置", chinese_enabled(self.registry)))
+            self.add_hotspot(key_box, "module_bind", module.name, tooltip=ui_text("绑定按键", chinese_enabled(self.registry)))
             p.restore()
             exp = self.gui_motion.value(f"dropdown.expand.{module.name}", 1.0 if module.name in self.module_expanded else 0.0, self.anim_duration(0.34), Easings.ease_out_expo)
             if exp > 0.01:
@@ -1657,7 +1664,7 @@ class ClickGuiBuildersMixin:
             active_v = self.anim.value(f"gui.mode.{mode}", 1.0 if active else 0.0, self.anim_duration(0.16), Easings.ease_out_quad)
             fill = color("#ffffff", 0.92 * active_v) if active_v > 0.01 else color("#1a1c22", 0.95)
             rounded_rect(p, rect, 5, fill, color("#ffffff", 0.10))
-            text = self.gui_mode_label(mode)
+            text = ui_text(self.gui_mode_label(mode), chinese_enabled(self.registry))
             self.draw_text(p, rect.adjusted(5, 0, -5, 0), text, self.font("poppins_medium", 7.1), color("#08080a") if active else THEME.text, Qt.AlignmentFlag.AlignCenter)
             self.add_hotspot(rect, "gui_mode", mode)
 
@@ -1681,12 +1688,12 @@ class ClickGuiBuildersMixin:
         self.draw_text(
             p,
             rect.adjusted(12.0, 0.0, -12.0, 0.0),
-            "←  Back to Jello Sigma",
+            ui_text("←  Back to Jello Sigma", chinese_enabled(self.registry)),
             self.font("jello_medium", 9.5),
             color("#010101", 0.72 * alpha),
             Qt.AlignmentFlag.AlignCenter,
         )
-        self.add_hotspot(rect, "jello_return", tooltip="Return to the main ClickGUI")
+        self.add_hotspot(rect, "jello_return", tooltip=ui_text("Return to the main ClickGUI", chinese_enabled(self.registry)))
 
     def draw_toasts(self, p: QPainter, width: int, _height: int) -> None:
         now = time.perf_counter()
@@ -1697,7 +1704,8 @@ class ClickGuiBuildersMixin:
             slide = Easings.ease_out_expo(min(1.0, age / self.anim_duration(0.22)))
             msg = toast["message"]
             kind, main = self.dynamic_message_kind(msg)
-            title = self.dynamic_message_title(msg, kind)
+            title = ui_text(self.dynamic_message_title(msg, kind), chinese_enabled(self.registry))
+            msg = toast_text(str(msg), chinese_enabled(self.registry))
             title_font = self.font("poppins_bold", 7.7)
             body_font = self.font("poppins_regular", 7.3)
             tw = max(210.0, min(430.0, max(self.text_advance(title_font, title), self.text_advance(body_font, msg)) + 58.0))
@@ -1732,16 +1740,16 @@ class ClickGuiBuildersMixin:
         rect = QRectF(width / 2 - 200 * scale, height / 2 - 90 * scale, 400 * scale, 180 * scale)
         glow_rect(p, rect, 12 * scale, 0.46)
         rounded_rect(p, rect, 11 * scale, color("#0b0b0f", 0.97), color("#ffffff", 0.16))
-        self.draw_text(p, QRectF(rect.left(), rect.top() + 28 * scale, rect.width(), 24 * scale), "KEYBIND", self.font("poppins_bold", 18 * scale), THEME.text, Qt.AlignmentFlag.AlignCenter)
-        self.draw_text(p, QRectF(rect.left(), rect.top() + 67 * scale, rect.width(), 21 * scale), module.name, self.font("poppins_medium", 11 * scale), THEME.cyan, Qt.AlignmentFlag.AlignCenter)
-        self.draw_text(p, QRectF(rect.left(), rect.top() + 98 * scale, rect.width(), 20 * scale), "Press any key to bind", self.font("poppins_regular", 9 * scale), THEME.muted, Qt.AlignmentFlag.AlignCenter)
+        self.draw_text(p, QRectF(rect.left(), rect.top() + 28 * scale, rect.width(), 24 * scale), ui_text("KEYBIND", chinese_enabled(self.registry)), self.font("poppins_bold", 18 * scale), THEME.text, Qt.AlignmentFlag.AlignCenter)
+        self.draw_text(p, QRectF(rect.left(), rect.top() + 67 * scale, rect.width(), 21 * scale), ui_text(module.name, chinese_enabled(self.registry)), self.font("poppins_medium", 11 * scale), THEME.cyan, Qt.AlignmentFlag.AlignCenter)
+        self.draw_text(p, QRectF(rect.left(), rect.top() + 98 * scale, rect.width(), 20 * scale), ui_text("Press any key to bind", chinese_enabled(self.registry)), self.font("poppins_regular", 9 * scale), THEME.muted, Qt.AlignmentFlag.AlignCenter)
         phase = time.perf_counter() * 4.6
         for i in range(3):
             dot_alpha = 0.24 + 0.64 * (0.5 + 0.5 * math.sin(phase + i * 0.7))
             p.setBrush(color("#ffffff", dot_alpha))
             p.setPen(Qt.PenStyle.NoPen)
             p.drawEllipse(QPointF(rect.center().x() - 16 * scale + i * 16 * scale, rect.bottom() - 37 * scale), 3.3 * scale, 3.3 * scale)
-        self.draw_text(p, QRectF(rect.left(), rect.bottom() - 24 * scale, rect.width(), 14 * scale), "ESC 清空绑定", self.font("poppins_regular", 7.4 * scale), color("#888890"), Qt.AlignmentFlag.AlignCenter)
+        self.draw_text(p, QRectF(rect.left(), rect.bottom() - 24 * scale, rect.width(), 14 * scale), ui_text("ESC 清空绑定", chinese_enabled(self.registry)), self.font("poppins_regular", 7.4 * scale), color("#888890"), Qt.AlignmentFlag.AlignCenter)
         p.restore()
 
     def draw_toggle_switch(self, p: QPainter, rect: QRectF, enabled: bool, action: tuple[str, Any] | None = None) -> None:

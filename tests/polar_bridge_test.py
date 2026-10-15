@@ -1032,7 +1032,7 @@ def test_polar_link_reconnects_after_plug_in() -> None:
             manager.polar.connected = False
             manager.polar.last_error = "未找到机器人 USB 串口"
 
-    manager.polar.start = fake_start
+    manager.polar.request_start = fake_start
     # 重试闸门现在只看“用户是否配了真端口”，不再看场景标志；
     # 所以这里要显式给一个真实端口，否则会在 Stub 判定处直接早退。
     manager.polar.port = "COM99"
@@ -1071,7 +1071,7 @@ def test_polar_link_reconnects_after_plug_in() -> None:
     def counting_start():
         hits["n"] += 1
 
-    lab.polar.start = counting_start
+    lab.polar.request_start = counting_start
     for _ in range(5):
         lab._polar_last_connect_attempt -= POLAR_RETRY_S + 1.0
         lab.tick_polar_link(state, registry, None)
@@ -1362,3 +1362,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

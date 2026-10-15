@@ -363,3 +363,289 @@ def decode_cc_frame(frame: bytes) -> dict | None:
     (cmd_id,) = struct.unpack_from("<H", frame, HEADER_SIZE)
     return {"seq": frame[3], "cmd_id": cmd_id,
             "data": frame[HEADER_SIZE + CMD_ID_SIZE: HEADER_SIZE + CMD_ID_SIZE + data_len]}
+
+
+class _StaleCCIntent(Exception):
+    """An intent was invalidated while the driver was opening a port."""
+
+
+class AsyncCustomControllerLink:
+    """Single-owner CC writer with a one-slot, expiring intent mailbox.
+
+    Enqueue methods never enumerate, open, write or join a serial driver. Their
+    success means *accepted*, not delivered. ``release_all`` reports success
+    only once neutral is confirmed. Neutral supersedes motion; failed writes
+    discard every pre-failure intent and require a successful neutral barrier.
+    A stuck OS driver can occupy this daemon, but never creates more workers.
+    """
+
+    asynchronous = True
+
+    def __init__(self, port: str = "COM3", baudrate: int = 115200,
+                 max_hz: float = DEFAULT_MAX_HZ, mock_output: bool = True,
+                 write_bytes: Callable[[bytes], Any] | None = None,
+                 time_fn: Callable[[], float] = time.perf_counter, *,
+                 max_intent_age: float = 0.25, release_attempts: int = 3,
+                 retry_interval: float = 0.05) -> None:
+        import threading
+        self.queued = 0
+        self.coalesced = 0
+        self.failed = 0
+        self.faulted = False
+        self.fault_reason = ""
+        self._fault_at = 0.0
+        self._motion_deadline = 0.0
+        self.port, self.baudrate = port, baudrate
+        self.max_hz, self.mock_output = max_hz, mock_output
+        self.time_fn = time_fn
+        self.max_intent_age = max(0.001, float(max_intent_age))
+        self.release_attempts = max(1, int(release_attempts))
+        self.retry_interval = max(0.001, float(retry_interval))
+        self.seq = self.sent = self.dropped_rate = 0
+        self.resolved_port = self.last_error = ""
+        self.last_frame = b""
+        self.last_keys = (0, 0)
+        self.dropped_keys = []
+        self.cursor = VirtualCursor()
+        self.wire_neutral = True
+        self.release_pending = False
+        self._condition = threading.Condition()
+        self._pending = None
+        self._epoch = 0
+        self._release_left = 0
+        self._release_due = 0.0
+        self._closing = False
+        self._stopped = False
+        self._serial = None
+        self._write_bytes = write_bytes
+        self._active = None
+        self._table = load_key_usage()
+        self._link = CustomControllerLink(port=port, baudrate=baudrate,
+            max_hz=max_hz, mock_output=mock_output,
+            write_bytes=self._write_frame, time_fn=time_fn)
+        self._thread = threading.Thread(target=self._run, name="cc-writer", daemon=True)
+        self._thread.start()
+
+    @property
+    def worker_alive(self) -> bool:
+        return self._thread.is_alive()
+
+    @property
+    def closed(self) -> bool:
+        return self._stopped
+
+    def _queue(self, cmd_id, payload, *, neutral=False):
+        with self._condition:
+            if self._closing:
+                return False, "CC writer closed"
+            if neutral:
+                return self.release_all()
+            if self.faulted:
+                return False, self.fault_reason or "CC failure latched; explicit re-arm required"
+            if self.release_pending:
+                return False, self.last_error or "CC neutral release pending"
+            self.queued += 1
+            self.coalesced += int(self._pending is not None)
+            self._pending = (self._epoch, cmd_id, payload, self.time_fn())
+            # An accepted motion may already be in the worker when a caller
+            # decides to release. Never advertise neutral until that barrier.
+            self.wire_neutral = False
+            self._condition.notify()
+            return True, "queued"
+
+    def send_keymouse(self, *, pressed, dx=0, dy=0, left=False, right=False,
+                      now=None):
+        key1, key2, dropped = keys_to_two_usages(pressed, self._table)
+        with self._condition:
+            x, y = self.cursor.move(dx, dy)
+            self.last_keys, self.dropped_keys = (key1, key2), dropped
+            payload = encode_keymouse_0306(key1=key1, key2=key2, x=x, y=y,
+                                           left=left, right=right)
+            return self._queue(CC_CMD_KEYMOUSE, payload,
+                               neutral=not (key1 or key2 or left or right))
+
+    def send_robot_interact(self, data, now=None):
+        data = bytes(data)
+        if len(data) > 30:
+            return False, f"0x0302 载荷最多 30 字节，实际 {len(data)}"
+        return self._queue(CC_CMD_ROBOT_INTERACT, data)
+
+    def _request_release(self):
+        self._epoch += 1
+        self._pending = None
+        self.release_pending = True
+        self.wire_neutral = False
+        self._release_left = self.release_attempts
+        self._release_due = 0.0
+        self._condition.notify()
+
+    def release_all(self, now=None):
+        with self._condition:
+            if self.wire_neutral and not self.release_pending:
+                return True, "neutral"
+            if not self.release_pending and not self._stopped:
+                self._request_release()
+            return False, self.last_error or "CC neutral release pending"
+
+    def retry_release(self):
+        """Explicit operator retry after the bounded neutral budget is spent."""
+        with self._condition:
+            if self._closing:
+                return False, "CC writer closed"
+            if self.release_pending and not self._release_left:
+                self._request_release()
+            return self.release_all()
+
+    def rearm(self, authorization_epoch):
+        """Called only after a newer explicit manager arm and confirmed neutral."""
+        with self._condition:
+            if (self._closing or self.release_pending or not self.wire_neutral
+                    or float(authorization_epoch) <= self._fault_at):
+                return False
+            self.faulted = False
+            self.fault_reason = ""
+            self.last_error = ""
+            self._epoch += 1
+            self._pending = None
+            return True
+
+    def close(self):
+        """Invalidate motion and request best-effort neutral; never wait on IO."""
+        with self._condition:
+            if self._closing:
+                return
+            self._closing = True
+            self._pending = None
+            if not self.release_pending:
+                self._epoch += 1
+            if not self.wire_neutral and not self.release_pending:
+                self._request_release()
+            self._condition.notify()
+
+    def wait_closed(self, timeout=2.5):
+        """Ordered application shutdown/test only, never a frame operation."""
+        import threading
+        if self._thread is not threading.current_thread():
+            self._thread.join(max(0.0, float(timeout)))
+        return self.closed
+
+    def _valid_active(self):
+        epoch, _, _, created, neutral = self._active
+        with self._condition:
+            return epoch == self._epoch and (neutral or (
+                not self._closing and not self.release_pending
+                and self.time_fn() - created <= self.max_intent_age))
+
+    def _write_frame(self, frame):
+        if not self._valid_active():
+            raise _StaleCCIntent("CC stale intent dropped")
+        if self._write_bytes is not None:
+            return self._write_bytes(frame)
+        if self._serial is None:
+            import serial
+            from .. import serial_ports as ports
+            target = ports.resolve_cc_port(self.port)
+            if target == ports.STUB_PORT:
+                raise RuntimeError("没找到自定义控制器串口，请插好线或显式选口")
+            with self._condition:
+                self.resolved_port = target
+            self._serial = serial.Serial(target, self.baudrate,
+                                          timeout=0.2, write_timeout=0.2)
+        # Opening/enumeration can take arbitrarily long on a broken driver.
+        # Recheck AFTER that operation, before letting its old intent escape.
+        if not self._valid_active():
+            raise _StaleCCIntent("CC stale intent dropped")
+        return self._serial.write(frame)
+
+    def _close_serial(self):
+        handle, self._serial = self._serial, None
+        if handle is not None:
+            try:
+                handle.close()
+            except Exception:
+                pass
+
+    def _run(self):
+        try:
+            while True:
+                with self._condition:
+                    while True:
+                        now = self.time_fn()
+                        if self.release_pending and self._release_left:
+                            delay = self._release_due - now
+                            if delay <= 0:
+                                payload = encode_keymouse_0306(x=self.cursor.x,
+                                                              y=self.cursor.y)
+                                intent = (self._epoch, CC_CMD_KEYMOUSE, payload, now, True)
+                                self._release_left -= 1
+                                break
+                            self._condition.wait(delay)
+                        elif self._closing:
+                            return
+                        elif self._pending is not None:
+                            # Wait without removing the mailbox so newer intent
+                            # can replace it while the wire-rate gate is closed.
+                            delay = self._link._next_due - now
+                            if delay > 0:
+                                self._condition.wait(delay)
+                                continue
+                            intent = (*self._pending, False)
+                            self._pending = None
+                            break
+                        else:
+                            if self._motion_deadline and not self.wire_neutral:
+                                remaining = self._motion_deadline - now
+                                if remaining <= 0:
+                                    self.faulted = True
+                                    self._fault_at = now
+                                    self.last_error = "CC input watchdog expired; explicit re-arm required"
+                                    self.fault_reason = self.last_error
+                                    self._motion_deadline = 0.0
+                                    self._request_release()
+                                    continue
+                                self._condition.wait(remaining)
+                            else:
+                                self._condition.wait()
+                    self._active = intent
+                if not self._valid_active():
+                    with self._condition:
+                        if not self.release_pending and not self.wire_neutral:
+                            self._request_release()
+                    continue
+                epoch, cmd_id, payload, _, neutral = intent
+                ok, why = self._link._send(cmd_id, payload, self.time_fn(),
+                                          neutral_release=neutral)
+                with self._condition:
+                    self.seq, self.sent = self._link.seq, self._link.sent
+                    self.last_frame = self._link.last_frame
+                    self.dropped_rate = self._link.dropped_rate
+                    if ok and epoch == self._epoch:
+                        self.last_error = self.fault_reason if self.faulted else ""
+                        self._motion_deadline = (0.0 if neutral else
+                            intent[3] + self.max_intent_age)
+                        if neutral:
+                            self.wire_neutral = True
+                            self.release_pending = False
+                            self._release_left = 0
+                            self.last_keys = (0, 0)
+                            self.dropped_keys = []
+                    elif not ok:
+                        self.failed += 1
+                        self.faulted = True
+                        self._fault_at = self.time_fn()
+                        self.last_error = why
+                        self.fault_reason = self.fault_reason or f"CC output failed; explicit re-arm required: {why}"
+                        if neutral and epoch == self._epoch:
+                            self._release_due = self.time_fn() + self.retry_interval
+                        elif not self.release_pending:
+                            self._request_release()
+                        # No pre-failure motion survives, even if submitted
+                        # while the failing write was in flight.
+                        self._pending = None
+                if not ok:
+                    self._close_serial()
+        finally:
+            self._close_serial()
+            with self._condition:
+                self._stopped = True
+                self._condition.notify_all()

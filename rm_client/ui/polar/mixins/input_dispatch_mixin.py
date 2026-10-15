@@ -69,6 +69,8 @@ from PySide6.QtGui import QCursor, QKeyEvent, QKeySequence, QMouseEvent, QWheelE
 
 # 相对导入层级：rm_client/ui/polar/mixins/ → ... = rm_client.ui、.... = rm_client
 from ...animation import Easings
+from ...cs2_buy_menu import grid_enabled, grid_layout
+from ...cs2_feedback import notify_buy_hover
 from ...jello_locale import LANGUAGE_CHINESE, LANGUAGE_ENGLISH, LANGUAGE_SETTING
 from ....model import Setting
 from ..primitives import InertialScroll
@@ -139,8 +141,9 @@ def _on_action_module_expand(self, payload: Any, point: QPointF, button: int, re
 def _on_action_module_bind(self, payload: Any, point: QPointF, button: int, rect: QRectF) -> None:
     module = self.registry.get(str(payload))
     if module:
-        self.binding_module = module
-        self.anim.value("keybind.overlay", 0.0, 0.01, Easings.linear, initial=0.0)
+        from ...jello_keybinds import open_module_keyboard
+        self.binding_module = None
+        open_module_keyboard(self,module.name)
 
 
 def _on_action_setting_toggle(self, payload: Any, point: QPointF, button: int, rect: QRectF) -> None:
@@ -234,6 +237,15 @@ def _on_action_jello_open_legacy(self, payload: Any, point: QPointF, button: int
 
 def _on_action_jello_return(self, payload: Any, point: QPointF, button: int, rect: QRectF) -> None:
     self.return_to_jello_clickgui()
+
+
+def _on_action_jello_dismiss_background(self, payload: Any, point: QPointF, button: int, rect: QRectF) -> None:
+    # Commit only on a matching release. A drag starting outside a panel must
+    # not dismiss it, and the closing click must never reach combat controls.
+    if button == 1 and self.gui_visible and not self.drag:
+        self._jello_background_press = QPointF(point)
+        self._jello_background_dragged = False
+        self._jello_background_release_owned = True
 
 
 def _on_action_jello_noop(self, payload: Any, point: QPointF, button: int, rect: QRectF) -> None:
@@ -433,6 +445,11 @@ def _on_action_economy_category(self, payload: Any, point: QPointF, button: int,
 
 
 def _on_action_economy_offer(self, payload: Any, point: QPointF, button: int, rect: QRectF) -> None:
+    if grid_enabled(self):
+        offer = next((o for o in self.economy_offers() if o.key==str(payload)),None)
+        if offer is None:
+            return
+        self.economy_category = offer.category
     self.select_economy_offer(str(payload))
 
 
@@ -484,6 +501,7 @@ _DISPATCH_HANDLERS = {
     "jello_open_legacy": _on_action_jello_open_legacy,
     "jello_return": _on_action_jello_return,
     "jello_noop": _on_action_jello_noop,
+    "jello_dismiss_background": _on_action_jello_dismiss_background,
     "hero_deploy_open": _on_action_hero_deploy_open,
     "hero_deploy_enter": _on_action_hero_deploy_enter,
     "hero_deploy_exit": _on_action_hero_deploy_exit,
@@ -553,6 +571,11 @@ class InputDispatchMixin:
         self._combat_input_was_allowed = False
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
+        self._jello_background_press = None
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._jello_background_release_owned = False
+        if self.handle_escape_menu_mouse(event, "press"):
+            return
         if self.handle_student_mouse(event, "press"):
             return
         self.setFocus(Qt.FocusReason.MouseFocusReason)
@@ -560,6 +583,14 @@ class InputDispatchMixin:
             return
         button = self.qt_button(event)
         point = event.position()
+        if (not self.gui_visible
+                and getattr(getattr(self, "gui_timeline", None), "progress", 0.0) > 0.0):
+            # The exit animation may render old GUI hit targets again. They
+            # are display-only once closed; consume clicks until it finishes.
+            if button == 1:
+                self._jello_background_release_owned = True
+            event.accept()
+            return
         if self.quick_action_wheel.active or self.overlay_coordinator.radial_active:
             if button == 2:
                 self.cancel_quick_action_wheel()
@@ -577,6 +608,13 @@ class InputDispatchMixin:
             if hotspot.rect.contains(point):
                 self.dispatch(hotspot.action, hotspot.payload, point, button, hotspot.rect)
                 return
+        # Opening/rebuilding a GUI may leave no current hit targets for one
+        # frame. The modal still owns that click; never publish it to the map.
+        if self.gui_visible:
+            if button == 1:
+                self._jello_background_release_owned = True
+            event.accept()
+            return
         if button == 1 and self.publish_map_click_from_screen(point):
             event.accept()
             return
@@ -588,6 +626,15 @@ class InputDispatchMixin:
             self.search_focus = False
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
+        background_press = getattr(self, "_jello_background_press", None)
+        if getattr(self, "_jello_background_release_owned", False):
+            if (background_press is not None
+                    and (event.position() - background_press).manhattanLength() > 6.0):
+                self._jello_background_dragged = True
+            event.accept()
+            return
+        if self.handle_escape_menu_mouse(event, "move"):
+            return
         if self.handle_student_mouse(event, "move"):
             return
         if self.quick_action_wheel.active or self.overlay_coordinator.radial_active:
@@ -606,7 +653,12 @@ class InputDispatchMixin:
             and self._control_mouse_point is not None
         ):
             delta = self.hover_point - self._control_mouse_point
-            self.control.add_mouse_motion(delta.x(), delta.y())
+            link = self.registry.get("RobotLink")
+            self.control.add_mouse_motion(
+                delta.x(), delta.y(),
+                self.get_setting_number(link, "Mouse Sensitivity", 1.0),
+                self.setting_bool(link, "Invert Mouse Y", False),
+            )
         self._control_mouse_point = (
             QPointF(self.hover_point)
             if self.combat_control_input_allowed()
@@ -614,11 +666,16 @@ class InputDispatchMixin:
         )
         self.hover_tooltip = ""
         hovered_action = ""
+        hovered_offer = ""
         for hotspot in reversed(self.hotspots):
             if hotspot.rect.contains(self.hover_point):
                 self.hover_tooltip = hotspot.tooltip
                 hovered_action = hotspot.action
+                if hovered_action=="economy_offer":
+                    hovered_offer = str(hotspot.payload)
                 break
+        if self.economy_visible:
+            notify_buy_hover(self,hovered_offer,time.perf_counter())
         # 启动页可见时渲染时钟已经按显示器刷新率运行；不再为每个原始
         # 鼠标事件强制整帧，仅在跨越热点、拖拽或提示变化时唤醒一帧。
         if (
@@ -655,6 +712,23 @@ class InputDispatchMixin:
             panel["y"] = point.y() - self.drag["offset_y"]
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+        background_press = getattr(self, "_jello_background_press", None)
+        if (getattr(self, "_jello_background_release_owned", False)
+                and event.button() == Qt.MouseButton.LeftButton):
+            self._jello_background_release_owned = False
+            self._jello_background_press = None
+            point = event.position()
+            target = next((h for h in reversed(self.hotspots)
+                           if h.button in (None, 1) and h.rect.contains(point)), None)
+            if (background_press is not None and self.gui_visible and target is not None
+                    and target.action == "jello_dismiss_background"
+                    and not getattr(self, "_jello_background_dragged", False)
+                    and (point - background_press).manhattanLength() <= 6.0):
+                self.set_clickgui_visible(False)
+            event.accept()
+            return
+        if self.handle_escape_menu_mouse(event, "release"):
+            return
         if self.handle_student_mouse(event, "release"):
             return
         if self.quick_action_wheel.active or self.overlay_coordinator.radial_active:
@@ -702,20 +776,25 @@ class InputDispatchMixin:
             event.accept()
 
     def wheelEvent(self, event: QWheelEvent) -> None:
+        if self.escape_menu_visible:
+            event.accept()
+            return
         if self.student_ui.visible:
             if self.student_ui.panel == "inventory":
                 self.handle_student_action("student_page", -1 if event.angleDelta().y() > 0 else 1)
             event.accept()
             return
         point = event.position()
-        delta = -event.angleDelta().y() / 120.0 * 28.0
+        pixel_delta = event.pixelDelta().y()
+        delta = -float(pixel_delta) if pixel_delta else -event.angleDelta().y() / 120.0 * 28.0
         if self.match_chat.input_open:
             self.match_chat.scroll(-1 if event.angleDelta().y() > 0 else 1)
             self.frame_scheduler.force()
             event.accept()
             return
         if self.economy_visible:
-            layout = self.economy_workspace_layer.layout(self.width(), self.height(), self.economy_island.progress)
+            layout = (grid_layout(self.economy_workspace_layer,self.width(),self.height(),self.economy_island.progress)
+                      if grid_enabled(self) else self.economy_workspace_layer.layout(self.width(),self.height(),self.economy_island.progress))
             if layout.offers_viewport.contains(point):
                 self.economy_offers_scroll.add_wheel(delta)
             elif layout.detail_viewport.contains(point):
@@ -747,10 +826,18 @@ class InputDispatchMixin:
             if not viewport["rect"].contains(point):
                 continue
             mode, key, maximum = viewport["mode"], viewport["key"], float(viewport["maximum"])
-            if mode == "jello_panel":
+            if mode == "jello_dropdown":
+                jello_delta = -float(pixel_delta) if pixel_delta else -event.angleDelta().y() / 120.0 * 35.0
+                self.jello_state.dropdown_scroll = max(
+                    0.0, min(maximum, self.jello_state.dropdown_scroll + jello_delta)
+                )
+                self.frame_scheduler.force()
+                event.accept()
+                return
+            elif mode == "jello_panel":
                 # ScrollableContentPanel.scrollStep is the literal 35 in
                 # Sigma 5.1.0; retained Polar interfaces continue using 28.
-                jello_delta = -event.angleDelta().y() / 120.0 * 35.0
+                jello_delta = -float(pixel_delta) if pixel_delta else -event.angleDelta().y() / 120.0 * 35.0
                 current = float(self.jello_state.panel_scroll.get(key, 0.0))
                 self.jello_state.panel_scroll[key] = max(0.0, min(maximum, current + jello_delta))
                 self.jello_state.mark_scroll(f"panel:{key}")
@@ -758,7 +845,7 @@ class InputDispatchMixin:
                 event.accept()
                 return
             elif mode == "jello_settings":
-                jello_delta = -event.angleDelta().y() / 120.0 * 35.0
+                jello_delta = -float(pixel_delta) if pixel_delta else -event.angleDelta().y() / 120.0 * 35.0
                 self.jello_state.scroll_settings_by(key, jello_delta, maximum)
                 self.jello_state.mark_scroll(f"settings:{key}")
                 self.frame_scheduler.force()
@@ -790,12 +877,21 @@ class InputDispatchMixin:
             event.accept()
             return
         if self.combat_control_input_allowed():
-            self.control.add_wheel(event.angleDelta().y())
+            link = self.registry.get("RobotLink")
+            self.control.add_wheel(event.angleDelta().y() *
+                                   self.get_setting_number(link, "Mouse Wheel Scale", 1.0))
             self.control.mock_output = bool(self.backend.mqtt.mock_output)
             self.control.send_from_state(self.state, self.registry)
             event.accept()
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
+        # A keyboard navigation/close action supersedes a pending mouse click,
+        # but the GUI still owns that click's eventual motion and release.
+        self._jello_background_press = None
+        if not self.escape_menu_visible and not event.isAutoRepeat():
+            # A new physical press supersedes any menu key-up lost on focus
+            # change; its later release must reach the normal control owner.
+            getattr(self, "_escape_menu_key_releases", set()).discard(event.key())
         if event.key() == Qt.Key.Key_F12 and not event.isAutoRepeat():
             modifiers = event.modifiers()
             release = bool(
@@ -811,6 +907,8 @@ class InputDispatchMixin:
                 self.control.clear_pending()
                 self.toast("E-STOP ACTIVE" if ok else f"E-STOP ACTIVE ({reason})")
             event.accept()
+            return
+        if self.handle_escape_menu_key(event):
             return
         if self.binding_module is not None:
             self.handle_keybind_event(event)
@@ -992,6 +1090,11 @@ class InputDispatchMixin:
         if self.overlay_coordinator.blocks_combat_input:
             event.accept()
             return
+        if event.key() == Qt.Key.Key_Escape and not self.home_visible:
+            if not event.isAutoRepeat():
+                self.set_escape_menu_visible(True)
+            event.accept()
+            return
         if self.minecraft_hud_active() and not event.isAutoRepeat():
             number_keys = {
                 Qt.Key.Key_1: 0,
@@ -1020,6 +1123,15 @@ class InputDispatchMixin:
             return
 
     def keyReleaseEvent(self, event: QKeyEvent) -> None:
+        pending = getattr(self, "_escape_menu_key_releases", set())
+        if event.key() in pending:
+            if not event.isAutoRepeat():
+                pending.discard(event.key())
+            event.accept()
+            return
+        if self.escape_menu_visible or event.key() == Qt.Key.Key_Escape:
+            event.accept()
+            return
         if self.handle_student_key(event, False):
             event.accept()
             return
@@ -1092,9 +1204,11 @@ class InputDispatchMixin:
         """Only the unobstructed combat viewport owns robot key/mouse input."""
 
         return bool(
-            not self.student_ui.visible
+            not self.escape_menu_visible
+            and not self.student_ui.visible
             and not self.home_visible
             and not self.gui_visible
+            and getattr(getattr(self, "gui_timeline", None), "progress", 0.0) <= 0.0
             and not self.economy_visible
             and not self.hero_deploy_ui.visible
             and not self.match_chat.input_open

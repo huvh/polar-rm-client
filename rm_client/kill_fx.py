@@ -11,7 +11,9 @@ from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QFont, QImage, QPainter, QPen, QPixmap, QTransform
 
 from .combat_events import CombatEvent
-from .ui_audio import ReliableAudioPool
+from .kill_audio import KillSoundPool
+from .ui.cs2_assets import local_cs2_assets
+from .ui.cs2_kill_feedback import Cs2KillFeedback
 
 
 KILL_TYPES = ("NORMAL", "HEADSHOT", "EXPLOSION", "CRIT", "ASSIST", "DESTROY_VEHICLE")
@@ -157,6 +159,7 @@ PRESET_ELEMENTS = {
     "Default Scrolling": ("kill_feed", "score", "bonus", "scrolling"),
     "Combo": ("kill_feed", "score", "bonus", "combo"),
     "Card": ("card_bar", "card"),
+    "CS2 Native": ("cs2",),
     "Battlefield 1": ("score", "bonus", "battlefield1", "match_progress"),
     "Minimal": ("score", "bonus"),
     "PUBG Subtitle": ("combo_subtitle", "kill_feed"),
@@ -324,11 +327,39 @@ class AssetBank:
         self.sound_root = root / "sounds"
         self.images: dict[str, QImage] = {}
         self.frames: dict[tuple[str, int, int], QImage] = {}
+        # Fixed power-of-two levels, not animation-size keys. Retaining the QImage
+        # and its cacheKey lets Qt reuse uploads instead of replacing them per frame.
+        self._minified: dict[tuple[int, int], QImage] = {}
 
     def image(self, name: str) -> QImage:
         if name not in self.images:
             self.images[name] = QImage(str(self.texture_root / name))
         return self.images[name]
+
+    def _filtered_image(self, p: QPainter, image: QImage, width: float, height: float) -> QImage:
+        """Choose an area-filtered level at least as large as its physical target.
+
+        deviceTransform includes painter scaling, rotation and device pixel ratio.
+        A final smooth draw handles the remaining <2x reduction. Each level is
+        computed once, from the original (never repeatedly blurred). All levels
+        together cost at most ~1/3 of the original pixels for square textures;
+        the 12-level cap also bounds pathological/extremely small animations.
+        """
+        transform = p.deviceTransform()
+        target_w = abs(width) * math.hypot(transform.m11(), transform.m12())
+        target_h = abs(height) * math.hypot(transform.m21(), transform.m22())
+        reduction = min(image.width() / max(1.0, target_w), image.height() / max(1.0, target_h))
+        level = min(12, max(0, int(math.floor(math.log2(max(1.0, reduction))))))
+        if level == 0:
+            return image
+        key = (image.cacheKey(), level)
+        if key not in self._minified:
+            divisor = 1 << level
+            self._minified[key] = image.scaled(
+                max(1, image.width() // divisor), max(1, image.height() // divisor),
+                Qt.AspectRatioMode.IgnoreAspectRatio, Qt.TransformationMode.SmoothTransformation,
+            )
+        return self._minified[key]
 
     def draw_centered(self, p: QPainter, name: str, center: QPointF, size: float, alpha: float = 1.0, rotation: float = 0.0, scale: float = 1.0, additive: bool = False, width_ratio: float = 1.0, height_ratio: float = 1.0) -> None:
         image = self.image(name)
@@ -343,7 +374,8 @@ class AssetBank:
         p.translate(center)
         p.rotate(rotation)
         p.scale(scale, scale)
-        p.drawImage(QRectF(-w / 2.0, -h / 2.0, w, h), image)
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+        p.drawImage(QRectF(-w / 2.0, -h / 2.0, w, h), self._filtered_image(p, image, w, h))
         p.restore()
 
     def draw_vertical_frame(self, p: QPainter, name: str, frame: int, count: int, center: QPointF, size: float, alpha: float, scale: float = 1.0, additive: bool = True) -> None:
@@ -364,7 +396,8 @@ class AssetBank:
         w, h = size, size / max(0.01, aspect)
         p.translate(center)
         p.scale(scale, scale)
-        p.drawImage(QRectF(-w / 2.0, -h / 2.0, w, h), frame_image)
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+        p.drawImage(QRectF(-w / 2.0, -h / 2.0, w, h), self._filtered_image(p, frame_image, w, h))
         p.restore()
 
     def draw_bottom_anchored(self, p: QPainter, name: str, anchor: QPointF, width: float, alpha: float, rotation: float, scale: float) -> None:
@@ -378,13 +411,14 @@ class AssetBank:
         p.translate(anchor)
         p.rotate(rotation)
         p.scale(scale, scale)
-        p.drawImage(QRectF(-width / 2.0, -height, width, height), image)
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+        p.drawImage(QRectF(-width / 2.0, -height, width, height), self._filtered_image(p, image, width, height))
         p.restore()
 
 
-class SoundPool(ReliableAudioPool):
+class SoundPool(KillSoundPool):
     def __init__(self, root: Path, count: int = 8) -> None:
-        super().__init__(root, voices_per_sound=2, fallback_voices=count)
+        super().__init__(root, count=count)
 
 
 class LockedTargetTracker:
@@ -1193,6 +1227,7 @@ class KillFxRenderer:
         self.texture_root = self.assets.texture_root
         self.sound_root = self.assets.sound_root
         self.sounds = SoundPool(self.assets.sound_root)
+        self.cs2 = Cs2KillFeedback(local_cs2_assets())
         self.scrolling = ScrollingRenderer(self.assets)
         self.combo = ComboRenderer(self.assets)
         self.card = CardRenderer(self.assets)
@@ -1220,6 +1255,7 @@ class KillFxRenderer:
         与其缓存全部保留。
         """
         self.scrolling.icons.clear()
+        self.cs2.clear()
         self.scrolling.pending.clear()
         self.scrolling.last_display = -1.0
         self.combo.context = None
@@ -1299,7 +1335,7 @@ class KillFxRenderer:
         else:
             elements = PRESET_ELEMENTS.get(preset, PRESET_ELEMENTS["Default Scrolling"])
         if visibility == "Icons Only":
-            return tuple(item for item in elements if item in ("scrolling", "scrolling_bf5", "scrolling_bf6", "combo", "card", "card_bar", "battlefield1", "valorant", "honor"))
+            return tuple(item for item in elements if item in ("cs2", "scrolling", "scrolling_bf5", "scrolling_bf6", "combo", "card", "card_bar", "battlefield1", "valorant", "honor"))
         if visibility == "Full HUD":
             companions = ("kill_feed", "combo_subtitle", "score", "bonus")
             return tuple(dict.fromkeys((*elements, *companions)))
@@ -1314,6 +1350,7 @@ class KillFxRenderer:
             return
         if event.kind == "death":
             self.combo_count = 0
+            self.cs2.clear()
             self.locked_targets.reset_engagement()
             return
         self.combo_count = self.combo_count + 1 if now - self.last_kill_at <= combo_window else 1
@@ -1334,6 +1371,8 @@ class KillFxRenderer:
         )
         self.last_context = context
         elements = self.effective_elements(preset, visibility, element_toggles)
+        if "cs2" in elements:
+            self.cs2.trigger(context, now)
         if "honor" in elements:
             self.honor.trigger(context, now)
         if "scrolling" in elements or "scrolling_bf5" in elements or "scrolling_bf6" in elements:
@@ -1353,6 +1392,8 @@ class KillFxRenderer:
             self._play_sound(context, preset, volume)
 
     def _play_sound(self, context: TriggerContext, preset: str, volume: float) -> None:
+        if preset == "CS2 Native" and self.cs2.assets.play("kill", volume / 100.0):
+            return
         if any(str(tag).lower() == LOCKED_TARGET_TAG for tag in context.tags):
             # LOCKED_TARGET 加分提示音优先（消化原零引用资产 addscore_df.ogg）。
             self.sounds.play("addscore_df.ogg", volume)
@@ -1364,7 +1405,8 @@ class KillFxRenderer:
         if preset == "Combo":
             name = f"combokillsound_{max(1, min(6, combo))}_cf.ogg"
         elif preset == "Card":
-            name = f"cardkillsound_{'armorheadshot' if key == 'headshot' else key}_cs.ogg"
+            card_key = key if key in {"default", "headshot", "explosion", "crit"} else "default"
+            name = f"cardkillsound_{'armorheadshot' if card_key == 'headshot' else card_key}_cs.ogg"
         elif preset == "Battlefield 1":
             name = "headshotkillsound_bf1.ogg" if key == "headshot" else "killsound_bf1.ogg"
         elif preset == "Battlefield 5":
@@ -1384,12 +1426,13 @@ class KillFxRenderer:
         return name
 
     def preload_preset_sounds(self, preset: str) -> None:
+        self.cs2.assets.preload_audio()
         names = {
             self._sound_name(kill_type, combo, preset)
             for kill_type in KILL_TYPES
             for combo in range(1, 7)
         }
-        names.add("addscore_df.ogg")
+        names.update(("addscore_df.ogg", "hitsound_bf6.ogg"))
         self.sounds.preload(names)
 
     def notify_hit(self, damage: int, kind: str, *, preset: str, visibility: str, sound_enabled: bool, volume: float, element_toggles: dict[str, bool] | None = None, now_override: float | None = None) -> None:
@@ -1426,6 +1469,8 @@ class KillFxRenderer:
         offset = QPointF(x_offset, y_offset) if anchor_policy == "Manual" else QPointF(0.0, 0.0)
         team_key = "ct" if team in ("Alliance", "CT Blue") else "t"
         bottom = layout.primary(120.0)
+        if "cs2" in elements:
+            self.cs2.draw(painter, bottom, now, layout.scale)
         if "scrolling" in elements:
             self.scrolling.draw(painter, bottom, now, layout.scale, "default")
         if "scrolling_bf5" in elements:

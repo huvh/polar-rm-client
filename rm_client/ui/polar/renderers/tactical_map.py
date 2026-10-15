@@ -87,6 +87,8 @@ from ....vision import VisionTarget
 from ...animation import Easings
 from ...paint import draw_bar, glow_rect, rounded_rect, text_width, with_alpha
 from ...theme import THEME, color
+from ...jello_locale import chinese_enabled
+from ...hud_locale import hud_text, hud_template, hud_buff_name
 
 __all__ = [
     "TacticalMapMixin",
@@ -191,7 +193,7 @@ def draw_radar_overlay(
         p.save()
         p.setOpacity(base_opacity * (0.55 + 0.35 * detail) * fade)
         rounded_rect(p, legend, 4, color("#000000", 0.30), with_alpha(accent_color, 0.30))
-        host.draw_text(p, legend, f"RADAR {drawn}", font, accent_color, Qt.AlignmentFlag.AlignCenter)
+        host.draw_text(p, legend, hud_text(f"RADAR {drawn}", chinese_enabled(host.registry)), font, accent_color, Qt.AlignmentFlag.AlignCenter)
         p.restore()
     return drawn
 
@@ -240,7 +242,7 @@ def draw_penalty_strip(host: Any, p: QPainter, field_rect: QRectF, *, compact: b
         p.save()
         p.setOpacity(base_opacity * (0.88 if compact else 1.0))
         rounded_rect(p, capsule, 5, with_alpha(warn_color, 0.22), color("#ffffff", 0.12))
-        host.draw_text(p, capsule, text, font, THEME.text, Qt.AlignmentFlag.AlignCenter)
+        host.draw_text(p, capsule, hud_text(text, chinese_enabled(host.registry)), font, THEME.text, Qt.AlignmentFlag.AlignCenter)
         p.restore()
         host.add_hotspot(capsule, "match_penalty", ptype, tooltip=f"最近判罚：类型 {ptype} · 累计 {total} 次 · 效果 {effect}s")
         y += 18.0
@@ -390,7 +392,7 @@ class TacticalMapMixin:
         bar_color = self.hud_warning() if pulse > 0.5 else self.hud_accent()
         bar_thickness = 0.6 + 1.4 * pulse
         draw_bar(p, line, progress, bar_color, color("#ffffff", 0.10), bar_thickness)
-        self.draw_glass_text(p, rect.adjusted(14, 0, -14, 0), text, font, THEME.text, Qt.AlignmentFlag.AlignCenter)
+        self.draw_glass_text(p, rect.adjusted(14, 0, -14, 0), str(self.match_mode_manager.current.title) + hud_text(text[len(str(self.match_mode_manager.current.title)):], chinese_enabled(self.registry)), font, THEME.text, Qt.AlignmentFlag.AlignCenter)
         p.restore()
 
     #: `RadarOverlay / Map` 的默认档。**必须是 Both**：接线前雷达叠加在
@@ -572,10 +574,10 @@ class TacticalMapMixin:
             rect = QRectF(x, band.top(), chip_w, band.height())
             tint = accent if kind == "buff" else self.hud_warning()
             rounded_rect(p, rect, 4, color("#000000", 0.30), with_alpha(tint, 0.30))
-            self.draw_text(p, rect, text, font, tint, Qt.AlignmentFlag.AlignCenter)
+            self.draw_text(p, rect, (f"{hud_buff_name(name, chinese_enabled(self.registry))} {remaining}s" if show_time and remaining > 0 else hud_buff_name(name, chinese_enabled(self.registry))), font, tint, Qt.AlignmentFlag.AlignCenter)
             self.add_hotspot(
                 rect, "buff_timeline", f"{kind}:{name}",
-                tooltip=f"{'本机增益' if kind == 'buff' else '特殊机制'}：{name} 剩余 {remaining}s",
+                tooltip=f"{'本机增益' if kind == 'buff' else '特殊机制'}：{hud_buff_name(name, chinese_enabled(self.registry))} 剩余 {remaining}s",
             )
             x += chip_w + 4.0
 
@@ -620,7 +622,7 @@ class TacticalMapMixin:
         if not minimal:
             p.save()
             p.setOpacity(p.opacity() * detail_alpha)
-            self.draw_text(p, QRectF(rect.left() + 12, rect.top() + 8, rect.width() - 24, 14), title, self.font("poppins_bold", 7.0 if compact else 8.4), THEME.text)
+            self.draw_text(p, QRectF(rect.left() + 12, rect.top() + 8, rect.width() - 24, 14), hud_template("{title} Tactical Map", chinese_enabled(self.registry), title=config.title), self.font("poppins_bold", 7.0 if compact else 8.4), THEME.text)
             p.restore()
         if not compact and not thin:
             p.save()
@@ -628,7 +630,7 @@ class TacticalMapMixin:
             self.draw_text(
                 p,
                 QRectF(rect.left() + 12, rect.top() + 27, rect.width() - 24, 14),
-                f"{config.field.width_m:g}m x {config.field.height_m:g}m official field",
+                hud_template("{width}m x {height}m official field", chinese_enabled(self.registry), width=f"{config.field.width_m:g}", height=f"{config.field.height_m:g}"),
                 self.font("poppins_regular", 7.2),
                 THEME.muted,
             )
@@ -660,7 +662,7 @@ class TacticalMapMixin:
             p.save()
             p.setOpacity(p.opacity() * detail_alpha)
             rounded_rect(p, title_chip, 6, self.hud_surface(0.72), self.hud_panel_outline(0.10))
-            self.draw_text(p, title_chip.adjusted(7, 0, -7, 0), f"{config.title} official map", self.font("poppins_medium", 6.9), THEME.text)
+            self.draw_text(p, title_chip.adjusted(7, 0, -7, 0), hud_template("{title} official map", chinese_enabled(self.registry), title=config.title), self.font("poppins_medium", 6.9), THEME.text)
             p.restore()
         p.restore()
         stack_top = field_rect.bottom() + (3 if minimal else 5 if compact else 8)
@@ -788,45 +790,49 @@ class TacticalMapMixin:
             "Assembly Command",
             "Performance Selection (from RobotProfile)",
         )
+        chinese = chinese_enabled(self.registry)
+        display_commands = tuple(hud_text(value, chinese) for value in commands)
         choice, ok = QInputDialog.getItem(
-            self, "Event commands", "Referee event command:", commands, 0, False
+            self, hud_text("Event commands", chinese), hud_text("Referee event command:", chinese), display_commands, 0, False
         )
-        if not ok:
+        if not ok or choice not in display_commands:
             return
+        # Only the displayed choice is localized; dispatch uses the original key.
+        choice = commands[display_commands.index(choice)]
         try:
             if choice.startswith("Rune"):
                 value, accepted = QInputDialog.getItem(
-                    self, "RuneActivateCommand", "Activate value:", ["1 = activate", "0 = cancel"], 0, False
+                    self, hud_text("RuneActivateCommand", chinese), hud_text("Activate value:", chinese), [hud_text("1 = activate", chinese), hud_text("0 = cancel", chinese)], 0, False
                 )
                 if accepted:
                     activate = 1 if value.startswith("1") else 0
                     ok_pub, reason = self.backend.publish_rune_activate(activate)
                     self.toast(f"Rune {'sent' if ok_pub else reason}")
             elif choice.startswith("Dart"):
-                target, accepted = QInputDialog.getInt(self, "DartCommand", "Target robot ID:", 1, 1, 209)
+                target, accepted = QInputDialog.getInt(self, hud_text("DartCommand", chinese), hud_text("Target robot ID:", chinese), 1, 1, 209)
                 if accepted:
                     open_gate, accepted2 = QInputDialog.getItem(
-                        self, "DartCommand", "Open gate:", ["False", "True"], 0, False
+                        self, hud_text("DartCommand", chinese), hud_text("Open gate:", chinese), [hud_text("False", chinese), hud_text("True", chinese)], 0, False
                     )
                     if accepted2:
                         ok_pub, reason = self.backend.publish_dart_command(
-                            target, open_gate == "True", False
+                            target, open_gate == hud_text("True", chinese), False
                         )
                         self.toast(f"Dart {'sent' if ok_pub else reason}")
             elif choice.startswith("Sentry"):
                 command_id, accepted = QInputDialog.getInt(
-                    self, "SentryCtrlCommand", "Command ID (consult the selected referee protocol):", 1, 0, 2
+                    self, hud_text("SentryCtrlCommand", chinese), hud_text("Command ID (consult the selected referee protocol):", chinese), 1, 0, 2
                 )
                 if accepted:
                     ok_pub, reason = self.backend.publish_sentry_command(command_id)
                     self.toast(f"Sentry {'sent' if ok_pub else reason}")
             elif choice.startswith("Assembly"):
                 operation, accepted = QInputDialog.getInt(
-                    self, "AssemblyCommand", "Operation (1=exchange ore,2=submit,3=stash):", 1, 1, 3
+                    self, hud_text("AssemblyCommand", chinese), hud_text("Operation (1=exchange ore,2=submit,3=stash):", chinese), 1, 1, 3
                 )
                 if accepted:
                     difficulty, accepted2 = QInputDialog.getInt(
-                        self, "AssemblyCommand", "Difficulty (1-3):", 1, 1, 3
+                        self, hud_text("AssemblyCommand", chinese), hud_text("Difficulty (1-3):", chinese), 1, 1, 3
                     )
                     if accepted2:
                         ok_pub, reason = self.backend.publish_assembly_command(operation, difficulty)
@@ -944,7 +950,7 @@ class TacticalMapMixin:
         collapsed_title_size = 6.0 if compact_density else 7.2
         title_font = self.font("poppins_medium", collapsed_title_size + (8.0 - collapsed_title_size) * hold_amount)
         title_rect = QRectF(rect.left() + 8.0, rect.top() + 2.0, rect.width() - 16.0, header_h - 2.0)
-        self.draw_glass_text(p, title_rect, title, title_font, THEME.text)
+        self.draw_glass_text(p, title_rect, hud_template("{title} Tactical Map", chinese_enabled(self.registry), title=config.title), title_font, THEME.text)
 
         map_rect = rect.adjusted(6.0, header_h, -6.0, -footer_h)
         p.save()
@@ -1056,7 +1062,7 @@ class TacticalMapMixin:
                     color("#ffffff", 0.12),
                     1.0,
                 )
-            tooltip = f"{robot.get('name', 'Robot')} {robot.get('id', '?')} | {hp}/{hp_max} HP | {distance:.1f}m"
+            tooltip = f"{robot.get('name', hud_text('Robot', chinese_enabled(self.registry)))} {robot.get('id', '?')} | {hp}/{hp_max} {hud_text('HP', chinese_enabled(self.registry))} | {distance:.1f}m"
             self.add_hotspot(QRectF(point.x() - 11.0, point.y() - 11.0, 22.0, 22.0), "map_robot", robot.get("id"), tooltip=tooltip)
 
     def draw_liquid_mini_status_overlay(self, p: QPainter, field_rect: QRectF, display: str) -> None:
@@ -1103,8 +1109,8 @@ class TacticalMapMixin:
         text = self.compact_map_status_label(label)
         if self.liquid_map_bool("Show Values", True):
             text = f"{text} {value}"
-        self.draw_text(p, rect.adjusted(3.0, 0.0, -3.0, -1.0), text, font, THEME.text, Qt.AlignmentFlag.AlignCenter)
-        self.add_hotspot(rect.adjusted(-2.0, -2.0, 2.0, 2.0), "map_status", key, tooltip=tooltip)
+        self.draw_text(p, rect.adjusted(3.0, 0.0, -3.0, -1.0), hud_text(text, chinese_enabled(self.registry)), font, THEME.text, Qt.AlignmentFlag.AlignCenter)
+        self.add_hotspot(rect.adjusted(-2.0, -2.0, 2.0, 2.0), "map_status", key, tooltip=hud_text(tooltip, chinese_enabled(self.registry)))
 
     def liquid_entity_color(self, team: str, hp_ratio: float, distance_ratio: float, color_mode: str) -> QColor:
         if color_mode == "Health":
@@ -1441,19 +1447,19 @@ class TacticalMapMixin:
             value_area_w = min(max(18.0, value_width + 1.0), text_left.width() * 0.48)
             label_area = QRectF(text_left.left(), text_left.top(), max(1.0, text_left.width() - value_area_w - 4.0), text_left.height())
             value_area = QRectF(text_left.right() - value_area_w, text_left.top(), value_area_w, text_left.height())
-            short_label = self.elide(p, label_font, short_label, label_area.width())
-            display_value = self.elide(p, value_font, value, value_area.width())
+            short_label = self.elide(p, label_font, hud_text(short_label, chinese_enabled(self.registry)), label_area.width())
+            display_value = self.elide(p, value_font, hud_text(value, chinese_enabled(self.registry)), value_area.width())
         else:
             label_area = QRectF(text_left)
             value_area = QRectF(text_left)
             display_value = value
-        self.draw_text(p, label_area.translated(0.5, 0.7), short_label, label_font, color("#000000", 0.72))
-        self.draw_text(p, label_area, short_label, label_font, THEME.text)
+        self.draw_text(p, label_area.translated(0.5, 0.7), hud_text(short_label, chinese_enabled(self.registry)), label_font, color("#000000", 0.72))
+        self.draw_text(p, label_area, hud_text(short_label, chinese_enabled(self.registry)), label_font, THEME.text)
         if show_value:
             align = Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
-            self.draw_text(p, value_area.translated(0.5, 0.7), display_value, value_font, color("#000000", 0.72), align)
-            self.draw_text(p, value_area, display_value, value_font, THEME.text, align)
-        self.add_hotspot(bar_rect.adjusted(-3.0, -3.0, 3.0, 3.0), "map_status", key, tooltip=tooltip)
+            self.draw_text(p, value_area.translated(0.5, 0.7), hud_text(display_value, chinese_enabled(self.registry)), value_font, color("#000000", 0.72), align)
+            self.draw_text(p, value_area, hud_text(display_value, chinese_enabled(self.registry)), value_font, THEME.text, align)
+        self.add_hotspot(bar_rect.adjusted(-3.0, -3.0, 3.0, 3.0), "map_status", key, tooltip=hud_text(tooltip, chinese_enabled(self.registry)))
 
     def draw_liquid_status_card(
         self,
@@ -1491,23 +1497,23 @@ class TacticalMapMixin:
             split_h = max(7.0, text_rect.height() * 0.48)
             label_rect = QRectF(text_rect.left(), text_rect.top(), text_rect.width(), split_h)
             value_rect = QRectF(text_rect.left(), label_rect.bottom() - 1.0, text_rect.width(), max(6.0, text_rect.bottom() - label_rect.bottom() + 1.0))
-            label_text = self.elide(p, label_font, label_text, label_rect.width())
-            display_value = self.elide(p, value_font, value, value_rect.width())
+            label_text = self.elide(p, label_font, hud_text(label_text, chinese_enabled(self.registry)), label_rect.width())
+            display_value = self.elide(p, value_font, hud_text(value, chinese_enabled(self.registry)), value_rect.width())
             value_align = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
         else:
             value_w = min(text_rect.width() * 0.46, text_width(p, value_font, value) + 2.0) if show_value else 0.0
             label_rect = QRectF(text_rect.left(), text_rect.top(), max(1.0, text_rect.width() - value_w - 4.0), text_rect.height())
             value_rect = QRectF(text_rect.right() - value_w, text_rect.top(), value_w, text_rect.height())
-            label_text = self.elide(p, label_font, label_text, label_rect.width())
-            display_value = self.elide(p, value_font, value, value_rect.width())
+            label_text = self.elide(p, label_font, hud_text(label_text, chinese_enabled(self.registry)), label_rect.width())
+            display_value = self.elide(p, value_font, hud_text(value, chinese_enabled(self.registry)), value_rect.width())
             value_align = Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
-        self.draw_text(p, label_rect, label_text, label_font, THEME.muted)
+        self.draw_text(p, label_rect, hud_text(label_text, chinese_enabled(self.registry)), label_font, THEME.muted)
         if show_value:
-            self.draw_text(p, value_rect, display_value, value_font, THEME.text, value_align)
+            self.draw_text(p, value_rect, hud_text(display_value, chinese_enabled(self.registry)), value_font, THEME.text, value_align)
         bar = QRectF(card_rect.left() + 6.0, card_rect.bottom() - 5.0, card_rect.width() - 12.0, 2.0)
         draw_bar(p, bar, lag_ratio, with_alpha(main, 0.18), color("#ffffff", 0.10), 1.0)
         draw_bar(p, bar, fast_ratio, with_alpha(main, 0.78), color("#ffffff", 0.00), 1.0)
-        self.add_hotspot(card_rect.adjusted(-3.0, -3.0, 3.0, 3.0), "map_status", key, tooltip=tooltip)
+        self.add_hotspot(card_rect.adjusted(-3.0, -3.0, 3.0, 3.0), "map_status", key, tooltip=hud_text(tooltip, chinese_enabled(self.registry)))
 
     def draw_official_map(self, p: QPainter, rect: QRectF, config: MatchModeConfig) -> QRectF:
         image = self.official_map_image(config)
@@ -1515,7 +1521,7 @@ class TacticalMapMixin:
         image_opacity = float(opacity_setting.value) if opacity_setting else 0.72
         rounded_rect(p, rect, 6, color("#050506", 0.72), color("#ffffff", 0.08))
         if image is None or image.isNull():
-            self.draw_text(p, rect, "official map asset missing", self.font("poppins_regular", 8.0), self.hud_danger(), Qt.AlignmentFlag.AlignCenter)
+            self.draw_text(p, rect, hud_text("official map asset missing", chinese_enabled(self.registry)), self.font("poppins_regular", 8.0), self.hud_danger(), Qt.AlignmentFlag.AlignCenter)
             fit = self.fit_aspect(rect, config.field.width_m / max(0.1, config.field.height_m))
         else:
             fit = self.fit_aspect(rect, image.width() / max(1.0, image.height()))
@@ -1722,7 +1728,7 @@ class TacticalMapMixin:
             bar_w = 15 if compact else 20
             bar = QRectF(point.x() - bar_w / 2, point.y() + (5 if compact else 7), bar_w, 2.4 if compact else 3)
             draw_bar(p, bar, hp / hp_max, base_color, color("#ffffff", 0.16), 1.5)
-            tooltip = f"{robot.get('name', 'Robot')} {robot.get('id', '?')} | {hp}/{hp_max} HP"
+            tooltip = f"{robot.get('name', hud_text('Robot', chinese_enabled(self.registry)))} {robot.get('id', '?')} | {hp}/{hp_max} {hud_text('HP', chinese_enabled(self.registry))}"
             self.add_hotspot(QRectF(point.x() - 10, point.y() - 10, 20, 20), "map_robot", robot.get("id"), tooltip=tooltip)
 
     def draw_map_markers(
@@ -1932,14 +1938,14 @@ class TacticalMapMixin:
         font_size = max(4.6, min(7.4, diameter * 0.22))
         value_font = self.font("poppins_bold", font_size)
         value_rect = QRectF(center.x() - diameter * 0.64, center.y() - diameter * 0.22, diameter * 1.28, diameter * 0.44)
-        self.draw_text(p, value_rect.translated(0.6, 0.7), value, value_font, color("#000000", 0.72), Qt.AlignmentFlag.AlignCenter)
-        self.draw_text(p, value_rect, value, value_font, THEME.text, Qt.AlignmentFlag.AlignCenter)
+        self.draw_text(p, value_rect.translated(0.6, 0.7), hud_text(value, chinese_enabled(self.registry)), value_font, color("#000000", 0.72), Qt.AlignmentFlag.AlignCenter)
+        self.draw_text(p, value_rect, hud_text(value, chinese_enabled(self.registry)), value_font, THEME.text, Qt.AlignmentFlag.AlignCenter)
         p.restore()
 
         if show_label:
             self.draw_status_label_capsule(p, center, draw_r, diameter, label, tooltip, main, hover_v, label_side)
 
-        self.add_hotspot(label_probe.adjusted(-4.0, -4.0, 8.0, 8.0), "map_status", key, tooltip=tooltip)
+        self.add_hotspot(label_probe.adjusted(-4.0, -4.0, 8.0, 8.0), "map_status", key, tooltip=hud_text(tooltip, chinese_enabled(self.registry)))
 
     def draw_status_label_capsule(
         self,
@@ -1989,8 +1995,8 @@ class TacticalMapMixin:
         else:
             p.fillRect(QRectF(capsule_rect.left() + 4.5, capsule_rect.top() + 1.4, capsule_rect.width() - 9.0, 1.0), shine)
         text = detail_text if hover_v > 0.58 and capsule_w > short_w + 22.0 else short_text
-        self.draw_text(p, text_rect.translated(0.5, 0.6), text, label_font, color("#000000", 0.68), align)
-        self.draw_text(p, text_rect, text, label_font, with_alpha(main, 0.94), align)
+        self.draw_text(p, text_rect.translated(0.5, 0.6), hud_text(text, chinese_enabled(self.registry)), label_font, color("#000000", 0.68), align)
+        self.draw_text(p, text_rect, hud_text(text, chinese_enabled(self.registry)), label_font, with_alpha(main, 0.94), align)
         p.restore()
 
     def compact_map_status_label(self, label: str) -> str:
@@ -2313,8 +2319,8 @@ class TacticalMapMixin:
             value_font = self.font("poppins_medium", 5.6 if compact else 6.9)
             left_pad = 6 if compact else 8
             main = self.liquid_status_color(label, ratio, c)
-            self.draw_text(p, QRectF(rect.left() + left_pad, y, rect.width() * 0.38, row_h), label, label_font, with_alpha(main, 0.88))
-            self.draw_text(p, QRectF(rect.left() + rect.width() * 0.43, y, rect.width() * 0.52, row_h), value, value_font, THEME.text, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            self.draw_text(p, QRectF(rect.left() + left_pad, y, rect.width() * 0.38, row_h), hud_text(label, chinese_enabled(self.registry)), label_font, with_alpha(main, 0.88))
+            self.draw_text(p, QRectF(rect.left() + rect.width() * 0.43, y, rect.width() * 0.52, row_h), hud_text(value, chinese_enabled(self.registry)), value_font, THEME.text, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             draw_bar(p, QRectF(rect.left() + left_pad, y + row_h - (3.0 if compact else 4.0), rect.width() - left_pad * 2, 1.8 if compact else 2.4), ratio, c, color("#ffffff", 0.10), 1.2)
 
     def draw_match_status_rings(self, p: QPainter, rect: QRectF, compact: bool = False) -> None:
@@ -2341,8 +2347,8 @@ class TacticalMapMixin:
             p.setBrush(color("#050507", 0.80))
             p.setPen(Qt.PenStyle.NoPen)
             p.drawEllipse(center, max(5.6, ring_d * 0.27), max(5.6, ring_d * 0.27))
-            self.draw_text(p, QRectF(center.x() - slot_w / 2.0, center.y() - 6.0, slot_w, 12.0), value, self.font("poppins_bold", 6.2 if compact else 7.0), THEME.text, Qt.AlignmentFlag.AlignCenter)
-            self.draw_text(p, QRectF(center.x() - slot_w / 2.0, rect.bottom() - (11.0 if compact else 13.0), slot_w, 10.0), label, self.font("poppins_medium", 5.6 if compact else 6.3), with_alpha(c, 0.92), Qt.AlignmentFlag.AlignCenter)
+            self.draw_text(p, QRectF(center.x() - slot_w / 2.0, center.y() - 6.0, slot_w, 12.0), hud_text(value, chinese_enabled(self.registry)), self.font("poppins_bold", 6.2 if compact else 7.0), THEME.text, Qt.AlignmentFlag.AlignCenter)
+            self.draw_text(p, QRectF(center.x() - slot_w / 2.0, rect.bottom() - (11.0 if compact else 13.0), slot_w, 10.0), hud_text(label, chinese_enabled(self.registry)), self.font("poppins_medium", 5.6 if compact else 6.3), with_alpha(c, 0.92), Qt.AlignmentFlag.AlignCenter)
 
     def match_status_ring_rows(self) -> list[tuple[str, str, float, QColor]]:
         config = self.match_mode_manager.current
@@ -2499,8 +2505,8 @@ class TacticalMapMixin:
             else:
                 glow_rect(p, rect, 8, self.telemetry_glow_amount(key))
                 rounded_rect(p, rect, 7, self.hud_surface(0.68), self.hud_panel_outline(0.09))
-            self.draw_text(p, QRectF(rect.left() + 9, rect.top() + 5, 48, 12), label, self.font("poppins_medium", 7.0), THEME.muted)
-            self.draw_text(p, QRectF(rect.left() + 46, rect.top() + 4, rect.width() - 55, 13), value, self.font("poppins_bold", 7.3), THEME.text, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            self.draw_text(p, QRectF(rect.left() + 9, rect.top() + 5, 48, 12), hud_text(label, chinese_enabled(self.registry)), self.font("poppins_medium", 7.0), THEME.muted)
+            self.draw_text(p, QRectF(rect.left() + 46, rect.top() + 4, rect.width() - 55, 13), hud_text(value, chinese_enabled(self.registry)), self.font("poppins_bold", 7.3), THEME.text, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             draw_bar(p, QRectF(rect.left() + 9, rect.bottom() - 10, rect.width() - 18, 4.2), max(0.0, min(1.0, ratio)), bar_color, color("#ffffff", 0.13), 2.1 + 1.2 * pulse)
             p.restore()
 
@@ -2561,8 +2567,8 @@ class TacticalMapMixin:
             ratio = max(0.0, min(1.0, ratio))
             row_active = self.anim.value(f"hud.telemetry.compact.{key}", 1.0, self.anim_duration(0.16), Easings.ease_out_pow4, initial=0.0)
             p.setOpacity(active * row_active)
-            self.draw_text(p, QRectF(seg_x, y + 4, seg_w * 0.44, 10), label, self.font("poppins_medium", 6.4), THEME.muted)
-            self.draw_text(p, QRectF(seg_x + seg_w * 0.38, y + 4, seg_w * 0.62, 10), value.replace(" / ", "/"), self.font("poppins_medium", 6.5), THEME.text, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            self.draw_text(p, QRectF(seg_x, y + 4, seg_w * 0.44, 10), hud_text(label, chinese_enabled(self.registry)), self.font("poppins_medium", 6.4), THEME.muted)
+            self.draw_text(p, QRectF(seg_x + seg_w * 0.38, y + 4, seg_w * 0.62, 10), hud_text(value.replace(" / ", "/"), chinese_enabled(self.registry)), self.font("poppins_medium", 6.5), THEME.text, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             # `Pulse Overrun` 在两条路径上行为必须一致：紧凑模式是默认视图，
             # 只改 DebugFull 等于开关在大多数时候看不出效果。
             draw_bar(p, QRectF(seg_x, y + 18, seg_w, 3.2), ratio, bar_color, color("#ffffff", 0.12), 1.6 + 1.0 * pulse)

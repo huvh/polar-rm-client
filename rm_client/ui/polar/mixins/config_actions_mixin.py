@@ -75,6 +75,8 @@ from typing import Any
 from PySide6.QtCore import QRectF, Qt, QTimer
 from PySide6.QtWidgets import QFileDialog, QInputDialog
 
+from ...jello_locale import chinese_enabled, ui_text
+
 # 相对导入层级：rm_client/ui/polar/mixins/ → ... = rm_client.ui、.... = rm_client
 from ....combat_events import CombatEvent
 from ....control import (build_dt7_selftest_report, evaluate_dt7_hold,
@@ -223,6 +225,19 @@ class ConfigActionsMixin:
         self.auto_save_config()
 
     def handle_config_action(self, action_name: str) -> None:
+        if action_name == "Open Keybind Manager":
+            from ...jello_keybinds import open_keyboard_manager
+            open_keyboard_manager(self)
+            return
+        if action_name in ("Open Crosshair Editor", "Import Crosshair Code", "Import Crosshair File", "Crosshair Import Details"):
+            from ....cs2_crosshair import import_dialog, open_crosshair_editor, show_import_details
+            if action_name == "Open Crosshair Editor":
+                open_crosshair_editor(self)
+            elif action_name == "Crosshair Import Details":
+                show_import_details(self)
+            else:
+                import_dialog(self, file=action_name == "Import Crosshair File")
+            return
         if self.handle_student_config_action(action_name):
             return
         qualification_actions = {
@@ -450,11 +465,11 @@ class ConfigActionsMixin:
         qualification = self.backend.qualification
         try:
             if action_name == "New Qualification Session":
-                operator, ok = QInputDialog.getText(self, "Field qualification", "Operator name:")
+                operator, ok = QInputDialog.getText(self, ui_text("Field qualification", chinese_enabled(self.registry)), ui_text("Operator name:", chinese_enabled(self.registry)))
                 if not ok:
                     return
                 firmware_hash, ok = QInputDialog.getText(
-                    self, "Field qualification", "Robot firmware SHA-256:"
+                    self, ui_text("Field qualification", chinese_enabled(self.registry)), ui_text("Robot firmware SHA-256:", chinese_enabled(self.registry))
                 )
                 if not ok:
                     return
@@ -575,8 +590,8 @@ class ConfigActionsMixin:
                     return
                 phrase, accepted = QInputDialog.getText(
                     self,
-                    "Physical firmware watchdog observation",
-                    "After physically observing neutral output, type ZERO OBSERVED:",
+                    ui_text("Physical firmware watchdog observation", chinese_enabled(self.registry)),
+                    ui_text("After physically observing neutral output, type ZERO OBSERVED:", chinese_enabled(self.registry)),
                 )
                 if not accepted or phrase.strip() != "ZERO OBSERVED":
                     self.toast("Firmware zero observation cancelled")
@@ -672,15 +687,15 @@ class ConfigActionsMixin:
                 }
                 reviewer, accepted = QInputDialog.getText(
                     self,
-                    "PRM1 capability evidence",
-                    "Named schema reviewer / bench safety observer:",
+                    ui_text("PRM1 capability evidence", chinese_enabled(self.registry)),
+                    ui_text("Named schema reviewer / bench safety observer:", chinese_enabled(self.registry)),
                 )
                 if not accepted or not reviewer.strip():
                     return
                 phrase, accepted = QInputDialog.getText(
                     self,
-                    "PRM1 capability evidence",
-                    "Type OBSERVED ON FIXTURE to confirm supervised evidence:",
+                    ui_text("PRM1 capability evidence", chinese_enabled(self.registry)),
+                    ui_text("Type OBSERVED ON FIXTURE to confirm supervised evidence:", chinese_enabled(self.registry)),
                 )
                 passed = bool(accepted and phrase.strip() == "OBSERVED ON FIXTURE")
                 qualification.record_supervised_prm1(
@@ -707,12 +722,12 @@ class ConfigActionsMixin:
                 )
                 self.toast("Soak PASS" if elapsed >= required else "Soak stopped too early")
             elif action_name == "Export Evidence":
-                destination = QFileDialog.getExistingDirectory(self, "Export field evidence")
+                destination = QFileDialog.getExistingDirectory(self, ui_text("Export field evidence", chinese_enabled(self.registry)))
                 if destination:
                     target = qualification.store.export_current(Path(destination))
                     self.toast(f"Evidence exported: {target.name}")
             elif action_name == "Field Sign-off":
-                lead, ok = QInputDialog.getText(self, "Dual sign-off", "Safety lead name:")
+                lead, ok = QInputDialog.getText(self, ui_text("Dual sign-off", chinese_enabled(self.registry)), ui_text("Safety lead name:", chinese_enabled(self.registry)))
                 if ok:
                     qualification.sign_off(lead)
                     self.toast("Dual sign-off recorded")
@@ -790,18 +805,32 @@ class ConfigActionsMixin:
         真正的逻辑在 rm_client/serial_ports.refresh_port_options()：那边是纯逻辑、
         可离线测；这里只负责提示与落盘。
         """
-        from rm_client.serial_ports import refresh_port_options
+        import rm_client.serial_ports as serial_ports
 
-        module = self.registry.get("RobotLink")
-        diffs = refresh_port_options(self.registry)
-        # 重扫完必须当场告诉他"DT7 现在到底认没认出来"，不然他还得自己去猜：
-        # Auto 只认 DJI 那对 VID/PID，认不出是**故意拒发**而不是乱开别人的口。
-        setting = module.get_setting("DT7 Port") if module is not None else None
-        seen = [str(x) for x in (getattr(setting, "options", None) or [])
-                if str(x) and str(x) != "Auto"]
-        self.toast("串口已重扫：" + ("；".join(diffs) if diffs else "候选口没有变化")
-                   + "｜DT7 可选 " + (", ".join(seen) if seen else "（没认出 DJI 口）"))
-        self.auto_save_config()
+        serial_ports.invalidate_port_cache()
+        serial_ports.port_snapshot()  # schedules the scan; never waits here
+        self.toast("正在后台重扫串口…")
+
+        def finish():
+            if serial_ports.discovery_pending():
+                QTimer.singleShot(50, finish)
+                return
+            module = self.registry.get("RobotLink")
+            diffs = serial_ports.refresh_port_options(self.registry, nonblocking=True)
+            setting = module.get_setting("DT7 Port") if module is not None else None
+            seen = [str(x) for x in (getattr(setting, "options", None) or [])
+                    if str(x) and str(x) != "Auto"]
+            # An explicit rescan can retry neutral on the original target.
+            # It never clears a failure latch or re-enables real motion.
+            for name in ("dt7_link", "cc_link"):
+                link = getattr(self.control, name, None)
+                if getattr(link, "release_pending", False) and hasattr(link, "retry_release"):
+                    link.retry_release()
+            self.toast("串口已重扫：" + ("；".join(diffs) if diffs else "候选口没有变化")
+                       + "｜DT7 可选 " + (", ".join(seen) if seen else "（没认出 DJI 口）"))
+            self.auto_save_config()
+
+        QTimer.singleShot(50, finish)
 
     def run_dt7_link_selftest(self) -> None:
         """Fresh baseline -> neutral/X probe -> no-send hold; token-bound."""
@@ -873,6 +902,9 @@ class ConfigActionsMixin:
                                   control.radio_km_robot_key_sequence, now)
                     phase = probe.advance(now, control.dt7_sent)
                     control.dt7_forced_keys = PROBE_BITS if phase == "press" else 0
+                    if phase == "hold" and hasattr(writer, "begin_qualification_hold"):
+                        if not writer.begin_qualification_hold(token.value, token.expires_at):
+                            probe.abort(detail="DT7 no-send hold authorization failed")
                     control.dt7_send_paused = phase == "hold"
                     control.dt7_paused_until = token.expires_at
             if probe.result is None:

@@ -145,6 +145,10 @@ class EconomyWorkspaceLayout:
 class EconomyWorkspaceLayer:
     """Responsive geometry for the exclusive economy GPU scene."""
 
+    def __init__(self) -> None:
+        from .cs2_feedback import BuyFeedback
+        self.cs2_feedback = BuyFeedback()
+
     def layout(self, width: int, height: int, progress: float) -> EconomyWorkspaceLayout:
         width_f = max(1.0, float(width))
         height_f = max(1.0, float(height))
