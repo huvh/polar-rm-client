@@ -7,7 +7,7 @@
 - `Esc → 设置`：视频、音频、游戏、键盘/鼠标、准星、界面/HUD六页。模态页不暂停比赛；输入先归零并锁定，返回不恢复旧按键、不自动Arm。F12在嵌套导入/确认窗口中也有效。
 - 购买页：`EconomyPanel → Shop Layout = CS2 Grid`。五列分别为弹丸、恢复、复活、支援、补给站，右侧是详细预览与原确认区。`Classic`保留旧工作区。
 - 原生击杀反馈：`EliminationFX → Preset = CS2 Native`。保留其他预设与开关；不是把所有用户预设强制覆盖为CS2。
-- 顶栏：`TopMatchBar → Local CS2 Assets`使用本机私人资源包；`Source Motion Preview`是已有原始动效开关，已保存的关闭选择不被覆盖。
+- 顶栏：`TopMatchBar → Local CS2 Assets`使用经校验的 CS2 素材（优先个人覆盖包，否则随源包）；`Source Motion Preview`是已有原始动效开关，已保存的关闭选择不被覆盖。
 - 准星：准星页粘贴分享码→导入→预览→应用，或`ClickGUI → Crosshair`导入动作。导入自动选择CS2样式，但不强制启用已关闭的Crosshair模块。
 
 ## 不是占位的设置
@@ -40,10 +40,10 @@ VSync/MSAA需要重启创建新的GL上下文。**显示器物理刷新率仍由
 ## 本机素材与只读边界
 
 - 安装目录只以`rb`读取选定VPK/font，CRC验证后复制到安装目录之外再运行Source2Viewer。没有启动CS2、注入/hook、读取进程内存或修改CS配置。
-- 私人激活包为`user_data/cs2_ui_pack`，manifest声明34项，涵盖Stratum2 Regular/Bold/Condensed/Mono/BoldTF、顶栏点纹/人数/骷髅、五张击杀卡与mask、购买分类图形及五个音效。
+- 用户确认拥有公开再分发授权后，已审核的随源包纳入`assets/cs2_ui_pack`。manifest声明34项运行时素材，涵盖Stratum2 Regular/Bold/Condensed/Mono/BoldTF、顶栏点纹/人数/骷髅、五张击杀卡与mask、购买分类图形及五个音效；另保留三个未启用的音效导出变体及其哈希。`user_data/cs2_ui_pack`仍可作为个人覆盖包。
 - manifest记录实际读取的18个源文件前后SHA-256，全部相等；设置布局另外保留只读核验。运行时不读Steam、解包、下载或生成进程。
 - 声音按本机`game_sounds_ui`事件表核对：KillCard.1=`kill_doof_01`（0.6），购买=`radial_menu_buy_03`（0.3），拒绝=`weapon_cant_buy`（0.4），选择=`inventory_item_select_01`（0.5），悬停=`itemtile_rollover_09`（0.3）。没有把商城购买声音误当局内买枪。
-- 提取工具：`tools/import_cs2_ui_pack.py`，显式指定游戏目录、工具、全新工作/输出目录。私人素材来自Valve，不因Source2Viewer为MIT就变成开源资源；`user_data/`已被Git/发布排除。可公开源码只包含独立实现与原创回退SVG。
+- 提取工具：`tools/import_cs2_ui_pack.py`，显式指定游戏目录、工具、全新工作/输出目录。素材来自Valve，不因Source2Viewer为MIT就变成开源资源；本次随源分发依据用户确认的授权。`user_data/`仍被Git排除，导入工具不会自动把个人文件加入仓库。新克隆与便携包无需Steam或本机覆盖包即可加载随源素材。
 - 未承诺第三方软件或反作弊系统绝对保证；这里的证据仅是无游戏写入/无进程接入的边界。
 
 ## 动效与材质

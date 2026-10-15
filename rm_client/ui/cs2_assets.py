@@ -1,9 +1,10 @@
-"""Optional, machine-local CS2 UI pack. Never reads a Steam installation.
+"""Validated bundled/local CS2 UI packs. Never reads a Steam installation.
 
 Only the explicit offline importer handles compiled game resources. Runtime
 verifies and preloads a small allowlisted pack once, before presentation; paint
 and event feedback never extract files, spawn processes or perform network I/O.
-Valve resources are not part of the public source/release distribution.
+The repository owner authorized redistribution of the reviewed bundled pack.
+Local imports stay in user_data and are never automatically committed.
 """
 from __future__ import annotations
 
@@ -56,8 +57,10 @@ class Cs2Assets:
             if manifest_path.stat().st_size > 128 * 1024:
                 raise ValueError("oversized CS2 manifest")
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-            if manifest.get("schema") != 1 or manifest.get("scope") != "local-personal-use":
-                raise ValueError("unsupported CS2 personal pack")
+            if manifest.get("schema") != 1 or manifest.get("scope") not in {
+                "local-personal-use", "authorized-distribution",
+            }:
+                raise ValueError("unsupported CS2 asset pack")
             entries = manifest["assets"]
             if not isinstance(entries, dict) or len(entries) > len(IMAGE_IDS | SOUND_IDS | FONT_IDS):
                 raise ValueError("invalid CS2 asset table")
@@ -147,4 +150,12 @@ class Cs2Assets:
 
 @lru_cache(maxsize=1)
 def local_cs2_assets() -> Cs2Assets:
-    return Cs2Assets(RuntimePaths.discover().user_data_root / "cs2_ui_pack")
+    paths = RuntimePaths.discover()
+    # A validated personal override remains optional. Clean clones and portable
+    # builds load immutable versioned assets without copying runtime user data.
+    local = paths.user_data_root / "cs2_ui_pack"
+    if (local / "manifest.json").is_file():
+        pack = Cs2Assets(local)
+        if pack.available:
+            return pack
+    return Cs2Assets(paths.asset("cs2_ui_pack"))

@@ -177,22 +177,30 @@ class DT7WorkerTests(unittest.TestCase):
     def test_expired_qualification_callback_is_deferred_and_motion_cancelled(self):
         from dataclasses import replace
         callbacks, writes = [], []
+        entered, unblock = threading.Event(), threading.Event()
         safety = OfficialSafety()
         token = safety.begin_qualification(['dt7_selftest'])
-        safety._qualification = replace(token, expires_at=time.perf_counter() + .025)
         safety.input_clear_hook = lambda reason: callbacks.append(threading.current_thread().name)
         class Serial:
             def __init__(self, port, *args, **kwargs):
                 self.port = port
-                time.sleep(.05)
+                entered.set()
+                unblock.wait(2)
             def write(self, frame):
                 writes.append(frame)
                 return len(frame)
             def close(self): pass
         with patch.object(Dt7KeyMouseLink, '_open_target', return_value=('COM9','')), patch('serial.Serial', Serial):
             link = self.make(max_intent_age_s=1)
+            self.addCleanup(unblock.set)
             link.safety = safety
             link.send(pressed_bits=1 << 12, qualification_token=token.value)
+            # Expire only once opening has begun. A 25 ms wall-clock race can
+            # otherwise expire before any port opens, where no release write
+            # is required; that is safe but tests a different lifecycle edge.
+            self.assertTrue(entered.wait(1))
+            safety._qualification = replace(token, expires_at=time.perf_counter() - 1)
+            unblock.set()
             until(lambda: bool(link._fault))
             self.assertEqual(callbacks, [])
             link.poll()

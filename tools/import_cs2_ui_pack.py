@@ -2,7 +2,8 @@
 
 Requires an explicit Source2Viewer CLI, used ONLY on extracted copies. No Steam
 process, game executable, memory, injection, install write, downloads or registry.
-Run with this checkout's Python/PySide6. Output is excluded from Git/releases.
+Run with this checkout's Python/PySide6. Personal output stays excluded from Git;
+only a separately reviewed, authorized copy belongs under assets/cs2_ui_pack.
 """
 from __future__ import annotations
 

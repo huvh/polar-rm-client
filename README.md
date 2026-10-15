@@ -222,6 +222,14 @@ PRM1 自瞄/小陀螺仍是独立 `LOCKED MOCK` 能力；客户端不提供自�
 
 ## 自包含现场候选包
 
+### 随源素材
+
+`assets/` 已包含客户端使用的 Jello/Minecraft 字体、图片、音效、GD656 特效、
+经用户确认再分发授权的 CS2 素材包，以及 Texas/Vending Machine 两段内置视频壁纸。
+正常 Git 克隆即可取得，无需额外复制开发机 `user_data`；CS2 本机覆盖包仍可选。
+版权与来源见 `THIRD_PARTY_NOTICES.md` 及各素材清单。个人配置、标定、日志、
+现场资格证据、自定义导入素材与 Release 压缩包不混入源代码提交。
+
 发布脚本以 PyInstaller 6.21 one-folder 方式构建，无需现场 Python、venv、
 pip 或网络。运行时只认可便携包 `bin/ffmpeg.exe`，OfficialEvent 还会校验
 FFmpeg 与 `BUILD_MANIFEST.json` 的哈希。
