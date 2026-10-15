@@ -1646,6 +1646,22 @@ def build_default_registry() -> ModuleRegistry:
             description="RS232/串口桥接 stub，用于后续接入真实机器人。",
         ),
         Module(
+            "ControllerAngles",
+            "System",
+            "None",
+            [
+                mode_setting("Angle RX Port", "Stub", ["Stub"] + [p for p in polar_port_choices() if p not in {"Stub", "Auto"}]),
+                mode_setting("Angle TX Port", "Stub", ["Stub"] + [p for p in polar_port_choices() if p not in {"Stub", "Auto"}]),
+                bool_setting("Forward Angles", False),
+                bool_setting("Angle Mock Writes", True),
+                action_setting("Arm Angle Forward", "只授权本次进程。需新鲜六轴数据、RobotLink 和 Allow Drive；断流后必须重新授权。"),
+                action_setting("Disarm Angle Forward", "停止角度转发，等待车端独立超时；不发送全零目标角度。"),
+                action_setting("Show Angle Status", "显示六轴角度接收有效性、转发状态和拦截原因。"),
+                action_setting("Rescan Serial Ports", "重新扫描显式 RX/TX 串口；不会自动选择设备。"),
+            ],
+            description="工程实体控制器六轴角度：A5/0x0302/30 字节，115200。默认关闭及 mock；300ms 独立超时。",
+        ),
+        Module(
             "RobotLink",
             "System",
             "None",

@@ -1,0 +1,9 @@
+Traceback (most recent call last):
+  File "/workspace/scratch/8fc313400f06/polar-controller-angle-fix/tests/hud_batch8_settings_test.py", line 32, in <module>
+    from rm_client.ui.polar.renderers.esp_wireframe import EspWireframeMixin  # noqa: E402
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/8fc313400f06/polar-controller-angle-fix/rm_client/ui/polar/__init__.py", line 6, in <module>
+    from .primitives import (
+  File "/workspace/scratch/8fc313400f06/polar-controller-angle-fix/rm_client/ui/polar/primitives.py", line 13, in <module>
+    from PySide6.QtCore import QRectF, Qt
+ModuleNotFoundError: No module named 'PySide6'

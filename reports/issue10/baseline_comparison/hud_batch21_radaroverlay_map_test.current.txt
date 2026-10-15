@@ -1,0 +1,5 @@
+Traceback (most recent call last):
+  File "/workspace/scratch/8fc313400f06/polar-controller-angle-fix/tests/hud_batch21_radaroverlay_map_test.py", line 36, in <module>
+    from PySide6.QtCore import QRectF  # noqa: E402
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ModuleNotFoundError: No module named 'PySide6'

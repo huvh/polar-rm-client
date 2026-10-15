@@ -1,0 +1,12 @@
+Traceback (most recent call last):
+  File "/workspace/scratch/8fc313400f06/polar-controller-angle-fix/tests/referee_integration_test.py", line 452, in <module>
+    main()
+  File "/workspace/scratch/8fc313400f06/polar-controller-angle-fix/tests/referee_integration_test.py", line 443, in main
+    test_real_mqtt_loopback()
+  File "/workspace/scratch/8fc313400f06/polar-controller-angle-fix/tests/referee_integration_test.py", line 308, in test_real_mqtt_loopback
+    wait_until(lambda: broker.ready.is_set(), "real paho subscribe completed")
+  File "/workspace/scratch/8fc313400f06/polar-controller-angle-fix/tests/referee_integration_test.py", line 299, in wait_until
+    check(bool(predicate()), label)
+  File "/workspace/scratch/8fc313400f06/polar-controller-angle-fix/tests/referee_integration_test.py", line 36, in check
+    raise AssertionError(label)
+AssertionError: real paho subscribe completed

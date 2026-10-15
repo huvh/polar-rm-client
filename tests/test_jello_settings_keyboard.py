@@ -166,13 +166,18 @@ class JelloKeyboardTests(unittest.TestCase):
 
     def test_dropdown_220ms_reopen_does_not_inherit_short_close(self):
         combo=JelloComboBox();combo.addItems(['First','Second','Third']);combo.resize(200,40);combo.show()
-        combo.showPopup();QTest.qWait(240)
+        # Drive the real Qt animation's clock, not the host scheduler: a busy
+        # event loop may deliver the final timer tick after qWait(240) returns.
+        def finish_motion():
+            combo._drop_motion.setCurrentTime(combo._drop_motion.duration())
+            APP.processEvents()
+        combo.showPopup();self.assertEqual(combo._drop_motion.duration(),220);finish_motion()
         self.assertEqual(combo._drop_progress,1)
-        combo.hidePopup();QTest.qWait(240)
+        combo.hidePopup();finish_motion()
         self.assertIsNone(combo._popup)
-        combo.showPopup();QTest.qWait(40);combo.hidePopup();QTest.qWait(240)
+        combo.showPopup();combo._drop_motion.setCurrentTime(40);combo.hidePopup();finish_motion()
         combo.showPopup();self.assertEqual(combo._drop_motion.duration(),220)
-        combo.hidePopup();QTest.qWait(240);combo.deleteLater();APP.processEvents()
+        combo.hidePopup();finish_motion();combo.deleteLater();APP.processEvents()
 
     def test_white_card_corners_and_margin_keep_elastic_overshoot_inside_window(self):
         dialog=JelloDialog(self.host);dialog.resize(1240,840);dialog.show();QTest.qWait(490)

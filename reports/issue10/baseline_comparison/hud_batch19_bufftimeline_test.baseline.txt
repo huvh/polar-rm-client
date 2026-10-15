@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "/tmp/polar-issue10-baseline-Iwt5cE/tests/hud_batch19_bufftimeline_test.py", line 40, in <module>
+    from PySide6.QtCore import QRectF
+ModuleNotFoundError: No module named 'PySide6'

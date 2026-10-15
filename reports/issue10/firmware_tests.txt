@@ -1,0 +1,13 @@
+.FAIL: Refusing to overwrite a later edit: application/mechanical_arm/mechanical_arm_engineer.c
+....
+----------------------------------------------------------------------
+Ran 5 tests in 0.348s
+
+OK
+PASS: sender reads only six floats, zeroes reserved tail, preserves frame ABI, enforces 34 ms across wrap
+PASS: recognized 5 source files; no writes
+PASS: controller angle source patch installed; no firmware build, flash or hardware operation
+PASS: controller angle source patch installed; no firmware build, flash or hardware operation
+Restored 5 controller-angle source files
+PASS: actual arm FOLLOW branch uses one fresh snapshot; startup/stale reaches existing SAFE and valid frames recover without bypassing jump gate
+PASS: real 0x0302 dispatch, finite checks, independent timeout, KM isolation, startup, wrap and recovery

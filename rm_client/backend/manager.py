@@ -46,6 +46,7 @@ from .polar_link import (
 from .polar_transport import PolarDriveIntent, PolarLinkTransport
 from .safety import OfficialSafety
 from .serial_backend import RmSerialBackend
+from .controller_angles import AngleRelayConfig, ControllerAngleRelay, explicit_port, port_key
 from .video_backend import AnnexBRecoveryGate, ContinuousMjpegDecoder, RmVideoBackend
 from .field_log import RotatingJsonlLogger
 from .qualification import QualificationEvidenceStore, QualificationManager
@@ -97,6 +98,7 @@ class BackendManager:
         )
         self.udp = RmVideoBackend(host="127.0.0.1", port=3334)
         self.serial = RmSerialBackend(port="Stub", baud=115200, mock_writes=True, safety=self.safety)
+        self.controller_angles = ControllerAngleRelay()
         # 队内 StandardRobot++ 0x5A 链路。与 referee 串口是两条独立物理链路：
         # 那条走官方 0xA5 裁判帧，这条走机器人自己的上位机协议。
         self.polar = PolarLinkTransport(
@@ -494,11 +496,78 @@ class BackendManager:
         self.polar.set_spin_command(cmd)
         return cmd
 
+    def _sync_controller_angles(self, registry: Any) -> dict[str, Any]:
+        """Configure the independent RX relay; never open a device on the UI thread.
+
+        Same human driving gates as the existing serial CC route, plus the
+        relay's explicit arm. MQTT qualification does not authorize or block
+        this separate physical-controller serial link.
+        """
+        module = registry.get("ControllerAngles") if registry is not None else None
+        robot = registry.get("RobotLink") if registry is not None else None
+
+        def value(owner, name, fallback):
+            setting = owner.get_setting(name) if owner else None
+            return setting.value if setting is not None else fallback
+
+        config = AngleRelayConfig(
+            enabled=bool(module is not None and module.enabled),
+            rx_port=str(value(module, "Angle RX Port", "Stub")).strip(),
+            tx_port=str(value(module, "Angle TX Port", "Stub")).strip(),
+            forward=bool(value(module, "Forward Angles", False)),
+            mock_output=bool(value(module, "Angle Mock Writes", True)),
+        )
+        authorized = bool(robot is not None and robot.enabled
+                          and value(robot, "Allow Drive", False)
+                          and not self.safety.estop_active)
+        conflict = ""
+        # Do not enumerate/resolve Auto here: that could stall the UI and could
+        # change its answer before an independent owner opens a port. Require
+        # explicit disjoint names while this receiver owns physical hardware.
+        owners = []
+        if robot is not None:
+            if value(robot, "Link Mode", "serial") == "serial":
+                owners.append(("RobotLink", str(value(robot, "Port", "Stub"))))
+            if value(robot, "Custom Controller Egress", False) and not value(robot, "CC Mock Writes", True):
+                owners.append(("CC keymouse", str(value(robot, "CC Port", "Auto"))))
+            if value(robot, "Direct DT7 Egress", False) and value(robot, "DT7 Real TX", False):
+                owners.append(("DT7", str(value(robot, "DT7 Port", "Auto"))))
+        for label, handle in (("CC prior writer", getattr(self, "_cc_link", None)),
+                              ("DT7 prior writer", getattr(self, "_dt7_link", None))):
+            if handle is not None and not getattr(handle, "mock_output", True):
+                owners.append((label, str(getattr(handle, "resolved_port", "")
+                                          or getattr(handle, "port", "Auto"))))
+        serial = getattr(self, "serial", None)
+        if serial is not None and getattr(serial, "running", False):
+            owners.append(("referee serial", str(serial.port)))
+        used = {port_key(config.rx_port)}
+        if config.forward and not config.mock_output:
+            used.add(port_key(config.tx_port))
+        if config.enabled:
+            for label, port in owners:
+                if port.strip().lower() == "auto" or (explicit_port(port) and port_key(port) in used):
+                    conflict = f"{label} port may conflict; select distinct explicit ports or Stub"
+                    break
+        if conflict:
+            config = replace(config, enabled=False)
+            authorized = False
+        self.controller_angles.configure(config, authorized)
+        if conflict:
+            self.controller_angles.disarm(conflict)
+        status = self.controller_angles.stats()
+        if self.state is not None:
+            self.state.backend_stats["controller_angles"] = status
+        return status
+
     def tick_polar_link(self, state=None, registry=None, control=None) -> dict[str, Any]:
         """Never wait for the transport's driver-held TX lock on a UI tick."""
         if control is not None:
             self._dt7_control_ref = control
         self._poll_device_writers(control)
+        # The independent angle watchdog/ownership must run even if POLAR is
+        # busy or closing, before another serial egress can claim a port.
+        if hasattr(self, "controller_angles"):
+            self._sync_controller_angles(registry)
         self._configure_device_egress(registry, control)
         if getattr(self.polar, "_stopping", False):
             return {"active": self.polar_bridge.active, "polar_status": "closing"}
@@ -1348,6 +1417,9 @@ class BackendManager:
         """
 
         self._input_clear_generation += 1
+        angle_link = getattr(self, "controller_angles", None)
+        if angle_link is not None:
+            angle_link.disarm(reason)
         control = getattr(self, "_dt7_control_ref", None)
         if control is not None:
             control.dt7_qualification_token = None
@@ -1463,6 +1535,9 @@ class BackendManager:
             self.mqtt.start()
 
     def shutdown(self, *, restart: bool = False) -> None:
+        angle_link = getattr(self, "controller_angles", None)
+        if angle_link is not None:
+            angle_link.close()
         # Best-effort neutral KMC before disconnect.  This does not replace the
         # robot-side watchdog or F12 E-stop, but prevents an ordinary app exit
         # or scenario switch from leaving the last movement key latched.
@@ -1860,6 +1935,18 @@ class BackendManager:
         """Apply every CC falling edge before retiring the previous writer."""
         cc_setting = settings.get("Custom Controller Egress")
         cc_wanted = bool(cc_setting is not None and cc_setting.value)
+        angle_link = getattr(self, "controller_angles", None)
+        owned_ports = angle_link.owned_ports if angle_link is not None else ()
+        cc_mock = bool(getattr(settings.get("CC Mock Writes"), "value", True))
+        cc_port = str(getattr(settings.get("CC Port"), "value", "Auto"))
+        if control is not None and cc_wanted and not cc_mock and owned_ports:
+            if cc_port.strip().lower() == "auto" or any(port_key(cc_port) == port_key(p) for p in owned_ports):
+                # A worker's stop request is not proof that its serial handle
+                # has closed. Wait without starting a competing port writer.
+                control.cc_enabled = False
+                control.cc_last_error = "角度链路仍占用串口；等待关闭后再启用键鼠出口"
+                self._cc_was_enabled = False
+                return
         if control is not None and cc_wanted:
             link_obj = self._cc_link_for(settings)
             control.cc_link = link_obj
@@ -2066,6 +2153,9 @@ class BackendManager:
 
     def trigger_estop(self) -> tuple[bool, str]:
         """先尽力发送全零 KMC，再锁死所有上行；断网时仍立即本地锁止。"""
+        angle_link = getattr(self, "controller_angles", None)
+        if angle_link is not None:
+            angle_link.disarm("E-stop active")
         try:
             zero_result = self.mqtt.publish_estop_zero()
         except Exception as exc:
@@ -2299,6 +2389,7 @@ class BackendManager:
             "mqtt": self.mqtt.stats(),
             "udp": self.udp.stats(),
             "serial": self.serial.stats(),
+            "controller_angles": self.controller_angles.stats(),
             "polar_link": {
                 **self.polar.stats(),
                 "link_alive": bool(self.polar_bridge.active),

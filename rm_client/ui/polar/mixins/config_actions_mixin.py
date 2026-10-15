@@ -96,6 +96,9 @@ class ConfigActionsMixin:
 
     def after_setting_changed(self, setting: Setting) -> None:
         self.invalidate_gui_cache()
+        angles = self.registry.get("ControllerAngles")
+        if angles is not None and any(setting is item for item in angles.settings):
+            self.backend._sync_controller_angles(self.registry)
         # 驾驶/键鼠槽位的改绑要立即生效，不能等下次加载配置；
         # 否则用户改完键后前几次按键仍按旧绑定开车。
         link_module = self.registry.get("RobotLink")
@@ -278,6 +281,28 @@ class ConfigActionsMixin:
             self.rescan_serial_ports()
         elif action_name == "Run Wireless KM Selftest":
             self.run_radio_km_selftest()
+        elif action_name in {"Arm Angle Forward", "Disarm Angle Forward", "Show Angle Status"}:
+            status = self.backend._sync_controller_angles(self.registry)
+            link = self.backend.controller_angles
+            if action_name == "Disarm Angle Forward":
+                link.disarm()
+                self.toast("角度转发已锁定；车端独立超时仍必须有效")
+            elif action_name == "Arm Angle Forward":
+                if not link.config.mock_output:
+                    answer, accepted = QInputDialog.getText(
+                        self, "实体控制器角度转发", "确认机械臂已支撑隔离、0x0302 接收与独立超时已验证。\n"
+                        "本次会向官方选手端发送真实关节目标。输入 ARM 授权本次进程：")
+                    if not accepted or answer.strip() != "ARM":
+                        return
+                # A slow dialog never authorizes cached input. Recheck gates,
+                # require a fresh sample, then wait for another source frame.
+                self.backend._sync_controller_angles(self.registry)
+                ok, why = link.arm()
+                self.toast(("角度转发已授权：" if ok else "角度转发未授权：") + why)
+            else:
+                self.toast(f"角度有效={status['valid']} 已授权={status['armed']} "
+                           f"真发={status['forwarded']} mock={status['mock_forwarded']}；"
+                           f"{status['last_error']}")
         elif action_name == "Save Current":
             self.save_current_config()
         elif action_name == "Reload Profile":
@@ -1016,6 +1041,8 @@ class ConfigActionsMixin:
         self.auto_save_config()
 
     def on_module_toggled(self, module: Module, enabled: bool, source: str) -> None:
+        if module.name in {"ControllerAngles", "RobotLink"}:
+            self.backend._sync_controller_angles(self.registry)
         if module.name == "RobotLink" and not enabled:
             self.backend.lock_control("RobotLink disabled")
             self.control.release_all(self.state, self.registry)

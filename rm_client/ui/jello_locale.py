@@ -45,6 +45,7 @@ CATEGORY_ZH = {
 }
 
 MODULE_ZH = {
+    "ControllerAngles": "实体控制器角度",
     "TopMatchBar": "CS顶部战况",
     "Scenario": "运行场景",
     "StartupVisual": "启动视觉",
@@ -119,6 +120,13 @@ MODULE_ZH = {
 
 # Phrases whose natural Chinese order cannot be produced by token joining.
 SETTING_ZH = {
+    "Angle RX Port": "角度接收串口",
+    "Angle TX Port": "角度转发串口",
+    "Forward Angles": "启用角度转发",
+    "Angle Mock Writes": "角度模拟发送",
+    "Arm Angle Forward": "授权角度转发",
+    "Disarm Angle Forward": "撤销角度转发授权",
+    "Show Angle Status": "查看角度链路状态",
     "Open Keybind Manager": "打开键盘绑定管理器",
     "Mouse Sensitivity": "鼠标灵敏度", "Invert Mouse Y": "反转鼠标垂直方向", "Mouse Wheel Scale": "鼠标滚轮倍率",
     "Language": "界面语言",

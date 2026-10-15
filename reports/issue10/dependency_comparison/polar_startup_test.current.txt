@@ -1,0 +1,23 @@
+[PASS] 仅有传统 COM1 时 Auto 不乱连
+[PASS] Auto 选中机器人而非 COM1
+[PASS] COM12 出现在选项列表里
+[PASS] 蓝牙串口被排除
+[PASS] 两候选同分时不猜
+[PASS] 显式 COM7 原样返回
+[PASS] 显式 Stub 原样返回
+[PASS] 启动页仍是原有三个场景，没有多出第四个模式
+[PASS] TeamBench 已彻底移除，不留悬空配置
+QOpenGLWidget is not supported on this platform.
+qt.multimedia.ffmpeg: Using Qt multimedia with FFmpeg version 9.0.1 LGPL version 2.1 or later
+[W][11:16:58.144433] pw.conf      | [          conf.c: 1182 try_load_conf()] can't load config client.conf: No such file or directory
+[E][11:16:58.144454] pw.conf      | [          conf.c: 1215 pw_conf_load_conf_for_context()] can't load config client.conf: No such file or directory
+Fatal Python error: Segmentation fault
+
+Current thread 0x00007f4cd7712740 (most recent call first):
+  File "/workspace/scratch/8fc313400f06/polar-controller-angle-fix/rm_client/ui_audio.py", line 54 in preload
+  File "/workspace/scratch/8fc313400f06/polar-controller-angle-fix/rm_client/ui_audio.py", line 214 in __init__
+  File "/workspace/scratch/8fc313400f06/polar-controller-angle-fix/rm_client/ui/polar_app.py", line 414 in __init__
+  File "/workspace/scratch/8fc313400f06/polar-controller-angle-fix/tests/polar_startup_test.py", line 484 in main
+  File "/workspace/scratch/8fc313400f06/polar-controller-angle-fix/tests/polar_startup_test.py", line 715 in <module>
+
+Extension modules: shiboken6.Shiboken, PySide6.QtCore, PySide6.QtGui, PySide6.QtWidgets, PySide6.QtOpenGLWidgets, PySide6.QtNetwork, PySide6.QtMultimedia, PySide6.QtOpenGL (total: 8)
