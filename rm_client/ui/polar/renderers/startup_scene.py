@@ -1509,15 +1509,18 @@ class StartupSceneMixin:
         return True
 
     def apply_scenario(self, key: str, close_home: bool) -> None:
+        if self.configuration_change_pending and self.reject_pending_configuration_edit():
+            return
         config = self.scenario_manager.set_scenario(key)
         self.scenario_manager.apply_to_registry(self.registry)
         # 后端按三种模式启动/停止 MQTT、UDP、串口（仅连接层，不动 UI）
-        self.backend.apply_scenario(key, registry=self.registry)
+        generation = self.backend.request_scenario(key, registry=self.registry)
+        self.capture_pending_scenario_configuration(generation)
         self.control.mock_output = bool(self.backend.mqtt.mock_output)
         if close_home:
             self.home_visible = False
             self.gui_visible = False
-        self.toast(f"Scenario: {config.title}")
+        self.toast(f"Scenario switching: {config.title}")
 
 
 # ---------------------------------------------------------------------------

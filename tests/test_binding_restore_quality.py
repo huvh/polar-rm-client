@@ -23,6 +23,7 @@ from PySide6.QtCore import QEvent, QTimer, Qt
 from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import QApplication
 from rm_client.config_store import ClientConfigStore, apply_registry_config, export_client_config
+from rm_client.configuration.transactions import ConfigurationRestorePoint
 from rm_client.control import DEFAULT_CONTROL_BINDS, KeyboardControlBridge, validate_control_binds
 from rm_client.model import (
     CONTROL_BIND_OPTIONS, CONTROL_RESERVED_KEYS, CONTROL_SLOT_ORDER,
@@ -30,6 +31,8 @@ from rm_client.model import (
 )
 from rm_client.ui.cs2_settings_center import apply_registry_draft, validate_draft
 from rm_client.ui.polar.mixins.persistence_mixin import PersistenceMixin
+from test_configuration_transactions import settle_configuration
+from window_lifecycle_helpers import close_window_safely
 
 APP = QApplication.instance() or QApplication([])
 
@@ -40,13 +43,24 @@ class Host(PersistenceMixin):
         self.registry = build_default_registry()
         self.control = KeyboardControlBridge()
         self.state = RobotState()
-        self.backend = Mock(mqtt=NS(mock_output=True))
+        self.backend = Mock(mqtt=NS(mock_output=True), lifecycle_pending=False)
         self.frame_scheduler = Mock()
         self.toast = Mock()
         self.config_loading = False
         self.auto_save_config = Mock()
         self.invalidate_gui_cache = Mock()
         self.invalidate_transient_overlay_scene = Mock()
+
+    def capture_configuration_restore_point(self):
+        return ConfigurationRestorePoint({}, dict(self.control.binds), True, "scenario")
+
+    def restore_configuration_runtime(self, previous):
+        pass  # This test host has no device or scene runtime to rebuild.
+
+    def fail_closed_configuration(self, previous, reason):
+        self.control.binds = dict(previous.control_binds)
+        self.backend.trigger_estop()
+        self.backend.lock_control(reason)
 
     def after_setting_changed(self, setting):
         if setting.name.startswith("Bind "):
@@ -166,6 +180,24 @@ class RegistryBindingTests(unittest.TestCase):
         self.assertEqual(host.control.binds, previous)
         self.assertEqual(host.bindings(), previous)
 
+    def test_pending_backend_rejects_binding_session_without_consuming_the_draft(self):
+        from rm_client.ui.jello_keybinds import BindingSession
+
+        host = Host()
+        session = BindingSession(host)
+        entry = next(item for item in session.entries if item.identity == ("module", "HeroLob"))
+        previous = host.registry.get("HeroLob").keybind
+        session.assign(entry, "F7")
+        host.backend.lifecycle_pending = True
+        with self.assertRaisesRegex(ValueError, "尚未完成"):
+            session.apply()
+        self.assertEqual(host.registry.get("HeroLob").keybind, previous)
+        host.auto_save_config.assert_not_called()
+        host.backend.lock_control.assert_not_called()
+        host.backend.lifecycle_pending = False
+        session.apply()
+        self.assertEqual(host.registry.get("HeroLob").keybind, "F7")
+
     def test_settings_callbacks_observe_the_whole_permutation(self):
         host = Host()
         host.control.key_state["W"] = True
@@ -227,6 +259,7 @@ class FreshWindowBindingTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {"POLAR_USER_DATA_ROOT": directory}):
             window = PolarRMWindow()
+            settle_configuration(window)
             try:
                 for timer in window.findChildren(QTimer):
                     timer.stop()
@@ -262,8 +295,9 @@ class FreshWindowBindingTests(unittest.TestCase):
                         self.assertIn(key, message)
                         self.assertIn("W 槽", message)
                         self.assertIn("键盘设置", message)
+                        settle_configuration(window)
             finally:
-                window.close()
+                close_window_safely(window, APP)
                 window.deleteLater()
                 APP.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
@@ -274,6 +308,7 @@ class FreshWindowBindingTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {"POLAR_USER_DATA_ROOT": directory}):
             try:
                 first = PolarRMWindow()
+                settle_configuration(first)
                 windows.append(first)
                 for timer in first.findChildren(QTimer):
                     timer.stop()
@@ -285,6 +320,7 @@ class FreshWindowBindingTests(unittest.TestCase):
                 first.save_current_config(announce=False)
                 expected = dict(first.control.binds)
                 fresh = PolarRMWindow()
+                settle_configuration(fresh)
                 windows.append(fresh)
                 for timer in fresh.findChildren(QTimer):
                     timer.stop()
@@ -304,6 +340,7 @@ class FreshWindowBindingTests(unittest.TestCase):
                 bad_settings["Bind W"] = "W"  # S already owns W after the swap.
                 bad_settings["Mouse Sensitivity"] = 2.0
                 fresh.apply_config_data(bad, announce=False)
+                settle_configuration(fresh)
                 self.assertEqual(fresh.current_config_data(), previous)
                 self.assertEqual(fresh.control.binds, expected)
                 self.assertTrue(fresh.backend.safety.estop_active)
@@ -313,12 +350,13 @@ class FreshWindowBindingTests(unittest.TestCase):
                 legacy_settings = legacy["modules"]["RobotLink"]["settings"]
                 legacy_settings.update({"Bind SHIFT": "CTRL", "Bind CTRL": "SHIFT"})
                 fresh.apply_config_data(legacy, announce=False)
+                settle_configuration(fresh)
                 self.assertEqual(fresh.control.resolve_slot("Ctrl"), ("SHIFT",))
                 self.assertEqual(fresh.control.resolve_slot("Shift"), ("CTRL",))
                 self.assertEqual(legacy_settings["Bind SHIFT"], "CTRL")
             finally:
                 for window in reversed(windows):
-                    window.close()
+                    close_window_safely(window, APP)
                     window.deleteLater()
                 APP.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 

@@ -41,7 +41,7 @@ def robotlink_settings(model_src: str) -> list:
         return re.findall(
             r"(?:bool_setting|number_setting|mode_setting|action_setting)\(\s*" + chr(34) +
             r"([^" + chr(34) + r"]+)" + chr(34), block)
-    raise AssertionError("model.py 里找不到 RobotLink 模块块")
+    raise AssertionError("声明式目录里找不到 RobotLink 模块块")
 
 
 def _module_settings(model_src: str) -> dict:
@@ -162,9 +162,10 @@ UI_ONLY = {
 
 
 def main() -> int:
-    model = (ROOT / "rm_client/model.py").read_text(encoding="utf-8")
-    declared = robotlink_settings(model)
-    files = [p for p in (ROOT / "rm_client").rglob("*.py") if p.name != "model.py"]
+    catalog = (ROOT / "rm_client/module_catalog.py").read_text(encoding="utf-8")
+    declared = robotlink_settings(catalog)
+    files = [p for p in (ROOT / "rm_client").rglob("*.py")
+             if p.name not in {"model.py", "module_catalog.py"}]
     scopes = []
     helper_names = set()
     for p in files:
@@ -227,12 +228,12 @@ def main() -> int:
     check("Baud 同理：默认值不覆盖场景/桥接配置", int(manager.polar.baud) == 230400,
           str(manager.polar.baud))
 
-    # ---- Tier B（保守、零误报）：设置名除了 model.py 的声明外，整个包一次都没出现 ----
+    # ---- Tier B（保守、零误报）：设置名除了目录声明外，整个包一次都没出现 ----
     # 上一版把 Tier A 的判据（"提到模块名的函数里取用"）套到所有模块，结果把
     # 通过参数取用的 Limit / Fade 之类全报成没人读 —— 那种噪声会让下一个人直接删掉这条测试。
     texts = [p.read_text(encoding="utf-8", errors="ignore") for p in files]
     blob = "\n".join(texts)
-    all_declared = _module_settings(model)
+    all_declared = _module_settings(catalog)
     dead = sorted({(m, n) for m, names in all_declared.items() for n in names
                    if n and n not in blob})
     print(f"     （Tier B 仅供参考：整包零引用的设置 {len(dead)} 项 —— "

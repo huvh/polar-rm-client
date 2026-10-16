@@ -23,6 +23,8 @@ os.environ.setdefault("POLAR_DISABLE_MEDIA_PRELOAD", "1")
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from window_lifecycle_helpers import close_window_safely, settle_window_lifecycle
+
 from rm_client.config_store import ClientConfigStore, apply_registry_config, export_client_config
 from rm_client.combat_events import CombatEvent, OfficialMatchFeed, VisionKillDetector
 from rm_client.combat_hud import (
@@ -120,6 +122,17 @@ from rm_client.ui.vision_motion import (
     VisionRenderInterpolator,
 )
 from rm_client.vision import ArmorObservation, VisionLossEvidence, VisionResult, PACKET_FRAME, PACKET_HEADER, PACKET_RESULT, PROTOCOL_MAGIC, PROTOCOL_VERSION, TongjiVisionBridge
+
+
+def _build_settled_window(window_type, app):
+    """Finish the real startup profile before testing normal UI interactions."""
+    window = window_type()
+    try:
+        settle_window_lifecycle(window, app)
+    except BaseException:
+        close_window_safely(window, app)
+        raise
+    return window
 
 
 def test_registry() -> None:
@@ -1143,7 +1156,7 @@ def test_armor_3d_esp_render() -> None:
     from rm_client.vision import ArmorObservation, VisionResult
 
     app = QApplication.instance() or QApplication([])
-    window = PolarRMWindow()
+    window = _build_settled_window(PolarRMWindow, app)
     window.resize(640, 360)
     # 桌面 smoke 用同尺寸 profile 模拟完成标定，确保预测绘制只依赖桥接结果而非 mock 框。
     from rm_client.calibration import CalibrationProfile
@@ -1206,7 +1219,7 @@ def test_armor_3d_esp_render() -> None:
         assert fluorescent_white_pixels > 5
         assert saturated_green_pixels == 0
     finally:
-        window.close()
+        close_window_safely(window, app)
     app.processEvents()
 
 
@@ -1474,7 +1487,7 @@ def test_pyside_animation_import() -> None:
     timeline.update(1.0 / 60.0)
     assert 0.0 <= timeline.progress <= current
     app = QApplication.instance() or QApplication([])
-    window = PolarRMWindow()
+    window = _build_settled_window(PolarRMWindow, app)
     layout = window.module_list_layout(1920, 1080)
     assert layout.anchor_x == 1902.0
     assert layout.anchor_y == 18.0
@@ -1496,7 +1509,7 @@ def test_pyside_animation_import() -> None:
         assert not snapshot.soft_glass.isNull()
         assert not snapshot.glass.isNull()
     elif os.environ.get("POLAR_REQUIRE_VIDEO_FIXTURE") == "1":
-        window.close()
+        close_window_safely(window, app)
         raise AssertionError("Required video fixture is missing: vending-machine.mp4")
     else:
         reason = "optional built-in wallpaper decode: vending-machine.mp4 not supplied"
@@ -1544,7 +1557,7 @@ def test_pyside_animation_import() -> None:
     rendered.fill(0)
     window.render(rendered)
     assert any(bytes(rendered.constBits()))
-    window.close()
+    close_window_safely(window, app)
 
 
 def test_liquid_glass_snapshot_stability() -> None:
@@ -1662,7 +1675,7 @@ def test_hud_liquid_glass_snapshot_stability() -> None:
     from rm_client.ui.polar_app import PolarRMWindow
 
     app = QApplication.instance() or QApplication([])
-    window = PolarRMWindow()
+    window = _build_settled_window(PolarRMWindow, app)
     window.resize(640, 360)
     source = QImage(640, 360, QImage.Format.Format_RGB32)
     source.fill(QColor("#234c68"))
@@ -1679,7 +1692,7 @@ def test_hud_liquid_glass_snapshot_stability() -> None:
     try:
         assert render() == render()
     finally:
-        window.close()
+        close_window_safely(window, app)
     app.processEvents()
 
 
@@ -1754,7 +1767,7 @@ def test_clickgui_offscreen_modes() -> None:
     from rm_client.ui.polar_app import PolarRMWindow
 
     app = QApplication.instance() or QApplication([])
-    window = PolarRMWindow()
+    window = _build_settled_window(PolarRMWindow, app)
     window.resize(1280, 720)
     window.home_visible = False
     window.gui_visible = True
@@ -1794,7 +1807,7 @@ def test_clickgui_offscreen_modes() -> None:
             assert any(hotspot.action == "jello_return" for hotspot in window.hotspots), mode
         window.jello_state.return_to_jello()
     finally:
-        window.close()
+        close_window_safely(window, app)
     app.processEvents()
 
 
@@ -1856,7 +1869,7 @@ def test_jello_clickgui_layout_and_old_group() -> None:
     ) == 0.0
 
     app = QApplication.instance() or QApplication([])
-    window = PolarRMWindow()
+    window = _build_settled_window(PolarRMWindow, app)
     try:
         # This visual contract starts in English regardless of the operator's
         # persisted default profile. Language toggling itself is tested below.
@@ -2221,7 +2234,7 @@ def test_jello_clickgui_layout_and_old_group() -> None:
             assert window.jello_state.legacy_mode is None
         assert len(stress_font_pages) <= 3
     finally:
-        window.close()
+        close_window_safely(window, app)
     app.processEvents()
 
 
@@ -2597,7 +2610,7 @@ def test_economy_respawn_close_and_reopen_restores_hud_scene() -> None:
     from rm_client.ui.polar_app import EconomyScenePhase, PolarRMWindow
 
     app = QApplication.instance() or QApplication([])
-    window = PolarRMWindow()
+    window = _build_settled_window(PolarRMWindow, app)
     window.timer.stop()
     try:
         window.home_visible = False
@@ -2726,7 +2739,7 @@ def test_economy_respawn_close_and_reopen_restores_hud_scene() -> None:
         assert window.overlay_coordinator.modal == OverlayKind.CLICKGUI
         window.set_clickgui_visible(False, announce=False, play_sound=False)
     finally:
-        window.close()
+        close_window_safely(window, app)
     app.processEvents()
 
 
@@ -2817,7 +2830,7 @@ def test_robot_launcher_and_polar_inertial_scroll() -> None:
     assert 0.0 <= motion.position <= 180.0
 
     app = QApplication.instance() or QApplication([])
-    window = PolarRMWindow()
+    window = _build_settled_window(PolarRMWindow, app)
     window.resize(1280, 720)
     try:
         window.hotspots.clear()
@@ -2841,7 +2854,7 @@ def test_robot_launcher_and_polar_inertial_scroll() -> None:
         assert "polar_unified" in modes
         assert "polar_settings" in modes
     finally:
-        window.close()
+        close_window_safely(window, app)
     app.processEvents()
 
 
@@ -3012,7 +3025,7 @@ def test_combat_target_hud_math_and_rendering() -> None:
     from rm_client.ui.polar_app import PolarRMWindow
 
     app = QApplication.instance() or QApplication([])
-    window = PolarRMWindow()
+    window = _build_settled_window(PolarRMWindow, app)
     window.resize(1280, 720)
     module = window.registry.get("CombatTargetHUD")
     assert module is not None
@@ -3074,7 +3087,7 @@ def test_combat_target_hud_math_and_rendering() -> None:
         assert not hasattr(window, "build_combat_target_hud_upload")
         assert not hasattr(GpuFrameCompositor, "upload_target_image")
     finally:
-        window.close()
+        close_window_safely(window, app)
     app.processEvents()
 
 
@@ -3539,7 +3552,7 @@ def test_hero_native_video_isolation_and_authoritative_lock() -> None:
     from rm_client.ui.polar_app import PolarRMWindow
 
     app = QApplication.instance() or QApplication([])
-    window = PolarRMWindow()
+    window = _build_settled_window(PolarRMWindow, app)
     window.timer.stop()
     original_backend = window.backend
     original_ensure_camera = window.ensure_camera_started
@@ -3548,15 +3561,18 @@ def test_hero_native_video_isolation_and_authoritative_lock() -> None:
     native_bgr[:, :, 1] = 255
 
     class NativeOnlyBackend:
-        def __init__(self) -> None:
+        def __init__(self, field_log) -> None:
             self.calls: list[str] = []
+            # The production camera boundary reports through the manager's
+            # diagnostic port even when this test isolates video selection.
+            self.field_log = field_log
 
         def latest_video_frame(self, _timeout: float, source_mode: str):
             self.calls.append(str(source_mode))
             assert source_mode == "Native 0x0310"
             return native_bgr, now, "native-0x0310"
 
-    fake_backend = NativeOnlyBackend()
+    fake_backend = NativeOnlyBackend(original_backend.field_log)
     window.backend = fake_backend
     resumed: list[bool] = []
     window.ensure_camera_started = lambda: resumed.append(True)
@@ -3638,7 +3654,7 @@ def test_hero_native_video_isolation_and_authoritative_lock() -> None:
     finally:
         window.backend = original_backend
         window.ensure_camera_started = original_ensure_camera
-        window.close()
+        close_window_safely(window, app)
     app.processEvents()
 
 
@@ -3650,7 +3666,7 @@ def test_normal_backend_video_freshness_and_source_ownership() -> None:
     from rm_client.ui.polar_app import PolarRMWindow
 
     app = QApplication.instance() or QApplication([])
-    window = PolarRMWindow()
+    window = _build_settled_window(PolarRMWindow, app)
     window.timer.stop()
     original_backend = window.backend
     now = time.perf_counter()
@@ -3712,7 +3728,7 @@ def test_normal_backend_video_freshness_and_source_ownership() -> None:
         assert not window.normal_video_frame_ready()
     finally:
         window.backend = original_backend
-        window.close()
+        close_window_safely(window, app)
     app.processEvents()
 
 
@@ -3868,7 +3884,7 @@ def test_minecraft_hud_keeps_client_overlay_stack() -> None:
     from rm_client.ui.polar_app import PolarRMWindow
 
     app = QApplication.instance() or QApplication([])
-    window = PolarRMWindow()
+    window = _build_settled_window(PolarRMWindow, app)
     window.timer.stop()
     calls: set[str] = set()
     try:
@@ -4082,7 +4098,7 @@ def test_minecraft_hud_keeps_client_overlay_stack() -> None:
         assert card_label.bottom() - card_value.top() <= 1.0
         window.draw_text = original_draw_text
     finally:
-        window.close()
+        close_window_safely(window, app)
     app.processEvents()
 
 

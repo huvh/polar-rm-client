@@ -1,61 +1,9 @@
-"""阶段 3e 大域 mixin 化：输入 / hotspot / dispatch（D15）→ InputDispatchMixin。
+"""Qt input routing and ClickGUI action dispatch.
 
-（REFACTOR_BLUEPRINT §5 阶段 3 表 3e 行 / §2 D15 节 / §5.6 冻结面）
-
-迁移范围（以 grep 重定位后的实际行号为准，蓝图原行号已漂移；四段不连续区块）：
-- 控制锁定输入清零钩子：``_clear_control_inputs_for_lock``
-- Qt 输入事件族：``mousePressEvent`` / ``mouseMoveEvent`` /
-  ``mouseReleaseEvent`` / ``wheelEvent`` / ``keyPressEvent`` /
-  ``keyReleaseEvent``
-- 键盘辅助族：``handle_tactical_map_hold_event`` /
-  ``handle_control_key_event`` / ``combat_control_input_allowed`` /
-  ``toggle_bound_module_for_event`` / ``publish_spin_control_state`` /
-  ``handle_keybind_event``
-- 动作路由：``dispatch``（第一步已由 if/elif 巨型路由链表化为模块级
-  ``{action: handler}`` 注册表 ``_DISPATCH_HANDLERS``，随域整体迁入）
-- 按键工具：``qt_button`` / ``key_name`` / ``keybind_matches`` /
-  ``is_right_shift_event``
-
-第一步（行为等价重构）论证——dispatch 表化：
-1) 原链首对 GUI 缓存类 action 的 ``invalidate_gui_cache`` 前置块逐字保留，
-   先于任何分支执行，语义不变；
-2) 原 elif 链各分支条件均为 ``action == <字符串字面量>``（或共享集合
-   economy_confirm/economy_confirm_hold），分支互不重叠，且任何分支体都不
-   修改 action/payload/point/button/rect —— 故"按 action 查表精确分发"与
-   "顺序 elif 匹配"结果等价；
-3) 三个复合守卫分支（jello_module_press / old_drag / polar_drag 的
-   ``... and button == 1``）将 button 守卫下沉为 handler 内提前返回：
-   守卫失败时原链落空到链尾隐式返回，与 handler 内 return 等价；
-4) 未注册 action 查表 miss 直接返回，与原链穷尽 elif 后隐式返回等价。
-handler 为**模块级函数**（首参命名 self = 窗口实例），分支体自原链逐字
-搬入（仅去掉条件行）；注册表为模块级常量，查表零分配，且不新增
-PolarRMWindow 类表面成员 —— api_freeze 冻结面零漂移（第一步后实测
-PASS，无基线更新）。
-
-纪律与特别注意（蓝图 3e 行，保守边界中文注明）：
-- 类内方法体**零修改**（含注释与空行），纯移动进本 Mixin；
-- **add_hotspot / _hotspot_clip 属 D15 输入域核心，按任务纪律留在
-  polar_app.py 原位不动**（阶段 3c 已确认 builders 经 self 调用即可）；
-  builders/hotspot 投递协议与本 Mixin 的命中消费经 ``self.hotspots`` /
-  ``self.dispatch(...)`` 衔接，调用面不变；
-- hotspots / drag / binding_module / hover_tooltip / search_focus /
-  liquid_press_* / _control_mouse_point / last_control_toast /
-  economy_hold_key / _startup_last_hover_action 等输入状态字段的初始化仍
-  全部在 ``PolarRMWindow.__init__`` 原位（D0 状态 schema 不动）；
-- ``__qualname__`` 钉回：全部迁入方法在模块底部把 ``__qualname__`` 钉回
-  ``PolarRMWindow.<name>``，api_freeze_test 的 qualname 基线比对不变；
-- MRO：InputDispatchMixin 位于继承列表 EconomyMixin 之后、QOpenGLWidget
-  之前，且与既有 Mixin 无同名成员（已逐一核对）→ 属性解析到本 Mixin，
-  ``window.<成员>`` 表面不变；Qt 事件处理器（mouse/key/wheel）由此覆盖
-  QOpenGLWidget 缺省实现，与迁移前 PolarRMWindow 自定义实现的语义一致；
-- 共享辅助经继承访问、不重复处理：``invalidate_gui_cache`` /
-  ``prewarm_jello_module_resources``（D2）、``after_setting_changed``
-  （D16）、``open_legacy_clickgui`` / ``return_to_jello_clickgui`` /
-  ``set_clickgui_visible``（D5）、``open/close_economy_workspace`` 等
-  （D6）、``begin/cancel/finish_quick_action_wheel``（D13）、
-  ``apply_scenario`` / ``reset_startup_page_animation``（D4）、
-  ``auto_save_config``（D17）、``setting_bool`` / ``setting_mode`` /
-  ``get_setting_number``（D19/D17）均经 ``self`` 继续调用，调用面不变。
+PointerInteraction owns pointer capture, dismissal and binding lifetimes.
+Event adapters and registered action handlers still receive the window and use
+its registry, control and rendering services. The action table centralizes
+routing; it does not make these handlers independent domain components.
 """
 
 from __future__ import annotations
@@ -63,6 +11,8 @@ from __future__ import annotations
 import math
 import time
 from typing import Any
+
+from ....emergency_actions import request_emergency_stop
 
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QCursor, QKeyEvent, QKeySequence, QMouseEvent, QWheelEvent
@@ -74,6 +24,8 @@ from ...cs2_feedback import notify_buy_hover
 from ...jello_locale import LANGUAGE_CHINESE, LANGUAGE_ENGLISH, LANGUAGE_SETTING
 from ....model import Setting
 from ..primitives import InertialScroll
+from ..pointer_interaction import PointerField, PointerInteraction
+from ..text_editing import ChatEdit, SearchEdit, TextKey, chat_edit, search_edit
 
 __all__ = [
     "InputDispatchMixin",
@@ -81,14 +33,9 @@ __all__ = [
 
 
 
-# ----------------------------------------------------------------------
-# 阶段 3e 第一步（行为等价重构）：dispatch 的 action → handler 注册表。
-# handler 为模块级函数，首参命名 self（= PolarRMWindow 实例）以使分支体
-# 自原 dispatch 的 if/elif 链逐字搬入（仅去掉 `elif action == ...` 条件
-# 行、复合守卫下沉为函数内提前返回）；注册表为模块级常量，查表零分配、
-# 不新增 PolarRMWindow 类表面成员。阶段 3e 第二步将随 D15 输入域整体
-# 迁入 rm_client/ui/polar/mixins/input_dispatch_mixin.py。
-# ----------------------------------------------------------------------
+# Compatibility action routing. Handlers retain access to the complete window;
+# button-specific admission belongs to each handler, while dispatch applies
+# runtime-transition and GUI-cache guards before invoking it.
 
 _GUI_CACHE_INVALIDATE_ACTIONS = frozenset({
     "module_toggle", "module_select", "module_expand", "setting_toggle", "setting_slider",
@@ -99,12 +46,36 @@ _GUI_CACHE_INVALIDATE_ACTIONS = frozenset({
 })
 
 
+_TEXT_KEYS = {
+    Qt.Key.Key_Escape: TextKey.CANCEL,
+    Qt.Key.Key_Return: TextKey.SUBMIT,
+    Qt.Key.Key_Enter: TextKey.SUBMIT,
+    Qt.Key.Key_Backspace: TextKey.BACKSPACE,
+    Qt.Key.Key_Up: TextKey.UP,
+    Qt.Key.Key_Down: TextKey.DOWN,
+    Qt.Key.Key_PageUp: TextKey.PAGE_UP,
+    Qt.Key.Key_PageDown: TextKey.PAGE_DOWN,
+}
+
+
+def _chat_key_edit(event: QKeyEvent) -> ChatEdit:
+    key = _TEXT_KEYS.get(event.key(), TextKey.OTHER)
+    # Special keys never consult the text payload in the existing Qt route.
+    return chat_edit(key, event.text() if key is TextKey.OTHER else "")
+
+
+def _search_key_edit(event: QKeyEvent) -> SearchEdit:
+    key = _TEXT_KEYS.get(event.key(), TextKey.OTHER)
+    edits_text = key not in (TextKey.BACKSPACE, TextKey.SUBMIT, TextKey.CANCEL)
+    return search_edit(key, event.text() if edits_text else "")
+
+
 def _on_action_jello_module_press(self, payload: Any, point: QPointF, button: int, rect: QRectF) -> None:
     if button != 1:
         return
     module = self.registry.get(str(payload))
     if module is not None:
-        self.drag = {
+        self.pointer_interaction.drag = {
             "type": "jello_module",
             "module": module.name,
             "start": QPointF(point),
@@ -142,7 +113,7 @@ def _on_action_module_bind(self, payload: Any, point: QPointF, button: int, rect
     module = self.registry.get(str(payload))
     if module:
         from ...jello_keybinds import open_module_keyboard
-        self.binding_module = None
+        self.pointer_interaction.binding_module = None
         open_module_keyboard(self,module.name)
 
 
@@ -155,7 +126,7 @@ def _on_action_setting_toggle(self, payload: Any, point: QPointF, button: int, r
 def _on_action_setting_slider(self, payload: Any, point: QPointF, button: int, rect: QRectF) -> None:
     setting = payload
     setting.set_from_ratio((point.x() - rect.left()) / max(1.0, rect.width()))
-    self.drag = {"type": "slider", "setting": setting, "rect": rect}
+    self.pointer_interaction.drag = {"type": "slider", "setting": setting, "rect": rect}
     self.after_setting_changed(setting)
 
 
@@ -242,10 +213,8 @@ def _on_action_jello_return(self, payload: Any, point: QPointF, button: int, rec
 def _on_action_jello_dismiss_background(self, payload: Any, point: QPointF, button: int, rect: QRectF) -> None:
     # Commit only on a matching release. A drag starting outside a panel must
     # not dismiss it, and the closing click must never reach combat controls.
-    if button == 1 and self.gui_visible and not self.drag:
-        self._jello_background_press = QPointF(point)
-        self._jello_background_dragged = False
-        self._jello_background_release_owned = True
+    if button == 1 and self.gui_visible and not self.pointer_interaction.drag:
+        self.pointer_interaction.own_background_press(point)
 
 
 def _on_action_jello_noop(self, payload: Any, point: QPointF, button: int, rect: QRectF) -> None:
@@ -300,7 +269,7 @@ def _on_action_old_drag(self, payload: Any, point: QPointF, button: int, rect: Q
         return
     panel = self.old_panels[str(payload)]
     panel["dragged"] = True
-    self.drag = {
+    self.pointer_interaction.drag = {
         "type": "old_panel",
         "category": str(payload),
         "offset_x": point.x() - float(panel["x"]),
@@ -312,7 +281,7 @@ def _on_action_polar_drag(self, payload: Any, point: QPointF, button: int, rect:
     if button != 1:
         return
     panel = self.polar_windows[str(payload)]
-    self.drag = {
+    self.pointer_interaction.drag = {
         "type": "polar_window",
         "category": str(payload),
         "offset_x": point.x() - float(panel["x"]),
@@ -372,8 +341,11 @@ def _on_action_startup_open_settings(self, payload: Any, point: QPointF, button:
 
 
 def _on_action_startup_open_gui(self, payload: Any, point: QPointF, button: int, rect: QRectF) -> None:
+    if self.reject_pending_configuration_edit():
+        return
     # 启动页快捷入口与正常场景入口必须启动同一套真实后端。
-    self.backend.apply_scenario(self.scenario_manager.current.key, registry=self.registry)
+    generation = self.backend.request_scenario(self.scenario_manager.current.key, registry=self.registry)
+    self.capture_pending_scenario_configuration(generation)
     self.home_visible = False
     self.startup_step = "done"
     self.set_clickgui_visible(True, announce=False)
@@ -381,7 +353,10 @@ def _on_action_startup_open_gui(self, payload: Any, point: QPointF, button: int,
 
 
 def _on_action_startup_open_config(self, payload: Any, point: QPointF, button: int, rect: QRectF) -> None:
-    self.backend.apply_scenario(self.scenario_manager.current.key, registry=self.registry)
+    if self.reject_pending_configuration_edit():
+        return
+    generation = self.backend.request_scenario(self.scenario_manager.current.key, registry=self.registry)
+    self.capture_pending_scenario_configuration(generation)
     config_module = self.registry.get("ConfigManager")
     self.selected_category = "System"
     if config_module:
@@ -483,11 +458,28 @@ def _on_action_economy_close(self, payload: Any, point: QPointF, button: int, re
     self.close_economy_workspace()
 
 
+def _on_action_retry_video_source_cleanup(self, payload: Any, point: QPointF, button: int, rect: QRectF) -> None:
+    if button == 1:
+        # Even a stale/busy recovery target owns its complete click. Its
+        # rejected release must never reach an otherwise eligible control path.
+        self.pointer_interaction.own_release()
+        self._control_mouse_point = None
+        self.retry_video_source_cleanup(payload)
+
+
+def _on_action_wait_video_source_cleanup(self, payload: Any, point: QPointF, button: int, rect: QRectF) -> None:
+    if button == 1:
+        self.pointer_interaction.own_release()
+        self._control_mouse_point = None
+
+
 def _on_action_startup_exit(self, payload: Any, point: QPointF, button: int, rect: QRectF) -> None:
     self.close()
 
 
 _DISPATCH_HANDLERS = {
+    "retry_video_source_cleanup": _on_action_retry_video_source_cleanup,
+    "wait_video_source_cleanup": _on_action_wait_video_source_cleanup,
     "jello_module_press": _on_action_jello_module_press,
     "module_toggle": _on_action_module_toggle,
     "module_select": _on_action_module_select,
@@ -550,7 +542,32 @@ _DISPATCH_HANDLERS = {
 
 
 class InputDispatchMixin:
-    """D15 输入 / hotspot / dispatch（Qt 事件族 + 键盘辅助族 + action 路由）。"""
+    """Qt event adapters and legacy field compatibility for pointer state."""
+    # Historical fields remain writable for renderer/extension compatibility;
+    # this single state owner holds the pointer epoch and binding lifecycle.
+    drag = PointerField("drag")
+    binding_module = PointerField("binding_module")
+    _jello_background_press = PointerField("background_press")
+    _jello_background_dragged = PointerField("background_dragged")
+    _jello_background_release_owned = PointerField("background_release_owned")
+
+    @property
+    def pointer_interaction(self) -> PointerInteraction:
+        # PolarRMWindow assembles this explicitly before installing callbacks.
+        # Legacy lightweight mixin hosts have no window constructor; preserve
+        # that extension seam with a per-instance owner, never class state.
+        state = getattr(self, "_pointer_interaction", None)
+        if state is None:
+            state = self._pointer_interaction = PointerInteraction()
+        return state
+
+    def _lifecycle_owns_input(self) -> bool:
+        """A retiring runtime cannot accept edits or new control samples."""
+        return bool(
+            getattr(getattr(self, "backend", None), "lifecycle_pending", False)
+            or getattr(self, "configuration_change_pending", False)
+            or getattr(getattr(self, "_window_lifecycle", None), "closing", False)
+        )
 
     def _clear_control_inputs_for_lock(self, _reason: str = "") -> None:
         """清空本地键鼠样本，并给"没有过期兜底"的出口补一帧中立的松手帧。
@@ -562,6 +579,9 @@ class InputDispatchMixin:
 
         self.control.reset_inputs()
         self.control.last_command = None
+        # A drag/key capture begun in the old epoch must not resume editing
+        # the replacement model when the transition later completes.
+        self.pointer_interaction.cancel_epoch()
         # 清空本地不等于车上松手。DT7 与官方选手端那两侧都**没有**"过期自动清零"
         # 的兜底：把最后一帧原样重复到永远。而下面 clear_pending() 正好取消掉
         # reset_inputs() 立起来的 _dirty，于是心跳从此一帧都不发。
@@ -579,15 +599,16 @@ class InputDispatchMixin:
         self._combat_input_was_allowed = False
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
-        self._jello_background_press = None
-        if event.button() == Qt.MouseButton.LeftButton:
-            self._jello_background_release_owned = False
+        if self._lifecycle_owns_input():
+            event.accept()
+            return
+        self.pointer_interaction.begin_press(left_button=event.button() == Qt.MouseButton.LeftButton)
         if self.handle_escape_menu_mouse(event, "press"):
             return
         if self.handle_student_mouse(event, "press"):
             return
         self.setFocus(Qt.FocusReason.MouseFocusReason)
-        if self.binding_module is not None:
+        if self.pointer_interaction.binding_module is not None:
             return
         button = self.qt_button(event)
         point = event.position()
@@ -596,7 +617,7 @@ class InputDispatchMixin:
             # The exit animation may render old GUI hit targets again. They
             # are display-only once closed; consume clicks until it finishes.
             if button == 1:
-                self._jello_background_release_owned = True
+                self.pointer_interaction.own_release()
             event.accept()
             return
         if self.quick_action_wheel.active or self.overlay_coordinator.radial_active:
@@ -620,7 +641,7 @@ class InputDispatchMixin:
         # frame. The modal still owns that click; never publish it to the map.
         if self.gui_visible:
             if button == 1:
-                self._jello_background_release_owned = True
+                self.pointer_interaction.own_release()
             event.accept()
             return
         if button == 1 and self.publish_map_click_from_screen(point):
@@ -634,11 +655,10 @@ class InputDispatchMixin:
             self.search_focus = False
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
-        background_press = getattr(self, "_jello_background_press", None)
-        if getattr(self, "_jello_background_release_owned", False):
-            if (background_press is not None
-                    and (event.position() - background_press).manhattanLength() > 6.0):
-                self._jello_background_dragged = True
+        if self._lifecycle_owns_input():
+            event.accept()
+            return
+        if self.pointer_interaction.track_owned_pointer(event.position()):
             event.accept()
             return
         if self.handle_escape_menu_mouse(event, "move"):
@@ -687,51 +707,51 @@ class InputDispatchMixin:
         # 启动页可见时渲染时钟已经按显示器刷新率运行；不再为每个原始
         # 鼠标事件强制整帧，仅在跨越热点、拖拽或提示变化时唤醒一帧。
         if (
-            self.drag is not None
+            self.pointer_interaction.drag is not None
             or hovered_action != self._startup_last_hover_action
             or self.hover_tooltip != previous_tooltip
             or (not self.home_visible and (self.hover_point - previous_point).manhattanLength() > 6.0)
         ):
             self.frame_scheduler.force()
         self._startup_last_hover_action = hovered_action
-        if self.drag is None:
+        if self.pointer_interaction.drag is None:
             return
         point = event.position()
-        if self.drag["type"] == "slider":
-            setting: Setting = self.drag["setting"]
-            rect: QRectF = self.drag["rect"]
+        if self.pointer_interaction.drag["type"] == "slider":
+            setting: Setting = self.pointer_interaction.drag["setting"]
+            rect: QRectF = self.pointer_interaction.drag["rect"]
             setting.set_from_ratio((point.x() - rect.left()) / max(1.0, rect.width()))
             self.after_setting_changed(setting)
-        elif self.drag["type"] == "jello_module":
-            start = self.drag.get("start", point)
-            self.drag["point"] = QPointF(point)
+        elif self.pointer_interaction.drag["type"] == "jello_module":
+            start = self.pointer_interaction.drag.get("start", point)
+            self.pointer_interaction.drag["point"] = QPointF(point)
             if isinstance(start, QPointF) and math.dist((start.x(), start.y()), (point.x(), point.y())) >= 6.0:
-                self.drag["moved"] = True
+                self.pointer_interaction.drag["moved"] = True
             self.invalidate_gui_cache()
             self.frame_scheduler.force()
-        elif self.drag["type"] == "old_panel":
-            panel = self.old_panels[self.drag["category"]]
+        elif self.pointer_interaction.drag["type"] == "old_panel":
+            panel = self.old_panels[self.pointer_interaction.drag["category"]]
             panel["dragged"] = True
-            panel["x"] = point.x() - self.drag["offset_x"]
-            panel["y"] = point.y() - self.drag["offset_y"]
-        elif self.drag["type"] == "polar_window":
-            panel = self.polar_windows[self.drag["category"]]
-            panel["x"] = point.x() - self.drag["offset_x"]
-            panel["y"] = point.y() - self.drag["offset_y"]
+            panel["x"] = point.x() - self.pointer_interaction.drag["offset_x"]
+            panel["y"] = point.y() - self.pointer_interaction.drag["offset_y"]
+        elif self.pointer_interaction.drag["type"] == "polar_window":
+            panel = self.polar_windows[self.pointer_interaction.drag["category"]]
+            panel["x"] = point.x() - self.pointer_interaction.drag["offset_x"]
+            panel["y"] = point.y() - self.pointer_interaction.drag["offset_y"]
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
-        background_press = getattr(self, "_jello_background_press", None)
-        if (getattr(self, "_jello_background_release_owned", False)
-                and event.button() == Qt.MouseButton.LeftButton):
-            self._jello_background_release_owned = False
-            self._jello_background_press = None
+        if self._lifecycle_owns_input():
+            event.accept()
+            return
+        interaction = self.pointer_interaction
+        if interaction.background_release_owned and event.button() == Qt.MouseButton.LeftButton:
             point = event.position()
             target = next((h for h in reversed(self.hotspots)
                            if h.button in (None, 1) and h.rect.contains(point)), None)
-            if (background_press is not None and self.gui_visible and target is not None
-                    and target.action == "jello_dismiss_background"
-                    and not getattr(self, "_jello_background_dragged", False)
-                    and (point - background_press).manhattanLength() <= 6.0):
+            release = interaction.release_background(point, left_button=True,
+                gui_visible=self.gui_visible,
+                background_target=target is not None and target.action == "jello_dismiss_background")
+            if release.dismiss:
                 self.set_clickgui_visible(False)
             event.accept()
             return
@@ -745,8 +765,8 @@ class InputDispatchMixin:
             return
         if self.economy_hold_key:
             self.finish_economy_hold(event.position())
-        if self.drag and self.drag.get("type") == "jello_module":
-            drag = self.drag
+        if self.pointer_interaction.drag and self.pointer_interaction.drag.get("type") == "jello_module":
+            drag = self.pointer_interaction.drag
             name = str(drag.get("module", ""))
             if drag.get("moved"):
                 function_bar = self.registry.get("MinecraftCombatHUD")
@@ -775,15 +795,18 @@ class InputDispatchMixin:
                         self.auto_save_config()
             self.invalidate_gui_cache()
             self.frame_scheduler.force()
-        if self.drag and self.drag.get("type") in {"old_panel", "polar_window"}:
+        if self.pointer_interaction.drag and self.pointer_interaction.drag.get("type") in {"old_panel", "polar_window"}:
             self.auto_save_config()
-        self.drag = None
+        self.pointer_interaction.drag = None
         if self.combat_control_input_allowed():
             self.control.mock_output = bool(self.backend.mqtt.mock_output)
             self.control.set_mouse_button(self.qt_button(event), False, self.state, self.registry)
             event.accept()
 
     def wheelEvent(self, event: QWheelEvent) -> None:
+        if self._lifecycle_owns_input():
+            event.accept()
+            return
         if self.escape_menu_visible:
             event.accept()
             return
@@ -895,7 +918,7 @@ class InputDispatchMixin:
     def keyPressEvent(self, event: QKeyEvent) -> None:
         # A keyboard navigation/close action supersedes a pending mouse click,
         # but the GUI still owns that click's eventual motion and release.
-        self._jello_background_press = None
+        self.pointer_interaction.cancel_background_press()
         if not self.escape_menu_visible and not event.isAutoRepeat():
             # A new physical press supersedes any menu key-up lost on focus
             # change; its later release must reach the normal control owner.
@@ -906,19 +929,26 @@ class InputDispatchMixin:
                 modifiers & Qt.KeyboardModifier.ControlModifier
                 and modifiers & Qt.KeyboardModifier.ShiftModifier
             )
+            if release and self._lifecycle_owns_input():
+                event.accept()
+                return
             if release:
                 self.backend.release_estop()
                 self.toast("E-STOP RELEASED — verify robot before control")
             else:
-                self.control.reset_inputs()
-                ok, reason = self.backend.trigger_estop()
-                self.control.clear_pending()
-                self.toast("E-STOP ACTIVE" if ok else f"E-STOP ACTIVE ({reason})")
+                result = request_emergency_stop(self.backend, self.control)
+                if result.failures:
+                    self.toast(result.message, kind="warning")
+                else:
+                    self.toast(result.message)
+            event.accept()
+            return
+        if self._lifecycle_owns_input():
             event.accept()
             return
         if self.handle_escape_menu_key(event):
             return
-        if self.binding_module is not None:
+        if self.pointer_interaction.binding_module is not None:
             self.handle_keybind_event(event)
             return
         if self.home_visible and self.wallpaper_picker_visible:
@@ -971,23 +1001,8 @@ class InputDispatchMixin:
             and self.keybind_matches(quick_wheel_module.keybind, key_name, event)
         )
         if self.match_chat.input_open:
-            if event.key() == Qt.Key.Key_Escape:
-                self.close_match_chat(clear=False)
-            elif event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
-                self.match_chat.send_input()
-                self.close_match_chat(clear=False)
-            elif event.key() == Qt.Key.Key_Backspace:
-                self.match_chat.backspace()
-            elif event.key() == Qt.Key.Key_Up:
-                self.match_chat.history_older()
-            elif event.key() == Qt.Key.Key_Down:
-                self.match_chat.history_newer()
-            elif event.key() == Qt.Key.Key_PageUp:
-                self.match_chat.scroll(5)
-            elif event.key() == Qt.Key.Key_PageDown:
-                self.match_chat.scroll(-5)
-            elif event.text() and event.text().isprintable():
-                self.match_chat.insert(event.text())
+            edit = _chat_key_edit(event)
+            edit.apply(self.match_chat, close=lambda: self.close_match_chat(clear=False))
             self.frame_scheduler.force()
             event.accept()
             return
@@ -1058,14 +1073,11 @@ class InputDispatchMixin:
                         self.activate_economy_offer(offer)
                 return
         if self.search_focus:
-            if event.key() == Qt.Key.Key_Backspace:
-                self.search_query = self.search_query[:-1]
-            elif event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            edit = _search_key_edit(event)
+            if edit.finish:
                 self.search_focus = False
-            elif event.key() == Qt.Key.Key_Escape:
-                self.search_focus = False
-            elif event.text() and event.text().isprintable():
-                self.search_query += event.text()
+            elif edit.changes_query:
+                self.search_query = edit.apply(self.search_query)
             return
         if event.key() == Qt.Key.Key_F8 or self.is_right_shift_event(event):
             self.set_clickgui_visible(not self.gui_visible)
@@ -1131,6 +1143,9 @@ class InputDispatchMixin:
             return
 
     def keyReleaseEvent(self, event: QKeyEvent) -> None:
+        if self._lifecycle_owns_input():
+            event.accept()
+            return
         pending = getattr(self, "_escape_menu_key_releases", set())
         if event.key() in pending:
             if not event.isAutoRepeat():
@@ -1143,7 +1158,7 @@ class InputDispatchMixin:
         if self.handle_student_key(event, False):
             event.accept()
             return
-        if self.binding_module is not None or self.search_focus:
+        if self.pointer_interaction.binding_module is not None or self.search_focus:
             return
         quick_wheel_module = self.registry.get("QuickActionWheel")
         key_name = self.key_name(event)
@@ -1212,7 +1227,8 @@ class InputDispatchMixin:
         """Only the unobstructed combat viewport owns robot key/mouse input."""
 
         return bool(
-            not self.escape_menu_visible
+            not self._lifecycle_owns_input()
+            and not self.escape_menu_visible
             and not self.student_ui.visible
             and not self.home_visible
             and not self.gui_visible
@@ -1225,6 +1241,8 @@ class InputDispatchMixin:
         )
 
     def toggle_bound_module_for_event(self, event: QKeyEvent, key_name: str) -> bool:
+        if self._lifecycle_owns_input():
+            return False
         if event.isAutoRepeat():
             return False
         for module in self.registry.modules:
@@ -1273,12 +1291,11 @@ class InputDispatchMixin:
         return result
 
     def handle_keybind_event(self, event: QKeyEvent) -> None:
-        module = self.binding_module
+        module = self.pointer_interaction.binding_module
         if module is None:
             return
         if event.key() == Qt.Key.Key_Escape:
-            module.keybind = "None"
-            self.binding_module = None
+            self.pointer_interaction.finish_binding("None")
             self.anim.value("keybind.overlay", 0.0, self.anim_duration(0.16), Easings.ease_out_quad)
             self.toast(f"{module.name} 按键绑定已清空")
             self.auto_save_config()
@@ -1286,30 +1303,21 @@ class InputDispatchMixin:
         name = self.key_name(event)
         if not name:
             return
-        module.keybind = name
-        self.binding_module = None
+        self.pointer_interaction.finish_binding(name)
         self.toast(f"{module.name} 已绑定到 {name}")
         self.auto_save_config()
 
-    # ------------------------------------------------------------------
-    # 阶段 3e 第一步（行为等价重构，REFACTOR_BLUEPRINT §5 阶段 3 表 3e 行）：
-    # dispatch 的巨型 if/elif 路由链已表化为 {action: handler} 注册表
-    # （模块级 _DISPATCH_HANDLERS；handler 为模块级函数、首参命名 self 以保
-    # 持分支体逐字零修改，且不新增 PolarRMWindow 类表面成员——api_freeze
-    # 冻结面零漂移）。行为等价论证：
-    # 1) 链首对 GUI 缓存类 action 的 invalidate_gui_cache 前置块逐字保留，
-    #    先于任何分支执行，语义不变；
-    # 2) 原 elif 链各分支条件均为 `action == <字符串字面量>`（或共享集合
-    #    economy_confirm/economy_confirm_hold），分支互不重叠，且任何分支体
-    #    都不修改 action/payload/point/button/rect —— 故"按 action 查表精确
-    #    分发"与"顺序 elif 匹配"结果等价；
-    # 3) 三个复合守卫分支（jello_module_press / old_drag / polar_drag 的
-    #    `... and button == 1`）将 button 守卫下沉为 handler 内提前返回：
-    #    守卫失败时原链落空到链尾隐式返回，与 handler 内 return 等价；
-    # 4) 未注册 action 查表 miss 直接返回，与原链穷尽 elif 后隐式返回等价。
-    # ------------------------------------------------------------------
-
+    # Runtime ownership is checked before student actions and cache invalidation.
+    # Unknown actions intentionally do nothing. This remains a window adapter,
+    # not a pure command service: handlers may mutate model and UI state.
     def dispatch(self, action: str, payload: Any, point: QPointF, button: int, rect: QRectF) -> None:
+        if self._lifecycle_owns_input():
+            # Scenario requests may explicitly coalesce while native owners
+            # retire. An accepted profile or final close still owns the model.
+            changing_profile = bool(getattr(self, "configuration_change_pending", False))
+            closing = bool(getattr(getattr(self, "_window_lifecycle", None), "closing", False))
+            if action != "select_scenario" or changing_profile or closing:
+                return
         if self.handle_student_action(action, payload, point):
             return
         if action in _GUI_CACHE_INVALIDATE_ACTIONS:

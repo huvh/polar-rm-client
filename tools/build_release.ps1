@@ -280,9 +280,21 @@ print('polar spec OK: %d segments, %d roles, %d warnings'
         }
     }
     Push-Location $sourceRoot
+    $oldFreezeCi = $env:CI
     try {
+        # PyInstaller hooks can import optional SDKs before application startup.
+        # Scope the observed OpenVINO telemetry opt-out to this invocation;
+        # restore the caller's process environment even when freezing fails.
+        $env:CI = "true"
         & $pyinstaller --noconfirm --clean --distpath $distRoot --workpath (Join-Path $stageRoot "work") (Join-Path $sourceRoot "tools\POLAR-RM.spec")
-    } finally { Pop-Location }
+    } finally {
+        if ($null -eq $oldFreezeCi) {
+            Remove-Item Env:CI -ErrorAction SilentlyContinue
+        } else {
+            $env:CI = $oldFreezeCi
+        }
+        Pop-Location
+    }
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath (Join-Path $portable "POLAR-RM.exe"))) {
         throw "PyInstaller one-folder build failed"
     }

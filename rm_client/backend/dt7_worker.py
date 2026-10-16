@@ -10,6 +10,7 @@ import threading
 import copy
 import time
 from .dt7_link import Dt7KeyMouseLink
+from .resource_close import close_resource
 
 
 class _WorkerSafety:
@@ -151,8 +152,15 @@ class AsyncDt7KeyMouseLink:
         return True, "queued"
 
     def release(self, now=None):
+        """Owner-thread compatibility entry point, including observer delivery."""
         self.poll()
+        return self.request_release()
+
+    def request_release(self):
+        """Admit bounded neutral from any thread without invoking observers."""
         with self._cv:
+            if self._closing:
+                return self.wire_neutral, self.last_error or "DT7 writer closed"
             if self._release_exhausted:
                 return False, self.last_error
             if not self._release_pending:
@@ -186,6 +194,8 @@ class AsyncDt7KeyMouseLink:
     def retry_release(self):
         """Explicit recovery only; ordinary heartbeat cannot reset the budget."""
         with self._cv:
+            if self._closing:
+                return False, "DT7 writer closed"
             self._release_exhausted = False
             self._release_pending = False
         return self.release()
@@ -312,13 +322,35 @@ class AsyncDt7KeyMouseLink:
                         self._inflight = False
                         self._cv.notify_all()
         finally:
-            self._link.close()
+            self._finalize_close()
+
+    def _finalize_close(self):
+        """Runs only on the sole writer or an explicit background close retry."""
+        with self._cv:
+            self._closing = True
+            self._latest = None
+        try:
+            close_resource(self._link)
+        except Exception as exc:
+            with self._cv:
+                self._last_error = f"DT7 close unconfirmed; explicit close retry required: {exc}"
+                self._fault = self._last_error
+                self._fault_reported = False
+                self._cv.notify_all()
+        else:
             self._closed.set()
 
     def close(self):
         # UI shutdown never joins a potentially blocked OS driver. The sole
         # owner finishes bounded neutral best-effort then closes in finally.
-        self.release()
+        with self._cv:
+            if self._closing:
+                if not self.closed and not self._thread.is_alive():
+                    self._thread = threading.Thread(
+                        target=self._finalize_close, name="dt7-close-retry", daemon=True)
+                    self._thread.start()
+                return
+        self.request_release()
         with self._cv:
             self._closing = True
             self._generation += 1
@@ -333,6 +365,19 @@ class AsyncDt7KeyMouseLink:
     def worker_alive(self):
         return self._thread.is_alive()
 
+    @property
+    def port_handoff_ready(self):
+        """Proof for another owner: neutral, no retained handle, worker gone."""
+        return bool(
+            self.closed and not self.worker_alive
+            and getattr(self._link, "_handle", self._link) is None
+            and not getattr(self._link, "_handle_close_failed", True)
+            and self.wire_neutral and not self.release_pending
+        )
+
     def wait_closed(self, timeout=2.0):
-        """Test/non-UI cleanup only."""
-        return self._closed.wait(timeout)
+        """Background/test cleanup only; None explicitly waits without a deadline."""
+        thread = self._thread
+        if thread is not threading.current_thread():
+            thread.join(None if timeout is None else max(0.0, float(timeout)))
+        return self.closed

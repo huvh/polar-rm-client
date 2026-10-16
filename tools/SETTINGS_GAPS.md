@@ -17,14 +17,23 @@ python tools/audit_settings.py --json out.json
 
 | 档位 | 数量 | 含义 |
 |---|---:|---|
-| **READ** | 361 | 静态工具检出字面命中且名字不冲突；仍需确认是否为功能消费者 |
+| **READ** | 355 | 静态工具检出字面命中且名字不冲突；仍需确认是否为功能消费者 |
 | **AMBIGUOUS** | 63 | 多个模块共用设置名；其中 48 项有工具归属提示、15 项仍无归属提示，均不能仅凭总数算已对齐 |
-| **DYNAMIC** | 25 | 由 `f"Bind {槽}"` / `f"Slot {序号}"` 动态拼名读取（已逐个核实读取点存在） |
+| **DYNAMIC** | 31 | 25 个动态设置名读取候选，加 6 个精确注册且存在消费端的动态音效命令；仍需行为测试 |
 | **ORPHAN** | **21** | 静态工具未发现字面或动态读取证据；按下表逐项保留待处理范围 |
 
-PR17 基线 `b26b7b7` 与本轮质量修复工作树的审计结果相同：上述四档数量一致，
-21 项 ORPHAN 的 `(module, setting)` 集合也一致。此次只校正文档和防倒退门限，
-**没有把 22→21 记为本轮新增接线**。
+2026-10-16 的命令边界抽取把六个 AudioFeedback 的 Import/Preview 名字改为有界循环生成，
+因此从 READ 改列 DYNAMIC，孤儿上限仍为 21。这不是消除了六个功能缺口。
+`tools/settings_action_evidence.py` 只有在精确解析器接受该命令、入口传给执行分派、
+对应类别调用音效消费端时才记录动态证据；纯声明、未知槽和断开的分派均不算。
+`tests/test_settings_action_evidence.py` 覆盖这些负例与真实审计输出，
+`tests/test_configuration_commands.py` 则逐一执行六个生产命令分派及其参数断言。
+
+
+历史 PR17 基线 `b26b7b7` 与命令抽取前工作树均为 READ 361 / AMBIGUOUS 63 /
+DYNAMIC 25 / ORPHAN 21；命令抽取后只有上述六项转为 DYNAMIC。
+21 项 ORPHAN 的 `(module, setting)` 集合没有变化，
+**没有把旧文档校正的 22→21 记为本轮新增接线**。
 
 旧清单多列的项是 `ClickGui / Save Layout`。两棵树中工具都因为
 `rm_client/ui/cs2_settings_center.py` 的设置列表

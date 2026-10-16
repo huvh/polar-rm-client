@@ -33,6 +33,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 from tools.test_registry import CATEGORIES, PROFILES, TestEntry, discover, select
+from tools.verification_provenance import collect_provenance
 
 
 @dataclass(frozen=True)
@@ -119,6 +120,11 @@ def child_environment(user_data: str, firmware: Path | None, *, desktop: bool = 
         env["POLAR_REFEREE_REFERENCE"] = str(firmware)
     env["POLAR_DISABLE_LOCAL_CAPTURE"] = "1"
     env["POLAR_DISABLE_MEDIA_PRELOAD"] = "1"
+    # OpenVINO's official telemetry wrapper uses disable_in_ci=True and its
+    # consent checker recognizes exactly CI=true (case-insensitive). Set this
+    # in every owned test child before optional dependencies can be imported.
+    # This is a local subprocess opt-out, not a request to run hosted/paid CI.
+    env["CI"] = "true"
     if desktop:
         env["QT_QPA_PLATFORM"] = "windows" if sys.platform == "win32" else ("xcb" if env.get("DISPLAY") else "wayland")
     else:
@@ -376,6 +382,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     results = []
     try:
+        payload["provenance"] = collect_provenance(ROOT)
         for entry in selected:
             print(f"RUN [{entry.category}] {entry.path}", flush=True)
             result = run_entry(entry, firmware=firmware, timeout=args.timeout, desktop=args.desktop,

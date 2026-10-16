@@ -7,7 +7,10 @@ from __future__ import annotations
 import time
 from typing import Any
 from ....model import RobotState
-from .contract import FIELDS, ALIASES
+from .projection_policy import (
+    ProjectileDamageBaseline, ProjectileDamageSample, assess_projectile_damage,
+    select_present_fields,
+)
 
 _RUNE_PHASE = {1: "INACTIVE", 2: "ACTIVATING", 3: "ACTIVE"}
 # Robot IDs: red 1-9, blue 101-109 (same role + 100).
@@ -158,16 +161,7 @@ class Rm2026StateAdapter:
             state.buff_rows = buff_rows
 
     def _apply_one(self, state: RobotState, name: str, data: dict[str, Any]) -> None:
-        present = frozenset(data.get("__present__", ()))
-        if "__present__" in data:
-            # The official schema uses optional fields. Missing fields are not
-            # permission grants, phase changes or zero-valued telemetry.
-            keys = {
-                ALIASES.get((name, field_name), field_name)
-                for number, (field_name, _kind, _repeated) in FIELDS.get(name, {}).items()
-                if number in present
-            }
-            data = {key: value for key, value in data.items() if key in keys or key == "__present__"}
+        data, present = select_present_fields(name, data)
         economy_before = self._economy_signature(state)
         if name == "GameStatus":
             state.current_round = int(data.get("current_round", state.current_round))
@@ -338,38 +332,35 @@ class Rm2026StateAdapter:
             clean = self._clean(data)
             killer_id = int(data.get("killer_id", 0))
             state.injury_stats.setdefault(killer_id, {}).update(clean)
-            if "small_projectile_damage" not in data and "large_projectile_damage" not in data:
+            small_present = "small_projectile_damage" in data
+            large_present = "large_projectile_damage" in data
+            if not small_present and not large_present:
                 return
             small_total = max(0, int(data.get("small_projectile_damage", state.projectile_damage_small_total)))
             large_total = max(0, int(data.get("large_projectile_damage", state.projectile_damage_large_total)))
-            if state.injury_stats_initialized:
-                # Cumulative counters can reset after respawn/reconnect.  A
-                # backwards jump establishes a new baseline and must never be
-                # interpreted as an enormous fresh hit.
-                counters_monotonic = bool(
-                    small_total >= state.projectile_damage_small_total
-                    and large_total >= state.projectile_damage_large_total
-                )
-                if counters_monotonic:
-                    small_delta = small_total - state.projectile_damage_small_total
-                    large_delta = large_total - state.projectile_damage_large_total
-                    damage_delta = small_delta + large_delta
-                    if damage_delta > 0:
-                        state.projectile_hit_revision += 1
-                        state.last_projectile_hit_at = time.perf_counter()
-                        state.last_projectile_damage_delta = damage_delta
-                        state.last_projectile_kind = (
-                            "17mm+42mm"
-                            if small_delta > 0 and large_delta > 0
-                            else ("42mm" if large_delta > 0 else "17mm")
-                        )
-                        state.last_projectile_killer_id = killer_id
-            else:
-                # RobotInjuryStat is a cumulative 1 Hz report.  Never trigger
-                # an automatic action from the first sample after startup.
-                state.injury_stats_initialized = True
-            state.projectile_damage_small_total = small_total
-            state.projectile_damage_large_total = large_total
+            decision = assess_projectile_damage(
+                ProjectileDamageBaseline(
+                    state.injury_stats_initialized,
+                    state.projectile_damage_small_initialized,
+                    state.projectile_damage_large_initialized,
+                    state.projectile_damage_small_total,
+                    state.projectile_damage_large_total,
+                ),
+                ProjectileDamageSample(small_present, large_present, small_total, large_total),
+            )
+            damage_delta = decision.damage_delta
+            if damage_delta > 0:
+                state.projectile_hit_revision += 1
+                state.last_projectile_hit_at = time.perf_counter()
+                state.last_projectile_damage_delta = damage_delta
+                state.last_projectile_kind = decision.projectile_kind
+                state.last_projectile_killer_id = killer_id
+            next_baseline = decision.next_baseline
+            state.injury_stats_initialized = next_baseline.initialized
+            state.projectile_damage_small_initialized = next_baseline.small_initialized
+            state.projectile_damage_large_initialized = next_baseline.large_initialized
+            state.projectile_damage_small_total = next_baseline.small_total
+            state.projectile_damage_large_total = next_baseline.large_total
         elif name == "RobotRespawnStatus":
             state.respawn_pending = bool(data.get("is_pending_respawn", state.respawn_pending))
             snapshot = state.backend_stats.setdefault("respawn_status", {})

@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+import logging
 import struct
 import time
+from typing import Callable
 
 from PySide6.QtCore import QRectF, QSize
-from PySide6.QtGui import QImage, QOpenGLContext
+from PySide6.QtGui import QImage, QOpenGLContext, QPainter
 from PySide6.QtOpenGL import (
     QOpenGLBuffer,
     QOpenGLFramebufferObject,
@@ -16,6 +18,11 @@ from PySide6.QtOpenGL import (
     QOpenGLShaderProgram,
     QOpenGLVertexArrayObject,
 )
+
+
+from .render_diagnostics import RenderFault, RenderFaultDiagnostics
+
+_LOG = logging.getLogger(__name__)
 
 
 _GL_BLEND = 0x0BE2
@@ -197,12 +204,93 @@ KYANT_GLASS_SLIDER_CASE = LensRegressionCase(
 )
 
 
+@dataclass(frozen=True)
+class FailedFrameRecovery:
+    """Keep the initiating defect distinct from independent cleanup defects."""
+
+    render_fault: RenderFault
+    cleanup_faults: tuple[RenderFault, ...]
+    rejected_layers: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class RejectedFrameRecovery:
+    """Ordinary rejected work is not an invented renderer exception."""
+    reason: str
+    rejected_layers: tuple[str, ...]
+    cleanup_faults: tuple[RenderFault, ...]
+
+
+class _GlCleanupFailure(RuntimeError):
+    """Carry one operation fault plus every independent unwind failure."""
+
+    def __init__(self, failures: tuple[tuple[str, Exception], ...]) -> None:
+        self.failures = failures
+        super().__init__("; ".join(
+            f"{name or 'draw'}: {type(error).__name__}: {error}" for name, error in failures
+        ))
+
+
+def _attempt_gl_cleanup(
+    actions: tuple[tuple[str, Callable[[], object]], ...],
+) -> tuple[bool, tuple[tuple[str, Exception], ...]]:
+    accepted = True
+    failures = []
+    for name, release in actions:
+        try:
+            if release() is False:
+                accepted = False
+        except Exception as exc:
+            accepted = False
+            failures.append((name, exc))
+    return accepted, tuple(failures)
+
+
+class LayerPaintSession:
+    """Own one active painter and pass-local state until the layer is released.
+
+    The caller may end raster painting before native commands. An exceptional
+    draw leaves the painter registered for the pass's independent unwind.
+    """
+
+    def __init__(self, device) -> None:
+        self.device = device
+        self._painter: QPainter | None = None
+        self.cleanup: list[tuple[str, Callable[[], object]]] = [
+            ("painter", self._end_painter),
+        ]
+
+    def begin_painter(self) -> QPainter:
+        if self._painter is not None:
+            raise RuntimeError("layer already owns an active painter")
+        self._painter = QPainter(self.device)
+        return self._painter
+
+    def _end_painter(self) -> bool:
+        painter, self._painter = self._painter, None
+        return painter is None or painter.end() is not False
+
+    def end_painter(self) -> bool:
+        try:
+            return self._end_painter()
+        except Exception as error:
+            raise _GlCleanupFailure((("cleanup.painter", error),)) from error
+
+    def defer_cleanup(self, name: str, release: Callable[[], object]) -> None:
+        # End the painter first; restore nested recording/owner state next.
+        self.cleanup.insert(1, (name, release))
+
+
 class GpuFrameCompositor:
     """在私有 FBO 中顺序合成背景、共享模糊、玻璃和 UI。"""
 
     def __init__(self) -> None:
         self.available = False
         self.last_error = ""
+        self.diagnostics = RenderFaultDiagnostics()
+        self.last_failed_frame: FailedFrameRecovery | None = None
+        self.last_rejected_frame: RejectedFrameRecovery | None = None
+        self._frame_rejection = ""
         self.background_fbo: QOpenGLFramebufferObject | None = None
         self.control_fbo: QOpenGLFramebufferObject | None = None
         self.blur_temp_fbo: QOpenGLFramebufferObject | None = None
@@ -265,34 +353,90 @@ class GpuFrameCompositor:
             self._uniform_cache[key] = location
         return location
 
+    def _record_operation_reject(self, phase: str, error: Exception) -> tuple[RenderFault, ...]:
+        if isinstance(error, _GlCleanupFailure):
+            return tuple(
+                fault
+                for name, nested in error.failures
+                for fault in self._record_operation_reject(f"{phase}.{name}" if name else phase, nested)
+            )
+        return (self.diagnostics.record(phase, error, logger=_LOG, now=time.perf_counter()),)
+
+    def _run_pass(
+        self,
+        phase: str,
+        render: Callable[[], bool],
+        *,
+        cleanup: tuple[tuple[str, Callable[[], object]], ...] = (),
+        on_reject: tuple[tuple[str, Callable[[], object]], ...] = (),
+    ) -> bool:
+        """Contain a GL pass fault while preserving root and cleanup evidence.
+
+        A normal not-ready/bind rejection remains False without an invented
+        exception. Every independent cleanup is attempted; a cleanup defect
+        also rejects the pass rather than reporting a successful frame.
+        """
+        fault = None
+        cleanup_faults = []
+        try:
+            accepted = bool(render())
+        except Exception as exc:
+            accepted = False
+            fault, *unwind_faults = self._record_operation_reject(phase, exc)
+            cleanup_faults.extend(unwind_faults)
+        actions = (*on_reject, *cleanup) if not accepted else cleanup
+        cleanup_accepted, errors = _attempt_gl_cleanup(actions)
+        for name, error in errors:
+            cleanup_faults.extend(self._record_operation_reject(f"{phase}.cleanup.{name}", error))
+        if fault is not None or cleanup_faults:
+            primary = fault if fault is not None else cleanup_faults[0]
+            self.last_error = primary.summary
+            self.last_failed_frame = FailedFrameRecovery(primary, tuple(cleanup_faults))
+        return accepted and cleanup_accepted
+
     def initialize(self) -> bool:
         if self.available:
             return True
-        try:
-            self.present_program = self._build_present_program()
-            self.blur_program = self._build_blur_program()
-            self.jello_blur_program = self._build_jello_blur_program()
-            self.glass_program = self._build_lens_program()
-            self._uniform_cache.clear()
-            if not self.vertex_array.create():
-                raise RuntimeError("GPU compositor VAO creation failed")
-            if not self.vertex_buffer.create():
-                raise RuntimeError("GPU compositor vertex buffer creation failed")
-            self.vertex_array.bind()
-            self.vertex_buffer.bind()
-            vertices = struct.pack("8f", -1.0, -1.0, 1.0, -1.0, -1.0, 1.0, 1.0, 1.0)
-            self.vertex_buffer.allocate(vertices, len(vertices))
-            self.vertex_buffer.release()
-            self.vertex_array.release()
-            self.available = True
-            self.last_error = ""
-            return True
-        except Exception as exc:
-            self.last_error = str(exc)
-            self.release()
+        accepted = self._run_pass(
+            "initialize", self._initialize_resources, on_reject=(("resources", self.release),),
+        )
+        if not accepted:
+            self.available = False
+        return accepted
+
+    def _initialize_resources(self) -> bool:
+        self.present_program = self._build_present_program()
+        self.blur_program = self._build_blur_program()
+        self.jello_blur_program = self._build_jello_blur_program()
+        self.glass_program = self._build_lens_program()
+        self._uniform_cache.clear()
+        if not self.vertex_array.create():
+            raise RuntimeError("GPU compositor VAO creation failed")
+        if not self.vertex_buffer.create():
+            raise RuntimeError("GPU compositor vertex buffer creation failed")
+        self.vertex_array.bind()
+        if self.vertex_buffer.bind() is False:
             return False
+        vertices = struct.pack("8f", -1.0, -1.0, 1.0, -1.0, -1.0, 1.0, 1.0, 1.0)
+        self.vertex_buffer.allocate(vertices, len(vertices))
+        self.vertex_buffer.release()
+        self.vertex_array.release()
+        self.available = True
+        self.last_error = ""
+        return True
 
     def ensure_size(self, width: int, height: int, device_pixel_ratio: float) -> bool:
+        if not self.available:
+            return False
+        accepted = self._run_pass(
+            "resize", lambda: self._allocate_size(width, height, device_pixel_ratio),
+            on_reject=(("framebuffers", self._destroy_fbos),),
+        )
+        if not accepted:
+            self.available = False
+        return accepted
+
+    def _allocate_size(self, width: int, height: int, device_pixel_ratio: float) -> bool:
         if not self.available:
             return False
         ratio = max(1.0, float(device_pixel_ratio))
@@ -321,59 +465,53 @@ class GpuFrameCompositor:
             self._device_pixel_ratio = ratio
             return True
         self._destroy_fbos()
-        try:
-            fmt = QOpenGLFramebufferObjectFormat()
-            fmt.setAttachment(QOpenGLFramebufferObject.Attachment.NoAttachment)
-            fmt.setInternalTextureFormat(_GL_RGBA8)
-            # QPainter's OpenGL engine uses stencil for path fills, strokes and
-            # nonrectangular clips. A colour-only target turns rounded outlines
-            # into bounding-box fragments on Windows and corrupts glyph masks.
-            # Pure shader/blur/lens targets remain colour-only; their material
-            # and sampling parameters are unchanged.
-            painter_fmt = QOpenGLFramebufferObjectFormat()
-            painter_fmt.setAttachment(QOpenGLFramebufferObject.Attachment.CombinedDepthStencil)
-            painter_fmt.setInternalTextureFormat(_GL_RGBA8)
-            self.background_fbo = QOpenGLFramebufferObject(size, painter_fmt)
-            self.control_fbo = QOpenGLFramebufferObject(size, painter_fmt)
-            self.blur_temp_fbo = QOpenGLFramebufferObject(size, fmt)
-            self.blur_fbo = QOpenGLFramebufferObject(size, fmt)
-            self.treated_blur_temp_fbo = QOpenGLFramebufferObject(size, fmt)
-            self.treated_blur_fbo = QOpenGLFramebufferObject(size, fmt)
-            self.hud_glass_fbo = QOpenGLFramebufferObject(size, fmt)
-            self.glass_fbo = QOpenGLFramebufferObject(size, fmt)
-            self.overlay_fbo = QOpenGLFramebufferObject(size, painter_fmt)
-            self.vision_fbo = QOpenGLFramebufferObject(size, fmt)
-            self.dynamic_fbo = QOpenGLFramebufferObject(size, painter_fmt)
-            self.target_fbo = QOpenGLFramebufferObject(size, painter_fmt)
-            if not all(
-                fbo.isValid()
-                for fbo in (
-                    self.background_fbo,
-                    self.control_fbo,
-                    self.blur_temp_fbo,
-                    self.blur_fbo,
-                    self.treated_blur_temp_fbo,
-                    self.treated_blur_fbo,
-                    self.hud_glass_fbo,
-                    self.glass_fbo,
-                    self.overlay_fbo,
-                    self.vision_fbo,
-                    self.dynamic_fbo,
-                    self.target_fbo,
-                )
-            ):
-                raise RuntimeError("GPU compositor FBO creation failed")
-            self._size = size
-            self._device_pixel_ratio = ratio
-            self._blur_valid = False
-            self._treated_blur_valid = False
-            self.fbo_generation += 1
-            return True
-        except Exception as exc:
-            self.last_error = str(exc)
-            self._destroy_fbos()
-            self.available = False
-            return False
+        fmt = QOpenGLFramebufferObjectFormat()
+        fmt.setAttachment(QOpenGLFramebufferObject.Attachment.NoAttachment)
+        fmt.setInternalTextureFormat(_GL_RGBA8)
+        # QPainter's OpenGL engine uses stencil for path fills, strokes and
+        # nonrectangular clips. A colour-only target turns rounded outlines
+        # into bounding-box fragments on Windows and corrupts glyph masks.
+        # Pure shader/blur/lens targets remain colour-only; their material
+        # and sampling parameters are unchanged.
+        painter_fmt = QOpenGLFramebufferObjectFormat()
+        painter_fmt.setAttachment(QOpenGLFramebufferObject.Attachment.CombinedDepthStencil)
+        painter_fmt.setInternalTextureFormat(_GL_RGBA8)
+        self.background_fbo = QOpenGLFramebufferObject(size, painter_fmt)
+        self.control_fbo = QOpenGLFramebufferObject(size, painter_fmt)
+        self.blur_temp_fbo = QOpenGLFramebufferObject(size, fmt)
+        self.blur_fbo = QOpenGLFramebufferObject(size, fmt)
+        self.treated_blur_temp_fbo = QOpenGLFramebufferObject(size, fmt)
+        self.treated_blur_fbo = QOpenGLFramebufferObject(size, fmt)
+        self.hud_glass_fbo = QOpenGLFramebufferObject(size, fmt)
+        self.glass_fbo = QOpenGLFramebufferObject(size, fmt)
+        self.overlay_fbo = QOpenGLFramebufferObject(size, painter_fmt)
+        self.vision_fbo = QOpenGLFramebufferObject(size, fmt)
+        self.dynamic_fbo = QOpenGLFramebufferObject(size, painter_fmt)
+        self.target_fbo = QOpenGLFramebufferObject(size, painter_fmt)
+        if not all(
+            fbo.isValid()
+            for fbo in (
+                self.background_fbo,
+                self.control_fbo,
+                self.blur_temp_fbo,
+                self.blur_fbo,
+                self.treated_blur_temp_fbo,
+                self.treated_blur_fbo,
+                self.hud_glass_fbo,
+                self.glass_fbo,
+                self.overlay_fbo,
+                self.vision_fbo,
+                self.dynamic_fbo,
+                self.target_fbo,
+            )
+        ):
+            raise RuntimeError("GPU compositor FBO creation failed")
+        self._size = size
+        self._device_pixel_ratio = ratio
+        self._blur_valid = False
+        self._treated_blur_valid = False
+        self.fbo_generation += 1
+        return True
 
     def paint_device(self, layer: str) -> QOpenGLPaintDevice | None:
         # Qt's OpenGL paint engine keeps a glyph-atlas binding cache.  The
@@ -403,6 +541,69 @@ class GpuFrameCompositor:
             return None
         return QOpenGLPaintDevice(self._size)
 
+    def paint_layer(
+        self, functions, layer: str, ratio: float,
+        render: Callable[[LayerPaintSession], bool], *, transparent: bool = True,
+    ) -> bool:
+        """Acquire, clear, draw and independently unwind a private layer.
+
+        Only an accepted draw with successful painter/FBO cleanup can be
+        committed to a window cache. Painter and layer release failures retain
+        separate typed evidence and cannot replace an initiating draw fault.
+        """
+        session = None
+        def draw() -> bool:
+            nonlocal session
+            device = self.paint_device(layer)
+            if device is None:
+                return False
+            session = LayerPaintSession(device)
+            device.setDevicePixelRatio(ratio)
+            self.clear_current(functions, transparent=transparent)
+            return render(session)
+
+        def finish_session() -> bool:
+            if session is None:
+                return True
+            accepted, failures = _attempt_gl_cleanup(tuple(session.cleanup))
+            if failures:
+                raise _GlCleanupFailure(failures)
+            return accepted
+
+        accepted = self._run_pass(
+            f"layer.paint.{layer}", draw,
+            cleanup=(("session", finish_session),
+                     ("framebuffer", lambda: self.release_layer(layer))),
+        )
+        if not accepted:
+            self._frame_rejection = self._frame_rejection or f"{layer} paint pass rejected"
+        return accepted
+
+    def paint_raster(self, device, draw: Callable[[QPainter], None], *, phase: str) -> bool:
+        """Finish a CPU image/picture painter before its device can retire."""
+        session = LayerPaintSession(device)
+        def paint() -> bool:
+            draw(session.begin_painter())
+            return True
+        accepted = self._run_pass(phase, paint, cleanup=(("painter", session._end_painter),))
+        if not accepted:
+            self._frame_rejection = self._frame_rejection or f"{phase} rejected"
+        return accepted
+
+    def render_vision_layer(self, functions, render: Callable[[], bool]) -> bool:
+        """Keep vision ownership separate from accepted native draw/cleanup."""
+        def draw() -> bool:
+            if self.vision_fbo is None or not self.vision_fbo.bind():
+                return False
+            self.clear_current(functions, transparent=True)
+            return render()
+        accepted = self._run_pass(
+            "layer.paint.vision", draw, cleanup=(("framebuffer", self.end_vision_layer),),
+        )
+        if not accepted:
+            self._frame_rejection = self._frame_rejection or "vision paint pass rejected"
+        return accepted
+
     def clear_current(self, functions, *, transparent: bool) -> None:
         functions.glViewport(0, 0, self._size.width(), self._size.height())
         functions.glDisable(_GL_SCISSOR_TEST)
@@ -411,7 +612,50 @@ class GpuFrameCompositor:
         functions.glClearColor(0.0, 0.0, 0.0, 0.0 if transparent else 1.0)
         functions.glClear(_GL_COLOR_BUFFER_BIT)
 
-    def release_layer(self, layer: str) -> None:
+    @property
+    def frame_rejected(self) -> bool:
+        return bool(self._frame_rejection)
+
+    def _release_frame_layers(self) -> tuple[tuple[RenderFault, ...], tuple[str, ...]]:
+        faults, rejected = [], []
+        original_error = self.last_error
+        for layer in ("background", "control", "overlay", "vision", "dynamic", "target"):
+            try:
+                accepted = self.end_vision_layer() if layer == "vision" else self.release_layer(layer)
+                if accepted is False:
+                    rejected.append(layer)
+            except Exception as error:
+                faults.append(self.diagnostics.record(
+                    f"frame.cleanup.{layer}", error, logger=_LOG, now=time.perf_counter()))
+        self.last_error = original_error
+        return tuple(faults), tuple(rejected)
+
+    def recover_failed_frame(self, exc: Exception) -> FailedFrameRecovery:
+        """Release every possible owner while preserving the initiating defect."""
+        fault = self.diagnostics.record("frame.compose", exc, logger=_LOG, now=time.perf_counter())
+        self.last_error = fault.summary
+        cleanup_faults, rejected = self._release_frame_layers()
+        recovery = FailedFrameRecovery(fault, cleanup_faults, rejected)
+        self.last_failed_frame = recovery
+        if rejected:
+            self.last_rejected_frame = RejectedFrameRecovery("exception cleanup rejected", rejected, cleanup_faults)
+        return recovery
+
+    def recover_rejected_frame(self) -> RejectedFrameRecovery:
+        """Unwind an ordinary False result without fabricating an exception."""
+        reason = self._frame_rejection or "frame rejected"
+        faults, rejected = self._release_frame_layers()
+        recovery = RejectedFrameRecovery(reason, rejected, faults)
+        self.last_rejected_frame = recovery
+        return recovery
+
+    def _release_framebuffer(self, fbo, layer: str) -> bool:
+        accepted = fbo is None or fbo.release() is not False
+        if not accepted:
+            self._frame_rejection = f"{layer} framebuffer release rejected"
+        return accepted
+
+    def release_layer(self, layer: str) -> bool:
         if layer == "background":
             fbo = self.background_fbo
         elif layer == "control":
@@ -422,8 +666,7 @@ class GpuFrameCompositor:
             fbo = self.target_fbo
         else:
             fbo = self.overlay_fbo
-        if fbo is not None:
-            fbo.release()
+        return self._release_framebuffer(fbo, layer)
 
     def upload_dynamic_image(
         self,
@@ -470,67 +713,53 @@ class GpuFrameCompositor:
             sanitize_alpha=True,
         )
 
-    def clear_target_layer(self, functions) -> bool:
-        """Clear the isolated TargetHUD layer without involving QPainter."""
-        if self.target_fbo is None or not self.target_fbo.bind():
+    def _clear_framebuffer(self, functions, fbo, layer: str) -> bool:
+        if fbo is None:
             return False
-        try:
+        def clear() -> bool:
+            if not fbo.bind():
+                return False
             self.clear_current(functions, transparent=True)
             return True
-        finally:
-            self.target_fbo.release()
+        return self._run_pass(f"layer.clear.{layer}", clear,
+            cleanup=(("framebuffer", lambda: self._release_framebuffer(fbo, layer)),))
+
+    def clear_target_layer(self, functions) -> bool:
+        """Clear the isolated TargetHUD layer and confirm its FBO release."""
+        return self._clear_framebuffer(functions, self.target_fbo, "target")
 
     def clear_scene_layers(
-        self,
-        functions,
-        layers: tuple[str, ...] = ("overlay", "dynamic", "target"),
+        self, functions, layers: tuple[str, ...] = ("overlay", "dynamic", "target"),
     ) -> bool:
-        """Atomically clear modal-owned UI FBOs on the OpenGL thread.
-
-        Event handlers only invalidate metadata.  Economy restoration invokes
-        this method from ``paintGL`` before rebuilding the normal HUD, so a
-        stale transparent dynamic layer can never be presented as a valid
-        cache.  A failed bind leaves restoration pending for the next frame.
-        """
-
-        mapping = {
-            "overlay": self.overlay_fbo,
-            "dynamic": self.dynamic_fbo,
-            "target": self.target_fbo,
-        }
-        for name in layers:
-            fbo = mapping.get(str(name))
-            if fbo is None or not fbo.bind():
-                return False
-            try:
-                self.clear_current(functions, transparent=True)
-            finally:
-                fbo.release()
+        """Clear modal storage; a bind or release rejection keeps restore pending."""
+        mapping = {"overlay": self.overlay_fbo, "dynamic": self.dynamic_fbo, "target": self.target_fbo}
         self._blur_valid = False
         self._treated_blur_valid = False
+        for name in layers:
+            if not self._clear_framebuffer(functions, mapping.get(str(name)), str(name)):
+                return False
         self._frame_glass_commands.clear()
         return True
 
     def begin_vision_layer(self, functions) -> bool:
         """Bind and clear the dedicated premultiplied vision wire layer."""
-        if self.vision_fbo is None or not self.vision_fbo.bind():
-            return False
-        self.clear_current(functions, transparent=True)
-        return True
-
-    def end_vision_layer(self) -> None:
-        if self.vision_fbo is not None:
-            self.vision_fbo.release()
-
-    def clear_vision_layer(self, functions) -> bool:
-        """Explicitly clear the vision FBO to transparent (bind, clear, release)."""
-        if self.vision_fbo is None or not self.vision_fbo.bind():
-            return False
-        try:
+        def begin() -> bool:
+            if self.vision_fbo is None or not self.vision_fbo.bind():
+                return False
             self.clear_current(functions, transparent=True)
             return True
-        finally:
-            self.vision_fbo.release()
+        accepted = self._run_pass("layer.begin.vision", begin,
+            on_reject=(("framebuffer", self.end_vision_layer),))
+        if not accepted:
+            self._frame_rejection = "vision framebuffer begin rejected"
+        return accepted
+
+    def end_vision_layer(self) -> bool:
+        return self._release_framebuffer(self.vision_fbo, "vision")
+
+    def clear_vision_layer(self, functions) -> bool:
+        """Clear the vision FBO and reject any unsuccessful release."""
+        return self._clear_framebuffer(functions, self.vision_fbo, "vision")
 
     def _upload_image_to_fbo(
         self,
@@ -594,6 +823,7 @@ class GpuFrameCompositor:
         functions.glActiveTexture(_GL_TEXTURE0)
 
     def begin_frame(self, *, rebuild_static_ui: bool = True) -> None:
+        self._frame_rejection = ""
         self._frame_glass_commands.clear()
         self._recording_static_glass = False
         self._glass_owner_stack[:] = [GlassOwner.HUD]
@@ -770,7 +1000,8 @@ class GpuFrameCompositor:
         functions.glDisable(_GL_DEPTH_TEST)
         functions.glDisable(_GL_SCISSOR_TEST)
         functions.glDisable(_GL_FRAMEBUFFER_SRGB)
-        self.blur_program.bind()
+        if self.blur_program.bind() is False:
+            return False
         functions.glActiveTexture(_GL_TEXTURE0)
         functions.glBindTexture(_GL_TEXTURE_2D, self.background_fbo.texture())
         functions.glUniform1i(self._uniform(self.blur_program, "sourceTex"), 0)
@@ -795,8 +1026,10 @@ class GpuFrameCompositor:
             self._uniform(self.blur_program, "includeOverlay"),
             1 if include_overlay else 0,
         )
-        self._draw_quad(functions, self.blur_program)
-        temp_fbo.release()
+        if not self._draw_quad(functions, self.blur_program):
+            return False
+        if temp_fbo.release() is False:
+            return False
 
         if not output_fbo.bind():
             self.blur_program.release()
@@ -806,9 +1039,11 @@ class GpuFrameCompositor:
         functions.glUniform1i(self._uniform(self.blur_program, "sourceTex"), 0)
         functions.glUniform1i(self._uniform(self.blur_program, "sourceMode"), 1)
         functions.glUniform2f(self._uniform(self.blur_program, "direction"), 0.0, 1.0)
-        self._draw_quad(functions, self.blur_program)
+        if not self._draw_quad(functions, self.blur_program):
+            return False
         self.blur_program.release()
-        output_fbo.release()
+        if output_fbo.release() is False:
+            return False
         return True
 
     def _render_jello_blur_pair(
@@ -844,7 +1079,8 @@ class GpuFrameCompositor:
         functions.glDisable(_GL_DEPTH_TEST)
         functions.glDisable(_GL_SCISSOR_TEST)
         functions.glDisable(_GL_FRAMEBUFFER_SRGB)
-        program.bind()
+        if program.bind() is False:
+            return False
         functions.glActiveTexture(_GL_TEXTURE0)
         functions.glBindTexture(_GL_TEXTURE_2D, self.background_fbo.texture())
         functions.glUniform1i(self._uniform(program, "sourceTex"), 0)
@@ -869,8 +1105,10 @@ class GpuFrameCompositor:
             1.0 / max(1.0, float(self._size.width())),
             1.0 / max(1.0, float(self._size.height())),
         )
-        self._draw_quad(functions, program)
-        temp_fbo.release()
+        if not self._draw_quad(functions, program):
+            return False
+        if temp_fbo.release() is False:
+            return False
 
         if not output_fbo.bind():
             program.release()
@@ -880,9 +1118,11 @@ class GpuFrameCompositor:
         functions.glUniform1i(self._uniform(program, "sourceTex"), 0)
         functions.glUniform1i(self._uniform(program, "sourceMode"), 1)
         functions.glUniform2f(self._uniform(program, "direction"), 0.0, 1.0)
-        self._draw_quad(functions, program)
+        if not self._draw_quad(functions, program):
+            return False
         program.release()
-        output_fbo.release()
+        if output_fbo.release() is False:
+            return False
         return True
 
     def prepare_blur(self, functions, *, background_changed: bool) -> bool:
@@ -900,7 +1140,8 @@ class GpuFrameCompositor:
         ):
             return False
         started = time.perf_counter()
-        try:
+
+        def render() -> bool:
             self._blur_valid = self._render_blur_pair(
                 functions,
                 temp_fbo=self.blur_temp_fbo,
@@ -910,12 +1151,19 @@ class GpuFrameCompositor:
             )
             self.last_blur_ms = (time.perf_counter() - started) * 1000.0
             return self._blur_valid
-        except Exception as exc:
-            self.last_error = str(exc)
+
+        accepted = self._run_pass(
+            "blur", render,
+            on_reject=(
+                ("program", self.blur_program.release),
+                ("temporary", self.blur_temp_fbo.release),
+                ("destination", self.blur_fbo.release),
+            ),
+            cleanup=(("qt-texture", lambda: self._restore_qt_texture_state(functions)),),
+        )
+        if not accepted:
             self._blur_valid = False
-            return False
-        finally:
-            self._restore_qt_texture_state(functions)
+        return accepted
 
     def prepare_treated_backdrop(self, functions, *, background_changed: bool) -> bool:
         """Blur the already-composited native HUD for modal overlay backdrops."""
@@ -936,7 +1184,8 @@ class GpuFrameCompositor:
         ):
             return False
         started = time.perf_counter()
-        try:
+
+        def render() -> bool:
             if treatment.blur_kernel == "jello_box20":
                 # RenderUtil2.setShaderParamsRounded() feeds an integer radius
                 # directly to Minecraft's full-resolution post shader.  It is
@@ -959,12 +1208,21 @@ class GpuFrameCompositor:
                 )
             self.last_blur_ms += (time.perf_counter() - started) * 1000.0
             return self._treated_blur_valid
-        except Exception as exc:
-            self.last_error = str(exc)
+
+        accepted = self._run_pass(
+            "backdrop.blur", render,
+            on_reject=(
+                ("program", self.blur_program.release),
+                ("jello-program", lambda: self.jello_blur_program.release()
+                 if self.jello_blur_program is not None else None),
+                ("temporary", self.treated_blur_temp_fbo.release),
+                ("destination", self.treated_blur_fbo.release),
+            ),
+            cleanup=(("qt-texture", lambda: self._restore_qt_texture_state(functions)),),
+        )
+        if not accepted:
             self._treated_blur_valid = False
-            return False
-        finally:
-            self._restore_qt_texture_state(functions)
+        return accepted
 
     def render_glass(
         self,
@@ -988,7 +1246,8 @@ class GpuFrameCompositor:
         ):
             return False
         started = time.perf_counter()
-        try:
+
+        def render() -> bool:
             if not destination_fbo.bind():
                 return False
             self.clear_current(functions, transparent=True)
@@ -1000,7 +1259,8 @@ class GpuFrameCompositor:
             if owners is not None:
                 glass_commands = tuple(command for command in glass_commands if command.owner in owners)
             if not glass_commands:
-                destination_fbo.release()
+                if destination_fbo.release() is False:
+                    return False
                 self.last_glass_ms = (time.perf_counter() - started) * 1000.0
                 return True
 
@@ -1008,7 +1268,8 @@ class GpuFrameCompositor:
             functions.glBlendEquation(_GL_FUNC_ADD)
             functions.glBlendFunc(_GL_ONE, _GL_ONE_MINUS_SRC_ALPHA)
             functions.glEnable(_GL_SCISSOR_TEST)
-            self.glass_program.bind()
+            if self.glass_program.bind() is False:
+                return False
             functions.glActiveTexture(_GL_TEXTURE0)
             functions.glBindTexture(_GL_TEXTURE_2D, self.background_fbo.texture())
             functions.glUniform1i(self._uniform(self.glass_program, "backgroundTex"), 0)
@@ -1110,27 +1371,31 @@ class GpuFrameCompositor:
                 functions.glUniform1f(self._uniform(self.glass_program, "depthEffect"), float(command.depth_effect))
                 functions.glUniform1f(self._uniform(self.glass_program, "frostAmount"), float(command.frost_amount))
                 functions.glUniform1f(self._uniform(self.glass_program, "vibrancyAmount"), float(command.vibrancy_amount))
-                self._draw_quad(functions, self.glass_program)
+                if not self._draw_quad(functions, self.glass_program):
+                    return False
 
             self.glass_program.release()
             functions.glDisable(_GL_SCISSOR_TEST)
             functions.glDisable(_GL_BLEND)
-            destination_fbo.release()
+            if destination_fbo.release() is False:
+                return False
             self.last_glass_ms = (time.perf_counter() - started) * 1000.0
             return True
-        except Exception as exc:
-            self.last_error = str(exc)
-            try:
-                functions.glDisable(_GL_SCISSOR_TEST)
-                functions.glDisable(_GL_BLEND)
-                destination_fbo.release()
-            except Exception:
-                pass
-            return False
-        finally:
-            self._restore_qt_texture_state(functions)
+
+        return self._run_pass(
+            "glass", render,
+            on_reject=(
+                ("program", self.glass_program.release),
+                ("scissor", lambda: functions.glDisable(_GL_SCISSOR_TEST)),
+                ("blend", lambda: functions.glDisable(_GL_BLEND)),
+                ("destination", destination_fbo.release),
+            ),
+            cleanup=(("qt-texture", lambda: self._restore_qt_texture_state(functions)),),
+        )
 
     def present(self, functions, default_fbo: int) -> bool:
+        if self.frame_rejected:
+            return False
         if not self.available or self.present_program is None or any(
             fbo is None
             for fbo in (
@@ -1159,7 +1424,7 @@ class GpuFrameCompositor:
         assert self.vision_fbo is not None
         assert self.dynamic_fbo is not None
         assert self.target_fbo is not None
-        try:
+        def render() -> bool:
             started = time.perf_counter()
             functions.glBindFramebuffer(_GL_FRAMEBUFFER, default_fbo)
             functions.glViewport(0, 0, self._size.width(), self._size.height())
@@ -1169,7 +1434,8 @@ class GpuFrameCompositor:
             functions.glDisable(_GL_FRAMEBUFFER_SRGB)
             functions.glClearColor(0.0, 0.0, 0.0, 1.0)
             functions.glClear(_GL_COLOR_BUFFER_BIT)
-            self.present_program.bind()
+            if self.present_program.bind() is False:
+                return False
             for unit, name, texture_id in (
                 (0, "backgroundTex", self.background_fbo.texture()),
                 (1, "controlTex", self.control_fbo.texture()),
@@ -1202,27 +1468,44 @@ class GpuFrameCompositor:
                 self._uniform(self.present_program, "backdropDimAlpha"),
                 float(self._backdrop_treatment.dim_alpha if self._backdrop_treatment.active else 0.0),
             )
-            self._draw_quad(functions, self.present_program)
+            if not self._draw_quad(functions, self.present_program):
+                return False
             self.present_program.release()
             self.last_present_ms = (time.perf_counter() - started) * 1000.0
             return True
-        except Exception as exc:
-            self.last_error = str(exc)
-            return False
-        finally:
-            # Present binds units 0..6. Always leave unit 0 active so Qt's
-            # next glyph-atlas upload cannot accidentally target another unit.
-            self._restore_qt_texture_state(functions)
 
-    def _draw_quad(self, functions, program: QOpenGLShaderProgram) -> None:
-        self.vertex_array.bind()
-        self.vertex_buffer.bind()
-        program.enableAttributeArray(0)
-        program.setAttributeBuffer(0, _GL_FLOAT, 0, 2, 2 * 4)
-        functions.glDrawArrays(_GL_TRIANGLE_STRIP, 0, 4)
-        program.disableAttributeArray(0)
-        self.vertex_buffer.release()
-        self.vertex_array.release()
+        return self._run_pass(
+            "present", render,
+            on_reject=(("program", self.present_program.release),),
+            # Present binds multiple texture units. Leave unit zero active so
+            # Qt's next glyph-atlas upload cannot target a compositor unit.
+            cleanup=(("qt-texture", lambda: self._restore_qt_texture_state(functions)),),
+        )
+
+    def _draw_quad(self, functions, program: QOpenGLShaderProgram) -> bool:
+        failure = None
+        accepted = False
+        try:
+            self.vertex_array.bind()  # Qt VAO bind is void; VBO bind is bool.
+            if self.vertex_buffer.bind() is not False:
+                program.enableAttributeArray(0)
+                program.setAttributeBuffer(0, _GL_FLOAT, 0, 2, 2 * 4)
+                functions.glDrawArrays(_GL_TRIANGLE_STRIP, 0, 4)
+                accepted = True
+        except Exception as exc:
+            failure = exc
+        finally:
+            # A partial bind or one failed release cannot strand the other
+            # GL state owners before QPainter's compatibility fallback.
+            cleanup_accepted, cleanup = _attempt_gl_cleanup((
+                ("quad.cleanup.attribute", lambda: program.disableAttributeArray(0)),
+                ("quad.cleanup.buffer", self.vertex_buffer.release),
+                ("quad.cleanup.array", self.vertex_array.release),
+            ))
+        errors = (("", failure), *cleanup) if failure is not None else cleanup
+        if errors:
+            raise _GlCleanupFailure(errors) from (failure or errors[0][1])
+        return accepted and cleanup_accepted
 
     @staticmethod
     def _compile(vertex: str, fragment: str) -> QOpenGLShaderProgram:
@@ -1668,22 +1951,32 @@ class GpuFrameCompositor:
         self._treated_blur_valid = False
 
     def release(self) -> None:
-        self._destroy_fbos()
-        if self.vertex_buffer.isCreated():
-            self.vertex_buffer.destroy()
-        if self.vertex_array.isCreated():
-            self.vertex_array.destroy()
-        for program in (
-            self.present_program,
-            self.blur_program,
-            self.jello_blur_program,
-            self.glass_program,
-        ):
+        """Retire every independent GL owner, retaining any failed program."""
+        self.available = False
+
+        def destroy_buffer() -> None:
+            if self.vertex_buffer.isCreated():
+                self.vertex_buffer.destroy()
+
+        def destroy_array() -> None:
+            if self.vertex_array.isCreated():
+                self.vertex_array.destroy()
+
+        def release_program(name: str) -> None:
+            program = getattr(self, name)
             if program is not None:
                 program.removeAllShaders()
-        self.present_program = None
-        self.blur_program = None
-        self.jello_blur_program = None
-        self.glass_program = None
+                setattr(self, name, None)
+
+        actions = (
+            ("release.framebuffers", self._destroy_fbos),
+            ("release.vertex-buffer", destroy_buffer),
+            ("release.vertex-array", destroy_array),
+            *((f"release.{name}", lambda name=name: release_program(name)) for name in (
+                "present_program", "blur_program", "jello_blur_program", "glass_program",
+            )),
+        )
+        _, failures = _attempt_gl_cleanup(actions)
         self._uniform_cache.clear()
-        self.available = False
+        if failures:
+            raise _GlCleanupFailure(failures) from failures[0][1]

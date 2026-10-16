@@ -56,6 +56,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from ..protocol import crc8, crc16
+from .resource_close import close_resource
 
 # --- 命令码（《2026 通信协议》表 1-5 / 表 1-43） ---
 CC_CMD_ROBOT_INTERACT = 0x0302     # 自定义控制器 <-> 机器人，30 字节，<=30Hz，图传链路
@@ -416,6 +417,7 @@ class AsyncCustomControllerLink:
         self._release_due = 0.0
         self._closing = False
         self._stopped = False
+        self._close_failed = False
         self._serial = None
         self._write_bytes = write_bytes
         self._active = None
@@ -433,6 +435,15 @@ class AsyncCustomControllerLink:
     @property
     def closed(self) -> bool:
         return self._stopped
+
+    @property
+    def port_handoff_ready(self) -> bool:
+        """Proof for another owner: neutral, no retained handle, worker gone."""
+        return bool(
+            self.closed and not self.worker_alive
+            and self._serial is None and not self._close_failed
+            and self.wire_neutral and not self.release_pending
+        )
 
     def _queue(self, cmd_id, payload, *, neutral=False):
         with self._condition:
@@ -483,7 +494,7 @@ class AsyncCustomControllerLink:
         with self._condition:
             if self.wire_neutral and not self.release_pending:
                 return True, "neutral"
-            if not self.release_pending and not self._stopped:
+            if not self.release_pending and not self._closing:
                 self._request_release()
             return False, self.last_error or "CC neutral release pending"
 
@@ -511,8 +522,13 @@ class AsyncCustomControllerLink:
 
     def close(self):
         """Invalidate motion and request best-effort neutral; never wait on IO."""
+        import threading
         with self._condition:
             if self._closing:
+                if not self.closed and not self._thread.is_alive():
+                    self._thread = threading.Thread(
+                        target=self._finalize_close, name="cc-close-retry", daemon=True)
+                    self._thread.start()
                 return
             self._closing = True
             self._pending = None
@@ -523,10 +539,11 @@ class AsyncCustomControllerLink:
             self._condition.notify()
 
     def wait_closed(self, timeout=2.5):
-        """Ordered application shutdown/test only, never a frame operation."""
+        """Background/test cleanup only; None explicitly waits without a deadline."""
         import threading
-        if self._thread is not threading.current_thread():
-            self._thread.join(max(0.0, float(timeout)))
+        thread = self._thread
+        if thread is not threading.current_thread():
+            thread.join(None if timeout is None else max(0.0, float(timeout)))
         return self.closed
 
     def _valid_active(self):
@@ -558,12 +575,35 @@ class AsyncCustomControllerLink:
         return self._serial.write(frame)
 
     def _close_serial(self):
-        handle, self._serial = self._serial, None
+        handle = self._serial
         if handle is not None:
-            try:
-                handle.close()
-            except Exception:
-                pass
+            close_resource(handle)
+            self._serial = None
+
+    def _record_close_failure(self, exc):
+        with self._condition:
+            self._close_failed = True
+            self._closing = True
+            self._pending = None
+            self.faulted = True
+            self.last_error = f"CC close unconfirmed; explicit close retry required: {exc}"
+            self.fault_reason = self.last_error
+            self._condition.notify_all()
+
+    def _finalize_close(self):
+        """Runs only on the sole writer or an explicit background close retry."""
+        with self._condition:
+            self._closing = True
+            self._pending = None
+        try:
+            self._close_serial()
+        except Exception as exc:
+            self._record_close_failure(exc)
+        else:
+            with self._condition:
+                self._close_failed = False
+                self._stopped = True
+                self._condition.notify_all()
 
     def _run(self):
         try:
@@ -643,9 +683,11 @@ class AsyncCustomControllerLink:
                         # while the failing write was in flight.
                         self._pending = None
                 if not ok:
-                    self._close_serial()
+                    try:
+                        self._close_serial()
+                    except Exception as exc:
+                        self._record_close_failure(exc)
+                        return
         finally:
-            self._close_serial()
-            with self._condition:
-                self._stopped = True
-                self._condition.notify_all()
+            if not self._close_failed:
+                self._finalize_close()

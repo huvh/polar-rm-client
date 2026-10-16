@@ -26,11 +26,13 @@ from PySide6.QtWidgets import QApplication
 
 from rm_client.model import LEGACY_GUI_MODES, PRIMARY_GUI_MODE, build_default_registry
 from rm_client.ui.clickgui_gpu import ClickGuiDrawList
+from rm_client.ui.gui_cache import ClickGuiLayerCache
 from rm_client.ui.jello_clickgui import JelloClickGuiRenderer, JelloClickGuiState
 from rm_client.ui.polar.clickgui_frame import ClickGuiFrame, build_clickgui_frame
 from rm_client.ui.polar.mixins.clickgui_builders_mixin import ClickGuiBuildersMixin
 from rm_client.ui.polar.primitives import Hotspot
 from rm_client.ui.polar_app import PolarRMWindow
+from window_lifecycle_helpers import close_window_safely, settle_window_lifecycle
 
 
 APP = QApplication.instance() or QApplication([])
@@ -344,7 +346,19 @@ class OverlayIntegrationTests(unittest.TestCase):
         self.assertEqual(actual, expected)
         self.assertEqual(self.host.hotspots, expected_host.hotspots)
         self.assertEqual(self.host.gui_scroll_viewports, expected_host.gui_scroll_viewports)
-        self.assertEqual(self.host.registry.get("ClickGui").get_setting("Render Backend").value, "Compatibility Painter")
+        self.assertEqual(self.host.registry.get("ClickGui").get_setting("Render Backend").value, "Unified GPU")
+
+    def test_transient_gpu_failure_recovers_next_frame_without_changing_preference(self):
+        setting = self.host.registry.get("ClickGui").get_setting("Render Backend")
+        self.host.clickgui_gpu.render.side_effect = [False, False, True]
+        self.paint()
+        self.assertEqual(setting.value, "Unified GPU")
+        frame = build_clickgui_frame(self.host, 640, 400, 1.0)
+        self.paint(gpu_frame=frame, gpu_atlas_prepared=True)
+        self.assertEqual(self.host.clickgui_gpu.render.call_count, 3)
+        self.assertEqual(setting.value, "Unified GPU")
+        self.assertEqual(self.host.hotspots, list(frame.hotspots))
+        self.assertEqual(self.host.gui_scroll_viewports, list(frame.scroll_viewports))
 
     def test_previous_drawlist_and_hotspot_kwargs_remain_supported(self):
         commands = self.host.build_gpu_clickgui(640, 400, 1.0)
@@ -357,9 +371,65 @@ class OverlayIntegrationTests(unittest.TestCase):
         self.host.clickgui_gpu.prepare_frame.assert_not_called()
 
 
+class CachedLayerRecoveryTests(unittest.TestCase):
+    def test_failed_cache_build_restores_painter_and_preserves_preference_for_retry(self):
+        host = Host()
+        host.gui_cache = ClickGuiLayerCache()
+        host.devicePixelRatioF = lambda: 1.0
+        host.setting_mode = lambda module, name, default: module.get_setting(name).value
+        setting = host.registry.get("ClickGui").get_setting("Render Backend")
+        rect = QRectF(12, 18, 100, 70)
+        layers = []
+        calls = []
+        def build(painter, bounds):
+            calls.append(bounds)
+            if len(calls) == 1:
+                layers.append(painter)
+                raise TypeError("bad cache geometry")
+            painter.fillRect(bounds, QColor("#336699"))
+        image = QImage(160, 120, QImage.Format.Format_ARGB32_Premultiplied)
+        image.fill(0)
+        painter = QPainter(image)
+        try:
+            with self.assertLogs("rm_client.ui.polar_app", level="ERROR"):
+                PolarRMWindow.draw_gui_cached_layer(host, painter, rect, ("key",), build)
+            self.assertEqual(setting.value, "Unified GPU")
+            self.assertFalse(layers[0].isActive())
+            self.assertTrue(painter.transform().isIdentity())
+            self.assertEqual(len(calls), 2)
+            first = image.copy()
+            image.fill(0)
+            PolarRMWindow.draw_gui_cached_layer(host, painter, rect, ("key",), build)
+            self.assertEqual(len(calls), 3)
+            self.assertEqual(image, first)
+            PolarRMWindow.draw_gui_cached_layer(host, painter, rect, ("key",), build)
+            self.assertEqual(len(calls), 3, "successful retry should be cached")
+        finally:
+            painter.end()
+
+
+class RendererInitializationContractTests(unittest.TestCase):
+    def test_context_failure_then_reinitialization_preserves_saved_renderer_choice(self):
+        registry = build_default_registry()
+        setting = registry.get("ClickGui").get_setting("Render Backend")
+        for preference in ("Unified GPU", "Compatibility Painter"):
+            with self.subTest(preference=preference):
+                setting.value = preference
+                host = NS(registry=registry, context=lambda: None)
+                for name in ("gpu_compositor", "vision_wire_gpu", "island_icon_gpu", "quick_action_wheel_gpu", "startup_gpu", "hud_video_gpu"):
+                    setattr(host, name, NS(initialize=Mock(return_value=True)))
+                host.clickgui_gpu = NS(initialize=Mock(side_effect=[False, True]))
+                PolarRMWindow.initializeGL(host)
+                self.assertEqual(setting.value, preference)
+                PolarRMWindow.initializeGL(host)
+                self.assertEqual(setting.value, preference)
+                self.assertEqual(host.clickgui_gpu.initialize.call_count, 2)
+
+
 class FullWindowLegacyParityTests(unittest.TestCase):
     def test_all_real_legacy_builders_match_compatibility_api(self):
         window = PolarRMWindow()
+        settle_window_lifecycle(window, APP)
         # Quiesce timers and avoid writing the test's UI state into config.
         for timer in window.findChildren(QTimer):
             timer.stop()
@@ -391,7 +461,7 @@ class FullWindowLegacyParityTests(unittest.TestCase):
                         self.assertGreater(len(frame.commands.commands), 20)
                         self.assertGreater(len(frame.hotspots), 1)
         finally:
-            window.close()
+            close_window_safely(window, APP)
             window.deleteLater()
 
 

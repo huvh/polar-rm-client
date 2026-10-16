@@ -1,16 +1,14 @@
 """Local audio output preferences. No paths/configuration in the CS2 install."""
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from functools import lru_cache
 import json
-import os
-from pathlib import Path
-import tempfile
 import weakref
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtMultimedia import QMediaDevices
 from .runtime_paths import RuntimePaths
+from .configuration.files import FileSnapshot, atomic_write_bytes
 
 POOLS = weakref.WeakSet()
 
@@ -66,17 +64,66 @@ def cue_volume(volume):
     return max(0.0, min(100.0, float(volume))) * prefs.master_volume / 100.0
 
 
-def save_audio(prefs):
-    prefs = validate_audio(asdict(prefs))
-    path = audio_path(); path.parent.mkdir(parents=True, exist_ok=True)
-    fd, name = tempfile.mkstemp(prefix="audio-", suffix=".tmp", dir=path.parent)
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as stream:
-            json.dump(asdict(prefs), stream, ensure_ascii=False, indent=2)
-            stream.flush(); os.fsync(stream.fileno())
-        os.replace(name, path)
-    finally:
-        Path(name).unlink(missing_ok=True)
-    current_audio.cache_clear(); selected_output.cache_clear()
+class AudioPreferenceRefreshError(ValueError):
+    def __init__(self, errors):
+        self.errors = tuple(errors)
+        super().__init__("Audio preference refresh failed: " + "; ".join(str(error) for error in self.errors))
+
+
+def _refresh_audio_pools():
+    current_audio.cache_clear()
+    selected_output.cache_clear()
+    errors = []
     for pool in list(POOLS):
-        pool.apply_audio_preferences()
+        try:
+            pool.apply_audio_preferences()
+        except Exception as error:
+            errors.append(error)
+    if errors:
+        raise AudioPreferenceRefreshError(errors)
+
+
+@dataclass
+class AudioPreferenceChange:
+    """A validated disk/cache/pool participant for a settings transaction."""
+    preferences: AudioPreferences
+    previous: FileSnapshot
+    _written: bool = field(default=False, init=False)
+
+    def commit(self):
+        payload = json.dumps(asdict(self.preferences), ensure_ascii=False, indent=2).encode("utf-8")
+        atomic_write_bytes(self.previous.path, payload)
+        self._written = True
+        _refresh_audio_pools()
+
+    def rollback(self):
+        if not self._written:
+            return
+        errors = []
+        for restore in (self.previous.restore, _refresh_audio_pools):
+            try:
+                restore()
+            except Exception as error:
+                errors.append(error)
+        if errors:
+            raise AudioPreferenceRefreshError(errors)
+        self._written = False
+
+
+def prepare_audio_change(prefs):
+    """Validate and snapshot without changing the file, cache, or devices."""
+    prefs = validate_audio(asdict(prefs))
+    return AudioPreferenceChange(prefs, FileSnapshot.capture(audio_path()))
+
+
+def save_audio(prefs):
+    """Standalone compatibility entry point with the same rollback contract."""
+    change = prepare_audio_change(prefs)
+    try:
+        change.commit()
+    except Exception as cause:
+        try:
+            change.rollback()
+        except Exception as restore_error:
+            raise ValueError(f"Audio preference update failed: {cause}; rollback failed: {restore_error}") from cause
+        raise

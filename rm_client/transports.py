@@ -7,6 +7,9 @@ import threading
 import time
 from typing import Callable
 
+from .backend.resource_close import close_resource
+from .backend.video_source import VideoStopStatus
+
 
 class FrameAssembler:
     """重组 SharkDataSever 的 UDP 分片包。
@@ -195,6 +198,8 @@ class _UDPVideoSession:
     stopped: threading.Event = field(default_factory=threading.Event)
     sock: socket.socket | None = None
     thread: threading.Thread | None = None
+    close_lock: threading.Lock = field(default_factory=threading.Lock)
+    close_error: str = ""
 
 
 @dataclass
@@ -211,10 +216,12 @@ class UDPVideoReceiver:
     _assembler: FrameAssembler = field(default_factory=FrameAssembler, init=False)
     _receiver_lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
     _session: _UDPVideoSession | None = field(default=None, init=False, repr=False)
+    _stop_worker: threading.Thread | None = field(default=None, init=False, repr=False)
 
     def start(self) -> None:
         with self._receiver_lock:
-            if self.running:
+            if (self.running or self._session is not None or self._stop_in_progress_locked()
+                    or (self._thread is not None and self._thread.is_alive())):
                 return
             # Socket, frame-ID epoch and stop signal are never reused by a
             # replacement receive worker, even if an old callback is delayed.
@@ -228,26 +235,137 @@ class UDPVideoReceiver:
                 name="udp-video", daemon=True,
             )
             self._thread = session.thread
-            session.thread.start()
+            try:
+                session.thread.start()
+            except Exception as exc:
+                self.running = False
+                session.stopped.set()
+                self.last_error = f"UDP receiver admission failed: {type(exc).__name__}: {exc}"
+                # A late-raising start wrapper may already have admitted a
+                # receiver creating its socket. Keep that session and thread
+                # until strict close observes its late native ownership.
+                if session.thread.ident is None:
+                    self._session = self._thread = None
+                raise
+
+    def _stop_in_progress_locked(self) -> bool:
+        return self._stop_worker is not None and self._stop_worker.is_alive()
+
+    def request_stop(self) -> None:
+        """Invalidate the receive epoch and close only its captured owner off-thread."""
+        with self._receiver_lock:
+            session = self._session
+            self.running = False
+            if session is None:
+                return
+            session.stopped.set()
+            if self._stop_in_progress_locked():
+                return
+            worker = threading.Thread(target=self._finish_requested_stop, args=(session,),
+                                      name="udp-video-stop", daemon=True)
+            self._stop_worker = worker
+            try:
+                worker.start()
+            except Exception as exc:
+                if worker.ident is None:
+                    self._stop_worker = None
+                self.last_error = f"UDP stop worker failed: {type(exc).__name__}: {exc}"
+                raise
+
+    def _finish_requested_stop(self, session: _UDPVideoSession) -> None:
+        self._close_session_socket(session)
+        if session.thread is not None and session.thread is not threading.current_thread():
+            session.thread.join()
+        # A socket created after our first close attempt is still attached to
+        # this session. The receiver's finally path closes it or retains its
+        # failed ownership; no later receiver can be replaced by this worker.
+        self._release_closed_session(session)
 
     def stop(self) -> None:
         with self._receiver_lock:
             session = self._session
-            self._session = None
             self.running = False
-            self._socket = None
-            self._thread = None
             if session is not None:
                 session.stopped.set()
         if session is None:
             return
-        if session.sock is not None:
-            try:
-                session.sock.close()
-            except OSError:
-                pass
+        self._close_session_socket(session)
         if session.thread is not None and session.thread is not threading.current_thread():
             session.thread.join(timeout=0.6)
+        self._release_closed_session(session)
+
+    @property
+    def stop_pending(self) -> bool:
+        with self._receiver_lock:
+            return (self._stop_in_progress_locked()
+                    or (self._session is not None and self._session.stopped.is_set()))
+
+    @property
+    def stop_status(self) -> VideoStopStatus:
+        with self._receiver_lock:
+            session = self._session
+            stopping = self._stop_in_progress_locked()
+            retired = session is not None and session.stopped.is_set()
+            # Never take close_lock here: a native close can be blocked while
+            # holding it and needs receiver_lock to publish its result.
+            # A blocked receiver may need socket.close() from a newly
+            # admitted stopper. The data thread alone is not a cleanup attempt.
+            inflight = stopping or bool(retired and session.close_lock.locked())
+            errors = (session.close_error,) if retired and session.close_error else ()
+            return VideoStopStatus(bool(retired or stopping), inflight, errors)
+
+    @property
+    def cleanup_complete(self) -> bool:
+        with self._receiver_lock:
+            return (self._session is None and self._socket is None
+                    and not self._stop_in_progress_locked()
+                    and (self._thread is None or not self._thread.is_alive()))
+
+    def wait_closed(self, timeout: float | None = None) -> bool:
+        """Worker/CLI only: finish an existing owner, retrying failed close."""
+        deadline = None if timeout is None else time.monotonic() + max(0.0, timeout)
+        with self._receiver_lock:
+            session, worker, stopper = self._session, self._thread, self._stop_worker
+        for owner in (stopper, worker):
+            if owner is not None and owner is not threading.current_thread():
+                remaining = None if deadline is None else max(0.0, deadline - time.monotonic())
+                owner.join(remaining)
+            if owner is not None and owner.is_alive():
+                return False
+        if session is not None:
+            self._close_session_socket(session)
+            self._release_closed_session(session)
+        return self.cleanup_complete
+
+    def _close_session_socket(self, session: _UDPVideoSession) -> None:
+        with session.close_lock:
+            sock = session.sock
+            if sock is None:
+                return
+            try:
+                close_resource(sock)
+            except Exception as exc:
+                session.close_error = f"UDP socket close unconfirmed: {type(exc).__name__}: {exc}"
+                with self._receiver_lock:
+                    self.last_error = session.close_error
+                return
+            session.sock = None
+            session.close_error = ""
+            with self._receiver_lock:
+                if self._session is session:
+                    self._socket = None
+
+    def _release_closed_session(self, session: _UDPVideoSession) -> None:
+        worker = session.thread
+        if session.sock is not None or (worker is not None and worker.is_alive()
+                                       and worker is not threading.current_thread()):
+            return
+        with self._receiver_lock:
+            if self._session is session:
+                self._session = None
+                self._socket = None
+                if worker is None or not worker.is_alive():
+                    self._thread = None
 
     def _run(self, session: _UDPVideoSession, host: str, port: int,
              on_frame: Callable[[bytes], None] | None) -> None:
@@ -256,9 +374,9 @@ class UDPVideoReceiver:
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             # Publish before bind so stop also closes a socket still starting.
             with self._receiver_lock:
+                session.sock = sock
                 if self._session is not session or session.stopped.is_set():
                     return
-                session.sock = sock
                 self._socket = sock
             sock.bind((host, port))
             sock.settimeout(0.2)
@@ -284,16 +402,11 @@ class UDPVideoReceiver:
             # A late worker owns only its captured socket. It cannot close or
             # mark unavailable a newly started receiver.
             session.stopped.set()
-            if sock is not None:
-                try:
-                    sock.close()
-                except OSError:
-                    pass
+            self._close_session_socket(session)
             with self._receiver_lock:
                 if self._session is session:
                     self.running = False
-                    self._socket = None
-                    self._session = None
+            self._release_closed_session(session)
 
 
 class CameraFeed:

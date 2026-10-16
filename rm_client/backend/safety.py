@@ -40,6 +40,23 @@ class QualificationToken:
     expires_at: float
 
 
+@dataclass(frozen=True, slots=True)
+class InputClearTraceFrame:
+    filename: str
+    function: str
+    line_number: int
+
+
+@dataclass(frozen=True, slots=True)
+class InputClearFailure:
+    """Bounded observer evidence without retained frames, locals, or payloads."""
+
+    reason: str
+    exception_type: str
+    frames: tuple[InputClearTraceFrame, ...]
+    trace_truncated: bool
+
+
 class OfficialSafety:
     """Gate all real control output while keeping mock diagnostics usable.
 
@@ -69,6 +86,32 @@ class OfficialSafety:
         self.last_transition_at = time.perf_counter()
         self.control_generation = 0
         self.input_clear_hook: Callable[[str], None] | None = None
+        self.input_clear_failure_count = 0
+        self._input_clear_failures: tuple[InputClearFailure, ...] = ()
+
+    @property
+    def input_clear_failures(self) -> tuple[InputClearFailure, ...]:
+        """Latest eight failures; successful delivery never erases prior evidence."""
+        return self._input_clear_failures
+
+    def _record_input_clear_failure(self, reason: str, error: Exception) -> None:
+        # Walk at most twelve frames, without linecache/source I/O or logging
+        # handlers on this safety-critical path. Never retain exception objects.
+        frames = []
+        trace = error.__traceback__
+        while trace is not None and len(frames) < 12:
+            code = trace.tb_frame.f_code
+            frames.append(InputClearTraceFrame(code.co_filename[:512], code.co_name[:128], trace.tb_lineno))
+            trace = trace.tb_next
+        failure = InputClearFailure(
+            reason[:256] if isinstance(reason, str) else "<invalid clear reason>",
+            f"{type(error).__module__}.{type(error).__qualname__}"[:256],
+            tuple(frames), trace is not None,
+        )
+        self.input_clear_failure_count += 1
+        # Immutable replacement also isolates the DT7 worker's shallow policy
+        # snapshot: recording there cannot mutate the owner's diagnostics.
+        self._input_clear_failures = (*self._input_clear_failures[-7:], failure)
 
     def _notify_input_clear(self, reason: str) -> None:
         hook = self.input_clear_hook
@@ -76,9 +119,9 @@ class OfficialSafety:
             return
         try:
             hook(str(reason))
-        except Exception:
+        except Exception as error:
             # Safety state transitions must never depend on diagnostics/UI.
-            pass
+            self._record_input_clear_failure(reason, error)
 
     def configure(
         self,

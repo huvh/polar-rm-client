@@ -6,7 +6,6 @@ deliberately excluded: a preferences page must never act as an Arm shortcut.
 """
 from __future__ import annotations
 
-import math
 from PySide6.QtCore import Qt, QEvent, QObject
 from PySide6.QtGui import QFont, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
@@ -15,149 +14,23 @@ from PySide6.QtWidgets import (
     QSlider, QTabWidget, QVBoxLayout, QWidget,
 )
 
-from ..control import validate_control_binds
-from ..model import CONTROL_BIND_OPTIONS, MODULE_BIND_OPTIONS, MODULE_RESERVED_KEYS, CONTROL_SLOT_ORDER, build_default_registry, Setting
+from ..configuration.preferences import PreferenceCapabilities, prepare_preference_draft
+from ..configuration.registry import SettingId
+from ..configuration.transactions import ConfigurationApplyError, apply_configuration_transaction
+from ..emergency_actions import request_emergency_stop
+from ..model import CONTROL_SLOT_ORDER, build_default_registry, Setting
 from .jello_locale import module_label, option_label, setting_label
 from .jello_widgets import JelloDialog, JelloCheckBox as QCheckBox, JelloComboBox as QComboBox, apply_jello_widgets, jello_font, use_jello_font_book
 from .settings_preparation import SettingsBuildQueue
+# Keep historical imports working while both dialogs use shared services.
+from .settings_application import (
+    PAGES, settings_specs, preference_capabilities, validate_draft, apply_registry_draft,
+)
+from .emergency_shortcut import install_estop_shortcut
 
 
-# None means all scalar preferences, never action/action_group controls.
-PAGES = {
-    "音频": (
-        ("AudioFeedback", None, True),
-        ("EliminationFX", ("Sound Enabled", "Sound Volume"), False),
-        ("HUD", ("Jello List Sound",), False),
-    ),
-    "游戏": (
-        ("MatchMode", None, False), ("RobotProfile", None, False),
-        ("AllianceProfile", None, False), ("MatchChat", None, True),
-        ("EconomyPanel", ("Shop Layout", "CS2 Feedback", "Confirm", "Hold Seconds"), False),
-        ("QuickActionWheel", None, True),
-    ),
-    "键盘 / 鼠标": (
-        ("RobotLink", ("Mouse Sensitivity", "Invert Mouse Y", "Mouse Wheel Scale",
-                       *(f"Bind {slot}" for slot in CONTROL_SLOT_ORDER)), False),
-    ),
-    "界面 / HUD": (
-        ("ClickGui", ("Scale", "Language", "Save Layout"), False),
-        ("HUD", None, True), ("UIScale", None, True),
-        ("TopMatchBar", None, True), ("MinecraftCombatHUD", None, False),
-        ("TacticalMap", None, True), ("CombatTargetHUD", None, True),
-        ("EliminationFX", ("Preset", "Element Visibility", "Scale", "Responsive Scale",
-                           "Anchor Policy", "X Offset", "Y Offset", "Kill Feed", "Card Icons"), True),
-    ),
-}
 _EXTRA_LABELS = {"Mouse Sensitivity": "鼠标灵敏度", "Invert Mouse Y": "反转鼠标垂直方向",
                  "Mouse Wheel Scale": "滚轮倍率"}
-
-
-def settings_specs(registry, page):
-    """Explicit capability allowlist; cannot expose TX/Mock/Arm gates by accident."""
-    for name, allowed, toggle in PAGES[page]:
-        module = registry.get(name)
-        if module is not None:
-            settings = [s for s in module.settings if s.kind in ("bool", "mode", "number")
-                        and (allowed is None or s.name in allowed)]
-            yield module, settings, toggle
-
-
-def validate_draft(host, draft, module_binds=None):
-    """Validate the entire page before touching any live preference or binding."""
-    allowed = {(module.name, setting.name)
-               for page in PAGES for module, settings, _ in settings_specs(host.registry, page)
-               for setting in settings}
-    for (name, key), value in draft.items():
-        module = host.registry.get(name)
-        setting = module.get_setting(key) if module else None
-        if setting is None:
-            raise ValueError(f"设置已不存在：{name}/{key}")
-        if (name, key) not in allowed:
-            raise ValueError(f"此页面不能更改设置：{name}/{key}")
-        if setting.kind == "bool" and type(value) is not bool:
-            raise ValueError("无效开关值：" + key)
-        if setting.kind == "mode" and value not in setting.options:
-            if not (key.startswith("Bind ") and isinstance(value, str)
-                    and value.lower() in {s.lower() for s in setting.options}):
-                raise ValueError("无效选项：" + key)
-        if setting.kind == "number":
-            if type(value) not in (int, float) or not math.isfinite(value):
-                raise ValueError("无效数值：" + key)
-            if not float(setting.min_value) <= value <= float(setting.max_value):
-                raise ValueError("数值超出范围：" + key)
-    binds = dict(host.control.binds)
-    for slot in CONTROL_SLOT_ORDER:
-        key = ("RobotLink", f"Bind {slot}")
-        if key in draft:
-            binds[slot] = draft[key]
-    binds = validate_control_binds(binds)
-    seen = {physical.lower(): slot for slot, physical in binds.items() if physical != "None"}
-    for name, value in (module_binds or {}).items():
-        if host.registry.get(name) is None or not isinstance(value, str):
-            raise ValueError(f"无效模块绑定：{name}")
-    for name, value in (module_binds or {}).items():
-        module = host.registry.get(name)
-        if value == module.keybind:
-            continue  # Historical priority overlaps are not silently rewritten.
-        if name in ("ClickGui", "MatchReadiness"):
-            raise ValueError(f"此页面不能更改模块绑定：{name}")
-        low = value.lower()
-        if low == "none":
-            continue
-        canonical_map_tab = name == "TacticalMap" and low == "tab"
-        if (value not in MODULE_BIND_OPTIONS and not canonical_map_tab) or (low in MODULE_RESERVED_KEYS and not canonical_map_tab):
-            raise ValueError(f"{value} 是保留键或不是可绑定按键")
-        if low in seen:
-            raise ValueError(f"{value} 已被驾驶协议槽 {seen[low]} 使用")
-        for other in host.registry.modules:
-            if other.name != name and (module_binds or {}).get(other.name, other.keybind).lower() == low:
-                raise ValueError(f"{value} 已被模块 {module_label(other.name, True)} 使用")
-    return binds
-
-
-def apply_registry_draft(host, draft, toggles=None, module_binds=None):
-    binds = validate_draft(host, draft, module_binds)
-    toggle_allowed = {module.name for page in PAGES
-                      for module, _, toggle in settings_specs(host.registry, page) if toggle}
-    for name, value in (toggles or {}).items():
-        if name not in toggle_allowed or type(value) is not bool:
-            raise ValueError(f"此页面不能更改模块开关：{name}")
-    # Save canonical physical names, including legacy SHIFT/CTRL casing, so
-    # mode-option validation on the next fresh launch preserves the same map.
-    draft = dict(draft)
-    for slot in CONTROL_SLOT_ORDER:
-        key = ("RobotLink", f"Bind {slot}")
-        if key in draft:
-            draft[key] = binds[slot]
-    changed = [(host.registry.get(name).get_setting(key), value)
-               for (name, key), value in draft.items()
-               if host.registry.get(name).get_setting(key).value != value]
-    # Apply a valid binding permutation atomically, not slot-by-slot rejection.
-    # Neutralize old held input first; never restore or arm after preferences.
-    host.backend.lock_control("settings applied")
-    host.control.release_all(host.state, host.registry)
-    host.control.clear_pending()
-    if not host.control.set_binds(binds):
-        raise ValueError("控制绑定无效")
-    link = host.registry.get("RobotLink")
-    for slot, physical in binds.items():
-        setting = link.get_setting(f"Bind {slot}") if link else None
-        if setting is not None:
-            setting.value = physical
-    for setting, value in changed:
-        setting.value = value
-    for setting, _ in changed:
-        host.after_setting_changed(setting)
-    for name, value in (toggles or {}).items():
-        module = host.registry.get(name)
-        if module.enabled != value:
-            host.registry.toggle_module(module, source="settings")
-    for name, value in (module_binds or {}).items():
-        host.registry.get(name).keybind = value
-    host.invalidate_gui_cache()
-    host.invalidate_transient_overlay_scene()
-    host.frame_scheduler.force()
-    host.auto_save_config()
 
 
 class BindingControl(QWidget):
@@ -431,10 +304,8 @@ class RegistrySettingsPage(QScrollArea):
             audio = validate_audio(data)
         apply_registry_draft(self.host, draft,
                              {key[1]: value for key, value in edits.items() if key[0] == "toggle"},
-                             {key[1]: value for key, value in edits.items() if key[0] == "bind"})
-        if audio is not None:
-            from ..audio_preferences import save_audio
-            save_audio(audio)
+                             {key[1]: value for key, value in edits.items() if key[0] == "bind"},
+                             audio_preferences=audio)
         self._baseline = values
         self._forced_dirty.clear()
         self.refresh_clean_draft()
@@ -456,29 +327,6 @@ class RegistrySettingsPage(QScrollArea):
             else: widget.spin.setValue(value)
         for name, widget in self.toggle_controls.items(): widget.setChecked(self.defaults.get(name).enabled)
         for name, widget in self.module_bind_controls.items(): widget.set_value(self.defaults.get(name).keybind)
-
-
-def install_estop_shortcut(dialog, host):
-    # An ordinary WindowShortcut misses nested modal file/import dialogs.
-    class EstopFilter(QObject):
-        def eventFilter(self, watched, event):
-            # Most events are layout/style/paint traffic. Do not enter Qt
-            # visibility checks or import Shiboken for every constructed child.
-            if event.type() not in (QEvent.Type.ShortcutOverride, QEvent.Type.KeyPress, QEvent.Type.KeyRelease):
-                return False
-            from shiboken6 import isValid
-            if event.key() == Qt.Key.Key_F12 and isValid(dialog) and dialog.isVisible():
-                if event.type() == QEvent.Type.KeyPress and not event.isAutoRepeat():
-                    host.control.reset_inputs()
-                    ok, reason = host.backend.trigger_estop()
-                    host.control.clear_pending()
-                    host.toast("E-STOP ACTIVE" if ok else f"E-STOP ACTIVE ({reason})")
-                event.accept(); return True
-            return super().eventFilter(watched, event)
-    filter_ = EstopFilter(dialog)
-    app = QApplication.instance(); app.installEventFilter(filter_)
-    dialog.finished.connect(lambda _result: app.removeEventFilter(filter_))
-    return filter_
 
 
 class CrosshairSettingsPage(QScrollArea):

@@ -12,6 +12,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .backend.resource_close import release_capture
+from .thumbnail_decoder import ThumbnailDecoder
+
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QImage, QLinearGradient, QPainter, QPainterPath, QPixmap
 
@@ -121,6 +124,9 @@ class VideoWallpaperPlayer:
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
         self._generation = 0
+        self._retired_threads: list[threading.Thread] = []
+        self._unreleased_captures: list[tuple[Any, Exception]] = []
+        self._capture_close_errors_reported = False
 
     @property
     def image(self) -> QImage:
@@ -145,11 +151,19 @@ class VideoWallpaperPlayer:
         if not path.exists():
             return False
         with self._lock:
+            if self._unreleased_captures:
+                return False
             if self.path == path and self._thread is not None and self._thread.is_alive():
                 return True
             if self.path == path and self._last_error:
                 return False
         self._stop_worker(keep_frame=True, wait=False)
+        with self._lock:
+            # A generation guard rejects stale pixels, but it does not close
+            # the old decoder. Never create a replacement while that native
+            # owner is still retiring; the next paint can retry without wait.
+            if self._unreleased_captures or any(thread.is_alive() for thread in self._retired_threads):
+                return False
         # Importing cv2 for the first time from this worker races Qt's plugin
         # loader on Windows and can deadlock or access-violate inside Python's
         # import machinery. Resolve the native module on the caller/UI thread
@@ -180,11 +194,42 @@ class VideoWallpaperPlayer:
     def release(self, keep_frame: bool = False) -> None:
         self._stop_worker(keep_frame=keep_frame, wait=True)
 
+    def close(self) -> None:
+        """Wait for every decode generation; only a teardown worker calls this."""
+        self.release()
+        with self._lock:
+            threads = tuple(self._retired_threads)
+        for thread in threads:
+            if thread is threading.current_thread():
+                raise RuntimeError("Wallpaper cannot wait for its own worker")
+            thread.join()
+        with self._lock:
+            self._retired_threads.clear()
+            failures = tuple(self._unreleased_captures)
+        if failures and self._capture_close_errors_reported:
+            retained = []
+            for capture, _ in failures:
+                try:
+                    release_capture(capture)
+                except Exception as exc:
+                    retained.append((capture, exc))
+            with self._lock:
+                self._unreleased_captures = retained
+            failures = tuple(retained)
+            self._capture_close_errors_reported = bool(failures)
+        if failures:
+            self._capture_close_errors_reported = True
+            messages = "; ".join(f"{type(error).__name__}: {error}" for _, error in failures)
+            raise RuntimeError(f"Wallpaper capture release failed: {messages}") from failures[0][1]
+
     def _stop_worker(self, keep_frame: bool, wait: bool) -> None:
         with self._lock:
             thread = self._thread
             stop_event = self._stop_event
             self._generation += 1
+            self._retired_threads = [worker for worker in self._retired_threads if worker.is_alive()]
+            if thread is not None and thread.is_alive() and thread not in self._retired_threads:
+                self._retired_threads.append(thread)
             self._thread = None
             self.path = None
         stop_event.set()
@@ -274,9 +319,13 @@ class VideoWallpaperPlayer:
         finally:
             if capture is not None:
                 try:
-                    capture.release()
-                except Exception:
-                    pass
+                    release_capture(capture)
+                except Exception as exc:
+                    # Older generations can fail after a new wallpaper has
+                    # started. Retain each unconfirmed owner until final close.
+                    with self._lock:
+                        self._unreleased_captures.append((capture, exc))
+                        self._last_error = f"Wallpaper capture release failed: {exc}"
 
     def _prepare_frames(self, frame: Any, cv2: Any, previous_lens: Any | None) -> tuple[QImage, QImage, QImage, Any]:
         with self._lock:
@@ -665,6 +714,7 @@ class StartupWallpaperManager:
         self.thumbnail_cache: dict[str, QImage] = {}
         self.thumbnail_futures: dict[str, Future[QImage]] = {}
         self.thumbnail_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="wallpaper-thumb")
+        self.thumbnail_decoder = ThumbnailDecoder()
         self.fast_background_sampling = False
         self.failed_media: Path | None = None
         self.selected_profile = ""
@@ -784,6 +834,23 @@ class StartupWallpaperManager:
         self.video_player.release()
         self.thumbnail_executor.shutdown(wait=False, cancel_futures=True)
 
+    def close(self) -> None:
+        """Drain decode and thumbnail workers without touching QPixmap state."""
+        failures = []
+        for close in (self.video_player.close, self.close_thumbnail_workers):
+            try:
+                close()
+            except Exception as exc:
+                failures.append(exc)
+        if failures:
+            messages = "; ".join(f"{type(error).__name__}: {error}" for error in failures)
+            raise RuntimeError(f"Wallpaper shutdown failed: {messages}") from failures[0]
+
+    def close_thumbnail_workers(self) -> None:
+        """Drain independently so a blocked video owner cannot delay this stop."""
+        self.thumbnail_executor.shutdown(wait=True, cancel_futures=True)
+        self.thumbnail_decoder.close()
+
     def thumbnail(self, profile: str) -> QImage:
         cached = self.thumbnail_cache.get(profile)
         if cached is not None:
@@ -811,29 +878,8 @@ class StartupWallpaperManager:
             preview = self.workspace / "3000925581" / "preview.gif"
             path = preview if preview.exists() else None
         if path is not None and path.exists():
-            self.thumbnail_futures[profile] = self.thumbnail_executor.submit(self._load_thumbnail, path)
+            self.thumbnail_futures[profile] = self.thumbnail_executor.submit(self.thumbnail_decoder.load, path)
         return QImage()
-
-    @staticmethod
-    def _load_thumbnail(path: Path) -> QImage:
-        try:
-            import cv2  # type: ignore
-
-            capture = cv2.VideoCapture(str(path))
-            ok, frame = capture.read()
-            capture.release()
-            if not ok:
-                return QImage()
-            height, width = frame.shape[:2]
-            max_width = 480
-            if width > max_width:
-                ratio = max_width / float(width)
-                frame = cv2.resize(frame, (max_width, max(2, round(height * ratio))), interpolation=cv2.INTER_AREA)
-            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            height, width, channels = rgb.shape
-            return QImage(rgb.data, width, height, channels * width, QImage.Format.Format_RGB888).copy()
-        except Exception:
-            return QImage()
 
     def draw(
         self,

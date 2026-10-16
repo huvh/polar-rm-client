@@ -79,15 +79,21 @@ class BlockingDecoder:
         self.lifecycle_generation += 1
         self.available = False
 
+    request_stop = stop
+
 
 def manager_stub(decoder):
     manager = object.__new__(BackendManager)
     manager.state = SimpleNamespace(deploy_mode=0)
     manager.native_decoder = decoder
     manager.udp = SimpleNamespace(
-        decode_h265=False, running=False, set_decode_enabled=lambda enabled: None,
+        decode_h265=False, running=False, request_decode_enabled=lambda enabled: None,
+        request_stop=lambda: None,
     )
     manager._active_video_source = "native 0x0310"
+    manager._video_source_request = None
+    manager._video_source_generation = 0
+    manager._video_source_failures = ()
     manager._hero_native_override = False
     manager._native_restart_results = Queue(maxsize=1)
     manager._native_restart_thread = None
@@ -175,11 +181,12 @@ class DecoderLifecycleQualityTests(unittest.TestCase):
         entered, release = threading.Event(), threading.Event()
         closed = []
 
-        def close(session):
+        def close(session, **kwargs):
             closed.append(session)
             if session is old:
                 entered.set()
                 release.wait(3)
+            return True
 
         with patch.object(decoder, "_close_session", side_effect=close), patch(
             "rm_client.backend.video_backend.subprocess.Popen"
@@ -399,9 +406,11 @@ class DecoderLifecycleQualityTests(unittest.TestCase):
                 self.assertTrue(first.entered.wait(1))
                 receiver.stop()
                 receiver.start()
-                self.assertTrue(second.entered.wait(1))
+                self.assertFalse(second.entered.is_set())
                 first.release.set()
                 old_thread.join(1)
+                receiver.start()
+                self.assertTrue(second.entered.wait(1))
                 self.assertTrue(receiver.running)
                 self.assertIs(receiver._socket, second)
                 self.assertFalse(second.closed)

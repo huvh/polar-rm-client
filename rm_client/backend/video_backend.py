@@ -23,6 +23,8 @@ from typing import Any, Callable
 
 from ..transports import UDPVideoReceiver
 from ..runtime_paths import RuntimePaths
+from .resource_close import close_resource
+from .video_source import VideoSourceAdmission, VideoStopStatus
 
 
 def resolve_ffmpeg_executable() -> str | None:
@@ -304,7 +306,7 @@ class RmVideoBackend(UDPVideoReceiver):
         # A bind failure leaves UDPVideoReceiver.running false. Do not reset
         # counters/decoder state on every retry while an existing receiver is
         # already alive.
-        if self.running:
+        if self.running or not self.cleanup_complete:
             return
         self.ffmpeg_executable = resolve_ffmpeg_executable()
         self.ffmpeg_available = self.ffmpeg_executable is not None
@@ -542,10 +544,50 @@ class RmVideoBackend(UDPVideoReceiver):
                     backoff_s=backoff, health=(decoder.health() if hasattr(decoder, "health") else {}),
                 )
 
-            self._h265_restart_thread = threading.Thread(
-                target=restart_worker, name="h265-decoder-restart", daemon=True,
-            )
-            self._h265_restart_thread.start()
+            worker = threading.Thread(target=restart_worker, name="h265-decoder-restart", daemon=True)
+            self._h265_restart_thread = worker
+            try:
+                worker.start()
+            except Exception as exc:
+                # A real thread that already started (even if it finished)
+                # remains a joinable owner. Never-admitted objects do not.
+                if worker.ident is None:
+                    self._h265_restart_thread = None
+                with self._lock:
+                    self.last_error = f"HEVC recovery admission failed: {type(exc).__name__}: {exc}"
+                    self._h265_next_restart_at = time.perf_counter() + self._h265_restart_backoff_s
+                    self._h265_restart_backoff_s = min(5.0, self._h265_restart_backoff_s * 2.0)
+                raise
+
+    def request_stop(self) -> None:
+        """Revoke all packet/decode state before independent close admissions."""
+        with self._lock:
+            self._video_generation += 1
+            self._h265_generation += 1
+            self.decode_h265 = False
+            self.latest_bgr = None
+            self.latest_bgr_at = 0.0
+        admission = VideoSourceAdmission()
+        admission.attempt("HEVC recovery reset", self.h265_recovery.reset)
+        admission.attempt("UDP stop", super().request_stop)
+        if self.h265_decoder is not None:
+            admission.attempt("HEVC stop", self.h265_decoder.request_stop)
+        admission.raise_if_failed()
+
+    @property
+    def stop_pending(self) -> bool:
+        return (super().stop_pending
+                or (self.h265_decoder is not None and self.h265_decoder.stop_pending))
+
+    @property
+    def stop_status(self) -> VideoStopStatus:
+        udp = super().stop_status
+        decoder = self.h265_decoder.stop_status if self.h265_decoder is not None else VideoStopStatus()
+        recovery = self._h265_restart_thread
+        inflight = udp.inflight or decoder.inflight or (recovery is not None and recovery.is_alive())
+        errors = tuple(f"UDP: {error}" for error in udp.errors) + tuple(
+            f"HEVC: {error}" for error in decoder.errors)
+        return VideoStopStatus(bool(udp.pending or decoder.pending or inflight), inflight, errors)
 
     def stop(self) -> None:
         with self._lock:
@@ -559,9 +601,27 @@ class RmVideoBackend(UDPVideoReceiver):
         with self._lock:
             self.h265_recovery.reset()
 
-    def set_decode_enabled(self, enabled: bool) -> None:
-        """Arm HEVC only for the selected UDP source; first data starts it."""
+    @property
+    def cleanup_complete(self) -> bool:
+        return (super().cleanup_complete
+                and (self.h265_decoder is None or self.h265_decoder.cleanup_complete))
 
+    def wait_closed(self, timeout: float | None = None) -> bool:
+        super().wait_closed(timeout)
+        decoder_closed = self.h265_decoder is None or self.h265_decoder.wait_closed()
+        if not decoder_closed:
+            self.last_error = self.h265_decoder.last_error or "HEVC decoder close unconfirmed"
+        return super().cleanup_complete and decoder_closed
+
+    def set_decode_enabled(self, enabled: bool) -> None:
+        """Synchronous compatibility: select HEVC and close disabled native state."""
+        self._set_decode_enabled(enabled, wait=True)
+
+    def request_decode_enabled(self, enabled: bool) -> None:
+        """UI-safe HEVC selection; disabling admits native close off-thread."""
+        self._set_decode_enabled(enabled, wait=False)
+
+    def _set_decode_enabled(self, enabled: bool, *, wait: bool) -> None:
         enabled = bool(enabled)
         with self._lock:
             if enabled == self.decode_h265:
@@ -570,7 +630,10 @@ class RmVideoBackend(UDPVideoReceiver):
             self._h265_generation += 1
             self.h265_recovery.reset()
         if not enabled and self.h265_decoder is not None:
-            self.h265_decoder.stop()
+            if wait:
+                self.h265_decoder.stop()
+            else:
+                self.h265_decoder.request_stop()
 
     def stats(self) -> dict[str, Any]:
         h265_at = self.h265_decoder.latest_timestamp() if self.h265_decoder else 0.0
@@ -646,6 +709,9 @@ class _DecoderSession:
     input_queue: Queue[bytes]
     stopped: threading.Event = field(default_factory=threading.Event)
     threads: list[threading.Thread] = field(default_factory=list)
+    close_lock: threading.Lock = field(default_factory=threading.Lock)
+    close_error: str = ""
+    closed: bool = False
 
 
 class ContinuousMjpegDecoder:
@@ -678,6 +744,8 @@ class ContinuousMjpegDecoder:
         self._lifecycle_lock = threading.Lock()
         self._generation = 0
         self._session: _DecoderSession | None = None
+        self._retired_sessions: list[_DecoderSession] = []
+        self._stop_worker: threading.Thread | None = None
         # Decoder stdin is serviced off the UDP/UI thread.  A bounded queue
         # prevents a stalled ffmpeg process from freezing 144 Hz rendering or
         # growing memory without limit.
@@ -723,7 +791,8 @@ class ContinuousMjpegDecoder:
         with self._lock:
             if expected_generation is not None and expected_generation != self._generation:
                 return False
-            if self._session is not None and not self._running:
+            if (self._retired_sessions or self._stop_in_progress_locked()
+                    or (self._session is not None and not self._running)):
                 return False
             generation = self._generation
         # A concurrent recovery owns process creation. Never make a receive or
@@ -737,12 +806,14 @@ class ContinuousMjpegDecoder:
 
     def _start_generation(self, generation: int) -> bool:
         with self._lock:
-            if generation != self._generation:
+            if (generation != self._generation or self._retired_sessions
+                    or self._stop_in_progress_locked()):
                 return False
             if self._running:
                 return True
             old = self._detach_session_locked(clear_latest=False)
-        self._close_session(old)
+        if not self._close_retired_session(old):
+            return False
         with self._lock:
             if generation != self._generation:
                 return False
@@ -803,7 +874,7 @@ class ContinuousMjpegDecoder:
                     for worker in session.threads:
                         worker.start()
             if session.stopped.is_set():
-                self._close_session(session)
+                self._close_retired_session(session)
                 return False
             return True
         except Exception as exc:  # pragma: no cover - platform process failure
@@ -812,7 +883,7 @@ class ContinuousMjpegDecoder:
                     self.last_error = str(exc)
                     if self._session is session:
                         self._detach_session_locked(clear_latest=True)
-            self._close_session(session)
+            self._close_retired_session(session)
             return False
 
     def write(self, data: bytes, *, expected_generation: int | None = None) -> bool:
@@ -860,9 +931,9 @@ class ContinuousMjpegDecoder:
             pipe = getattr(session.proc, pipe_name, None)
             if pipe is not None:
                 try:
-                    pipe.close()
-                except Exception:
-                    pass
+                    close_resource(pipe)
+                except Exception as exc:
+                    session.close_error = f"Decoder pipe close unconfirmed: {type(exc).__name__}: {exc}"
 
     def _write_loop(self, session: _DecoderSession) -> None:
         proc = session.proc
@@ -984,13 +1055,19 @@ class ContinuousMjpegDecoder:
             now = time.perf_counter()
             with self._lock:
                 generation = self._generation
+                if self._stop_in_progress_locked():
+                    return False
                 if expected_generation is not None and expected_generation != generation:
                     return False
                 if now < self._next_restart_at:
                     return False
                 session = self._detach_session_locked(clear_latest=clear_latest)
                 self.restart_count += 1
-            self._close_session(session)
+            self._close_retired_session(session)
+            with self._lock:
+                retired = tuple(self._retired_sessions)
+            for owner in retired:
+                self._close_retired_session(owner)
             # The start helper must not reacquire the lifecycle lock. A stop
             # during teardown/spawn advances the generation and wins.
             try:
@@ -1066,6 +1143,8 @@ class ContinuousMjpegDecoder:
         session = self._session
         if session is not None:
             session.stopped.set()
+            if not any(owner is session for owner in self._retired_sessions):
+                self._retired_sessions.append(session)
         self._session = None
         self._proc = None
         self._running = False
@@ -1084,36 +1163,148 @@ class ContinuousMjpegDecoder:
         return session
 
     @staticmethod
-    def _close_session(session: _DecoderSession | None) -> None:
+    def _close_session(session: _DecoderSession | None, *,
+                       worker_timeout: float | None = 1.0) -> bool:
         if session is None:
-            return
-        session.stopped.set()
-        proc = session.proc
-        # A single deadline covers process reap and all three workers. Never
-        # close a pipe while a surviving worker owns its blocking read/write.
-        deadline = time.perf_counter() + 1.0
-        try:
-            proc.terminate()
-        except Exception:
-            pass
-        try:
-            proc.wait(timeout=max(0.0, deadline - time.perf_counter()))
-        except Exception:
+            return True
+        with session.close_lock:
+            if session.closed:
+                return True
+            session.stopped.set()
+            proc = session.proc
+            deadline = time.perf_counter() + 1.0
             try:
-                proc.kill()
-                proc.wait(timeout=0.2)
+                proc.terminate()
             except Exception:
+                # Already-exited processes may reject termination. Only the
+                # final poll/reap confirmation decides whether ownership ends.
                 pass
-        for worker in session.threads:
-            if worker is not threading.current_thread() and worker.is_alive():
-                worker.join(timeout=max(0.0, deadline - time.perf_counter()))
-        if not any(worker.is_alive() for worker in session.threads):
+            try:
+                proc.wait(timeout=max(0.0, deadline - time.perf_counter()))
+            except Exception:
+                try:
+                    proc.kill()
+                    proc.wait(timeout=0.2)
+                except Exception:
+                    pass
+            for worker in session.threads:
+                if worker is not threading.current_thread() and worker.is_alive():
+                    wait = None if worker_timeout is None else max(0.0, deadline - time.perf_counter())
+                    worker.join(timeout=wait)
+            if any(worker.is_alive() for worker in session.threads):
+                session.close_error = "Decoder workers still own process pipes"
+                return False
+            try:
+                if proc.poll() is None:
+                    session.close_error = "Decoder process exit unconfirmed"
+                    return False
+            except Exception as exc:
+                session.close_error = f"Decoder process exit unconfirmed: {exc}"
+                return False
+            errors = []
             for pipe in (proc.stdin, proc.stdout, proc.stderr):
-                if pipe is not None:
+                if pipe is not None and getattr(pipe, "closed", None) is not True:
                     try:
-                        pipe.close()
-                    except Exception:
-                        pass
+                        close_resource(pipe)
+                        if getattr(pipe, "closed", None) is False:
+                            raise OSError("Decoder pipe remained open after close")
+                    except Exception as exc:
+                        errors.append(f"{type(exc).__name__}: {exc}")
+            session.close_error = "; ".join(errors)
+            session.closed = not errors
+            return session.closed
+
+    def _close_retired_session(self, session: _DecoderSession | None, *,
+                               worker_timeout: float | None = 1.0) -> bool:
+        if session is None:
+            return True
+        with self._lock:
+            if not any(owner is session for owner in self._retired_sessions):
+                self._retired_sessions.append(session)
+        closed = self._close_session(session, worker_timeout=worker_timeout)
+        with self._lock:
+            if closed:
+                self._retired_sessions = [owner for owner in self._retired_sessions if owner is not session]
+            else:
+                self.last_error = session.close_error or "Decoder resource close unconfirmed"
+        return bool(closed)
+
+    @property
+    def stop_pending(self) -> bool:
+        """Retained close or process-lifecycle work remains unconfirmed."""
+        with self._lock:
+            # A failed stop admission may leave an unpublished Popen behind
+            # the lifecycle lock, before it can enter the retired inventory.
+            return bool(self._retired_sessions or self._stop_in_progress_locked()
+                        or self._lifecycle_lock.locked())
+
+    @property
+    def stop_status(self) -> VideoStopStatus:
+        with self._lock:
+            retired = tuple(self._retired_sessions)
+            # This also observes a Popen not yet published into a session.
+            inflight = self._stop_in_progress_locked() or self._lifecycle_lock.locked()
+            # A retired data reader can require terminate() to unblock. Its
+            # liveness retains ownership, but must not prevent admitting the
+            # missing closer after a stop-worker admission failure.
+            inflight = inflight or any(session.close_lock.locked() for session in retired)
+            errors = tuple(session.close_error for session in retired if session.close_error)
+            return VideoStopStatus(bool(retired or inflight), inflight, errors)
+
+    @property
+    def cleanup_complete(self) -> bool:
+        with self._lock:
+            return (self._session is None and not self._retired_sessions and not self._running
+                    and not self._stop_in_progress_locked())
+
+    def wait_closed(self) -> bool:
+        """Worker/CLI only: observe in-flight startup and finish retained owners."""
+        with self._lock:
+            stopper = self._stop_worker
+        if stopper is not None and stopper is not threading.current_thread():
+            stopper.join()
+        with self._lifecycle_lock:
+            with self._lock:
+                if self._session is not None:
+                    return False
+                retired = tuple(self._retired_sessions)
+            for session in retired:
+                self._close_retired_session(session, worker_timeout=None)
+            return self.cleanup_complete
+
+    def _stop_in_progress_locked(self) -> bool:
+        return self._stop_worker is not None and self._stop_worker.is_alive()
+
+    def request_stop(self, *, clear_latest: bool = True) -> None:
+        """Invalidate now; one retained worker closes native owners off caller."""
+        with self._lock:
+            self._generation += 1
+            self._detach_session_locked(clear_latest=clear_latest)
+            if self._stop_in_progress_locked():
+                return
+            if not self._retired_sessions and not self._lifecycle_lock.locked():
+                return  # No current, retained, or in-flight spawn owner to wait for.
+            worker = threading.Thread(target=self._finish_requested_stop,
+                                      name=f"mjpeg-stop-{self.codec}", daemon=True)
+            self._stop_worker = worker
+            try:
+                worker.start()
+            except Exception as exc:
+                if worker.ident is None:
+                    self._stop_worker = None
+                self.last_error = f"Decoder stop worker failed: {type(exc).__name__}: {exc}"
+                raise
+
+    def _finish_requested_stop(self) -> None:
+        # An unpublished Popen belongs to the lifecycle lock. Its generation
+        # was invalidated above; wait for it to publish into retained ownership
+        # before taking the final owner snapshot. Never join this worker while
+        # holding that lock.
+        with self._lifecycle_lock:
+            with self._lock:
+                retired = tuple(self._retired_sessions)
+            for session in retired:
+                self._close_retired_session(session, worker_timeout=None)
 
     def stop(self, *, clear_latest: bool = True) -> None:
         # Do not wait for the lifecycle lock: an in-progress restart might be
@@ -1121,4 +1312,4 @@ class ContinuousMjpegDecoder:
         with self._lock:
             self._generation += 1
             session = self._detach_session_locked(clear_latest=clear_latest)
-        self._close_session(session)
+        self._close_retired_session(session)

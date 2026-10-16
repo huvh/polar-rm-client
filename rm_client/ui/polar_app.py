@@ -35,16 +35,32 @@ from PySide6.QtGui import (
     QWheelEvent,
 )
 from PySide6.QtOpenGLWidgets import QOpenGLWidget
-from PySide6.QtWidgets import QApplication, QFileDialog, QInputDialog, QWidget
+from PySide6.QtWidgets import QApplication, QFileDialog, QInputDialog, QMessageBox, QWidget
 
 from ..backend.dt7_link import status_token as _dt7_status_token
 from ..calibration import CameraCalibrationManager
+from ..emergency_actions import request_control_lock
 from ..auto_spin import ProjectileHitSpinController
 from ..combat_hud import CombatHudAnimator, VALID_COMBAT_HUD_VISUALS, ring_end
 from ..combat_events import CombatEvent, OfficialMatchFeed, VisionKillDetector
 from ..config_store import ClientConfigStore, apply_registry_config, export_client_config
+from ..configuration.wheel import sync_wheel_from_module, sync_module_from_wheel
 from ..control import KeyboardControlBridge
+from ..lifecycle import TeardownTask
 from .polar.clickgui_frame import ClickGuiFrame, build_clickgui_frame
+from .polar.clickgui_presenter import ClickGuiGpuPresenter, ClickGuiViewport
+from .polar.compositor_plan import (
+    BackdropTreatment, FinalFrameCompositor, FrameCompositionPlan,
+    OverlayScene, motion_layer_needs_refresh,
+)
+from .polar.window_lifecycle import OwnerAction, OwnerActionFailure, WindowLifecycleController, run_owner_actions
+from .polar.presentation_controller import (
+    PanelIntent, PanelPresentationController, dynamic_content_duration,
+)
+from .polar.frame_telemetry import FrameTelemetry, FrameTelemetryField
+from .polar.tick_controller import (
+    FrameTiming, RenderCadence, RuntimeTickPlan, TickDiagnosticField, TickDiagnostics, TickStageRunner,
+)
 from ..economy import (
     CATEGORY_TITLES,
     TRANSACTION_LABELS,
@@ -274,16 +290,16 @@ from .polar.mixins.clickgui_builders_mixin import ClickGuiBuildersMixin
 # _economy_restore_pending_generation / _economy_pending_overlay 等）仍全部在
 # __init__ 原位初始化，D2 侧写入点不动。
 from .polar.mixins.economy_mixin import EconomyMixin
-# 阶段 3e 大域 mixin 化（REFACTOR_BLUEPRINT §5 阶段 3 表 3e 行）：D15 输入/
-# hotspot/dispatch 族（鼠标/滚轮/键盘事件、键盘辅助族、按键工具族、
-# _clear_control_inputs_for_lock、dispatch action 路由）已机械迁至
-# mixins/input_dispatch_mixin.py 的 InputDispatchMixin（零修改，四段不连续
-# 区块整体搬迁），由下方 PolarRMWindow 继承装配；dispatch 的 if/elif 路由链
-# 已先经第一步表化为模块级 {action: handler} 注册表（行为等价论证见新模块
-# docstring）；add_hotspot/_hotspot_clip 属 D15 输入域核心，按任务纪律留在
-# 本文件原位；hotspots/drag/binding_module 等输入状态字段仍在 __init__ 原位
-# 初始化；__qualname__ 已钉回 PolarRMWindow.<name>。
+# Event adapters preserve the window facade. PointerInteraction owns capture,
+# release and binding epochs; hotspot geometry remains in its UI adapter.
 from .polar.mixins.input_dispatch_mixin import InputDispatchMixin
+from .polar.pointer_interaction import PointerInteraction
+from .polar.panel_layouts import create_panel_layouts
+from .polar.window_assembly import (
+    create_feedback_assets, create_gpu_services, create_presentation_services,
+    create_startup_wallpaper, create_vision_services, create_warmup_timer,
+    prepare_runtime_paths, resolve_client_asset, start_frame_timer,
+)
 # 阶段 3f 大域 mixin 化：D16 动作处理/配置动作/资格赛全族（after_setting_changed/
 # handle_config_action/handle_qualification_action/start_kmc_qualification_test/
 # restore_compact_hud/on_module_toggled/play_gui_transition_sound/
@@ -374,22 +390,35 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
     _aspect_fit_image_rect = staticmethod(_aspect_fit_image_rect)
     painter_device_scale = staticmethod(painter_device_scale)
 
+    # Existing diagnostics consumers may still read/write these private seams.
+    # Production tick paths use the single owner below, without copied state.
+    _ui_tick_last_ms = TickDiagnosticField("last_ms")
+    _ui_tick_max_ms = TickDiagnosticField("max_ms")
+    _ui_tick_gap_ms = TickDiagnosticField("gap_ms")
+    _ui_tick_gap_max_ms = TickDiagnosticField("gap_max_ms")
+    _ui_tick_stages = TickDiagnosticField("stages")
+    _ui_tick_perf_log_at = TickDiagnosticField("reported_at")
+    _tick_error_count = TickDiagnosticField("count")
+    _tick_last_error = TickDiagnosticField("last_error")
+    _tick_last_log_at = TickDiagnosticField("last_logged_at")
+
+    fps_samples = FrameTelemetryField("fps_samples")
+    render_frame_ms_ema = FrameTelemetryField("ema_ms")
+    _last_present_time = FrameTelemetryField("last_presented_at")
+    _field_frame_times_ms = FrameTelemetryField("frame_times_ms")
+    _last_field_frame_log_at = FrameTelemetryField("last_reported_at")
+
     NORMAL_BACKEND_VIDEO_STALE_S = 2.0
 
     def __init__(self) -> None:
         super().__init__()
+        self._pointer_interaction = PointerInteraction()
+        self._tick_diagnostics = TickDiagnostics()
+        self._clickgui_presenter: ClickGuiGpuPresenter | None = None
         self._gpu_prewarm_jobs_pending = None
         self._gpu_prewarm_last_ms = 0.0
         self._gpu_prewarm_max_ms = 0.0
-        self._ui_tick_last_ms = 0.0
-        self._ui_tick_max_ms = 0.0
-        self._ui_tick_gap_ms = 0.0
-        self._ui_tick_gap_max_ms = 0.0
-        self._ui_tick_stages = {}
-        self._ui_tick_perf_log_at = 0.0
-        self._gpu_prewarm_timer = QTimer(self)
-        self._gpu_prewarm_timer.setSingleShot(True)
-        self._gpu_prewarm_timer.timeout.connect(self._run_gpu_prewarm_slice)
+        self._gpu_prewarm_timer = create_warmup_timer(self, self._run_gpu_prewarm_slice)
         self.setWindowTitle(ui_text("POLAR-RM Custom Client", True))
         self.resize(1280, 720)
         self.setMinimumSize(1000, 620)
@@ -397,9 +426,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setUpdateBehavior(QOpenGLWidget.UpdateBehavior.NoPartialUpdate)
 
-        self.paths = RuntimePaths.discover()
-        self.paths.ensure_writable_dirs()
-        self.paths.seed_default_config()
+        self.paths = prepare_runtime_paths()
         self.workspace = self.paths.workspace_root
         self.registry = build_default_registry()
         self.state = RobotState()
@@ -425,17 +452,17 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             client_id=str(self.state.robot_id),
             scenario_key=self.scenario_manager.current.key,
         )
+        self._window_lifecycle = WindowLifecycleController(self.backend)
+        self._window_close_finalized = False
         self.mqtt = self.backend.mqtt
         self.top_match_bar = TopMatchBarController(self)
         self.backend.referee_view_observer = self.top_match_bar.observe_referee
         self.official_feed = OfficialMatchFeed()
         self.vision_kill_detector = VisionKillDetector()
         self._official_state_updates: dict[str, Any] = {}
-        self.kill_fx = KillFxRenderer(self.paths.asset("kill_fx", "gd656"))
-        self.ui_audio = UiAudioManager(
-            self.paths.asset("ui_sounds"),
-            custom_root=self.paths.user_data_root / "ui_sounds" / "custom",
-        )
+        feedback = create_feedback_assets(self.paths)
+        self.kill_fx = feedback.kill_fx
+        self.ui_audio = feedback.ui_audio
         self.registry.add_toggle_listener(self.on_module_toggled)
         # P6: ModuleRegistry 在 toggle/set/direct assignment 三条 enabled
         # 写路径上统一推进代际，静态 key 不再每帧构造 N+1 元组。
@@ -462,15 +489,16 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         self.economy_bridge = EconomyCommandBridge()
         self.economy_bridge.sender = self.send_economy_request
         self.config_store = ClientConfigStore(self.paths.configs_root)
-        self.calibration = CameraCalibrationManager(self.workspace, profile_dir=self.paths.calibrations_root)
-        self.calibration.load("polar_webcam")
-        self.tongji_receiver = TongjiVisionReceiver()
-        self.gimbal_command_bridge = GimbalCommandBridge()
-        self.composite_vision = CompositeVisionPipeline()
-        self.local_vision = LocalAlignedVision(
-            self._client_asset_path("同济自瞄", "sp_vision_25", "assets", "yolov5.xml")
+        vision_services = create_vision_services(
+            workspace=self.workspace, calibration_profiles=self.paths.calibrations_root,
+            model_path=self._client_asset_path("同济自瞄", "sp_vision_25", "assets", "yolov5.xml"),
         )
-        self.tongji_bridge = TongjiVisionBridge()
+        self.calibration = vision_services.calibration
+        self.tongji_receiver = vision_services.receiver
+        self.gimbal_command_bridge = vision_services.gimbal_commands
+        self.composite_vision = vision_services.composite
+        self.local_vision = vision_services.local
+        self.tongji_bridge = vision_services.bridge
         self._vision_source = "Mock"
         self._tongji_enabled = False
         self._vision_snapshot: VisionSnapshot | None = None
@@ -491,36 +519,26 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         self._dynamic_hud_started_at = time.perf_counter()
         self.dynamic_hud_ms = 0.0
         self._armor_geometry_smooth: dict[tuple[int, int, bool, str], tuple[tuple[tuple[float, float], ...], tuple[tuple[float, float], ...]]] = {}
-        self.startup_wallpaper = StartupWallpaperManager(
-            self.workspace,
-            assets_dir=self.paths.asset("wallpapers"),
-            user_dir=self.paths.user_data_root / "wallpapers",
-            pkg_dir=self.paths.resource_root / "3000925581",
-            cache_dir=self.paths.user_data_root / ".wallpaper_cache" / "3000925581",
-        )
+        self.startup_wallpaper = create_startup_wallpaper(self.paths)
         self.scenario_manager.apply_to_registry(self.registry)
         self.scenario_manager.apply_to_runtime(self.mqtt, self.udp, self.control)
         self.match_mode_manager.apply_to_registry(self.registry)
-        self.fonts = FontBook()
-        self.fonts.load_from_project_assets(self.paths.resource_root)
-        self.anim = AnimationBank()
-        self.gui_motion = GuiMotionController(self.anim)
-        self.gui_cache = ClickGuiLayerCache()
-        self.clickgui_gpu = ClickGuiGpuRenderer()
-        self.jello_clickgui = JelloClickGuiRenderer(
-            self.paths.asset("jello")
-        )
-        self.minecraft_hud = MinecraftCombatHudRenderer(
-            self.paths.asset("minecraft_hud")
-        )
+        presentation = create_presentation_services(self.paths)
+        self.fonts = presentation.fonts
+        self.anim = presentation.animation
+        self.gui_motion = presentation.motion
+        self.gui_cache = presentation.gui_cache
+        self.clickgui_gpu = presentation.clickgui_gpu
+        self.jello_clickgui = presentation.jello
+        self.minecraft_hud = presentation.minecraft_hud
         self._last_minecraft_hud_layout = None
-        self.student_ui = StudentUiState()
-        self.student_renderer = StudentPanelRenderer(self.paths.asset("minecraft_hud"))
-        self.server_chat_renderer = MinecraftServerChatRenderer(self.paths.asset("minecraft_hud"))
+        self.student_ui = presentation.student_state
+        self.student_renderer = presentation.student_renderer
+        self.server_chat_renderer = presentation.chat_renderer
         self.student_reload_expanded = False
         self._student_pending_panel = None
-        self.hero_deploy_ui = HeroDeployInterfaceState()
-        self.hero_deploy_renderer = HeroDeployRenderer()
+        self.hero_deploy_ui = presentation.hero_state
+        self.hero_deploy_renderer = presentation.hero_renderer
         # Align the baseline instead of leaving it at zero: scenario setup
         # already bumps deploy_status_revision once, and treating that as a
         # state change invalidated the whole compositor scene one second after
@@ -534,8 +552,9 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         self._hero_native_sequence = 0
         self._hero_native_source = "none"
         self._hero_native_wait_started = time.perf_counter()
-        self.vision_wire_gpu = VisionWireGpuRenderer()
-        self.island_icon_gpu = IslandIconGpuRenderer()
+        gpu = create_gpu_services()
+        self.vision_wire_gpu = gpu.vision_wire
+        self.island_icon_gpu = gpu.island_icon
         self._gpu_island_icon_commands: list[IslandIconCommand] = []
         self._collect_gpu_island_icons = False
         self._gpu_hud_commands = ClickGuiDrawList()
@@ -544,11 +563,11 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         self._watermark_title_cache_key: tuple[object, ...] | None = None
         self._watermark_title_static_key: tuple[object, ...] | None = None
         self._watermark_cache_next_refresh_at = 0.0
-        self.quick_action_wheel_gpu = QuickActionWheelGpuRenderer()
+        self.quick_action_wheel_gpu = gpu.quick_action_wheel
         self._gpu_quick_action_wheel_command: QuickActionWheelCommand | None = None
         self._gpu_quick_action_wheel_labels = ClickGuiDrawList()
         self._collect_gpu_quick_action_wheel = False
-        self.gpu_compositor = GpuFrameCompositor()
+        self.gpu_compositor = gpu.compositor
         self._gpu_frame_recording = False
         self._gpu_background_key: tuple[object, ...] | None = None
         self._gpu_background_transform_key: tuple[object, ...] | None = None
@@ -567,9 +586,9 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         self.clickgui_gpu_layout_ms = 0.0
         self.startup_cache = StartupLayerCache()
         self.frame_scheduler = FrameScheduler()
-        self.liquid_glass = LiquidGlassRenderer()
-        self.startup_gpu = StartupGpuCompositor()
-        self.hud_video_gpu = StartupGpuCompositor()
+        self.liquid_glass = gpu.liquid_glass
+        self.startup_gpu = gpu.startup
+        self.hud_video_gpu = gpu.hud_video
         # 部分 Windows 驱动会在 QPainter 与自定义纹理 shader 连续切页时
         # 损坏 QOpenGLWidget 的帧缓冲。Qt 自身仍负责 OpenGL 合成；先禁用
         # 这条原生视频 shader 路径，保证一级/二级页面切换绝不花屏。
@@ -583,7 +602,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         self.render_fps_cap = 240.0
         self.render_fps_target = 144.0
         self._render_timer_interval_ms = max(4, int(round(1000.0 / self.render_fps_target)))
-        self.render_frame_ms_ema = 0.0
+        self._frame_telemetry = FrameTelemetry()
         self._last_render_tune = time.perf_counter()
         self._last_logic_time = time.perf_counter()
         self._last_control_tick_time = 0.0
@@ -632,8 +651,6 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         self.hover_point = QPointF(0.0, 0.0)
         self.liquid_press_point = QPointF(-1000.0, -1000.0)
         self.liquid_press_until = 0.0
-        self.drag: dict[str, Any] | None = None
-        self.binding_module: Module | None = None
         self.toasts: list[dict[str, Any]] = []
         # Inline settings start collapsed.  The previous pre-expanded set made
         # Old/New/Dropdown measure every settings block on first open.
@@ -665,15 +682,10 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         self.frame_image: QImage | None = None
         self.frame_pixmap: QPixmap | None = None
         # 主 HUD 独立保存图传的低分辨率玻璃快照，绝不读取启动页壁纸。
-        self.fps_samples: list[float] = []
-        self._last_present_time = time.perf_counter()
+        self._frame_telemetry.last_presented_at = time.perf_counter()
         self.last_frame_time = time.perf_counter()
-        self._tick_error_count = 0
-        self._tick_last_error = ""
-        self._tick_last_log_at: dict[str, float] = {}
         self._last_readiness_audit_at = 0.0
-        self._field_frame_times_ms: list[float] = []
-        self._last_field_frame_log_at = time.perf_counter()
+        self._frame_telemetry.last_reported_at = time.perf_counter()
         self.last_control_toast = 0.0
         self._control_mouse_point: QPointF | None = None
         self._combat_input_was_allowed = False
@@ -687,18 +699,11 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         # Keeping it off avoids trading stutter for intermittent corruption.
         self.gpu_viewport_enabled = False
 
-        self.old_panels = {
-            # Polar Old starts each 140px panel at (20, 20) with a
-            # 20px gap.  Stored positions remain logical pixels when dragged.
-            category: {"x": 20.0 + i * 160.0, "y": 20.0, "expanded": category in ("Combat", "Vision", "Render"), "dragged": False}
-            for i, category in enumerate(CATEGORIES)
-        }
-        self.new_panels = {category: {"scroll": 0.0} for category in CATEGORIES}
-        self.dropdown_panels = {category: {"expanded": True, "scroll": 0.0} for category in CATEGORIES}
-        self.polar_windows = {
-            category: {"x": 80.0 + (index % 4) * 230.0, "y": 100.0 + (index // 4) * 330.0, "scroll": 0.0}
-            for index, category in enumerate([*CATEGORIES, "Profile"])
-        }
+        panels = create_panel_layouts(CATEGORIES)
+        self.old_panels = panels.old
+        self.new_panels = panels.new
+        self.dropdown_panels = panels.dropdown
+        self.polar_windows = panels.polar
         self.polar_unified_scroll = 0.0
         self.polar_unified_scroll_motion = InertialScroll()
         self.polar_settings_scroll_motion: dict[str, InertialScroll] = {}
@@ -748,51 +753,82 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             self.home_visible = False
             self.startup_step = "done"
         self.sync_mode_setting()
-        if not self.home_visible:
-            # 自动启动/跳过启动页时按当前场景启动后端（MQTT/UDP/串口）
-            self.backend.apply_scenario(self.scenario_manager.current.key, registry=self.registry)
-            self.refresh_vision_runtime()
+        if not self.home_visible and not self.configuration_change_pending:
+            generation = self.backend.request_scenario(self.scenario_manager.current.key, registry=self.registry)
+            self.capture_pending_scenario_configuration(generation)
         self.toast("ClickGUI 已就绪：Jello Sigma")
 
         from .window_shortcuts import WindowShortcuts
         WindowShortcuts(self)  # QObject parent owns the filter for this window.
 
-        self.timer = QTimer(self)
-        self.timer.setTimerType(Qt.TimerType.PreciseTimer)
-        self.timer.timeout.connect(self.on_tick)
-        # Drive the UI at the selected display cadence.  Polling at 5 ms and
-        # throwing callbacks away produced visibly irregular Sigma timelines.
-        self.timer.start(self._render_timer_interval_ms)
+        # Start event delivery only after profile staging and all callback
+        # dependencies exist. Native resource activation still waits for poll.
+        self.timer = start_frame_timer(self, self.on_tick, self._render_timer_interval_ms)
 
     def on_tick(self) -> None:
         now = time.perf_counter()
+        if not self._poll_backend_lifecycle():
+            return
+        self._begin_ui_frame(now)
+        self._advance_input_and_scroll(self.frame_dt)
+        self._advance_panel_presentation(now, self.frame_dt)
+        self._advance_economy_transaction(now)
+        self._advance_hud_presentation(self.frame_dt)
+        self._advance_runtime_tick(now)
+        self._request_ui_frame(now)
+        self._publish_tick_performance(now)
+
+    def _poll_backend_lifecycle(self) -> bool:
+        update = self._window_lifecycle.poll(self._handle_backend_lifecycle_completion)
+        if update.notification:
+            self.toast(update.notification, kind="warning" if update.failed else "info")
+        if update.schedule_close:
+            if update.completion_warning:
+                # A toast would disappear with the window. Keep confirmed
+                # shutdown errors visible before accepting this safe exit.
+                self._show_shutdown_warning(update.completion_warning)
+            QTimer.singleShot(0, self.close)
+        if not update.runtime_allowed:
+            # Keep the event loop and status visible, but do not advance input,
+            # economy, camera, decoder, or backend work while owners retire.
+            self.update()
+        return update.runtime_allowed
+
+    def _show_shutdown_warning(self, message: str) -> None:
+        """Dialog adapter: keep final errors visible until acknowledged."""
+        QMessageBox.warning(None, "Shutdown warning", message)
+
+    def _show_shutdown_cleanup_warning(self, message: str) -> None:
+        """Owner-thread save/GL faults remain visible after native cleanup."""
+        QMessageBox.warning(None, "Exit cleanup warning", message)
+
+    def _handle_backend_lifecycle_completion(self, completion) -> bool:
+        handled = self.on_backend_lifecycle_completion(completion)
+        self.control.mock_output = bool(self.backend.mqtt.mock_output)
+        return handled
+
+    def _begin_ui_frame(self, now: float) -> None:
         self.flush_auto_save_if_due(now)
         self.gui_motion.begin_frame(now)
         self._ui_frame_index += 1
-        elapsed = max(0.0, now - self.last_frame_time)
-        self._ui_tick_gap_ms = elapsed * 1000.0
-        self._ui_tick_gap_max_ms = max(self._ui_tick_gap_max_ms, self._ui_tick_gap_ms)
-        # UI timelines follow the display clock.  A first-use glyph/FBO upload
-        # can block one frame for more than 50 ms; truncating that elapsed time
-        # made Jello's nominal 450 ms open take 700-900 ms and all HUD motion
-        # briefly enter slow motion.  Physics/backend ticks retain their own
-        # conservative 50 ms cap below.
-        ui_dt = max(0.001, min(1.0, elapsed))
+        timing = FrameTiming.since(now, self.last_frame_time)
+        self._tick_diagnostics.record_wakeup(timing.gap_ms)
         self.last_frame_time = now
-        self.frame_dt = ui_dt
+        self.frame_dt = timing.ui_dt
         ui_scale_module = self.registry.get("UIScale")
         refresh_setting = ui_scale_module.get_setting("HUD Refresh Rate") if ui_scale_module else None
-        try:
-            requested_hz = float(refresh_setting.value) if refresh_setting else 144.0
-        except (TypeError, ValueError):
-            requested_hz = 144.0
-        self.render_fps_target = render_target(max(120.0,min(self.render_fps_cap,requested_hz)),self.render_fps_cap)
-        # Paint caps must not lower the event/backend/KMC logic clock.
-        requested_interval = max(4,int(round(1000.0/max(120.0,self.render_fps_target))))
+        cadence = RenderCadence.resolve(
+            refresh_setting.value if refresh_setting else 144.0,
+            self.render_fps_cap, render_target,
+        )
+        self.render_fps_target = cadence.target_hz
+        requested_interval = cadence.timer_interval_ms
         if requested_interval != self._render_timer_interval_ms:
             self._render_timer_interval_ms = requested_interval
             self.timer.setInterval(requested_interval)
             self.frame_scheduler.force()
+
+    def _advance_input_and_scroll(self, ui_dt: float) -> None:
         self.polar_unified_scroll = self.polar_unified_scroll_motion.update(ui_dt)
         self.economy_category_scroll.update(ui_dt)
         self.economy_offers_scroll.update(ui_dt)
@@ -810,36 +846,24 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         self._combat_input_was_allowed = input_allowed
         for motion in self.polar_settings_scroll_motion.values():
             motion.update(ui_dt)
-        self.gui_timeline.set_target(1.0 if self.gui_visible else 0.0)
-        self.gui_timeline.update(ui_dt)
-        self.jello_state.update(ui_dt)
-        if (
-            self.jello_state.reset_pending
-            and not self.gui_visible
-            and self.gui_timeline.progress <= 0.001
-        ):
-            self.jello_state.finish_reset()
-        gui_mode = self.active_clickgui_mode()
-        self.polar_unified_morph.set_target(
-            1.0 if self.gui_visible and gui_mode == "PolarUnified" else 0.0,
-            self.anim_duration(0.62 if self.gui_visible else 0.48),
-            now=now,
+
+    def _advance_panel_presentation(self, now: float, ui_dt: float) -> None:
+        controller = PanelPresentationController(
+            self.gui_timeline, self.jello_state, self.polar_unified_morph,
+            self.economy_island, self.active_clickgui_mode,
         )
-        self.polar_unified_morph.update(now=now)
-        self.economy_island.set_target(
-            1.0 if self.economy_visible else 0.0,
-            self.anim_duration(0.62 if self.economy_visible else 0.48),
-            now=now,
-        )
-        self.economy_island.update(now=now)
+        controller.advance(now, ui_dt, PanelIntent(
+            gui_visible=self.gui_visible,
+            gui_duration=self.anim_duration(0.62 if self.gui_visible else 0.48),
+            economy_visible=self.economy_visible,
+            economy_duration=self.anim_duration(0.62 if self.economy_visible else 0.48),
+        ))
         if (
             self.economy_phase == EconomyScenePhase.OPENING
             and self.economy_island.progress >= 0.999
         ):
             self.economy_phase = EconomyScenePhase.OPEN
-        # Hero deploy uses the same reversible Control Center spring as the
-        # economy island.  Advance it at the render-timer rate (not the 60 Hz
-        # logic gate) so the Dynamic-Island morph remains smooth at 120/144 Hz.
+        # Hero presentation stays on the display clock, before close-restore.
         self.hero_deploy_ui.update_presentation(now)
         if (
             self.economy_phase == EconomyScenePhase.CLOSING
@@ -854,6 +878,8 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             self.invalidate_transient_overlay_scene()
             self.frame_scheduler.force()
             self.update()
+
+    def _advance_economy_transaction(self, now: float) -> None:
         self.state.economy_mock_mode = self.economy_uses_mock_transport()
         economy_transaction = self.economy_bridge.update(self.state, now)
         if (
@@ -873,36 +899,36 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                 and self.setting_bool(match_chat, "Referee Notices", True)
             ):
                 self.chat_event_adapter.economy(economy_transaction, now)
+
+    def _advance_hud_presentation(self, ui_dt: float) -> None:
         self.tactical_map_state.update(ui_dt)
         dynamic_payload = self.dynamic_island_payload()
-        content_duration = 0.30 if dynamic_payload["kind"] == "module" else 0.80
-        if not dynamic_payload["active"]:
-            content_duration = 0.22
+        content_duration = dynamic_content_duration(
+            active=dynamic_payload["active"], kind=dynamic_payload["kind"],
+        )
         self.dynamic_island_state.set_content_target(
             1.0 if dynamic_payload["active"] else 0.0,
             content_duration,
         )
         self.dynamic_island_state.update(ui_dt)
-        logic_interval = 1.0 / 60.0
-        # KMC runs on its own 75 Hz sub-tick. Keeping it inside the 60 Hz
-        # logic layer capped real output at 60 Hz while the official limiter
-        # (and qualification evidence) assumes 75 Hz frames.
-        control_interval = 1.0 / 75.0
-        if now - self._last_control_tick_time >= control_interval * 0.92:
+
+    def _advance_runtime_tick(self, now: float) -> None:
+        plan = RuntimeTickPlan.at(now, self._last_control_tick_time, self._last_logic_time)
+        if plan.control_due:
             self._last_control_tick_time = now
             self._run_tick_stage(
                 "control.75hz",
                 lambda: self.control.tick(self.state, self.registry, now),
                 now,
             )
-        if now - self._last_logic_time >= logic_interval * 0.92:
-            logic_dt = max(0.001, min(0.05, now - self._last_logic_time))
+        if plan.logic_dt is not None:
+            logic_dt = plan.logic_dt
             self._last_logic_time = now
             if not self.home_visible and not self.hero_deploy_video_cut_active():
-                self.ensure_camera_started()
+                self._run_tick_stage("camera.runtime", self.ensure_camera_started, now)
             self.startup_wallpaper.set_active(self.home_visible)
             if not self.home_visible:
-                self.refresh_vision_runtime()
+                self._run_tick_stage("vision.runtime", self.refresh_vision_runtime, now)
             self.consume_capture_frame()
             self.state.camera_connected = self.camera_worker.connected
             self.state.mqtt_connected = self.mqtt.connected
@@ -949,6 +975,8 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             ):
                 self.chat_event_adapter.poll(self.state, now)
                 self.student_notice_adapter.poll(self.state, now)
+
+    def _request_ui_frame(self, now: float) -> None:
         high_rate = (
             not self.home_visible
             or self.startup_needs_high_rate()
@@ -964,63 +992,24 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         )
         if self.frame_scheduler.should_request(now, high_rate, self.render_fps_target):
             self.update()
-        self._ui_tick_last_ms = (time.perf_counter() - now) * 1000.0
-        self._ui_tick_max_ms = max(self._ui_tick_max_ms, self._ui_tick_last_ms)
-        if now - self._ui_tick_perf_log_at >= 5.0:
-            self._ui_tick_perf_log_at = now
-            metrics = {
-                "tick_ms": self._ui_tick_last_ms,
-                "tick_max_ms": self._ui_tick_max_ms,
-                "wakeup_gap_ms": self._ui_tick_gap_ms,
-                "wakeup_gap_max_ms": self._ui_tick_gap_max_ms,
-                "stages": {name: dict(stats) for name, stats in self._ui_tick_stages.items()},
-                "gpu_prewarm_last_ms": self._gpu_prewarm_last_ms,
-                "gpu_prewarm_max_ms": self._gpu_prewarm_max_ms,
-            }
-            self.state.backend_stats["ui_tick_performance"] = metrics
-            try:
-                self.backend.field_log.emit("ui_tick_timing", **metrics)
-            except Exception:
-                _LOG.warning("UI timing diagnostic could not be written", exc_info=True)
-            self._ui_tick_stages.clear()
-            self._ui_tick_max_ms = self._ui_tick_gap_max_ms = 0.0
+
+    def _publish_tick_performance(self, now: float) -> None:
+        report = self._tick_diagnostics.finish_tick(now, time.perf_counter())
+        if report is None:
+            return
+        metrics = report.metrics()
+        metrics.update(gpu_prewarm_last_ms=self._gpu_prewarm_last_ms,
+                       gpu_prewarm_max_ms=self._gpu_prewarm_max_ms)
+        self.state.backend_stats["ui_tick_performance"] = metrics
+        try:
+            self.backend.field_log.emit("ui_tick_timing", **metrics)
+        except Exception:
+            _LOG.warning("UI timing diagnostic could not be written", exc_info=True)
 
     def _run_tick_stage(self, name: str, callback: Any, now: float | None = None) -> bool:
-        """Keep one backend/vision fault from killing the Qt timer callback."""
-
-        started = time.perf_counter()
-        try:
-            callback()
-            return True
-        except Exception as exc:
-            now = time.perf_counter() if now is None else float(now)
-            self._tick_error_count += 1
-            self._tick_last_error = f"{name}: {type(exc).__name__}: {exc}"
-            self.state.backend_stats["ui_tick"] = {
-                "errors": self._tick_error_count,
-                "last_error": self._tick_last_error,
-            }
-            if now - self._tick_last_log_at.get(name, 0.0) >= 1.0:
-                self._tick_last_log_at[name] = now
-                _LOG.exception("UI tick stage failed: %s", name)
-                self.backend.field_log.emit(
-                    "thread_exception",
-                    stage=name,
-                    error_type=type(exc).__name__,
-                    error=str(exc),
-                    count=self._tick_error_count,
-                )
-            return False
-        finally:
-            # Preserve exception isolation while exposing work outside paintGL.
-            # Collection is cheap and bounded by the fixed list of tick stages.
-            stages = getattr(self, "_ui_tick_stages", None)
-            if stages is not None:
-                elapsed_ms = (time.perf_counter() - started) * 1000.0
-                stats = stages.setdefault(name, {"count": 0, "total_ms": 0.0, "max_ms": 0.0})
-                stats["count"] += 1
-                stats["total_ms"] += elapsed_ms
-                stats["max_ms"] = max(stats["max_ms"], elapsed_ms)
+        """Keep backend, vision and diagnostic faults inside their tick boundary."""
+        runner = TickStageRunner(self.state.backend_stats, self.backend.field_log.emit, _LOG, time.perf_counter)
+        return self._tick_diagnostics.run_stage(runner, name, callback, now=now)
 
     def update_backend_readiness(self, now: float | None = None, *, force: bool = False) -> dict[str, Any]:
         """Publish the fail-closed audit into runtime state for UI/diagnostics."""
@@ -1096,11 +1085,9 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         self.vision_wire_gpu.initialize()
         self.island_icon_gpu.initialize()
         self.quick_action_wheel_gpu.initialize()
-        if not self.clickgui_gpu.initialize():
-            click_gui = self.registry.get("ClickGui")
-            backend = click_gui.get_setting("Render Backend") if click_gui else None
-            if backend is not None:
-                backend.value = "Compatibility Painter"
+        # Availability is runtime state. A context failure must not rewrite the
+        # saved rendering preference; a later context may initialize correctly.
+        self.clickgui_gpu.initialize()
         self.startup_gpu.initialize()
         self.hud_video_gpu.initialize()
         # Record the actual driver, not the configured backend label. This
@@ -1125,6 +1112,9 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         # touched once by GpuFrameCompositor, avoiding Qt/GL state collisions.
 
     def paintGL(self) -> None:
+        if self._window_lifecycle.closing:
+            self._paint_shutdown_status()
+            return
         started = time.perf_counter()
         gpu_presented = self.paint_gpu_frame()
         if not gpu_presented:
@@ -1144,27 +1134,12 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             # the generator. Resume only after a successful visible GPU frame.
             self._gpu_prewarm_timer.start(16)
         presented = time.perf_counter()
-        present_dt = max(0.001, min(0.25, presented - self._last_present_time))
-        self._last_present_time = presented
-        self.fps_samples.append(1.0 / present_dt)
-        if len(self.fps_samples) > 90:
-            self.fps_samples.pop(0)
-        self.state.fps = sum(self.fps_samples) / len(self.fps_samples)
-        elapsed_ms = (presented - started) * 1000.0
-        self.render_frame_ms_ema = elapsed_ms if self.render_frame_ms_ema <= 0.0 else self.render_frame_ms_ema * 0.90 + elapsed_ms * 0.10
-        self._field_frame_times_ms.append(elapsed_ms)
-        if len(self._field_frame_times_ms) > 720:
-            del self._field_frame_times_ms[:-720]
-        if presented - self._last_field_frame_log_at >= 5.0 and self._field_frame_times_ms:
-            ordered = sorted(self._field_frame_times_ms)
-            p95_index = min(len(ordered) - 1, max(0, math.ceil(len(ordered) * 0.95) - 1))
+        frame = self._frame_telemetry.record_frame(started, presented)
+        self.state.fps = frame.fps
+        if frame.report is not None:
             self.backend.field_log.emit(
                 "frame_timing",
-                samples=len(ordered),
-                frame_ms_p95=ordered[p95_index],
-                frame_ms_max=ordered[-1],
-                frame_ms_ema=self.render_frame_ms_ema,
-                fps=self.state.fps,
+                **frame.report.metrics(),
                 render_target_fps=self.render_fps_target,
                 # frame_ms never existed and previously reported a misleading
                 # constant zero. This legacy scalar is final-present CPU time;
@@ -1180,13 +1155,12 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                     "dynamic": self.gpu_compositor.last_dynamic_ms,
                     "present": self.gpu_compositor.last_present_ms,
                 },
-                ui_tick_ms=self._ui_tick_last_ms,
-                ui_wakeup_gap_ms=self._ui_tick_gap_ms,
+                ui_tick_ms=self._tick_diagnostics.last_ms,
+                ui_wakeup_gap_ms=self._tick_diagnostics.gap_ms,
                 gpu_prewarm_last_ms=self._gpu_prewarm_last_ms,
                 gpu_prewarm_max_ms=self._gpu_prewarm_max_ms,
             )
-            self._field_frame_times_ms.clear()
-            self._last_field_frame_log_at = presented
+            self._frame_telemetry.acknowledge_report(frame.report)
         # 不再依据视频或偶发纹理上传耗时自动降档。摄像头保持源帧率，
         # HUD 呈现频率由 UIScale.HUD Refresh Rate 独立控制。
 
@@ -1300,6 +1274,8 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
 
     def prewarm_gpu_clickgui_resources(self) -> None:
         """Queue incremental GL warmup; preserve event-loop turns between pages."""
+        if self._window_lifecycle.closing:
+            return
         if not self.clickgui_gpu.available or not self.gpu_compositor.available:
             return
         self._gpu_prewarm_jobs_pending = self._gpu_prewarm_jobs()
@@ -1518,6 +1494,8 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
 
 
     def _run_gpu_prewarm_slice(self) -> None:
+        if self._window_lifecycle.closing:
+            return
         jobs = self._gpu_prewarm_jobs_pending
         if jobs is None or not self.gpu_compositor.available or not self.isVisible():
             return
@@ -1647,6 +1625,9 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             # frozen motion layer. Forget readiness before any cache decision.
             self.invalidate_transient_overlay_scene()
         functions = context.extraFunctions()
+        presented = False
+        committed = False
+        recovered = False
         try:
             restore_generation = self._economy_restore_pending_generation
             restore_attempt = bool(
@@ -1680,68 +1661,31 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             self._gpu_frame_recording = True
             if not self.paint_gpu_background(functions, width, height, ratio):
                 return False
-            economy_active = not startup_scene and (
-                self.economy_island.progress > 0.01 or self.economy_visible
+            scene = OverlayScene.resolve(
+                startup_scene=startup_scene,
+                economy_visible=self.economy_visible,
+                economy_progress=self.economy_island.progress,
+                clickgui_visible=self.gui_visible,
+                clickgui_progress=self.gui_timeline.progress,
+                student_visible=self.student_ui.visible,
+                escape_visible=self.escape_menu_visible,
             )
-            clickgui_active = not startup_scene and (
-                self.gui_timeline.progress > 0.01 or self.gui_visible
+            economy_active = scene.economy_active
+            clickgui_active = scene.clickgui_active
+            modal_backdrop_active = scene.modal_backdrop_active
+            jello_blur_radius = (
+                self.gui_timeline.blur_radius()
+                if not economy_active and clickgui_active and self.active_clickgui_mode() == PRIMARY_GUI_MODE
+                else None
             )
-            student_active = not startup_scene and self.student_ui.visible
-            escape_active = not startup_scene and self.escape_menu_visible
-            modal_backdrop_active = economy_active or clickgui_active or student_active or escape_active
-            economy_reveal = (
-                max(0.0, min(1.0, self.economy_island.progress))
-                if economy_active
-                else 0.0
+            treatment = BackdropTreatment.resolve(
+                scene, economy_progress=self.economy_island.progress,
+                clickgui_progress=self.gui_timeline.progress,
+                jello_blur_radius=jello_blur_radius,
+                student_panel=self.student_ui.panel,
+                student_progress=self.student_ui.progress,
             )
-            clickgui_reveal = (
-                max(0.0, min(1.0, self.gui_timeline.progress))
-                if clickgui_active
-                else 0.0
-            )
-            # Sigma drives a 20 px blur with min(1, raw * 4).  Its black
-            # overlay is part of ClickGuiScreen itself, so the compositor must
-            # not add Polar's separate dim pass on top of it.
-            if economy_active:
-                backdrop_active = economy_reveal > 0.0
-                backdrop_progress = economy_reveal
-                backdrop_blur = 4.0 * economy_reveal
-                backdrop_dim = 0.40
-                backdrop_blur_kernel = "compact_gaussian"
-            elif clickgui_active and self.active_clickgui_mode() == PRIMARY_GUI_MODE:
-                backdrop_active = clickgui_reveal > 0.0
-                backdrop_progress = 1.0 if backdrop_active else 0.0
-                backdrop_blur = self.gui_timeline.blur_radius()
-                backdrop_dim = 0.0
-                backdrop_blur_kernel = "jello_box20"
-            elif escape_active:
-                backdrop_active = True
-                backdrop_progress = 1.0
-                backdrop_blur = 20.0
-                backdrop_dim = 0.0
-                backdrop_blur_kernel = "jello_box20"
-            elif student_active:
-                backdrop_active = True
-                backdrop_progress = 1.0
-                backdrop_blur = 0.0 if self.student_ui.panel=="damage" else 20.0 * min(1.0, self.student_ui.progress * 4.0)
-                backdrop_dim = 0.0
-                backdrop_blur_kernel = "jello_box20"
-            else:
-                # Keep the historical compositor treatment when a legacy GUI
-                # is entered temporarily through Old ClickGUIs.
-                backdrop_active = clickgui_reveal > 0.0
-                backdrop_progress = clickgui_reveal
-                backdrop_blur = 3.0
-                backdrop_dim = 0.26
-                backdrop_blur_kernel = "compact_gaussian"
-            treatment_changed = self.gpu_compositor.set_backdrop_treatment(
-                active=backdrop_active,
-                progress=backdrop_progress,
-                blur_radius_px=backdrop_blur,
-                dim_alpha=backdrop_dim,
-                include_overlay=not economy_active,
-                blur_kernel=backdrop_blur_kernel,
-            )
+            treatment_changed = treatment.apply(self.gpu_compositor)
             control_changed = self.paint_gpu_control_backdrop(
                 functions,
                 width,
@@ -1750,14 +1694,19 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                 startup_scene=startup_scene,
                 economy_active=economy_active,
             )
+            if self.gpu_compositor.frame_rejected:
+                return False
             # Modal vision must never punch crisply through the treated
             # backdrop. Economy additionally clears the complete HUD layer;
             # Jello keeps the cached HUD under Sigma's blur.
             if modal_backdrop_active:
-                self.gpu_compositor.clear_vision_layer(functions)
+                if not self.gpu_compositor.clear_vision_layer(functions):
+                    return False
                 native_vision_owner = False
             else:
                 native_vision_owner = self.paint_gpu_vision_layer(functions, width, height, ratio)
+                if self.gpu_compositor.frame_rejected:
+                    return False
 
             if startup_scene:
                 transition_active = (
@@ -1791,7 +1740,8 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                             atlas_prepared=True,
                         ):
                             return False
-                        self.gpu_compositor.release_layer("overlay")
+                        if self.gpu_compositor.release_layer("overlay") is False:
+                            return False
                         self._startup_static_page_key = launcher_key
                     if not self.paint_gpu_startup_interaction_layer(functions, width, height, ratio, cached_static=True):
                         return False
@@ -1802,7 +1752,8 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                     if device is None:
                         return False
                     self.gpu_compositor.clear_current(functions, transparent=True)
-                    self.gpu_compositor.release_layer("overlay")
+                    if self.gpu_compositor.release_layer("overlay") is False:
+                        return False
                     if not self.paint_gpu_startup_interaction_layer(functions, width, height, ratio):
                         return False
                 self._gpu_static_ui_key = static_key
@@ -1821,31 +1772,30 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                         return False
                     device.setDevicePixelRatio(ratio)
                     self.gpu_compositor.clear_current(functions, transparent=True)
-                    self.gpu_compositor.release_layer("overlay")
+                    if self.gpu_compositor.release_layer("overlay") is False:
+                        return False
                     self._gpu_static_ui_key = static_key
                 elif rebuild_hud_static:
-                    device = self.gpu_compositor.paint_device("overlay")
-                    if device is None:
+                    def draw_static(session) -> bool:
+                        self.gpu_compositor.push_glass_owner(GlassOwner.HUD)
+                        session.defer_cleanup("glass_owner", self.gpu_compositor.pop_glass_owner)
+                        self.gpu_compositor.begin_static_glass()
+                        session.defer_cleanup("static_glass", self.gpu_compositor.end_static_glass)
+                        painter = session.begin_painter()
+                        self.paint_overlay(
+                            None,
+                            startup_background_ready=True,
+                            hud_background_ready=True,
+                            painter=painter,
+                            logical_size=(width, height),
+                            include_interactive=False,
+                            split_motion_layer=not modal_backdrop_active,
+                            capture_module_list=modal_backdrop_active,
+                        )
+                        return True
+
+                    if not self.gpu_compositor.paint_layer(functions, "overlay", ratio, draw_static):
                         return False
-                    device.setDevicePixelRatio(ratio)
-                    self.gpu_compositor.clear_current(functions, transparent=True)
-                    self.gpu_compositor.push_glass_owner(GlassOwner.HUD)
-                    self.gpu_compositor.begin_static_glass()
-                    painter = QPainter(device)
-                    self.paint_overlay(
-                        None,
-                        startup_background_ready=True,
-                        hud_background_ready=True,
-                        painter=painter,
-                        logical_size=(width, height),
-                        include_interactive=False,
-                        split_motion_layer=not modal_backdrop_active,
-                        capture_module_list=modal_backdrop_active,
-                    )
-                    painter.end()
-                    self.gpu_compositor.end_static_glass()
-                    self.gpu_compositor.pop_glass_owner()
-                    self.gpu_compositor.release_layer("overlay")
                     self._gpu_static_ui_key = static_key
 
                 if economy_active and self.clickgui_gpu.available:
@@ -1867,10 +1817,13 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                     if not self.clickgui_gpu.render(
                         functions, commands, width, height, ratio, atlas_prepared=True,
                     ):
-                        self.gpu_compositor.release_layer("dynamic")
+                        if self.gpu_compositor.release_layer("dynamic") is False:
+                            return False
                         return False
-                    self.gpu_compositor.release_layer("dynamic")
-                    self.gpu_compositor.clear_target_layer(functions)
+                    if self.gpu_compositor.release_layer("dynamic") is False:
+                        return False
+                    if not self.gpu_compositor.clear_target_layer(functions):
+                        return False
                 else:
                     prepared_clickgui_commands: ClickGuiDrawList | None = None
                     prepared_clickgui_frame: ClickGuiFrame | None = None
@@ -1900,63 +1853,55 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                         or self.escape_menu_visible
                     )
                     now = time.perf_counter()
-                    # The wheel is normally held for less than a second, so a
-                    # frozen base HUD is the cleanest result.  Chat can stay
-                    # open longer; refresh the base at 4 Hz while its input and
-                    # caret continue at the display refresh rate.
-                    base_refresh_interval = (
-                        0.25
-                        if (self.match_chat.input_open or self.escape_menu_visible)
-                        and not self.quick_action_wheel.visible
-                        else float("inf")
-                    )
-                    refresh_motion_layer = bool(
-                        not priority_overlay_active
-                        or not self._gpu_motion_layer_ready
-                        or now - self._gpu_motion_layer_updated_at
-                        >= base_refresh_interval
+                    refresh_motion_layer = motion_layer_needs_refresh(
+                        radial_visible=self.quick_action_wheel.visible,
+                        chat_open=self.match_chat.input_open,
+                        student_visible=self.student_ui.visible,
+                        escape_visible=self.escape_menu_visible,
+                        ready=self._gpu_motion_layer_ready,
+                        now=now, updated_at=self._gpu_motion_layer_updated_at,
                     )
 
                     if refresh_motion_layer:
                         dynamic_started = time.perf_counter()
-                        device = self.gpu_compositor.paint_device("dynamic")
-                        if device is None:
+                        def draw_motion(session) -> bool:
+                            self.begin_gpu_hud_command_collection()
+                            self.begin_gpu_island_icon_collection()
+                            self.begin_gpu_quick_action_wheel_collection()
+                            painter = session.begin_painter()
+                            if not self.home_visible and not clickgui_active:
+                                # Priority overlays own target_fbo and must not be
+                                # baked into this reusable base frame.
+                                self.paint_hud_motion_overlay(
+                                    painter,
+                                    width,
+                                    height,
+                                    include_vision=not native_vision_owner,
+                                    include_target_hud=(
+                                        self.menu_overlay_active()
+                                        and not priority_overlay_active
+                                    ),
+                                    include_chat=not self.match_chat.input_open,
+                                    include_radial=not self.quick_action_wheel.visible,
+                                )
+                            if not self.home_visible:
+                                self.paint_clickgui_overlay(
+                                    painter,
+                                    width,
+                                    height,
+                                    gpu_commands=prepared_clickgui_commands,
+                                    gpu_frame=prepared_clickgui_frame,
+                                    gpu_atlas_prepared=prepared_clickgui_atlas,
+                                )
+                            if not session.end_painter():
+                                return False
+                            self.flush_gpu_hud_commands(functions, width, height, ratio)
+                            self.flush_gpu_island_icons(functions, width, height, ratio)
+                            self.flush_gpu_quick_action_wheel(functions, width, height, ratio)
+                            return True
+
+                        if not self.gpu_compositor.paint_layer(functions, "dynamic", ratio, draw_motion):
                             return False
-                        device.setDevicePixelRatio(ratio)
-                        self.gpu_compositor.clear_current(functions, transparent=True)
-                        self.begin_gpu_hud_command_collection()
-                        self.begin_gpu_island_icon_collection()
-                        self.begin_gpu_quick_action_wheel_collection()
-                        painter = QPainter(device)
-                        if not self.home_visible and not clickgui_active:
-                            # Priority overlays own target_fbo and must not be
-                            # baked into this reusable base frame.
-                            self.paint_hud_motion_overlay(
-                                painter,
-                                width,
-                                height,
-                                include_vision=not native_vision_owner,
-                                include_target_hud=(
-                                    self.menu_overlay_active()
-                                    and not priority_overlay_active
-                                ),
-                                include_chat=not self.match_chat.input_open,
-                                include_radial=not self.quick_action_wheel.visible,
-                            )
-                        if not self.home_visible:
-                            self.paint_clickgui_overlay(
-                                painter,
-                                width,
-                                height,
-                                gpu_commands=prepared_clickgui_commands,
-                                gpu_frame=prepared_clickgui_frame,
-                                gpu_atlas_prepared=prepared_clickgui_atlas,
-                            )
-                        painter.end()
-                        self.flush_gpu_hud_commands(functions, width, height, ratio)
-                        self.flush_gpu_island_icons(functions, width, height, ratio)
-                        self.flush_gpu_quick_action_wheel(functions, width, height, ratio)
-                        self.gpu_compositor.release_layer("dynamic")
                         self._gpu_motion_layer_ready = True
                         self._gpu_motion_layer_updated_at = now
                         self.gpu_compositor.last_dynamic_ms = (
@@ -1972,7 +1917,8 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                         ):
                             return False
                     elif modal_backdrop_active:
-                        self.gpu_compositor.clear_target_layer(functions)
+                        if not self.gpu_compositor.clear_target_layer(functions):
+                            return False
                     elif not self.paint_gpu_target_hud_layer(
                         functions,
                         width,
@@ -1981,77 +1927,38 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                     ):
                         return False
 
-            base_blur_dirty = self._gpu_background_changed or control_changed
-            if not self.gpu_compositor.prepare_blur(
-                functions,
-                background_changed=base_blur_dirty,
-            ):
+            if self.gpu_compositor.frame_rejected:
                 return False
-            # Native HUD lenses sample only the scene/control blur. They never
-            # read the modal treatment texture, so opening a workspace cannot
-            # alter their material or feed a previous HUD frame back into them.
-            if not self.gpu_compositor.render_glass(
-                functions,
-                include_static=True,
-                owners={GlassOwner.HUD},
-                destination="hud",
-                apply_backdrop_treatment=False,
-            ):
-                return False
-            # Capture the complete native HUD once, then soften that stable
-            # result for ClickGUI/economy. Overlay lenses stay crisp and sample
-            # this treated backdrop rather than a cheaper replacement surface.
-            if not self.gpu_compositor.prepare_treated_backdrop(
-                functions,
-                background_changed=(
-                    base_blur_dirty
-                    or treatment_changed
-                    or rebuild_hud_static
+            composition = FrameCompositionPlan(
+                background_changed=self._gpu_background_changed,
+                control_changed=control_changed,
+                treatment_changed=treatment_changed,
+                static_ui_rebuilt=rebuild_hud_static,
+                overlay_owners=scene.glass_owners(
+                    radial_visible=self.quick_action_wheel.visible,
+                    hero_visible=self.hero_deploy_ui.render_visible,
                 ),
-            ):
-                return False
-            glass_owners: set[GlassOwner] = set()
-            if economy_active:
-                glass_owners.add(GlassOwner.ECONOMY)
-            if clickgui_active:
-                glass_owners.add(GlassOwner.CLICKGUI)
-            if self.quick_action_wheel.visible:
-                glass_owners.add(GlassOwner.RADIAL)
-            if self.hero_deploy_ui.render_visible:
-                glass_owners.add(GlassOwner.HERO_DEPLOY)
-            if not self.gpu_compositor.render_glass(
-                functions,
-                include_static=True,
-                owners=glass_owners,
-                destination="overlay",
-            ):
-                return False
-            presented = self.gpu_compositor.present(
-                functions,
-                self.defaultFramebufferObject(),
+                target_framebuffer=self.defaultFramebufferObject(),
             )
+            presented = FinalFrameCompositor(self.gpu_compositor).present(functions, composition)
             if presented and restore_attempt and restore_generation is not None:
                 self._finalize_economy_restore(restore_generation)
-            return presented
+            committed = presented
+            return committed
         except Exception as exc:
-            self.gpu_compositor.last_error = str(exc)
-            try:
-                self.gpu_compositor.release_layer("background")
-                self.gpu_compositor.release_layer("control")
-                self.gpu_compositor.release_layer("overlay")
-                self.gpu_compositor.end_vision_layer()
-                self.gpu_compositor.release_layer("dynamic")
-                self.gpu_compositor.release_layer("target")
-            except Exception:
-                pass
+            self.gpu_compositor.recover_failed_frame(exc)
+            recovered = True
             # Never preserve metadata for a partially rendered modal frame.
             # The compatibility fallback below remains visible for the current
             # present; the next GL frame then performs a complete, deterministic
             # rebuild.  Economy restore generations intentionally stay pending.
-            self.invalidate_transient_overlay_scene()
-            self.frame_scheduler.force()
             return False
         finally:
+            if not committed:
+                if not recovered:
+                    self.gpu_compositor.recover_rejected_frame()
+                self.invalidate_transient_overlay_scene()
+                self.frame_scheduler.force()
             self._gpu_frame_recording = False
 
     def paint_gpu_control_backdrop(
@@ -2084,54 +1991,49 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             )
         if key == self._gpu_control_backdrop_key:
             return False
-        device = self.gpu_compositor.paint_device("control")
-        if device is None:
-            # False means an unchanged, valid backdrop to the caller. A bind
-            # failure must instead reject this frame through its existing
-            # compatibility/retry recovery, never present untouched storage.
-            raise RuntimeError("GPU control backdrop paint device unavailable")
-        device.setDevicePixelRatio(ratio)
-        self.gpu_compositor.clear_current(functions, transparent=True)
-        if economy_active:
-            # The reference Control Center applies dim and blur to the complete
-            # captured backdrop in the compositor. This layer intentionally
-            # stays transparent; rebuilding a full-screen QPainter mask on
-            # every spring frame caused both pulsing and avoidable stalls.
-            pass
-        elif startup_scene and self.startup_step in {"scenario", "match"}:
-            painter = QPainter(device)
-            painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-            scale = max(0.74, min(1.14, self.get_auto_ui_scale(width, height, strength=0.45)))
-            menu_x, menu_y, button_w, button_h, gap = self.liquid_menu_layout(width, height, 3, scale)
-            accents = (
-                [self.startup_menu_accent(index + 2) for index in range(2)] + [color("#ec5ad9")]
-                if self.startup_step == "match"
-                else [self.startup_menu_accent(index) for index in range(3)]
-            )
-            for index, accent in enumerate(accents):
-                rect = QRectF(menu_x, menu_y + index * (button_h + gap), button_w, button_h)
-                painter.setPen(Qt.PenStyle.NoPen)
-                painter.setBrush(with_alpha(accent, 0.34))
-                painter.drawRoundedRect(
-                    QRectF(
-                        rect.left() + 22.0 * scale,
-                        rect.center().y() - 2.0 * scale,
-                        min(94.0 * scale, rect.width() * 0.24),
-                        4.0 * scale,
-                    ),
-                    2.0 * scale,
-                    2.0 * scale,
+        def draw_control(session) -> bool:
+            if economy_active:
+                # The reference Control Center applies dim and blur to the complete
+                # captured backdrop in the compositor. This layer intentionally
+                # stays transparent; rebuilding a full-screen QPainter mask on
+                # every spring frame caused both pulsing and avoidable stalls.
+                pass
+            elif startup_scene and self.startup_step in {"scenario", "match"}:
+                painter = session.begin_painter()
+                painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+                scale = max(0.74, min(1.14, self.get_auto_ui_scale(width, height, strength=0.45)))
+                menu_x, menu_y, button_w, button_h, gap = self.liquid_menu_layout(width, height, 3, scale)
+                accents = (
+                    [self.startup_menu_accent(index + 2) for index in range(2)] + [color("#ec5ad9")]
+                    if self.startup_step == "match"
+                    else [self.startup_menu_accent(index) for index in range(3)]
                 )
-                # 注意：这里不再画按钮左缘的 accent 竖条。稳定页/过渡流的
-                # launcher draw list（build_gpu_startup_button）已经绘制同位
-                # 条并带玻璃圆角 SDF 裁剪；此处重复绘制会在 r=18s 弧角外泄
-                # ~7px。另注：本层（control FBO）的 clip 可靠性不具备跨层/
-                # 跨驱动保证——管线内实验（tmp_corner_verify/clip_audit_out）
-                # 显示 overlay 层 clip 生效而本层曾出现异常，故圆角约束一律
-                # 用引擎无关手段（GPU SDF mask / 路径交集 / 预裁剪），不依赖
-                # QPainter setClip*。
-            painter.end()
-        self.gpu_compositor.release_layer("control")
+                for index, accent in enumerate(accents):
+                    rect = QRectF(menu_x, menu_y + index * (button_h + gap), button_w, button_h)
+                    painter.setPen(Qt.PenStyle.NoPen)
+                    painter.setBrush(with_alpha(accent, 0.34))
+                    painter.drawRoundedRect(
+                        QRectF(
+                            rect.left() + 22.0 * scale,
+                            rect.center().y() - 2.0 * scale,
+                            min(94.0 * scale, rect.width() * 0.24),
+                            4.0 * scale,
+                        ),
+                        2.0 * scale,
+                        2.0 * scale,
+                    )
+                    # 注意：这里不再画按钮左缘的 accent 竖条。稳定页/过渡流的
+                    # launcher draw list（build_gpu_startup_button）已经绘制同位
+                    # 条并带玻璃圆角 SDF 裁剪；此处重复绘制会在 r=18s 弧角外泄
+                    # ~7px。另注：本层（control FBO）的 clip 可靠性不具备跨层/
+                    # 跨驱动保证——管线内实验（tmp_corner_verify/clip_audit_out）
+                    # 显示 overlay 层 clip 生效而本层曾出现异常，故圆角约束一律
+                    # 用引擎无关手段（GPU SDF mask / 路径交集 / 预裁剪），不依赖
+                    # QPainter setClip*。
+            return True
+
+        if not self.gpu_compositor.paint_layer(functions, "control", ratio, draw_control):
+            return False
         self._gpu_control_backdrop_key = key
         return True
 
@@ -2151,23 +2053,14 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         # Glyph page publication may allocate textures. Do it before binding
         # the destination FBO; the following render pass is strictly read-only.
         self.clickgui_gpu.prepare_frame(commands, ratio)
-        device = self.gpu_compositor.paint_device("dynamic")
-        if device is None:
-            return False
-        try:
-            self.gpu_compositor.clear_current(functions, transparent=True)
+        def draw(session) -> bool:
             rendered = self.clickgui_gpu.render(
-                functions,
-                commands,
-                width,
-                height,
-                ratio,
-                atlas_prepared=True,
+                functions, commands, width, height, ratio, atlas_prepared=True,
             )
             self.gpu_compositor.last_dynamic_ms = (time.perf_counter() - started) * 1000.0
             return rendered
-        finally:
-            self.gpu_compositor.release_layer("dynamic")
+
+        return self.gpu_compositor.paint_layer(functions, "dynamic", ratio, draw)
 
     def module_list_animation_in_flight(self) -> bool:
         """True while any module-list row is fading/sliding in or out."""
@@ -2365,69 +2258,69 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             return True
 
         started = time.perf_counter()
-        device = self.gpu_compositor.paint_device("background")
-        if device is None:
-            return False
-        device.setDevicePixelRatio(ratio)
-        self.gpu_compositor.clear_current(functions, transparent=False)
-        # Some Windows drivers corrupt a QOpenGLTexture fed from a changing
-        # QImage while an FBO is resized at 2K/DPR boundaries.  The raw video
-        # shader stays available for explicit diagnostics, but the production
-        # path paints the decoded frame into our *private* scene FBO and still
-        # presents it through the single GPU compositor.  This removes the
-        # striped/repeated-frame failure without falling back to the window's
-        # mixed QPainter/default-framebuffer path.
-        # The launcher has one production background path: texture -> private
-        # background FBO.  The painter branch remains a GPU-init fallback only.
-        raw_video_path = True
-        raw_drawn = False
-        if self.home_visible:
-            if raw_video_path and mode not in ("ParticleGrid", "PkgScene") and profile not in ("ParticleGrid", "Default3000925581Pkg") and self.startup_gpu.available:
-                snapshot = startup_snapshot
-                if snapshot is not None:
-                    stable_draw_rect = self.startup_wallpaper.last_draw_rect.translated(
-                        -float(self.startup_wallpaper.parallax_x),
-                        -float(self.startup_wallpaper.parallax_y),
-                    )
-                    self.startup_gpu.update_frame(
-                        snapshot.image,
-                        stable_draw_rect,
-                        snapshot.sequence,
-                        snapshot.frame_interval,
-                        self.get_setting_number(module, "Dim Overlay", 0.28),
-                        origin=TextureOrigin.TOP_LEFT_IMAGE,
-                    )
-                    raw_drawn = self.startup_gpu.render(functions, canvas, interpolate=False)
-                    if raw_drawn:
-                        self.liquid_glass.update(
-                            "startup",
+        def draw_background(session) -> bool:
+            # Some Windows drivers corrupt a QOpenGLTexture fed from a changing
+            # QImage while an FBO is resized at 2K/DPR boundaries.  The raw video
+            # shader stays available for explicit diagnostics, but the production
+            # path paints the decoded frame into our *private* scene FBO and still
+            # presents it through the single GPU compositor.  This removes the
+            # striped/repeated-frame failure without falling back to the window's
+            # mixed QPainter/default-framebuffer path.
+            # The launcher has one production background path: texture -> private
+            # background FBO.  The painter branch remains a GPU-init fallback only.
+            raw_video_path = True
+            raw_drawn = False
+            if self.home_visible:
+                if raw_video_path and mode not in ("ParticleGrid", "PkgScene") and profile not in ("ParticleGrid", "Default3000925581Pkg") and self.startup_gpu.available:
+                    snapshot = startup_snapshot
+                    if snapshot is not None:
+                        stable_draw_rect = self.startup_wallpaper.last_draw_rect.translated(
+                            -float(self.startup_wallpaper.parallax_x),
+                            -float(self.startup_wallpaper.parallax_y),
+                        )
+                        self.startup_gpu.update_frame(
                             snapshot.image,
                             stable_draw_rect,
-                            soft=snapshot.soft_glass,
-                            lens=snapshot.glass,
+                            snapshot.sequence,
+                            snapshot.frame_interval,
+                            self.get_setting_number(module, "Dim Overlay", 0.28),
+                            origin=TextureOrigin.TOP_LEFT_IMAGE,
                         )
-        # Live camera frames deliberately do not use StartupGpuCompositor's
-        # current/previous texture pair.  A changing QImage can otherwise race
-        # texture reuse on some Windows drivers, producing an intermittent
-        # flipped or repeated frame.  Painting the latest immutable QImage into
-        # this private FBO still leaves the final composition entirely on the
-        # GPU, while guaranteeing that each display frame has one orientation.
-        if not raw_drawn:
-            painter = QPainter(device)
-            painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-            painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, smooth_video(not self.high_res_optimize(width,height)))
-            if self.home_visible:
-                self.draw_startup_background(painter, width, height)
-            elif self.hero_deploy_video_cut_active():
-                self.draw_hero_native_background(painter, width, height)
-            elif self.backend_video_source_selected() and not self.normal_backend_video_fresh():
-                self.draw_backend_video_lost(painter, width, height)
-            elif self.normal_video_frame_ready() and self.frame_image is not None and not self.frame_image.isNull():
-                painter.drawImage(canvas, self.frame_image, QRectF(self.frame_image.rect()))
-            else:
-                self.draw_synthetic_video(painter, width, height)
-            painter.end()
-        self.gpu_compositor.release_layer("background")
+                        raw_drawn = self.startup_gpu.render(functions, canvas, interpolate=False)
+                        if raw_drawn:
+                            self.liquid_glass.update(
+                                "startup",
+                                snapshot.image,
+                                stable_draw_rect,
+                                soft=snapshot.soft_glass,
+                                lens=snapshot.glass,
+                            )
+            # Live camera frames deliberately do not use StartupGpuCompositor's
+            # current/previous texture pair.  A changing QImage can otherwise race
+            # texture reuse on some Windows drivers, producing an intermittent
+            # flipped or repeated frame.  Painting the latest immutable QImage into
+            # this private FBO still leaves the final composition entirely on the
+            # GPU, while guaranteeing that each display frame has one orientation.
+            if not raw_drawn:
+                painter = session.begin_painter()
+                painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+                painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, smooth_video(not self.high_res_optimize(width,height)))
+                if self.home_visible:
+                    self.draw_startup_background(painter, width, height)
+                elif self.hero_deploy_video_cut_active():
+                    self.draw_hero_native_background(painter, width, height)
+                elif self.backend_video_source_selected() and not self.normal_backend_video_fresh():
+                    self.draw_backend_video_lost(painter, width, height)
+                elif self.normal_video_frame_ready() and self.frame_image is not None and not self.frame_image.isNull():
+                    painter.drawImage(canvas, self.frame_image, QRectF(self.frame_image.rect()))
+                else:
+                    self.draw_synthetic_video(painter, width, height)
+            return True
+
+        if not self.gpu_compositor.paint_layer(
+            functions, "background", ratio, draw_background, transparent=False,
+        ):
+            return False
         self._gpu_background_key = background_key
         self._gpu_background_transform_key = transform_key
         self._gpu_background_changed = blur_source_key != self._gpu_blur_source_key
@@ -2436,7 +2329,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         return True
 
     def tune_render_rate(self, now: float) -> None:
-        if now - self._last_render_tune < 0.35 or self.render_frame_ms_ema <= 0.0:
+        if now - self._last_render_tune < 0.35 or self._frame_telemetry.ema_ms <= 0.0:
             return
         self._last_render_tune = now
         levels = [60.0, 72.0, 90.0, 120.0, 144.0]
@@ -2445,7 +2338,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             allowed = [60.0]
         current = min(range(len(allowed)), key=lambda index: abs(allowed[index] - self.render_fps_target))
         budget_ms = 1000.0 / max(1.0, allowed[current])
-        measured_ms = self.render_frame_ms_ema
+        measured_ms = self._frame_telemetry.ema_ms
         if self.gpu_compositor.available:
             compositor = self.gpu_compositor
             media_reuse = max(1.0, self.render_fps_target / 30.0)
@@ -2775,28 +2668,22 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
     ) -> bool:
         """Draw chat input and the radial wheel without repainting the HUD."""
         started_at = time.perf_counter()
-        device = self.gpu_compositor.paint_device("target")
-        if device is None:
-            return False
-        device.setDevicePixelRatio(ratio)
-        try:
-            self.gpu_compositor.clear_current(functions, transparent=True)
+        def draw(session) -> bool:
             self.begin_gpu_quick_action_wheel_collection()
-            painter = QPainter(device)
+            painter = session.begin_painter()
             if self.match_chat.input_open:
                 self.draw_match_chat(painter, width, height, now=started_at)
             if self.quick_action_wheel.visible:
                 self.draw_quick_action_wheel(painter, width, height)
             self.draw_student_frontend(painter, width, height)
             self.draw_escape_menu(painter, width, height)
-            painter.end()
+            if not session.end_painter():
+                return False
             self.flush_gpu_quick_action_wheel(functions, width, height, ratio)
-            self.gpu_compositor.last_dynamic_ms = (
-                time.perf_counter() - started_at
-            ) * 1000.0
+            self.gpu_compositor.last_dynamic_ms = (time.perf_counter() - started_at) * 1000.0
             return True
-        finally:
-            self.gpu_compositor.release_layer("target")
+
+        return self.gpu_compositor.paint_layer(functions, "target", ratio, draw)
 
     @staticmethod
     def quick_action_sector_path(
@@ -3044,6 +2931,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                 self.draw_economy_overlay_compat(p, width, height, economy_alpha)
 
         gui_alpha = self.gui_timeline.progress
+        gpu_presented = False
         if self.gui_visible or gui_alpha > 0.01:
             # Drop HUD/map hit targets while ClickGUI owns the pointer.
             self.hotspots.clear()
@@ -3068,58 +2956,21 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                         self.hotspots.extend(gpu_hotspots)
                     else:
                         self.build_gpu_clickgui(width, height, gui_alpha)
-                pixel_ratio = self.devicePixelRatioF()
-                if not gpu_atlas_prepared:
-                    # Direct compatibility callers do not have the outer
-                    # compositor's frame-boundary preparation step.
-                    self.clickgui_gpu.prepare_frame(commands, pixel_ratio)
-                    gpu_atlas_prepared = True
-                p.beginNativePainting()
                 context = self.context()
                 functions = context.extraFunctions() if context is not None else None
-                # QPainter / target-layer uploads may leave non-zero texture units
-                # dirty; reset unit 0 before sampling glyph atlases.
-                if functions is not None:
-                    self.gpu_compositor._restore_qt_texture_state(functions, clear_bindings=True)
-                rendered = bool(
-                    context
-                    and functions is not None
-                    and self.clickgui_gpu.render(
-                        functions,
-                        commands,
-                        width,
-                        height,
-                        pixel_ratio,
-                        atlas_prepared=gpu_atlas_prepared,
+                presenter = getattr(self, "_clickgui_presenter", None)
+                if presenter is None or presenter.renderer is not self.clickgui_gpu:
+                    presenter = ClickGuiGpuPresenter(
+                        self.clickgui_gpu, self.gpu_compositor._restore_qt_texture_state,
                     )
+                    self._clickgui_presenter = presenter
+                rendered = presenter.present(
+                    p, functions, commands,
+                    ClickGuiViewport(width, height, self.devicePixelRatioF()),
+                    atlas_prepared=gpu_atlas_prepared,
                 )
-                p.endNativePainting()
-                if not rendered:
-                    # Incomplete atlas snapshot must not permanently flip the user
-                    # off Unified GPU; retry prepare+render once this frame.
-                    if context is not None and functions is not None:
-                        try:
-                            self.clickgui_gpu.prepare_frame(commands, pixel_ratio)
-                            self.gpu_compositor._restore_qt_texture_state(functions, clear_bindings=True)
-                            p.beginNativePainting()
-                            rendered = bool(
-                                self.clickgui_gpu.render(
-                                    functions,
-                                    commands,
-                                    width,
-                                    height,
-                                    pixel_ratio,
-                                    atlas_prepared=True,
-                                )
-                            )
-                            p.endNativePainting()
-                        except Exception:
-                            rendered = False
-                    if not rendered:
-                        backend = click_gui.get_setting("Render Backend") if click_gui else None
-                        if backend:
-                            backend.value = "Compatibility Painter"
-                        direct_gpu = False
+                direct_gpu = rendered
+                gpu_presented = rendered
                 if rendered and frame_to_publish is not None:
                     frame_to_publish.publish_interactions(self)
             if not direct_gpu:
@@ -3161,10 +3012,13 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                     del self.hotspots[gui_hotspot_start:]
                     self.gui_scroll_viewports = []
 
+        if not self.gui_visible and gui_alpha <= 0.01 and economy_alpha <= 0.01:
+            self.draw_video_source_recovery(p, width, height)
+
         if (
             self.binding_module is not None
             and self.active_clickgui_mode() in LEGACY_GUI_MODES
-            and not (gui_alpha > 0.01 and self.setting_mode(self.registry.get("ClickGui"), "Render Backend", "Unified GPU") == "Unified GPU" and self.clickgui_gpu.available)
+            and not (gui_alpha > 0.01 and gpu_presented)
         ):
             self.draw_keybind_overlay(p, width, height)
 
@@ -3408,46 +3262,116 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             return False
 
     def closeEvent(self, event: QCloseEvent) -> None:
-        failures = []
-
-        def cleanup(label, action):
+        if self._window_lifecycle.ready_to_close:
             try:
-                action()
-            except Exception as exc:
-                failures.append(f"{label}: {exc}")
+                self._finish_window_shutdown()
+            finally:
+                super().closeEvent(event)
+            return
+        if not self._window_lifecycle.closing:
+            if not self._admit_window_close():
+                event.ignore()
+                return
+            self._begin_window_shutdown()
+        else:
+            self._window_lifecycle.retry_close()
+        # A blocked native owner is still owned. A timer polls completion and
+        # schedules a second close only after the backend confirms retirement.
+        event.ignore()
 
-        # A save or one broken resource must never prevent the other safety
-        # and teardown actions. Stop the timer and outputs before disk/GL work.
+    def _admit_window_close(self) -> bool:
+        """Preserve pending edits before sealing resource ownership."""
+        stop = None
+        if self.configuration_close_requires_save:
+            # A failed disk write cancels close, not the operator's intent to
+            # stop driving. Revoke authority before fallible input cleanup and
+            # keep it locked until the operator explicitly authorizes again.
+            stop = request_control_lock(
+                self.backend, self.control, self.backend.mqtt.publish_estop_zero,
+            )
+            if stop.failures:
+                self.toast(stop.message, kind="warning")
         try:
-            cleanup("timer", self.timer.stop)
-            if hasattr(self, "_gpu_prewarm_timer"):
-                cleanup("GPU warmup timer", self._gpu_prewarm_timer.stop)
-            cleanup("control lock", lambda: self.backend.lock_control("window closing"))
-            self.control.mock_output = bool(self.backend.mqtt.mock_output)
-            cleanup("control release", lambda: self.control.release_all(self.state, self.registry))
-            cleanup("emergency stop", self.backend.trigger_estop)
-            cleanup("backend", self.backend.shutdown)
-            cleanup("configuration", lambda: self.flush_auto_save(force=True))
-            try:
-                has_context = self.context() is not None
-            except Exception as exc:
-                has_context = False
-                failures.append(f"GL context: {exc}")
-            if has_context:
-                try:
-                    self.makeCurrent()
-                    for name in ("clickgui_gpu", "vision_wire_gpu", "island_icon_gpu", "quick_action_wheel_gpu", "gpu_compositor", "startup_gpu", "hud_video_gpu"):
-                        cleanup(name, getattr(self, name).release)
-                except Exception as exc:
-                    failures.append(f"GL context: {exc}")
-                finally:
-                    cleanup("GL done", self.doneCurrent)
-            for name, method in (("startup_wallpaper", "release"), ("camera_worker", "stop"), ("local_vision", "stop"), ("tongji_receiver", "stop"), ("tongji_bridge", "stop")):
-                cleanup(name, getattr(getattr(self, name), method))
+            accepted = self.prepare_configuration_for_close()
+        except Exception as exc:
+            _LOG.error("Close configuration admission failed", exc_info=True)
+            self.toast(f"关闭保存检查失败：{type(exc).__name__}: {exc}", kind="warning")
+            accepted = False
+        if not accepted:
+            message = "关闭已取消，未保存草稿仍保留。"
+            if stop is not None:
+                message += "恢复控制需要显式重新授权。"
+                message += "比赛控制保持锁定。" if not stop.failures else stop.message
+            self.toast(message, kind="warning")
+        return accepted
+
+    def _begin_window_shutdown(self) -> None:
+        tasks = (
+            TeardownTask("camera", self.camera_worker.close),
+            TeardownTask("local-vision", self.local_vision.close),
+            TeardownTask("tongji-receiver", self.tongji_receiver.close),
+            TeardownTask("tongji-bridge", self.tongji_bridge.close),
+            TeardownTask("wallpaper-video", self.startup_wallpaper.video_player.close),
+            TeardownTask("wallpaper-thumbnails", self.startup_wallpaper.close_thumbnail_workers),
+        )
+        prepare = (
+            OwnerAction("GPU warmup timer", self._gpu_prewarm_timer.stop),
+            OwnerAction("window input", lambda: self.setEnabled(False)),
+            OwnerAction("local input", lambda: self._clear_control_inputs_for_lock("window closing")),
+            OwnerAction("pending configuration", self.cancel_pending_configuration_for_close),
+        )
+        self._window_lifecycle.request_close(prepare=prepare, tasks=tasks)
+        # The main timer remains alive even if a test/tool had paused it. No
+        # normal runtime stages execute through the closing branch above.
+        self.timer.start(16)
+        self.update()
+
+    def _paint_shutdown_status(self) -> None:
+        painter = QPainter(self)
+        try:
+            painter.fillRect(self.rect(), QColor("#0b1018"))
+            painter.setPen(QColor("#e1e8f0"))
+            painter.drawText(
+                self.rect().adjusted(40, 40, -40, -40),
+                Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap,
+                self._window_lifecycle.status_text,
+            )
         finally:
-            if failures:
-                self.state.push_event("Exit cleanup warnings: " + "; ".join(failures))
-            super().closeEvent(event)
+            painter.end()
+
+    def _finish_window_shutdown(self) -> None:
+        if self._window_close_finalized:
+            return
+        self._window_close_finalized = True
+        failures = list(self._window_lifecycle.owner_failures)
+        failures.extend(run_owner_actions((
+            OwnerAction("timer", self.timer.stop),
+            OwnerAction("GPU warmup timer", self._gpu_prewarm_timer.stop),
+            OwnerAction("configuration", lambda: self.flush_auto_save(force=True)),
+        )))
+        try:
+            has_context = self.context() is not None
+        except Exception as exc:
+            _LOG.error("Window GL context inspection failed", exc_info=True)
+            has_context = False
+            failures.append(OwnerActionFailure("GL context", type(exc).__name__, str(exc)))
+        if has_context:
+            try:
+                self.makeCurrent()
+                failures.extend(run_owner_actions(tuple(
+                    OwnerAction(name, getattr(self, name).release)
+                    for name in ("clickgui_gpu", "vision_wire_gpu", "island_icon_gpu",
+                                 "quick_action_wheel_gpu", "gpu_compositor", "startup_gpu", "hud_video_gpu")
+                )))
+            except Exception as exc:
+                _LOG.error("Window GL context cleanup failed", exc_info=True)
+                failures.append(OwnerActionFailure("GL context", type(exc).__name__, str(exc)))
+            finally:
+                failures.extend(run_owner_actions((OwnerAction("GL done", self.doneCurrent),)))
+        if failures:
+            message = "Exit cleanup warnings: " + "; ".join(f.summary for f in failures)
+            self.state.push_event(message)
+            self._show_shutdown_cleanup_warning(message)
 
     def focusOutEvent(self, event) -> None:
         """A lost foreground window is an unconditional control epoch break."""
@@ -4327,10 +4251,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
 
     def _client_asset_path(self, *parts: str) -> Path:
         """Resolve assets under rm_custom_client/ regardless of workspace root."""
-        primary = self.paths.resource_root.joinpath(*parts)
-        if primary.exists():
-            return primary
-        return self.paths.app_root.joinpath(*parts)
+        return resolve_client_asset(self.paths, *parts)
 
     # ------------------------------------------------------------------
     # 阶段 3d 大域 mixin 化：build_gpu_economy_workspace（D6 GPU 经济工作区
@@ -4548,66 +4469,10 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
     # ------------------------------------------------------------------
 
     def sync_quick_action_wheel_settings(self) -> None:
-        module = self.registry.get("QuickActionWheel")
-        if module is None:
-            return
-        slot_names = (
-            "Up",
-            "Upper Right",
-            "Right",
-            "Lower Right",
-            "Down",
-            "Lower Left",
-            "Left",
-            "Upper Left",
-        )
-        action_by_label = {label: action for action, label in ACTION_LABELS.items()}
-        actions: list[str] = []
-        for index, name in enumerate(slot_names):
-            setting = module.get_setting(name)
-            label = str(setting.value) if setting is not None else ACTION_LABELS[DEFAULT_ACTIONS[index]]
-            actions.append(action_by_label.get(label, DEFAULT_ACTIONS[index]))
-        self.quick_action_wheel.configure(
-            sector_count=int(self.setting_mode(module, "Sectors", "8")),
-            radius=self.get_setting_number(module, "Radius", 118.0),
-            dead_zone=self.get_setting_number(module, "Dead Zone", 38.0),
-            show_labels=self.setting_bool(module, "Show Labels", True),
-            label_style=self.setting_mode(module, "Label Style", "Action"),
-            icon_style=self.setting_mode(module, "Icon Style", "Initials"),
-            actions=actions,
-        )
+        sync_wheel_from_module(self.registry.get("QuickActionWheel"), self.quick_action_wheel)
 
     def apply_quick_action_wheel_to_settings(self) -> None:
-        module = self.registry.get("QuickActionWheel")
-        if module is None:
-            return
-        values: dict[str, Any] = {
-            "Sectors": str(self.quick_action_wheel.sector_count),
-            "Radius": self.quick_action_wheel.radius,
-            "Dead Zone": self.quick_action_wheel.dead_zone,
-            "Show Labels": self.quick_action_wheel.show_labels,
-            "Label Style": self.quick_action_wheel.label_style,
-            "Icon Style": self.quick_action_wheel.icon_style,
-        }
-        slot_names = (
-            "Up",
-            "Upper Right",
-            "Right",
-            "Lower Right",
-            "Down",
-            "Lower Left",
-            "Left",
-            "Upper Left",
-        )
-        for index, name in enumerate(slot_names):
-            values[name] = ACTION_LABELS.get(
-                self.quick_action_wheel.actions[index],
-                ACTION_LABELS[DEFAULT_ACTIONS[index]],
-            )
-        for name, value in values.items():
-            setting = module.get_setting(name)
-            if setting is not None:
-                setting.value = value
+        sync_module_from_wheel(self.registry.get("QuickActionWheel"), self.quick_action_wheel)
 
     def draw_gui_cached_layer(
         self,
@@ -4623,9 +4488,11 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
 
         def local_build(layer: QPainter, local_rect: QRectF) -> None:
             layer.save()
-            layer.translate(-rect.left(), -rect.top())
-            build(layer, QRectF(rect))
-            layer.restore()
+            try:
+                layer.translate(-rect.left(), -rect.top())
+                build(layer, QRectF(rect))
+            finally:
+                layer.restore()
 
         try:
             self.gui_cache.draw(
@@ -4637,10 +4504,8 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             )
         except Exception:
             _LOG.exception("ClickGUI cache failed; using compatibility painting")
-            # 缓存层异常时立即退回直接绘制，交互界面不能因显卡兼容性失效。
-            setting = module.get_setting("Render Backend") if module else None
-            if setting is not None:
-                setting.value = "Compatibility Painter"
+            # This frame may bypass the cache without changing the user's
+            # persisted choice. The next frame can rebuild a healthy cache.
             self.gui_cache.clear()
             build(painter, QRectF(rect))
 
@@ -4717,21 +4582,9 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
 # ----------------------------------------------------------------------
 
 
-# ----------------------------------------------------------------------
-# 阶段 4 窗口壳收编（REFACTOR_BLUEPRINT §5 阶段 4 / 目标子包结构）：
-# main()（QApplication GL 装配 + 创建窗口）已机械迁至
-# rm_client/ui/polar/app_entry.py（语句序列零修改），此处 re-export 维持
-# §5.6 模块级冻结符号 rm_client.ui.polar_app.main 的兼容面——外部触点
-# main.py:59 与 rm_client/app.py:655、tests/api_freeze_test.py 模块符号
-# 快照（kind=function / sig="main"）均不受影响。模块级函数 __qualname__
-# 恒为 "main"，无需钉回。
-#
-# 终态决策（方案 A，保守）：PolarRMWindow 与 D0-D3（构造/生命周期、主循环
-# tick 编排、GPU 帧编排/FBO 层管理、paint_overlay CPU 绘制总线）保留在
-# 本文件原位，不做 WindowShellMixin 化——它们即窗口壳的核心编排（蓝图
-# 阶段 4 对最终形态的定义如此），且 __init__ 是状态 schema、构造期调用
-# 多个 Mixin 方法，整体搬移属纯搬运高风险零收益。论证全文见
-# app_entry.py 模块 docstring。
-# ----------------------------------------------------------------------
-from .polar.app_entry import main  # noqa: E402  （阶段 4 兼容 re-export）
-
+# Keep the established polar_app.main import path. The composition root in
+# polar.app_entry imports PolarRMWindow only when main() runs, so importing the
+# entry function alone does not construct the window or start device owners.
+# Window orchestration still shares substantial state across its mixins; this
+# compatibility re-export does not imply that those responsibilities are split.
+from .polar.app_entry import main  # noqa: E402

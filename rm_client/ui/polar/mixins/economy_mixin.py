@@ -1,58 +1,18 @@
-"""阶段 3d 大域 mixin 化：经济工作区（D6）→ EconomyMixin。
+"""Economy workspace adapters and interaction/transport entry points.
 
-（REFACTOR_BLUEPRINT §5 阶段 3 表 3d 行 / §2 D6 节 / §5.6 冻结面）
+Pure confirmation decisions live in economy_presentation; responsive module
+geometry and lens calibration live in economy_layout. This adapter owns Qt
+painting/GPU submissions, animations, hotspots, and application-state writes.
+It does not grant confirmation or transport permission from presentation state.
 
-迁移范围（以 grep 重定位后的实际行号为准，蓝图原行号已漂移；七段不连续区块）：
-- legacy 绘制：``draw_economy_overlay_legacy``
-- 数据/传输：``economy_scale_steps``（staticmethod）/ ``economy_ui_scale`` /
-  ``economy_uses_mock_transport`` / ``send_economy_request`` / ``economy_offers`` /
-  ``economy_categories`` / ``economy_selected_offer``
-- FBO restore 协议提交端：``_finalize_economy_restore``
-- 开合状态机：``open_economy_workspace`` / ``close_economy_workspace``
-- 交互/状态机：``select_economy_offer`` / ``submit_economy_offer`` /
-  ``activate_economy_offer`` / ``begin_economy_hold`` / ``finish_economy_hold``
-- 玻璃助手：``_economy_glass_row`` / ``_economy_dim_around`` /
-  ``_economy_island_well``
-- 绘制总入口：``draw_economy_overlay_compat``（阶段 3c 报告明确属 D6、
-  留待本阶段迁入——本次确认迁入）
-- GPU 构建：``build_gpu_economy_workspace``（含方法内嵌套的
-  ``add_control_center_tile`` 装配闭包，随方法体整体随行搬运）
-- 资格赛：``start_economy_qualification_test``
-
-纪律与特别注意（蓝图 3d 行，保守边界中文注明）：
-- 方法体**零修改**（含注释、空行与嵌套函数），纯移动进本 Mixin；
-- **D2↔D6 FBO restore generation 协议处理**：协议分两端——提交端
-  ``_finalize_economy_restore``（D6 冻结面成员，smoke_test 直调）随 D6 整体
-  迁入本 Mixin；失效辅助 ``invalidate_transient_overlay_scene`` 被 D1（on_tick）、
-  D2（_paint_gpu_frame_cached / paint_direct_gpu_background）、D5、D7、D16
-  **多域共用** → 按保守边界决策留在 polar_app.py 原位（参考阶段 2b 对同一
-  方法的处理），两端经 ``self.`` 相互调用的调用面不变；
-  ``_economy_generation`` / ``_economy_restore_pending_generation`` /
-  ``_economy_pending_overlay`` / ``_economy_close_finalized`` 等协议状态字段的
-  初始化仍全部在 ``PolarRMWindow.__init__`` 原位（D0 状态 schema 不动），
-  D2 侧写入点（on_tick / _paint_gpu_frame_cached）亦保持原位；
-- ``economy_lerp_rect`` 已在阶段 1 作为模块级纯函数迁入
-  polar/text_metrics.py，不在本轮范围；
-- ``rm_client/ui/economy_glass.py``（绘制基元）与
-  ``rm_client/ui/economy_workspace.py``（EconomyIslandState /
-  EconomyWorkspaceLayer）为域内既有独立模块，此前已迁，不重复处理；
-  本 Mixin 仅经 ``self.economy_island`` / ``self.economy_workspace_layer``
-  等实例字段继续使用它们；
-- ``__qualname__`` 钉回：全部迁入方法（含 staticmethod
-  ``economy_scale_steps``）在模块底部把 ``__qualname__`` 钉回
-  ``PolarRMWindow.<name>``，api_freeze_test 的 qualname 基线比对不变；
-- MRO：EconomyMixin 位于继承列表 ClickGuiBuildersMixin 之后、QOpenGLWidget
-  之前，且与既有 Mixin 无同名成员（已逐一核对）→ 属性解析到本 Mixin，
-  ``window.<成员>`` 表面不变；
-- 共享辅助经继承访问、不重复处理：``get_auto_ui_scale`` / ``current_profile``
-  族（PersistenceMixin，阶段 3a）、``setting_bool`` / ``anim_duration`` /
-  ``toast`` / ``category_icon``（D19，留 polar_app.py）、``add_hotspot``（D15）、
-  ``play_gui_transition_sound`` / ``set_clickgui_visible`` / ``open_match_chat``
-  等（各自归属域）均经 ``self`` 继续调用，调用面与每帧开销不变。
+The close/restore generation protocol still coordinates with the main window:
+only a successfully presented normal HUD finalizes an economy close. Public
+window entry-point signatures and qualnames remain compatible.
 """
 
 from __future__ import annotations
 
+import logging
 import time
 from dataclasses import replace
 
@@ -82,6 +42,14 @@ from ....economy import (
 )
 from ....robot_profiles import profile_by_key
 from ..primitives import EconomyScenePhase
+from ...economy_presentation import EconomyConfirmationState
+from ...economy_layout import (
+    compat_economy_layout,
+    economy_detail_scroll_maximum,
+    economy_header_tile,
+    economy_lens_plan,
+    economy_module_geometry,
+)
 
 __all__ = [
     "EconomyMixin",
@@ -495,28 +463,11 @@ class EconomyMixin:
         selected = self.economy_selected_offer()
         context = EconomyContext.from_state(self.state)
         scale = self.economy_ui_scale(width, height)
-        morph = Easings.ease_out_expo(max(0.0, min(1.0, alpha)))
-        content_alpha = Easings.ease_out_expo(max(0.0, min(1.0, (morph - 0.12) / 0.88)))
-        compact = width < 1480 or height < 860
-
-        # Keep the fallback sheet anchored to the top island as well. It must
-        # never regress into a centered modal when the GPU path is unavailable.
-        margin_x = 16.0 * scale if compact else 28.0 * scale
-        top_margin = 18.0 * scale if compact else 24.0 * scale
-        bottom_margin = 18.0 * scale if compact else 28.0 * scale
-        target_w = min(width - margin_x * 2.0, 1510.0 * scale)
-        target_h = min(height - top_margin - bottom_margin, 740.0 * scale)
-        target = QRectF((width - target_w) * 0.5, top_margin, target_w, target_h)
-        island_h = 44.0 * scale
-        island_w = min(max(280.0 * scale, 360.0 * scale), width * 0.40)
-        collapsed = QRectF(width * 0.5 - island_w * 0.5, top_margin, island_w, island_h)
-        # Expanded corner stays very round (squircle-ish), never a hard 12–16 box.
-        expand_r = min(40.0 * scale, min(target_w, target_h) * 0.08)
-        # Both configured entry styles retain the same top anchor.  The
-        # compatibility option may alter content density, but it must never
-        # turn the economy workspace back into a centered modal.
-        panel = self.economy_lerp_rect(collapsed, target, morph)
-        radius = island_h * 0.5 * (1.0 - morph) + expand_r * morph
+        layout = compat_economy_layout(width, height, scale=scale, alpha=alpha, category_count=len(categories))
+        morph = layout.morph
+        content_alpha = layout.content_alpha
+        panel = layout.panel
+        radius = layout.radius
 
         p.save()
         # Compatibility scene dim. The caller owns battle-HUD exclusion.
@@ -556,8 +507,7 @@ class EconomyMixin:
                     Qt.AlignmentFlag.AlignCenter,
                 )
 
-        header_h = 58.0 * scale
-        header = QRectF(panel.left() + 26.0 * scale, panel.top() + 16.0 * scale, panel.width() - 52.0 * scale, header_h - 14.0 * scale)
+        header = layout.header
         if content_alpha > 0.02:
             p.save()
             p.setOpacity(p.opacity() * content_alpha)
@@ -594,26 +544,11 @@ class EconomyMixin:
             return
         p.setOpacity(p.opacity() * content_alpha)
 
-        # Floating island columns with real gaps — not a squared grid with hairlines.
-        col_gap = 12.0 * scale
-        inner = panel.adjusted(20.0 * scale, header_h + 6.0 * scale, -20.0 * scale, -18.0 * scale)
-        left_w = max(172.0 * scale, min(228.0 * scale, inner.width() * 0.20))
-        rest = max(40.0, inner.width() - left_w - col_gap)
-        well_r = 22.0 * scale
-        if compact:
-            left = QRectF(inner.left(), inner.top(), left_w, inner.height())
-            content = QRectF(left.right() + col_gap, inner.top(), rest, inner.height())
-            list_h = max(150.0 * scale, content.height() * 0.44)
-            list_rect = QRectF(content.left(), content.top(), content.width(), list_h)
-            detail = QRectF(content.left(), list_rect.bottom() + col_gap, content.width(), content.bottom() - list_rect.bottom() - col_gap)
-        else:
-            list_w = max(280.0 * scale, min(rest * 0.48, rest - 250.0 * scale - col_gap))
-            left = QRectF(inner.left(), inner.top(), left_w, inner.height())
-            list_rect = QRectF(left.right() + col_gap, inner.top(), list_w, inner.height())
-            detail = QRectF(list_rect.right() + col_gap, inner.top(), inner.right() - list_rect.right() - col_gap, inner.height())
-
+        left = layout.left
+        list_rect = layout.offers_pane
+        detail = layout.detail_pane
         for well in (left, list_rect, detail):
-            self._economy_island_well(p, well, well_r)
+            self._economy_island_well(p, well, 22.0 * scale)
 
         pad = 16.0 * scale
         gold_font = self.font("poppins_bold", 28.0 * scale)
@@ -654,12 +589,10 @@ class EconomyMixin:
         )
 
         status_block_h = 100.0 * scale
-        category_top = left.top() + 124.0 * scale
-        category_bottom = left.bottom() - status_block_h - 10.0 * scale
-        cat_count = max(1, len(categories))
+        category_top = layout.category_top
+        category_bottom = layout.category_bottom
+        category_h = layout.category_height
         cat_gap = 8.0 * scale
-        cat_avail = max(40.0 * scale, category_bottom - category_top)
-        category_h = min(40.0 * scale, max(32.0 * scale, (cat_avail - cat_gap * (cat_count - 1)) / cat_count))
         self.draw_glass_text(
             p,
             QRectF(left.left() + pad, category_top - 18.0 * scale, left.width() - pad * 2.0, 16.0 * scale),
@@ -715,66 +648,71 @@ class EconomyMixin:
             self.font("poppins_bold", 10.5 * scale),
             color("#ffffff"),
         )
-        viewport = list_rect.adjusted(list_pad, title_h + 6.0 * scale, -list_pad, -list_pad)
-        card_h = max(54.0 * scale, min(68.0 * scale, viewport.height() * 0.26 if compact else 62.0 * scale))
-        card_gap = 8.0 * scale
-        self.economy_offers_scroll.set_bounds(max(0.0, len(offers) * (card_h + card_gap) - card_gap - viewport.height()))
-        p.save()
-        p.setClipRect(viewport)
+        viewport = layout.offers.viewport
+        self.economy_offers_scroll.set_bounds(layout.offers.scroll_maximum(len(offers)))
         previous_clip = getattr(self, "_hotspot_clip", None)
-        self._hotspot_clip = viewport
-        scroll = self.economy_offers_scroll.position
-        for index, offer in enumerate(offers):
-            rect = QRectF(viewport.left(), viewport.top() + index * (card_h + card_gap) - scroll, viewport.width(), card_h)
-            if not rect.intersects(viewport):
-                continue
-            active = selected is not None and offer.key == selected.key
-            hovered = rect.contains(self.hover_point)
-            hover_v = self.anim.value(
-                f"economy.hover.{offer.key}",
-                1.0 if hovered or active else 0.0,
-                self.anim_duration(0.14),
-                Easings.ease_out_expo,
-            )
-            self._economy_glass_row(p, rect, hover=hover_v, active=active)
-            title_color = color("#ffffff") if offer.enabled else color("#9aa3ac", 0.72)
-            price_w = 88.0 * scale
-            self.draw_glass_text(
-                p,
-                rect.adjusted(18.0 * scale, 8.0 * scale, -price_w - 10.0 * scale, -rect.height() + 32.0 * scale),
-                offer.short_title,
-                self.font("poppins_bold", 10.5 * scale),
-                title_color,
-            )
-            price = "仅状态" if offer.status_only else f"{offer.cost} 金币"
-            self.draw_glass_text(
-                p,
-                rect.adjusted(18.0 * scale, 8.0 * scale, -14.0 * scale, -rect.height() + 32.0 * scale),
-                price,
-                self.font("poppins_bold", 9.5 * scale),
-                color("#ffd56a") if offer.enabled else color("#b8a878", 0.55),
-                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
-            )
-            secondary = offer.reason if not offer.enabled else offer.description
-            self.draw_glass_text(
-                p,
-                rect.adjusted(18.0 * scale, 32.0 * scale, -14.0 * scale, -8.0 * scale),
-                secondary,
-                self.font("poppins_medium", 7.8 * scale),
-                color("#b8c8d8", 0.90 if offer.enabled else 0.55),
-            )
-            self.add_hotspot(rect, "economy_offer", offer.key, tooltip=offer.reason or offer.description)
-        self._hotspot_clip = previous_clip
-        p.restore()
+        p.save()
+        drawing_failed = False
+        try:
+            p.setClipRect(viewport)
+            self._hotspot_clip = viewport
+            scroll = self.economy_offers_scroll.position
+            for index, offer in enumerate(offers):
+                rect = layout.offers.card(index, scroll)
+                if not rect.intersects(viewport):
+                    continue
+                active = selected is not None and offer.key == selected.key
+                hovered = rect.contains(self.hover_point)
+                hover_v = self.anim.value(
+                    f"economy.hover.{offer.key}",
+                    1.0 if hovered or active else 0.0,
+                    self.anim_duration(0.14),
+                    Easings.ease_out_expo,
+                )
+                self._economy_glass_row(p, rect, hover=hover_v, active=active)
+                title_color = color("#ffffff") if offer.enabled else color("#9aa3ac", 0.72)
+                price_w = 88.0 * scale
+                self.draw_glass_text(
+                    p,
+                    rect.adjusted(18.0 * scale, 8.0 * scale, -price_w - 10.0 * scale, -rect.height() + 32.0 * scale),
+                    offer.short_title,
+                    self.font("poppins_bold", 10.5 * scale),
+                    title_color,
+                )
+                price = "仅状态" if offer.status_only else f"{offer.cost} 金币"
+                self.draw_glass_text(
+                    p,
+                    rect.adjusted(18.0 * scale, 8.0 * scale, -14.0 * scale, -rect.height() + 32.0 * scale),
+                    price,
+                    self.font("poppins_bold", 9.5 * scale),
+                    color("#ffd56a") if offer.enabled else color("#b8a878", 0.55),
+                    Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+                )
+                secondary = offer.reason if not offer.enabled else offer.description
+                self.draw_glass_text(
+                    p,
+                    rect.adjusted(18.0 * scale, 32.0 * scale, -14.0 * scale, -8.0 * scale),
+                    secondary,
+                    self.font("poppins_medium", 7.8 * scale),
+                    color("#b8c8d8", 0.90 if offer.enabled else 0.55),
+                )
+                self.add_hotspot(rect, "economy_offer", offer.key, tooltip=offer.reason or offer.description)
+        except BaseException:
+            drawing_failed = True
+            raise
+        finally:
+            self._hotspot_clip = previous_clip
+            try:
+                p.restore()
+            except Exception:
+                if not drawing_failed:
+                    raise
+                logging.getLogger(__name__).exception(
+                    "Economy list painter restore failed while handling a drawing error"
+                )
 
         detail_pad = 16.0 * scale
-        button_h = 46.0 * scale
-        button = QRectF(
-            detail.left() + detail_pad,
-            detail.bottom() - button_h - 14.0 * scale,
-            max(40.0, detail.width() - detail_pad * 2.0),
-            button_h,
-        )
+        button = layout.action_button
         content_bottom = button.top() - 10.0 * scale
         if selected is not None and detail.height() > 80.0 * scale:
             self.draw_glass_text(
@@ -863,38 +801,17 @@ class EconomyMixin:
                     color("#a8bac8", 0.90),
                 )
 
-        now = time.perf_counter()
-        pending = self.economy_bridge.latest is not None and self.economy_bridge.latest.status == "pending"
-        if selected is None:
-            button_text = "请先选择商品"
-            button_enabled = False
-            action = "economy_confirm"
-        elif pending:
-            button_text = "请求处理中…"
-            button_enabled = False
-            action = "economy_confirm"
-        elif not selected.enabled or selected.status_only:
-            button_text = selected.reason or "当前不可用"
-            button_enabled = False
-            action = "economy_confirm"
-        elif selected.confirmation == "hold":
-            hold_progress = (
-                max(0.0, min(1.0, (now - self.economy_hold_started) / 0.60))
-                if self.economy_hold_key == selected.key
-                else 0.0
-            )
-            button_text = "按住 0.6 秒确认" if hold_progress <= 0.0 else f"确认中 {round(hold_progress * 100)}%"
-            button_enabled = True
-            action = "economy_confirm_hold"
-        else:
-            armed = self.economy_armed_key == selected.key and now <= self.economy_armed_until
-            if armed:
-                remain = max(0.0, self.economy_armed_until - now)
-                button_text = f"再点一次确认（{remain:.1f}s）"
-            else:
-                button_text = f"确认购买 · {selected.cost} 金币"
-            button_enabled = True
-            action = "economy_confirm"
+        confirmation = EconomyConfirmationState(
+            selected=selected,
+            pending=self.economy_bridge.latest is not None and self.economy_bridge.latest.status == "pending",
+            hold_key=self.economy_hold_key,
+            hold_started=self.economy_hold_started,
+            armed_key=self.economy_armed_key,
+            armed_until=self.economy_armed_until,
+        ).present(now=time.perf_counter())
+        button_text = confirmation.text
+        button_enabled = confirmation.enabled
+        action = confirmation.action
 
         draw_economy_glass(
             p,
@@ -917,8 +834,8 @@ class EconomyMixin:
                 color("#5ce7d8", 0.40),
                 1.0,
             )
-        if selected is not None and selected.confirmation == "hold" and self.economy_hold_key == selected.key:
-            progress = max(0.0, min(1.0, (now - self.economy_hold_started) / 0.60))
+        if confirmation.held_progress is not None:
+            progress = confirmation.held_progress
             fill = QRectF(button.left(), button.top(), max(8.0, button.width() * progress), button.height())
             clip = QPainterPath()
             clip.addRoundedRect(button, button.height() * 0.5, button.height() * 0.5)
@@ -968,7 +885,6 @@ class EconomyMixin:
         category_alpha = layout.category_alpha
         offers_alpha = layout.offers_alpha
         detail_alpha = layout.detail_alpha
-        panel = layout.panel
         def add_control_center_tile(
             rect: QRectF,
             opacity: float,
@@ -976,51 +892,33 @@ class EconomyMixin:
             material: LensMaterial = LensMaterial.STRONG,
             clip: QRectF | None = None,
         ) -> QRectF:
-            tile = QRectF(rect)
-            visible = tile.intersected(clip) if clip is not None else QRectF(tile)
-            alpha = max(0.0, min(1.0, float(opacity)))
-            if visible.isEmpty() or alpha <= 0.01:
+            lens = economy_lens_plan(rect, opacity, clip=clip)
+            if lens is None:
                 return QRectF()
-            radius = min(34.0, tile.height() * 0.5)
-            # ControlCenterContent is calibrated on a 68dp minimum tile.
-            # Smaller desktop controls must scale both lens depth and travel
-            # together; retaining a 48px travel on a 38px strip creates the
-            # long horizontal distortion visible in the previous build.
-            lens_scale = min(1.0, max(0.20, min(tile.width(), tile.height()) / 68.0))
             self.gpu_compositor.add_glass(
-                tile,
-                radius,
+                lens.rect,
+                lens.radius,
                 strength=1.0,
                 surface="clear",
-                opacity=alpha,
+                opacity=lens.opacity,
                 material=material,
-                refraction_height_px=max(1.0, 24.0 * lens_scale * alpha),
-                refraction_amount_px=-max(1.0, 48.0 * lens_scale * alpha),
+                refraction_height_px=lens.refraction_height,
+                refraction_amount_px=lens.refraction_amount,
                 chromatic_aberration=0.0,
                 depth_effect=1.0,
                 frost_amount=0.0,
-                vibrancy_amount=alpha,
-                clip_rect=clip,
+                vibrancy_amount=lens.opacity,
+                clip_rect=lens.clip,
             )
             # ControlCenterContent uses a five-percent black container color.
-            commands.rect(tile, radius, color("#000000", 0.05 * alpha), clip=clip)
-            return visible
+            commands.rect(lens.rect, lens.radius, color("#000000", 0.05 * lens.opacity), clip=lens.clip)
+            return lens.visible
 
         # Control Center is a group of independent glass modules over one
         # treated backdrop. It never places one giant frosted card behind all
         # controls.
         header = layout.header
-        header_tile = QRectF(
-            header.left() - 16.0,
-            panel.top(),
-            header.width() + 32.0,
-            min(panel.height(), 68.0),
-        )
-        add_control_center_tile(
-            header_tile,
-            header_alpha,
-            material=LensMaterial.STRONG,
-        )
+        add_control_center_tile(economy_header_tile(layout), header_alpha, material=LensMaterial.STRONG)
 
         # --- Island summary: visible before the body begins to reveal. ---
         scale = self.economy_ui_scale(width, height)
@@ -1069,32 +967,13 @@ class EconomyMixin:
         if content_alpha < 0.02 or layout.body_clip.isEmpty():
             return commands
 
+        geometry = economy_module_geometry(layout, category_count=len(categories))
+
         def body_clip(rect: QRectF) -> QRectF:
             return QRectF(rect).intersected(layout.body_clip)
 
         strip = layout.status_strip
-        status_gap = 8.0
-        source_widths = (304.0, 152.0, 152.0)
-        source_total = sum(source_widths) + status_gap * 2.0
-        status_scale = min(1.0, strip.width() / max(1.0, source_total))
-        status_widths = tuple(value * status_scale for value in source_widths)
-        status_total = sum(status_widths) + status_gap * 2.0
-        status_left = strip.center().x() - status_total * 0.5
-        status_tiles = (
-            QRectF(status_left, strip.top(), status_widths[0], strip.height()),
-            QRectF(
-                status_left + status_widths[0] + status_gap,
-                strip.top(),
-                status_widths[1],
-                strip.height(),
-            ),
-            QRectF(
-                status_left + status_widths[0] + status_gap * 2.0 + status_widths[1],
-                strip.top(),
-                status_widths[2],
-                strip.height(),
-            ),
-        )
+        status_tiles = geometry.status_tiles
         for status_tile in status_tiles:
             add_control_center_tile(
                 status_tile,
@@ -1103,9 +982,9 @@ class EconomyMixin:
                 clip=layout.body_clip,
             )
         tab_bar = layout.tab_bar
-        tab_gap = 8.0
-        tab_width = 0.0
-        tab_rects: tuple[QRectF, ...] = ()
+        tab_gap = geometry.tab_gap
+        tab_width = geometry.tab_width
+        tab_rects = geometry.tab_rects
         if layout.three_column:
             add_control_center_tile(
                 layout.category_pane,
@@ -1114,22 +993,6 @@ class EconomyMixin:
                 clip=layout.body_clip,
             )
         else:
-            tab_count = max(1, len(categories))
-            tab_width = min(
-                152.0,
-                max(1.0, (tab_bar.width() - tab_gap * (tab_count - 1)) / tab_count),
-            )
-            tabs_total = tab_width * tab_count + tab_gap * (tab_count - 1)
-            tabs_left = tab_bar.center().x() - tabs_total * 0.5
-            tab_rects = tuple(
-                QRectF(
-                    tabs_left + index * (tab_width + tab_gap),
-                    tab_bar.top(),
-                    tab_width,
-                    tab_bar.height(),
-                )
-                for index in range(tab_count)
-            )
             for tab_rect in tab_rects:
                 add_control_center_tile(
                     tab_rect,
@@ -1246,24 +1109,20 @@ class EconomyMixin:
                     tab_clip,
                 )
                 if self.economy_visible and layout.interactive:
-                    self.add_hotspot(rect, "economy_category", key)
+                    self.add_hotspot(rect.intersected(tab_clip), "economy_category", key)
 
         # --- Offers pane ---
-        offers_pane = layout.offers_pane.translated(0.0, layout.offers_offset)
-        offers_clip = body_clip(offers_pane)
-        list_pad = 14.0
-        viewport = layout.offers_viewport.translated(0.0, layout.offers_offset)
-        viewport_clip = body_clip(viewport)
-        card_h = 68.0
-        card_gap = 8.0
-        card_w = min(520.0, viewport.width())
-        card_left = viewport.center().x() - card_w * 0.5
+        offers_pane = geometry.offers_pane
+        offers_clip = geometry.offers_clip
+        viewport_clip = geometry.viewport_clip
+        card_w = geometry.offers.card_width
+        card_left = geometry.offers.card_left
         commands.text(
             QRectF(card_left, offers_pane.top() + 12.0, card_w, 24.0),
             f"可选操作 · {CATEGORY_TITLES.get(self.economy_category, self.economy_category)}",
             self.font("poppins_bold", 10.5 * scale), color("#ffffff", offers_alpha), clip=offers_clip,
         )
-        self.economy_offers_scroll.set_bounds(max(0.0, len(offers) * (card_h + card_gap) - card_gap - viewport.height()))
+        self.economy_offers_scroll.set_bounds(geometry.offers.scroll_maximum(len(offers)))
         scroll = self.economy_offers_scroll.position
         if selected is not None:
             selected_offer_index = next(
@@ -1277,12 +1136,7 @@ class EconomyMixin:
                 Easings.ease_out_expo,
                 initial=float(selected_offer_index),
             )
-            selection_rect = QRectF(
-                card_left,
-                viewport.top() + animated_offer_index * (card_h + card_gap) - scroll,
-                card_w,
-                card_h,
-            )
+            selection_rect = geometry.offers.card(animated_offer_index, scroll)
             commands.rect(
                 selection_rect,
                 min(34.0, selection_rect.height() * 0.5),
@@ -1292,7 +1146,7 @@ class EconomyMixin:
                 clip=viewport_clip,
             )
         for index, offer in enumerate(offers):
-            rect = QRectF(card_left, viewport.top() + index * (card_h + card_gap) - scroll, card_w, card_h)
+            rect = geometry.offers.card(index, scroll)
             if not rect.intersects(viewport_clip):
                 continue
             add_control_center_tile(
@@ -1335,20 +1189,18 @@ class EconomyMixin:
                 clip=viewport_clip,
             )
             if self.economy_visible and layout.interactive:
-                self.add_hotspot(rect, "economy_offer", offer.key, tooltip=offer.reason or offer.description)
+                self.add_hotspot(rect.intersected(viewport_clip), "economy_offer", offer.key, tooltip=offer.reason or offer.description)
 
         # --- Detail pane ---
-        detail = layout.detail_pane.translated(0.0, layout.detail_offset)
-        detail_clip = body_clip(detail)
+        detail = geometry.detail_pane
+        detail_clip = geometry.detail_clip
         detail_pad = 16.0
-        detail_vp = layout.detail_viewport.translated(0.0, layout.detail_offset)
-        detail_vp_clip = body_clip(detail_vp)
-        # Compute detail content height for scroll bounds
-        detail_content_h = 142.0  # selected info module
-        detail_content_h += reload_detail_height(self)
+        detail_vp = geometry.detail_viewport
+        detail_vp_clip = geometry.detail_viewport_clip
         history = list(reversed(self.economy_bridge.history[-3:]))
-        detail_content_h += 24.0 + max(1, len(history)) * 52.0 if history else 52.0
-        self.economy_detail_scroll.set_bounds(max(0.0, detail_content_h - detail_vp.height()))
+        self.economy_detail_scroll.set_bounds(economy_detail_scroll_maximum(
+            viewport_height=detail_vp.height(), reload_height=reload_detail_height(self), history_count=len(history),
+        ))
         detail_scroll = self.economy_detail_scroll.position
         summary_rect = QRectF(
             detail_vp.left(),
@@ -1394,7 +1246,7 @@ class EconomyMixin:
                               QRectF(detail_vp.left(), history_top, detail_vp.width(), reload_detail_height(self)),
                               detail_vp_clip, detail_alpha, interactive=self.economy_visible and layout.interactive)
         history_top += reload_detail_height(self)
-        button = layout.action_button.translated(0.0, layout.detail_offset)
+        button = geometry.action_button
         if history_top + 36.0 < detail_vp_clip.bottom():
             commands.text(
                 QRectF(detail.left() + detail_pad, history_top, detail.width() - detail_pad * 2, 18.0),
@@ -1450,41 +1302,19 @@ class EconomyMixin:
                 )
 
         # --- Action button ---
-        now = time.perf_counter()
-        pending = self.economy_bridge.latest is not None and self.economy_bridge.latest.status == "pending"
-        # Availability can change in the same tick that a held respawn request
-        # succeeds.  Keep progress defined across every branch so the first
-        # post-response GPU frame cannot abort and expose only the camera.
-        hold_progress = 0.0
-        if selected is None:
-            button_text = "请先选择商品"
-            button_enabled = False
-            action = "economy_confirm"
-        elif pending:
-            button_text = "请求处理中…"
-            button_enabled = False
-            action = "economy_confirm"
-        elif not selected.enabled or selected.status_only:
-            button_text = selected.reason or "当前不可用"
-            button_enabled = False
-            action = "economy_confirm"
-        elif selected.confirmation == "hold":
-            hold_progress = (
-                max(0.0, min(1.0, (now - self.economy_hold_started) / 0.60))
-                if self.economy_hold_key == selected.key else 0.0
-            )
-            button_text = "按住 0.6 秒确认" if hold_progress <= 0.0 else f"确认中 {round(hold_progress * 100)}%"
-            button_enabled = True
-            action = "economy_confirm_hold"
-        else:
-            armed = self.economy_armed_key == selected.key and now <= self.economy_armed_until
-            if armed:
-                remain = max(0.0, self.economy_armed_until - now)
-                button_text = f"再点一次确认（{remain:.1f}s）"
-            else:
-                button_text = f"确认购买 · {selected.cost} 金币"
-            button_enabled = True
-            action = "economy_confirm"
+        confirmation = EconomyConfirmationState(
+            selected=selected,
+            pending=self.economy_bridge.latest is not None and self.economy_bridge.latest.status == "pending",
+            hold_key=self.economy_hold_key,
+            hold_started=self.economy_hold_started,
+            armed_key=self.economy_armed_key,
+            armed_until=self.economy_armed_until,
+        ).present(now=time.perf_counter())
+        button_text = confirmation.text
+        button_enabled = confirmation.enabled
+        action = confirmation.action
+
+        hold_progress = confirmation.progress
 
         # Press feedback only changes the dynamic geometry. It never rebuilds
         # the combined backdrop, text atlas, or static workspace layout.
@@ -1534,7 +1364,7 @@ class EconomyMixin:
             Qt.AlignmentFlag.AlignCenter, detail_clip,
         )
         if selected is not None and button_enabled and self.economy_visible and layout.interactive:
-            self.add_hotspot(button, action, selected.key, tooltip=button_text)
+            self.add_hotspot(button.intersected(detail_clip), action, selected.key, tooltip=button_text)
 
         return commands
 

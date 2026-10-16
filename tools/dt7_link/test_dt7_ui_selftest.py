@@ -50,6 +50,34 @@ class Spy:
         pass
 
 
+def dispatched_config_calls(action_name):
+    """Exercise real parsing and both adapters with inert diagnostic endpoints."""
+    from rm_client.ui.polar.mixins.config_actions_mixin import ConfigActionsMixin
+
+    class DispatchProbe(ConfigActionsMixin):
+        def __init__(self):
+            self.calls = []
+
+        def handle_student_config_action(self, name):
+            return False
+
+        def handle_calibration_action(self, name):
+            self.calls.append(("calibration", name))
+
+        def run_dt7_link_selftest(self):
+            self.calls.append("dt7")
+
+        def rescan_serial_ports(self):
+            self.calls.append("rescan")
+
+        def run_radio_km_selftest(self):
+            self.calls.append("radio")
+
+    probe = DispatchProbe()
+    probe.handle_config_action(action_name)
+    return probe.calls
+
+
 def main() -> int:
     print("\n--- 1) C 路自检判据（纯函数）---")
     x = int(1 << C.KEYBOARD_BITS["X"])
@@ -161,10 +189,17 @@ def main() -> int:
     check("把手复位后恢复正常", spy.calls[-1]["pressed_bits"] == 5, str(spy.calls[-1]))
 
     print("\n--- 4) 按钮不许是空壳：设置项、分派、处理函数三处必须成对存在 ---")
-    model = (ROOT / "rm_client/model.py").read_text(encoding="utf-8")
+    catalog = (ROOT / "rm_client/module_catalog.py").read_text(encoding="utf-8")
     mix = (ROOT / "rm_client/ui/polar/mixins/config_actions_mixin.py").read_text(encoding="utf-8")
-    check("RobotLink 设置项里有这个按钮", model.count('"Run DT7 Link Selftest"') == 1)
-    check("分派表里有同名分支", 'action_name == "Run DT7 Link Selftest"' in mix)
+    check("RobotLink 设置项里有这个按钮", catalog.count('"Run DT7 Link Selftest"') == 1)
+    check("同名按钮经真实解析与分派恰好调用 DT7 处理函数一次",
+          dispatched_config_calls("Run DT7 Link Selftest") == ["dt7"])
+    check("近似名字不误入 DT7 处理函数",
+          all(dispatched_config_calls(name) == [] for name in
+              ("Run DT7 Link Selftest ", "run dt7 link selftest", "Run DT7 Link")))
+    check("其他诊断按钮不误入 DT7 处理函数",
+          dispatched_config_calls("Rescan Serial Ports") == ["rescan"]
+          and dispatched_config_calls("Run Wireless KM Selftest") == ["radio"])
     check("处理函数存在", "def run_dt7_link_selftest(self) -> None:" in mix)
     check("按钮自己不开新串口（同口互抢是最难查的故障）",
           "import serial" not in mix and "Serial(" not in mix)

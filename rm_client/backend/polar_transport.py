@@ -27,6 +27,8 @@ from dataclasses import asdict, dataclass, field, replace
 from typing import Any, Callable
 
 from ..serial_ports import describe_ports, resolve_port as resolve_polar_port
+from .resource_close import close_resource
+from .serial_stream import StreamOpenError
 from .polar_link import (
     MAX_RETAINED_BYTES,
     SPIN_CMD_NONE,
@@ -172,6 +174,7 @@ class PolarLinkTransport:
         self.last_segment_at = 0.0
 
         self._serial: Any = None
+        self._close_error = ""
         # ---- D 路（车端 USB<->WiFi 桥）：只有"字节从哪儿来"这一层受影响 ----
         #: "serial" 直插 C 板；"tcp" 走车上小电脑上的 bridge_server 裸管道
         self.transport = "serial"
@@ -186,6 +189,7 @@ class PolarLinkTransport:
         self._intent: PolarDriveIntent | None = None
         self._intent_lock = threading.RLock()
         self._lifecycle_lock = threading.RLock()
+        self._stream_close_lock = threading.Lock()
         self._connect_generation = 0
         self._connecting = False
         self._stopping = False
@@ -246,7 +250,7 @@ class PolarLinkTransport:
                 self.mock_writes)
 
     def _claim_start_locked(self) -> tuple[int, tuple[Any, ...]] | None:
-        if (self._stopping or self._connecting or self._running
+        if (self._stopping or self._connecting or self._running or self._serial is not None
                 or (self._thread is not None and self._thread.is_alive())):
             return None
         self._connecting = True
@@ -319,6 +323,8 @@ class PolarLinkTransport:
                     error = f"链路 {resolved} 打开失败"
                     code = "PORT_OPEN_FAILED"
         except Exception as exc:
+            if isinstance(exc, StreamOpenError):
+                opened = exc.resource_owner
             if mode in ("tcp", "wifi", "bridge"):
                 error = f"连不上车端桥 {resolved}：{exc}"
                 code = "BRIDGE_UNREACHABLE"
@@ -364,9 +370,16 @@ class PolarLinkTransport:
             # Keep ownership until the rejected/failed handle has been closed.
             if opened is not None:
                 try:
-                    opened.close()
-                except Exception:
-                    pass
+                    close_resource(opened)
+                except Exception as exc:
+                    with self._lifecycle_lock:
+                        # No replacement is admitted while this connector is
+                        # active. Preserve even a rejected/stale open owner.
+                        self._serial = opened
+                        self.connected = False
+                        self._close_error = f"Rejected robot stream close unconfirmed: {exc}"
+                        self.last_error = self._close_error
+                        self.last_error_code = "STREAM_CLOSE_FAILED"
             with self._lifecycle_lock:
                 self._connecting = False
                 self._connector_thread = None
@@ -436,12 +449,7 @@ class PolarLinkTransport:
             worker.join(timeout=1.0)
         if worker is None or not worker.is_alive():
             self._thread = None
-        if self._serial is not None:
-            try:
-                self._serial.close()
-            except Exception:
-                pass
-            self._serial = None
+        self._close_failed_stream()
         self.connected = False
 
     # ------------------------------------------------------------------
@@ -590,12 +598,7 @@ class PolarLinkTransport:
                 self._spin_cmd = SPIN_CMD_NONE
                 self._gimbal_host_request = 0
                 self._drive_was_armed = False
-            stream, self._serial = self._serial, None
-            if stream is not None:
-                try:
-                    stream.close()
-                except Exception:
-                    pass
+            self._close_failed_stream()
             self._running = False
 
     def _drain_rx(self) -> None:
@@ -791,14 +794,26 @@ class PolarLinkTransport:
             self.last_error_code = "STREAM_WRITE_FAILED"
             self._close_failed_stream()
 
+    @property
+    def cleanup_complete(self) -> bool:
+        return (self._serial is None and not self._running and not self._connecting
+                and (self._thread is None or not self._thread.is_alive())
+                and (self._stopper_thread is None or not self._stopper_thread.is_alive()))
+
     def _close_failed_stream(self) -> None:
-        stream, self._serial = self._serial, None
-        self.connected = False
-        if stream is not None:
-            try:
-                stream.close()
-            except Exception:
-                pass
+        with self._stream_close_lock:
+            stream = self._serial
+            self.connected = False
+            if stream is not None:
+                try:
+                    close_resource(stream)
+                except Exception as exc:
+                    self._close_error = f"Robot stream close unconfirmed: {type(exc).__name__}: {exc}"
+                    self.last_error = self._close_error
+                    self.last_error_code = "STREAM_CLOSE_FAILED"
+                    return
+                self._serial = None
+            self._close_error = ""
 
     def _flush_zero_burst(self, *, blocking: bool) -> None:
         """尽力连续发送零帧；断链/短写时不能保证固件收到或执行停车。

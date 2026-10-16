@@ -32,7 +32,8 @@ python -m venv .venv
 开发前先读 [贡献与验证约定](CONTRIBUTING.md) 和 [当前架构与所有权](docs/architecture.md)。
 正式入口是 `main.py`：它先处理运行目录、preflight、回放和队内链路自检，再进入
 `rm_client.ui.polar_app.main`，实际 Qt 装配位于 `rm_client/ui/polar/app_entry.py`。
-`rm_client/app.py` 中保留的 Tk 实现不是当前主窗口；不要沿旧类新增生产功能。
+`rm_client/app.py` 是惰性兼容入口，直接运行也进入 Qt；历史 Tk 实现保留在
+`rm_client/legacy_tk_app.py`，只有显式访问旧导出时才加载，不属于当前主窗口。
 
 击杀特效（GD656 图/音）和同济 Local 检测权重（`yolov5.xml/.bin`）**已随本仓库资源目录提供**，不是 pip 包，无需再从 GitHub 用 pip 安装。完整同济 C++ 自瞄工程见 [TongjiSuperPower/sp_vision_25](https://github.com/TongjiSuperPower/sp_vision_25)，仅在真机/UDP 外挂时另 clone 编译。详情见 `requirements.txt` 注释与 `THIRD_PARTY_NOTICES.md`。
 
@@ -166,7 +167,7 @@ python -m venv .venv
 - `Reload Profile`：重新读取当前配置。
 - `Import Config`：打开文件选择器，把外部 `.json` 配置复制进运行时 `user_data/configs/` 并加入 Profile 列表。
 
-配置加载顺序是：默认模块注册表 -> 当前场景/比赛模式默认值 -> 用户配置覆盖 -> 运行时连接参数同步。坏字段会被跳过，不会让客户端无法启动。
+配置加载顺序是：默认模块注册表 -> 当前场景/比赛模式默认值 -> 用户配置覆盖 -> 运行时连接参数同步。兼容的未知字段可以忽略；已知字段类型错误或非有限 JSON 数值会在修改前拒绝整份配置，保留原设置。运行时切换异步完成，只有确认成功后才提交；失败会恢复设置并保持控制锁定。
 
 ## UI 缩放
 

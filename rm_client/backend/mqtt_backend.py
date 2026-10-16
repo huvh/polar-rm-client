@@ -17,6 +17,7 @@ from ..transports import MqttPublishRecord, OfficialMqttBridge
 from .referee.registry import DEFAULT_PROFILE, get_profile
 from .referee.validation import InvalidRefereePayload, validate_message
 from .safety import OfficialSafety
+from .mqtt_cleanup import MqttClientResources
 
 
 class RmMqttBackend(OfficialMqttBridge):
@@ -62,9 +63,11 @@ class RmMqttBackend(OfficialMqttBridge):
         self._lifecycle_generation = 0
         self._cleanup_thread: threading.Thread | None = None
         self._cleanup_client: Any = None
+        self._client_resources: MqttClientResources | None = None
         self._pending_start = False
         self._cleanup_error = ""
         self._pending_input_clear: str | None = None
+        self._owner_thread = threading.get_ident()
 
     # ------------------------------------------------------------------
     # 生命周期
@@ -106,6 +109,8 @@ class RmMqttBackend(OfficialMqttBridge):
                 self.client = mqtt.Client(client_id=self.client_id or None,
                                           protocol=mqtt.MQTTv311,
                                           reconnect_on_failure=False)
+            self._client_resources = MqttClientResources(self.client)
+            self._client_resources.attach_socket_observers()
             self.client.on_connect = self._on_connect
             self.client.on_disconnect = self._on_disconnect
             self.client.on_connect_fail = self._on_connect_fail
@@ -113,7 +118,7 @@ class RmMqttBackend(OfficialMqttBridge):
             self.client.reconnect_delay_set(min_delay=1, max_delay=30)
             self.client.connect_async(self.host, self.port, keepalive=30)
             self._started = True
-            result = self.client.loop_start()
+            result = self._client_resources.start_network_loop()
             if result is not None and result != 0:
                 raise RuntimeError(f"MQTT network loop failed to start (rc={result})")
         except Exception as exc:  # pragma: no cover - depends on paho availability
@@ -143,22 +148,60 @@ class RmMqttBackend(OfficialMqttBridge):
                 and threading.current_thread() not in (worker, network_thread)):
             worker.join()
 
+    def wait_stopped(self, timeout: float | None = None) -> bool:
+        """Wait/observe only; never invoke safety hooks from a cleanup worker.
+
+        Call stop(wait=False) on the owner thread first. The retained cleanup
+        owner is not replaced when a driver stalls or reports a close error.
+        """
+        with self._lifecycle_lock:
+            worker = self._cleanup_thread
+            client = self._cleanup_client
+            network_thread = getattr(client, "_thread", None)
+        if worker is not None and threading.current_thread() not in (worker, network_thread):
+            worker.join(timeout)
+        with self._lifecycle_lock:
+            return (not self._started and self.client is None
+                    and self._cleanup_client is None and not self._cleanup_error)
+
     def _stop_client_locked(self) -> threading.Thread | None:
         self._lifecycle_generation += 1
         self._started = False
         self._pending_start = False
         self._reconnect_required = False
         self._zero_after_reconnect = False
-        client, self.client = self.client, None
         self.connected = False
-        self.disconnected_at = time.perf_counter()
-        self.clear_received_epoch()
-        if not self.safety.estop_active:
-            self._lock_safety_locked("MQTT stopped; explicit re-arm required")
-        self.safety.current_stage = "0"
-        self.safety._stage_seen = False
-        if client is not None:
-            self._cleanup_client = client
+        # Transfer ownership before fallible epoch/safety notification work.
+        # A preparation error must never detach a client without scheduling
+        # its cleanup or retaining it for an explicit retry.
+        if self.client is not None:
+            if self._cleanup_client is not None and self._cleanup_client is not self.client:
+                raise RuntimeError("MQTT already retains a different cleanup owner")
+            if self._client_resources is None or self._client_resources.client is not self.client:
+                self._client_resources = MqttClientResources(self.client)
+            self._cleanup_client, self.client = self.client, None
+        failure = None
+        try:
+            self.disconnected_at = time.perf_counter()
+            try:
+                self.clear_received_epoch()
+            except Exception as exc:
+                failure = exc
+            try:
+                if not self.safety.estop_active:
+                    self._lock_safety_locked("MQTT stopped; explicit re-arm required")
+            except Exception as exc:
+                if failure is None:
+                    failure = exc
+            self.safety.current_stage = "0"
+            self.safety._stage_seen = False
+        finally:
+            self._begin_client_cleanup_locked()
+        if failure is not None:
+            raise failure
+        return self._cleanup_thread
+
+    def _begin_client_cleanup_locked(self) -> None:
         # An explicit stop may retry a previously failed cleanup. A normal
         # poll/start never retries a broken owner or spawns more workers.
         if self._cleanup_client is not None and self._cleanup_thread is None:
@@ -169,21 +212,18 @@ class RmMqttBackend(OfficialMqttBridge):
             try:
                 worker.start()
             except Exception as exc:
-                self._cleanup_thread = None
+                if worker.ident is None:
+                    self._cleanup_thread = None
                 self._cleanup_error = self.last_error = f"MQTT cleanup failed: {exc}"
-        return self._cleanup_thread
 
     def _finish_client_cleanup(self) -> None:
         with self._lifecycle_lock:
-            client = self._cleanup_client
-        try:
-            client.disconnect()
-        except Exception:
-            # A disconnected socket still needs its loop joined.
-            pass
+            resources = self._client_resources
         error = ""
         try:
-            client.loop_stop()
+            if resources is None:
+                raise RuntimeError("MQTT cleanup has no retained resource owner")
+            resources.close()
         except Exception as exc:
             error = f"MQTT cleanup failed: {exc}"
         with self._lifecycle_lock:
@@ -192,7 +232,9 @@ class RmMqttBackend(OfficialMqttBridge):
                 self._cleanup_error = self.last_error = error
                 self._pending_start = self._started = False
             else:
+                self._cleanup_error = ""
                 self._cleanup_client = None
+                self._client_resources = None
             if not error and self._pending_start and self._started:
                 self._pending_start = False
                 # Start uses the latest endpoint/profile/identity, not values
@@ -202,12 +244,14 @@ class RmMqttBackend(OfficialMqttBridge):
         self._flush_input_clear()
 
     def _lock_safety_locked(self, reason: str) -> None:
-        self.safety.lock_control(reason, notify=False)
-        # Clearing input is idempotent; concurrent invalidations coalesce. The
-        # authority is already revoked before any observer is called.
+        # Admission precedes the fallible observer boundary; delivery remains
+        # owner-only even when Paho invokes this method from a callback.
         self._pending_input_clear = reason
+        self.safety.lock_control(reason, notify=False)
 
     def _flush_input_clear(self) -> None:
+        if threading.get_ident() != self._owner_thread:
+            return
         with self._lifecycle_lock:
             reason, self._pending_input_clear = self._pending_input_clear, None
         if reason is not None:
@@ -220,6 +264,8 @@ class RmMqttBackend(OfficialMqttBridge):
         clean_session=True. A fresh Client discards that motion queue instead.
         Deliberate stop/profile failures never schedule an automatic restart.
         """
+        # Observer delivery cannot wait for reconnect backoff to expire.
+        self._flush_input_clear()
         with self._lifecycle_lock:
             if not self._reconnect_required or time.perf_counter() < self._next_reconnect_at:
                 return

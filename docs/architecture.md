@@ -21,10 +21,16 @@
 3. [polar_app.py](../rm_client/ui/polar_app.py) 仍拥有窗口构造、主 tick、GPU 帧
    编排、CPU overlay 分发和关闭次序。`polar/renderers/` 与 `polar/mixins/`
    分出了绘制/交互职责，但多数方法仍通过同一个 `self` 访问窗口状态。
-4. [app.py](../rm_client/app.py) 保留历史 Tk 类，`app.main()` 已委托 Qt 入口。
-   不要把旧 Tk 类或旧 transport 示例当成当前运行架构。
+4. [app.py](../rm_client/app.py) 是惰性兼容门面，`app.main()` 与模块执行都委托 Qt。
+   历史 Tk 实现位于 [legacy_tk_app.py](../rm_client/legacy_tk_app.py)，仅显式访问旧导出时加载。
+   旧 Tk 类和旧 transport 示例不计作当前 Qt 运行路径。
 
-`rm_client.ui.polar_app` 的导出与窗口成员有 API 冻结测试；重排类、Mixin MRO、
+整洁代码重构已把时钟和调度决策放入 [tick_controller.py](../rm_client/ui/polar/tick_controller.py)，
+把面板动画决策放入 [presentation_controller.py](../rm_client/ui/polar/presentation_controller.py)，
+把不可变叠层计划与最终合成顺序放入 [compositor_plan.py](../rm_client/ui/polar/compositor_plan.py)。
+窗口仍承担 Qt 所有权和阶段适配，不应把这些提取描述成所有窗口状态已完全解耦。
+
+`rm_client.ui.polar_app` 的导出与窗口成员有显式兼容契约，完整历史快照作为可选审计保留；重排类、Mixin MRO、
 初始化顺序或导出时，要检查调用点并运行相关回归，不能仅改 import 就认为兼容。
 
 ## 数据、配置与 UI

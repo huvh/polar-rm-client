@@ -28,7 +28,7 @@ class Host(InputDispatchMixin, EscapeMenuMixin, QWidget):
         self.quick_action_wheel = NS(active=False)
         self.overlay_coordinator = NS(radial_active=False, blocks_combat_input=False)
         self.registry = NS(get=lambda name: None, modules=[])
-        self.backend = Mock(mqtt=NS(mock_output=True))
+        self.backend = Mock(mqtt=NS(mock_output=True), lifecycle_pending=False)
         self.backend.trigger_estop.return_value = (True, "")
         self.control = Mock()
         self.state = NS()

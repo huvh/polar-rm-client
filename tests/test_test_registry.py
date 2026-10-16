@@ -275,6 +275,29 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(env["POLAR_REQUIRE_VIDEO_FIXTURE"], "1")
         self.assertEqual(env["POLAR_USER_DATA_ROOT"], "/isolated")
 
+    def test_all_runner_children_opt_out_of_telemetry_before_optional_imports(self):
+        original = {"CI": "false", "POLAR_DISABLE_LOCAL_CAPTURE": "0", "POLAR_DISABLE_MEDIA_PRELOAD": "0"}
+        for desktop in (False, True):
+            for release in (False, True):
+                with self.subTest(desktop=desktop, release=release), mock.patch.dict(os.environ, original):
+                    env = verify.child_environment("/isolated", None, desktop=desktop, release=release)
+                    self.assertEqual(env["CI"], "true")
+                    self.assertEqual(env["POLAR_DISABLE_LOCAL_CAPTURE"], "1")
+                    self.assertEqual(env["POLAR_DISABLE_MEDIA_PRELOAD"], "1")
+                    self.assertEqual({key: os.environ[key] for key in original}, original)
+
+    def test_actual_test_child_receives_optout_without_importing_optional_packages(self):
+        script = (
+            "import os\n"
+            "assert os.environ['CI'] == 'true'\n"
+            "assert os.environ['POLAR_DISABLE_LOCAL_CAPTURE'] == '1'\n"
+            "assert os.environ['POLAR_DISABLE_MEDIA_PRELOAD'] == '1'\n"
+            "print('[PASS] opt-out environment is present before optional imports')\n"
+        )
+        with mock.patch.dict(os.environ, {"CI": "false"}):
+            result, stdout, _ = self.run_fixture(script)
+        self.assertEqual(result.status, "PASS", stdout)
+
     def test_timeout_cleanup_still_kills_owned_process_if_tree_cleanup_fails(self):
         process = mock.Mock(pid=123)
         process.poll.return_value = None

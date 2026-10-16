@@ -431,26 +431,51 @@ class MqttLifecycleTests(unittest.TestCase):
         self.assertEqual(reasons, ['ordinary caller'])
         self.backend.safety.input_clear_hook = None
 
-    def test_blocked_input_clear_observer_does_not_own_lifecycle_lock(self):
-        entered, release = threading.Event(), threading.Event()
-        self.addCleanup(release.set)
-        def observer(reason):
-            if reason == 'connect failed':
-                entered.set()
-                release.wait(2)
-        self.backend.safety.input_clear_hook = observer
-        callback = threading.Thread(target=lambda: self.backend._on_connect_fail(self.old, None))
+    def test_callback_input_clear_waits_for_owner_even_during_backoff(self):
+        owner = threading.get_ident()
+        observed = []
+        self.backend.safety.input_clear_hook = lambda reason: observed.append(
+            (threading.get_ident(), reason))
+        callback = threading.Thread(target=lambda: self.backend._on_disconnect(self.old, None))
         callback.start()
-        self.assertTrue(entered.wait(1))
-        self.assertEqual(self.backend.safety.control_state.value, 'LOCKED')
-        before = time.perf_counter()
-        self.backend.stop(wait=False)
-        self.assertLess(time.perf_counter() - before, .05)
-        release.set()
         callback.join(1)
         self.assertFalse(callback.is_alive())
-        self.assertFalse(self.backend._reconnect_required)
+        self.assertEqual(observed, [])
+        self.assertEqual(self.backend.safety.control_state.value, 'LOCKED')
+        self.assertTrue(self.backend._reconnect_required)
+        self.backend._next_reconnect_at = time.perf_counter() + 100
+        self.backend.poll_connection()
+        self.assertEqual(observed, [(owner, 'MQTT disconnected: None')])
+        self.assertIs(self.backend.client, self.old)
+        self.backend.poll_connection()
+        self.assertEqual(len(observed), 1)
         self.backend.safety.input_clear_hook = None
+
+    def test_cleanup_worker_cannot_steal_pending_owner_notification(self):
+        observed = []
+        self.backend.safety.input_clear_hook = lambda reason: observed.append(threading.get_ident())
+        worker = threading.Thread(target=lambda: self.backend.stop(wait=False))
+        worker.start()
+        worker.join(1)
+        self.assertTrue(self.backend.wait_stopped(1))
+        self.assertEqual(observed, [])
+        self.backend.poll_connection()  # No reconnect pending: still drains.
+        self.assertEqual(observed, [threading.get_ident()])
+        self.backend.safety.input_clear_hook = None
+
+    def test_invalidation_errors_cannot_skip_native_cleanup(self):
+        for method in ('clear_received_epoch', '_lock_safety_locked', '_flush_input_clear', '_emit_event'):
+            with self.subTest(method=method):
+                self.backend.start()
+                client = self.backend.client
+                self.backend.safety.release_estop()
+                with patch.object(self.backend, method, side_effect=OSError(method)):
+                    with self.assertRaises(OSError):
+                        self.backend.stop(wait=False)
+                self.assertTrue(self.backend.wait_stopped(1))
+                self.assertEqual((client.disconnects, client.stops), (1, 1))
+                self.assertIsNone(self.backend.client)
+                self.assertIsNone(self.backend._cleanup_client)
 
     def test_stop_from_network_callback_cannot_join_itself_indirectly(self):
         finished = threading.Event()
