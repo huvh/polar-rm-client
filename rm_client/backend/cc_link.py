@@ -378,6 +378,13 @@ class AsyncCustomControllerLink:
     only once neutral is confirmed. Neutral supersedes motion; failed writes
     discard every pre-failure intent and require a successful neutral barrier.
     A stuck OS driver can occupy this daemon, but never creates more workers.
+
+    ``retain_owner`` may publish the initialized facade to its caller before
+    worker admission. Keep that owner through a constructor failure until
+    ``closed`` is confirmed. The original exception also receives a best-effort
+    ``failed_writer`` attribute for callers using the original constructor API.
+    The callback runs outside the worker lock. If it calls ``close()``, the
+    constructor returns that sealed owner without admitting another writer.
     """
 
     asynchronous = True
@@ -387,7 +394,8 @@ class AsyncCustomControllerLink:
                  write_bytes: Callable[[bytes], Any] | None = None,
                  time_fn: Callable[[], float] = time.perf_counter, *,
                  max_intent_age: float = 0.25, release_attempts: int = 3,
-                 retry_interval: float = 0.05) -> None:
+                 retry_interval: float = 0.05,
+                 retain_owner: Callable[["AsyncCustomControllerLink"], None] | None = None) -> None:
         import threading
         self.queued = 0
         self.coalesced = 0
@@ -425,12 +433,49 @@ class AsyncCustomControllerLink:
         self._link = CustomControllerLink(port=port, baudrate=baudrate,
             max_hz=max_hz, mock_output=mock_output,
             write_bytes=self._write_frame, time_fn=time_fn)
-        self._thread = threading.Thread(target=self._run, name="cc-writer", daemon=True)
-        self._thread.start()
+        self._thread = None
+        self._starting = False
+        self.startup_failed = False
+        admission_reserved = False
+        try:
+            if retain_owner is not None:
+                retain_owner(self)
+            with self._condition:
+                if self._closing:
+                    return  # The retention callback already cancelled this owner.
+                self._starting = True
+                admission_reserved = True
+            try:
+                self._thread = threading.Thread(target=self._run, name="cc-writer", daemon=True)
+                self._thread.start()
+            finally:
+                with self._condition:
+                    self._starting = False
+        except BaseException as exc:
+            self.startup_failed = True
+            self.faulted = True
+            # Retention precedes admission; cancellation and best-effort
+            # metadata cannot replace the original construction failure.
+            try:
+                with self._condition:
+                    # Keep an already-finished failed finalizer for explicit
+                    # retry, preserving its native-close diagnostic.
+                    if not self._closing:
+                        self.last_error = self.fault_reason = "CC writer admission failed; close required"
+                    never_admitted = self._thread is None or self._thread.ident is None
+                    if not self._closing or (admission_reserved and never_admitted):
+                        self.close()
+            except BaseException:
+                pass
+            try:
+                exc.failed_writer = self
+            except BaseException:
+                pass
+            raise
 
     @property
     def worker_alive(self) -> bool:
-        return self._thread.is_alive()
+        return self._thread is not None and self._thread.is_alive()
 
     @property
     def closed(self) -> bool:
@@ -524,25 +569,32 @@ class AsyncCustomControllerLink:
         """Invalidate motion and request best-effort neutral; never wait on IO."""
         import threading
         with self._condition:
-            if self._closing:
-                if not self.closed and not self._thread.is_alive():
-                    self._thread = threading.Thread(
-                        target=self._finalize_close, name="cc-close-retry", daemon=True)
-                    self._thread.start()
-                return
-            self._closing = True
-            self._pending = None
-            if not self.release_pending:
-                self._epoch += 1
-            if not self.wire_neutral and not self.release_pending:
-                self._request_release()
-            self._condition.notify()
+            if not self._closing:
+                self._closing = True
+                self._pending = None
+                if not self.release_pending:
+                    self._epoch += 1
+                if not self.wire_neutral and not self.release_pending:
+                    self._request_release()
+                self._condition.notify()
+            if not self._starting and not self.closed and not self.worker_alive:
+                # A rejected writer can still own a native handle; only a
+                # background worker may drain its barrier and release it.
+                never_admitted = self._thread is None or self._thread.ident is None
+                # A rejected close-retry thread does not erase an earlier
+                # native-close failure. Retry that finalizer, not the drain.
+                needs_drain = never_admitted and not self._close_failed
+                target = self._run if needs_drain else self._finalize_close
+                self._thread = threading.Thread(
+                    target=target, name="cc-close-retry", daemon=True)
+                self._thread.start()
 
     def wait_closed(self, timeout=2.5):
         """Background/test cleanup only; None explicitly waits without a deadline."""
         import threading
         thread = self._thread
-        if thread is not threading.current_thread():
+        if (thread is not None and thread.ident is not None
+                and thread is not threading.current_thread()):
             thread.join(None if timeout is None else max(0.0, float(timeout)))
         return self.closed
 

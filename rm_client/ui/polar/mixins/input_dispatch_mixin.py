@@ -19,6 +19,7 @@ from PySide6.QtGui import QCursor, QKeyEvent, QKeySequence, QMouseEvent, QWheelE
 
 # 相对导入层级：rm_client/ui/polar/mixins/ → ... = rm_client.ui、.... = rm_client
 from ...animation import Easings
+from ...tactical_map_interaction import map_hit_position
 from ...cs2_buy_menu import grid_enabled, grid_layout
 from ...cs2_feedback import notify_buy_hover
 from ...jello_locale import LANGUAGE_CHINESE, LANGUAGE_ENGLISH, LANGUAGE_SETTING
@@ -631,6 +632,14 @@ class InputDispatchMixin:
         if button == 1:
             self.liquid_press_point = QPointF(point)
             self.liquid_press_until = time.perf_counter() + 0.12
+            if (not self.gui_visible and self.tactical_map_hold
+                    and getattr(self, "tactical_map_field_layout", None) is not None
+                    and map_hit_position(point, self.tactical_map_field_rect,
+                        getattr(self, "_tactical_map_hit_geometry", None)) is not None):
+                # Hotspots still dispatch first, but a map press owns its
+                # release even when that dispatch or command publication fails.
+                self.pointer_interaction.own_release()
+                self._control_mouse_point = None
         for hotspot in reversed(self.hotspots):
             if hotspot.button not in (None, button):
                 continue

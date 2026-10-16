@@ -277,10 +277,16 @@ def observe(case):
     manager.trace = control.trace = trace
 
     def factory(kind, **kwargs):
+        # Ownership publication is a separate constructor seam, not endpoint
+        # configuration. The frozen configuration/effect fixture is unchanged;
+        # real admission-failure retention is tested with actual writers.
+        retain_owner = kwargs.pop("retain_owner", None)
         trace.record("factory." + kind, kwargs)
         kwargs.pop("safety", None)
         link = Link("new_" + kind + "_" + str(len(links)), trace, **kwargs)
         links.append(link)
+        if retain_owner is not None:
+            retain_owner(link)
         return link
 
     def load_profile():

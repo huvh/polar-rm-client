@@ -43,6 +43,7 @@ from .referee.registry import DEFAULT_PROFILE, get_profile
 from .referee.profile_change import RefereeProfileChange
 from .referee.rm2026.state_adapter import Rm2026StateAdapter
 from .mqtt_backend import RmMqttBackend
+from .mqtt_endpoint import admit_mqtt_endpoint
 from .polar_bridge import (
     PolarControlArbiter,
     PolarMotionVerifier,
@@ -304,28 +305,24 @@ class BackendManager:
         port_setting = module.get_setting("Port")
         if host_setting is None or port_setting is None:
             return ""
-        want_host = str(host_setting.value or "").strip()
-        note = ""
-        try:
-            want_port = int(port_setting.value)
-        except (TypeError, ValueError):
-            want_port = -1
-        if not want_host or " " in want_host:
-            note = "MQTT 地址为空或含空格，沿用 " + str(self.mqtt.host)
-            want_host = str(self.mqtt.host)
-        if not 1000 <= want_port <= 9999:
-            note = (note + "；" if note else "") + "MQTT 端口非法，沿用 " + str(self.mqtt.port)
-            want_port = int(self.mqtt.port)
-        changed = self.mqtt.set_address(want_host, want_port)
-        # 设置项永远等于真正在用的地址：UI 不骗人
-        if str(host_setting.value) != self.mqtt.host:
-            host_setting.value = str(self.mqtt.host)
-        if int(port_setting.value or 0) != int(self.mqtt.port):
-            port_setting.value = int(self.mqtt.port)
-        self.mqtt.last_error = note
+        raw_host, raw_port = host_setting.value, port_setting.value
+        endpoint = admit_mqtt_endpoint(raw_host, raw_port,
+            current_host=self.mqtt.host, current_port=self.mqtt.port)
+        changed = self.mqtt.set_address(endpoint.host, endpoint.port)
+        # set_address may deliver an input-clear observer that edits settings
+        # or reenters sync. Repair only the captured request, without parsing
+        # raw values again or erasing a newer request/diagnostic from that hook.
+        host_unchanged = host_setting.value is raw_host
+        port_unchanged = port_setting.value is raw_port
+        if host_unchanged:
+            host_setting.value = self.mqtt.host
+        if port_unchanged:
+            port_setting.value = self.mqtt.port
+        if host_unchanged and port_unchanged:
+            self.mqtt.last_error = endpoint.note
         if changed:
             print(f"[mqtt] broker 改为 {self.mqtt.host}:{self.mqtt.port}")
-        return note
+        return endpoint.note
 
     @property
     def referee_profile_change(self) -> RefereeProfileChange:
@@ -759,6 +756,12 @@ class BackendManager:
             # mock_output 都不传，等于 C 路在客户端里根本发不出一个字节。
             real_tx = endpoint.real_tx
             link = getattr(self, "_dt7_link", None)
+            if getattr(link, "startup_failed", False) and not link.closed:
+                control.dt7_link = link
+                control.dt7_enabled = False
+                control.dt7_last_error = link.last_error or "DT7 writer startup cleanup pending"
+                self._dt7_was_enabled = False
+                return {"active": self.polar_bridge.active, "dt7_error": control.dt7_last_error}
             angle_link = getattr(self, "controller_angles", None)
             owned_ports = angle_link.owned_ports if angle_link is not None else ()
             if real_tx and owned_ports and (port.strip().lower() == "auto"
@@ -802,9 +805,12 @@ class BackendManager:
                         control.dt7_enabled = False
                         return {"active": self.polar_bridge.active, "dt7_error": "DT7 previous writer closing"}
                 writer_type = AsyncDt7KeyMouseLink if real_tx else dt7_link.Dt7KeyMouseLink
+                ownership = ({"retain_owner": lambda owner: setattr(self, "_dt7_link", owner)}
+                             if real_tx else {})
                 link = writer_type(port=port, profile=prof,
-                                   mock_output=not real_tx, safety=self.safety)
-                self._dt7_link = link
+                                   mock_output=not real_tx, safety=self.safety, **ownership)
+                if getattr(self, "_dt7_link", None) is not link:
+                    self._dt7_link = link
                 self._dt7_change_key = None
             control.dt7_link = link
             link.safety = self.safety
@@ -2071,6 +2077,9 @@ class BackendManager:
         port, hz, mock = endpoint.identity
         link = getattr(self, "_cc_link", None)
         self._cc_reconfigure_blocked = False
+        if getattr(link, "startup_failed", False) and not link.closed:
+            self._cc_reconfigure_blocked = True
+            return link
         if (link is None or getattr(link, "closed", False)
                 or (link.port, float(link.max_hz), bool(link.mock_output)) != (port, hz, mock)):
             if link is not None and not getattr(link, "wire_neutral", True):
@@ -2093,8 +2102,11 @@ class BackendManager:
                     self._cc_reconfigure_blocked = True
                     return link
             writer_type = cc_link.CustomControllerLink if mock else cc_link.AsyncCustomControllerLink
-            link = writer_type(port=port, max_hz=hz, mock_output=mock)
-            self._cc_link = link
+            ownership = ({"retain_owner": lambda owner: setattr(self, "_cc_link", owner)}
+                         if not mock else {})
+            link = writer_type(port=port, max_hz=hz, mock_output=mock, **ownership)
+            if getattr(self, "_cc_link", None) is not link:
+                self._cc_link = link
             self._cc_change_key = None
         return link
 
