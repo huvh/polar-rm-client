@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass, replace
 import json
 import math
 import time
 from typing import Any
 
-from .model import ModuleRegistry, RobotState
+from .model import CONTROL_BIND_OPTIONS, CONTROL_RESERVED_KEYS, ModuleRegistry, RobotState
 
 
 # 官方 V1.3.1 KeyboardMouseControl.keyboard_value 位序。
@@ -36,14 +37,37 @@ CONTROL_KEYS = frozenset(KEYBOARD_BITS)
 DEFAULT_CONTROL_BINDS: dict[str, str] = {slot: slot for slot in KEYBOARD_BITS}
 
 # 可供绑定的物理键名候选（与 `PolarRMWindow.key_name()` 的输出同一命名体系）。
-BINDABLE_KEY_NAMES = (
-    "W", "A", "S", "D", "Q", "E", "R", "F", "G", "Z", "X", "C", "V", "B",
-    "Shift", "RightShift", "Ctrl", "Space", "Tab", "Enter", "Escape",
-    "Backspace", "Delete", "Insert", "Home", "End", "PageUp", "PageDown",
-    "Up", "Down", "Left", "Right", "F1", "F2", "F3", "F4", "F5",
-    "F6", "F7", "F8", "F9", "F10", "F12",
-    "None",
-)
+# Keep the public tuple while sharing the UI's safety-filtered whitelist.
+BINDABLE_KEY_NAMES = tuple(CONTROL_BIND_OPTIONS)
+
+
+def validate_control_binds(binds: Mapping[str, str]) -> dict[str, str]:
+    """Return a complete, canonical map, or reject it without changing inputs.
+
+    Validate the final assignment rather than intermediate slot changes so
+    swaps and longer cycles are legal. UI-reserved keys remain unavailable
+    through every caller, including profile restore and the bridge API.
+    """
+    if not isinstance(binds, Mapping) or set(binds) != CONTROL_KEYS:
+        raise ValueError("控制绑定必须包含全部有效协议槽位")
+    allowed = {key.lower(): key for key in CONTROL_BIND_OPTIONS}
+    result = {}
+    seen = {}
+    for slot in KEYBOARD_BITS:
+        physical = binds[slot]
+        if not isinstance(physical, str):
+            raise ValueError(f"无效控制绑定：{slot}")
+        low = physical.strip().lower()
+        if low in CONTROL_RESERVED_KEYS:
+            raise ValueError(f"{physical} 是界面 / 急停保留键")
+        if low not in allowed:
+            raise ValueError(f"{physical} 不是可绑定按键")
+        if low != "none":
+            if low in seen:
+                raise ValueError(f"{physical} 同时绑定了 {seen[low]} 与 {slot}；请先清除其中一个")
+            seen[low] = slot
+        result[slot] = allowed[low]
+    return result
 
 
 @dataclass
@@ -311,19 +335,17 @@ class KeyboardControlBridge:
         slot = str(slot).upper()
         if slot not in CONTROL_KEYS:
             return False
-        candidate = str(key_name or "None").strip()
-        if candidate and candidate not in BINDABLE_KEY_NAMES:
+        candidate = dict(self.binds)
+        candidate[slot] = (key_name.strip() or "None") if isinstance(key_name, str) else (key_name or "None")
+        return self.set_binds(candidate)
+
+    def set_binds(self, binds: Mapping[str, str]) -> bool:
+        """Atomically replace a complete binding map; rejection leaves it intact."""
+        try:
+            candidate = validate_control_binds(binds)
+        except ValueError:
             return False
-        if candidate != "None":
-            lowered = candidate.lower()
-            for other, bound in self.binds.items():
-                if other != slot and str(bound).lower() == lowered:
-                    return False  # 已被别的槽占用
-            # 物理键名与默认槽名相同时，仍要先把旧的同名绑定释放，避免两个槽同时响应
-            for other in list(self.binds):
-                if other != slot and str(self.binds[other]).lower() == lowered:
-                    self.binds[other] = DEFAULT_CONTROL_BINDS[other]
-        self.binds[slot] = candidate or "None"
+        self.binds = candidate
         return True
 
     def reset_binds(self) -> None:

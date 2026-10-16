@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QSlider, QTabWidget, QVBoxLayout, QWidget,
 )
 
+from ..control import validate_control_binds
 from ..model import CONTROL_BIND_OPTIONS, MODULE_BIND_OPTIONS, CONTROL_RESERVED_KEYS, CONTROL_SLOT_ORDER, build_default_registry, Setting
 from .jello_locale import module_label, option_label, setting_label
 from .jello_widgets import JelloDialog, JelloCheckBox as QCheckBox, JelloComboBox as QComboBox, apply_jello_widgets, jello_font, use_jello_font_book
@@ -63,11 +64,16 @@ def settings_specs(registry, page):
 
 def validate_draft(host, draft, module_binds=None):
     """Validate the entire page before touching any live preference or binding."""
+    allowed = {(module.name, setting.name)
+               for page in PAGES for module, settings, _ in settings_specs(host.registry, page)
+               for setting in settings}
     for (name, key), value in draft.items():
         module = host.registry.get(name)
         setting = module.get_setting(key) if module else None
         if setting is None:
             raise ValueError(f"设置已不存在：{name}/{key}")
+        if (name, key) not in allowed:
+            raise ValueError(f"此页面不能更改设置：{name}/{key}")
         if setting.kind == "bool" and type(value) is not bool:
             raise ValueError("无效开关值：" + key)
         if setting.kind == "mode" and value not in setting.options:
@@ -84,19 +90,17 @@ def validate_draft(host, draft, module_binds=None):
         key = ("RobotLink", f"Bind {slot}")
         if key in draft:
             binds[slot] = draft[key]
-    seen = {}
-    for slot, physical in binds.items():
-        low = physical.lower()
-        if low in CONTROL_RESERVED_KEYS:
-            raise ValueError(f"{physical} 是界面 / 急停保留键")
-        if low != "none":
-            if low in seen:
-                raise ValueError(f"{physical} 同时绑定了 {seen[low]} 与 {slot}；请先清除其中一个")
-            seen[low] = slot
+    binds = validate_control_binds(binds)
+    seen = {physical.lower(): slot for slot, physical in binds.items() if physical != "None"}
+    for name, value in (module_binds or {}).items():
+        if host.registry.get(name) is None or not isinstance(value, str):
+            raise ValueError(f"无效模块绑定：{name}")
     for name, value in (module_binds or {}).items():
         module = host.registry.get(name)
         if value == module.keybind:
             continue  # Historical priority overlaps are not silently rewritten.
+        if name in ("ClickGui", "MatchReadiness"):
+            raise ValueError(f"此页面不能更改模块绑定：{name}")
         low = value.lower()
         if low == "none":
             continue
@@ -113,6 +117,18 @@ def validate_draft(host, draft, module_binds=None):
 
 def apply_registry_draft(host, draft, toggles=None, module_binds=None):
     binds = validate_draft(host, draft, module_binds)
+    toggle_allowed = {module.name for page in PAGES
+                      for module, _, toggle in settings_specs(host.registry, page) if toggle}
+    for name, value in (toggles or {}).items():
+        if name not in toggle_allowed or type(value) is not bool:
+            raise ValueError(f"此页面不能更改模块开关：{name}")
+    # Save canonical physical names, including legacy SHIFT/CTRL casing, so
+    # mode-option validation on the next fresh launch preserves the same map.
+    draft = dict(draft)
+    for slot in CONTROL_SLOT_ORDER:
+        key = ("RobotLink", f"Bind {slot}")
+        if key in draft:
+            draft[key] = binds[slot]
     changed = [(host.registry.get(name).get_setting(key), value)
                for (name, key), value in draft.items()
                if host.registry.get(name).get_setting(key).value != value]
@@ -120,7 +136,14 @@ def apply_registry_draft(host, draft, toggles=None, module_binds=None):
     # Neutralize old held input first; never restore or arm after preferences.
     host.backend.lock_control("settings applied")
     host.control.release_all(host.state, host.registry)
-    host.control.binds = binds
+    host.control.clear_pending()
+    if not host.control.set_binds(binds):
+        raise ValueError("控制绑定无效")
+    link = host.registry.get("RobotLink")
+    for slot, physical in binds.items():
+        setting = link.get_setting(f"Bind {slot}") if link else None
+        if setting is not None:
+            setting.value = physical
     for setting, value in changed:
         setting.value = value
     for setting, _ in changed:

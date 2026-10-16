@@ -48,8 +48,9 @@ from ...jello_locale import chinese_enabled, ui_text
 
 # 相对导入层级：rm_client/ui/polar/mixins/ → .... = rm_client、... = rm_client.ui
 from ....config_store import apply_registry_config, export_client_config, validate_client_config
+from ....control import validate_control_binds
 from ....match_modes import MatchModeConfig
-from ....model import CONTROL_RESERVED_KEYS, CONTROL_SLOT_ORDER, PRIMARY_GUI_MODE, Module, normalize_gui_mode
+from ....model import CONTROL_SLOT_ORDER, PRIMARY_GUI_MODE, Module, normalize_gui_mode
 from ....robot_profiles import (
     apply_profile_to_state,
     profile_by_key,
@@ -447,6 +448,18 @@ class PersistenceMixin:
         try:
             self.refresh_wallpaper_profiles()
             self.refresh_custom_ui_sound_options()
+            # Normalize legacy key casing before generic mode-option loading
+            # can discard it. Validate the complete saved permutation, so an
+            # invalid key cannot silently leave a different partial mapping.
+            modules = data.get("modules", {})
+            link_data = modules.get("RobotLink", {})
+            saved_settings = link_data.get("settings", {})
+            saved_binds = {slot: saved_settings[f"Bind {slot}"] for slot in CONTROL_SLOT_ORDER
+                           if f"Bind {slot}" in saved_settings}
+            if saved_binds and sync_runtime:
+                binds = validate_control_binds({**self.control.binds, **saved_binds})
+                settings = {**saved_settings, **{f"Bind {slot}": binds[slot] for slot in saved_binds}}
+                data = {**data, "modules": {**modules, "RobotLink": {**link_data, "settings": settings}}}
             apply_registry_config(self.registry, data)
             # Runtime profile reload can change HUD tone between two display
             # ticks; discard the frame-local palette immediately.
@@ -490,26 +503,35 @@ class PersistenceMixin:
         """把 ClickGUI 里的“Bind <槽位>”同步到键盘控制桥。
 
         前端可自定义驾驶键，而后端发的永远是协议槽位；这里就是两者的唯一汇合点。
-        两个槽绑到同一物理键时 `set_bind` 会拒绝，不会默默丢动作。
+        先校验完整映射，再原子替换，支持交换或轮换绑定；非法映射整体回滚。
         """
 
         link = self.registry.get("RobotLink")
         if link is None or self.control is None:
             return
-        for slot in CONTROL_SLOT_ORDER:
-            setting = link.get_setting(f"Bind {slot}")
-            if setting is None:
-                continue
-            wanted = str(setting.value or slot)
-            if wanted.lower() in CONTROL_RESERVED_KEYS:
-                setting.value = self.control.binds.get(slot, slot)
-                self.toast(f"{wanted} 是界面保留键，未更改控制绑定", kind="warning")
-                continue
-            if str(self.control.binds.get(slot, "")).lower() == wanted.lower():
-                continue
-            if not self.control.set_bind(slot, wanted):
-                # 被别的槽占用或非法值：回滚显示，不静默失配
-                setting.value = self.control.binds.get(slot, slot)
+        settings = {slot: link.get_setting(f"Bind {slot}") for slot in CONTROL_SLOT_ORDER}
+        candidate = dict(self.control.binds)
+        candidate.update({slot: setting.value for slot, setting in settings.items() if setting is not None})
+        try:
+            candidate = validate_control_binds(candidate)
+        except ValueError as exc:
+            for slot, setting in settings.items():
+                if setting is not None:
+                    setting.value = self.control.binds.get(slot, slot)
+            if self.config_loading:
+                # Let apply_config_data restore its full snapshot and keep
+                # output locked rather than report a partially loaded profile.
+                raise
+            self.toast(f"控制绑定未更改：{exc}", kind="warning")
+            return
+        if candidate != self.control.binds:
+            self.backend.lock_control("control bindings changed")
+            self.control.release_all(self.state, self.registry)
+            self.control.clear_pending()
+            self.control.set_binds(candidate)
+        for slot, setting in settings.items():
+            if setting is not None:
+                setting.value = candidate[slot]
 
     def sync_runtime_from_registry(self) -> None:
         self.sync_control_binds()

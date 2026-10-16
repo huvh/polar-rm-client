@@ -44,6 +44,7 @@ from ..combat_hud import CombatHudAnimator, VALID_COMBAT_HUD_VISUALS, ring_end
 from ..combat_events import CombatEvent, OfficialMatchFeed, VisionKillDetector
 from ..config_store import ClientConfigStore, apply_registry_config, export_client_config
 from ..control import KeyboardControlBridge
+from .polar.clickgui_frame import ClickGuiFrame, build_clickgui_frame
 from ..economy import (
     CATEGORY_TITLES,
     TRANSACTION_LABELS,
@@ -1872,7 +1873,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                     self.gpu_compositor.clear_target_layer(functions)
                 else:
                     prepared_clickgui_commands: ClickGuiDrawList | None = None
-                    prepared_clickgui_hotspots: list[Hotspot] | None = None
+                    prepared_clickgui_frame: ClickGuiFrame | None = None
                     prepared_clickgui_atlas = False
                     click_gui = self.registry.get("ClickGui")
                     gui_alpha = self.gui_timeline.progress
@@ -1883,12 +1884,12 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                     ):
                         self.gpu_compositor.push_glass_owner(GlassOwner.CLICKGUI)
                         try:
-                            prepared_clickgui_commands = self.build_gpu_clickgui(width, height, gui_alpha)
+                            prepared_clickgui_frame = build_clickgui_frame(self, width, height, gui_alpha)
+                            prepared_clickgui_commands = prepared_clickgui_frame.commands
                         finally:
                             self.gpu_compositor.pop_glass_owner()
-                        # Snapshot hit targets before motion overlay / overlay clear
-                        # wipes them.  Layout runs once; present reuses this list.
-                        prepared_clickgui_hotspots = list(self.hotspots)
+                        # Geometry travels with its draw list; preparation does not
+                        # publish pointer targets before the modal layer is painted.
                         self.clickgui_gpu.prepare_frame(prepared_clickgui_commands, ratio)
                         prepared_clickgui_atlas = True
 
@@ -1948,7 +1949,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                                 width,
                                 height,
                                 gpu_commands=prepared_clickgui_commands,
-                                gpu_hotspots=prepared_clickgui_hotspots,
+                                gpu_frame=prepared_clickgui_frame,
                                 gpu_atlas_prepared=prepared_clickgui_atlas,
                             )
                         painter.end()
@@ -3022,6 +3023,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         *,
         gpu_commands: ClickGuiDrawList | None = None,
         gpu_hotspots: list[Hotspot] | None = None,
+        gpu_frame: ClickGuiFrame | None = None,
         gpu_atlas_prepared: bool = False,
         force_economy_compat: bool = False,
     ) -> None:
@@ -3049,9 +3051,15 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                 p.fillRect(QRectF(0, 0, width, height), with_alpha(THEME.dim, gui_alpha))
             click_gui = self.registry.get("ClickGui")
             direct_gpu = self.setting_mode(click_gui, "Render Backend", "Unified GPU") == "Unified GPU" and self.clickgui_gpu.available
+            frame_to_publish = None
             if direct_gpu:
-                if gpu_commands is None:
-                    commands = self.build_gpu_clickgui(width, height, gui_alpha)
+                if gpu_frame is not None:
+                    commands = gpu_frame.commands
+                    frame_to_publish = gpu_frame
+                elif gpu_commands is None:
+                    frame = build_clickgui_frame(self, width, height, gui_alpha)
+                    commands = frame.commands
+                    frame_to_publish = frame
                 else:
                     commands = gpu_commands
                     # Outer path already built layout + atlas once; restore the
@@ -3112,7 +3120,12 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                         if backend:
                             backend.value = "Compatibility Painter"
                         direct_gpu = False
+                if rendered and frame_to_publish is not None:
+                    frame_to_publish.publish_interactions(self)
             if not direct_gpu:
+                # Failed GPU geometry must not coexist with fallback targets.
+                self.hotspots.clear()
+                self.gui_scroll_viewports = []
                 gui_hotspot_start = len(self.hotspots)
                 p.save()
                 mode = self.active_clickgui_mode()
@@ -4623,6 +4636,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                 device_pixel_ratio=self.devicePixelRatioF(),
             )
         except Exception:
+            _LOG.exception("ClickGUI cache failed; using compatibility painting")
             # 缓存层异常时立即退回直接绘制，交互界面不能因显卡兼容性失效。
             setting = module.get_setting("Render Backend") if module else None
             if setting is not None:

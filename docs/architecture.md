@@ -1,0 +1,124 @@
+# 当前架构与所有权
+
+本文记录当前 Python 客户端的装配关系和修改边界，不宣称已经完成分层重写。
+完整模块功能映射见 [MODULE_BACKEND_MAP.md](../MODULE_BACKEND_MAP.md)，
+工程约定见 [CONTRIBUTING.md](../CONTRIBUTING.md)。蓝图中的旧行号和阶段计划
+不是当前代码位置，应从下面的文件/符号导航。
+
+## 入口与窗口
+
+1. [main.py](../main.py) 是支持的运行入口。只读现场日志回放在 GUI 导入之前
+   分流；队内链路自检、运行目录准备和 preflight 也在正常 GUI 启动前处理。
+   preflight 不播种用户配置，正常启动才在目标不存在时复制默认配置。
+2. `main.py` 导入 `rm_client.ui.polar_app.main`。这个兼容导出来自
+   [polar/app_entry.py](../rm_client/ui/polar/app_entry.py)，负责 QApplication、
+   OpenGL surface 配置、创建/显示 `PolarRMWindow` 及启动事件循环。
+   `PolarRMWindow` 在函数内延迟导入，避免 re-export 的循环初始化。
+3. [polar_app.py](../rm_client/ui/polar_app.py) 仍拥有窗口构造、主 tick、GPU 帧
+   编排、CPU overlay 分发和关闭次序。`polar/renderers/` 与 `polar/mixins/`
+   分出了绘制/交互职责，但多数方法仍通过同一个 `self` 访问窗口状态。
+4. [app.py](../rm_client/app.py) 保留历史 Tk 类，`app.main()` 已委托 Qt 入口。
+   不要把旧 Tk 类或旧 transport 示例当成当前运行架构。
+
+`rm_client.ui.polar_app` 的导出与窗口成员有 API 冻结测试；重排类、Mixin MRO、
+初始化顺序或导出时，要检查调用点并运行相关回归，不能仅改 import 就认为兼容。
+
+## 数据、配置与 UI
+
+- [model.py](../rm_client/model.py) 定义 `RobotState`、模块注册表和设置。
+  `scenarios.py`、`match_modes.py`、`robot_profiles.py` 提供不同维度的默认值；
+  配置覆盖与运行时同步仍由窗口协作对象完成，不是独立的纯模型层。
+- `RobotState` 同时承载遥测、仿真值和前端状态。新增字段必须标明真实来源、单位、
+  新鲜度、默认/失联行为；界面显示成功不能反过来当作设备确认。
+- `BackendManager.apply_updates()` 是官方 MQTT 解码队列的消费入口，调用年度
+  adapter 应用到状态后再通知只读 `referee_view_observer`。展示观察者不可抢队列、
+  二次应用消息或决定控制授权。
+- 当前逻辑 tick 先执行 `state.tick()`，再进行后端应用、业务/前端处理和模块 tick，
+  最后处理队内链路及 overlay。队内 `polar_*` 状态不能提前写入再被仿真覆盖，
+  也不能覆盖官方字段的所有权或改变其容器类型。
+- [state_overlay.py](../rm_client/state_overlay.py) 对写入模型的队内遥测实施显式
+  字段/类型契约，并复制可变容器。新增内建模型字段需要扩展契约；JSON 规格中的
+  通用扩展仍可保留在 `polar_overlay` 中供消费者读取，不获得任意属性写权限。
+- `KeyboardControlBridge` 的 75 Hz 控制检查与 60 Hz 逻辑检查在窗口计时器中分别
+  调度；这不是硬实时线程保证，实际频率仍受事件循环和运行环境约束。
+
+## 后端与控制出口
+
+[BackendManager](../rm_client/backend/manager.py) 统一装配和协调以下对象。
+窗口保留的 `mqtt`、`udp`、`serial` 属性指向 manager 的实例，不是第二套连接。
+
+| 职责 | 当前实现 | 主要边界 |
+| --- | --- | --- |
+| 裁判 MQTT | `RmMqttBackend` | profile 校验/解码、有界接收队列、重连、发布安全门禁 |
+| Shark UDP 图传 | `RmVideoBackend` | 分片重组、解码、最新帧与时效；不重复组包 |
+| 原生 `0x0310` 图传 | manager + `ContinuousMjpegDecoder("h264")` | 独立解码器、序号/恢复门禁；等待可恢复码流 |
+| 官方 `0xA5` 串口 | `RmSerialBackend` | 读线程、帧编解码、mock/真实写；拒绝 `0x0310/0x0311` |
+| 队内 `0x5A` 链路 | `PolarLinkTransport` + `PolarStateBridge` | 独立端口/连接状态、段映射、驾驶授权和归零 |
+| DT7 / 自定义键鼠 | `AsyncDt7KeyMouseLink` / `AsyncCustomControllerLink` | worker 拥有真实串口，输入意图与写完成分开 |
+| 实体控制器角度 | `ControllerAngleRelay` | 独立 RX/TX、显式端口、Arm/超时；不取代键鼠链路 |
+
+年度裁判差异通过 `backend/referee/registry.py` 中的 profile 与年度 adapter
+处理。队内协议以 `backend/polar_protocol.json` 为规格；不要把段格式散到
+manager、transport 或绘制代码中。需要计算/限幅的特殊映射仍可能需要专用 handler，
+不能承诺任意协议变化都只改 JSON。
+
+`transports.py` 中的 `OfficialMqttBridge`、`UDPVideoReceiver`、`SerialBridgeStub`
+仍是 `Rm*Backend` 继承的基础/兼容实现。它们不是三个待实现的生产占位符；
+`MQTTTransport` 也不是当前窗口装配的 MQTT 后端。
+
+`OfficialSafety`、资格证据和控制状态共同限制真实输出。队内 `0x5A` 与官方
+裁判/MQTT 通道并行，不能用场景名代替单个链路授权。云台出口归属由
+`BackendManager.gimbal_egress_owner()` 统一裁决，不能让官方与队内出口各自决定
+发送同一份目标。开火、键位、断流、物理遥控优先等约束见 [AGENT.md](../AGENT.md)。
+
+## 线程、资源与关闭
+
+- 摄像头采集、壁纸解码、本地视觉、网络接收和若干设备写入有各自 worker。
+  UI 负责消费结果和 Qt/GL 操作；新增路径先确认所属线程，不把阻塞工作搬回帧回调。
+- DT7/自定义键鼠 worker 使用有界意图邮箱和归零优先逻辑，处理慢打开、过期输入、
+  generation 变化和完成通知。已排队、已写出、归零确认和失败是不同状态。
+- POLAR 连接使用异步请求与单一连接所有权；旧连接/清理仍占有资源时不能启动替代者。
+  manager 普通帧路径不会等 POLAR 驱动持有的 TX 锁。
+- OpenGL 资源必须在正确上下文创建/释放。尺寸、DPR、存储替换或语言/设置变化后，
+  缓存失效要覆盖实际依赖；复用缓存不等于可以复用过期 framebuffer 内容。
+- `PolarRMWindow.closeEvent()` 先停计时器、锁控制/释放输入、急停并关闭后端，
+  再保存配置、释放 GL 和其他 worker。单项清理异常不能阻断后续安全清理。
+
+这些路径的详细约束与剩余同步关闭限制见
+[UI-thread device I/O isolation](ui_device_io_hardening.md)。测试 fake 驱动的低延迟
+不能推导出真实 Windows 驱动、GPU 或串口关闭的上界。
+
+## 路径与运行数据
+
+[RuntimePaths](../rm_client/runtime_paths.py) 是源码/便携版的路径入口：
+
+| 内容 | 源码模式默认值 | 便携包默认值 |
+| --- | --- | --- |
+| 只读资源根 | 仓库根 | `resources/` |
+| 默认配置模板 | `configs/` | `defaults/` |
+| 实际配置/标定/日志 | `user_data/configs/`、`user_data/calibrations/`、`user_data/logs/` | 同左 |
+| manager 资格证据 | `user_data/field_evidence/` | `field_evidence/` |
+| FFmpeg | `bin/ffmpeg.exe` | `bin/ffmpeg.exe`，发布清单校验 |
+
+源码模式可用 `POLAR_USER_DATA_ROOT` 隔离运行数据；`POLAR_APP_ROOT` 是另一种
+应用根/便携布局覆盖，不能拿它当同义的临时用户目录。默认配置只在目标不存在时
+复制，不应在正常保存、测试或 preflight 时改写模板。
+
+独立 CLI 有显式输出参数，不一定使用上表的 manager 目录。例如
+`--polar-selftest` 默认写当前工作目录的 `field_evidence/`，回放默认生成
+`POLAR-field-replay-summary.json`。测试/工具应传临时输出路径，不能把这些生成物
+当成源文件。日志可能包含裁判载荷和设备诊断，提交前必须做范围与隐私检查。
+
+## 已知边界与后续拆分原则
+
+- `PolarRMWindow`、`BackendManager`、`RobotState` 仍是大对象。Mixin 抽取减少了
+  单文件体积，但没有自动消除共享可变状态、构造顺序或模块间耦合。
+- 场景切换与最终关闭仍有同步停止/归零/等待；`RmSerialBackend` 还保留同步
+  open/write/close API，日志写入也并非全部异步。不要宣传为“全程无阻塞”。
+- 兼容类、fallback、mock 与真实路径同时存在。删除或合并前必须查清生产调用、
+  现场工具、测试和发布入口；测试仅走 mock 不证明真实分支等价。
+- 新拆分应同时收窄依赖和所有权，优先提取纯转换、明确的状态机或有生命周期的
+  服务。每一步保留可运行入口与回归证据，不把批量搬文件等同于架构修复完成。
+- 当前的离线回归、桌面渲染、发布预检和真车资格是分开的验收层次。
+  缺少现场证据时仍保持 [BACKEND_MATCH_READINESS.md](../BACKEND_MATCH_READINESS.md)
+  的 **NOT READY FOR REAL MATCH** 结论。
