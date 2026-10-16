@@ -12,6 +12,7 @@ from .scenarios import SCENARIO_MODES
 from .backend.referee.registry import DEFAULT_PROFILE, supported_profiles
 from .serial_ports import port_choices as polar_port_choices
 from .serial_ports import rc_port_choices as dt7_port_choices
+from .state_overlay import validated_polar_overlay
 
 
 CATEGORIES = ["Combat", "Movement", "Vision", "Strategy", "System", "Render"]
@@ -678,15 +679,16 @@ class RobotState:
         必须在 `tick()` 之后调用：桌面仿真会写同一批字段（底盘/云台朝向、buff、
         能量等），后写覆盖先写，才能保证接上真机器人时 HUD 显示的是实测量而不是
         正弦动画。链路过期（`polar_link_active` 为假）时不再覆盖，交还给原有数据源。
+        只接受 state_overlay 中声明的遥测字段；不能改写设置、授权或官方容器。
+        通用协议扩展仍保留在 polar_overlay，供已有消费者读取。
         """
 
         if not self.polar_overlay:
             return
         if not self.polar_link_active:
             return
-        for name, value in self.polar_overlay.items():
-            if hasattr(self, name):
-                setattr(self, name, value)
+        for name, value in validated_polar_overlay(self.polar_overlay).items():
+            setattr(self, name, value)
         self.official_state_at = self.official_state_at or time.perf_counter()
 
     def tick(self, dt: float) -> None:
