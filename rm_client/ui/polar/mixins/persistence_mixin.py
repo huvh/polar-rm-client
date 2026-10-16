@@ -24,6 +24,7 @@ from ...jello_locale import chinese_enabled, ui_text
 from ....config_store import ProfileSaveError, apply_registry_config, export_client_config, validate_client_config
 from ....configuration.wheel import restore_wheel_profile
 from ....configuration.registry import RegistrySnapshot
+from ....configuration.quiescence import quiesce_configuration_inputs
 from ....configuration.pending import (
     ConfigurationPhase, CompletionAction, PendingConfigurationChange, PendingScenarioConfiguration, ProfileIdentity,
 )
@@ -73,9 +74,11 @@ class PersistenceMixin:
     def apply_match_mode(self, key: str, close_home: bool, announce: bool = True) -> None:
         if self.reject_pending_configuration_edit():
             return
-        self.backend.lock_control("match mode changed")
-        self.control.release_all(self.state, self.registry)
-        self.control.clear_pending()
+        quiesce_configuration_inputs(
+            revoke=lambda: self.backend.lock_control("match mode changed"),
+            release=lambda: self.control.release_all(self.state, self.registry),
+            clear_pending=lambda: self.control.clear_pending(),
+        )
         config = self.match_mode_manager.set_mode(key)
         self.match_mode_manager.apply_to_registry(self.registry)
         self.seed_match_state(config)
@@ -111,10 +114,15 @@ class PersistenceMixin:
         if int(self.state.robot_id) != robot_id or str(self.backend.mqtt.client_id) != str(robot_id):
             # Revoke the old epoch before changing either identity. Never
             # inherit armed outputs merely because the operator chose Blue.
-            self.backend.lock_control("robot profile/alliance changed")
-            self.control.mock_output = bool(self.backend.mqtt.mock_output)
-            self.control.release_all(self.state, self.registry)
-            self.control.clear_pending()
+            def release_inputs() -> None:
+                self.control.mock_output = bool(self.backend.mqtt.mock_output)
+                self.control.release_all(self.state, self.registry)
+
+            quiesce_configuration_inputs(
+                revoke=lambda: self.backend.lock_control("robot profile/alliance changed"),
+                release=release_inputs,
+                clear_pending=lambda: self.control.clear_pending(),
+            )
             if any(
                 bool(getattr(transport, flag, False))
                 for transport in (self.backend.mqtt, getattr(self.backend, "polar", None), getattr(self.backend, "serial", None))
@@ -611,9 +619,11 @@ class PersistenceMixin:
         if spin is not None and spin.enabled and spin_stops:
             # Only the falling edge is published on the old transport/identity.
             self.publish_spin_control_state(False, source="config_reload")
-        self.backend.lock_control("configuration reload")
-        self.control.release_all(self.state, self.registry)
-        self.control.clear_pending()
+        quiesce_configuration_inputs(
+            revoke=lambda: self.backend.lock_control("configuration reload"),
+            release=lambda: self.control.release_all(self.state, self.registry),
+            clear_pending=lambda: self.control.clear_pending(),
+        )
 
     def _restore_configuration_view(self, previous: ConfigurationRestorePoint) -> None:
         # RegistrySnapshot already restored exact values without enable hooks.
@@ -731,9 +741,11 @@ class PersistenceMixin:
             self.toast(f"控制绑定未更改：{exc}", kind="warning")
             return
         if candidate != self.control.binds:
-            self.backend.lock_control("control bindings changed")
-            self.control.release_all(self.state, self.registry)
-            self.control.clear_pending()
+            quiesce_configuration_inputs(
+                revoke=lambda: self.backend.lock_control("control bindings changed"),
+                release=lambda: self.control.release_all(self.state, self.registry),
+                clear_pending=lambda: self.control.clear_pending(),
+            )
             self.control.set_binds(candidate)
         for slot, setting in settings.items():
             if setting is not None:

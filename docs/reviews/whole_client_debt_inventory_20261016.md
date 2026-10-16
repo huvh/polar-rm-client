@@ -548,3 +548,15 @@ video/control/combat coordination and source-specific map/render adapters.
 No additional broad rewrite is justified solely by these counts. Existing
 hardware, firmware, packaging, native audio/desktop/GPU and unfinished-profile
 acceptance limits remain open.
+
+### Third-stage fixed-source follow-on
+
+The [final third-stage architecture audit](final_third_architecture_audit_20261016.md)
+records independent focused acceptance at `ade481f`, including actual API mutation,
+50 quality tests, metric controls and all nine new suites (49 methods). All 311
+suites are discovered without changed exemptions; baseline/API/metric integrity
+and earlier policy guards are unchanged. It records meaningful audio recovery,
+descriptor admission, quiescence, health projection and MJPEG outcomes, while
+retaining broad view/model/runtime coupling and native prerequisites explicitly.
+Its 215-module source is larger, not falsely counted as a whole-tree reduction.
+Parent-owned full-profile completion remains a separate evidence item.

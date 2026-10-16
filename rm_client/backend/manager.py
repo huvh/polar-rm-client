@@ -36,6 +36,7 @@ from . import cc_link
 from . import dt7_link
 from .dt7_worker import AsyncDt7KeyMouseLink
 from .port_admission import PortReservation, first_port_conflict
+from .polar_health import capture_polar_link_health
 from .device_egress_settings import (
     CustomControllerSettings, DeviceEgressSettings, EgressPermissions,
 )
@@ -1002,21 +1003,7 @@ class BackendManager:
             "急停激活，队内链路控制已锁零" if estopped else str(authority["reason"] or "")
         )
         target.backend_stats["polar_link"] = {
-            **self.polar.stats(),
-            "link_alive": bool(bridge.active),
-            "segment_counts": {
-                f"0x{key:02X}": int(value)
-                for key, value in sorted(bridge.segment_counts.items())
-            },
-            "dropped_segments": bridge.dropped,
-            "decode": {
-                "frames_ok": self.polar.codec.stats.frames_ok,
-                "crc8_errors": self.polar.codec.stats.crc8_errors,
-                "crc16_errors": self.polar.codec.stats.crc16_errors,
-                "unknown_segments": self.polar.codec.stats.unknown_segments,
-                "length_errors": self.polar.codec.stats.length_errors,
-                "buffer_overflows": self.polar.codec.stats.buffer_overflows,
-            },
+            **capture_polar_link_health(lambda: self.polar, lambda: bridge),
             "authority": authority,
             "motion": motion_stats,
             "timestamp_roll_detected": self.polar.timestamp.roll_detected,
@@ -2513,21 +2500,7 @@ class BackendManager:
             "serial": self.serial.stats(),
             "controller_angles": self.controller_angles.stats(),
             "polar_link": {
-                **self.polar.stats(),
-                "link_alive": bool(self.polar_bridge.active),
-                "segment_counts": {
-                    f"0x{key:02X}": int(value)
-                    for key, value in sorted(self.polar_bridge.segment_counts.items())
-                },
-                "dropped_segments": self.polar_bridge.dropped,
-                "decode": {
-                    "frames_ok": self.polar.codec.stats.frames_ok,
-                    "crc8_errors": self.polar.codec.stats.crc8_errors,
-                    "crc16_errors": self.polar.codec.stats.crc16_errors,
-                    "unknown_segments": self.polar.codec.stats.unknown_segments,
-                    "length_errors": self.polar.codec.stats.length_errors,
-                    "buffer_overflows": self.polar.codec.stats.buffer_overflows,
-                },
+                **capture_polar_link_health(lambda: self.polar, lambda: self.polar_bridge),
                 "authority": self.polar_arbiter.stats(),
                 "timestamp_roll_detected": self.polar.timestamp.roll_detected,
             },

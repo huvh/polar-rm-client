@@ -44,6 +44,7 @@ from rm_client.configuration.transactions import (
     ConfigurationApplyError, ConfigurationRestorePoint, RuntimeRestorePending,
     apply_configuration_transaction, rollback_configuration_transaction,
 )
+from rm_client.configuration.quiescence import quiesce_configuration_inputs
 from rm_client.configuration.registry import RegistrySnapshot
 from rm_client.configuration.profile_saves import ProfileSaveState
 from rm_client.ui.polar.profile_save_fields import ProfileSaveField
@@ -119,6 +120,7 @@ Persistence = extract_class(PERSISTENCE, "PersistenceMixin", {
     "cancel_pending_configuration_for_close",
     "_accepted_profile_identity", "_set_profile_selection", "_restorable_profile_name", "_accept_profile_selection", "_save_profile", "flush_auto_save",
 }, {
+    "quiesce_configuration_inputs": quiesce_configuration_inputs,
     "time": time, "deepcopy": deepcopy, "os": os, "replace": replace, "logging": logging,
     "validate_client_config": store.validate_client_config,
     "ProfileSaveError": store.ProfileSaveError,

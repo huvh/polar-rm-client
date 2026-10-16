@@ -41,6 +41,19 @@ def resolve_ffmpeg_executable() -> str | None:
     return None
 
 
+def _decode_jpeg_bgr(frame: bytes) -> Any:
+    """Decode one raw encoded image; callers own envelopes and publication.
+
+    OpenCV requires a uint8 array, not Python bytes. Keep this conversion shared
+    by UDP MJPEG and the continuous decoder without sharing their lifecycle,
+    timestamp, counter or error-reporting policies.
+    """
+    import cv2  # type: ignore
+    import numpy as np  # type: ignore
+    encoded = np.frombuffer(frame, dtype=np.uint8)
+    return cv2.imdecode(encoded, cv2.IMREAD_COLOR)  # type: ignore[attr-defined]
+
+
 def detect_frame_codec(frame: bytes) -> str:
     """返回 'mjpeg' / 'h264' / 'h265' / 'unknown'。
 
@@ -410,10 +423,12 @@ class RmVideoBackend(UDPVideoReceiver):
 
     def _decode_mjpeg(self, frame: bytes, generation: int | None = None) -> None:
         try:
-            import cv2  # type: ignore
-            bgr = cv2.imdecode(
-                frame, cv2.IMREAD_COLOR
-            )  # type: ignore[attr-defined]
+            # Match only the exact optional envelope already recognized by
+            # detect_frame_codec; raw SOI takes precedence over a prefix.
+            payload = frame
+            if not frame.startswith(b"\xff\xd8") and frame[4:6] == b"\xff\xd8":
+                payload = frame[4:]
+            bgr = _decode_jpeg_bgr(payload)
             if bgr is not None:
                 h, w = bgr.shape[:2]
                 with self._lock:
@@ -1001,10 +1016,7 @@ class ContinuousMjpegDecoder:
 
     def _decode_frame(self, frame: bytes, session: _DecoderSession | None = None) -> None:
         try:
-            import cv2  # type: ignore
-            import numpy as np  # type: ignore
-            encoded = np.frombuffer(frame, dtype=np.uint8)
-            bgr = cv2.imdecode(encoded, cv2.IMREAD_COLOR)  # type: ignore[attr-defined]
+            bgr = _decode_jpeg_bgr(frame)
             if bgr is None:
                 return
             with self._lock:

@@ -85,19 +85,27 @@ def _refresh_audio_pools():
 
 @dataclass
 class AudioPreferenceChange:
-    """A validated disk/cache/pool participant for a settings transaction."""
+    """Single-writer disk/cache/pool recovery after ordinary exceptions.
+
+    Once a write is attempted, rollback owns the captured prior bytes until
+    both file and pool restoration succeed. This is not crash/multiprocess
+    atomicity and does not arbitrate concurrent admitted preference writers.
+    An unattempted participant never restores over another writer's changes.
+    """
     preferences: AudioPreferences
     previous: FileSnapshot
-    _written: bool = field(default=False, init=False)
+    _restore_required: bool = field(default=False, init=False)
 
     def commit(self):
         payload = json.dumps(asdict(self.preferences), ensure_ascii=False, indent=2).encode("utf-8")
+        # Admission owns recovery before a fallible writer can publish bytes.
+        # A raised write/cleanup call does not prove replacement was rejected.
+        self._restore_required = True
         atomic_write_bytes(self.previous.path, payload)
-        self._written = True
         _refresh_audio_pools()
 
     def rollback(self):
-        if not self._written:
+        if not self._restore_required:
             return
         errors = []
         for restore in (self.previous.restore, _refresh_audio_pools):
@@ -107,7 +115,7 @@ class AudioPreferenceChange:
                 errors.append(error)
         if errors:
             raise AudioPreferenceRefreshError(errors)
-        self._written = False
+        self._restore_required = False
 
 
 def prepare_audio_change(prefs):
