@@ -263,6 +263,11 @@ class Harness(current.InputDispatchMixin):
         self.record("economy.offers", category)
         return [NS(key=key, confirmation=self.case.confirmation) for key in self.case.offers]
 
+    def reconcile_economy_selection(self):
+        # Both names model the same original command for frozen input traces.
+        # Query purity is verified separately against the real window methods.
+        return self.economy_selected_offer()
+
     def economy_selected_offer(self):
         self.record("economy.selected")
         offers = self.economy_offers(self.economy_category)

@@ -185,6 +185,172 @@ class ApplicationEntryContractTests(unittest.TestCase):
                 raise AssertionError("owned application did not run its event loop")
         ''')
 
+    def test_fresh_qt_launch_preserves_surface_and_window_effect_order(self):
+        self.run_isolated('''
+            import os
+            import sys
+            import types
+            from unittest.mock import patch
+            os.environ["QT_QPA_PLATFORM"] = "offscreen"
+            from PySide6.QtCore import Qt
+            from PySide6.QtGui import QSurfaceFormat
+            from PySide6.QtWidgets import QApplication, QWidget
+            from rm_client.ui.polar import app_entry
+            import rm_client.ui.cs2_video_settings as video
+            events = []
+            def configure(surface):
+                assert QApplication.instance() is None
+                assert surface.majorVersion() == 3 and surface.minorVersion() == 3
+                assert surface.profile() == QSurfaceFormat.OpenGLContextProfile.CoreProfile
+                assert surface.swapBehavior() == QSurfaceFormat.SwapBehavior.DoubleBuffer
+                events.append("surface-preference")
+            class Window(QWidget):
+                def __init__(self):
+                    assert QApplication.instance().applicationName() == "POLAR-RM Custom Client"
+                    surface = QSurfaceFormat.defaultFormat()
+                    assert surface.depthBufferSize() == 0 and surface.stencilBufferSize() == 0
+                    super().__init__()
+                    events.append("construct")
+                def show(self):
+                    events.append("show")
+                    super().show()
+                def setAttribute(self, attribute, enabled=True):
+                    if attribute == Qt.WidgetAttribute.WA_DeleteOnClose:
+                        assert enabled is True
+                        events.append("delete-on-close")
+                    super().setAttribute(attribute, enabled)
+            def restore(window):
+                assert window.isVisible()
+                assert not getattr(QApplication.instance(), "_polar_client_windows", {})
+                events.append("restore-placement")
+            def execute(application):
+                windows = list(application._polar_client_windows.values())
+                assert len(windows) == 1 and windows[0].isVisible()
+                events.append("event-loop")
+                return 7
+            qt_entry = types.ModuleType("rm_client.ui.polar_app")
+            qt_entry.PolarRMWindow = Window
+            sys.modules[qt_entry.__name__] = qt_entry
+            video.configure_surface = configure
+            video.restore_startup_window = restore
+            with patch.object(QApplication, "exec", execute):
+                try:
+                    app_entry.main()
+                except SystemExit as error:
+                    assert error.code == 7
+                else:
+                    raise AssertionError("owned event loop must exit with its status")
+            assert events == ["surface-preference", "construct", "show", "restore-placement",
+                              "delete-on-close", "event-loop"], events
+        ''')
+
+    def test_reused_qt_launch_skips_surface_configuration_and_event_loop(self):
+        self.run_isolated('''
+            import os
+            import sys
+            import types
+            from unittest.mock import patch
+            os.environ["QT_QPA_PLATFORM"] = "offscreen"
+            from PySide6.QtWidgets import QApplication, QWidget
+            from rm_client.ui.polar import app_entry
+            import rm_client.ui.cs2_video_settings as video
+            application = QApplication([])
+            events = []
+            class Window(QWidget):
+                def __init__(self):
+                    super().__init__()
+                    events.append("construct")
+                def show(self):
+                    events.append("show")
+                    super().show()
+            qt_entry = types.ModuleType("rm_client.ui.polar_app")
+            qt_entry.PolarRMWindow = Window
+            sys.modules[qt_entry.__name__] = qt_entry
+            def forbidden(*args):
+                raise AssertionError("host application owns surface and event loop")
+            video.configure_surface = forbidden
+            video.restore_startup_window = lambda window: events.append("restore-placement")
+            with patch.object(QApplication, "exec", forbidden):
+                app_entry.main()
+            assert events == ["construct", "show", "restore-placement"], events
+            assert len(application._polar_client_windows) == 1
+        ''')
+
+    def test_launch_failure_keeps_exception_identity_and_stops_later_effects(self):
+        for stage in ("surface", "construct", "show", "restore"):
+            with self.subTest(stage=stage):
+                self.run_isolated('''
+                    import os
+                    import sys
+                    import types
+                    from unittest.mock import patch
+                    os.environ["QT_QPA_PLATFORM"] = "offscreen"
+                    from PySide6.QtWidgets import QApplication, QWidget
+                    from rm_client.ui.polar import app_entry
+                    import rm_client.ui.cs2_video_settings as video
+                    events = []
+                    failure = TypeError("injected launch failure")
+                    stage = STAGE
+                    def effect(name):
+                        events.append(name)
+                        if name == stage:
+                            raise failure
+                    class Window(QWidget):
+                        def __init__(self):
+                            super().__init__()
+                            effect("construct")
+                        def show(self):
+                            effect("show")
+                            super().show()
+                    qt_entry = types.ModuleType("rm_client.ui.polar_app")
+                    qt_entry.PolarRMWindow = Window
+                    sys.modules[qt_entry.__name__] = qt_entry
+                    video.configure_surface = lambda surface: effect("surface")
+                    video.restore_startup_window = lambda window: effect("restore")
+                    with patch.object(QApplication, "exec", lambda: effect("event-loop")):
+                        try:
+                            app_entry.main()
+                        except TypeError as error:
+                            assert error is failure
+                        else:
+                            raise AssertionError("launch failure was swallowed")
+                    stages = ["surface", "construct", "show", "restore"]
+                    assert events == stages[:stages.index(stage) + 1], events
+                    app = QApplication.instance()
+                    assert not getattr(app, "_polar_client_windows", {})
+                '''.replace("STAGE", repr(stage)))
+
+    def test_qt_owner_import_has_no_window_or_domain_dependency(self):
+        self.run_isolated('''
+            import importlib.abc
+            import sys
+            class RejectClientImports(importlib.abc.MetaPathFinder):
+                def find_spec(self, fullname, path=None, target=None):
+                    if fullname.startswith(("rm_client.ui.polar_app", "rm_client.model",
+                                            "rm_client.backend", "rm_client.transports",
+                                            "rm_client.ui.polar.app_entry")):
+                        raise AssertionError("unexpected client dependency: " + fullname)
+            sys.meta_path.insert(0, RejectClientImports())
+            from rm_client.ui.polar.qt_application import launch_qt_application
+            assert callable(launch_qt_application)
+            from PySide6.QtWidgets import QApplication
+            assert QApplication.instance() is None
+        ''')
+
+    def test_window_entry_supplies_its_factory_without_loading_compatibility_entry(self):
+        self.run_isolated('''
+            import os
+            import sys
+            from unittest.mock import patch
+            os.environ["QT_QPA_PLATFORM"] = "offscreen"
+            from rm_client.ui import polar_app
+            assert "rm_client.ui.polar.app_entry" not in sys.modules
+            with patch.object(polar_app, "launch_qt_application") as launch:
+                polar_app.main()
+            launch.assert_called_once_with(polar_app.PolarRMWindow)
+            assert "rm_client.ui.polar.app_entry" not in sys.modules
+        ''')
+
     def test_legacy_exports_are_lazy_and_keep_the_same_objects(self):
         self.run_isolated('''
             import sys

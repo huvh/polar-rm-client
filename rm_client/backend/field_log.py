@@ -137,9 +137,14 @@ class RotatingJsonlLogger:
             self._pending_records += 1
             self._pending_bytes += len(line)
             if self._worker is None:
-                start_worker = self._worker = threading.Thread(
-                    target=self._run, name="polar-field-log", daemon=True,
-                )
+                try:
+                    start_worker = threading.Thread(
+                        target=self._run, name="polar-field-log", daemon=True,
+                    )
+                except RuntimeError as exc:
+                    self._record_admission_failure(exc, None)
+                    return False
+                self._worker = start_worker
             self._condition.notify_all()
         if start_worker is not None:
             # Starting happens outside the state lock. Concurrent producers can
@@ -148,17 +153,27 @@ class RotatingJsonlLogger:
                 start_worker.start()
             except RuntimeError as exc:
                 with self._condition:
-                    self._errors += 1
-                    self._last_error = self._error_text(exc)
-                    self._dropped["write"] += len(self._queue)
-                    self._queue.clear()
-                    self._pending_records = self._pending_bytes = 0
-                    self._completed_sequence = self._accepted
-                    self._worker = None
-                    self._closed = self._closing
-                    self._condition.notify_all()
+                    self._record_admission_failure(exc, start_worker)
                 return False
         return True
+
+    def _record_admission_failure(self, error: RuntimeError, worker: threading.Thread | None) -> None:
+        """Called under the state lock; only a never-admitted owner loses work.
+
+        A start wrapper may raise after a real worker started or even finished.
+        Its ``ident`` stays set after exit. Keep that worker's in-flight counts
+        and any later writer intact; a diagnostic is not proof of release.
+        """
+        self._errors += 1
+        self._last_error = self._error_text(error)
+        if self._worker is worker and (worker is None or worker.ident is None):
+            self._dropped["write"] += len(self._queue)
+            self._queue.clear()
+            self._pending_records = self._pending_bytes = 0
+            self._completed_sequence = self._accepted
+            self._worker = None
+            self._closed = self._closing
+        self._condition.notify_all()
 
     def referee_payload(self, topic: str, payload: bytes) -> bool:
         bounded = bytes(payload[:65536])

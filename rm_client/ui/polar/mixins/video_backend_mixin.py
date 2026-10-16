@@ -272,9 +272,7 @@ class VideoBackendMixin:
             # The judge-system acknowledgement is authoritative.  Stop the
             # normal webcam sampler and make the Apple-island/
             # AndroidLiquidGlass console the locked foreground workspace.
-            if self.camera_started:
-                self.camera_worker.stop(wait=False)
-                self.camera_started = False
+            self._camera_activation.pause_admitted_capture()
             self._hero_native_wait_started = now
             if self.economy_phase != EconomyScenePhase.CLOSED:
                 self._economy_generation += 1
@@ -444,36 +442,26 @@ class VideoBackendMixin:
         if self._window_lifecycle.closing:
             return
         if os.environ.get("POLAR_DISABLE_LOCAL_CAPTURE", "").lower() in ("1", "true", "yes"):
-            if self.camera_worker.running:
-                self.camera_worker.stop(wait=False)
-            self.camera_started = False
-            self.camera_worker.last_error = "local capture disabled"
+            self._camera_activation.suspend(reason="local capture disabled")
             return
         source = self.registry.get("CameraFeed")
         source_setting = source.get_setting("Source") if source else None
         if source_setting is not None and source_setting.value != "Webcam":
             # A hidden webcam must not keep sampling or feeding local vision
             # after UDP/Native/Synthetic takes ownership of CameraFeed.
-            if self.camera_worker.running:
-                self.camera_worker.stop(wait=False)
-            self.camera_started = False
+            self._camera_activation.suspend()
             return
         camera_id = int(self.get_setting_number(source, "Camera ID", 0))
         capture_width = int(self.get_setting_number(source, "Capture Width", 960))
         capture_height = int(self.get_setting_number(source, "Capture Height", 540))
-        requested_config = (camera_id, capture_width, capture_height)
-        if self.camera_started and not self.camera_worker.running:
-            self.camera_started = False
-        if self.camera_started and self._camera_config != requested_config:
-            self.camera_worker.stop(wait=False)
-            self.camera_started = False
-            self.clear_normal_backend_video_frame()
-        if not self.camera_started:
-            self.camera_worker.configure(camera_id, (capture_width, capture_height))
-            self.camera_worker.on_frame = self.on_captured_camera_frame
-            self.camera_started = self.camera_worker.start()
-            if self.camera_started:
-                self._camera_config = requested_config
+        self._camera_activation.ensure(
+            (camera_id, capture_width, capture_height),
+            bind_frame_sink=self._bind_camera_frame_sink,
+            discard_frame=lambda: self.clear_normal_backend_video_frame(),
+        )
+
+    def _bind_camera_frame_sink(self) -> None:
+        self.camera_worker.on_frame = self.on_captured_camera_frame
 
     def draw_video(self, p: QPainter, width: int, height: int) -> None:
         if self.hero_deploy_video_cut_active():
@@ -513,33 +501,23 @@ class VideoBackendMixin:
         Native release stays with each worker. This adapter never joins it;
         final window shutdown uses the separate strict close contract.
         """
-        failures = []
-        for name, owner in owners:
-            if not owner.running:
-                continue
-            try:
-                owner.stop(wait=False)
-            except Exception as exc:
-                failures.append((name, exc))
-        for name, exc in failures:
-            def report_failure(error=exc):
-                raise error
-            try:
-                self._run_tick_stage(f"vision.stop.{name}", report_failure)
-            except Exception:
-                # All revocations have already been attempted. Even a broken
-                # diagnostic adapter must not replace the operational cause.
-                _LOG.error("Vision stop diagnostic failed: %s", name, exc_info=True)
-        return failures[0][1] if failures else None
+        return self._vision_selection.stop_workers(owners, report_failure=self._report_vision_stop_failure)
+
+    def _report_vision_stop_failure(self, name: str, error: Exception) -> None:
+        def report_failure():
+            raise error
+        try:
+            self._run_tick_stage(f"vision.stop.{name}", report_failure)
+        except Exception:
+            # All revocations have already been attempted. Even a broken
+            # diagnostic adapter must not replace the operational cause.
+            _LOG.error("Vision stop diagnostic failed: %s", name, exc_info=True)
 
     def refresh_vision_runtime(self) -> None:
         if self._window_lifecycle.closing:
             return
-        owners = (
-            ("local", self.local_vision),
-            ("receiver", self.tongji_receiver),
-            ("bridge", self.tongji_bridge),
-        )
+        selection = self._vision_selection
+        owners = selection.workers()
         try:
             self.backend.set_active_video_source(
                 self.setting_mode(self.registry.get("CameraFeed"), "Source", "")
@@ -551,30 +529,27 @@ class VideoBackendMixin:
             self._stop_vision_workers(owners)
             raise
         if os.environ.get("POLAR_DISABLE_LOCAL_CAPTURE", "").lower() in ("1", "true", "yes"):
-            self._vision_source = "Mock"
-            self._tongji_enabled = False
+            selection.disable_capture()
             failure = self._stop_vision_workers(owners)
             if failure is not None:
                 raise failure
             return
         bridge_module = self.registry.get("TongjiVisionBridge")
-        self._vision_source = os.environ.get("POLAR_VISION_SOURCE", self.setting_mode(bridge_module, "Vision Source", "Local"))
-        if self._vision_source not in ("Local", "Tongji", "Auto", "Mock"):
-            self._vision_source = "Local"
+        selection.select_source(os.environ.get(
+            "POLAR_VISION_SOURCE", self.setting_mode(bridge_module, "Vision Source", "Local"),
+        ))
         bridge_enabled = bool(bridge_module and bridge_module.enabled)
-        self._tongji_enabled = self._vision_source in ("Tongji", "Auto") and bridge_enabled
+        selection.set_bridge_enabled(bridge_enabled)
         listen = self.setting_bool(bridge_module, "Listen", True)
-        receiver_requested = self._tongji_enabled and listen
-        local_enabled = self._vision_source in ("Local", "Auto") and bridge_enabled
+        receiver_requested = selection.receiver_requested(listen)
+        local_enabled = selection.local_enabled(bridge_enabled)
         model_path = self._client_asset_path("同济自瞄", "sp_vision_25", "assets", "yolov5.xml")
         local_requested = local_enabled and model_path.exists()
         # Revoke disabled owners before admitting any replacement. The legacy
         # TCP bridge remains compatibility-only and is always revoked here.
-        stops = [("bridge", self.tongji_bridge)]
-        if not receiver_requested:
-            stops.append(("receiver", self.tongji_receiver))
-        if not local_requested:
-            stops.append(("local", self.local_vision))
+        stops = selection.unrequested_workers(
+            receiver_requested=receiver_requested, local_requested=local_requested,
+        )
         failure = self._stop_vision_workers(stops)
         if failure is not None:
             raise failure
@@ -690,18 +665,17 @@ class VideoBackendMixin:
         camera_module = self.registry.get("CameraFeed")
         source_mode = self.setting_mode(camera_module, "Source", "Webcam")
         normalized_mode = source_mode.strip().lower()
-        if normalized_mode != self._normal_backend_mode:
+        if self._normal_video_timeline.mode_changed(normalized_mode):
             self.clear_normal_backend_video_frame()
-            self._normal_backend_mode = normalized_mode
+            self._normal_video_timeline.select_mode(normalized_mode)
         if normalized_mode == "synthetic":
             return
         if normalized_mode != "webcam":
             self.consume_backend_video_frame()
             return
         frame = self.camera_worker.latest_frame()
-        if frame is None or frame.sequence <= self._last_capture_sequence:
+        if frame is None or not self._normal_video_timeline.consume_capture(frame.sequence):
             return
-        self._last_capture_sequence = frame.sequence
         try:
             self._vision_scene_luminance = float(frame.bgr[::32, ::32].mean()) / 255.0
             self.state.vision_scene_luminance = self._vision_scene_luminance
@@ -711,8 +685,7 @@ class VideoBackendMixin:
         if self.setting_bool(camera_module, "Mirror", False):
             image = image.mirrored(True, False)
         self.frame_image = image
-        self._normal_frame_source = "webcam"
-        self._display_frame_sequence += 1
+        self._normal_video_timeline.publish_capture_frame()
         # QPixmap 会由 Qt OpenGL Paint Engine 缓存为纹理；同一摄像头帧在
         # 120/144Hz HUD 重绘期间不再反复上传 QImage。
         self.frame_pixmap = QPixmap.fromImage(image)
@@ -724,9 +697,9 @@ class VideoBackendMixin:
         camera_module = self.registry.get("CameraFeed")
         source_mode = self.setting_mode(camera_module, "Source", "Webcam")
         normalized_mode = source_mode.strip().lower()
-        if normalized_mode != self._normal_backend_mode:
+        if self._normal_video_timeline.mode_changed(normalized_mode):
             self.clear_normal_backend_video_frame()
-            self._normal_backend_mode = normalized_mode
+            self._normal_video_timeline.select_mode(normalized_mode)
         bgr, frame_at, _frame_source = self.backend.latest_video_frame(
             self.NORMAL_BACKEND_VIDEO_STALE_S,
             source_mode,
@@ -735,7 +708,7 @@ class VideoBackendMixin:
             self.backend.udp.clear_stale_decoded_frame(self.NORMAL_BACKEND_VIDEO_STALE_S)
             self.clear_normal_backend_video_frame()
             return
-        if frame_at <= self._last_backend_video_at:
+        if not self._normal_video_timeline.backend_frame_is_new(frame_at):
             return
         try:
             source = bgr
@@ -757,8 +730,7 @@ class VideoBackendMixin:
         camera_module = self.registry.get("CameraFeed")
         if self.setting_bool(camera_module, "Mirror", False):
             image = image.mirrored(True, False)
-        self._last_backend_video_at = frame_at
-        self._display_frame_sequence += 1
+        self._normal_video_timeline.admit_backend_frame(frame_at)
         # OfficialEvent stops the local webcam while the judge feed owns the
         # screen; the decoded backend frame is the only live image, so local
         # vision must consume it or detection/ESP silently lose all input.
@@ -766,7 +738,7 @@ class VideoBackendMixin:
             self._backend_vision_sequence = int(getattr(self, "_backend_vision_sequence", 0)) + 1
             self.local_vision.submit(self._backend_vision_sequence, width, height, bgr)
         self.frame_image = image
-        self._normal_frame_source = "backend"
+        self._normal_video_timeline.publish_backend_frame()
         self.frame_pixmap = QPixmap.fromImage(image)
         try:
             self._vision_scene_luminance = float(bgr[::32, ::32].mean()) / 255.0
@@ -781,22 +753,17 @@ class VideoBackendMixin:
         normalized_source = source.strip().lower()
         return bool(
             self.backend_video_source_selected()
-            and self._normal_backend_mode == normalized_source
-            and self._normal_frame_source == "backend"
-            and self._last_backend_video_at > 0.0
-            and now - self._last_backend_video_at <= self.NORMAL_BACKEND_VIDEO_STALE_S
+            and self._normal_video_timeline.backend_is_fresh(
+                normalized_source, now, self.NORMAL_BACKEND_VIDEO_STALE_S,
+            )
         )
 
     def normal_video_frame_ready(self, now: float | None = None) -> bool:
         source = self.setting_mode(self.registry.get("CameraFeed"), "Source", "Webcam")
         normalized_source = source.strip().lower()
-        if normalized_source in {"", "webcam"}:
-            return bool(
-                self._normal_backend_mode in {"", "webcam"}
-                and self._normal_frame_source == "webcam"
-            )
-        if normalized_source == "synthetic":
-            return False
+        ready = self._normal_video_timeline.readiness_without_backend(normalized_source)
+        if ready is not None:
+            return ready
         return self.normal_backend_video_fresh(now)
 
     def clear_normal_backend_video_frame(self) -> bool:
@@ -804,10 +771,8 @@ class VideoBackendMixin:
         # main frame fields. Invalidate it even when the selected source was
         # Synthetic and therefore had no ``_normal_frame_source`` owner.
         self.liquid_glass.discard("hud")
-        if self._last_backend_video_at <= 0.0 and self._normal_frame_source == "none":
+        if not self._normal_video_timeline.clear_frame():
             return False
-        self._last_backend_video_at = 0.0
-        self._normal_frame_source = "none"
         self.frame_image = None
         self.frame_pixmap = None
         self._gpu_background_key = None

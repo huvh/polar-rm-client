@@ -11,7 +11,7 @@ import time
 
 from PySide6.QtCore import QRectF, Qt
 
-from ..economy import EconomyContext, CATEGORY_TITLES, TRANSACTION_LABELS
+from ..economy_values import EconomyContext, CATEGORY_TITLES, TRANSACTION_LABELS
 from ..student_ui import presentation_data, value_text
 from .animation import Easings
 from .clickgui_gpu import ClickGuiDrawList
@@ -81,7 +81,7 @@ def build_grid(host, width, height):
     layout = grid_layout(host.economy_workspace_layer, width, height, progress)
     context = EconomyContext.from_state(host.state)
     offers = host.economy_offers()
-    selected = host.economy_selected_offer()
+    selected = host.reconcile_economy_selection()
     now = time.perf_counter()
     body_alpha, detail_alpha = layout.offers_alpha, layout.detail_alpha
     # All content and hit areas use the SAME final-grid -> animated-root clip.

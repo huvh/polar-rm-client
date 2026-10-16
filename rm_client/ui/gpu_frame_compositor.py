@@ -576,7 +576,7 @@ class GpuFrameCompositor:
                      ("framebuffer", lambda: self.release_layer(layer))),
         )
         if not accepted:
-            self._frame_rejection = self._frame_rejection or f"{layer} paint pass rejected"
+            self.reject_frame(f"{layer} paint pass rejected")
         return accepted
 
     def paint_raster(self, device, draw: Callable[[QPainter], None], *, phase: str) -> bool:
@@ -587,7 +587,7 @@ class GpuFrameCompositor:
             return True
         accepted = self._run_pass(phase, paint, cleanup=(("painter", session._end_painter),))
         if not accepted:
-            self._frame_rejection = self._frame_rejection or f"{phase} rejected"
+            self.reject_frame(f"{phase} rejected")
         return accepted
 
     def render_vision_layer(self, functions, render: Callable[[], bool]) -> bool:
@@ -601,7 +601,7 @@ class GpuFrameCompositor:
             "layer.paint.vision", draw, cleanup=(("framebuffer", self.end_vision_layer),),
         )
         if not accepted:
-            self._frame_rejection = self._frame_rejection or "vision paint pass rejected"
+            self.reject_frame("vision paint pass rejected")
         return accepted
 
     def clear_current(self, functions, *, transparent: bool) -> None:
@@ -615,6 +615,16 @@ class GpuFrameCompositor:
     @property
     def frame_rejected(self) -> bool:
         return bool(self._frame_rejection)
+
+    def reject_frame(self, reason: str, *, detail: str = "") -> None:
+        """Retain a child renderer's False result without inventing a fault.
+
+        Child renderers keep their own typed exception/cleanup diagnostics.
+        The frame owner only records why their incomplete output cannot be
+        cached or presented; a later rejection must not erase that first cause.
+        """
+        if not self._frame_rejection:
+            self._frame_rejection = f"{reason}: {detail}" if detail else reason
 
     def _release_frame_layers(self) -> tuple[tuple[RenderFault, ...], tuple[str, ...]]:
         faults, rejected = [], []
@@ -652,7 +662,7 @@ class GpuFrameCompositor:
     def _release_framebuffer(self, fbo, layer: str) -> bool:
         accepted = fbo is None or fbo.release() is not False
         if not accepted:
-            self._frame_rejection = f"{layer} framebuffer release rejected"
+            self.reject_frame(f"{layer} framebuffer release rejected")
         return accepted
 
     def release_layer(self, layer: str) -> bool:
@@ -745,13 +755,14 @@ class GpuFrameCompositor:
         """Bind and clear the dedicated premultiplied vision wire layer."""
         def begin() -> bool:
             if self.vision_fbo is None or not self.vision_fbo.bind():
+                self.reject_frame("vision framebuffer begin rejected")
                 return False
             self.clear_current(functions, transparent=True)
             return True
         accepted = self._run_pass("layer.begin.vision", begin,
             on_reject=(("framebuffer", self.end_vision_layer),))
         if not accepted:
-            self._frame_rejection = "vision framebuffer begin rejected"
+            self.reject_frame("vision framebuffer begin rejected")
         return accepted
 
     def end_vision_layer(self) -> bool:

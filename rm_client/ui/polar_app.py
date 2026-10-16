@@ -48,6 +48,10 @@ from ..configuration.wheel import sync_wheel_from_module, sync_module_from_wheel
 from ..control import KeyboardControlBridge
 from ..lifecycle import TeardownTask
 from .polar.clickgui_frame import ClickGuiFrame, build_clickgui_frame
+from .polar.overlay_layers import (
+    FrameViewport, LayerCacheSnapshot, MotionLayerInputs, OverlayDrawPorts,
+    OverlayLayerPlan, OverlayLayerRenderer, StaticLayerMode,
+)
 from .polar.clickgui_presenter import ClickGuiGpuPresenter, ClickGuiViewport
 from .polar.compositor_plan import (
     BackdropTreatment, FinalFrameCompositor, FrameCompositionPlan,
@@ -259,7 +263,7 @@ from .polar.renderers.startup_scene import StartupSceneMixin
 # 阶段 3a 大域 mixin 化（REFACTOR_BLUEPRINT §5 阶段 3 表 3a 行）：D17 配置/档案/
 # 壁纸持久化族方法体已机械迁至 mixins/persistence_mixin.py 的 PersistenceMixin
 # （零修改，三段不连续区块整体搬迁），由下方 PolarRMWindow 继承装配；
-# _auto_save_pending/_auto_save_due_at/config_loading 状态字段仍在 __init__ 原位
+# Save ownership is composed explicitly in __init__; config_loading stays with the UI adapter.
 # 初始化，auto-save 合并写（0.25s 防抖）语义不变；load_startup_config 在 __init__
 # 的调用点不变，mixin 方法可用性由 MRO 保证。
 from .polar.mixins.persistence_mixin import PersistenceMixin
@@ -295,10 +299,18 @@ from .polar.mixins.economy_mixin import EconomyMixin
 from .polar.mixins.input_dispatch_mixin import InputDispatchMixin
 from .polar.pointer_interaction import PointerInteraction
 from .polar.panel_layouts import create_panel_layouts
+from .polar.qt_application import _abort_failed_launch, launch_qt_application
+from .polar.startup_navigation import StartupNavigation, StartupNavigationField
+from .polar.gpu_warmup import GpuWarmupQueue, GpuWarmupField
+from .polar.camera_activation import CameraActivation, CameraActivationField
+from ..configuration.profile_saves import ProfileSaveState
+from .polar.profile_save_fields import ProfileSaveField
+from .polar.vision_selection import VisionSelection, VisionSelectionField
+from .polar.normal_video_timeline import NormalVideoTimeline, NormalVideoField
 from .polar.window_assembly import (
     create_feedback_assets, create_gpu_services, create_presentation_services,
     create_startup_wallpaper, create_vision_services, create_warmup_timer,
-    prepare_runtime_paths, resolve_client_asset, start_frame_timer,
+    create_frame_timer, prepare_runtime_paths, resolve_client_asset, start_frame_timer,
 )
 # 阶段 3f 大域 mixin 化：D16 动作处理/配置动作/资格赛全族（after_setting_changed/
 # handle_config_action/handle_qualification_action/start_kmc_qualification_test/
@@ -392,6 +404,20 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
 
     # Existing diagnostics consumers may still read/write these private seams.
     # Production tick paths use the single owner below, without copied state.
+    _last_capture_sequence = NormalVideoField("capture_sequence")
+    _display_frame_sequence = NormalVideoField("display_sequence")
+    _last_backend_video_at = NormalVideoField("backend_admitted_at")
+    _normal_backend_mode = NormalVideoField("requested_mode")
+    _normal_frame_source = NormalVideoField("frame_source")
+
+    _accepted_profile = ProfileSaveField("accepted")
+    _unsaved_profile_name = ProfileSaveField("draft")
+    _auto_save_pending = ProfileSaveField("pending")
+    _auto_save_owner = ProfileSaveField("pending_owner")
+    _auto_save_due_at = ProfileSaveField("due_at")
+    _close_save_retry_required = ProfileSaveField("close_retry_required")
+    _config_save_error = ProfileSaveField("error_reported")
+
     _ui_tick_last_ms = TickDiagnosticField("last_ms")
     _ui_tick_max_ms = TickDiagnosticField("max_ms")
     _ui_tick_gap_ms = TickDiagnosticField("gap_ms")
@@ -408,6 +434,30 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
     _field_frame_times_ms = FrameTelemetryField("frame_times_ms")
     _last_field_frame_log_at = FrameTelemetryField("last_reported_at")
 
+    # Startup state is shared with legacy adapters through named fields only.
+    # Navigation decisions and transition ownership live outside the window.
+    home_visible = StartupNavigationField("visible")
+    startup_step = StartupNavigationField("page")
+    startup_transition_started = StartupNavigationField("transition_started")
+    startup_transition_from = StartupNavigationField("transition_from")
+    startup_transition_to = StartupNavigationField("transition_to")
+    _startup_page_epoch = StartupNavigationField("page_epoch")
+    _startup_static_ready_at = StartupNavigationField("static_ready_at")
+
+    _gpu_prewarm_jobs_pending = GpuWarmupField("pending")
+    _gpu_prewarm_last_ms = GpuWarmupField("last_ms")
+    _gpu_prewarm_max_ms = GpuWarmupField("max_ms")
+
+    camera_worker = CameraActivationField("worker")
+    camera_started = CameraActivationField("started")
+    _camera_config = CameraActivationField("configuration")
+
+    local_vision = VisionSelectionField("local")
+    tongji_receiver = VisionSelectionField("receiver")
+    tongji_bridge = VisionSelectionField("bridge")
+    _vision_source = VisionSelectionField("source")
+    _tongji_enabled = VisionSelectionField("tongji_enabled")
+
     NORMAL_BACKEND_VIDEO_STALE_S = 2.0
 
     def __init__(self) -> None:
@@ -415,9 +465,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         self._pointer_interaction = PointerInteraction()
         self._tick_diagnostics = TickDiagnostics()
         self._clickgui_presenter: ClickGuiGpuPresenter | None = None
-        self._gpu_prewarm_jobs_pending = None
-        self._gpu_prewarm_last_ms = 0.0
-        self._gpu_prewarm_max_ms = 0.0
+        self._gpu_warmup = GpuWarmupQueue()
         self._gpu_prewarm_timer = create_warmup_timer(self, self._run_gpu_prewarm_slice)
         self.setWindowTitle(ui_text("POLAR-RM Custom Client", True))
         self.resize(1280, 720)
@@ -442,9 +490,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         self.match_mode_manager = MatchModeManager("RMUC7v7")
         self.mode_manager = GuiModeManager(PRIMARY_GUI_MODE)
         self.vision = MockVisionPipeline()
-        self.camera_worker = CameraCaptureWorker()
-        self.camera_started = False
-        self._camera_config: tuple[int, int, int] | None = None
+        self._camera_activation = CameraActivation(CameraCaptureWorker())
         # SharkClient 对齐后端：三种模式统一由 BackendManager 编排（仅接线，不动 UI）
         self.backend = BackendManager(
             workspace=self.workspace,
@@ -494,22 +540,15 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             model_path=self._client_asset_path("同济自瞄", "sp_vision_25", "assets", "yolov5.xml"),
         )
         self.calibration = vision_services.calibration
-        self.tongji_receiver = vision_services.receiver
+        self._vision_selection = VisionSelection(
+            local=vision_services.local, receiver=vision_services.receiver,
+            bridge=vision_services.bridge,
+        )
         self.gimbal_command_bridge = vision_services.gimbal_commands
         self.composite_vision = vision_services.composite
-        self.local_vision = vision_services.local
-        self.tongji_bridge = vision_services.bridge
-        self._vision_source = "Mock"
-        self._tongji_enabled = False
         self._vision_snapshot: VisionSnapshot | None = None
-        self._last_capture_sequence = 0
-        # Webcam/vision sequence numbers come from CameraCaptureWorker.  Keep
-        # the render upload sequence separate so time spent on UDP/Native does
-        # not make a later webcam restart wait for thousands of frame numbers.
-        self._display_frame_sequence = 0
-        self._last_backend_video_at = 0.0
-        self._normal_backend_mode = ""
-        self._normal_frame_source = "none"
+        # Capture consumption and display uploads have separate sequence spaces.
+        self._normal_video_timeline = NormalVideoTimeline()
         self._last_vision_result: VisionResult | None = None
         self.vision_render_interpolator = VisionRenderInterpolator()
         self.target_hud_presence = TargetHudPresenceState()
@@ -614,20 +653,16 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         # Coalesce slider/drag updates into one atomic profile write.  Saving a
         # complete JSON document for every mouse event caused avoidable frame
         # stalls even after the store itself became crash-safe.
-        self._auto_save_pending = False
-        self._auto_save_due_at = 0.0
+        self._profile_saves = ProfileSaveState()
 
         scenario_module = self.registry.get("Scenario")
-        self.home_visible = self.setting_bool(scenario_module, "Show Startup", True)
-        self.startup_step = "scenario" if self.home_visible else "done"
-        self.startup_transition_started = time.perf_counter()
-        # The launcher transition is deliberately independent from the card
-        # entrance animation.  It retains the old page until the new one has a
-        # complete GPU draw list, which prevents a half-initialised 2K frame.
-        self.startup_transition_from: str | None = None
-        self.startup_transition_to: str | None = None
-        self._startup_page_epoch = 0
-        self._startup_static_ready_at = self.startup_transition_started + self.anim_duration(0.42)
+        self._startup_navigation = StartupNavigation(
+            visible=self.setting_bool(scenario_module, "Show Startup", True),
+        )
+        self._startup_navigation.transition_started = time.perf_counter()
+        # Page retirement remains independent from card entrance animation;
+        # the renderer retains the old page until its replacement is complete.
+        self._startup_navigation.defer_static(self.anim_duration(0.42))
         self._startup_last_hover_action = ""
         self.gui_visible = False
         self.gui_timeline = JelloMainTimeline()
@@ -749,9 +784,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         self.kill_fx.preload_preset_sounds(
             self.setting_mode(elimination_fx, "Preset", "Default Scrolling")
         )
-        if os.environ.get("POLAR_AUTOSTART", "").lower() in ("1", "true", "yes"):
-            self.home_visible = False
-            self.startup_step = "done"
+        self._startup_navigation.apply_autostart(os.environ.get("POLAR_AUTOSTART", ""))
         self.sync_mode_setting()
         if not self.home_visible and not self.configuration_change_pending:
             generation = self.backend.request_scenario(self.scenario_manager.current.key, registry=self.registry)
@@ -763,7 +796,15 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
 
         # Start event delivery only after profile staging and all callback
         # dependencies exist. Native resource activation still waits for poll.
-        self.timer = start_frame_timer(self, self.on_tick, self._render_timer_interval_ms)
+        self.timer = create_frame_timer(self, self.on_tick)
+        try:
+            self.timer.start(self._render_timer_interval_ms)
+        except BaseException as failure:
+            # Every shutdown dependency now exists, including the named timer.
+            # Retain this complete owner even though the factory cannot return
+            # it. Earlier, partially constructed windows have no abort contract.
+            _abort_failed_launch(QApplication.instance(), self, self._abort_startup, failure)
+            raise
 
     def on_tick(self) -> None:
         now = time.perf_counter()
@@ -1278,7 +1319,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             return
         if not self.clickgui_gpu.available or not self.gpu_compositor.available:
             return
-        self._gpu_prewarm_jobs_pending = self._gpu_prewarm_jobs()
+        self._gpu_warmup.replace(self._gpu_prewarm_jobs())
         self._gpu_prewarm_timer.start(16)
 
     def _gpu_prewarm_jobs(self):
@@ -1508,29 +1549,15 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         context = self.context()
         if context is None or not context.isValid():
             return
-        started = time.perf_counter()
-        try:
-            self.makeCurrent()
-            # One atlas/image per turn. The 3 ms target is soft: a single
-            # driver upload cannot be preempted. Record real overruns instead
-            # of reporting the timer budget as measured frame time.
-            while time.perf_counter() - started < 0.003:
-                kind, args, kwargs = next(jobs)
-                if kind == "text":
-                    self.clickgui_gpu.prewarm(*args, **kwargs)
-                elif kind == "image":
-                    self.clickgui_gpu.prewarm_images(*args)
-                break
-        except StopIteration:
-            self._gpu_prewarm_jobs_pending = None
-        except Exception as exc:
-            self._gpu_prewarm_jobs_pending = None
-            self.backend.field_log.emit("gpu_prewarm_error", error=str(exc))
-        finally:
-            self.doneCurrent()
-            self._gpu_prewarm_last_ms = (time.perf_counter() - started) * 1000.0
-            self._gpu_prewarm_max_ms = max(self._gpu_prewarm_max_ms, self._gpu_prewarm_last_ms)
-        if self._gpu_prewarm_jobs_pending is not None:
+        pending = self._gpu_warmup.run_slice(
+            jobs,
+            uploads=self.clickgui_gpu,
+            acquire_context=self.makeCurrent,
+            release_context=self.doneCurrent,
+            report_error=lambda exc: self.backend.field_log.emit("gpu_prewarm_error", error=str(exc)),
+            clock=time.perf_counter,
+        )
+        if pending:
             self._gpu_prewarm_timer.start(16)
 
 
@@ -1616,6 +1643,10 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             return False
         width, height = self.width(), self.height()
         ratio = self.devicePixelRatioF()
+        try:
+            viewport = FrameViewport(width, height, ratio)
+        except ValueError:
+            return False
         storage_generation = self.gpu_compositor.fbo_generation
         if width <= 0 or height <= 0 or not self.gpu_compositor.ensure_size(width, height, ratio):
             return False
@@ -1714,218 +1745,99 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                     and self.startup_transition_to is not None
                     and time.perf_counter() - self.startup_transition_started < self.anim_duration(0.42)
                 )
-                # The stable page can be cached as soon as a transition ends.
-                # Waiting for a timer here left a transparent dynamic layer on
-                # 2K displays and exposed the previous page for one more frame.
-                cache_ready = not transition_active
-                if cache_ready:
-                    launcher_key = (*static_key, self.scenario_manager.current.key, self.match_mode_manager.current.key, chinese_enabled(self.registry))
-                    if launcher_key != self._startup_static_page_key:
-                        self.hotspots.clear()
-                        self.gpu_compositor.clear_static_glass()
-                        self.gpu_compositor.begin_static_glass()
-                        commands = self.build_gpu_startup_launcher(width, height, page=self.startup_step, settled=True)
-                        self.gpu_compositor.end_static_glass()
-                        self.clickgui_gpu.prepare_frame(commands, ratio)
-                        device = self.gpu_compositor.paint_device("overlay")
-                        if device is None:
-                            return False
-                        self.gpu_compositor.clear_current(functions, transparent=True)
-                        if not self.clickgui_gpu.render(
-                            functions,
-                            commands,
-                            width,
-                            height,
-                            ratio,
-                            atlas_prepared=True,
-                        ):
-                            return False
-                        if self.gpu_compositor.release_layer("overlay") is False:
-                            return False
-                        self._startup_static_page_key = launcher_key
-                    if not self.paint_gpu_startup_interaction_layer(functions, width, height, ratio, cached_static=True):
-                        return False
-                else:
-                    self.gpu_compositor.clear_static_glass()
-                    self._startup_static_page_key = None
-                    device = self.gpu_compositor.paint_device("overlay")
-                    if device is None:
-                        return False
-                    self.gpu_compositor.clear_current(functions, transparent=True)
-                    if self.gpu_compositor.release_layer("overlay") is False:
-                        return False
-                    if not self.paint_gpu_startup_interaction_layer(functions, width, height, ratio):
-                        return False
-                self._gpu_static_ui_key = static_key
+                static_mode = (StaticLayerMode.STARTUP_TRANSITION if transition_active
+                               else StaticLayerMode.STARTUP_STABLE)
+                launcher_key = None if transition_active else (
+                    *static_key, self.scenario_manager.current.key,
+                    self.match_mode_manager.current.key, chinese_enabled(self.registry),
+                )
             else:
-                # The liquid-glass specification makes Economy an exclusive
-                # scene. Jello and retained GUIs use the normal HUD snapshot
-                # path whenever Economy is inactive.
-                if economy_active:
-                    # Economy is an exclusive scene: camera + economy control
-                    # backdrop only.  Clearing the cached host HUD here fixes
-                    # the map/ModuleList ghosting that contradicted the sole
-                    # liquid-glass specification, without changing any shared
-                    # HUD or glass renderer.
-                    device = self.gpu_compositor.paint_device("overlay")
-                    if device is None:
-                        return False
-                    device.setDevicePixelRatio(ratio)
-                    self.gpu_compositor.clear_current(functions, transparent=True)
-                    if self.gpu_compositor.release_layer("overlay") is False:
-                        return False
-                    self._gpu_static_ui_key = static_key
-                elif rebuild_hud_static:
-                    def draw_static(session) -> bool:
-                        self.gpu_compositor.push_glass_owner(GlassOwner.HUD)
-                        session.defer_cleanup("glass_owner", self.gpu_compositor.pop_glass_owner)
-                        self.gpu_compositor.begin_static_glass()
-                        session.defer_cleanup("static_glass", self.gpu_compositor.end_static_glass)
-                        painter = session.begin_painter()
-                        self.paint_overlay(
-                            None,
-                            startup_background_ready=True,
-                            hud_background_ready=True,
-                            painter=painter,
-                            logical_size=(width, height),
-                            include_interactive=False,
-                            split_motion_layer=not modal_backdrop_active,
-                            capture_module_list=modal_backdrop_active,
-                        )
-                        return True
+                static_mode = (StaticLayerMode.ECONOMY if economy_active else
+                               StaticLayerMode.HUD_REBUILD if rebuild_hud_static else StaticLayerMode.REUSE)
+                launcher_key = None
+            economy_gpu = economy_active and self.clickgui_gpu.available
+            gui_alpha = self.gui_timeline.progress
+            prepare_clickgui = False
+            if not startup_scene and not economy_gpu:
+                click_gui = self.registry.get("ClickGui")
+                prepare_clickgui = (
+                    (self.gui_visible or gui_alpha > 0.01)
+                    and self.setting_mode(click_gui, "Render Backend", "Unified GPU") == "Unified GPU"
+                    and self.clickgui_gpu.available
+                )
+            motion = MotionLayerInputs(
+                radial_visible=self.quick_action_wheel.visible,
+                chat_open=self.match_chat.input_open,
+                student_visible=self.student_ui.visible,
+                escape_visible=self.escape_menu_visible,
+            )
+            plan = OverlayLayerPlan(
+                viewport=viewport, storage_generation=self.gpu_compositor.fbo_generation,
+                scene=scene, static_mode=static_mode, static_key=static_key,
+                startup_key=launcher_key, economy_gpu=economy_gpu,
+                prepare_clickgui=prepare_clickgui, motion=motion,
+            )
+            cache = LayerCacheSnapshot(
+                static_key=self._gpu_static_ui_key, startup_key=self._startup_static_page_key,
+                motion_ready=self._gpu_motion_layer_ready,
+                motion_updated_at=self._gpu_motion_layer_updated_at,
+            )
+            home_visible = self.home_visible
 
-                    if not self.gpu_compositor.paint_layer(functions, "overlay", ratio, draw_static):
-                        return False
-                    self._gpu_static_ui_key = static_key
+            def draw_static(painter) -> None:
+                self.paint_overlay(
+                    None, startup_background_ready=True, hud_background_ready=True,
+                    painter=painter, logical_size=(width, height), include_interactive=False,
+                    split_motion_layer=not modal_backdrop_active,
+                    capture_module_list=modal_backdrop_active,
+                )
 
-                if economy_active and self.clickgui_gpu.available:
-                    # Economy panel is the complete dynamic scene.  Do not draw HUD
-                    # motion here: its only backdrop is the live camera texture plus
-                    # economy-owned control rails.
-                    self.gpu_compositor.push_glass_owner(GlassOwner.ECONOMY)
-                    try:
-                        commands = self.build_gpu_economy_workspace(width, height)
-                    finally:
-                        self.gpu_compositor.pop_glass_owner()
-                    self.clickgui_gpu.prepare_frame(commands, ratio)
-
-                    device = self.gpu_compositor.paint_device("dynamic")
-                    if device is None:
-                        return False
-                    device.setDevicePixelRatio(ratio)
-                    self.gpu_compositor.clear_current(functions, transparent=True)
-                    if not self.clickgui_gpu.render(
-                        functions, commands, width, height, ratio, atlas_prepared=True,
-                    ):
-                        if self.gpu_compositor.release_layer("dynamic") is False:
-                            return False
-                        return False
-                    if self.gpu_compositor.release_layer("dynamic") is False:
-                        return False
-                    if not self.gpu_compositor.clear_target_layer(functions):
-                        return False
-                else:
-                    prepared_clickgui_commands: ClickGuiDrawList | None = None
-                    prepared_clickgui_frame: ClickGuiFrame | None = None
-                    prepared_clickgui_atlas = False
-                    click_gui = self.registry.get("ClickGui")
-                    gui_alpha = self.gui_timeline.progress
-                    if (
-                        (self.gui_visible or gui_alpha > 0.01)
-                        and self.setting_mode(click_gui, "Render Backend", "Unified GPU") == "Unified GPU"
-                        and self.clickgui_gpu.available
-                    ):
-                        self.gpu_compositor.push_glass_owner(GlassOwner.CLICKGUI)
-                        try:
-                            prepared_clickgui_frame = build_clickgui_frame(self, width, height, gui_alpha)
-                            prepared_clickgui_commands = prepared_clickgui_frame.commands
-                        finally:
-                            self.gpu_compositor.pop_glass_owner()
-                        # Geometry travels with its draw list; preparation does not
-                        # publish pointer targets before the modal layer is painted.
-                        self.clickgui_gpu.prepare_frame(prepared_clickgui_commands, ratio)
-                        prepared_clickgui_atlas = True
-
-                    priority_overlay_active = bool(
-                        self.quick_action_wheel.visible
-                        or self.match_chat.input_open
-                        or self.student_ui.visible
-                        or self.escape_menu_visible
+            def draw_motion(session, prepared) -> bool:
+                session.defer_cleanup("gpu-commands", self._discard_gpu_command_collections)
+                self.begin_gpu_hud_command_collection()
+                self.begin_gpu_island_icon_collection()
+                self.begin_gpu_quick_action_wheel_collection()
+                painter = session.begin_painter()
+                if not home_visible and not clickgui_active:
+                    self.paint_hud_motion_overlay(
+                        painter, width, height, include_vision=not native_vision_owner,
+                        include_target_hud=(self.menu_overlay_active() and not motion.priority_active),
+                        include_chat=not motion.chat_open, include_radial=not motion.radial_visible,
                     )
-                    now = time.perf_counter()
-                    refresh_motion_layer = motion_layer_needs_refresh(
-                        radial_visible=self.quick_action_wheel.visible,
-                        chat_open=self.match_chat.input_open,
-                        student_visible=self.student_ui.visible,
-                        escape_visible=self.escape_menu_visible,
-                        ready=self._gpu_motion_layer_ready,
-                        now=now, updated_at=self._gpu_motion_layer_updated_at,
+                if not home_visible:
+                    self.paint_clickgui_overlay(
+                        painter, width, height, gpu_commands=prepared.commands,
+                        gpu_frame=prepared.frame, gpu_atlas_prepared=prepared.atlas_prepared,
                     )
+                if not session.end_painter():
+                    return False
+                self.flush_gpu_hud_commands(functions, width, height, ratio)
+                self.flush_gpu_island_icons(functions, width, height, ratio)
+                self.flush_gpu_quick_action_wheel(functions, width, height, ratio)
+                return not self.gpu_compositor.frame_rejected
 
-                    if refresh_motion_layer:
-                        dynamic_started = time.perf_counter()
-                        def draw_motion(session) -> bool:
-                            self.begin_gpu_hud_command_collection()
-                            self.begin_gpu_island_icon_collection()
-                            self.begin_gpu_quick_action_wheel_collection()
-                            painter = session.begin_painter()
-                            if not self.home_visible and not clickgui_active:
-                                # Priority overlays own target_fbo and must not be
-                                # baked into this reusable base frame.
-                                self.paint_hud_motion_overlay(
-                                    painter,
-                                    width,
-                                    height,
-                                    include_vision=not native_vision_owner,
-                                    include_target_hud=(
-                                        self.menu_overlay_active()
-                                        and not priority_overlay_active
-                                    ),
-                                    include_chat=not self.match_chat.input_open,
-                                    include_radial=not self.quick_action_wheel.visible,
-                                )
-                            if not self.home_visible:
-                                self.paint_clickgui_overlay(
-                                    painter,
-                                    width,
-                                    height,
-                                    gpu_commands=prepared_clickgui_commands,
-                                    gpu_frame=prepared_clickgui_frame,
-                                    gpu_atlas_prepared=prepared_clickgui_atlas,
-                                )
-                            if not session.end_painter():
-                                return False
-                            self.flush_gpu_hud_commands(functions, width, height, ratio)
-                            self.flush_gpu_island_icons(functions, width, height, ratio)
-                            self.flush_gpu_quick_action_wheel(functions, width, height, ratio)
-                            return True
-
-                        if not self.gpu_compositor.paint_layer(functions, "dynamic", ratio, draw_motion):
-                            return False
-                        self._gpu_motion_layer_ready = True
-                        self._gpu_motion_layer_updated_at = now
-                        self.gpu_compositor.last_dynamic_ms = (
-                            time.perf_counter() - dynamic_started
-                        ) * 1000.0
-
-                    if priority_overlay_active:
-                        if not self.paint_priority_interaction_layer(
-                            functions,
-                            width,
-                            height,
-                            ratio,
-                        ):
-                            return False
-                    elif modal_backdrop_active:
-                        if not self.gpu_compositor.clear_target_layer(functions):
-                            return False
-                    elif not self.paint_gpu_target_hud_layer(
-                        functions,
-                        width,
-                        height,
-                        ratio,
-                    ):
-                        return False
+            draws = OverlayDrawPorts(
+                clear_startup_interactions=self.hotspots.clear,
+                startup_commands=lambda: self.build_gpu_startup_launcher(
+                    width, height, page=self.startup_step, settled=True),
+                startup_interaction=lambda cached: self.paint_gpu_startup_interaction_layer(
+                    functions, width, height, ratio, **({"cached_static": True} if cached else {})),
+                static_hud=draw_static,
+                economy_commands=lambda: self.build_gpu_economy_workspace(width, height),
+                clickgui_frame=lambda: build_clickgui_frame(self, width, height, gui_alpha),
+                motion_hud=draw_motion,
+                priority_interaction=lambda: self.paint_priority_interaction_layer(functions, width, height, ratio),
+                target_hud=lambda: self.paint_gpu_target_hud_layer(functions, width, height, ratio),
+            )
+            updated = OverlayLayerRenderer(
+                self.gpu_compositor, self.clickgui_gpu, clock=time.perf_counter,
+            ).render(functions, plan, cache, draws)
+            if updated is None:
+                return False
+            self._gpu_static_ui_key = updated.static_key
+            self._startup_static_page_key = updated.startup_key
+            self._gpu_motion_layer_ready = updated.motion_ready
+            self._gpu_motion_layer_updated_at = updated.motion_updated_at
 
             if self.gpu_compositor.frame_rejected:
                 return False
@@ -3305,6 +3217,14 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             self.toast(message, kind="warning")
         return accepted
 
+    def _abort_startup(self) -> None:
+        """Seal a failed launch without admitting more runtime or asking to save.
+
+        The application owns this wrapper until the normal asynchronous close
+        completes. No operator edits have been admitted by a successful launch.
+        """
+        self._begin_window_shutdown()
+
     def _begin_window_shutdown(self) -> None:
         tasks = (
             TeardownTask("camera", self.camera_worker.close),
@@ -4149,6 +4069,25 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         self.dynamic_smooth_values[key] = current
         return current
 
+    def _discard_gpu_command_collections(self) -> None:
+        """Stop recording before fallback, without submitting partial batches.
+
+        The layer session registers this before the first collection starts.
+        Its independent unwind still ends the painter and releases the FBO if
+        drawing or a child renderer fails. Empty successful batches retain
+        their existing objects; no replacement draw lists are allocated here.
+        """
+        self._collect_gpu_hud_commands = False
+        self._collect_gpu_island_icons = False
+        self._collect_gpu_quick_action_wheel = False
+        self._gpu_island_icon_commands.clear()
+        self._gpu_quick_action_wheel_command = None
+        for commands in (self._gpu_hud_commands, self._gpu_quick_action_wheel_labels):
+            commands.rects.clear()
+            commands.texts.clear()
+            commands.images.clear()
+            commands.commands.clear()
+
     def begin_gpu_island_icon_collection(self) -> None:
         self._gpu_island_icon_commands.clear()
         self._collect_gpu_island_icons = self.island_icon_gpu.available
@@ -4177,27 +4116,33 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         if not commands.commands or not self.clickgui_gpu.available:
             return
         self.clickgui_gpu.prepare_frame(commands, ratio)
-        self.clickgui_gpu.render(
+        if not self.clickgui_gpu.render(
             functions,
             commands,
             width,
             height,
             ratio,
             atlas_prepared=True,
-        )
+        ):
+            self.gpu_compositor.reject_frame(
+                "HUD command render rejected", detail=self.clickgui_gpu.last_error,
+            )
 
     def flush_gpu_island_icons(self, functions, width: int, height: int, ratio: float) -> None:
         self._collect_gpu_island_icons = False
         if not self._gpu_island_icon_commands or not self.island_icon_gpu.available:
             self._gpu_island_icon_commands.clear()
             return
-        self.island_icon_gpu.render(
+        if not self.island_icon_gpu.render(
             functions,
             self._gpu_island_icon_commands,
             width,
             height,
             ratio,
-        )
+        ):
+            self.gpu_compositor.reject_frame(
+                "island icon render rejected", detail=self.island_icon_gpu.last_error,
+            )
         self._gpu_island_icon_commands.clear()
 
     def begin_gpu_quick_action_wheel_collection(self) -> None:
@@ -4237,17 +4182,23 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             background_texture=background.texture(),
             blur_texture=blur_texture,
         ):
+            self.gpu_compositor.reject_frame(
+                "quick action wheel render rejected", detail=self.quick_action_wheel_gpu.last_error,
+            )
             return
         if labels.commands and self.clickgui_gpu.available:
             self.clickgui_gpu.prepare_frame(labels, ratio)
-            self.clickgui_gpu.render(
+            if not self.clickgui_gpu.render(
                 functions,
                 labels,
                 width,
                 height,
                 ratio,
                 atlas_prepared=True,
-            )
+            ):
+                self.gpu_compositor.reject_frame(
+                    "quick action wheel label render rejected", detail=self.clickgui_gpu.last_error,
+                )
 
     def _client_asset_path(self, *parts: str) -> Path:
         """Resolve assets under rm_custom_client/ regardless of workspace root."""
@@ -4582,9 +4533,6 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
 # ----------------------------------------------------------------------
 
 
-# Keep the established polar_app.main import path. The composition root in
-# polar.app_entry imports PolarRMWindow only when main() runs, so importing the
-# entry function alone does not construct the window or start device owners.
-# Window orchestration still shares substantial state across its mixins; this
-# compatibility re-export does not imply that those responsibilities are split.
-from .polar.app_entry import main  # noqa: E402
+def main() -> None:
+    """Launch this window through the implementation-independent Qt owner."""
+    launch_qt_application(PolarRMWindow)

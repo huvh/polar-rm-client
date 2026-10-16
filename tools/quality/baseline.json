@@ -1,4 +1,5 @@
 {
+  "all_import_cycles": [],
   "function_budgets": {
     "rm_client.backend.manager:BackendManager._tick_polar_link_ready": {
       "decisions": 10,
@@ -25,22 +26,22 @@
       "statements": 8
     },
     "rm_client.ui.polar.mixins.economy_mixin:EconomyMixin.build_gpu_economy_workspace": {
-      "decisions": 80,
+      "decisions": 45,
       "max_control_depth": 3,
-      "rationale": "Downward ratchet measured at f70bae1: Shared bounded economy-confirmation presentation removed duplicated confirmation logic; both rendering paths remain characterized. Geometry work after this snapshot is not credited.",
-      "statements": 218
+      "rationale": "Downward ratchet measured at c4d3bcf97ef43056bf316bbec593802652120878: Pure selection content and named GPU workspace/text ports own their decisions; accepted rendering traces, named-port, value/label identity and domain tests remain unchanged. Full-tree and relocated responsibility accounting is retained in docs/quality_gates.md.",
+      "statements": 131
     },
     "rm_client.ui.polar.mixins.economy_mixin:EconomyMixin.draw_economy_overlay_compat": {
-      "decisions": 61,
+      "decisions": 33,
       "max_control_depth": 3,
-      "rationale": "Downward ratchet measured at f70bae1: Shared bounded economy-confirmation presentation removed duplicated confirmation logic; both rendering paths remain characterized. Geometry work after this snapshot is not credited.",
-      "statements": 199
+      "rationale": "Downward ratchet measured at c4d3bcf97ef43056bf316bbec593802652120878: Pure selection content and a named compatibility painter port own their decisions; accepted ordered drawing, failure cleanup, value/label identity and domain tests remain unchanged. Full-tree and relocated responsibility accounting is retained in docs/quality_gates.md.",
+      "statements": 123
     },
     "rm_client.ui.polar_app:PolarRMWindow._paint_gpu_frame_cached": {
-      "decisions": 69,
-      "max_control_depth": 5,
-      "rationale": "Downward ratchet measured at f70bae1: Explicit frame/painter ownership and focused rendering collaborators reduce direct orchestration; fallback, cleanup and real CPU-frame tests retained. Native GL remains unqualified.",
-      "statements": 167
+      "decisions": 46,
+      "max_control_depth": 3,
+      "rationale": "Downward ratchet measured at c4d3bcf97ef43056bf316bbec593802652120878: A typed OverlayLayerRenderer port owns presentation-layer selection and cleanup; accepted original-painter traces, failure unwinding, CPU pixels and API fixtures remain unchanged. Native GL remains unqualified. Full-tree and relocated responsibility accounting is retained in docs/quality_gates.md.",
+      "statements": 97
     },
     "rm_client.ui.polar_app:PolarRMWindow.on_tick": {
       "decisions": 1,
@@ -137,7 +138,7 @@
   },
   "rationale": "Initial characterization before the Clean Code responsibility refactor, not a passing-baseline refresh. Existing debt stays visible and new lint debt, initialization cycles and hotspot complexity growth fail. Physical line counts are informational only. Eight existing function budgets were lowered after the reviewed f70bae1 responsibility extractions; see reports/clean_code/ratchet_f70bae1.json. Original source identity, lint debt, initialization-cycle limits and the paint_overlay budget remain unchanged.",
   "runtime_cycles": [],
-  "schema_version": 1,
+  "schema_version": 2,
   "source_git_tree": "46333e99db86988f503b4ff31cd651d0e07eed86",
   "source_local_revision": "da91fc54b97caffd8f76b1aba86f88105d3c0379",
   "source_revision": "d64f1528e2e1864ef369537c026b6d3f7127f590"

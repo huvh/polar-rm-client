@@ -45,6 +45,8 @@ from rm_client.configuration.transactions import (
     apply_configuration_transaction, rollback_configuration_transaction,
 )
 from rm_client.configuration.registry import RegistrySnapshot
+from rm_client.configuration.profile_saves import ProfileSaveState
+from rm_client.ui.polar.profile_save_fields import ProfileSaveField
 from rm_client.configuration.pending import ProfileIdentity, ConfigurationPhase, CompletionAction, PendingConfigurationChange
 profiles = load_pure("ui_regression_profiles", "rm_client/robot_profiles.py")
 
@@ -136,7 +138,16 @@ Persistence = extract_class(PERSISTENCE, "PersistenceMixin", {
 
 
 class Harness(Persistence):
+    _accepted_profile = ProfileSaveField("accepted")
+    _unsaved_profile_name = ProfileSaveField("draft")
+    _auto_save_pending = ProfileSaveField("pending")
+    _auto_save_owner = ProfileSaveField("pending_owner")
+    _auto_save_due_at = ProfileSaveField("due_at")
+    _close_save_retry_required = ProfileSaveField("close_retry_required")
+    _config_save_error = ProfileSaveField("error_reported")
+
     def __init__(self):
+        self._profile_saves = ProfileSaveState()
         self.registry = registry()
         # These model-only cases need name normalization, not disk access.
         self.config_store = NS(clean_profile_name=lambda value: store.ClientConfigStore.clean_profile_name(None, value))

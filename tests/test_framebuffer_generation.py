@@ -20,10 +20,16 @@ from PySide6.QtCore import QRectF, QSize
 from PySide6.QtGui import QImage, QPainter
 from PySide6.QtWidgets import QApplication
 from rm_client.ui import gpu_frame_compositor as compositor
+from rm_client.ui.clickgui_gpu import ClickGuiDrawList
 from rm_client.ui.cs2_video_settings import smooth_video
 from rm_client.ui.polar.compositor_plan import (
     BackdropTreatment, FinalFrameCompositor, FrameCompositionPlan,
     OverlayScene, motion_layer_needs_refresh,
+)
+
+from rm_client.ui.polar.overlay_layers import (
+    FrameViewport, LayerCacheSnapshot, MotionLayerInputs, OverlayDrawPorts,
+    OverlayLayerPlan, OverlayLayerRenderer, StaticLayerMode,
 )
 
 APP = QApplication.instance() or QApplication([])
@@ -35,7 +41,7 @@ def window_methods():
     node = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "PolarRMWindow")
     node.bases = []; node.decorator_list = []
     node.body = [n for n in node.body if isinstance(n, ast.FunctionDef) and n.name in {
-        "_paint_gpu_frame_cached", "invalidate_transient_overlay_scene", "paint_gpu_control_backdrop",
+        "_paint_gpu_frame_cached", "_discard_gpu_command_collections", "invalidate_transient_overlay_scene", "paint_gpu_control_backdrop",
         "paint_gpu_startup_interaction_layer", "paint_priority_interaction_layer", "paint_gpu_background",
     }]
     module = ast.Module(body=[ast.ImportFrom(module="__future__", names=[ast.alias(name="annotations")], level=0), node], type_ignores=[])
@@ -43,7 +49,11 @@ def window_methods():
              "EconomyScenePhase": NS(CLOSING="closing"), "PRIMARY_GUI_MODE": "JelloSigma",
              "BackdropTreatment": BackdropTreatment, "FinalFrameCompositor": FinalFrameCompositor,
              "FrameCompositionPlan": FrameCompositionPlan, "OverlayScene": OverlayScene,
-             "motion_layer_needs_refresh": motion_layer_needs_refresh}
+             "motion_layer_needs_refresh": motion_layer_needs_refresh,
+             "FrameViewport": FrameViewport, "LayerCacheSnapshot": LayerCacheSnapshot,
+             "MotionLayerInputs": MotionLayerInputs, "OverlayDrawPorts": OverlayDrawPorts,
+             "OverlayLayerPlan": OverlayLayerPlan, "OverlayLayerRenderer": OverlayLayerRenderer,
+             "StaticLayerMode": StaticLayerMode}
     exec(compile(ast.fix_missing_locations(module), str(source), "exec"), scope)
     return scope["PolarRMWindow"]
 
@@ -103,6 +113,8 @@ class FramebufferGenerationTests(unittest.TestCase):
         w._economy_restore_pending_generation = None; w._economy_generation = 0; w.economy_phase = "closed"
         w.home_visible = False; w.wallpaper_picker_visible = False; w.clickgui_gpu = NS(available=True)
         w.gpu_static_ui_key = lambda width, height, ratio: ("battle-ui", width, height, ratio)
+        w._startup_static_page_key = None
+        w.hotspots = []
         w._gpu_static_ui_key = None; w._should_defer_hud_static_rebuild = lambda key: False
         w.paint_gpu_background = lambda *args: True
         w.paint_gpu_control_backdrop = lambda *args, **kwargs: False
@@ -120,6 +132,11 @@ class FramebufferGenerationTests(unittest.TestCase):
                      "begin_gpu_quick_action_wheel_collection", "paint_clickgui_overlay", "flush_gpu_hud_commands",
                      "flush_gpu_island_icons", "flush_gpu_quick_action_wheel"):
             setattr(w, name, Mock())
+        w._gpu_hud_commands = ClickGuiDrawList()
+        w._gpu_island_icon_commands = []
+        w._gpu_quick_action_wheel_command = None
+        w._gpu_quick_action_wheel_labels = ClickGuiDrawList()
+        w._collect_gpu_hud_commands = w._collect_gpu_island_icons = w._collect_gpu_quick_action_wheel = False
         w.paint_hud_motion_overlay = lambda painter, *args, **kwargs: painter.fillRect(0, 0, 30, 30, 0xFFFFFFFF)
         for name in ("paint_gpu_target_hud_layer", "paint_priority_interaction_layer"):
             setattr(w, name, Mock(return_value=True))

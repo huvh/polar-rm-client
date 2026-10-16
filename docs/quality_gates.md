@@ -16,10 +16,59 @@ python tools/verify_all.py --test test_quality_gates --test test_test_registry -
 ```
 
 `verify_all.py` discovers the new suite automatically. It must record a nonzero
-unittest count, and dependency skips remain SKIP/INCOMPLETE. A successful static
+unittest count, and dependency skips remain SKIP/INCOMPLETE. Unittest's
+`expectedFailure` also remains INCOMPLETE with its own reported count: a known
+failing assertion is not a passed test even though unittest exits zero. Use an
+explicit negative assertion (such as `assertRaises`) to verify intended rejection
+behavior. A successful static
 check is not an application, GPU, firmware, robot, or visual qualification.
 The new suite also runs the real repository gate, so the existing aggregate
 verification command cannot silently omit architecture checks.
+
+## Reproducing the Linux verification dependencies
+
+`requirements-verification-linux-cp312.txt` records the exact 2026-10-16 Linux
+x86_64 CPython 3.12.14 environment separately from the supported runtime ranges.
+It pins all ten runtime/transitive wheels, including `openvino-telemetry`, and
+requires their official PyPI SHA-256 hashes. Wheel names, metadata-source URLs,
+download URLs and platform scope are recorded in
+`tools/quality/verification_environment.json`. No installer runs during tests.
+
+On a matching Linux x86_64 host with glibc 2.28 or later and Python 3.12.14:
+
+```sh
+python3.12 -m venv .venv-verification
+CI=true .venv-verification/bin/python -m pip install -r requirements-verification-linux-cp312.txt
+.venv-verification/bin/python -m pip check
+CI=true .venv-verification/bin/python tests/test_verification_dependency_lock.py
+CI=true .venv-verification/bin/python tools/verify_all.py --category offline --json tmp_quality/offline.json --log-dir tmp_quality/logs
+```
+
+Check `python3.12 --version` first; the command name alone does not guarantee the
+recorded patch version. Unavailable versions, unsupported wheel tags or hash
+mismatches must stop setup rather than silently selecting newer packages.
+The lock is intentionally Linux/CPython-3.12-specific; it is not a Windows
+packaging lock or a claim that another platform cannot run the application.
+The ordinary runtime/build requirements remain unchanged.
+
+Dependency hashes do not pin the OS, graphics driver, fonts, compiler, FFmpeg,
+media/model assets or external firmware. Offline tests that need those inputs
+must still report their actual missing prerequisites. `--category offline`
+selects local checks; the default `--profile offline` additionally includes
+firmware-category checks and cannot fully pass without the required prepared
+reference. Native desktop and field qualification remain separate gates.
+
+For disconnected reproduction, prepare a wheel directory on a matching connected
+host with `python -m pip download -r requirements-verification-linux-cp312.txt`;
+then install with `--no-index --find-links <wheel-directory>` and the same lock.
+The 2026-10-16 restoration checked all ten downloaded wheel hashes, installed
+that wheel directory into a second empty virtual environment with `--no-index`,
+and passed `pip check`, exact-version checks, native imports and an offscreen Qt
+`QImage` construction. That validates this dependency-setup path, not the full
+application suite or native desktop rendering.
+
+Keep the lock and wheel directory together. Package installation is an explicit
+setup action, never a side effect of `verify_all.py` or a unit test.
 
 ## Verification report provenance
 
@@ -47,6 +96,54 @@ download, baseline rewrite, dependency installation or environment-variable
 dump is performed. Executable paths, remote URLs, filenames from dirty status,
 and Git error text are not included in this metadata.
 
+### Report attempt identity and interrupted runs
+
+Each execution report has a unique `run_id`, UTC start time and `run_state`.
+Once argument parsing, timeout validation and registry selection succeed, and
+before firmware validation or subprocess execution, the requested JSON
+destination receives an explicit nonpassing INCOMPLETE checkpoint. A lock
+conflict or invalid firmware reference records a blocked attempt; an unexpected
+interruption after that checkpoint leaves the attempt visibly unfinished. A
+completed run replaces the checkpoint with its actual selected-scope results.
+
+Malformed arguments, invalid selectors and discovery failures occur before an
+execution attempt is established; they return an error without overwriting an
+existing report. Always match the invocation's exit status and new run ID before
+accepting a JSON file. An old PASS file's existence alone is never evidence that
+the latest command completed successfully.
+
+Reports are published by writing a complete sibling temporary file and atomically
+replacing the destination. A write/replace error still fails the command; it must
+not be treated as a successfully delivered new report. Use a distinct destination
+per concurrent/requested attempt and retain the matching exit status and run ID.
+An earlier verifier can still finish its own run after another invocation is
+blocked, so reusing one filename across overlapping invocations is ambiguous.
+Inventory-only `--list` retains its separate nonexecution format.
+
+### Start/end source stability
+
+Execution reports also contain an additive `source_stability` object. The
+runner hashes relative names and exact bytes of Python/native/build source and
+JSON/configuration contracts beneath `rm_client`, `tests`, `tools` and `configs`,
+plus `main.py` and root dependency declarations. Its complete suffix list and
+exclusions are embedded in the report. Captures are independent of Git history
+and timestamps, so a supplied source snapshot can still be checked.
+
+A persistent content change, addition, deletion or rename during verification
+adds a FAIL evidence result even if every selected child reported PASS. If a
+source capture is unavailable, that evidence result is INCOMPLETE. Unchanged
+source fingerprints do not add a fictitious executed test to the suite counts.
+`test_verification_sources` proves the distinction using real inert subprocesses
+that modify their own code or add a test after inventory selection.
+
+This is a start/end comparison, not a filesystem freeze: it cannot detect an
+edit restored between captures. It excludes binary/media assets, external
+fixtures and installed packages; preserve those separate manifests and the
+actual source revision when reproducing a full result. Writes to reports and
+logs outside the declared source/contract scope do not invalidate evidence.
+The existing Git identity remains the start-of-run committed identity and dirty
+flag; the new digest describes the declared working-file scope, not that Git tree.
+
 ## What is enforced
 
 - Every discovered production Python file must parse. An empty source tree,
@@ -55,10 +152,16 @@ and Git error text are not included in this metadata.
   layers cannot import `rm_client.ui`, even via a function-local or type-only
   import. The model boundary includes its extracted `module_catalog` and
   `module_settings` domains; emergency-action coordination and qualification
-  observation predicates are also protected. UI depends on those layers, not
-  the reverse.
-- No new module-initialization import cycles. Deferred imports are reported
-  separately; they are not falsely called an initialization cycle.
+  observation predicates, pure referee profiles and economy value types are
+  also protected. UI depends on those layers, not
+  the reverse. The two pure roots `referee_profiles` and `economy_values` also
+  reject backend, Qt-binding and Tk imports, including deferred, type-only and
+  unresolved declarations. This narrow rule protects their reviewed value-only
+  boundary; it is not a general ban on backend imports in every domain adapter.
+- No new module-initialization import cycles. An additional full-import-graph
+  guard also rejects cycles containing function-local imports; those are still
+  reported separately and never falsely called initialization cycles.
+  Type-checking-only edges remain excluded from both runtime graphs.
 - No increase in scoped existing debt for bare `except`, wildcard imports,
   shadowed definitions, inline compound suites, or semicolon-separated code.
   Strings and comments containing semicolons are not violations. Property
@@ -310,6 +413,32 @@ No classification changes its baseline automatically. The module map retains
 its manually reviewed section and now describes missing grep evidence honestly:
 absence of a nearby name does not prove there is no generic/dynamic consumer.
 
+## Per-suite environment isolation
+
+Every owned verifier child receives a fresh application-data directory and XDG
+cache/config/data roots beneath it. `POLAR_APP_ROOT` is removed because it forces
+portable mode in the real `RuntimePaths` resolver and overrides the isolated
+application-data directory. Explicit portable-path tests supply their own local
+mapping; the source runner must not inherit another installed application's root.
+
+The runner additionally forces `POLAR_AUTOSTART=0` and removes the standalone
+startup suite's `POLAR_STARTUP_USER_DATA_ROOT` debugging override. An inherited
+shell setting must not activate production transports or bypass the new data
+root. A test of explicit activation or a fixed-path edge case must arrange it
+inside its own controlled fixture. Release-selected FFmpeg and explicit media
+fixtures remain available; this is not a blanket environment reset.
+
+Without `--firmware`, the child also removes an inherited
+`POLAR_REFEREE_REFERENCE`; with that option, both firmware selectors point to the
+same explicitly selected checkout. Otherwise a shell's old reference could
+silently satisfy tests outside the report's firmware identity check.
+
+`test_test_registry` covers both original counterexamples: the production
+`RuntimePaths` resolver must stay in source mode with the requested owned data
+root, and consecutive real subprocesses must have separate writable cache and
+configuration directories. The invoking environment is unchanged. These are
+fixture-isolation checks, not an OS security sandbox or a network prohibition.
+
 ## Optional dependency telemetry in local verification
 
 Every `verify_all.py` child gets `CI=true` before importing test/application
@@ -350,3 +479,51 @@ optional dependencies before importing them, and continue to distinguish local
 fixtures from hardware/network qualification. Environment-contract regressions
 exercise both all profile combinations and a real inert child process; they
 never import the telemetry package.
+
+## Second-pass responsibility ratchet (2026-10-16)
+
+The fixed integrated source `c4d3bcf97ef43056bf316bbec593802652120878`, Git tree
+`7133ab90ca589f2b9afaf6e141186b42f5b6d6c1`, measures source SHA-256
+`2112b3f1c0c583adaf7f5e26daf90061c619697bd398b84b4d0b64d30999b191`.
+Three existing budgets are lowered to those measured values. No baseline source
+identity, lint allowance, other function limit, public API snapshot, behavioral
+trace or pixel fixture is refreshed by this change.
+
+| Symbol | Prior allowance (statements / decisions / depth) | Actual starting `71ebb0f` | New measured cap |
+| --- | --- | --- | --- |
+| `EconomyMixin.build_gpu_economy_workspace` | 218 / 80 / 3 | 198 / 77 / 3 | 131 / 45 / 3 |
+| `EconomyMixin.draw_economy_overlay_compat` | 199 / 61 / 3 | 179 / 58 / 3 | 123 / 33 / 3 |
+| `PolarRMWindow._paint_gpu_frame_cached` | 167 / 69 / 5 | 167 / 69 / 5 | 97 / 46 / 3 |
+
+The older allowances predate geometry work already present at `71ebb0f`; that
+prior reduction is not credited to this pass. Accepted named-port/domain tests
+and preserved behavior justify these boundaries, rather than wrapper size alone.
+Responsibility moved into new collaborators remains visible: all functions in
+`rm_client.ui.economy_content` total 131 statements / 53 decisions, and
+`rm_client.ui.polar.overlay_layers` total 187 statements / 89 decisions.
+
+Whole-tree totals **increase** from `71ebb0f` to the fixed integrated source:
+190 to 204 modules, 3211 to 3342 functions, 36668 to 36957 executable statements,
+and 12901 to 12999 decisions. These include retained historical UI source.
+This is a bounded reduction of selected orchestration responsibilities, not a
+claim that total project complexity decreased or all large adapters disappeared.
+
+`tests/test_quality_ratchet_baseline.py` measures the real repository and then
+independently sets every reviewed symbol/metric to its limit plus one. Each must
+produce exactly its matching responsibility-growth failure. The original
+behavior, rendering and API suites remain separate acceptance evidence.
+
+### Full-import cycle guard
+
+At the same fixed integrated source, both initialization and deferred-inclusive
+import graphs have zero cycles. Baseline schema 2 adds a required, explicit
+`all_import_cycles: []` allowance and fails closed if it is absent or malformed.
+The original baseline source identity and initialization-cycle allowance remain
+unchanged. This is a new enforcement boundary; deferred cycles had previously
+been reported without a failing guard.
+
+The quality suite mutates an acyclic fixture with a real function-local import
+to create a cycle while keeping initialization cycles empty. The CLI must fail
+for the full graph. Replacing that edge with a `TYPE_CHECKING` import passes,
+preserving the existing non-runtime classification. Dynamic imports remain
+outside this static graph's evidence.

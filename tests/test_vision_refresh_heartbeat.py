@@ -22,10 +22,16 @@ from rm_client.tongji_yolo import LocalAlignedVision
 from rm_client.tongji_bridge import TongjiVisionReceiver
 from rm_client.vision import TongjiVisionBridge
 from rm_client.ui.polar.mixins.video_backend_mixin import VideoBackendMixin
+from rm_client.ui.polar.vision_selection import VisionSelection, VisionSelectionField
 
 
 class RefreshHost(VideoBackendMixin, SimpleNamespace):
     """Keep real helper dispatch while supplying unrelated window services."""
+    local_vision = VisionSelectionField("local")
+    tongji_receiver = VisionSelectionField("receiver")
+    tongji_bridge = VisionSelectionField("bridge")
+    _vision_source = VisionSelectionField("source")
+    _tongji_enabled = VisionSelectionField("tongji_enabled")
 
 
 class VisionRefreshHeartbeatTests(unittest.TestCase):
@@ -112,7 +118,7 @@ class VisionRefreshHeartbeatTests(unittest.TestCase):
                 registry=SimpleNamespace(get=lambda _: module), setting_mode=mode,
                 setting_bool=lambda *args: True, get_setting_number=number,
                 _client_asset_path=lambda *args: Path(__file__),
-                local_vision=owners[0], tongji_receiver=owners[1], tongji_bridge=owners[2],
+                _vision_selection=VisionSelection(*owners),
             )
             with patch.dict(os.environ, {
                 "POLAR_DISABLE_LOCAL_CAPTURE": "1" if disabled else "0",

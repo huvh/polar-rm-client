@@ -10,15 +10,21 @@ from collections import Counter
 import json
 from pathlib import Path
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 REQUIRED_BASELINE_KEYS = {"schema_version", "source_revision", "rationale", "lint_debt",
-                          "runtime_cycles", "function_budgets"}
+                          "runtime_cycles", "all_import_cycles", "function_budgets"}
 LOWER_LAYER_PREFIXES = ("rm_client.backend", "rm_client.configuration")
 LOWER_LAYER_MODULES = frozenset({"rm_client.model", "rm_client.module_catalog",
-                                "rm_client.module_settings", "rm_client.config_store",
+                                "rm_client.module_settings", "rm_client.referee_profiles",
+                                "rm_client.economy_values", "rm_client.config_store",
                                 "rm_client.lifecycle", "rm_client.emergency_actions",
                                 "rm_client.qualification_observations",
                                 "rm_client.runtime_paths", "rm_client.state_overlay"})
+PURE_DOMAIN_MODULES = frozenset({"rm_client.referee_profiles", "rm_client.economy_values"})
+PURE_DOMAIN_FORBIDDEN_PREFIXES = ("rm_client.backend", "PySide6", "PySide2", "PyQt6", "PyQt5",
+                                  "tkinter", "Tkinter")
+
+
 RESPONSIBILITY_METRICS = frozenset({"statements", "decisions", "max_control_depth"})
 
 
@@ -51,20 +57,21 @@ def load_baseline(path: Path) -> dict:
         if not isinstance(key, str) or not key or type(count) is not int or count < 0:
             raise ValueError("Invalid lint-debt entry")
     validate_cycles(baseline["runtime_cycles"])
+    validate_cycles(baseline["all_import_cycles"])
     validate_function_budgets(baseline["function_budgets"])
     return baseline
 
 
 def validate_cycles(cycles: object) -> None:
     if not isinstance(cycles, list):
-        raise ValueError("Runtime cycles must be an explicit list of module lists")
+        raise ValueError("Import cycles must be an explicit list of module lists")
     for cycle in cycles:
         if not isinstance(cycle, list) or not cycle or not all(
             isinstance(module, str) and module.strip() for module in cycle
         ):
-            raise ValueError("Invalid runtime-cycle entry")
+            raise ValueError("Invalid import-cycle entry")
         if len(cycle) != len(set(cycle)):
-            raise ValueError("Runtime-cycle members must be distinct")
+            raise ValueError("Import-cycle members must be distinct")
 
 
 def validate_function_budgets(budgets: object) -> None:
@@ -92,6 +99,14 @@ def check_report(report: dict, baseline: dict) -> list[str]:
         for edge in details["declared_imports"]:
             if edge["target"] == "rm_client.ui" or edge["target"].startswith("rm_client.ui."):
                 violations.append(f"UI dependency from lower layer: {details['path']}:{edge['line']} -> {edge['target']}")
+    for module in PURE_DOMAIN_MODULES:
+        details = report["modules"].get(module)
+        if details is None:
+            continue
+        for edge in details["declared_imports"]:
+            if any(edge["target"] == prefix or edge["target"].startswith(prefix + ".")
+                   for prefix in PURE_DOMAIN_FORBIDDEN_PREFIXES):
+                violations.append(f"Forbidden pure-domain dependency: {details['path']}:{edge['line']} -> {edge['target']}")
     old_debt = baseline["lint_debt"]
     for key, count in lint_debt(report).items():
         if count > old_debt.get(key, 0):
@@ -100,6 +115,10 @@ def check_report(report: dict, baseline: dict) -> list[str]:
     for cycle in report["runtime_cycles"]:
         if not any(set(cycle) <= allowed for allowed in allowed_cycles):
             violations.append("New module-initialization cycle: " + " -> ".join(cycle))
+    allowed_full_cycles = [set(cycle) for cycle in baseline["all_import_cycles"]]
+    for cycle in report["all_import_cycles"]:
+        if not any(set(cycle) <= allowed for allowed in allowed_full_cycles):
+            violations.append("New import cycle including deferred imports: " + " -> ".join(cycle))
     for symbol, budgets in baseline["function_budgets"].items():
         module, _, function = symbol.partition(":")
         current = report["modules"].get(module, {}).get("functions", {}).get(function)

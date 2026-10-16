@@ -15,7 +15,7 @@ from typing import Any, Callable
 from .match_modes import MATCH_MODE_KEYS
 from .robot_profiles import RMUC_ROBOTS
 from .scenarios import SCENARIO_MODES
-from .backend.referee.registry import DEFAULT_PROFILE, supported_profiles
+from .referee_profiles import DEFAULT_PROFILE, supported_profiles
 from .serial_ports import port_choices as polar_port_choices
 from .serial_ports import rc_port_choices as dt7_port_choices
 from .state_overlay import validated_polar_overlay

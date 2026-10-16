@@ -145,6 +145,18 @@ class WindowAssemblyTests(unittest.TestCase):
         timer.timeout.emit()
         self.assertEqual(events, ["warmup", "frame"])
 
+    def test_frame_timer_can_be_published_inert_before_admission(self):
+        owner = QObject()
+        self.addCleanup(owner.deleteLater)
+        callback = Mock()
+        timer = assembly.create_frame_timer(owner, callback)
+        self.assertIs(timer.parent(), owner)
+        self.assertFalse(timer.isActive())
+        self.assertFalse(timer.isSingleShot())
+        self.assertEqual(timer.timerType(), Qt.TimerType.PreciseTimer)
+        timer.timeout.emit()
+        callback.assert_called_once_with()
+
     def test_panel_default_coordinates_and_mutable_maps_are_instance_local(self):
         categories = ("Combat", "Vision", "Render", "System", "Extras")
         first, second = create_panel_layouts(categories), create_panel_layouts(categories)

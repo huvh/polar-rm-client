@@ -238,11 +238,23 @@ class ControllerAngleRelay:
                 return
             if self.start_workers and not self._failed and not self._retained_streams and (
                     self._thread is None or not self._thread.is_alive()):
-                self._stop = threading.Event()
+                stop = threading.Event()
+                worker = threading.Thread(target=self._run,
+                    args=(config, self._epoch, stop), name="controller-angle-relay", daemon=True)
+                self._stop = stop
                 self._owned_config = config
-                self._thread = threading.Thread(target=self._run,
-                    args=(config, self._epoch, self._stop), name="controller-angle-relay", daemon=True)
-                self._thread.start()
+                self._thread = worker
+                try:
+                    worker.start()
+                except RuntimeError:
+                    # An unstarted Thread cannot be joined by strict teardown.
+                    # A real admission, even a finished worker, keeps its ident
+                    # and remains owned until wait_closed confirms cleanup.
+                    if worker.ident is None:
+                        self._thread = None
+                        self._owned_config = None
+                        stop.set()
+                    raise
 
     @property
     def owned_ports(self) -> tuple[str, ...]:

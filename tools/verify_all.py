@@ -28,12 +28,14 @@ import sys
 import tempfile
 import threading
 import time
+import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 from tools.test_registry import CATEGORIES, PROFILES, TestEntry, discover, select
 from tools.verification_provenance import collect_provenance
+from tools.verification_sources import SOURCE_SCOPE, capture_sources, compare_sources
 
 
 @dataclass(frozen=True)
@@ -45,6 +47,7 @@ class CheckResult:
     skipped: int = 0
     returncode: int | None = None
     duration_s: float = 0.0
+    expected_failures: int = 0
 
 
 # Anchored status lines only: prose mentioning a mock's "SKIP" or "PASS"
@@ -54,6 +57,7 @@ PASS_LINE = re.compile(r"(?im)^\s*(?:\[\s*(?:PASS|OK)\s*\]|PASS:)\s*[^\n]+")
 UNITTEST_RUN = re.compile(r"(?m)^Ran (\d+) tests? in [^\n]+$")
 UNITTEST_OK = re.compile(r"(?m)^OK(?: \([^\n]*\))?$")
 UNITTEST_SKIP = re.compile(r"(?m)^OK \([^\n]*\bskipped=(\d+)[^\n]*\)$")
+UNITTEST_EXPECTED_FAILURE = re.compile(r"(?m)^OK \([^\n]*\bexpected failures=(\d+)[^\n]*\)$")
 
 
 def classify_output(returncode: int, output: str, *, completion_pattern: str | None = None,
@@ -83,6 +87,11 @@ def classify_output(returncode: int, output: str, *, completion_pattern: str | N
                   if line.lstrip().startswith(("[FAIL]", "FAIL:", "ERROR:", "FAILED", "AssertionError"))]
         return CheckResult("FAIL", " | ".join(errors[:3])[:500] or f"exit={returncode}",
                            tests_run, passed, skipped, returncode)
+    expected_failures = sum(int(value) for value in UNITTEST_EXPECTED_FAILURE.findall(output))
+    if expected_failures:
+        detail = f"{expected_failures} unittest expected failures remain unresolved" + (f" | {detail}" if detail else "")
+        return CheckResult("INCOMPLETE", detail, tests_run, passed, skipped, returncode,
+                           expected_failures=expected_failures)
     if returncode == 77 or skipped:
         any_passed = passed > 0 or (tests_run is not None and tests_run > skipped_tests)
         declared_incomplete = any(re.match(r"(?:\\n)?(?:\[INCOMPLETE\]|INCOMPLETE(?:\s|:|\())", line, re.I)
@@ -114,10 +123,23 @@ def child_environment(user_data: str, firmware: Path | None, *, desktop: bool = 
     env["PYTHONPATH"] = str(ROOT)
     env["PYTHONIOENCODING"] = "utf-8"
     env["POLAR_USER_DATA_ROOT"] = user_data
+    # This runner verifies the selected source checkout. A portable-app root
+    # would bypass POLAR_USER_DATA_ROOT and redirect writes to another install.
+    env.pop("POLAR_APP_ROOT", None)
+    # Standalone startup debugging may opt into a persistent root or activation.
+    # The canonical runner instead owns fresh storage and inert startup; a test
+    # that exercises activation must explicitly arrange that behavior itself.
+    env.pop("POLAR_STARTUP_USER_DATA_ROOT", None)
+    env["POLAR_AUTOSTART"] = "0"
+    env["XDG_CACHE_HOME"] = str(Path(user_data) / "cache")
+    env["XDG_CONFIG_HOME"] = str(Path(user_data) / "config")
+    env["XDG_DATA_HOME"] = str(Path(user_data) / "data")
     env["POLAR_FIRMWARE_ROOT"] = str(firmware or ROOT / ".firmware-not-selected")
     env["POLAR_FIRMWARE_READ_ONLY"] = "1"
     if firmware:
         env["POLAR_REFEREE_REFERENCE"] = str(firmware)
+    else:
+        env.pop("POLAR_REFEREE_REFERENCE", None)
     env["POLAR_DISABLE_LOCAL_CAPTURE"] = "1"
     env["POLAR_DISABLE_MEDIA_PRELOAD"] = "1"
     # OpenVINO's official telemetry wrapper uses disable_in_ci=True and its
@@ -334,8 +356,28 @@ def acquire_lock() -> bool:
 
 
 def write_json(path: Path, payload: dict) -> None:
+    """Publish one complete report without exposing truncated JSON to readers."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent,
+                                         prefix=path.name + ".", suffix=".tmp", delete=False) as handle:
+            temporary = Path(handle.name)
+            handle.write(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
+        os.replace(temporary, path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
+def incomplete_report(payload: dict, path: Path | None, detail: str, *, state: str = "blocked") -> None:
+    """Do not leave an earlier successful attempt as this run's report."""
+    payload.update(run_state=state, passed=False,
+                   counts={"PASS": 0, "SKIP": 0, "INCOMPLETE": 1, "FAIL": 0},
+                   results=[{"id": "verification_run", "category": "evidence",
+                             "status": "INCOMPLETE", "detail": detail}])
+    if path is not None:
+        write_json(path, payload)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -368,21 +410,29 @@ def main(argv: list[str] | None = None) -> int:
         if args.json:
             write_json(args.json, payload)
         return 0
+    payload["run_id"] = uuid.uuid4().hex
+    payload["run_started_at_utc"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    incomplete_report(payload, args.json, "Verification has started but has not completed", state="running")
     firmware = args.firmware.expanduser().resolve() if args.firmware else None
     identity = None
     if firmware is not None:
         try:
             identity = firmware_identity(firmware)
         except (OSError, ValueError, subprocess.TimeoutExpired) as exc:
-            print(f"[INCOMPLETE] Invalid firmware target: {exc}")
+            detail = f"Invalid firmware target: {exc}"
+            incomplete_report(payload, args.json, detail)
+            print(f"[INCOMPLETE] {detail}")
             return 2
         print(f"[target] {identity}")
     if not acquire_lock():
-        print("[INCOMPLETE] Another verifier is running; shared resources cannot be verified concurrently.", file=sys.stderr)
+        detail = "Another verifier is running; shared resources cannot be verified concurrently."
+        incomplete_report(payload, args.json, detail)
+        print(f"[INCOMPLETE] {detail}", file=sys.stderr)
         return 2
     results = []
     try:
         payload["provenance"] = collect_provenance(ROOT)
+        sources_before = capture_sources(ROOT)
         for entry in selected:
             print(f"RUN [{entry.category}] {entry.path}", flush=True)
             result = run_entry(entry, firmware=firmware, timeout=args.timeout, desktop=args.desktop,
@@ -409,10 +459,20 @@ def main(argv: list[str] | None = None) -> int:
                     results.append({"id": "firmware_unchanged", "status": "FAIL", "detail": "Firmware worktree changed; results invalid"})
             except (OSError, ValueError, subprocess.TimeoutExpired) as exc:
                 results.append({"id": "firmware_unchanged", "status": "FAIL", "detail": str(exc)})
+        sources_after = capture_sources(ROOT)
+        source_status, source_detail = compare_sources(sources_before, sources_after)
+        payload["source_stability"] = {"schema_version": 1, "status": source_status,
+                                       "detail": source_detail, "scope": SOURCE_SCOPE,
+                                       "before": sources_before, "after": sources_after}
+        if source_status != "PASS":
+            results.append({"id": "verification_source_stability", "category": "evidence",
+                            "status": source_status, "detail": source_detail})
+            print(f"[{source_status}] {source_detail}", flush=True)
         counts = {status: sum(item["status"] == status for item in results)
                   for status in ("PASS", "SKIP", "INCOMPLETE", "FAIL")}
         complete = bool(results) and counts["PASS"] == len(results)
-        payload.update(results=results, counts=counts, passed=complete, firmware_identity=identity)
+        payload.update(results=results, counts=counts, passed=complete, firmware_identity=identity,
+                       run_state="completed")
         if args.json:
             write_json(args.json, payload)
         print("\n" + ("PASS" if complete else "NO-GO") + " (selected scope): " +

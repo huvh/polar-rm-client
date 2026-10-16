@@ -8,7 +8,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ..economy import EconomyOffer
+from ..economy_values import EconomyOffer
+from .economy_interaction import HOLD_SECONDS
 
 
 @dataclass(frozen=True)
@@ -36,7 +37,7 @@ class EconomyConfirmationState:
         selected = self.selected
         held_progress = None
         if selected is not None and selected.confirmation == "hold" and self.hold_key == selected.key:
-            held_progress = max(0.0, min(1.0, (now - self.hold_started) / 0.60))
+            held_progress = max(0.0, min(1.0, (now - self.hold_started) / HOLD_SECONDS))
 
         if selected is None:
             return EconomyConfirmation("请先选择商品", False)

@@ -24,8 +24,8 @@ from tools.quality import gates, metrics
 
 
 def empty_baseline():
-    return {"schema_version": 1, "source_revision": "fixture", "rationale": "test fixture",
-            "lint_debt": {}, "runtime_cycles": [], "function_budgets": {}}
+    return {"schema_version": 2, "source_revision": "fixture", "rationale": "test fixture",
+            "lint_debt": {}, "runtime_cycles": [], "all_import_cycles": [], "function_budgets": {}}
 
 
 class SourceFixture(unittest.TestCase):
@@ -153,13 +153,15 @@ class ImportGraphTests(SourceFixture):
         self.assertEqual(report["runtime_cycles"], [["rm_client.a", "rm_client.b"]])
         self.assertTrue(any("initialization cycle" in item for item in self.violations()))
 
-    def test_deferred_cycle_is_reported_but_not_initialization_cycle(self):
+    def test_deferred_cycle_fails_full_graph_without_initialization_cycle(self):
         self.source("rm_client/a.py", "from . import b")
         self.source("rm_client/b.py", "def make():\n    from . import a\n    return a")
         report = self.report()
         self.assertEqual(report["runtime_cycles"], [])
         self.assertEqual(report["all_import_cycles"], [["rm_client.a", "rm_client.b"]])
-        self.assertEqual(self.violations(), [])
+        self.assertEqual(self.violations(), [
+            "New import cycle including deferred imports: rm_client.a -> rm_client.b"
+        ])
 
     def test_type_checking_cycle_is_not_runtime_evidence(self):
         self.source("rm_client/a.py", "from . import b")
@@ -167,6 +169,8 @@ class ImportGraphTests(SourceFixture):
         report = self.report()
         self.assertEqual(report["all_import_cycles"], [])
         self.assertTrue(report["modules"]["rm_client.b"]["imports"][0]["type_only"])
+        self.assertEqual(report["runtime_cycles"], [])
+        self.assertEqual(self.violations(), [])
 
     def test_class_body_import_is_eager_and_function_body_is_deferred(self):
         self.source("rm_client/a.py", "class A:\n    from . import b\n    def create(self):\n        from . import c")
@@ -187,11 +191,31 @@ class ImportGraphTests(SourceFixture):
 
     def test_extracted_domain_services_keep_the_dependency_boundary(self):
         for module in ("module_catalog", "module_settings", "lifecycle",
-                       "emergency_actions", "qualification_observations"):
+                       "emergency_actions", "qualification_observations",
+                       "referee_profiles", "economy_values"):
             with self.subTest(module=module):
                 source = self.source(f"rm_client/{module}.py", "from rm_client.ui import polar_app")
                 self.assertTrue(any("UI dependency from lower layer" in item for item in self.violations()))
                 source.unlink()
+
+    def test_pure_domain_roots_reject_backend_and_gui_imports_in_every_scope(self):
+        targets = ("rm_client.backend.referee.registry", "PySide6.QtCore", "PySide2.QtCore",
+                   "PyQt6.QtWidgets", "PyQt5.QtWidgets", "tkinter", "Tkinter")
+        for module in ("referee_profiles", "economy_values"):
+            for target in targets:
+                for statement in (f"import {target}", f"from {target} import Value"):
+                    for content in (statement, "def create():\n    " + statement,
+                                    "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    " + statement):
+                        with self.subTest(module=module, content=content):
+                            path = self.source(f"rm_client/{module}.py", content)
+                            self.assertTrue(any("Forbidden pure-domain dependency" in item
+                                                for item in self.violations()))
+                            path.unlink()
+
+    def test_pure_domain_stdlib_dependencies_remain_valid(self):
+        for module in ("referee_profiles", "economy_values"):
+            self.source(f"rm_client/{module}.py", "from dataclasses import dataclass\nfrom typing import Any\nfrom types import MappingProxyType")
+        self.assertEqual(self.violations(), [])
 
     def test_unresolved_ui_import_still_violates_the_dependency_boundary(self):
         self.source("rm_client/backend/service.py", "from rm_client.ui.future_view import View")
@@ -302,6 +326,29 @@ class QualityCliTests(SourceFixture):
         self.assertEqual(code, 2)
         self.assertIn("baseline is incomplete", output)
 
+    def test_missing_full_graph_allowance_cannot_disable_the_guard(self):
+        self.source("rm_client/a.py", "VALUE = 1")
+        baseline = empty_baseline()
+        baseline.pop("all_import_cycles")
+        path = self.source("baseline.json", json.dumps(baseline))
+        code, output = self.run_cli("--baseline", str(path))
+        self.assertEqual(code, 2, output)
+        self.assertIn("baseline is incomplete", output)
+
+    def test_real_deferred_import_mutation_fails_cli_and_type_only_control_passes(self):
+        self.source("rm_client/a.py", "from . import b")
+        self.source("rm_client/b.py", "def make():\n    return 1")
+        baseline = self.source("baseline.json", json.dumps(empty_baseline()))
+        self.assertEqual(self.run_cli("--baseline", str(baseline))[0], 0)
+        self.source("rm_client/b.py", "def make():\n    from . import a\n    return a")
+        self.assertEqual(self.report()["runtime_cycles"], [])
+        code, output = self.run_cli("--baseline", str(baseline))
+        self.assertEqual(code, 1, output)
+        self.assertIn("New import cycle including deferred imports", output)
+        self.assertNotIn("initialization cycle:", output)
+        self.source("rm_client/b.py", "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    from . import a")
+        self.assertEqual(self.run_cli("--baseline", str(baseline))[0], 0)
+
     def test_invalid_budget_values_cannot_disable_the_ratchet(self):
         self.source("rm_client/a.py", "def tick():\n    return 1")
         for symbol in ("rm_client.a:tick", "rm_client.retired:old_tick"):
@@ -334,6 +381,8 @@ class QualityCliTests(SourceFixture):
         self.source("rm_client/a.py", "VALUE = 1")
         for key, value in (("runtime_cycles", "rm_client.a"), ("runtime_cycles", ["rm_client.a"]),
                            ("runtime_cycles", [[None]]), ("runtime_cycles", [["a", "a"]]),
+                           ("all_import_cycles", "rm_client.a"), ("all_import_cycles", ["rm_client.a"]),
+                           ("all_import_cycles", [[None]]), ("all_import_cycles", [["a", "a"]]),
                            ("lint_debt", []), ("schema_version", True),
                            ("source_revision", ["fixture"]), ("rationale", " ")):
             with self.subTest(key=key, value=value):

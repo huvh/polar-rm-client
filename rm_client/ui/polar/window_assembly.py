@@ -147,9 +147,16 @@ def create_warmup_timer(parent: QObject, callback: Callable[[], None]) -> QTimer
     return timer
 
 
-def start_frame_timer(parent: QObject, callback: Callable[[], None], interval_ms: int) -> QTimer:
+def create_frame_timer(parent: QObject, callback: Callable[[], None]) -> QTimer:
+    """Connect an inert event source so its owner can publish it before admission."""
     timer = QTimer(parent)
     timer.setTimerType(Qt.TimerType.PreciseTimer)
     timer.timeout.connect(callback)
+    return timer
+
+
+def start_frame_timer(parent: QObject, callback: Callable[[], None], interval_ms: int) -> QTimer:
+    """Compatibility factory for callers that do not need staged admission."""
+    timer = create_frame_timer(parent, callback)
     timer.start(interval_ms)
     return timer

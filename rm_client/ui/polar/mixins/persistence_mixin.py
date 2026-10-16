@@ -1,7 +1,7 @@
 """Window adapters for profile persistence and conservative runtime restoration.
 
-Validation, migration, registry snapshots, and transaction failure handling live
-in rm_client.configuration. This mixin owns the window-specific effects and
+Validation, migration, registry snapshots, delayed-save ownership and transaction
+failure handling live in rm_client.configuration. This mixin owns the window-specific effects and
 keeps saved preferences separate from permission to actuate a robot.
 """
 
@@ -319,11 +319,7 @@ class PersistenceMixin:
         return self.config_store.clean_profile_name(str(setting.value if setting else "default"))
 
     def _accepted_profile_identity(self) -> ProfileIdentity:
-        identity = getattr(self, "_accepted_profile", None)
-        if identity is None:
-            identity = ProfileIdentity(self.current_profile())
-            self._accepted_profile = identity
-        return identity
+        return self._profile_saves.identity(lambda: self.current_profile())
 
     def _set_profile_selection(self, profile: str) -> None:
         module = self.registry.get("ConfigManager")
@@ -336,13 +332,10 @@ class PersistenceMixin:
 
     def _accept_profile_selection(self, profile: str) -> None:
         previous = self._accepted_profile_identity()
-        self._accepted_profile = ProfileIdentity(profile, previous.generation + 1)
-        self._unsaved_profile_name = None
-        self._close_save_retry_required = False
+        self._profile_saves.accept_profile(profile, previous)
         self._set_profile_selection(profile)
-        # A delayed save from the prior loaded model cannot save the new model.
-        self._auto_save_pending = False
-        self._auto_save_owner = None
+        # Selection must succeed before retiring the previous delayed save.
+        self._profile_saves.cancel_pending()
 
     def current_config_data(self) -> dict[str, Any]:
         return export_client_config(
@@ -392,8 +385,7 @@ class PersistenceMixin:
 
     @property
     def configuration_close_requires_save(self) -> bool:
-        return bool(getattr(self, "_unsaved_profile_name", None) is not None
-                    or getattr(self, "_auto_save_pending", False))
+        return self._profile_saves.close_requires_save
 
     def prepare_configuration_for_close(self) -> bool:
         """Try an owned dirty save once before the window enters shutdown.
@@ -409,13 +401,10 @@ class PersistenceMixin:
             return False
         draft = getattr(self, "_unsaved_profile_name", None)
         accepted = self._accepted_profile_identity()
-        owner = getattr(self, "_auto_save_owner", None) or accepted
-        if draft is None and owner != accepted:
-            self._auto_save_pending = False
-            self._auto_save_owner = None
+        intent = self._profile_saves.close_intent(draft, accepted)
+        if intent is None:
             return True  # A superseded timer owns no part of the live model.
-        self._close_save_retry_required = True
-        self._save_profile(draft or accepted.name, announce=True, explicit=draft is not None)
+        self._save_profile(intent.profile, announce=True, explicit=intent.explicit)
         return not self.configuration_close_requires_save
 
     def cancel_pending_configuration_for_close(self) -> None:
@@ -819,17 +808,14 @@ class PersistenceMixin:
             if profile != accepted.name or getattr(self, "_unsaved_profile_name", None) is not None:
                 # A failed explicit save-as must not become an automatic write
                 # to its source. Keep the chosen name and draft for manual retry.
-                self._unsaved_profile_name = profile
+                self._profile_saves.begin_draft(profile)
                 self._set_profile_selection(profile)
-                self._auto_save_pending = False
-                self._auto_save_owner = None
+                self._profile_saves.cancel_pending()
                 operation = "另存" if profile != accepted.name else "草稿保存"
                 self.toast(f"{operation}失败，当前更改尚未保存，请重试保存：{exc}", kind="warning")
                 return
             self._set_profile_selection(accepted.name)
-            self._auto_save_pending = True
-            self._auto_save_owner = accepted
-            self._auto_save_due_at = time.perf_counter() + 5.0
+            self._profile_saves.defer_save(lambda: accepted, lambda: time.perf_counter(), 5.0)
             retry = "请手动保存或重试关闭" if getattr(self, "_close_save_retry_required", False) else "将重试"
             if recovery_failed:
                 self.toast(f"配置保存失败，文件恢复未完成，{retry}：{exc}", kind="warning")
@@ -839,10 +825,7 @@ class PersistenceMixin:
             return
         if explicit or profile != accepted.name:
             self._accept_profile_selection(profile)
-        self._auto_save_pending = False
-        self._auto_save_owner = None
-        self._config_save_error = False
-        self._close_save_retry_required = False
+        self._profile_saves.complete_save()
         self.refresh_config_profiles()
         if announce:
             self.toast(f"配置已保存：{path.name}")
@@ -889,26 +872,22 @@ class PersistenceMixin:
             return  # Failed save-as drafts require explicit retry or another load.
         if self.current_profile() != self._accepted_profile_identity().name:
             return
-        self._auto_save_pending = True
-        self._auto_save_owner = self._accepted_profile_identity()
-        self._auto_save_due_at = time.perf_counter() + 0.25
+        self._profile_saves.defer_save(
+            lambda: self._accepted_profile_identity(), lambda: time.perf_counter(), 0.25,
+        )
 
     def flush_auto_save_if_due(self, now: float | None = None) -> None:
         if not self._auto_save_pending or self.configuration_change_pending:
             return
-        if (getattr(self, "_unsaved_profile_name", None) is not None
-                or getattr(self, "_close_save_retry_required", False)):
+        if self._profile_saves.automatic_save_blocked:
             return
         now = time.perf_counter() if now is None else float(now)
-        if now < self._auto_save_due_at:
+        if not self._profile_saves.is_due(now):
             return
         accepted = self._accepted_profile_identity()
-        owner = getattr(self, "_auto_save_owner", None) or accepted
-        if owner != accepted:
-            # Superseded callback: its document is no longer the live registry.
-            self._auto_save_pending = False
-            self._auto_save_owner = None
-            return
+        owner = self._profile_saves.save_identity(accepted)
+        if owner is None:
+            return  # A superseded callback cannot save the current registry.
         self._save_profile(owner.name, announce=False)
 
     def flush_auto_save(self, *, force: bool = False) -> None:

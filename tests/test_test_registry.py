@@ -140,6 +140,15 @@ class EvidenceClassificationTests(unittest.TestCase):
             with self.subTest(tail=tail):
                 self.assertEqual(self.result("Ran 3 tests in 0s\nOK\n" + tail).status, "INCOMPLETE")
 
+    def test_expected_failure_is_not_counted_as_a_passed_assertion(self):
+        result = self.result("x\nRan 1 test in 0s\nOK (expected failures=1)")
+        self.assertEqual((result.status, result.tests_run, result.expected_failures), ("INCOMPLETE", 1, 1))
+        self.assertIn("unresolved", result.detail)
+        mixed = self.result(".sx\nRan 3 tests in 0s\nOK (skipped=1, expected failures=1)")
+        self.assertEqual((mixed.status, mixed.skipped, mixed.expected_failures), ("INCOMPLETE", 1, 1))
+        multiple = self.result("Ran 1 test in 0s\nOK\nRan 1 test in 0s\nOK (expected failures=1)")
+        self.assertEqual((multiple.status, multiple.tests_run, multiple.expected_failures), ("INCOMPLETE", 2, 1))
+
     def test_legacy_skip_spellings_and_exit_77_never_pass(self):
         for skip in ("[SKIP] missing", "SKIP: missing", "SKIP optional fixture"):
             with self.subTest(skip=skip):
@@ -242,6 +251,17 @@ class RunnerTests(unittest.TestCase):
                 result, stdout, stderr = self.run_fixture(source)
                 self.assertEqual(result.status, expected, stdout + stderr)
 
+    def test_real_unittest_expected_failure_cannot_make_the_suite_pass(self):
+        source = (
+            "import unittest\nclass KnownDefect(unittest.TestCase):\n"
+            " @unittest.expectedFailure\n"
+            " def test_still_broken(self): self.assertEqual(1, 2)\n"
+            "unittest.main()\n"
+        )
+        result, stdout, stderr = self.run_fixture(source)
+        self.assertEqual((result.status, result.tests_run, result.expected_failures), ("INCOMPLETE", 1, 1), stdout + stderr)
+        self.assertEqual(result.returncode, 0)
+
     def test_script_directory_imports_work(self):
         result, _, _ = self.run_fixture("from pathlib import Path\nimport sys\nassert sys.path[0] == str(Path(__file__).parent)\nprint('[PASS] direct-script path preserved')")
         self.assertEqual(result.status, "PASS")
@@ -274,6 +294,56 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(env["POLAR_FIRMWARE_READ_ONLY"], "1")
         self.assertEqual(env["POLAR_REQUIRE_VIDEO_FIXTURE"], "1")
         self.assertEqual(env["POLAR_USER_DATA_ROOT"], "/isolated")
+
+    def test_inherited_portable_root_cannot_escape_the_owned_user_data(self):
+        from rm_client.runtime_paths import RuntimePaths
+
+        inherited = {"POLAR_APP_ROOT": "/other/portable-install", "POLAR_REFEREE_REFERENCE": "/unselected/firmware",
+                     "XDG_CACHE_HOME": "/other/cache", "XDG_CONFIG_HOME": "/other/config", "XDG_DATA_HOME": "/other/data"}
+        with tempfile.TemporaryDirectory() as directory, mock.patch.dict(os.environ, inherited):
+            environment = verify.child_environment(directory, None)
+            paths = RuntimePaths.discover(environ=environment)
+            self.assertTrue(paths.source_mode)
+            self.assertEqual(paths.app_root, ROOT)
+            self.assertEqual(paths.user_data_root, Path(directory))
+            self.assertNotIn("POLAR_APP_ROOT", environment)
+            self.assertNotIn("POLAR_REFEREE_REFERENCE", environment)
+            for variable in ("XDG_CACHE_HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME"):
+                self.assertEqual(Path(environment[variable]).parent, Path(directory))
+            self.assertEqual({key: os.environ[key] for key in inherited}, inherited)
+
+    def test_actual_children_have_separate_writable_cache_and_config_roots(self):
+        source = (
+            "import os\nfrom pathlib import Path\n"
+            "assert 'POLAR_APP_ROOT' not in os.environ\n"
+            "assert 'POLAR_REFEREE_REFERENCE' not in os.environ\n"
+            "root = Path(os.environ['POLAR_USER_DATA_ROOT'])\n"
+            "for name in ('XDG_CACHE_HOME', 'XDG_CONFIG_HOME', 'XDG_DATA_HOME'):\n"
+            " path = Path(os.environ[name])\n"
+            " assert path.parent == root\n"
+            " assert not (path / 'previous-test').exists()\n"
+            " path.mkdir(parents=True, exist_ok=True)\n"
+            " (path / 'previous-test').write_text('owned')\n"
+            "print('[PASS] isolated writable paths')\n"
+        )
+        inherited = {"POLAR_APP_ROOT": "/unselected/app", "POLAR_REFEREE_REFERENCE": "/unselected/firmware"}
+        with mock.patch.dict(os.environ, inherited):
+            for _ in range(2):
+                result, stdout, stderr = self.run_fixture(source)
+                self.assertEqual(result.status, "PASS", stdout + stderr)
+
+    def test_inherited_autostart_and_debug_data_root_are_not_test_inputs(self):
+        source = (
+            "import os\n"
+            "assert os.environ['POLAR_AUTOSTART'] == '0'\n"
+            "assert 'POLAR_STARTUP_USER_DATA_ROOT' not in os.environ\n"
+            "print('[PASS] test owns activation and startup data')\n"
+        )
+        inherited = {"POLAR_AUTOSTART": "true", "POLAR_STARTUP_USER_DATA_ROOT": "/other/operator-data"}
+        with mock.patch.dict(os.environ, inherited):
+            result, stdout, stderr = self.run_fixture(source)
+            self.assertEqual(result.status, "PASS", stdout + stderr)
+            self.assertEqual({key: os.environ[key] for key in inherited}, inherited)
 
     def test_all_runner_children_opt_out_of_telemetry_before_optional_imports(self):
         original = {"CI": "false", "POLAR_DISABLE_LOCAL_CAPTURE": "0", "POLAR_DISABLE_MEDIA_PRELOAD": "0"}
@@ -330,6 +400,83 @@ class RunnerTests(unittest.TestCase):
         self.assertIn('$testReport.passed -ne $true', script)
         self.assertIn('registry_results = $testReport.results', script)
         self.assertNotIn('gpu_renderer_runtime = "PASS"', script)
+
+
+class ReportPublicationTests(unittest.TestCase):
+    def prior_report(self, directory):
+        path = Path(directory) / "report.json"
+        path.write_text(json.dumps({"passed": True, "run_id": "previous-run", "results": [{"status": "PASS"}]}))
+        return path
+
+    def assert_incomplete_attempt(self, path, state):
+        report = json.loads(path.read_text())
+        self.assertFalse(report["passed"])
+        self.assertEqual(report["run_state"], state)
+        self.assertRegex(report["run_id"], r"^[0-9a-f]{32}$")
+        self.assertEqual(report["counts"], {"PASS": 0, "SKIP": 0, "INCOMPLETE": 1, "FAIL": 0})
+        self.assertEqual(report["results"][0]["status"], "INCOMPLETE")
+        return report
+
+    def test_lock_rejection_replaces_an_old_pass_with_current_incomplete_evidence(self):
+        with tempfile.TemporaryDirectory() as directory, \
+             mock.patch.object(verify, "acquire_lock", return_value=False), \
+             mock.patch.object(verify, "run_entry") as run, \
+             contextlib.redirect_stderr(io.StringIO()):
+            path = self.prior_report(directory)
+            self.assertEqual(verify.main(["--test", "test_test_registry", "--json", str(path)]), 2)
+            report = self.assert_incomplete_attempt(path, "blocked")
+        self.assertIn("Another verifier", report["results"][0]["detail"])
+        run.assert_not_called()
+
+    def test_invalid_firmware_replaces_an_old_pass_before_test_execution(self):
+        with tempfile.TemporaryDirectory() as directory, \
+             mock.patch.object(verify, "firmware_identity", side_effect=ValueError("invalid fixture")), \
+             mock.patch.object(verify, "acquire_lock") as acquire, \
+             mock.patch.object(verify, "run_entry") as run, \
+             contextlib.redirect_stdout(io.StringIO()):
+            path = self.prior_report(directory)
+            self.assertEqual(verify.main(["--test", "test_test_registry", "--firmware", directory, "--json", str(path)]), 2)
+            report = self.assert_incomplete_attempt(path, "blocked")
+        self.assertIn("Invalid firmware", report["results"][0]["detail"])
+        acquire.assert_not_called()
+        run.assert_not_called()
+
+    def test_interrupted_execution_keeps_current_nonpassing_checkpoint(self):
+        with tempfile.TemporaryDirectory() as directory, \
+             mock.patch.object(verify, "acquire_lock", return_value=True), \
+             mock.patch.object(verify, "run_entry", side_effect=RuntimeError("interrupted fixture")), \
+             contextlib.redirect_stdout(io.StringIO()):
+            path = self.prior_report(directory)
+            with self.assertRaisesRegex(RuntimeError, "interrupted fixture"):
+                verify.main(["--test", "test_test_registry", "--json", str(path)])
+            report = self.assert_incomplete_attempt(path, "running")
+        self.assertIn("has not completed", report["results"][0]["detail"])
+
+    def test_invalid_invocation_does_not_claim_to_have_started_a_new_report(self):
+        for arguments in (("--test", "nonexistent-suite"), ("--timeout", "0")):
+            with self.subTest(arguments=arguments), tempfile.TemporaryDirectory() as directory, \
+                 mock.patch.object(verify, "run_entry") as run, \
+                 contextlib.redirect_stderr(io.StringIO()):
+                path = self.prior_report(directory)
+                previous = path.read_bytes()
+                with self.assertRaises(SystemExit) as rejected:
+                    verify.main([*arguments, "--json", str(path)])
+                self.assertEqual(rejected.exception.code, 2)
+                self.assertEqual(path.read_bytes(), previous)
+                run.assert_not_called()
+
+    def test_atomic_publish_failure_preserves_complete_previous_bytes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = self.prior_report(directory)
+            previous = path.read_bytes()
+            with mock.patch.object(verify.os, "replace", side_effect=OSError("replace denied")):
+                with self.assertRaisesRegex(OSError, "replace denied"):
+                    verify.write_json(path, {"passed": False})
+            self.assertEqual(path.read_bytes(), previous)
+            self.assertEqual(list(Path(directory).iterdir()), [path])
+            verify.write_json(path, {"passed": False})
+            self.assertEqual(json.loads(path.read_text()), {"passed": False})
+            self.assertEqual(list(Path(directory).iterdir()), [path])
 
 
 class SmokeSelectionTests(unittest.TestCase):

@@ -154,7 +154,7 @@ class EnvironmentFactsTests(unittest.TestCase):
 
     def test_actual_metadata_collection_does_not_import_heavy_dependencies(self):
         original = builtins.__import__
-        forbidden = {"PySide6", "shiboken6", "numpy", "cv2", "paho", "serial", "openvino", "PyInstaller", "ziglang"}
+        forbidden = {"PySide6", "shiboken6", "numpy", "cv2", "paho", "serial", "openvino", "openvino_telemetry", "PyInstaller", "ziglang"}
 
         def guarded(name, *args, **kwargs):
             if name.split(".")[0] in forbidden:

@@ -15,7 +15,7 @@ import subprocess
 
 DEPENDENCIES = (
     "PySide6", "PySide6-Addons", "PySide6-Essentials", "shiboken6",
-    "opencv-python", "numpy", "paho-mqtt", "pyserial", "openvino",
+    "opencv-python", "numpy", "paho-mqtt", "pyserial", "openvino", "openvino-telemetry",
     "PyInstaller", "ziglang",
 )
 

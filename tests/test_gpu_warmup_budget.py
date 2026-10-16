@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 SOURCE = ROOT / 'rm_client/ui/polar_app.py'
 from rm_client.ui.polar.frame_telemetry import FrameTelemetry
+from rm_client.ui.polar.gpu_warmup import GpuWarmupQueue, GpuWarmupField
 from rm_client.ui.polar.tick_controller import TickDiagnostics, TickStageRunner
 
 
@@ -24,12 +25,17 @@ def methods(*names):
     scope = {'time': time, 'math': math, 'TickStageRunner': TickStageRunner, '_LOG': logging.getLogger(__name__), 'QTimer': NS(singleShot=lambda delay, callback: callback()),
              'QApplication': NS(activeModalWidget=lambda: None)}
     exec(compile(ast.fix_missing_locations(module), str(SOURCE), 'exec'), scope)
-    return scope['Window']
+    cls = scope['Window']
+    cls._gpu_prewarm_jobs_pending = GpuWarmupField("pending")
+    cls._gpu_prewarm_last_ms = GpuWarmupField("last_ms")
+    cls._gpu_prewarm_max_ms = GpuWarmupField("max_ms")
+    return cls
 
 
 class WarmupTests(unittest.TestCase):
     def make_window(self):
         w = methods('prewarm_gpu_clickgui_resources', '_run_gpu_prewarm_slice')()
+        w._gpu_warmup = GpuWarmupQueue()
         w.calls = []
         w._window_lifecycle = NS(closing=False)
         w.escape_menu_visible = False
@@ -98,6 +104,7 @@ class WarmupTests(unittest.TestCase):
 
     def paint_window(self, gpu_presented):
         w = methods('paintGL')()
+        w._gpu_warmup = GpuWarmupQueue()
         w.calls = []
         w._window_lifecycle = NS(closing=False)
         w.paint_gpu_frame = lambda: gpu_presented

@@ -422,7 +422,7 @@ def _on_action_economy_category(self, payload: Any, point: QPointF, button: int,
         self.economy_offers_scroll.position = 0.0
         self.economy_offers_scroll.target = 0.0
         self.economy_offers_scroll.velocity = 0.0
-        self.economy_selected_offer()
+        self.reconcile_economy_selection()
         self.frame_scheduler.force()
 
 
@@ -1054,7 +1054,7 @@ class InputDispatchMixin:
                 index += -1 if event.key() == Qt.Key.Key_Left else 1
                 self.economy_category = categories[index % len(categories)]
                 self.economy_selected_key = ""
-                self.economy_selected_offer()
+                self.reconcile_economy_selection()
                 self.economy_offers_scroll.position = 0.0
                 self.economy_offers_scroll.target = 0.0
                 self.frame_scheduler.force()
@@ -1065,7 +1065,7 @@ class InputDispatchMixin:
                 self.select_economy_offer(offers[selected_index % len(offers)].key)
                 return
             if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
-                offer = self.economy_selected_offer()
+                offer = self.reconcile_economy_selection()
                 if offer is not None and not event.isAutoRepeat():
                     if offer.confirmation == "hold":
                         self.begin_economy_hold(offer)
