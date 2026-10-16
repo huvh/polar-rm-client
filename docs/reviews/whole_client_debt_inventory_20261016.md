@@ -381,3 +381,58 @@ the earlier c4d3bcf aggregate. Logs/hashes are retained under
 - Existing firmware/reference prerequisites, native Windows/desktop GPU/device
   acceptance and packaging remain open. The inventory does not turn the prior
   12 SKIP/4 INCOMPLETE checks or profile-external qualification gaps into passes.
+
+## Bounded indirect dependency guard review (base `fa2c2b8`)
+
+The static gate's two protected pure-domain roots previously rejected only
+**direct** backend/Qt/Tk imports. A new local helper could import these dependencies
+and be imported by `referee_profiles` or `economy_values` without violating the
+gate. This is a demonstrated tooling blind spot, not evidence that those two
+production modules currently have that coupling.
+
+The test-first checkpoint `afbdb95` reproduces 38 failing assertions across
+36 root/forbidden-target/import-form/scope combinations, one multi-hop path and
+one helper-to-UI path. The narrow correction follows resolved local import edges
+from each protected root, including deferred and type-only edges, and reports
+a deterministic shortest route to each offending module. The UI boundary also
+applies along that route. Unreachable GUI imports do not contaminate a pure
+root, and a type-only cycle terminates without becoming a runtime-cycle claim.
+A separate CLI negative control establishes that the indirect mutation returns
+failure while leaving its baseline byte-for-byte unchanged.
+
+The corrected candidate passes 47 quality test methods, the separate reviewed
+metric-limit test, and the real static gate. Raw red and green output is retained
+in `../evidence/clean-code-20261016/indirect-domain-guard/`. The red run used the
+system Python and the green run the parent-provisioned hash-pinned verification
+environment. No production source, baseline budget, lint allowance or cycle
+allowance changed. The fixed production digest remains
+`6ae54216d9d09eeeae53e7da28f68274c64cc8e713dc65804de89ec99a76af70`:
+208 modules, 3,368 functions, 37,123 statements, 13,069 decisions and 598 import
+edges. These measurements are not size reductions or runtime acceptance.
+
+### What remains outside this guard
+
+- Only the two named roots are protected. New pure owners, including a proposed
+  crosshair codec or startup coordinator, need their own import-blocker and
+  behavioral evidence; this change does not silently certify them.
+- Dynamic imports, reflective aliases and implicit package-initializer effects
+  are not inferred. Resolved declared dependency paths are conservative source
+  relationships, not a simulated Python execution graph.
+- Low counts or zero SCCs cannot prove responsibility ownership. Passing a
+  whole window to a smaller helper retains the same coupling; inspect the full
+  input/output and callback surfaces.
+- Test-method counts do not measure exercised paths. A constructor extraction
+  must preserve effect prefixes on failure, setting-observation time, retained
+  owner lifetime and asynchronous activation order. A draft-session extraction
+  must preserve mutable option copies, cancellation, validation and projection
+  without prematurely mutating the registry.
+- Shared DT7/CC thread ownership needs separate per-adapter admission/late-start,
+  partial-constructor failure, blocked close and terminal-error checks. A common
+  helper passing once cannot establish both adapters' protocol behavior.
+- GPU retry policy needs failed partial initialization and retry/disposal
+  ordering checks; mocked native handles cannot establish driver validity.
+
+These results do not replace the parent's new fixed-source integrated run.
+The prior 268 PASS / 12 SKIP / 3 INCOMPLETE result is a separate reported baseline,
+not a result of this lane. Hardware, native desktop/GPU and packaging limits
+remain unchanged; no full-clean claim is made.

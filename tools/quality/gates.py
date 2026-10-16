@@ -6,7 +6,7 @@ Reports and baseline files are not rewritten by a check.
 """
 from __future__ import annotations
 
-from collections import Counter
+from collections import Counter, deque
 import json
 from pathlib import Path
 
@@ -21,7 +21,7 @@ LOWER_LAYER_MODULES = frozenset({"rm_client.model", "rm_client.module_catalog",
                                 "rm_client.qualification_observations",
                                 "rm_client.runtime_paths", "rm_client.state_overlay"})
 PURE_DOMAIN_MODULES = frozenset({"rm_client.referee_profiles", "rm_client.economy_values"})
-PURE_DOMAIN_FORBIDDEN_PREFIXES = ("rm_client.backend", "PySide6", "PySide2", "PyQt6", "PyQt5",
+PURE_DOMAIN_FORBIDDEN_PREFIXES = ("rm_client.backend", "rm_client.ui", "PySide6", "PySide2", "PyQt6", "PyQt5",
                                   "tkinter", "Tkinter")
 
 
@@ -90,6 +90,35 @@ def validate_function_budgets(budgets: object) -> None:
                 raise ValueError(f"Responsibility budget must be a nonnegative integer: {symbol} {metric}")
 
 
+def pure_domain_violations(report: dict) -> list[str]:
+    """Follow declared local dependencies, including deferred and type-only edges.
+
+    Purity is a source boundary, not merely an eager-import property. A helper
+    must not conceal a forbidden dependency. Use a deterministic shortest path
+    for diagnostics and visit each local module once per protected root.
+    """
+    violations = []
+    modules = report["modules"]
+    for root in sorted(PURE_DOMAIN_MODULES):
+        pending = deque([(root, (root,))])
+        visited = {root}
+        while pending:
+            module, path = pending.popleft()
+            details = modules.get(module)
+            if details is None:
+                continue
+            for edge in details["declared_imports"]:
+                if any(edge["target"] == prefix or edge["target"].startswith(prefix + ".")
+                       for prefix in PURE_DOMAIN_FORBIDDEN_PREFIXES):
+                    route = f" via {' -> '.join(path)}" if len(path) > 1 else ""
+                    violations.append(f"Forbidden pure-domain dependency: {details['path']}:{edge['line']} -> {edge['target']}{route}")
+            for target in sorted({edge["target"] for edge in details["imports"]}):
+                if target not in visited:
+                    visited.add(target)
+                    pending.append((target, (*path, target)))
+    return violations
+
+
 def check_report(report: dict, baseline: dict) -> list[str]:
     violations = [f"Syntax error in {error['path']}: {error['error']}"
                   for error in report["syntax_errors"]]
@@ -99,14 +128,7 @@ def check_report(report: dict, baseline: dict) -> list[str]:
         for edge in details["declared_imports"]:
             if edge["target"] == "rm_client.ui" or edge["target"].startswith("rm_client.ui."):
                 violations.append(f"UI dependency from lower layer: {details['path']}:{edge['line']} -> {edge['target']}")
-    for module in PURE_DOMAIN_MODULES:
-        details = report["modules"].get(module)
-        if details is None:
-            continue
-        for edge in details["declared_imports"]:
-            if any(edge["target"] == prefix or edge["target"].startswith(prefix + ".")
-                   for prefix in PURE_DOMAIN_FORBIDDEN_PREFIXES):
-                violations.append(f"Forbidden pure-domain dependency: {details['path']}:{edge['line']} -> {edge['target']}")
+    violations.extend(pure_domain_violations(report))
     old_debt = baseline["lint_debt"]
     for key, count in lint_debt(report).items():
         if count > old_debt.get(key, 0):
@@ -174,8 +196,9 @@ def render_markdown(report: dict, violations: list[str], limit: int = 20) -> str
               "", "## Gate result", "", *([f"- {violation}" for violation in violations] or ["No ratchet or dependency-boundary violations."]),
               "", "## Limits", "",
               "Imports are statically resolved within the measured source tree. Dynamic imports, reflective calls,",
-              "alias-based state access, and effects hidden inside callees are not inferred. TYPE_CHECKING imports",
+              "alias-based state access, implicit package-initializer execution, and effects hidden inside callees are not inferred. TYPE_CHECKING imports",
               "are reported but excluded from runtime cycles; function-local imports are only in the deferred graph.",
+              "The protected pure-domain roots reject forbidden declared dependencies through resolved local helpers, including deferred and type-only edges. This is not a general proof of runtime purity.",
               "State access counts cover literal `self.state.field` and `state.field` paths; they do not establish field ownership.",
               "Direct self names include method calls and collaborators, not just mutable fields. No metric here qualifies a robot or GPU.",
               "Historical UI implementation remains included in every total. Its source classification only separates legacy module-name evidence from current-runtime coverage; moving it is not a complexity reduction.", ""]

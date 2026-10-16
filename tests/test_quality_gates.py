@@ -212,6 +212,45 @@ class ImportGraphTests(SourceFixture):
                                                 for item in self.violations()))
                             path.unlink()
 
+    def test_pure_domain_rejects_forbidden_dependencies_through_local_helpers(self):
+        for root in ("referee_profiles", "economy_values"):
+            for target in ("rm_client.backend.transport", "PySide6.QtCore", "tkinter"):
+                for statement in (f"import {target}", f"from {target} import Value"):
+                    for content in (statement, "def create():\n    " + statement,
+                                    "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    " + statement):
+                        with self.subTest(root=root, content=content):
+                            source = self.source(f"rm_client/{root}.py", "from .helper import Value")
+                            self.source("rm_client/helper.py", content)
+                            violations = self.violations()
+                            self.assertTrue(any("Forbidden pure-domain dependency" in item
+                                                and f"rm_client.{root} -> rm_client.helper" in item
+                                                for item in violations), violations)
+                            source.unlink()
+
+    def test_pure_domain_transitive_guard_includes_every_local_hop(self):
+        self.source("rm_client/economy_values.py", "from .first import Value")
+        self.source("rm_client/first.py", "from .second import Value")
+        self.source("rm_client/second.py", "from PyQt6.QtCore import Value")
+        self.assertTrue(any("rm_client.economy_values -> rm_client.first -> rm_client.second"
+                            in item for item in self.violations()))
+
+    def test_pure_domain_helper_ui_dependency_is_not_hidden(self):
+        self.source("rm_client/economy_values.py", "from .helper import Value")
+        self.source("rm_client/helper.py", "from rm_client.ui.future_view import Value")
+        self.assertTrue(any("Forbidden pure-domain dependency" in item
+                            for item in self.violations()))
+
+    def test_pure_domain_transitive_walk_terminates_on_type_only_cycle(self):
+        self.source("rm_client/economy_values.py", "from .helper import Value")
+        self.source("rm_client/helper.py", "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    from .economy_values import Value")
+        self.assertEqual(self.violations(), [])
+
+    def test_unreachable_ui_dependencies_do_not_contaminate_pure_roots(self):
+        self.source("rm_client/economy_values.py", "from .helper import Value")
+        self.source("rm_client/helper.py", "from dataclasses import dataclass\nValue = 1")
+        self.source("rm_client/unrelated.py", "from PySide6.QtCore import QObject")
+        self.assertEqual(self.violations(), [])
+
     def test_pure_domain_stdlib_dependencies_remain_valid(self):
         for module in ("referee_profiles", "economy_values"):
             self.source(f"rm_client/{module}.py", "from dataclasses import dataclass\nfrom typing import Any\nfrom types import MappingProxyType")
@@ -348,6 +387,20 @@ class QualityCliTests(SourceFixture):
         self.assertNotIn("initialization cycle:", output)
         self.source("rm_client/b.py", "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    from . import a")
         self.assertEqual(self.run_cli("--baseline", str(baseline))[0], 0)
+
+    def test_indirect_pure_domain_mutation_fails_cli_without_relaxing_baseline(self):
+        self.source("rm_client/economy_values.py", "from .helper import Value")
+        helper = self.source("rm_client/helper.py", "Value = 1")
+        baseline = self.source("baseline.json", json.dumps(empty_baseline()))
+        before = baseline.read_bytes()
+        self.assertEqual(self.run_cli("--baseline", str(baseline))[0], 0)
+        helper.write_text("from PySide6.QtCore import Value\n", encoding="utf-8")
+        code, output = self.run_cli("--baseline", str(baseline))
+        self.assertEqual(code, 1, output)
+        self.assertIn("Forbidden pure-domain dependency", output)
+        self.assertIn("rm_client.economy_values -> rm_client.helper", output)
+        self.assertNotIn("PASS:", output)
+        self.assertEqual(baseline.read_bytes(), before)
 
     def test_invalid_budget_values_cannot_disable_the_ratchet(self):
         self.source("rm_client/a.py", "def tick():\n    return 1")
