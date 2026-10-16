@@ -1628,6 +1628,14 @@ class BackendManager:
                     self.field_log.emit("device_shutdown_unconfirmed", device=name,
                                         closed=closed, error=writer.last_error)
         self.field_log.emit("backend_shutdown", restart=restart)
+        # Scenario changes run on the UI thread and must not wait for disk.
+        # Only final application shutdown seals and drains the audit writer.
+        close_log = getattr(self.field_log, "close", None)
+        if not restart and callable(close_log) and not close_log(timeout=1.0):
+            logging.getLogger(__name__).warning(
+                "Field audit log shutdown incomplete or records lost: %s",
+                dict(self.field_log.snapshot()),
+            )
 
     def apply_readiness(
         self,
@@ -2490,7 +2498,7 @@ class BackendManager:
             },
             "field_log": {
                 "path": str(self.field_log.path),
-                "last_error": self.field_log.last_error,
+                **dict(self.field_log.snapshot()),
             },
             "message_apply": {
                 "errors": self._apply_error_count,

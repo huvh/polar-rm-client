@@ -428,6 +428,8 @@ def test_rotating_log_and_replay() -> None:
         logger = RotatingJsonlLogger(Path(directory), max_bytes=1024, backups=2)
         for index in range(80):
             logger.emit("publish_result", index=index, detail="x" * 100)
+        require(logger.flush(timeout=2.0), "all accepted field records written without loss")
+        require(logger.close(timeout=2.0), "field writer closed before replay")
         files = sorted(Path(directory).glob("*.jsonl*"))
         require(1 <= len(files) <= 3, "bounded rotation")
         records = list(ReadOnlyFieldReplay(files).records())
