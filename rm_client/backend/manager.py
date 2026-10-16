@@ -14,6 +14,8 @@ from __future__ import annotations
 import logging
 import json
 import time
+import threading
+from queue import Empty, Full, Queue
 from dataclasses import replace
 from typing import Any, Callable
 
@@ -139,6 +141,9 @@ class BackendManager:
         self._native_next_restart_at = 0.0
         self._native_restart_backoff_s = 0.5
         self._native_failure_epoch_handled = False
+        self._native_restart_generation = 0
+        self._native_restart_thread: threading.Thread | None = None
+        self._native_restart_results: Queue[tuple[int, bool, dict[str, Any]]] = Queue(maxsize=1)
         self._apply_error_count = 0
         self._last_apply_error = ""
         self._official_state_updates_count = 0
@@ -308,6 +313,7 @@ class BackendManager:
         self.referee_adapter = profile.create_state_adapter(self)
         self.qualification.store.referee_profile = profile.profile_id
         self.qualification.store.protocol_version = profile.protocol_version
+        self._native_restart_generation = getattr(self, "_native_restart_generation", 0) + 1
         self.native_decoder.stop()
         self._native_recovery.reset()
         self._native_0310_last_sequence = None
@@ -1301,25 +1307,44 @@ class BackendManager:
             self._mqtt_disconnect_lock_applied = False
         self._recover_video_decoders()
 
+    def _poll_native_decoder_restart(self) -> None:
+        """Apply completion only on the manager/UI thread, never the worker."""
+
+        try:
+            generation, restarted, health = self._native_restart_results.get_nowait()
+        except Empty:
+            return
+        self._native_restart_thread = None
+        if generation != self._native_restart_generation:
+            return
+        self._native_failure_epoch_handled = bool(restarted)
+        self._native_recovery.reset()
+        self._native_0310_blocked_until_sps = True
+        if restarted:
+            self._native_0310_decoder_restarts += 1
+            self._native_0310_decoder_started_once = True
+            self._native_restart_backoff_s = 0.5
+            self._native_next_restart_at = 0.0
+        else:
+            self._native_next_restart_at = time.perf_counter() + self._native_restart_backoff_s
+            self._native_restart_backoff_s = min(5.0, self._native_restart_backoff_s * 2.0)
+        self.field_log.emit(
+            "decoder_restart", source="native_0310", restarted=restarted, health=health,
+        )
+
     def _recover_video_decoders(self) -> None:
-        """Apply decoder health timeouts off the transport callback path.
+        """Schedule at most one recovery; the UI tick never tears down pipes."""
 
-        An ffmpeg process can remain alive while producing no frame (bad GOP,
-        transmitter reset) or can leave a stale last image. Both conditions
-        are treated exactly like packet loss: reset the bounded Annex-B gate,
-        restart with backoff, and wait for a fresh parameter-set/keyframe.
-        """
-
+        self._poll_native_decoder_restart()
         if self.udp.decode_h265 and self.udp.running and self.udp.h265_decoder is not None:
             health = self.udp.h265_decoder.health()
             if health.get("first_frame_timeout") or health.get("stale"):
-                self.udp.h265_recovery.reset()
                 self.udp._request_h265_restart()
 
         native_selected = self._active_video_source in {
             "native", "native 0x0310", "0x0310",
         } or int(getattr(self.state, "deploy_mode", 0) if self.state is not None else 0) == 1
-        if not native_selected:
+        if not native_selected or self._native_restart_thread is not None:
             return
         health = self.native_decoder.health()
         crashed = bool(
@@ -1330,27 +1355,32 @@ class BackendManager:
         )
         if not (crashed or health.get("first_frame_timeout") or health.get("stale")):
             return
-        now = time.perf_counter()
-        if now < self._native_next_restart_at:
+        if time.perf_counter() < self._native_next_restart_at:
             return
-        restarted = self.native_decoder.restart(clear_latest=True)
-        self._native_failure_epoch_handled = bool(restarted)
+        decoder = self.native_decoder
+        decoder_generation = decoder.lifecycle_generation
+        generation = self._native_restart_generation
+        results = self._native_restart_results
         self._native_recovery.reset()
         self._native_0310_blocked_until_sps = True
-        if restarted:
-            self._native_0310_decoder_restarts += 1
-            self._native_0310_decoder_started_once = True
-            self._native_restart_backoff_s = 0.5
-            self._native_next_restart_at = 0.0
-        else:
-            self._native_next_restart_at = now + self._native_restart_backoff_s
-            self._native_restart_backoff_s = min(5.0, self._native_restart_backoff_s * 2.0)
-        self.field_log.emit(
-            "decoder_restart",
-            source="native_0310",
-            restarted=restarted,
-            health=health,
+
+        def recover() -> None:
+            try:
+                restarted = decoder.restart(clear_latest=True, expected_generation=decoder_generation)
+            except Exception as exc:
+                restarted = False
+                health["restart_error"] = f"{type(exc).__name__}: {exc}"
+            # The only manager-owned object touched here is a bounded mailbox.
+            # Source switches and shutdown invalidate completion by generation.
+            try:
+                results.put_nowait((generation, restarted, health))
+            except Full:
+                pass
+
+        self._native_restart_thread = threading.Thread(
+            target=recover, name="native-decoder-restart", daemon=True,
         )
+        self._native_restart_thread.start()
 
     def _build_commit(self) -> str:
         try:
@@ -1505,6 +1535,7 @@ class BackendManager:
         if normalized not in {"native", "native 0x0310", "0x0310"} and int(
             getattr(self.state, "deploy_mode", 0) if self.state is not None else 0
         ) != 1:
+            self._native_restart_generation = getattr(self, "_native_restart_generation", 0) + 1
             self.native_decoder.stop()
             self._native_recovery.reset()
             self._native_0310_blocked_until_sps = True
@@ -1573,6 +1604,7 @@ class BackendManager:
         self.serial.stop()
         # stop() 内部会先发归零突发帧再关口，避免把最后一条驾驶指令冻在车上。
         self.polar.stop()
+        self._native_restart_generation = getattr(self, "_native_restart_generation", 0) + 1
         self.native_decoder.stop()
         self._native_recovery.reset()
         # DT7 那个 DJI VCOM 是**独占**口：不关句柄，选手端和下一轮调试都得等本进程
@@ -1771,11 +1803,20 @@ class BackendManager:
                     if not payload_to_write:
                         self._native_0310_recovery_dropped_chunks += 1
 
+                if payload_to_write and self._native_restart_thread is not None:
+                    # Recovery completion is consumed by tick(). Do not let a
+                    # transport payload race its process creation or gate reset.
+                    payload_to_write = b""
+                    self._native_recovery.reset()
+                    self._native_0310_blocked_until_sps = True
+                    self._native_0310_recovery_dropped_chunks += 1
                 if payload_to_write:
                     if not self.native_decoder.available:
-                        if self._native_0310_decoder_started_once:
-                            self._native_0310_decoder_restarts += 1
+                        # start() never reaps a crashed process: that work is
+                        # reserved for the asynchronous health recovery path.
                         started = self.native_decoder.start()
+                        if started and self._native_0310_decoder_started_once:
+                            self._native_0310_decoder_restarts += 1
                         self._native_0310_decoder_started_once = bool(
                             self._native_0310_decoder_started_once or started
                         )

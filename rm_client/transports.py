@@ -190,6 +190,14 @@ class FrameAssembler:
 
 
 @dataclass
+class _UDPVideoSession:
+    assembler: FrameAssembler = field(default_factory=FrameAssembler)
+    stopped: threading.Event = field(default_factory=threading.Event)
+    sock: socket.socket | None = None
+    thread: threading.Thread | None = None
+
+
+@dataclass
 class UDPVideoReceiver:
     host: str = "127.0.0.1"
     port: int = 3334
@@ -201,63 +209,91 @@ class UDPVideoReceiver:
     _thread: threading.Thread | None = field(default=None, init=False)
     _socket: socket.socket | None = field(default=None, init=False)
     _assembler: FrameAssembler = field(default_factory=FrameAssembler, init=False)
+    _receiver_lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
+    _session: _UDPVideoSession | None = field(default=None, init=False, repr=False)
 
     def start(self) -> None:
-        if self.running:
-            return
-        # An explicit receiver restart is a new frame-ID epoch. Sender resets
-        # cannot safely be inferred from late packets on an active socket.
-        self._assembler.clear()
-        self.running = True
-        self._thread = threading.Thread(target=self._run, name="udp-video", daemon=True)
-        self._thread.start()
+        with self._receiver_lock:
+            if self.running:
+                return
+            # Socket, frame-ID epoch and stop signal are never reused by a
+            # replacement receive worker, even if an old callback is delayed.
+            session = _UDPVideoSession()
+            self._session = session
+            self._assembler = session.assembler
+            self.running = True
+            self.last_error = ""
+            session.thread = threading.Thread(
+                target=self._run, args=(session, self.host, self.port, self.on_frame),
+                name="udp-video", daemon=True,
+            )
+            self._thread = session.thread
+            session.thread.start()
 
     def stop(self) -> None:
-        self.running = False
-        if self._socket is not None:
+        with self._receiver_lock:
+            session = self._session
+            self._session = None
+            self.running = False
+            self._socket = None
+            self._thread = None
+            if session is not None:
+                session.stopped.set()
+        if session is None:
+            return
+        if session.sock is not None:
             try:
-                self._socket.close()
+                session.sock.close()
             except OSError:
                 pass
-            self._socket = None
-        if self._thread is not None and self._thread.is_alive():
-            self._thread.join(timeout=0.6)
-        self._thread = None
+        if session.thread is not None and session.thread is not threading.current_thread():
+            session.thread.join(timeout=0.6)
 
-    def _run(self) -> None:
+    def _run(self, session: _UDPVideoSession, host: str, port: int,
+             on_frame: Callable[[bytes], None] | None) -> None:
+        sock = None
         try:
-            self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            self._socket.bind((self.host, self.port))
-            self._socket.settimeout(0.2)
-        except OSError as exc:
-            self.last_error = str(exc)
-            self.running = False
-            return
-        try:
-            while self.running:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            # Publish before bind so stop also closes a socket still starting.
+            with self._receiver_lock:
+                if self._session is not session or session.stopped.is_set():
+                    return
+                session.sock = sock
+                self._socket = sock
+            sock.bind((host, port))
+            sock.settimeout(0.2)
+            while not session.stopped.is_set():
                 try:
-                    packet, _addr = self._socket.recvfrom(65535)
+                    packet, _addr = sock.recvfrom(65535)
                 except socket.timeout:
                     continue
-                except OSError as exc:
-                    if self.running:
-                        self.last_error = str(exc)
-                    break
-                self.packets_received += 1
-                frame = self._assembler.push_packet(packet)
-                if frame is not None:
-                    self.frames_received += 1
-                    if self.on_frame:
-                        self.on_frame(frame)
+                with self._receiver_lock:
+                    if self._session is not session or session.stopped.is_set():
+                        break
+                    self.packets_received += 1
+                    frame = session.assembler.push_packet(packet)
+                    if frame is not None:
+                        self.frames_received += 1
+                if frame is not None and on_frame is not None and not session.stopped.is_set():
+                    on_frame(frame)
+        except OSError as exc:
+            with self._receiver_lock:
+                if self._session is session and not session.stopped.is_set():
+                    self.last_error = str(exc)
         finally:
-            self.running = False
-            sock = self._socket
-            self._socket = None
+            # A late worker owns only its captured socket. It cannot close or
+            # mark unavailable a newly started receiver.
+            session.stopped.set()
             if sock is not None:
                 try:
                     sock.close()
                 except OSError:
                     pass
+            with self._receiver_lock:
+                if self._session is session:
+                    self.running = False
+                    self._socket = None
+                    self._session = None
 
 
 class CameraFeed:
