@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..control import validate_control_binds
-from ..model import CONTROL_BIND_OPTIONS, MODULE_BIND_OPTIONS, CONTROL_RESERVED_KEYS, CONTROL_SLOT_ORDER, build_default_registry, Setting
+from ..model import CONTROL_BIND_OPTIONS, MODULE_BIND_OPTIONS, MODULE_RESERVED_KEYS, CONTROL_SLOT_ORDER, build_default_registry, Setting
 from .jello_locale import module_label, option_label, setting_label
 from .jello_widgets import JelloDialog, JelloCheckBox as QCheckBox, JelloComboBox as QComboBox, apply_jello_widgets, jello_font, use_jello_font_book
 from .settings_preparation import SettingsBuildQueue
@@ -105,7 +105,7 @@ def validate_draft(host, draft, module_binds=None):
         if low == "none":
             continue
         canonical_map_tab = name == "TacticalMap" and low == "tab"
-        if (value not in MODULE_BIND_OPTIONS and not canonical_map_tab) or (low in CONTROL_RESERVED_KEYS | {"escape"} and not canonical_map_tab):
+        if (value not in MODULE_BIND_OPTIONS and not canonical_map_tab) or (low in MODULE_RESERVED_KEYS and not canonical_map_tab):
             raise ValueError(f"{value} 是保留键或不是可绑定按键")
         if low in seen:
             raise ValueError(f"{value} 已被驾驶协议槽 {seen[low]} 使用")
@@ -327,7 +327,7 @@ class RegistrySettingsPage(QScrollArea):
             apply_jello_widgets(keyboard_button, stylesheet=False)
             root.insertWidget(0,keyboard_button)
             note = QLabel("驾驶键发送的仍是官方协议槽位；不会改固件。鼠标倍率只作用于本客户端输入，不修改NUC自瞄或DT7原始输入。\n"
-                          "F11全屏、F12急停、RightShift/Tab等界面保留键不能改绑。已有快捷键与驾驶键的历史重叠保留；新绑定会检查冲突。")
+                          "F7事件菜单、Esc菜单、F11全屏、F12急停、RightShift/Tab等界面保留键不能用作驾驶键。已有快捷键与驾驶键的历史重叠保留；新绑定会检查冲突。")
             apply_jello_widgets(note, stylesheet=False)
             note.setWordWrap(True); root.insertWidget(0, note)
             box = QGroupBox("模块快捷键"); apply_jello_widgets(box, stylesheet=False); root.addWidget(box)

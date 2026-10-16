@@ -11,7 +11,7 @@ import time
 from PySide6.QtCore import QPointF, QRectF, Qt, QTimer
 from PySide6.QtGui import QColor, QFontMetricsF, QPainter, QPainterPath, QPen, QPolygonF
 from PySide6.QtWidgets import QDialog, QHBoxLayout, QLabel, QLineEdit, QListWidget, QPushButton, QVBoxLayout, QWidget
-from ..model import CONTROL_SLOT_ORDER, CONTROL_RESERVED_KEYS
+from ..model import CONTROL_SLOT_ORDER, MODULE_RESERVED_KEYS
 from .fonts import draw_ui_text, cjk_ui_font, has_cjk, elide_ui_text
 from .jello_locale import module_label, category_label
 from .jello_widgets import JelloDialog, apply_jello_widgets, draw_shadow, ease_out_back, jello_font, jello_regular_font
@@ -47,7 +47,7 @@ NAV_KEYS = tuple(Key(name,label,i*118,382,108,44,False) for i,(name,label) in en
     [("Insert","Ins"),("Home","Home"),("End","End"),("PageUp","PgUp"),("PageDown","PgDn"),
      ("Left","←"),("Up","↑"),("Down","↓"),("Right","→")]))
 ALL_KEYS = (*NATIVE_KEYS,*FUNCTION_KEYS,*NAV_KEYS)
-RESERVED = CONTROL_RESERVED_KEYS | {"escape"}
+RESERVED = MODULE_RESERVED_KEYS
 
 
 @dataclass(frozen=True)

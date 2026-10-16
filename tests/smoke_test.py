@@ -8,6 +8,9 @@ import sys
 from tempfile import TemporaryDirectory
 import time
 from typing import Any
+import unittest
+
+SMOKE_SKIPS: list[str] = []
 
 # UI regression tests use deterministic synthetic/backend frames. Never probe
 # a developer's physical webcam or load the local OpenVINO worker implicitly.
@@ -1114,28 +1117,6 @@ def test_local_prediction_snapshot() -> None:
     assert all(len(armor.back_points) == 4 for armor in snapshot.result.predicted_armors)
 
 
-def test_tongji_local_yolo_demo() -> None:
-    """用同济自带 demo 验证 Windows/OpenVINO 路径真的能加载 XML/BIN 并完成一帧推理。"""
-    # The optional 60 MiB upstream demo is outside the immutable release
-    # source. Keep that lab integration from leaking into release regression.
-    if os.environ.get("POLAR_SKIP_EXTERNAL_INTEGRATION", "").lower() in ("1", "true", "yes"):
-        return
-    model = ROOT.parent / "同济自瞄" / "sp_vision_25" / "assets" / "yolov5.xml"
-    demo = ROOT.parent / "同济自瞄" / "sp_vision_25" / "assets" / "demo" / "demo.avi"
-    if not model.exists() or not demo.exists():
-        return
-    import cv2
-    from rm_client.tongji_yolo import TongjiYoloV5
-
-    capture = cv2.VideoCapture(str(demo))
-    ok, frame = capture.read()
-    capture.release()
-    assert ok and frame is not None
-    detector = TongjiYoloV5(model, "CPU")
-    result = detector.detect(frame)
-    assert isinstance(result, list)
-
-
 def test_calibration_export() -> None:
     from rm_client.calibration import CalibrationProfile, CameraCalibrationManager
 
@@ -1518,7 +1499,9 @@ def test_pyside_animation_import() -> None:
         window.close()
         raise AssertionError("Required video fixture is missing: vending-machine.mp4")
     else:
-        print("SKIP optional built-in wallpaper decode: vending-machine.mp4 not supplied")
+        reason = "optional built-in wallpaper decode: vending-machine.mp4 not supplied"
+        SMOKE_SKIPS.append(reason)
+        print("[SKIP] " + reason)
     window.wallpaper_picker_visible = True
     rendered = QImage(1280, 720, QImage.Format.Format_ARGB32_Premultiplied)
     rendered.fill(0)
@@ -1820,7 +1803,9 @@ def test_jello_clickgui_layout_and_old_group() -> None:
     from PySide6.QtCore import QEvent, QPointF, QRectF, Qt
     from PySide6.QtGui import QFont, QKeyEvent
     from PySide6.QtWidgets import QApplication
+    from rm_client.ui.fonts import ui_text_advance
     from rm_client.ui.jello_clickgui import JelloClickGuiState, JelloMainTimeline
+    from rm_client.ui.jello_locale import description_label
     from rm_client.ui.polar_app import PolarRMWindow
 
     timeline = JelloMainTimeline()
@@ -1918,16 +1903,30 @@ def test_jello_clickgui_layout_and_old_group() -> None:
         for asset in window.jello_clickgui.image_assets:
             assert asset.is_file() and asset.stat().st_size > 0
         hud_module = window.registry.get("HUD")
+        hud_fonts = window._jello_gpu_fonts()
         hud_pages = window._jello_module_text_pages(
             hud_module,
-            window._jello_gpu_fonts(),
+            hud_fonts,
         )
+
+        def assert_description_warmed(text: str, size: float, width: float) -> None:
+            # PR17 prewarms the actual lossless wrapped lines. Requiring one
+            # unwrapped string would reject correct multi-line descriptions.
+            for value in (text, description_label(text, True)):
+                lines = window.jello_clickgui.wrapped_description(hud_fonts[size], value, width)
+                assert "".join(lines) == value, (size, value, lines)
+                assert set(lines).issubset(hud_pages[size]), (size, value, lines)
+                assert all(
+                    ui_text_advance(hud_fonts[size], line.rstrip()) <= width + 0.01
+                    for line in lines
+                ), (size, width, lines)
+
         assert hud_module.name in hud_pages[40.0]
-        assert hud_module.description in hud_pages[20.0]
+        assert_description_warmed(hud_module.description, 20.0, 440.0)
         for setting in hud_module.settings:
             assert setting.name in hud_pages[25.0]
             assert setting.name in hud_pages[14.0]
-            assert setting.description in hud_pages[14.0]
+            assert_description_warmed(setting.description, 14.0, 460.0)
 
         window.resize(1280, 720)
         window.home_visible = False
@@ -4159,17 +4158,32 @@ def test_estop_zero_frame_bypass_and_backend_readiness() -> None:
     manager.shutdown()
 
 
-def run_all_smoke_tests() -> None:
-    # Definition-order discovery includes every module-level test, including
-    # regressions added after the original manually maintained entry point.
+def run_all_smoke_tests() -> int:
+    # Definition-order discovery includes every core module-level test. External
+    # model/demo inference lives in tongji_external_integration_test.py and is
+    # explicitly inventoried under the registry's external category.
     tests = [(name, value) for name, value in globals().items()
              if name.startswith("test_") and callable(value)
              and getattr(value, "__module__", None) == __name__]
+    SMOKE_SKIPS.clear()
+    completed = 0
     for name, test in tests:
         print(f"RUN {name}", flush=True)
-        test()
-    print(f"smoke checks completed: {len(tests)} test functions; see explicit optional-fixture SKIP output")
+        before = len(SMOKE_SKIPS)
+        try:
+            test()
+        except unittest.SkipTest as exc:
+            SMOKE_SKIPS.append(str(exc))
+            print(f"[SKIP] {name}: {exc}", flush=True)
+        if len(SMOKE_SKIPS) == before:
+            completed += 1
+            print(f"[PASS] {name}", flush=True)
+        else:
+            print(f"[INCOMPLETE] {name}: some checks were not executed", flush=True)
+    print(f"smoke checks completed: {completed}/{len(tests)} complete test functions; "
+          f"{len(SMOKE_SKIPS)} skipped checks", flush=True)
+    return 0 if tests and not SMOKE_SKIPS else 77
 
 
 if __name__ == "__main__":
-    run_all_smoke_tests()
+    raise SystemExit(run_all_smoke_tests())

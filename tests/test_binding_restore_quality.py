@@ -19,12 +19,16 @@ os.environ.setdefault("POLAR_DISABLE_LOCAL_CAPTURE", "1")
 os.environ.setdefault("POLAR_DISABLE_MEDIA_PRELOAD", "1")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from PySide6.QtCore import QEvent, QTimer
+from PySide6.QtCore import QEvent, QTimer, Qt
+from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import QApplication
 from rm_client.config_store import ClientConfigStore, apply_registry_config, export_client_config
 from rm_client.control import DEFAULT_CONTROL_BINDS, KeyboardControlBridge, validate_control_binds
-from rm_client.model import CONTROL_RESERVED_KEYS, CONTROL_SLOT_ORDER, RobotState, build_default_registry
-from rm_client.ui.cs2_settings_center import apply_registry_draft
+from rm_client.model import (
+    CONTROL_BIND_OPTIONS, CONTROL_RESERVED_KEYS, CONTROL_SLOT_ORDER,
+    MODULE_BIND_OPTIONS, MODULE_RESERVED_KEYS, RobotState, build_default_registry,
+)
+from rm_client.ui.cs2_settings_center import apply_registry_draft, validate_draft
 from rm_client.ui.polar.mixins.persistence_mixin import PersistenceMixin
 
 APP = QApplication.instance() or QApplication([])
@@ -97,6 +101,34 @@ class BindingMapTests(unittest.TestCase):
         self.assertEqual(bridge.binds["D"], "None")
         bridge.reset_binds()
         self.assertEqual(bridge.binds, DEFAULT_CONTROL_BINDS)
+
+    def test_all_unconditional_window_keys_are_unavailable_for_driving(self):
+        expected = {"rightshift", "tab", "escape", "f7", "f8", "f9", "f11", "f12"}
+        self.assertEqual(CONTROL_RESERVED_KEYS, expected)
+        self.assertFalse(expected & {name.lower() for name in CONTROL_BIND_OPTIONS})
+        host = Host()
+        for key in ("F7", "Escape"):
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                validate_draft(host, {("RobotLink", "Bind W"): key})
+
+    def test_driver_only_reservations_do_not_change_module_hotkey_policy(self):
+        from rm_client.ui.jello_keybinds import BindingSession
+
+        self.assertIn("F7", MODULE_BIND_OPTIONS)
+        self.assertIn("Escape", MODULE_BIND_OPTIONS)  # Historical option set.
+        self.assertNotIn("f7", MODULE_RESERVED_KEYS)
+        host = Host()
+        session = BindingSession(host)
+        driver = next(item for item in session.entries if item.identity == ("RobotLink", "Bind W"))
+        hero = next(item for item in session.entries if item.identity == ("module", "HeroLob"))
+        for key in ("F7", "Escape"):
+            with self.assertRaises(ValueError):
+                session.assign(driver, key)
+        session.assign(hero, "F7")
+        session.apply()
+        self.assertEqual(host.registry.get("HeroLob").keybind, "F7")
+        with self.assertRaises(ValueError):
+            session.assign(hero, "Escape")
 
 
 class RegistryBindingTests(unittest.TestCase):
@@ -190,6 +222,51 @@ class RegistryBindingTests(unittest.TestCase):
 
 
 class FreshWindowBindingTests(unittest.TestCase):
+    def test_menu_keys_are_consumed_and_old_profiles_fail_closed_explicitly(self):
+        from rm_client.ui.polar_app import PolarRMWindow
+
+        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {"POLAR_USER_DATA_ROOT": directory}):
+            window = PolarRMWindow()
+            try:
+                for timer in window.findChildren(QTimer):
+                    timer.stop()
+                window.home_visible = False
+                with patch.object(window, "open_event_command_menu") as event_menu, \
+                     patch.object(window, "set_escape_menu_visible") as escape_menu, \
+                     patch.object(window, "handle_control_key_event") as driving:
+                    window.keyPressEvent(QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_F7, Qt.KeyboardModifier.NoModifier))
+                    window.keyPressEvent(QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_Escape, Qt.KeyboardModifier.NoModifier))
+                    event_menu.assert_called_once()
+                    escape_menu.assert_called_once_with(True)
+                    driving.assert_not_called()
+                window.home_visible = True
+                previous = deepcopy(window.current_config_data())
+                previous_binds = dict(window.control.binds)
+                for key in ("F7", "Escape"):
+                    with self.subTest(key=key):
+                        legacy = deepcopy(previous)
+                        legacy["modules"]["RobotLink"]["settings"].update({"Bind W": key, "Mouse Sensitivity": 2.0})
+                        source_store = ClientConfigStore(Path(directory) / "legacy")
+                        source = source_store.save(key, legacy)
+                        original_bytes = source.read_bytes()
+                        profile = window.config_store.import_file(source, registry=window.registry)
+                        with patch.object(window, "toast") as toast:
+                            window.apply_config_data(window.config_store.load(profile), announce=False)
+                        self.assertEqual(window.current_config_data(), previous)
+                        self.assertEqual(window.control.binds, previous_binds)
+                        self.assertTrue(window.backend.safety.estop_active)
+                        self.assertEqual(source.read_bytes(), original_bytes)
+                        self.assertEqual(window.config_store.profile_path(profile).read_bytes(), original_bytes)
+                        message = toast.call_args.args[0]
+                        self.assertIn("配置加载失败", message)
+                        self.assertIn(key, message)
+                        self.assertIn("W 槽", message)
+                        self.assertIn("键盘设置", message)
+            finally:
+                window.close()
+                window.deleteLater()
+                APP.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
     def test_settings_save_then_new_window_startup_restores_swap_and_cycles(self):
         from rm_client.ui.polar_app import PolarRMWindow
 

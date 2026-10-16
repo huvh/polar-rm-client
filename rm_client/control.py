@@ -59,7 +59,7 @@ def validate_control_binds(binds: Mapping[str, str]) -> dict[str, str]:
             raise ValueError(f"无效控制绑定：{slot}")
         low = physical.strip().lower()
         if low in CONTROL_RESERVED_KEYS:
-            raise ValueError(f"{physical} 是界面 / 急停保留键")
+            raise ValueError(f"{slot} 槽的 {physical} 是界面 / 急停保留键，请在键盘设置中改绑为其他按键")
         if low not in allowed:
             raise ValueError(f"{physical} 不是可绑定按键")
         if low != "none":

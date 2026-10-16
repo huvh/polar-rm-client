@@ -49,81 +49,6 @@ function Assert-UnderPath([string]$Path, [string]$Root) {
     }
 }
 
-function Invoke-RequiredTest([string]$Python, [string]$Script, [string]$Label, [int]$TimeoutSeconds = 300, [string]$LogRoot = "") {
-    Write-Host "Running release test: $Label"
-    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
-    $startInfo.FileName = $Python
-    # Run the test under a tiny watchdog bootstrap. It prints the active test
-    # function before invocation and dumps every Python thread if progress
-    # stalls, turning intermittent native/Qt hangs into actionable logs.
-    $bootstrap = @'
-import faulthandler, os, runpy, sys, threading
-path = sys.argv[1]
-# Keep unittest's argv and import path identical to direct script execution.
-sys.argv = [path]
-sys.path.insert(0, os.path.dirname(os.path.abspath(path)))
-faulthandler.enable(all_threads=True)
-faulthandler.dump_traceback_later(120, repeat=True)
-target = os.path.normcase(os.path.abspath(path))
-done = threading.Event()
-def sample_active_test():
-    previous = None
-    while not done.wait(1.0):
-        names = set()
-        for frame in sys._current_frames().values():
-            while frame is not None:
-                name = frame.f_code.co_name
-                if name.startswith('test_') and os.path.normcase(os.path.abspath(frame.f_code.co_filename)) == target:
-                    names.add(name)
-                frame = frame.f_back
-        active = ', '.join(sorted(names))
-        if active and active != previous:
-            print('ACTIVE ' + active, flush=True)
-        previous = active
-# Per-call profiling perturbs GIL/deadman timing. Sample stacks instead of
-# instrumenting every call; never relax production timeouts to pass a test.
-watcher = threading.Thread(target=sample_active_test, daemon=True)
-watcher.start()
-try:
-    runpy.run_path(path, run_name="__main__")
-finally:
-    done.set()
-    watcher.join(0.2)
-faulthandler.cancel_dump_traceback_later()
-'@
-    $bootstrapPath = Join-Path $LogRoot "release_test_bootstrap.py"
-    New-Item -ItemType Directory -Force $LogRoot | Out-Null
-    [System.IO.File]::WriteAllText($bootstrapPath, $bootstrap, [System.Text.UTF8Encoding]::new($false))
-    $startInfo.Arguments = '"' + $bootstrapPath.Replace('"', '\"') + '" "' + $Script.Replace('"', '\"') + '"'
-    $startInfo.WorkingDirectory = Split-Path -Parent (Split-Path -Parent $Script)
-    $startInfo.UseShellExecute = $false
-    if (-not [string]::IsNullOrWhiteSpace($LogRoot)) {
-        $startInfo.RedirectStandardOutput = $true
-        $startInfo.RedirectStandardError = $true
-    }
-    $process = [System.Diagnostics.Process]::Start($startInfo)
-    if ($null -eq $process) { throw "$Label failed to start" }
-    $stdoutTask = if ($startInfo.RedirectStandardOutput) { $process.StandardOutput.ReadToEndAsync() } else { $null }
-    $stderrTask = if ($startInfo.RedirectStandardError) { $process.StandardError.ReadToEndAsync() } else { $null }
-    $timedOut = -not $process.WaitForExit($TimeoutSeconds * 1000)
-    if ($timedOut) {
-        # Stop the complete child tree (FFmpeg/OpenVINO helpers included) so a
-        # failed release gate can never leak into the next build attempt.
-        try { $process.Kill($true) } catch { try { $process.Kill() } catch {} }
-        $process.WaitForExit(10000) | Out-Null
-    }
-    if ($null -ne $stdoutTask) {
-        $stdout = $stdoutTask.GetAwaiter().GetResult()
-        $stderr = $stderrTask.GetAwaiter().GetResult()
-        [System.IO.File]::WriteAllText((Join-Path $LogRoot "$Label.stdout.log"), $stdout, [System.Text.UTF8Encoding]::new($false))
-        [System.IO.File]::WriteAllText((Join-Path $LogRoot "$Label.stderr.log"), $stderr, [System.Text.UTF8Encoding]::new($false))
-        if (-not [string]::IsNullOrWhiteSpace($stdout)) { Write-Host $stdout.TrimEnd() }
-        if (-not [string]::IsNullOrWhiteSpace($stderr)) { Write-Warning $stderr.TrimEnd() }
-    }
-    if ($timedOut) { throw "$Label timed out after $TimeoutSeconds seconds; see $LogRoot" }
-    if ($process.ExitCode -ne 0) { throw "$Label failed with exit code $($process.ExitCode)" }
-}
-
 function Invoke-PortablePreflight(
     [string]$Executable,
     [string]$ReportPath,
@@ -293,7 +218,6 @@ print('polar spec OK: %d segments, %d roles, %d warnings'
     $oldQtPlatform = $env:QT_QPA_PLATFORM
     $oldDisableCapture = $env:POLAR_DISABLE_LOCAL_CAPTURE
     $oldDisableMediaPreload = $env:POLAR_DISABLE_MEDIA_PRELOAD
-    $oldSkipExternalIntegration = $env:POLAR_SKIP_EXTERNAL_INTEGRATION
     $oldOpenCvThreads = $env:OPENCV_FOR_THREADS_NUM
     $oldOmpThreads = $env:OMP_NUM_THREADS
     $oldOmpLimit = $env:OMP_THREAD_LIMIT
@@ -304,7 +228,6 @@ print('polar spec OK: %d segments, %d roles, %d warnings'
         $env:POLAR_USER_DATA_ROOT = Join-Path $stageRoot "test-user-data"
         $env:POLAR_DISABLE_LOCAL_CAPTURE = "1"
         $env:POLAR_DISABLE_MEDIA_PRELOAD = "1"
-        $env:POLAR_SKIP_EXTERNAL_INTEGRATION = "1"
         $env:OPENCV_FOR_THREADS_NUM = "4"
         $env:OMP_NUM_THREADS = "4"
         $env:OMP_THREAD_LIMIT = "8"
@@ -313,37 +236,9 @@ print('polar spec OK: %d segments, %d roles, %d warnings'
         # setdefault(), which is too late when another imported module has
         # already selected the Windows platform plugin.
         $env:QT_QPA_PLATFORM = "offscreen"
-        Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\test_build_safety_regressions.py") "build_safety_regressions" 120 $testLogRoot
-        Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\test_transport_safety_regressions.py") "transport_safety_regressions" 120 $testLogRoot
-        Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\test_ui_state_regressions.py") "ui_state_regressions" 120 $testLogRoot
-        Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\test_inventory_text_crosshair_scale.py") "inventory_crosshair" 120 $testLogRoot
-        Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\test_cs2_crosshair_import.py") "cs2_crosshair" 120 $testLogRoot
-        Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\test_jello_settings_keyboard.py") "jello_settings_keyboard" 120 $testLogRoot
-        Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\backend_protocol_test.py") "backend_protocol" 240 $testLogRoot
-        Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\referee_integration_test.py") "referee_integration" 180 $testLogRoot
-        # Team StandardRobot++ 0x5A link: framing/CRC parity with the team's own
-        # reference implementation, HUD overlay + arbitration, a virtual-robot
-        # end-to-end loop, and a real-window startup path. These are the gates
-        # that prove the client can talk to the actual robots, so a release must
-        # never be cut without them.
-        Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\polar_spec_test.py") "polar_spec" 180 $testLogRoot
-        Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\robot_roles_test.py") "robot_roles" 180 $testLogRoot
-        Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\polar_link_test.py") "polar_link" 180 $testLogRoot
-        Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\polar_bridge_test.py") "polar_bridge" 240 $testLogRoot
-        Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\polar_integration_test.py") "polar_integration" 240 $testLogRoot
-        Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\polar_selftest_test.py") "polar_selftest" 240 $testLogRoot
-        Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\polar_startup_test.py") "polar_startup" 240 $testLogRoot
-        Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\api_freeze_test.py") "api_freeze" 180 $testLogRoot
-        Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\field_candidate_test.py") "field_candidate" 240 $testLogRoot
-        Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\dt7_alignment_test.py") "dt7_alignment" 180 $testLogRoot
-        $oldRequireVideoFixture = $env:POLAR_REQUIRE_VIDEO_FIXTURE
-        try {
-            $env:POLAR_REQUIRE_VIDEO_FIXTURE = "1"
-            Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\smoke_test.py") "ui_backend_regression" 300 $testLogRoot
-        } finally {
-            $env:POLAR_REQUIRE_VIDEO_FIXTURE = $oldRequireVideoFixture
-        }
-        Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\gpu_compositor_test.py") "gpu_compositor" 180 $testLogRoot
+        # The Python registry owns the complete suite list, prerequisite
+        # categories and PASS/SKIP/INCOMPLETE/FAIL interpretation. Exit zero
+        # from an individual script is insufficient evidence for a release.
         # QOpenGLWidget runtime smokes require a real desktop/WGL surface. A
         # caller's inherited offscreen setting would otherwise create zero
         # native draw calls and produce a misleading release failure.
@@ -353,8 +248,20 @@ print('polar spec OK: %d segments, %d roles, %d warnings'
         # release gate does not depend on the offscreen plugin supporting GL.
         & $python -c "from rm_client.preflight import _qt_opengl_context; ok, detail = _qt_opengl_context(); print(detail); raise SystemExit(0 if ok else 1)"
         if ($LASTEXITCODE -ne 0) { throw "desktop Qt/OpenGL preflight failed" }
-        Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\gpu_renderer_runtime_smoke.py") "gpu_renderer_runtime" 180 $testLogRoot
-        Invoke-RequiredTest $python (Join-Path $sourceRoot "tests\startup_gpu_runtime_smoke.py") "startup_gpu_runtime" 180 $testLogRoot
+        & $python (Join-Path $sourceRoot "tools\verify_all.py") --profile release --desktop `
+            --timeout 300 --log-dir $testLogRoot --json (Join-Path $testLogRoot "release-tests.json")
+        if ($LASTEXITCODE -ne 0) {
+            throw "Release registry contains failed, skipped, or incomplete checks; see $testLogRoot"
+        }
+        $testReportPath = Join-Path $testLogRoot "release-tests.json"
+        if (-not (Test-Path -LiteralPath $testReportPath -PathType Leaf)) {
+            throw "Release registry did not produce its evidence report"
+        }
+        $testReport = Get-Content -LiteralPath $testReportPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        if ($testReport.passed -ne $true -or $testReport.results.Count -eq 0 -or
+            @($testReport.results | Where-Object { $_.status -ne "PASS" }).Count -ne 0) {
+            throw "Release registry report is incomplete or not fully passing"
+        }
     }
     finally {
         $env:PYTHONPATH = $oldPythonPath
@@ -362,7 +269,6 @@ print('polar spec OK: %d segments, %d roles, %d warnings'
         $env:POLAR_USER_DATA_ROOT = $oldUserData
         $env:POLAR_DISABLE_LOCAL_CAPTURE = $oldDisableCapture
         $env:POLAR_DISABLE_MEDIA_PRELOAD = $oldDisableMediaPreload
-        $env:POLAR_SKIP_EXTERNAL_INTEGRATION = $oldSkipExternalIntegration
         $env:OPENCV_FOR_THREADS_NUM = $oldOpenCvThreads
         $env:OMP_NUM_THREADS = $oldOmpThreads
         $env:OMP_THREAD_LIMIT = $oldOmpLimit
@@ -532,17 +438,11 @@ print(json.dumps({'default_profile': get_profile().profile_id, 'protocol_version
             default_json_sha256 = (Get-FileHash (Join-Path $portable "defaults\default.json") -Algorithm SHA256).Hash
         }
         tests = [ordered]@{
-            backend_protocol = "PASS"
-            referee_integration = "PASS"
-            field_candidate = "PASS"
-            dt7_alignment = "PASS"
-            ui_backend_regression = "PASS"
-            inventory_crosshair = "PASS"
-            cs2_crosshair = "PASS"
-            jello_settings_keyboard = "PASS"
-            gpu_compositor = "PASS"
-            gpu_renderer_runtime = "PASS"
-            startup_gpu_runtime = "PASS"
+            registry_profile = $testReport.profile
+            registry_counts = $testReport.counts
+            registry_results = $testReport.results
+            not_selected = $testReport.not_selected
+            evidence_scope = $testReport.evidence_scope
             portable_preflight = "PENDING"
             clean_windows = "FIELD VALIDATION REQUIRED"
         }

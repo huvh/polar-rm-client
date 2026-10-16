@@ -33,13 +33,18 @@ CONTROL_BIND_OPTIONS = [
 ]
 # These keys are consumed by the window before control dispatch. Do not offer
 # a binding which can never reach its slot (F12 must remain the E-stop).
-CONTROL_RESERVED_KEYS = frozenset({"rightshift", "tab", "f8", "f9", "f11", "f12"})
-CONTROL_BIND_OPTIONS = [key for key in CONTROL_BIND_OPTIONS if key.lower() not in CONTROL_RESERVED_KEYS]
+CONTROL_RESERVED_KEYS = frozenset({"rightshift", "tab", "escape", "f7", "f8", "f9", "f11", "f12"})
+# F7 opens the event-command menu before driving dispatch, but certain module
+# shortcuts run earlier. Preserve their existing binding policy separately.
+MODULE_RESERVED_KEYS = CONTROL_RESERVED_KEYS - {"f7"}
 # Module shortcuts use the window's printable-key dispatcher, not the limited
 # driver-slot enum. Keep these distinct so a visual keyboard cannot invent an
 # unsupported physical-to-firmware control mapping.
-MODULE_BIND_OPTIONS = list(dict.fromkeys([*CONTROL_BIND_OPTIONS, *list("ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
+MODULE_BIND_OPTIONS = [key for key in CONTROL_BIND_OPTIONS
+                       if key.lower() not in MODULE_RESERVED_KEYS - {"escape"}]
+MODULE_BIND_OPTIONS = list(dict.fromkeys([*MODULE_BIND_OPTIONS, *list("ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
                                          *list("0123456789"), "`", "-", "=", "[", "]", "\\", ";", "'", ",", ".", "/", "Alt"]))
+CONTROL_BIND_OPTIONS = [key for key in CONTROL_BIND_OPTIONS if key.lower() not in CONTROL_RESERVED_KEYS]
 
 PRIMARY_GUI_MODE = "JelloSigma"
 
