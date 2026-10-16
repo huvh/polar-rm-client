@@ -35,6 +35,7 @@ from ..scenarios import SCENARIOS
 from . import cc_link
 from . import dt7_link
 from .dt7_worker import AsyncDt7KeyMouseLink
+from .port_admission import PortReservation, first_port_conflict
 from .device_egress_settings import (
     CustomControllerSettings, DeviceEgressSettings, EgressPermissions,
 )
@@ -657,10 +658,15 @@ class BackendManager:
         if config.forward and not config.mock_output:
             used.add(port_key(config.tx_port))
         if config.enabled:
-            for label, port in owners:
-                if port.strip().lower() == "auto" or (explicit_port(port) and port_key(port) in used):
-                    conflict = f"{label} port may conflict; select distinct explicit ports or Stub"
-                    break
+            # Keep alias observations lazy: the first conflict stops evaluation,
+            # and disabled reception must not inspect owner aliases at all.
+            reservations = (
+                PortReservation(label, unresolved_auto=True)
+                if port.strip().lower() == "auto" else
+                PortReservation(label, port_key(port) if explicit_port(port) else None)
+                for label, port in owners
+            )
+            conflict = first_port_conflict(used, reservations)
         if conflict:
             config = replace(config, enabled=False)
             authorized = False

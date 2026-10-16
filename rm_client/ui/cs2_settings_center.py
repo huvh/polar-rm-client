@@ -22,6 +22,7 @@ from ..model import CONTROL_SLOT_ORDER, build_default_registry, Setting
 from .jello_locale import module_label, option_label, setting_label
 from .jello_widgets import JelloDialog, JelloCheckBox as QCheckBox, JelloComboBox as QComboBox, apply_jello_widgets, jello_font, use_jello_font_book
 from .settings_preparation import SettingsBuildQueue
+from .preference_draft import PreferenceDraft
 # Keep historical imports working while both dialogs use shared services.
 from .settings_application import (
     PAGES, settings_specs, preference_capabilities, validate_draft, apply_registry_draft,
@@ -113,7 +114,7 @@ class RegistrySettingsPage(QScrollArea):
         self.host, self.page, self.defaults = host, page, defaults
         self.controls, self.toggle_controls, self.module_bind_controls = {}, {}, {}
         self.audio_controls = {}
-        self._baseline, self._forced_dirty = {}, set()
+        self._draft = PreferenceDraft()
         self.search_rows, self.groups = [], []
         self.setWidgetResizable(True)
         self.content = QWidget(); self.setWidget(self.content)
@@ -135,7 +136,7 @@ class RegistrySettingsPage(QScrollArea):
         else:
             self.loading.hide()
             self.content.setEnabled(True)
-            self._baseline = self._draft_values()
+            self._draft.accept(self._draft_values())
             self.refresh_clean_draft()
         self.filter(getattr(self, "_query", ""))
 
@@ -259,12 +260,17 @@ class RegistrySettingsPage(QScrollArea):
     def _draft_values(self):
         return {key: self._widget_value(widget) for key, widget in self._draft_widgets().items()}
 
+    @property
+    def _baseline(self):
+        """Read-only compatibility view for settings diagnostics."""
+        return self._draft.baseline
+
     def refresh_clean_draft(self):
         """Follow live changes only where this page has no pending user edit."""
         if not self.builder.ready:
             return
         for key, widget in self._draft_widgets().items():
-            if key in self._forced_dirty or self._widget_value(widget) != self._baseline[key]:
+            if self._draft.is_pending(key, lambda: self._widget_value(widget)):
                 continue
             kind, name, *setting = key
             if kind == "audio":
@@ -284,14 +290,13 @@ class RegistrySettingsPage(QScrollArea):
                 else:
                     value = module.enabled if kind == "toggle" else module.keybind
             self._set_widget_value(widget, value)
-            self._baseline[key] = self._widget_value(widget)
+            self._draft.follow_live(key, self._widget_value(widget))
 
     def apply_draft(self):
         if not self.builder.ready:
             raise ValueError("请等待当前页完成加载")
         values = self._draft_values()
-        edits = {key: value for key, value in values.items()
-                 if key in self._forced_dirty or value != self._baseline[key]}
+        edits = self._draft.edits(values)
         draft = {key[1:]: value for key, value in edits.items() if key[0] == "setting"}
         audio_edits = {key[1]: value for key, value in edits.items() if key[0] == "audio"}
         audio = None
@@ -306,15 +311,14 @@ class RegistrySettingsPage(QScrollArea):
                              {key[1]: value for key, value in edits.items() if key[0] == "toggle"},
                              {key[1]: value for key, value in edits.items() if key[0] == "bind"},
                              audio_preferences=audio)
-        self._baseline = values
-        self._forced_dirty.clear()
+        self._draft.accept(values)
         self.refresh_clean_draft()
 
     def reset_draft(self):
         if not self.builder.ready:
             return
         # Reset is an explicit edit even if a default equals the old snapshot.
-        self._forced_dirty.update(self._draft_widgets())
+        self._draft.force_edits(self._draft_widgets())
         if self.audio_controls:
             self.audio_controls["device_id"].setCurrentIndex(0)
             self.audio_controls["master_volume"].spin.setValue(100)

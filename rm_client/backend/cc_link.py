@@ -57,6 +57,7 @@ from typing import Any, Callable
 
 from ..protocol import crc8, crc16
 from .resource_close import close_resource
+from .writer_thread import WriterThread
 
 # --- 命令码（《2026 通信协议》表 1-5 / 表 1-43） ---
 CC_CMD_ROBOT_INTERACT = 0x0302     # 自定义控制器 <-> 机器人，30 字节，<=30Hz，图传链路
@@ -433,8 +434,7 @@ class AsyncCustomControllerLink:
         self._link = CustomControllerLink(port=port, baudrate=baudrate,
             max_hz=max_hz, mock_output=mock_output,
             write_bytes=self._write_frame, time_fn=time_fn)
-        self._thread = None
-        self._starting = False
+        self._worker = WriterThread(self._condition)
         self.startup_failed = False
         admission_reserved = False
         try:
@@ -443,14 +443,9 @@ class AsyncCustomControllerLink:
             with self._condition:
                 if self._closing:
                     return  # The retention callback already cancelled this owner.
-                self._starting = True
+                self._worker.reserve()
                 admission_reserved = True
-            try:
-                self._thread = threading.Thread(target=self._run, name="cc-writer", daemon=True)
-                self._thread.start()
-            finally:
-                with self._condition:
-                    self._starting = False
+            self._worker.start_reserved(self._run, "cc-writer")
         except BaseException as exc:
             self.startup_failed = True
             self.faulted = True
@@ -462,7 +457,7 @@ class AsyncCustomControllerLink:
                     # retry, preserving its native-close diagnostic.
                     if not self._closing:
                         self.last_error = self.fault_reason = "CC writer admission failed; close required"
-                    never_admitted = self._thread is None or self._thread.ident is None
+                    never_admitted = self._worker.never_admitted
                     if not self._closing or (admission_reserved and never_admitted):
                         self.close()
             except BaseException:
@@ -474,8 +469,13 @@ class AsyncCustomControllerLink:
             raise
 
     @property
+    def _thread(self):
+        """Compatibility view of the sole retained worker (never a second owner)."""
+        return self._worker.thread
+
+    @property
     def worker_alive(self) -> bool:
-        return self._thread is not None and self._thread.is_alive()
+        return self._worker.alive
 
     @property
     def closed(self) -> bool:
@@ -567,7 +567,6 @@ class AsyncCustomControllerLink:
 
     def close(self):
         """Invalidate motion and request best-effort neutral; never wait on IO."""
-        import threading
         with self._condition:
             if not self._closing:
                 self._closing = True
@@ -577,25 +576,19 @@ class AsyncCustomControllerLink:
                 if not self.wire_neutral and not self.release_pending:
                     self._request_release()
                 self._condition.notify()
-            if not self._starting and not self.closed and not self.worker_alive:
+            if not self._worker.starting and not self.closed and not self.worker_alive:
                 # A rejected writer can still own a native handle; only a
                 # background worker may drain its barrier and release it.
-                never_admitted = self._thread is None or self._thread.ident is None
+                never_admitted = self._worker.never_admitted
                 # A rejected close-retry thread does not erase an earlier
                 # native-close failure. Retry that finalizer, not the drain.
                 needs_drain = never_admitted and not self._close_failed
                 target = self._run if needs_drain else self._finalize_close
-                self._thread = threading.Thread(
-                    target=target, name="cc-close-retry", daemon=True)
-                self._thread.start()
+                self._worker.start(target, "cc-close-retry")
 
     def wait_closed(self, timeout=2.5):
         """Background/test cleanup only; None explicitly waits without a deadline."""
-        import threading
-        thread = self._thread
-        if (thread is not None and thread.ident is not None
-                and thread is not threading.current_thread()):
-            thread.join(None if timeout is None else max(0.0, float(timeout)))
+        self._worker.join(timeout)
         return self.closed
 
     def _valid_active(self):

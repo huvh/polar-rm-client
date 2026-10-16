@@ -40,7 +40,8 @@ def labels(result):
 
 class KeyboardRoutingDifferentialTests(unittest.TestCase):
     def assert_same(self, case, keys, *, fail_at=None):
-        expected = run_case(case, keys, baseline=True, fail_at=fail_at)
+        expected = run_case(case, keys, baseline=True, fail_at=fail_at,
+                            correct_economy_repeat_release=True)
         actual = run_case(case, keys, fail_at=fail_at)
         self.assertEqual(actual, expected)
         if fail_at is None:

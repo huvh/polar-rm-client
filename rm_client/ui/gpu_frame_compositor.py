@@ -231,6 +231,20 @@ class _GlCleanupFailure(RuntimeError):
         ))
 
 
+class _GlProgramBuildFailure(_GlCleanupFailure):
+    """Transfer a failed factory candidate to the compositor's retirement slot.
+
+    The native wrapper exists before compilation can complete. The exception
+    carries it across the existing classmethod factory boundary without global
+    state or mutating the original driver exception. Diagnostics unwrap the
+    original failure through the same structured operation-error contract.
+    """
+
+    def __init__(self, program: QOpenGLShaderProgram, error: Exception) -> None:
+        self.program = program
+        super().__init__((("", error),))
+
+
 def _attempt_gl_cleanup(
     actions: tuple[tuple[str, Callable[[], object]], ...],
 ) -> tuple[bool, tuple[tuple[str, Exception], ...]]:
@@ -286,6 +300,7 @@ class GpuFrameCompositor:
 
     def __init__(self) -> None:
         self.available = False
+        self._release_pending = False
         self.last_error = ""
         self.diagnostics = RenderFaultDiagnostics()
         self.last_failed_frame: FailedFrameRecovery | None = None
@@ -397,6 +412,17 @@ class GpuFrameCompositor:
     def initialize(self) -> bool:
         if self.available:
             return True
+        # Unavailable does not mean unowned: resize failure and incomplete
+        # retirement can leave programs or native buffers alive. Never replace
+        # them until the previous lifetime has independently finished release.
+        if self._release_pending or any(program is not None for program in (
+            self.present_program, self.blur_program, self.jello_blur_program, self.glass_program,
+        )):
+            def retire() -> bool:
+                self.release()
+                return True
+            if not self._run_pass("initialize.retire", retire):
+                return False
         accepted = self._run_pass(
             "initialize", self._initialize_resources, on_reject=(("resources", self.release),),
         )
@@ -405,25 +431,56 @@ class GpuFrameCompositor:
         return accepted
 
     def _initialize_resources(self) -> bool:
-        self.present_program = self._build_present_program()
-        self.blur_program = self._build_blur_program()
-        self.jello_blur_program = self._build_jello_blur_program()
-        self.glass_program = self._build_lens_program()
+        self._install_program("present_program", self._build_present_program)
+        self._install_program("blur_program", self._build_blur_program)
+        self._install_program("jello_blur_program", self._build_jello_blur_program)
+        self._install_program("glass_program", self._build_lens_program)
         self._uniform_cache.clear()
         if not self.vertex_array.create():
             raise RuntimeError("GPU compositor VAO creation failed")
         if not self.vertex_buffer.create():
             raise RuntimeError("GPU compositor vertex buffer creation failed")
-        self.vertex_array.bind()
-        if self.vertex_buffer.bind() is False:
+        if not self._initialize_quad_storage():
             return False
-        vertices = struct.pack("8f", -1.0, -1.0, 1.0, -1.0, -1.0, 1.0, 1.0, 1.0)
-        self.vertex_buffer.allocate(vertices, len(vertices))
-        self.vertex_buffer.release()
-        self.vertex_array.release()
         self.available = True
         self.last_error = ""
         return True
+
+    def _install_program(self, name: str, build: Callable[[], QOpenGLShaderProgram]) -> None:
+        """Publish both successful and failed native candidates to one owner."""
+        try:
+            program = build()
+        except _GlProgramBuildFailure as failure:
+            setattr(self, name, failure.program)
+            raise
+        setattr(self, name, program)
+
+    def _initialize_quad_storage(self) -> bool:
+        """Unbind setup state before lifetime retirement, even on partial bind.
+
+        Bindings belong to this pass; created native handles belong to release().
+        Preserve the setup cause plus every independent unbind failure instead
+        of allowing a finally-block exception to replace the initiating defect.
+        """
+        failure = None
+        accepted = False
+        try:
+            self.vertex_array.bind()
+            if self.vertex_buffer.bind() is not False:
+                vertices = struct.pack("8f", -1.0, -1.0, 1.0, -1.0, -1.0, 1.0, 1.0, 1.0)
+                self.vertex_buffer.allocate(vertices, len(vertices))
+                accepted = True
+        except Exception as error:
+            failure = error
+        finally:
+            cleanup_accepted, cleanup = _attempt_gl_cleanup((
+                ("setup.cleanup.buffer", self.vertex_buffer.release),
+                ("setup.cleanup.array", self.vertex_array.release),
+            ))
+        errors = (("", failure), *cleanup) if failure is not None else cleanup
+        if errors:
+            raise _GlCleanupFailure(errors) from (failure or errors[0][1])
+        return accepted and cleanup_accepted
 
     def ensure_size(self, width: int, height: int, device_pixel_ratio: float) -> bool:
         if not self.available:
@@ -1521,12 +1578,17 @@ class GpuFrameCompositor:
     @staticmethod
     def _compile(vertex: str, fragment: str) -> QOpenGLShaderProgram:
         program = QOpenGLShaderProgram()
-        if not program.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Vertex, vertex):
-            raise RuntimeError(program.log())
-        if not program.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Fragment, fragment):
-            raise RuntimeError(program.log())
-        if not program.link():
-            raise RuntimeError(program.log())
+        try:
+            if not program.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Vertex, vertex):
+                raise RuntimeError(program.log())
+            if not program.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Fragment, fragment):
+                raise RuntimeError(program.log())
+            if not program.link():
+                raise RuntimeError(program.log())
+        except Exception as error:
+            # The factory cannot return this candidate, but the initializer
+            # must retain it before independently retiring every program.
+            raise _GlProgramBuildFailure(program, error) from error
         return program
 
     @staticmethod
@@ -1988,6 +2050,7 @@ class GpuFrameCompositor:
             )),
         )
         _, failures = _attempt_gl_cleanup(actions)
+        self._release_pending = bool(failures)
         self._uniform_cache.clear()
         if failures:
             raise _GlCleanupFailure(failures) from failures[0][1]

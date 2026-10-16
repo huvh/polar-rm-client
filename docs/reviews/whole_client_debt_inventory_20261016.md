@@ -436,3 +436,63 @@ These results do not replace the parent's new fixed-source integrated run.
 The prior 268 PASS / 12 SKIP / 3 INCOMPLETE result is a separate reported baseline,
 not a result of this lane. Hardware, native desktop/GPU and packaging limits
 remain unchanged; no full-clean claim is made.
+
+### Independent startup extraction review
+
+The subsequent startup candidate `0167a3c` failed independent comparison against
+actual constructor ASTs at the fixed production base: 204 of 208 lookup/call/
+boolean/argument/failure-prefix comparisons differed. Binding later callbacks
+before the first effect moved attribute-lookup failure prefixes and could retain
+stale collaborators; feedback preloading also observed its collaborators before
+the original registry query. These are synthetic extraction-equivalence cases,
+not a claim about normal-user crashes or physical devices.
+
+Correction `607782c`, independently checked at documentation tip `c5b9633`,
+preserves all 208 comparisons with no differences. A detached worktree also
+passes 106 focused startup, real-window construction, assembly, asynchronous
+lifecycle, delayed constructor cleanup, constructor failure, failed launch,
+launch-abort and public-API test methods. The independent probe, red/green output
+and focused log are in
+`../evidence/clean-code-20261016/independent-startup-audit/`. The probe takes a
+checkout path and compares its constructor region to `fa2c2b8` using local Git;
+it is a review reproducer, not an installed test-suite dependency.
+
+This accepts the named callback workflow's ordered startup responsibility and
+lazy scenario guard. It does not unify window service lifetimes, extend abort
+coverage to earlier partial constructors, or certify native OpenGL/audio/device
+behavior. Existing unavailable-audio/offscreen warnings remain in the raw log.
+
+### Explicit policies for the three new pure owners
+
+The follow-on gate policy is deliberately root-specific. Existing
+`referee_profiles` and `economy_values` restrictions remain unchanged. All five
+protected roots reject declared backend, PySide2/6, PyQt5/6 and Tkinter imports,
+including dependencies reached through local helpers, deferred scopes and
+TYPE_CHECKING scopes. Additional forbidden targets are:
+
+| Protected root | Additional forbidden prefixes |
+| --- | --- |
+| `rm_client.referee_profiles` | `rm_client.ui` |
+| `rm_client.economy_values` | `rm_client.ui` |
+| `rm_client.crosshair_profile` | `rm_client.ui`, `rm_client.model`, `rm_client.cs2_crosshair`, `rm_client.serial_ports` |
+| `rm_client.ui.preference_draft` | `rm_client.model` |
+| `rm_client.ui.polar.startup_activation` | `rm_client.ui.polar_app`, `rm_client.config_store`, `rm_client.configuration` |
+
+The two UI-hosted pure owners may import other pure UI helpers. Directory
+placement alone is not a dependency violation. The crosshair owner also joins
+the existing lower-layer UI-import rule. These policies encode the reviewed
+codec/facade, draft/live-model and startup/runtime-adapter boundaries; they do
+not declare every unlisted module pure or prohibit every possible side effect.
+
+Test-first checkpoint `31463b2` exposes 348 failing source mutations across the
+three roots, import/from forms, direct/helper paths and eager/deferred/type-only
+scopes. The corrected gate passes all 50 quality methods, the separate metric
+negative-control test and the real static gate, without modifying a budget or
+allowance. Positive controls explicitly allow pure UI siblings and unrelated
+runtime adapters. The prior dynamic-import/implicit-initializer limitations
+still apply. Runtime import-blocker and behavioral tests remain necessary,
+particularly for behavior that is not represented by a declared import.
+
+Raw red/green and separately identified candidate-tree checks are retained under
+`../evidence/clean-code-20261016/pure-owner-policies/`. Passing separate candidate
+static reports is not a combined integration result or native qualification.

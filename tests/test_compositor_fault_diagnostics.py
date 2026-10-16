@@ -203,6 +203,10 @@ class CompositorFaultTests(unittest.TestCase):
             except ValueError as cause:
                 raise TypeError("shader layout") from cause
         self.c.available = False
+        # This case begins a new shader lifetime. Retained programs now
+        # correctly take the retirement admission path before any builder.
+        for name in ("present_program", "blur_program", "jello_blur_program", "glass_program"):
+            setattr(self.c, name, None)
         self.c._build_present_program = fail
         self.c.release = Mock(side_effect=OSError("resource cleanup"))
         self.assertFalse(self.c.initialize())
@@ -282,6 +286,10 @@ class CompositorFaultTests(unittest.TestCase):
 
     def test_initialize_retains_shader_root_and_independent_release_errors(self):
         self.c.available = False
+        # This case begins a new shader lifetime. Retained programs now
+        # correctly take the retirement admission path before any builder.
+        for name in ("present_program", "blur_program", "jello_blur_program", "glass_program"):
+            setattr(self.c, name, None)
         self.c._build_present_program = Mock(side_effect=TypeError("shader root"))
         self.c.vertex_buffer.destroy.side_effect = OSError("buffer destroy")
         self.assertFalse(self.c.initialize())

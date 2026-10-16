@@ -304,7 +304,7 @@ class Harness(current.InputDispatchMixin):
         }
 
 
-def run_case(case: Case, keys: list[Key] | tuple[Key, ...], *, baseline=False, fail_at=None):
+def run_case(case: Case, keys: list[Key] | tuple[Key, ...], *, baseline=False, fail_at=None, correct_economy_repeat_release=False):
     host = Harness(case, fail_at)
     accepted, error = [], None
     implementation = BASELINE if baseline else current.InputDispatchMixin
@@ -312,10 +312,18 @@ def run_case(case: Case, keys: list[Key] | tuple[Key, ...], *, baseline=False, f
         for key in keys:
             event = Event(key, host)
             method = implementation.keyPressEvent if key.phase == "press" else implementation.keyReleaseEvent
+            finish_hold = host.finish_economy_hold
+            # Explicitly corrected historical behavior, without replacing the
+            # frozen route or suppressing any earlier modal-owner observations.
+            if (baseline and correct_economy_repeat_release and key.phase == "release"
+                    and key.repeat and key.code in (Qt.Key.Key_Return, Qt.Key.Key_Enter)):
+                host.finish_economy_hold = lambda: None
             try:
                 method(host, event)
             except Exception as exc:
                 error = (type(exc).__name__, str(exc))
+            finally:
+                host.finish_economy_hold = finish_hold
             accepted.append(event.accepted)
             if error is not None: break
     return host.trace, host.snapshot(), accepted, error

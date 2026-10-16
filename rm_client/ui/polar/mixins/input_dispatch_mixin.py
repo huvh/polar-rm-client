@@ -1186,7 +1186,10 @@ class InputDispatchMixin:
             event.accept()
             return
         if self.economy_visible and event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
-            self.finish_economy_hold()
+            # Auto-repeat may include synthetic key-up events while the physical
+            # key is still held. Only its real release completes confirmation.
+            if not event.isAutoRepeat():
+                self.finish_economy_hold()
             return
         if self.overlay_coordinator.blocks_combat_input:
             event.accept()

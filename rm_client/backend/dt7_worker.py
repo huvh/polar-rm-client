@@ -11,6 +11,7 @@ import copy
 import time
 from .dt7_link import Dt7KeyMouseLink
 from .resource_close import close_resource
+from .writer_thread import WriterThread
 
 
 class _WorkerSafety:
@@ -83,8 +84,7 @@ class AsyncDt7KeyMouseLink:
         self.last_send_rate_limited = False
         self._last_error = ""
         self._link.safety = _WorkerSafety(self)
-        self._thread = None
-        self._starting = False
+        self._worker = WriterThread(self._cv)
         self.startup_failed = False
         admission_reserved = False
         try:
@@ -93,14 +93,9 @@ class AsyncDt7KeyMouseLink:
             with self._cv:
                 if self._closing:
                     return  # The retention callback already cancelled this owner.
-                self._starting = True
+                self._worker.reserve()
                 admission_reserved = True
-            try:
-                self._thread = threading.Thread(target=self._run, name="dt7-writer", daemon=True)
-                self._thread.start()
-            finally:
-                with self._cv:
-                    self._starting = False
+            self._worker.start_reserved(self._run, "dt7-writer")
         except BaseException as exc:
             self.startup_failed = True
             # A defensive start wrapper may admit the real worker then raise.
@@ -113,7 +108,7 @@ class AsyncDt7KeyMouseLink:
                     # the admission error must not silently run it again.
                     if not self._closing:
                         self._last_error = "DT7 writer admission failed; close required"
-                    never_admitted = self._thread is None or self._thread.ident is None
+                    never_admitted = self._worker.never_admitted
                     if not self._closing or (admission_reserved and never_admitted):
                         self.close()
             except BaseException:
@@ -398,22 +393,25 @@ class AsyncDt7KeyMouseLink:
                     self._generation += 1
                     self._latest = None
                     self._cv.notify_all()
-            if not self._starting and not self.closed and not self.worker_alive:
+            if not self._worker.starting and not self.closed and not self.worker_alive:
                 # An unadmitted owner may still hold an injected native link
                 # or a neutral barrier. Run its normal drain off the caller.
-                never_admitted = self._thread is None or self._thread.ident is None
+                never_admitted = self._worker.never_admitted
                 target = self._run if never_admitted else self._finalize_close
-                self._thread = threading.Thread(
-                    target=target, name="dt7-close-retry", daemon=True)
-                self._thread.start()
+                self._worker.start(target, "dt7-close-retry")
 
     @property
     def closed(self):
         return self._closed.is_set()
 
     @property
+    def _thread(self):
+        """Compatibility view of the sole retained worker (never a second owner)."""
+        return self._worker.thread
+
+    @property
     def worker_alive(self):
-        return self._thread is not None and self._thread.is_alive()
+        return self._worker.alive
 
     @property
     def port_handoff_ready(self):
@@ -427,8 +425,5 @@ class AsyncDt7KeyMouseLink:
 
     def wait_closed(self, timeout=2.0):
         """Background/test cleanup only; None explicitly waits without a deadline."""
-        thread = self._thread
-        if (thread is not None and thread.ident is not None
-                and thread is not threading.current_thread()):
-            thread.join(None if timeout is None else max(0.0, float(timeout)))
+        self._worker.join(timeout)
         return self.closed

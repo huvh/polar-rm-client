@@ -39,7 +39,7 @@ from PySide6.QtWidgets import QApplication, QFileDialog, QInputDialog, QMessageB
 
 from ..backend.dt7_link import status_token as _dt7_status_token
 from ..calibration import CameraCalibrationManager
-from ..emergency_actions import request_control_lock
+from ..emergency_actions import request_control_lock, request_focus_loss
 from ..auto_spin import ProjectileHitSpinController
 from ..combat_hud import CombatHudAnimator, VALID_COMBAT_HUD_VISUALS, ring_end
 from ..combat_events import CombatEvent, OfficialMatchFeed, VisionKillDetector
@@ -301,6 +301,9 @@ from .polar.pointer_interaction import PointerInteraction
 from .polar.panel_layouts import create_panel_layouts
 from .polar.qt_application import _abort_failed_launch, launch_qt_application
 from .polar.startup_navigation import StartupNavigation, StartupNavigationField
+from .polar.startup_activation import (
+    StartupProfilePorts, StartupPresentationPorts, StartupScenarioPorts, activate_startup_session,
+)
 from .polar.gpu_warmup import GpuWarmupQueue, GpuWarmupField
 from .polar.camera_activation import CameraActivation, CameraActivationField
 from ..configuration.profile_saves import ProfileSaveState
@@ -771,25 +774,43 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         self.student_notice_adapter = StudentNoticeAdapter(self.match_chat)
         self._gpu_warm_pending = True
 
-        self.sync_quick_action_wheel_settings()
-        self.apply_match_mode(self.match_mode_manager.current.key, close_home=False, announce=False)
-        self.apply_robot_profile(self.current_robot_profile_key(), close_home=False, announce=False)
-        self.refresh_config_profiles()
-        self.refresh_wallpaper_profiles()
-        self.refresh_custom_ui_sound_options()
-        self.config_store.ensure_default(self.current_config_data())
-        self.load_startup_config()
-        self.setWindowTitle(ui_text("POLAR-RM Custom Client", chinese_enabled(self.registry)))
-        elimination_fx = self.registry.get("EliminationFX")
-        self.kill_fx.preload_preset_sounds(
-            self.setting_mode(elimination_fx, "Preset", "Default Scrolling")
+        def preload_startup_feedback() -> None:
+            # Keep registry observation before feedback-service lookup, including
+            # partial effects if either collaborator raises during startup.
+            elimination_fx = self.registry.get("EliminationFX")
+            self.kill_fx.preload_preset_sounds(
+                self.setting_mode(elimination_fx, "Preset", "Default Scrolling"))
+
+        activate_startup_session(
+            StartupProfilePorts(
+                sync_wheel=lambda: self.sync_quick_action_wheel_settings(),
+                apply_match=lambda: self.apply_match_mode(
+                    self.match_mode_manager.current.key, close_home=False, announce=False),
+                apply_robot=lambda: self.apply_robot_profile(
+                    self.current_robot_profile_key(), close_home=False, announce=False),
+                refresh_profiles=lambda: self.refresh_config_profiles(),
+                refresh_wallpapers=lambda: self.refresh_wallpaper_profiles(),
+                refresh_sounds=lambda: self.refresh_custom_ui_sound_options(),
+                ensure_default=lambda: self.config_store.ensure_default(self.current_config_data()),
+                load_saved=lambda: self.load_startup_config(),
+            ),
+            StartupPresentationPorts(
+                update_title=lambda: self.setWindowTitle(
+                    ui_text("POLAR-RM Custom Client", chinese_enabled(self.registry))),
+                preload_feedback=preload_startup_feedback,
+                apply_autostart=lambda: self._startup_navigation.apply_autostart(
+                    os.environ.get("POLAR_AUTOSTART", "")),
+                sync_mode=lambda: self.sync_mode_setting(),
+                announce_ready=lambda: self.toast("ClickGUI 已就绪：Jello Sigma"),
+            ),
+            StartupScenarioPorts(
+                launcher_visible=lambda: self.home_visible,
+                configuration_pending=lambda: self.configuration_change_pending,
+                request=lambda: self.backend.request_scenario(
+                    self.scenario_manager.current.key, registry=self.registry),
+                capture=lambda generation: self.capture_pending_scenario_configuration(generation),
+            ),
         )
-        self._startup_navigation.apply_autostart(os.environ.get("POLAR_AUTOSTART", ""))
-        self.sync_mode_setting()
-        if not self.home_visible and not self.configuration_change_pending:
-            generation = self.backend.request_scenario(self.scenario_manager.current.key, registry=self.registry)
-            self.capture_pending_scenario_configuration(generation)
-        self.toast("ClickGUI 已就绪：Jello Sigma")
 
         from .window_shortcuts import WindowShortcuts
         WindowShortcuts(self)  # QObject parent owns the filter for this window.
@@ -3296,13 +3317,18 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
     def focusOutEvent(self, event) -> None:
         """A lost foreground window is an unconditional control epoch break."""
 
-        self.student_ui.dragging = ""
-        try:
+        def release_inputs() -> None:
             self.control.mock_output = bool(self.backend.mqtt.mock_output)
             self.control.release_all(self.state, self.registry)
-            self.backend.mqtt.publish_estop_zero()
-            self.backend.lock_control("window focus lost")
-            self.control.clear_pending()
+
+        try:
+            result = request_focus_loss(
+                self.backend, self.control, release_inputs,
+                lambda: self.backend.mqtt.publish_estop_zero(),
+            )
+            self.student_ui.dragging = ""
+            if result.failures:
+                self.toast(result.message, kind="warning")
         finally:
             super().focusOutEvent(event)
     # ------------------------------------------------------------------

@@ -86,3 +86,40 @@ def request_control_lock(backend: ControlLock, inputs: PendingInputs,
         failures.append(StopFailure("neutral publication", type(error).__name__, str(error)))
     _clear_inputs(inputs, failures)
     return StopResult("Match control LOCKED" if locked else "Control lock INCOMPLETE", tuple(failures))
+
+
+class FocusLossInputs(PendingInputs, Protocol):
+    def release_direct_dt7(self) -> None: ...
+    def release_custom_controller(self) -> None: ...
+
+
+def request_focus_loss(
+    backend: ControlLock,
+    inputs: FocusLossInputs,
+    release_inputs: Callable[[], object],
+    publish_zero: Callable[[], tuple[bool, str]],
+) -> StopResult:
+    """Revoke first; one failed cleanup must not skip other neutral paths.
+
+    The normal release callback preserves the existing neutral KMC snapshot and
+    direct-link releases. If any part fails, independently reset local input and
+    retry both dedicated neutral releases. Those releases are idempotent; no
+    ordinary command is retried after a failed reset or publication. Native
+    release methods retain their own pending/error state; an attempted release
+    is not proof that firmware received neutral input.
+    """
+    failures: list[StopFailure] = []
+    locked = _attempt("control lock", lambda: backend.lock_control("window focus lost"), failures)
+    if not _attempt("input release", release_inputs, failures):
+        _attempt("fallback input reset", lambda: inputs.reset_inputs(), failures)
+        _attempt("DT7 neutral release", lambda: inputs.release_direct_dt7(), failures)
+        _attempt("custom controller neutral release", lambda: inputs.release_custom_controller(), failures)
+    try:
+        ok, reason = publish_zero()
+        if not ok:
+            failures.append(StopFailure("neutral publication", "Rejected", reason))
+    except Exception as error:
+        failures.append(StopFailure("neutral publication", type(error).__name__, str(error)))
+    _attempt("pending input clear", lambda: inputs.clear_pending(), failures)
+    return StopResult("Focus-loss control LOCKED" if locked else "Focus-loss control lock INCOMPLETE",
+                      tuple(failures))

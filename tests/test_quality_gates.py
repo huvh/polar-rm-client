@@ -251,6 +251,47 @@ class ImportGraphTests(SourceFixture):
         self.source("rm_client/unrelated.py", "from PySide6.QtCore import QObject")
         self.assertEqual(self.violations(), [])
 
+    def test_new_pure_owners_reject_their_reviewed_direct_and_indirect_dependencies(self):
+        gui = ("PySide6.QtCore", "PySide2.QtCore", "PyQt6.QtCore", "PyQt5.QtCore",
+               "tkinter", "Tkinter", "rm_client.backend.service")
+        policies = {
+            "rm_client.crosshair_profile": (*gui, "rm_client.ui.view", "rm_client.model",
+                                           "rm_client.cs2_crosshair", "rm_client.serial_ports"),
+            "rm_client.ui.preference_draft": (*gui, "rm_client.model"),
+            "rm_client.ui.polar.startup_activation": (*gui, "rm_client.ui.polar_app",
+                                                     "rm_client.config_store", "rm_client.configuration.store"),
+        }
+        for root, targets in policies.items():
+            for target in targets:
+                for statement in (f"import {target}", f"from {target} import Value"):
+                    for content in (statement, "def use():\n    " + statement,
+                                    "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    " + statement):
+                        for indirect in (False, True):
+                            with self.subTest(root=root, content=content, indirect=indirect):
+                                path = self.source(root.replace(".", "/") + ".py",
+                                                   "from rm_client.value_support import Value" if indirect else content)
+                                self.source("rm_client/value_support.py", content if indirect else "Value = 1")
+                                violations = self.violations()
+                                self.assertTrue(any("Forbidden pure-domain dependency" in item
+                                                    for item in violations), violations)
+                                if indirect:
+                                    self.assertTrue(any(f"{root} -> rm_client.value_support" in item
+                                                        for item in violations), violations)
+                                path.unlink()
+
+    def test_ui_hosted_pure_owners_can_use_pure_ui_siblings(self):
+        self.source("rm_client/ui/value_support.py", "from dataclasses import dataclass\nValue = 1")
+        for root in ("rm_client.ui.preference_draft", "rm_client.ui.polar.startup_activation"):
+            self.source(root.replace(".", "/") + ".py", "from rm_client.ui.value_support import Value")
+        self.assertEqual(self.violations(), [])
+
+    def test_new_pure_owners_accept_stdlib_and_unrelated_runtime_adapters(self):
+        for root in ("rm_client.crosshair_profile", "rm_client.ui.preference_draft",
+                     "rm_client.ui.polar.startup_activation"):
+            self.source(root.replace(".", "/") + ".py", "from dataclasses import dataclass")
+        self.source("rm_client/ui/unrelated.py", "from PySide6.QtCore import QObject")
+        self.assertEqual(self.violations(), [])
+
     def test_pure_domain_stdlib_dependencies_remain_valid(self):
         for module in ("referee_profiles", "economy_values"):
             self.source(f"rm_client/{module}.py", "from dataclasses import dataclass\nfrom typing import Any\nfrom types import MappingProxyType")

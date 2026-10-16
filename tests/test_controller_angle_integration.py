@@ -19,6 +19,7 @@ from rm_client.backend.controller_angles import (
 )
 from rm_client.backend.cc_link import CustomControllerLink, decode_cc_frame
 from rm_client.backend.device_egress_settings import CustomControllerSettings, EgressPermissions
+from rm_client.backend.port_admission import PortReservation, first_port_conflict
 from rm_client.model import build_default_registry
 from rm_client.serial_ports import refresh_port_options
 
@@ -29,6 +30,7 @@ def manager_method(name="_sync_controller_angles"):
     method = next(n for n in cls.body if isinstance(n, ast.FunctionDef)
                   and n.name == name)
     env = dict(Any=object, AngleRelayConfig=AngleRelayConfig, replace=replace,
+               PortReservation=PortReservation, first_port_conflict=first_port_conflict,
                explicit_port=explicit_port, port_key=port_key,
                CustomControllerSettings=CustomControllerSettings, EgressPermissions=EgressPermissions)
     exec(compile(ast.Module(body=[method], type_ignores=[]), "manager-angle-method", "exec"), env)

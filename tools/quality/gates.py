@@ -16,13 +16,27 @@ REQUIRED_BASELINE_KEYS = {"schema_version", "source_revision", "rationale", "lin
 LOWER_LAYER_PREFIXES = ("rm_client.backend", "rm_client.configuration")
 LOWER_LAYER_MODULES = frozenset({"rm_client.model", "rm_client.module_catalog",
                                 "rm_client.module_settings", "rm_client.referee_profiles",
-                                "rm_client.economy_values", "rm_client.config_store",
+                                "rm_client.economy_values", "rm_client.crosshair_profile", "rm_client.config_store",
                                 "rm_client.lifecycle", "rm_client.emergency_actions",
                                 "rm_client.qualification_observations",
                                 "rm_client.runtime_paths", "rm_client.state_overlay"})
-PURE_DOMAIN_MODULES = frozenset({"rm_client.referee_profiles", "rm_client.economy_values"})
-PURE_DOMAIN_FORBIDDEN_PREFIXES = ("rm_client.backend", "rm_client.ui", "PySide6", "PySide2", "PyQt6", "PyQt5",
-                                  "tkinter", "Tkinter")
+GUI_AND_BACKEND_PREFIXES = ("rm_client.backend", "PySide6", "PySide2", "PyQt6", "PyQt5",
+                            "tkinter", "Tkinter")
+PURE_DOMAIN_FORBIDDEN_PREFIXES = (*GUI_AND_BACKEND_PREFIXES, "rm_client.ui")
+# Policies describe reviewed dependencies, not directory-based purity. Pure
+# owners hosted under ui may legitimately depend on other pure UI siblings.
+PURE_DOMAIN_POLICIES = {
+    "rm_client.referee_profiles": PURE_DOMAIN_FORBIDDEN_PREFIXES,
+    "rm_client.economy_values": PURE_DOMAIN_FORBIDDEN_PREFIXES,
+    "rm_client.crosshair_profile": (*PURE_DOMAIN_FORBIDDEN_PREFIXES, "rm_client.model",
+                                   "rm_client.cs2_crosshair", "rm_client.serial_ports"),
+    "rm_client.ui.preference_draft": (*GUI_AND_BACKEND_PREFIXES, "rm_client.model"),
+    "rm_client.ui.polar.startup_activation": (*GUI_AND_BACKEND_PREFIXES,
+                                            "rm_client.ui.polar_app", "rm_client.config_store",
+                                            "rm_client.configuration"),
+}
+PURE_DOMAIN_MODULES = frozenset(PURE_DOMAIN_POLICIES)
+
 
 
 RESPONSIBILITY_METRICS = frozenset({"statements", "decisions", "max_control_depth"})
@@ -109,7 +123,7 @@ def pure_domain_violations(report: dict) -> list[str]:
                 continue
             for edge in details["declared_imports"]:
                 if any(edge["target"] == prefix or edge["target"].startswith(prefix + ".")
-                       for prefix in PURE_DOMAIN_FORBIDDEN_PREFIXES):
+                       for prefix in PURE_DOMAIN_POLICIES[root]):
                     route = f" via {' -> '.join(path)}" if len(path) > 1 else ""
                     violations.append(f"Forbidden pure-domain dependency: {details['path']}:{edge['line']} -> {edge['target']}{route}")
             for target in sorted({edge["target"] for edge in details["imports"]}):
