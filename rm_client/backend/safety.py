@@ -67,6 +67,7 @@ class OfficialSafety:
         self._authorized_capabilities: frozenset[str] = frozenset()
         self.last_reason = "startup lock"
         self.last_transition_at = time.perf_counter()
+        self.control_generation = 0
         self.input_clear_hook: Callable[[str], None] | None = None
 
     def _notify_input_clear(self, reason: str) -> None:
@@ -122,13 +123,15 @@ class OfficialSafety:
     def is_fighting(self) -> bool:
         return self._stage_seen and self.current_stage in FIGHTING_STAGES
 
-    def lock_control(self, reason: str = "operator lock") -> None:
+    def lock_control(self, reason: str = "operator lock", *, notify: bool = True) -> None:
         self.control_state = ControlState.LOCKED
         self._qualification = None
         self._authorized_capabilities = frozenset()
         self.last_reason = str(reason)
         self.last_transition_at = time.perf_counter()
-        self._notify_input_clear(self.last_reason)
+        self.control_generation += 1
+        if notify:
+            self._notify_input_clear(self.last_reason)
 
     def begin_qualification(
         self,
@@ -149,6 +152,7 @@ class OfficialSafety:
         self.control_state = ControlState.QUALIFICATION
         self.last_reason = "qualification token active"
         self.last_transition_at = current
+        self.control_generation += 1
         self._notify_input_clear("qualification epoch started")
         return token
 
@@ -164,6 +168,7 @@ class OfficialSafety:
         self.control_state = ControlState.MATCH_ARMED
         self.last_reason = "operator armed verified evidence"
         self.last_transition_at = time.perf_counter()
+        self.control_generation += 1
         self._notify_input_clear("match control armed; neutral input required")
 
     @staticmethod
@@ -264,6 +269,7 @@ class OfficialSafety:
         self._authorized_capabilities = frozenset()
         self.last_reason = "E-stop triggered"
         self.last_transition_at = self.estop_at
+        self.control_generation += 1
         self._notify_input_clear(self.last_reason)
 
     def release_estop(self) -> None:
