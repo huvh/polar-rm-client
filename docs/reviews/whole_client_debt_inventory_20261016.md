@@ -496,3 +496,55 @@ particularly for behavior that is not represented by a declared import.
 Raw red/green and separately identified candidate-tree checks are retained under
 `../evidence/clean-code-20261016/pure-owner-policies/`. Passing separate candidate
 static reports is not a combined integration result or native qualification.
+
+## Combined-source architecture acceptance delta
+
+Independent static/API/discovery checks cover production revision
+`1417b925fd8b21642fe4957af62a51254db147bc`, source digest
+`70538a0cdb59627162e01682bd703dea0b1fbb00193c45bff82e201e23be16fa`.
+Evidence-only `d609914` and `ce49dc5` arrived during this review; their complete
+diffs contain documentation/review artifacts only, with no production, suite
+or tool changes. These are focused checks, **not** the pending full-profile run.
+
+| Area | Non-cosmetic accepted change | Remaining coupling or evidence limit |
+| --- | --- | --- |
+| Startup | Named ports own ordered profile preparation, loaded presentation and lazy scenario admission; independent lookup/failure-prefix correction preserves observation order. | Window constructs services, owns timers/abort, and adapts filesystem/backend/UI effects. Earlier partial constructors remain outside retained-abort coverage. |
+| Crosshair/catalog | Pure schema and codecs become the catalog's source; facade aliases preserve codec identity and twelve function ASTs. | Qt editor, previews, registry mutation and presentation preferences remain in the facade. This does not make the whole catalog/model runtime pure. |
+| Preference editing | A draft owner tracks accepted snapshots, forced edits and pending/live reconciliation. | Widgets normalize values; the adapter assembles and commits real transactions. This is not crash durability, universal deep-copy isolation or a pure settings dialog. |
+| Writer lifetime | DT7 and CC share retained thread admission/reservation/join ownership. | Each adapter retains protocol, queue, native-handle release and neutral semantics. Thread ownership is not physical shutdown confirmation. |
+| Angle admission | Immutable reservations and an ordered first-conflict veto detach policy while preserving lazy alias observations. | Manager still reads registry/native handles and configures, disarms and publishes status. Policy does not acquire ports or grant forwarding authority. |
+| Compositor | Partial setup unbinds independently; failed shader candidates and incomplete retirement remain owned before retry. | Native context/driver validity, actual pixel output and presentation cadence need desktop evidence. Large source-specific rendering passes remain intentional. |
+| Focus loss | Authority revocation precedes independently attempted cleanup; failed cleanup no longer skips other neutral routes and pending-input clearing. | An attempt is not a firmware acknowledgement. Ordinary exceptions are handled; process-control exceptions and physical failures remain separate. This is an intentional safety correction, not historical-prefix equivalence. |
+| Economy hold | Synthetic autorepeat release no longer finishes a physical Enter/Return confirmation hold. | Modal priority and the rest of keyboard routing still depend on the window. The historical differential explicitly adjusts only the reproduced defect. |
+| Architecture gates | Five scoped roots reject forbidden dependencies through declared local helper paths, with negative and positive controls. | Dynamic imports, implicit initializer effects, reflection and arbitrary effects through callbacks remain outside static inference. No general purity or clean-code score is claimed. |
+
+### Reproduction and integrity checks
+
+- Static gate passes. The same metric implementation measures 213 modules,
+  3,396 functions, 37,179 statements, 13,082 decisions and 605 local import edges;
+  both eager and deferred-inclusive SCC counts are zero. Compared with `fa2c2b8`,
+  this is **+5 modules, +28 functions, +56 statements, +13 decisions and +7 edges**.
+  Replacements are counted; the result is not presented as a whole-tree shrink.
+- Actual window API freeze passes its removal/restoration mutation self-test.
+  The unchanged public-contract manifest is not a proof of every runtime path.
+- 50 quality-tool methods and a separate 64-method boundary/API/metric selection
+  pass. These counts overlap in responsibility and are not an aggregate coverage
+  percentage or substitute for the full profile.
+- Import-free registry discovery finds 302 suites. All 14 newly added executable
+  suites are discovered as offline; the two new historical fixtures are correctly
+  not executable suites. No manual suite exemption was added.
+- `tools/quality/baseline.json`, `tests/window_api_contract.json`,
+  `tools/test_registry.py` and `tools/quality/metrics.py` are byte-for-byte unchanged
+  from `fa2c2b8`; hashes are retained in the discovery log. Existing harness edits
+  add newly extracted names or establish a fresh GPU lifetime. The keyboard
+  differential's explicit repeat-release adjustment accompanies dedicated red
+  defect evidence; the historical source fixture remains unchanged.
+
+Raw output, source-scoped summary and hashes are under
+`../evidence/clean-code-20261016/combined-architecture-audit/`.
+Remaining broad debts include mixed RobotState authority, window/service
+assembly, cross-service modal routing, live configuration/UI effect ordering,
+video/control/combat coordination and source-specific map/render adapters.
+No additional broad rewrite is justified solely by these counts. Existing
+hardware, firmware, packaging, native audio/desktop/GPU and unfinished-profile
+acceptance limits remain open.
