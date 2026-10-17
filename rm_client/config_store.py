@@ -97,8 +97,9 @@ class ClientConfigStore:
         payload["profile"] = self.clean_profile_name(profile)
         validate_client_config(payload)
         serialized = json.dumps(payload, ensure_ascii=False, indent=2, allow_nan=False)
-        # A power loss or process termination must leave either the old valid
-        # profile or the new valid profile, never a half-written default.json.
+        # Replacement is atomic under normal OS operation, so readers do not
+        # observe a partially written profile. Directory metadata is not
+        # fsynced here; power-loss/crash durability is not promised.
         _atomic_write(path, serialized)
         return path
 

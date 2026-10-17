@@ -198,13 +198,14 @@ class LifecycleCoordinator(Generic[Target]):
                     self._mailbox.put_nowait(_TaskResult(task.name,
                         f"Could not prepare retry: {type(exc).__name__}: {exc}"))
                     continue
-            worker = threading.Thread(target=_close_resource, args=(task, self._mailbox),
-                                      name=f"lifecycle-{task.name}", daemon=True)
-            self._workers[task.name] = worker
+            worker = None
             try:
+                worker = threading.Thread(target=_close_resource, args=(task, self._mailbox),
+                                          name=f"lifecycle-{task.name}", daemon=True)
+                self._workers[task.name] = worker
                 worker.start()
             except Exception as exc:
-                if worker.ident is None:
+                if worker is None or worker.ident is None:
                     self._workers[task.name] = None
                     self._mailbox.put_nowait(_TaskResult(task.name,
                         f"Could not start cleanup: {type(exc).__name__}: {exc}"))
