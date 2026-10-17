@@ -1,6 +1,48 @@
 # Remaining architecture acceptance: evidence-based close-out
 
-## Latest evidence index — 2026-10-17 20:11 UTC
+## Current close-out index — 2026-10-17 20:37 UTC
+
+- Earlier completed audio aggregate is public `d8a90c52d3a52b390c1a014750191dc5b760a3b7`
+  / local `bd7115ffdcab11c5771fac362aabe97f960b22bd`: **345 PASS / 12 SKIP /
+  4 INCOMPLETE / 0 FAIL**, **NO-GO**. See
+  [audio admission repair](kill_audio_admission_repair_20261017.md) for exact tree,
+  fingerprint and limits. This accepts the tested fallback/ownership boundaries,
+  not physical repeated audio playback or the user's native symptom's root cause.
+- Later field-log admission candidate public `a44cf8d` / local `197f428` handles
+  ordinary constructor/start exceptions while retaining uncertain admitted work
+  and loss accounting. Its full offline regression is now **completed: 346 PASS /
+  12 SKIP / 4 INCOMPLETE / 0 FAIL, NO-GO** (`passed=false`). Results were read from
+  `../client-field-log-full/results.json`, run `b9108a31ebd1461c93affd616b821afc`,
+  started 2026-10-17 20:29:29 UTC. Exact local source is
+  `197f4284e59efc432750e1cf6051c5b8f0e5ed18`, tree
+  `daebc6193463f7bc74e24d4f84c106e50959c4ec`. All 695 declared verification inputs
+  have identical start/end SHA-256
+  `b448096787d185cda7ad5ccf3df23227997c19a350112502d7daf7d1d23d2625`;
+  source stability PASS. This fingerprint excludes docs/assets/external fixtures/
+  installed packages and cannot detect transient edits restored between captures.
+  No full run remains pending at this update. Drained does not mean lossless or
+  fsynced; offline success is not native or field qualification.
+- All 242 declared RobotState fields have bounded writer/default-only dispositions.
+  Normal referee scalar publication now belongs to the decoded adapter; raw
+  consumption retains receipt freshness/events. Compatibility APIs, dynamic
+  extensions and exhaustive runtime semantics are not globally single-writer proof.
+- The named serial starter/reader, Paho/MQTT cleanup and decoder constructor
+  cells are discharged by the constructor matrix. The early-window ledger is
+  enumerated, with bounded feedback, idle-wallpaper and actual-window prefix
+  probes; neither establishes every transitive constructor or native lifetime.
+- Smallest next bounded architecture check: actual-window failure during startup
+  `_clear_control_inputs_for_lock("startup locked")`, before ClientConfigStore and
+  the retained abort boundary. Verify acquired-owner retirement and original-error
+  preservation. This prefix remains **unverified, not a confirmed defect**.
+- Historical activation-timeout/DT7-budget causation, external prerequisites and
+  native Windows/GPU/audio/portable/device qualification remain open. No complete
+  Clean Code, merge-readiness or match-readiness acceptance is asserted.
+
+The sections below preserve dated evidence. Their old “remaining”, “current” and
+“running” wording describes those snapshots, not new work to repeat. This index
+supersedes those statuses without altering historical results.
+
+## Historical evidence index — 2026-10-17 20:11 UTC
 
 - Exact source public `b59b042` / local `12e86e9` completed **344 PASS / 12 SKIP /
   4 INCOMPLETE / 0 FAIL**, aggregate **NO-GO**. See
@@ -91,7 +133,7 @@ schedule estimate follows from these tests. Earlier historical RED rows are
 retained as evidence; their named accepted corrections determine current status.
 
 
-## Current scope
+## Historical scope — integration at `8dbe624`
 
 This revision replaces the initial broad planning envelope with concrete
 candidate-specific dispositions. Base inventory is `1b2f580`; reviewed follow-on
@@ -117,7 +159,7 @@ steps below are a more useful basis for scheduling. No new extraction is require
 merely because a method is long or receives a host object; retain cohesive code
 with a named responsibility and an explicit boundary limitation.
 
-## Eight-gate update
+## Historical eight-gate update — superseded status, retained evidence
 
 | Gate | Concrete evidence now discharged | Remaining condition and category |
 | --- | --- | --- |
@@ -125,7 +167,7 @@ with a named responsibility and an explicit boundary limitation.
 | B. Resource ownership/admission | Existing explicit adapter tests discharge many close/retry/stale-result cells; see the 13-owner matrix. POLAR admission correction `9c80e74` has separate transport/render review. Wallpaper `643accd` independently passes 40 methods + three extra probes; UDP `8a354c0` independently passes 19 methods. Thumbnail `a23999f` independently passes 32 methods plus a two-native-acquisition drain probe. | Constructor-vs-start coverage must be completed only for the identified matrix gaps, where still unestablished. **Bounded evidence gaps**. The named thumbnail executor submission/shutdown gap is discharged at `a23999f`. Wallpaper post-close open and UDP phantom-session counterexamples are fixed at named candidates; no remaining failure in those reproductions. |
 | C. Window construction/activation | Existing startup ordering evidence retained; corrected finalization `fb271c8` independently passes 51 methods + 26 historical lookup/failure-prefix comparisons. | Earlier partial-constructor acquisitions are outside finalization scope. Enumerate acquisitions before the retained-abort boundary and fault each owned-service publication. **Evidence/ownership review gap**. Early audio QObject retention was subsequently reproduced; weak-callback correction `9dd5a80` is independently accepted: 47 audio tests and the same red/green native-QObject retention probe. This discharges the audio acquisition example, not the entire early-constructor ledger. |
 | D. Input/authority | Existing emergency, focus-loss, hold-repeat and keyboard historical routing tests retained. Existing egress tests cover positive eligible output as well as individual false gates. | Retain explicit press/release/modal assertions in final-source regression. Shared differential collaborators do not prove their own runtime behavior. **Fixed candidate accepted:** drag ownership correction `8df72aa` passed independent review (22 methods and five pre-fix red failures reported by the input/review lanes). Movement candidate `ec80a3a` is independently accepted (30 tests + two successor/payload-failure probes), included in `8dbe624` but outside the earlier `93aa839` run. |
-| E. State/projection ownership | Pure health/map/referee values and their historical/explicit assertions retained. Frozen referee globals now genuinely independent. | A field-group producer/overwrite ledger for RobotState and video/control/combat cross-owner writes is still absent from this close-out. **Architecture documentation/coverage gap**. Do not require wholesale model replacement without a demonstrated conflicting writer or change reason. |
+| E. State/projection ownership | Pure health/map/referee values and their historical/explicit assertions retained. Frozen referee globals now genuinely independent. | At this historical snapshot the field-group ledger was absent. It is now enumerated for all 242 declared fields; dynamic extensions and exhaustive cross-owner runtime semantics remain bounded coverage gaps. Do not require wholesale model replacement without a demonstrated conflicting writer or change reason. |
 | F. Configuration/live order | Existing transaction, quiescence, preference draft, descriptor and audio recovery evidence retained; ordinary-error rollback and explicit failed-restoration retry remain separate. | Recheck relevant contracts in final integration; retain live UI/runtime adapters with their documented ordered-effect responsibility. **No new defect selected**. Crash/concurrent-writer atomicity is explicitly outside the implemented guarantee. |
 | G. Presentation responsibility | Existing map values, exact rendering/cleanup contracts retained. Framebuffer `99c96e9` has separate transport review; specialized renderer/startup texture ownership already has enumerated fault tests. | Keep source-specific map/ClickGUI/economy/video adapters when cohesive; only split if a concrete independent policy/state owner is identified. **Native rendering qualification blocked externally**; broad host independence is not asserted. |
 | H. Whole-inventory disposition | All 24 families have an explicit disposition below; ownership matrix and exact independent reports identify acceptance boundaries. | Integrating owner must attach final source/digest and complete aggregate, then reconcile any new failure. **Final evidence pending**. Zero SCCs and passing counts are not universal semantic coverage. |
@@ -137,7 +179,7 @@ referee test was an oracle defect, not incorrect production metadata. All have
 named fixed candidates; none is represented here as permanently open merely
 because its historical red evidence remains in the repository.
 
-## Disposition of the original 24 families
+## Historical disposition of the original 24 families
 
 “Retain” accepts the stated responsibility for the current scope; it does not
 certify every runtime path or waive the named tests/native qualification.
@@ -156,7 +198,7 @@ architecture close-out, not a demand for an automatic rewrite.
 | 8. Referee protocol | **Retain with boundary:** annual decoding/projection and metadata are separate; historical partial-publication semantics characterized. | Frozen independent metadata and protocol bytes at final source; reference/annual compatibility prerequisites remain external. |
 | 9. Robot protocol/transport | **Fixed candidate accepted within scope:** spec remains authoritative; POLAR admission correction supplements existing retained-native tests. | Final-source regression; physical acknowledgment is not inferred from queue/close status. |
 | 10. Device egress | **Retain with boundary:** shared thread ownership does not replace per-adapter native/protocol ownership. | Existing DT7/CC/angle adapter tests and final integration; device qualification separate. |
-| 11. Official transports/decoders | **Review gap:** UDP constructor defect has accepted correction; nested process/pipe/socket ownership already extensively tested. | Establish remaining MQTT/decoder constructor cells rather than assuming start tests cover them. |
+| 11. Official transports/decoders | **Review gap:** UDP constructor defect has accepted correction; nested process/pipe/socket ownership already extensively tested. | The named MQTT/decoder constructor cells were subsequently discharged by the constructor matrix; retain native qualification and any separately identified untested prefixes. |
 | 12. Audit/replay | **Retain:** bounded writer/accounting and replay isolation have specific responsibilities. | Final admission/loss/drain/intact tests; no claim that drained implies lossless. |
 | 13. Vision/video UI | **Review gap:** camera/model workers retain native owners and reject stale results; UI coordinates control/combat. | Include cross-owner source/generation/authority in field ledger; native model/driver throughput external. |
 | 14. Combat/audio | **Retain with accepted ownership fix:** confirmed-vs-inferred events, dedup and repeat-cue behavior are deliberate; weak signal listeners prevent unintended pool retention. | Final event/audio recovery tests; offscreen QObject lifetime passed, physical sound-device output remains external. |
@@ -171,13 +213,13 @@ architecture close-out, not a demand for an automatic rewrite.
 | 23. Paths/preflight | **Retain:** source/portable roots and observational preflight are distinct. Explicit build interpreter accepted in source/Python scope. | Native Windows path-with-spaces/default/explicit interpreter and actual packaged launch. |
 | 24. Historical/package facades | **Retain:** compatibility exports and historical source are intentional, counted and not complexity wins. | Keep API identity/frozen fixtures; update misleading migration comments only when relevant. |
 
-## Finite next-stage list
+## Historical finite next-stage list
 
 1. **Seal the final combined regression:** exact revision/digest, discovery,
    API/static gates and complete profile; list FAIL, SKIP and INCOMPLETE separately.
    Stop and fix any new reproducible regression before declaring this checkpoint.
-2. **Close named resource test gaps:** constructor rejection for serial starter/
-   reader, MQTT and decoder boundaries where not yet established. UDP constructor
+2. **Historical resource test gaps, now discharged for the named cells:** serial
+   starter/reader, MQTT and decoder constructor rejection have subsequent matrix evidence. UDP constructor
    and the named thumbnail submit/late-admission/cancellation cases now have
    accepted corrections and evidence; do not count them as remaining gaps.
    Read production cleanup before adding fixes. Finish when each matrix cell has
