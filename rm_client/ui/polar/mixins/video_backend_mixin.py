@@ -923,7 +923,12 @@ class VideoBackendMixin:
                 referee_profile=self.state.referee_profile,
                 received_at=received_at,
             )
-            self._official_state_updates.update(updates)
+            # Decoded backend application owns scalar telemetry. A raw packet
+            # arriving between tick stages must not publish it ahead of the
+            # canonical adapter (or bypass an apply failure/transition block).
+            # Receipt freshness is not a transactional state-application claim.
+            if "official_feed_at" in updates:
+                self._official_state_updates["official_feed_at"] = updates["official_feed_at"]
             for event in events:
                 self.accept_combat_event(event)
 

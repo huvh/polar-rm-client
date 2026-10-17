@@ -179,7 +179,7 @@ OFFICIAL_DOWNLINK_MESSAGES = frozenset({
 })
 
 
-def _parse_event_param(raw: bytes) -> dict[str, Any]:
+def _parse_event_param(raw: bytes) -> dict[str, Any] | None:
     if not raw:
         return {}
     text = raw.decode("utf-8", errors="replace").strip()
@@ -199,9 +199,32 @@ def _parse_event_param(raw: bytes) -> dict[str, Any]:
             except ValueError:
                 pass
         return {"detail": text}
+    except (ValueError, RecursionError):
+        # JSON tokens/nesting may exceed runtime conversion/parser limits.
+        # Unlike syntax fallback, this is an explicitly rejected extension.
+        return None
     if not isinstance(value, dict):
         return {"detail": text}
     return value
+
+
+def _event_numbers(value: dict[str, Any], *, extended: bool) -> tuple[int, int, int, float, int] | None:
+    """Reject invalid explicit numeric extensions, preserving absent defaults.
+
+    Conversion stays compatible with existing finite numeric strings. Keep the
+    exception boundary around input conversion, never around UI callbacks.
+    """
+    try:
+        victim_id = int(value.get("victim_id", 0))
+        killer_id = int(value.get("killer_id", 0))
+        combo = int(value.get("combo", 0)) if extended else 0
+        distance = float(value.get("distance_m", 0.0)) if extended else 0.0
+        score = int(value.get("score_delta", 0)) if extended else 0
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if not math.isfinite(distance):
+        return None
+    return victim_id, killer_id, combo, distance, score
 
 
 class OfficialMatchFeed:
@@ -344,22 +367,24 @@ class OfficialMatchFeed:
         elif name == "Event":
             event_id = _field_int(fields, 1)
             event_data = _parse_event_param(_field_bytes(fields, 2))
-            victim_id = int(event_data.get("victim_id", 0))
-            killer_id = int(event_data.get("killer_id", 0))
-            detail = str(event_data.get("detail", ""))
-            if event_id == 1:
-                tags = event_data.get("tags", ())
-                events.append(CombatEvent(
-                    "elimination", "referee", True, now, victim_id, killer_id, detail or "official_event",
-                    kill_type=str(event_data.get("kill_type", "NORMAL")).upper(),
-                    combo=int(event_data.get("combo", 0)),
-                    victim_name=str(event_data.get("victim_name", "")),
-                    distance_m=float(event_data.get("distance_m", 0.0)),
-                    score_delta=int(event_data.get("score_delta", 0)),
-                    tags=tuple(str(tag) for tag in tags) if isinstance(tags, (list, tuple)) else (),
-                ))
-            elif event_id in (2, 3):
-                events.append(CombatEvent("objective", "referee", True, now, victim_id, killer_id, detail or "objective"))
+            numbers = (_event_numbers(event_data, extended=event_id == 1)
+                       if event_data is not None else None)
+            if numbers is not None:
+                victim_id, killer_id, combo, distance, score = numbers
+                detail = str(event_data.get("detail", ""))
+                if event_id == 1:
+                    tags = event_data.get("tags", ())
+                    events.append(CombatEvent(
+                        "elimination", "referee", True, now, victim_id, killer_id, detail or "official_event",
+                        kill_type=str(event_data.get("kill_type", "NORMAL")).upper(),
+                        combo=combo,
+                        victim_name=str(event_data.get("victim_name", "")),
+                        distance_m=distance,
+                        score_delta=score,
+                        tags=tuple(str(tag) for tag in tags) if isinstance(tags, (list, tuple)) else (),
+                    ))
+                elif event_id in (2, 3):
+                    events.append(CombatEvent("objective", "referee", True, now, victim_id, killer_id, detail or "objective"))
         elif name == "CustomByteBlock":
             events.extend(self._custom_events(_field_bytes(fields, 1), now))
 
@@ -409,24 +434,29 @@ class OfficialMatchFeed:
                     return []
         try:
             value = json.loads(text)
-        except json.JSONDecodeError:
+        except (ValueError, RecursionError):
+            # Includes syntax, numeric-token and nesting parser limits.
             return []
         if not isinstance(value, dict) or value.get("protocol") != "polar.kill.v1":
             return []
+        numbers = _event_numbers(value, extended=True)
+        if numbers is None:
+            return []
+        victim_id, killer_id, combo, distance, score = numbers
         tags = value.get("tags", ())
         return [CombatEvent(
             str(value.get("kind", "elimination")),
             "team_byte_block",
             bool(value.get("confirmed", True)),
             now,
-            int(value.get("victim_id", 0)),
-            int(value.get("killer_id", 0)),
+            victim_id,
+            killer_id,
             str(value.get("detail", "")),
             str(value.get("kill_type", "NORMAL")).upper(),
-            int(value.get("combo", 0)),
+            combo,
             str(value.get("victim_name", "")),
-            float(value.get("distance_m", 0.0)),
-            int(value.get("score_delta", 0)),
+            distance,
+            score,
             tuple(str(tag) for tag in tags) if isinstance(tags, (list, tuple)) else (),
         )]
 

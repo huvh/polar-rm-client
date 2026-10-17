@@ -321,6 +321,8 @@ class Rm2026StateAdapter:
             if "airsupport_status" in data:
                 state.air_support_active = int(data["airsupport_status"]) == 1
             state.air_support_free_time_sec = int(data.get("left_time", state.air_support_free_time_sec))
+            if "left_time" in data:
+                state.air_support_can_free = state.air_support_free_time_sec > 0
             state.air_support_cost_coins = int(data.get("cost_coins", state.air_support_cost_coins))
         elif name == "GlobalSpecialMechanism":
             ids = [int(v) for v in data.get("mechanism_id", ())]
