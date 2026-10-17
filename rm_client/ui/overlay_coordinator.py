@@ -72,10 +72,12 @@ class OverlayCoordinator:
 
     def request_modal(self, kind: OverlayKind) -> OverlayKind | None:
         previous = self.modal
+        changed = self.modal != kind or self.chat_input or self.radial_active
         self.modal = kind
         self.chat_input = False
         self.radial_active = False
-        self._notify_input_claimed()
+        if changed:
+            self._notify_input_claimed()
         return previous
 
     def close_modal(self, kind: OverlayKind | None = None) -> bool:
@@ -86,10 +88,12 @@ class OverlayCoordinator:
 
     def begin_chat(self) -> OverlayKind | None:
         previous = self.modal
+        changed = not self.chat_input or self.modal is not None or self.radial_active
         self.modal = None
         self.radial_active = False
         self.chat_input = True
-        self._notify_input_claimed()
+        if changed:
+            self._notify_input_claimed()
         return previous
 
     def end_chat(self) -> None:
@@ -98,8 +102,10 @@ class OverlayCoordinator:
     def begin_radial(self) -> bool:
         if self.chat_input or self.modal is not None:
             return False
+        changed = not self.radial_active
         self.radial_active = True
-        self._notify_input_claimed()
+        if changed:
+            self._notify_input_claimed()
         return True
 
     def end_radial(self) -> None:

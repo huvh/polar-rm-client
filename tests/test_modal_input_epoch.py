@@ -29,6 +29,25 @@ def window_fixture():
         case.doCleanups()
 
 class ModalInputEpochTests(unittest.TestCase):
+    def test_repeated_owner_request_does_not_repeat_neutral_egress(self):
+        from rm_client.ui.overlay_coordinator import OverlayCoordinator, OverlayKind
+        from unittest.mock import Mock
+        callback = Mock()
+        coordinator = OverlayCoordinator(on_input_claimed=callback)
+        for _ in range(10):
+            coordinator.request_modal(OverlayKind.HERO_DEPLOY)
+        callback.assert_called_once()
+        coordinator.close_modal()
+        coordinator.request_modal(OverlayKind.HERO_DEPLOY)
+        self.assertEqual(callback.call_count, 2)
+        for _ in range(10):
+            coordinator.begin_chat()
+        self.assertEqual(callback.call_count, 3)
+        coordinator.end_chat()
+        for _ in range(10):
+            coordinator.begin_radial()
+        self.assertEqual(callback.call_count, 4)
+
     def test_transient_chat_releases_motion_before_next_frame(self):
         with window_fixture() as (case, w, sink):
             case.key(Qt.Key.Key_W)

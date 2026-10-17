@@ -16,3 +16,8 @@ The normal sampled ownership check remains a fallback. Existing neutral transmis
 
 ## Limits
 This is root-authored and root-reviewed; no independent reviewer has approved this recovery patch yet. Full offline regression is pending. No Windows, GPU, physical audio, serial hardware or real robot qualification is claimed. Previous scores on other source commits do not apply. New raw execution logs remain local pending the existing publication permission request.
+
+## Follow-up found during complete regression
+The full run of source 0b92c3f exposed the native-video smoke fixture replacing the backend without its MQTT configuration port. Its fixture now preserves the original MQTT port; video authority assertions are unchanged. The exact failing native-video smoke function passes after the fixture correction. The full original run continues on its frozen source and will retain its failure.
+
+Coordinator notification is also idempotent for repeated requests by the same owner, preventing repeated neutral egress when ownership has not changed. A new direct test covers repeated modal/chat/radial requests and a genuine close/reopen. Five modal regression methods pass on this follow-up. This follow-up has no completed full-profile score yet.

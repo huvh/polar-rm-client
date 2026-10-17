@@ -3566,6 +3566,7 @@ def test_hero_native_video_isolation_and_authoritative_lock() -> None:
             # The production camera boundary reports through the manager's
             # diagnostic port even when this test isolates video selection.
             self.field_log = field_log
+            self.mqtt = original_backend.mqtt
 
         def latest_video_frame(self, _timeout: float, source_mode: str):
             self.calls.append(str(source_mode))
