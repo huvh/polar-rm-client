@@ -47,7 +47,7 @@ work may be integrated concurrently; rerun inventory for a later source.
 
 This is ordered, partial publication, not an atomic whole-state transaction.
 `_run_tick_stage` isolates stage failures; a failure does not roll back prior
-writers. Constructor, configuration, scenario, replay, legacy UI, and explicit
+writers. Constructor, configuration, scenario, legacy UI, and explicit
 user actions can also write fields outside this tick order. Their source sites
 are included where the bounded scan recognizes them.
 
@@ -116,10 +116,25 @@ The scan covers all declared fields, but only receiver spellings `state`,
 `self.state`, `target`, and `self` inside `model.py`; it is not whole-program
 alias analysis. Constructor kwargs, external callers, dynamic dictionary keys,
 returned mutable aliases, generic reflection, and arbitrary extension attributes
-can escape it. A row marked UNTRACED means no post-default writer established by
-this bounded scan, **not** that the field is dead or immutable.
+can escape it. Follow-up classifications of default-only fields below are
+bounded static findings, **not** proof that the fields are dead, immutable, or
+fully covered under dynamic/external calls.
 
-Fields without a traced post-default writer: **10**: `base_max_health`, `enemy_base_max_health`, `enemy_outpost_max_health`, `in_supply_zone`, `max_chassis_energy`, `outpost_max_health`, `projectile_shop_price`, `supply_zone_known`, `target_health`, `target_max_health`.
+Follow-up at source `2bcf4b4595dd5a261cb4e4c98b1ac2fb8e209ea6` examined
+constructor arguments, official-feed literal updates, POLAR allowlists, and
+configuration/protocol names for the ten initially untraced scalar fields. No
+post-default scalar producer was found in these production paths. Two supply-zone
+fields have explicit unknown-state rationale; seven are consumed as presentation
+or demo defaults without an established constant-value design guarantee;
+`max_chassis_energy` has a decoded canonical-container value but no scalar
+projection or production scalar consumer found. This does not establish complete
+dynamic coverage or a runtime defect. No tests were run.
+
+Current `replay.py:1-5,35-60` only summarizes field logs; it is not an established
+RobotState writer. Normal and legacy constructors use `RobotState()` without
+field overrides (`ui/polar_app.py:491`, `legacy_tk_app.py:59`).
+
+Fields with bounded default-only scalar dispositions: **10**: `base_max_health`, `enemy_base_max_health`, `enemy_outpost_max_health`, `in_supply_zone`, `max_chassis_energy`, `outpost_max_health`, `projectile_shop_price`, `supply_zone_known`, `target_health`, `target_max_health`.
 
 | Field (declaration line) | Observed writer / dynamic contract sites |
 | --- | --- |
@@ -145,7 +160,7 @@ Fields without a traced post-default writer: **10**: `base_max_health`, `enemy_b
 | `current_heat` (58) | `rm_client/backend/referee/rm2026/state_adapter.py`:246 (write); `rm_client/combat_events.py`:251 (feed-key); `rm_client/model.py`:449 (write); `rm_client/state_overlay.py`:23 (overlay) |
 | `max_heat` (59) | `rm_client/backend/referee/rm2026/state_adapter.py`:228 (write); `rm_client/robot_profiles.py`:127 (write); `rm_client/state_overlay.py`:28 (overlay) |
 | `current_chassis_energy` (60) | `rm_client/backend/referee/rm2026/state_adapter.py`:247 (write); `rm_client/combat_events.py`:252 (feed-key); `rm_client/model.py`:450 (write); `rm_client/state_overlay.py`:44 (overlay) |
-| `max_chassis_energy` (61) | **UNTRACED beyond initializer** |
+| `max_chassis_energy` (61) | **Bounded default-only scalar (100); purpose unresolved.** `backend/referee/rm2026/codec.py`:200 decodes field 14; `backend/referee/rm2026/state_adapter.py`:221 retains it in `robot_statics`, without scalar projection. No production scalar consumer found. |
 | `current_buffer_energy` (62) | `rm_client/backend/referee/rm2026/state_adapter.py`:248 (write); `rm_client/combat_events.py`:253 (feed-key); `rm_client/model.py`:451 (write) |
 | `max_buffer_energy` (63) | `rm_client/backend/referee/rm2026/state_adapter.py`:238 (write) |
 | `chassis_power_w` (64) | `rm_client/model.py`:452 (write) |
@@ -155,8 +170,8 @@ Fields without a traced post-default writer: **10**: `base_max_health`, `enemy_b
 | `total_projectiles_fired` (68) | `rm_client/backend/referee/rm2026/state_adapter.py`:249 (write); `rm_client/combat_events.py`:254 (feed-key) |
 | `remaining_economy` (69) | `rm_client/backend/referee/rm2026/state_adapter.py`:213 (write); `rm_client/combat_events.py`:209 (feed-key); `rm_client/economy.py`:216 (write); `rm_client/model.py`:482 (write) |
 | `total_economy_obtained` (70) | `rm_client/backend/referee/rm2026/state_adapter.py`:214 (write); `rm_client/combat_events.py`:210 (feed-key); `rm_client/model.py`:483 (write) |
-| `in_supply_zone` (73) | **UNTRACED beyond initializer** |
-| `supply_zone_known` (74) | **UNTRACED beyond initializer** |
+| `in_supply_zone` (73) | **Intentional unknown default (False) in reviewed paths.** `model.py`:71-74 and `backend/polar_bridge.py`:342-346 explain unavailable RFID mapping. Read by `economy_values.py`:71 and `backend/referee/rm2026/economy_rules.py`:69-74; referee validates purchases when zone is unknown. |
+| `supply_zone_known` (74) | **Intentional unknown default (False) in reviewed paths.** `model.py`:71-74 and `backend/polar_bridge.py`:342-346 prohibit guessing an RFID mapping. Read by `economy_values.py`:72 and `backend/referee/rm2026/economy_rules.py`:69-74. |
 | `out_of_combat` (75) | `rm_client/backend/referee/rm2026/state_adapter.py`:251 (write); `rm_client/combat_events.py`:256 (feed-key) |
 | `can_remote_heal` (76) | `rm_client/backend/referee/rm2026/state_adapter.py`:252 (write); `rm_client/combat_events.py`:257 (feed-key) |
 | `can_remote_ammo` (77) | `rm_client/backend/referee/rm2026/state_adapter.py`:253 (write); `rm_client/combat_events.py`:258 (feed-key) |
@@ -182,8 +197,8 @@ Fields without a traced post-default writer: **10**: `base_max_health`, `enemy_b
 | `level` (97) | `rm_client/backend/referee/rm2026/state_adapter.py`:223 (write); `rm_client/robot_profiles.py`:123 (write) |
 | `target_id` (98) | `rm_client/ui/polar/mixins/video_backend_mixin.py`:1113 (write) |
 | `target_distance_m` (99) | `rm_client/model.py`:469 (write); `rm_client/ui/polar/mixins/video_backend_mixin.py`:1114 (write) |
-| `target_health` (100) | **UNTRACED beyond initializer** |
-| `target_max_health` (101) | **UNTRACED beyond initializer** |
+| `target_health` (100) | **Bounded default-only demo/display value (320).** Readers: `model.py`:503,532; `ui/polar/renderers/combat_target_hud.py`:580,605; `legacy_tk_app.py`:236. Vision synchronization updates identity/distance/lock, not this scalar. |
+| `target_max_health` (101) | **Bounded default-only demo/display value (450).** Readers: `model.py`:503,532; `ui/polar/renderers/combat_target_hud.py`:580,605; `legacy_tk_app.py`:236. Vision synchronization updates identity/distance/lock, not this scalar. |
 | `target_locked` (102) | `rm_client/ui/polar/mixins/video_backend_mixin.py`:1091,1120,1123 (write) |
 | `energy_target_locked` (103) | `rm_client/model.py`:471 (write) |
 | `energy_target_distance_m` (104) | `rm_client/model.py`:470 (write) |
@@ -205,20 +220,20 @@ Fields without a traced post-default writer: **10**: `base_max_health`, `enemy_b
 | `projectile_allowance_17mm` (120) | `rm_client/backend/manager.py`:401 (write); `rm_client/backend/referee/rm2026/state_adapter.py`:46,50,55,58 (write); `rm_client/model.py`:479 (write); `rm_client/state_overlay.py`:59 (overlay) |
 | `projectile_allowance_42mm` (121) | `rm_client/backend/manager.py`:402 (write); `rm_client/backend/referee/rm2026/state_adapter.py`:47,51,56,59 (write); `rm_client/model.py`:480 (write); `rm_client/state_overlay.py`:60 (overlay) |
 | `projectile_shop_state` (122) | `rm_client/model.py`:486 (write) |
-| `projectile_shop_price` (123) | **UNTRACED beyond initializer** |
+| `projectile_shop_price` (123) | **Bounded default-only demo/display value (50).** Readers: `model.py`:486 (demo shop status); `ui/polar/renderers/tactical_map.py`:2004 (price display). No live producer found. |
 | `base_health` (124) | `rm_client/backend/referee/rm2026/state_adapter.py`:194 (write); `rm_client/combat_events.py`:218 (feed-key); `rm_client/model.py`:490,516 (write); `rm_client/state_overlay.py`:42 (overlay); `rm_client/ui/polar/mixins/persistence_mixin.py`:190,195 (write) |
-| `base_max_health` (125) | **UNTRACED beyond initializer** |
+| `base_max_health` (125) | **Bounded default-only presentation value (5000).** Readers: `ui/polar/renderers/tactical_map.py`:1954; `kill_fx.py`:1504; `ui/polar/mixins/persistence_mixin.py`:195. No post-default producer found; not a proven immutable constant. |
 | `base_status` (126) | `rm_client/backend/referee/rm2026/state_adapter.py`:195 (write); `rm_client/combat_events.py`:219 (feed-key); `rm_client/model.py`:520 (write) |
 | `base_shield` (127) | `rm_client/backend/referee/rm2026/state_adapter.py`:196 (write); `rm_client/combat_events.py`:220 (feed-key); `rm_client/model.py`:524 (write) |
 | `enemy_base_health` (128) | `rm_client/backend/referee/rm2026/state_adapter.py`:199 (write); `rm_client/model.py`:491,517 (write); `rm_client/ui/polar/mixins/persistence_mixin.py`:191,196 (write) |
-| `enemy_base_max_health` (129) | **UNTRACED beyond initializer** |
+| `enemy_base_max_health` (129) | **Bounded default-only presentation value (5000).** Readers: `ui/polar/renderers/tactical_map.py`:1958; `kill_fx.py`:1506; `ui/polar/mixins/persistence_mixin.py`:196. No post-default producer found; not a proven immutable constant. |
 | `enemy_base_status` (130) | `rm_client/backend/referee/rm2026/state_adapter.py`:200 (write); `rm_client/model.py`:521 (write) |
 | `enemy_base_shield` (131) | `rm_client/backend/referee/rm2026/state_adapter.py`:201 (write); `rm_client/model.py`:525 (write) |
 | `outpost_health` (132) | `rm_client/backend/referee/rm2026/state_adapter.py`:197 (write); `rm_client/combat_events.py`:221 (feed-key); `rm_client/model.py`:492,518 (write); `rm_client/state_overlay.py`:48 (overlay); `rm_client/ui/polar/mixins/persistence_mixin.py`:192,197 (write) |
-| `outpost_max_health` (133) | **UNTRACED beyond initializer** |
+| `outpost_max_health` (133) | **Bounded default-only presentation/reset value (1500).** Read by `ui/polar/mixins/persistence_mixin.py`:197. No post-default producer found; not a proven immutable constant. |
 | `outpost_status` (134) | `rm_client/backend/referee/rm2026/state_adapter.py`:198 (write); `rm_client/combat_events.py`:222 (feed-key); `rm_client/model.py`:522 (write) |
 | `enemy_outpost_health` (135) | `rm_client/backend/referee/rm2026/state_adapter.py`:202 (write); `rm_client/model.py`:493,519 (write); `rm_client/ui/polar/mixins/persistence_mixin.py`:193,198 (write) |
-| `enemy_outpost_max_health` (136) | **UNTRACED beyond initializer** |
+| `enemy_outpost_max_health` (136) | **Bounded default-only presentation/reset value (1500).** Readers: `ui/polar/renderers/tactical_map.py`:1962,2284,2322; `ui/polar/mixins/persistence_mixin.py`:198. No post-default producer found; not a proven immutable constant. |
 | `enemy_outpost_status` (137) | `rm_client/backend/referee/rm2026/state_adapter.py`:203 (write); `rm_client/model.py`:523 (write) |
 | `jump_ready` (138) | `rm_client/model.py`:465 (write) |
 | `pte_ready` (139) | `rm_client/model.py`:466 (write) |

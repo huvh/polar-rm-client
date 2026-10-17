@@ -1,5 +1,22 @@
 # Resumed repairs and acceptance, 2026-10-17
 
+## Latest corrected-source result
+
+Local `2bcf4b4595dd5a261cb4e4c98b1ac2fb8e209ea6`, equivalent public source
+`f4df6bb9e15942ed5b9c7c884d7846c93d7d67ea`, tree
+`4a2f7c3210bf5d981246b15eb7633680f9f127b3`, completed the full selected offline
+profile: **329 PASS / 12 SKIP / 4 INCOMPLETE / 0 FAIL**. Aggregate remains
+**NO-GO** for the four prerequisites below. All 678 declared source inputs
+retained start/end SHA-256
+`09a2302cce10a5ff1beb59bca72585ae5c71b61926f22e8d41346e9aaf6fa922`.
+
+Correction compares newly occupied physical keys against the complete previous
+physical-key set, preserving slot permutations. Both previously failing test
+files remain unchanged. Six focused suites passed 66 methods; a separate reviewer
+reran the original 25 methods and seven new methods and checked 1,000 deterministic
+permutations. Those focused counts are separate from the aggregate suite counts.
+Later documentation-only commits do not change these tested sources.
+
 ## Scope
 
 Public candidate `5db330f771e4b1d2f813a88e887185d58199ec10` has the same
