@@ -685,7 +685,9 @@ class WindowAsyncLifecycleTests(unittest.TestCase):
                 Qt.KeyboardModifier.NoModifier))
         self.assertTrue(window.backend.safety.estop_active)
         self.assertNotEqual(window.backend.safety.control_state.value, "QUALIFICATION")
-        clear.assert_called_once_with()
+        # The failed lock observer now clears pending independently; the
+        # F12 adapter retains its own bounded fallback cleanup as well.
+        self.assertEqual(clear.call_args_list, [unittest.mock.call(), unittest.mock.call()])
         self.assertIn("TypeError: F12 reset failure", toast.call_args.args[0])
         self.assertEqual(toast.call_args.kwargs, {"kind": "warning"})
 

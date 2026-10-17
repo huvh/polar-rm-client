@@ -185,7 +185,9 @@ class DialogServiceWiringTests(unittest.TestCase):
             child.exec()
         self.assertEqual(failures, [])
         stop.assert_called_once_with()
-        clear.assert_called_once_with()
+        # The failed lock observer now clears pending independently; the
+        # F12 adapter retains its own bounded fallback cleanup as well.
+        self.assertEqual(clear.call_args_list, [unittest.mock.call(), unittest.mock.call()])
         arm.assert_not_called()
         self.assertTrue(window.backend.safety.estop_active)
         self.assertNotEqual(window.backend.safety.control_state.value, "QUALIFICATION")

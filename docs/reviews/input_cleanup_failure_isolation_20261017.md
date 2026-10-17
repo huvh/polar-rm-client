@@ -20,3 +20,8 @@ Focus-loss has its own independent fallback. The existing fixture now asserts ex
 - Full offline regression: pending at this checkpoint.
 - No independent reviewer, real robot, serial hardware, Windows/GPU or field qualification is claimed. Previous complete scores apply only to their original source commits.
 - Raw logs remain local and are not included in this publication.
+
+## First complete profile and F12 fixture correction
+Source `9271054b55d427b7f83b77f296a2160b76b3ba65` / public `22aa04b61de8d7dc1acf1a033adfbe6d7475a794` completed **323 PASS / 12 SKIP / 4 INCOMPLETE / 2 FAIL**. The two failed files contain three F12 cases expecting one pending-clear call after a failed reset. Pending clear now occurs independently in the lock observer and in the F12 adapter's fallback. The fixture asserts exactly both calls, preserving all authority, E-stop, re-arm rejection and warning checks. No production change is included in this follow-up.
+
+The two corrected files passed 6 + 21 unittest methods. A new full-profile run is required; the failed profile is not overwritten or relabeled.
