@@ -124,3 +124,25 @@ deliberately retain respectively the first feedback renderer and the wallpaper
 executor each produce **one assertion failure, zero errors**. These controls
 show the corresponding retirement assertions reject retention; they are not
 production defects or extra qualification of native media.
+
+## Actual early-window prefix follow-up
+
+At local source `a4d8774334586572d17ae06370170606a390b8b3`,
+`tests/test_window_early_constructor_ownership.py` adds three actual offscreen
+window/factory failures: ClientConfigStore construction, partial vision bridge
+construction, and partial presentation construction. Three methods passed both
+author and independent runs. Two deliberate retained-owner controls (window and
+wallpaper executor) each failed cleanly. No production leak was reproduced.
+
+The probes observe native window/timer/audio destroyed signals and weak-reference
+retirement of backend, camera, vision, wallpaper/video/executor and renderer
+owners. The real early field-log worker may exist before activation; it retires
+through its existing one-second idle path. Tests allow three seconds per captured
+thread, not a global three-second deadline. Rescue follows the observations and
+cannot convert retained-owner evidence to success.
+
+These are bounded failure-prefix checks, not exhaustive constructor coverage.
+Native multimedia initialization may still occur; playback/source loading is
+suppressed. Physical audio/decoder/device cleanup and audit-log durability remain
+unqualified. The tested window is not passed to a universal partial-object close
+routine, and no such routine is established as safe by these results.

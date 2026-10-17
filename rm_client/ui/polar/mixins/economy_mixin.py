@@ -307,6 +307,7 @@ class EconomyMixin:
         self._economy_scene_epoch += 1
         self.economy_armed_key = ""
         self.economy_hold_key = ""
+        self._economy_hold_input_owner = None
         self.economy_category_scroll.position = 0.0
         self.economy_category_scroll.target = 0.0
         self.economy_category_scroll.velocity = 0.0
@@ -350,6 +351,7 @@ class EconomyMixin:
         self._economy_scene_epoch += 1
         self.economy_armed_key = ""
         self.economy_hold_key = ""
+        self._economy_hold_input_owner = None
         self.economy_hold_rect = QRectF()
         self.invalidate_transient_overlay_scene()
         self.hotspots = [
@@ -399,6 +401,7 @@ class EconomyMixin:
         self.economy_armed_key = ""
         self.economy_armed_until = 0.0
         self.economy_hold_key = ""
+        self._economy_hold_input_owner = None
         self.toast(f"{transaction.message} · {offer.short_title}")
         self.frame_scheduler.force()
 
@@ -424,6 +427,7 @@ class EconomyMixin:
         if unavailable is not None:
             self.toast(unavailable)
             return
+        self._economy_hold_input_owner = getattr(self, "_economy_hold_input_source", None)
         self.economy_hold_key = offer.key
         self.economy_hold_started = time.perf_counter()
         self.economy_hold_rect = QRectF(rect) if rect is not None else QRectF()
@@ -436,6 +440,7 @@ class EconomyMixin:
         elapsed = time.perf_counter() - self.economy_hold_started
         inside = point is None or self.economy_hold_rect.isNull() or self.economy_hold_rect.contains(point)
         self.economy_hold_key = ""
+        self._economy_hold_input_owner = None
         self.economy_hold_rect = QRectF()
         offer = next((item for item in self.economy_offers() if item.key == key), None)
         completion = complete_economy_hold(offer_exists=offer is not None, inside=inside, elapsed=elapsed)

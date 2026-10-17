@@ -38,6 +38,32 @@ __all__ = [
 
 
 
+def _begin_economy_hold_from_input(host, offer, owner, rect=None):
+    # Keep the public hold API compatible while transferring the event source
+    # only when begin_economy_hold actually admits the offer.
+    previous = getattr(host, "_economy_hold_input_source", None)
+    host._economy_hold_input_source = owner
+    try:
+        if rect is None:
+            host.begin_economy_hold(offer)
+        else:
+            host.begin_economy_hold(offer, rect)
+    finally:
+        host._economy_hold_input_source = previous
+
+
+def _cancel_economy_hold_input(host):
+    # Retire confirmation intent before cleanup can call out or reenter Qt.
+    host.economy_hold_key = ""
+    host._economy_hold_input_owner = None
+    host.economy_hold_rect = QRectF()
+
+
+def _owns_economy_hold_release(host, owner):
+    admitted = getattr(host, "_economy_hold_input_owner", None)
+    return admitted is None or admitted == owner
+
+
 # Compatibility action routing. Handlers retain access to the complete window;
 # button-specific admission belongs to each handler, while dispatch applies
 # runtime-transition and GUI-cache guards before invoking it.
@@ -466,7 +492,7 @@ def _on_action_economy_confirm(self, action: str, payload: Any, point: QPointF, 
         else:
             self.economy_selected_key = key
         if action == "economy_confirm_hold":
-            self.begin_economy_hold(offer, rect)
+            _begin_economy_hold_from_input(self, offer, ("mouse", button), rect)
         else:
             self.activate_economy_offer(offer)
 
@@ -589,6 +615,7 @@ class InputDispatchMixin:
         Each independent egress gets a neutral attempt even if another fails.
         A failed cleanup blocks control until a successful explicit lock reset.
         """
+        _cancel_economy_hold_input(self)
         if self._modal_input_blocked():
             return
         self._modal_input_clearing = True
@@ -639,6 +666,7 @@ class InputDispatchMixin:
         0x5A 与 0x0311 的链路中立化由后端负责；这里不能保留可重放的旧意图。
         """
 
+        _cancel_economy_hold_input(self)
         # A reentrant callback joins the existing cleanup owner. It must not
         # reset that owner's pending latch or recursively publish neutral.
         if getattr(self, "_lock_input_clearing", False):
@@ -846,7 +874,7 @@ class InputDispatchMixin:
             self.quick_action_wheel.update_pointer(event.position().x(), event.position().y())
             event.accept()
             return
-        if self.economy_hold_key:
+        if self.economy_hold_key and _owns_economy_hold_release(self, ("mouse", self.qt_button(event))):
             self.finish_economy_hold(event.position())
         drag = self.pointer_interaction.drag
         if drag and drag.get("type") == "jello_module":
@@ -1139,7 +1167,7 @@ class InputDispatchMixin:
                 offer = self.reconcile_economy_selection()
                 if offer is not None and not event.isAutoRepeat():
                     if offer.confirmation == "hold":
-                        self.begin_economy_hold(offer)
+                        _begin_economy_hold_from_input(self, offer, ("key", event.key()))
                     else:
                         self.activate_economy_offer(offer)
                 return
@@ -1250,7 +1278,7 @@ class InputDispatchMixin:
         if self.economy_visible and event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
             # Auto-repeat may include synthetic key-up events while the physical
             # key is still held. Only its real release completes confirmation.
-            if not event.isAutoRepeat():
+            if not event.isAutoRepeat() and _owns_economy_hold_release(self, ("key", event.key())):
                 self.finish_economy_hold()
             return
         if self.overlay_coordinator.blocks_combat_input:
