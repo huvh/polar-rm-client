@@ -15,6 +15,39 @@ digest is `d6a9b5855d1d542da0c2120972dceac7273819ba74512749fdd02d61146702e6`
 (SHA-256 over sorted POSIX path, NUL, SHA-256 file bytes). This is a bounded
 `rm_client/**/*.py` digest, not the full verifier source fingerprint. Other
 work may be integrated concurrently; rerun inventory for a later source.
+The original digest and appendix line references are **historical**, not a
+certificate of the later repair. At source
+`4734c31dff4e5f628237cc49b93c7d79b4a586f8`, a read-only static rescan parsed all
+221 Python files and reconfirmed 242 declared fields. Its same-scope digest is
+`2c18604c8b4af4bca95003c4a267a765d29fe96524a5f672af8107a83396c334`.
+This rescan did not rerun tests or regenerate every writer-reference line.
+
+## Subsequent reproduced defect and accepted repair
+
+The original overlap finding below was a documentation gap at the time of the
+inventory. Later execution established actual valid-input inconsistencies:
+partial score updates reset the match stage; ammo-only updates zeroed unrelated
+health; current-schema enemy-base field 6 replaced the official roster and could
+fabricate an elimination. Signed negative countdown and partial respawn updates
+also disagreed with the decoded adapter.
+
+Source repair `4734c31dff4e5f628237cc49b93c7d79b4a586f8`
+(public `cb66f1f9985e362d775aff64884c912d520b67bf`, identical tree verified by the
+integration owner) filters raw state updates
+by actual wire-field presence, preserves explicit zero/false, keeps current
+roster decoding on field 11 only, and prevents the legacy preview roster from
+entering current health/event authority. The actual referee profile is passed
+at `video_backend_mixin.py:918-924`; profile changes reset event history.
+Countdown sign/clamping agrees with the decoded adapter. Partial respawn progress
+is left to the adapter's accumulated snapshot unless both operands are present.
+
+Ten new focused tests passed. Independent offscreen review also reproduced the
+three primary failures before the fix through the real window's
+`backend.apply_updates` -> `consume_official_messages` -> `apply_official_state`
+chain, then verified all three after the fix. This is bounded acceptance of the
+named counterexamples, not whole-state equivalence or hardware qualification.
+Details, source hashes, publication identifier and limits are recorded in
+[Authority projection repair](authority_projection_repair_20261017.md).
 
 ## Authority and overwrite order
 
@@ -55,8 +88,8 @@ are included where the bounded scan recognizes them.
 
 | Field group | Producers and overrides | Authority/freshness boundary |
 | --- | --- | --- |
-| Match/score/economy/health | Model defaults/demo; decoded `backend/referee/rm2026/state_adapter.py`; later `OfficialMatchFeed` updates; allowlisted POLAR health/heat/energy | Official state suppresses demo. Raw feed applies after decoded data. POLAR wins only for allowlisted active overlay values. Economy ownership suppresses selected demo balances. |
-| Official robot arrays, positions, buffs and frontend rows/maps | Referee adapter canonical containers, then `sync_frontend_state` at lines 61-169; raw feed also supplies official health | Projection returns with no authoritative inputs. Explicit local zero-health beats global fallback; rows/maps/buffs retain documented publication order. POLAR uses separate `polar_ally_hp`/`polar_ground_positions`. |
+| Match/score/economy/health | Model defaults/demo; decoded `backend/referee/rm2026/state_adapter.py`; later `OfficialMatchFeed` updates; allowlisted POLAR health/heat/energy | Official state suppresses demo. Raw feed applies after decoded data; repair `4734c31` requires wire-field presence and preserves explicit zeros. POLAR wins only for allowlisted active overlay values. Economy ownership suppresses selected demo balances. |
+| Official robot arrays, positions, buffs and frontend rows/maps | Referee adapter canonical containers, then `sync_frontend_state` at lines 61-169; raw feed supplies current-profile field-11 health only after repair `4734c31` | Projection returns with no authoritative inputs. Explicit local zero-health beats global fallback; rows/maps/buffs retain documented publication order. POLAR uses separate `polar_ally_hp`/`polar_ground_positions`. |
 | POLAR telemetry and authority diagnostics | Bridge handlers `polar_bridge.py:176-359`; manager telemetry/authority publishers | Link activity requires received segments and age <= 2 seconds (`polar_bridge.py:50,153-162`). This is link freshness, not a separate timestamp for every cached overlay field. Generic spec outputs stay in overlay; only whitelist fields cross into model. |
 | Video provenance and luminance | Video mixin capture/backend ingestion; connection LEDs in window | `video_backend_mixin.py:654-747` selects webcam/backend/synthetic and rejects repeated frames; authoritative deploy video cuts normal consumption. Backend freshness/normal timeline gates apply before publication. Frame source/generation mostly live in dedicated owners, not RobotState. |
 | Vision counts, aim, target and locks | `active_tongji_result` and `sync_tongji_vision_state` (`video_backend_mixin.py:873-909,1080-1125`) | Local/receiver `latest` enforce timeout. Auto prefers available Tongji over local (`vision.py:295-313`), not a timestamp comparison between both. Calibrated/FOV tracking and terminal-target rejection control lock. No result clears lock/calibration/counts, but old numeric aim/sequence/target values can remain and must not be treated as fresh authorization. |
@@ -78,9 +111,11 @@ are included where the bounded scan recognizes them.
   must be read with their values. Retention alone is not fresh command authority.
 - The two official projections overlap in health, match and economy fields.
   Decoded adapter applies presence selection (`state_adapter.py:171-172`), while
-  raw feed has its own parsing/defaults. A differential partial-message test is
-  needed before claiming these producers always agree; this source audit does
-  not establish a conflicting payload or label the overlap a reproduced defect.
+  raw feed has its own parsing/defaults. The initial static audit left their
+  agreement unproven. The subsequent repair above closes the named executed
+  partial-message/profile counterexamples; universal equivalence remains
+  unproven. See the repair report rather than treating the original gap as a
+  still-unreproduced concern.
 
 ## Existing test anchors, not new execution results
 
@@ -95,9 +130,11 @@ are included where the bounded scan recognizes them.
 - `tests/test_vision_selection.py:36-67`: source spelling, ordered selection,
   capture disable and revocation planning.
 
-No tests were run for this document. Final-source aggregate results, all-field
-semantic coverage, per-field POLAR expiry policy, agreement of both official
-projections, and physical output remain distinct verification questions. The
+The initial inventory and latest static rescan did not execute tests. The
+subsequent repair has the separately identified focused and independent results
+above. Final-source aggregate results, all-field semantic coverage, per-field
+POLAR expiry policy, general agreement of both official projections, and physical
+output remain distinct verification questions. The
 source verifier excludes `docs` (`tools/verification_sources.py:12-23`); this
 new document therefore does not alter its declared source input fingerprint.
 
@@ -108,7 +145,7 @@ All fields have initializers in `model.py` at the listed declaration line.
 `mutate` means a recognized mutating container call. `overlay` denotes the
 explicit allowlist consumed through `model.py:418`; `feed-key` denotes a literal
 key in `OfficialMatchFeed.consume` published through the mixin's `setattr` at
-line 934. These are writer candidates/source references, not universal runtime
+historical line 934 (line 938 at repair `4734c31`). These are writer candidates/source references, not universal runtime
 reachability or exclusivity proof. Historical `legacy_tk_app.py` sites are
 included but do not establish normal-window execution.
 
