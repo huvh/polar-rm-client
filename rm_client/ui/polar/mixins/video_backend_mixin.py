@@ -917,7 +917,11 @@ class VideoBackendMixin:
 
     def consume_official_messages(self) -> None:
         for topic, payload, _received_at in self.mqtt.drain_received_messages():
-            events, updates = self.official_feed.consume(topic, payload, alliance=self.alliance_side(), local_robot_id=self.state.robot_id)
+            events, updates = self.official_feed.consume(
+                topic, payload, alliance=self.alliance_side(),
+                local_robot_id=self.state.robot_id,
+                referee_profile=self.state.referee_profile,
+            )
             self._official_state_updates.update(updates)
             for event in events:
                 self.accept_combat_event(event)

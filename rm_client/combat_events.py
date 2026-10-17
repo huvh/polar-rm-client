@@ -7,6 +7,8 @@ import struct
 import time
 from typing import Any, Iterable
 
+from .referee_profiles import DEFAULT_PROFILE
+
 
 @dataclass(frozen=True)
 class CombatEvent:
@@ -86,6 +88,44 @@ def _field_int(fields: dict[int, list[int | bytes]], field: int, default: int = 
         return default
     value = values[-1]
     return int(value) if isinstance(value, int) else default
+
+
+def _field_int32(fields: dict[int, list[int | bytes]], field: int) -> int:
+    value = _field_int(fields, field) & 0xFFFFFFFF
+    return value - (1 << 32) if value & (1 << 31) else value
+
+
+# Raw-feed presentation is a partial projection, just like the decoded adapter.
+# Numbers follow the reviewed RM2026 contract; absence is not an explicit zero.
+_STATE_UPDATE_FIELDS = {
+    "GameStatus": {
+        "current_round": (1,), "total_rounds": (2,), "red_score": (3,),
+        "blue_score": (4,), "current_stage": (5,), "stage_countdown_sec": (6,),
+        "stage_elapsed_sec": (7,),
+    },
+    "GlobalLogisticsStatus": {
+        "remaining_economy": (1,), "total_economy_obtained": (2,),
+        "tech_level": (3,), "encryption_level": (4,),
+    },
+    "GlobalUnitStatus": {
+        "base_health": (1,), "base_status": (2,), "base_shield": (3,),
+        "outpost_health": (4,), "outpost_status": (5,), "official_robot_health": (11,),
+    },
+    "RobotRespawnStatus": {
+        "respawn_pending": (1,), "respawn_progress": (2, 3),
+        "respawn_can_free": (4,), "respawn_gold_cost": (5,), "respawn_can_pay": (6,),
+    },
+    "RobotDynamicStatus": {
+        "current_health": (1,), "current_heat": (2,), "current_chassis_energy": (4,),
+        "current_buffer_energy": (5,), "total_projectiles_fired": (8,),
+        "remaining_ammo": (9,), "out_of_combat": (10,),
+        "can_remote_heal": (12,), "can_remote_ammo": (13,),
+    },
+    "AirSupportStatusSync": {
+        "air_support_active": (1,), "air_support_free_time_sec": (2,),
+        "air_support_can_free": (2,), "air_support_cost_coins": (3,),
+    },
+}
 
 
 def _field_bytes(fields: dict[int, list[int | bytes]], field: int) -> bytes:
@@ -171,6 +211,7 @@ class OfficialMatchFeed:
         self.last_kill_data_at = 0.0
         self.last_official_event_at = 0.0
         self._robot_health: list[int] = []
+        self._referee_profile = DEFAULT_PROFILE
         self._seen: dict[tuple[str, int, int], float] = {}
 
     def is_fresh(self, timeout_s: float = 2.5) -> bool:
@@ -180,7 +221,15 @@ class OfficialMatchFeed:
         """只有可能携带击杀/战亡信息的官方消息才会屏蔽视觉击杀。"""
         return self.last_kill_data_at > 0.0 and time.perf_counter() - self.last_kill_data_at <= timeout_s
 
-    def consume(self, topic: str, payload: bytes, *, alliance: str, local_robot_id: int) -> tuple[list[CombatEvent], dict[str, Any]]:
+    def consume(self, topic: str, payload: bytes, *, alliance: str, local_robot_id: int,
+                referee_profile: str = DEFAULT_PROFILE) -> tuple[list[CombatEvent], dict[str, Any]]:
+        if referee_profile != self._referee_profile:
+            self._referee_profile = referee_profile
+            self._robot_health = []
+            self._seen.clear()
+            self.last_message_at = 0.0
+            self.last_kill_data_at = 0.0
+            self.last_official_event_at = 0.0
         now = time.perf_counter()
         name = _topic_name(topic)
         if name in OFFICIAL_DOWNLINK_MESSAGES:
@@ -201,8 +250,8 @@ class OfficialMatchFeed:
                     0: "NOT_STARTED", 1: "PREPARE", 2: "SELF_CHECK",
                     3: "COUNTDOWN", 4: "MATCH", 5: "SETTLEMENT",
                 }.get(_field_int(fields, 5), str(_field_int(fields, 5))),
-                "stage_countdown_sec": _field_int(fields, 6),
-                "stage_elapsed_sec": _field_int(fields, 7),
+                "stage_countdown_sec": max(0, _field_int32(fields, 6)),
+                "stage_elapsed_sec": max(0, _field_int32(fields, 7)),
             })
         elif name == "GlobalLogisticsStatus":
             updates.update({
@@ -212,7 +261,10 @@ class OfficialMatchFeed:
                 "encryption_level": _field_int(fields, 4),
             })
         elif name == "GlobalUnitStatus":
-            health_values = fields.get(11) or fields.get(6) or []
+            # Current field 6 is enemy_base_health, never a roster. The legacy
+            # roster has no reviewed role order and is diagnostic-only in its
+            # decoded adapter; raw feedback must not bypass that quarantine.
+            health_values = fields.get(11, []) if referee_profile == DEFAULT_PROFILE else []
             health = [number for value in health_values for number in _packed_uints(value)]
             updates.update({
                 "base_health": _field_int(fields, 1),
@@ -236,11 +288,11 @@ class OfficialMatchFeed:
                 kind = "death" if robot_id == local_robot_id else "elimination"
                 events.append(CombatEvent(kind, "referee", True, now, victim_id=robot_id, detail="alive_state"))
         elif name == "RobotRespawnStatus":
-            total = max(0, _field_int(fields, 2))
+            total = max(1, _field_int(fields, 2))
             current = max(0, _field_int(fields, 3))
             updates.update({
                 "respawn_pending": bool(_field_int(fields, 1)),
-                "respawn_progress": min(1.0, current / total) if total > 0 else 0.0,
+                "respawn_progress": min(1.0, current / total),
                 "respawn_can_free": bool(_field_int(fields, 4)),
                 "respawn_gold_cost": _field_int(fields, 5),
                 "respawn_can_pay": bool(_field_int(fields, 6)),
@@ -287,6 +339,14 @@ class OfficialMatchFeed:
         elif name == "CustomByteBlock":
             events.extend(self._custom_events(_field_bytes(fields, 1), now))
 
+        required_fields = _STATE_UPDATE_FIELDS.get(name, {})
+        updates = {
+            key: value for key, value in updates.items()
+            if key == "official_feed_at"
+            or all(number in fields for number in required_fields[key])
+        }
+        # Partial respawn progress belongs to the decoded adapter's accumulated
+        # snapshot. Only a complete pair can independently replace that value.
         filtered = self._dedupe(events)
         if filtered:
             self.last_official_event_at = now
