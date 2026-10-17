@@ -15,14 +15,27 @@ class ThumbnailDecoder:
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
+        self._loads_finished = threading.Condition(self._lock)
+        self._close_lock = threading.Lock()
+        self._active_loads = 0
+        self._closed = False
         self._unreleased_captures: list[tuple[Any, Exception]] = []
         self.last_error = ""
         self._close_errors_reported = False
 
     def load(self, path: Path) -> QImage:
-        with self._lock:
-            if self._unreleased_captures:
+        with self._loads_finished:
+            if self._closed or self._unreleased_captures:
                 return QImage()
+            self._active_loads += 1
+        try:
+            return self._decode(path)
+        finally:
+            with self._loads_finished:
+                self._active_loads -= 1
+                self._loads_finished.notify_all()
+
+    def _decode(self, path: Path) -> QImage:
         capture = None
         try:
             import cv2  # type: ignore
@@ -52,6 +65,17 @@ class ThumbnailDecoder:
 
     def close(self) -> None:
         """Report once, then retry only on a later explicit shutdown request."""
+        # Executor.submit can raise after native worker admission but before
+        # registering that worker. Own decode activity independently, and deny
+        # a delayed task native entry even if executor shutdown already returned.
+        with self._close_lock:
+            with self._loads_finished:
+                self._closed = True
+                while self._active_loads:
+                    self._loads_finished.wait()
+            self._close_captures()
+
+    def _close_captures(self) -> None:
         if self._close_errors_reported:
             with self._lock:
                 failures = tuple(self._unreleased_captures)

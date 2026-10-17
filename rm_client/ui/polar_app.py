@@ -789,49 +789,49 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             self.kill_fx.preload_preset_sounds(
                 self.setting_mode(elimination_fx, "Preset", "Default Scrolling"))
 
-        activate_startup_session(
-            StartupProfilePorts(
-                sync_wheel=lambda: self.sync_quick_action_wheel_settings(),
-                apply_match=lambda: self.apply_match_mode(
-                    self.match_mode_manager.current.key, close_home=False, announce=False),
-                apply_robot=lambda: self.apply_robot_profile(
-                    self.current_robot_profile_key(), close_home=False, announce=False),
-                refresh_profiles=lambda: self.refresh_config_profiles(),
-                refresh_wallpapers=lambda: self.refresh_wallpaper_profiles(),
-                refresh_sounds=lambda: self.refresh_custom_ui_sound_options(),
-                ensure_default=lambda: self.config_store.ensure_default(self.current_config_data()),
-                load_saved=lambda: self.load_startup_config(),
-            ),
-            StartupPresentationPorts(
-                update_title=lambda: self.setWindowTitle(
-                    ui_text("POLAR-RM Custom Client", chinese_enabled(self.registry))),
-                preload_feedback=preload_startup_feedback,
-                apply_autostart=lambda: self._startup_navigation.apply_autostart(
-                    os.environ.get("POLAR_AUTOSTART", "")),
-                sync_mode=lambda: self.sync_mode_setting(),
-                announce_ready=lambda: self.toast("ClickGUI 已就绪：Jello Sigma"),
-            ),
-            StartupScenarioPorts(
-                launcher_visible=lambda: self.home_visible,
-                configuration_pending=lambda: self.configuration_change_pending,
-                request=lambda: self.backend.request_scenario(
-                    self.scenario_manager.current.key, registry=self.registry),
-                capture=lambda generation: self.capture_pending_scenario_configuration(generation),
-            ),
-        )
-
-        from .window_shortcuts import WindowShortcuts
-        WindowShortcuts(self)  # QObject parent owns the filter for this window.
-
-        # Start event delivery only after profile staging and all callback
-        # dependencies exist. Native resource activation still waits for poll.
-        self.timer = create_frame_timer(self, self.on_tick)
         try:
+            activate_startup_session(
+                StartupProfilePorts(
+                    sync_wheel=lambda: self.sync_quick_action_wheel_settings(),
+                    apply_match=lambda: self.apply_match_mode(
+                        self.match_mode_manager.current.key, close_home=False, announce=False),
+                    apply_robot=lambda: self.apply_robot_profile(
+                        self.current_robot_profile_key(), close_home=False, announce=False),
+                    refresh_profiles=lambda: self.refresh_config_profiles(),
+                    refresh_wallpapers=lambda: self.refresh_wallpaper_profiles(),
+                    refresh_sounds=lambda: self.refresh_custom_ui_sound_options(),
+                    ensure_default=lambda: self.config_store.ensure_default(self.current_config_data()),
+                    load_saved=lambda: self.load_startup_config(),
+                ),
+                StartupPresentationPorts(
+                    update_title=lambda: self.setWindowTitle(
+                        ui_text("POLAR-RM Custom Client", chinese_enabled(self.registry))),
+                    preload_feedback=preload_startup_feedback,
+                    apply_autostart=lambda: self._startup_navigation.apply_autostart(
+                        os.environ.get("POLAR_AUTOSTART", "")),
+                    sync_mode=lambda: self.sync_mode_setting(),
+                    announce_ready=lambda: self.toast("ClickGUI 已就绪：Jello Sigma"),
+                ),
+                StartupScenarioPorts(
+                    launcher_visible=lambda: self.home_visible,
+                    configuration_pending=lambda: self.configuration_change_pending,
+                    request=lambda: self.backend.request_scenario(
+                        self.scenario_manager.current.key, registry=self.registry),
+                    capture=lambda generation: self.capture_pending_scenario_configuration(generation),
+                ),
+            )
+
+            from .window_shortcuts import WindowShortcuts
+            WindowShortcuts(self)  # QObject parent owns the filter for this window.
+
+            # Start event delivery only after profile staging and all callback
+            # dependencies exist. Native resource activation still waits for poll.
+            self.timer = create_frame_timer(self, self.on_tick)
             self.timer.start(self._render_timer_interval_ms)
         except BaseException as failure:
-            # Every shutdown dependency now exists, including the named timer.
-            # Retain this complete owner even though the factory cannot return
-            # it. Earlier, partially constructed windows have no abort contract.
+            # All service owners exist before activation. A failed profile,
+            # shortcut or timer admission cannot abandon an already requested
+            # lifecycle generation merely because the factory never returns.
             _abort_failed_launch(QApplication.instance(), self, self._abort_startup, failure)
             raise
 
@@ -3252,7 +3252,15 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         The application owns this wrapper until the normal asynchronous close
         completes. No operator edits have been admitted by a successful launch.
         """
-        self._begin_window_shutdown()
+        try:
+            if "timer" not in self.__dict__:
+                # Failure-only event source: successful construction keeps its
+                # original timer publication order, after profile/shortcuts.
+                self.timer = create_frame_timer(self, self.on_tick)
+        finally:
+            # Even unavailable timer service must revoke runtime and request
+            # shutdown. Retention preserves the owner if polling cannot run.
+            self._begin_window_shutdown()
 
     def _begin_window_shutdown(self) -> None:
         tasks = (

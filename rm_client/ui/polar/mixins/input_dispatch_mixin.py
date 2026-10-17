@@ -27,6 +27,7 @@ from ....model import Setting
 from ..primitives import InertialScroll
 from ..pointer_interaction import PointerField, PointerInteraction
 from ..hit_testing import topmost_hotspot
+from ..scroll_routing import ScrollFamily, scroll_target_at
 from ..text_editing import ChatEdit, SearchEdit, TextKey, chat_edit, search_edit
 
 __all__ = [
@@ -730,10 +731,7 @@ class InputDispatchMixin:
             setting.set_from_ratio((point.x() - rect.left()) / max(1.0, rect.width()))
             self.after_setting_changed(setting)
         elif self.pointer_interaction.drag["type"] == "jello_module":
-            start = self.pointer_interaction.drag.get("start", point)
-            self.pointer_interaction.drag["point"] = QPointF(point)
-            if isinstance(start, QPointF) and math.dist((start.x(), start.y()), (point.x(), point.y())) >= 6.0:
-                self.pointer_interaction.drag["moved"] = True
+            self.pointer_interaction.track_module_drag(point)
             self.invalidate_gui_cache()
             self.frame_scheduler.force()
         elif self.pointer_interaction.drag["type"] == "old_panel":
@@ -771,10 +769,18 @@ class InputDispatchMixin:
             return
         if self.economy_hold_key:
             self.finish_economy_hold(event.position())
-        if self.pointer_interaction.drag and self.pointer_interaction.drag.get("type") == "jello_module":
-            drag = self.pointer_interaction.drag
-            name = str(drag.get("module", ""))
-            if drag.get("moved"):
+        drag = self.pointer_interaction.drag
+        if drag and drag.get("type") == "jello_module":
+            # Module captures are acquired only by a left press. Releasing a
+            # different held button must neither commit nor discard that drag.
+            if event.button() != Qt.MouseButton.LeftButton:
+                event.accept()
+                return
+            # Claim exactly once before callbacks: even a later toast/save
+            # failure or nested release must not replay a toggle or drop.
+            command = self.pointer_interaction.take_module_drag()
+            name = command.name
+            if command.moved:
                 function_bar = self.registry.get("MinecraftCombatHUD")
                 override = self.setting_mode(function_bar, "GUI Scale", "Auto")
                 multiplier = self.get_setting_number(function_bar, "Scale Multiplier", 1.0)
@@ -801,9 +807,12 @@ class InputDispatchMixin:
                         self.auto_save_config()
             self.invalidate_gui_cache()
             self.frame_scheduler.force()
-        if self.pointer_interaction.drag and self.pointer_interaction.drag.get("type") in {"old_panel", "polar_window"}:
+        elif drag and drag.get("type") in {"old_panel", "polar_window"}:
             self.auto_save_config()
-        self.pointer_interaction.drag = None
+        # A callback may have started a new capture. Retire only the command
+        # associated with this release, never its successor.
+        if self.pointer_interaction.drag is drag:
+            self.pointer_interaction.drag = None
         if self.combat_control_input_allowed():
             self.control.mock_output = bool(self.backend.mqtt.mock_output)
             self.control.set_mouse_button(self.qt_button(event), False, self.state, self.registry)
@@ -859,57 +868,34 @@ class InputDispatchMixin:
             self.frame_scheduler.force()
             event.accept()
             return
-        for viewport in reversed(self.gui_scroll_viewports):
-            if not viewport["rect"].contains(point):
-                continue
-            mode, key, maximum = viewport["mode"], viewport["key"], float(viewport["maximum"])
-            if mode == "jello_dropdown":
+        scroll = scroll_target_at(self.gui_scroll_viewports, point)
+        if scroll is not None:
+            key, maximum = scroll.key, scroll.maximum
+            if scroll.is_jello:
+                # Sigma's literal 35-pixel step differs from retained Polar's
+                # 28. Preserve the second live angle read on this path.
                 jello_delta = -float(pixel_delta) if pixel_delta else -event.angleDelta().y() / 120.0 * 35.0
+            if scroll.family is ScrollFamily.JELLO_DROPDOWN:
                 self.jello_state.dropdown_scroll = max(
                     0.0, min(maximum, self.jello_state.dropdown_scroll + jello_delta)
                 )
-                self.frame_scheduler.force()
-                event.accept()
-                return
-            elif mode == "jello_panel":
-                # ScrollableContentPanel.scrollStep is the literal 35 in
-                # Sigma 5.1.0; retained Polar interfaces continue using 28.
-                jello_delta = -float(pixel_delta) if pixel_delta else -event.angleDelta().y() / 120.0 * 35.0
+            elif scroll.family is ScrollFamily.JELLO_PANEL:
                 current = float(self.jello_state.panel_scroll.get(key, 0.0))
                 self.jello_state.panel_scroll[key] = max(0.0, min(maximum, current + jello_delta))
                 self.jello_state.mark_scroll(f"panel:{key}")
-                self.frame_scheduler.force()
-                event.accept()
-                return
-            elif mode == "jello_settings":
-                jello_delta = -float(pixel_delta) if pixel_delta else -event.angleDelta().y() / 120.0 * 35.0
+            elif scroll.family is ScrollFamily.JELLO_SETTINGS:
                 self.jello_state.scroll_settings_by(key, jello_delta, maximum)
                 self.jello_state.mark_scroll(f"settings:{key}")
-                self.frame_scheduler.force()
-                event.accept()
-                return
-            elif mode == "old":
-                target = self.old_panels[key]
-            elif mode == "new":
-                target = self.new_panels[key]
-            elif mode == "dropdown":
-                target = self.dropdown_panels[key]
-            elif mode == "polar_multi":
-                target = self.polar_windows[key]
-            elif mode == "polar_settings":
+            elif scroll.family is ScrollFamily.LEGACY_PANEL:
+                target = getattr(self, scroll.panel_attribute)[key]
+                target["scroll"] = max(0.0, min(maximum, float(target.get("scroll", 0.0)) + delta))
+            elif scroll.family is ScrollFamily.SETTINGS_MOTION:
                 motion = self.polar_settings_scroll_motion.setdefault(key, InertialScroll())
                 motion.set_bounds(maximum)
                 motion.add_wheel(delta)
-                self.frame_scheduler.force()
-                event.accept()
-                return
             else:
                 self.polar_unified_scroll_motion.set_bounds(maximum)
                 self.polar_unified_scroll_motion.add_wheel(delta)
-                self.frame_scheduler.force()
-                event.accept()
-                return
-            target["scroll"] = max(0.0, min(maximum, float(target.get("scroll", 0.0)) + delta))
             self.frame_scheduler.force()
             event.accept()
             return

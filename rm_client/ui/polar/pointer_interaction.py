@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from typing import Any, Protocol
 
 from PySide6.QtCore import QPointF
@@ -16,6 +17,13 @@ class BindingTarget(Protocol):
 class BackgroundRelease:
     consumed: bool = False
     dismiss: bool = False
+
+
+@dataclass(frozen=True)
+class ModuleDragRelease:
+    """One consumed module gesture, detached from mutable capture storage."""
+    name: str
+    moved: bool
 
 
 @dataclass
@@ -68,6 +76,38 @@ class PointerInteraction:
         self.drag = None
         self.binding_module = None
         self.background_press = None
+
+    def track_module_drag(self, point: QPointF) -> None:
+        """Update an admitted module capture without rendering/window effects.
+
+        Keep live writes: a compatibility capture can replace self.drag while
+        storing the point, and the threshold update must see that successor.
+        """
+        start = self.drag.get("start", point)
+        self.drag["point"] = QPointF(point)
+        if isinstance(start, QPointF) and math.dist((start.x(), start.y()), (point.x(), point.y())) >= 6.0:
+            self.drag["moved"] = True
+
+    def take_module_drag(self) -> ModuleDragRelease:
+        """Consume an admitted module capture before interpreting its payload.
+
+        Legacy dictionaries are normalized only here. Payload read failures
+        cannot resurrect the command, and callbacks receive an immutable value
+        rather than retaining access to live capture state.
+        """
+        drag = self.take_drag()
+        return ModuleDragRelease(str(drag.get("module", "")), bool(drag.get("moved")))
+
+    def take_drag(self) -> dict[str, Any] | None:
+        """Transfer the captured command before running fallible UI effects.
+
+        A repeated/reentrant release must not replay a completed module toggle
+        or slot assignment. New captures created by those effects are separate
+        commands and remain owned by this interaction.
+        """
+        drag = self.drag
+        self.drag = None
+        return drag
 
     def finish_binding(self, key: str) -> BindingTarget | None:
         module = self.binding_module

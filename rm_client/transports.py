@@ -230,12 +230,12 @@ class UDPVideoReceiver:
             self._assembler = session.assembler
             self.running = True
             self.last_error = ""
-            session.thread = threading.Thread(
-                target=self._run, args=(session, self.host, self.port, self.on_frame),
-                name="udp-video", daemon=True,
-            )
-            self._thread = session.thread
             try:
+                session.thread = threading.Thread(
+                    target=self._run, args=(session, self.host, self.port, self.on_frame),
+                    name="udp-video", daemon=True,
+                )
+                self._thread = session.thread
                 session.thread.start()
             except Exception as exc:
                 self.running = False
@@ -244,7 +244,7 @@ class UDPVideoReceiver:
                 # A late-raising start wrapper may already have admitted a
                 # receiver creating its socket. Keep that session and thread
                 # until strict close observes its late native ownership.
-                if session.thread.ident is None:
+                if session.thread is None or session.thread.ident is None:
                     self._session = self._thread = None
                 raise
 

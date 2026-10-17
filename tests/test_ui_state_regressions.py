@@ -38,7 +38,7 @@ def load_pure(name, relative):
 
 sys.path.insert(0, str(ROOT))
 from rm_client.ui.polar.frame_telemetry import FrameTelemetry
-from rm_client.ui.polar.window_lifecycle import OwnerAction, OwnerActionFailure, run_owner_actions
+from rm_client.ui.polar.window_lifecycle import FinalContextPorts, OwnerAction, OwnerActionFailure, WindowLifecycleController, run_owner_actions
 from rm_client import config_store as store
 from rm_client.configuration.transactions import (
     ConfigurationApplyError, ConfigurationRestorePoint, RuntimeRestorePending,
@@ -525,12 +525,13 @@ class WindowPathTests(unittest.TestCase):
         class Base:
             def closeEvent(self, _event):
                 self.calls.append("super")
-        cls = extract_class("rm_client/ui/polar_app.py", "PolarRMWindow", {"paintGL", "paint_gpu_frame", "_paint_gpu_frame_cached", "_paint_compatibility_frame", "closeEvent", "_finish_window_shutdown", "toast"}, {"time": time, "math": math, "EconomyScenePhase": phases, "OwnerAction": OwnerAction, "OwnerActionFailure": OwnerActionFailure, "run_owner_actions": run_owner_actions}, base=Base)
+        cls = extract_class("rm_client/ui/polar_app.py", "PolarRMWindow", {"paintGL", "paint_gpu_frame", "_paint_gpu_frame_cached", "_paint_compatibility_frame", "closeEvent", "_finish_window_shutdown", "_window_close_finalized", "toast"}, {"time": time, "math": math, "EconomyScenePhase": phases, "FinalContextPorts": FinalContextPorts, "OwnerAction": OwnerAction, "OwnerActionFailure": OwnerActionFailure, "run_owner_actions": run_owner_actions}, base=Base)
         economy = extract_class("rm_client/ui/polar/mixins/economy_mixin.py", "EconomyMixin", {"_finalize_economy_restore"}, {"EconomyScenePhase": phases, "OverlayKind": NS(ECONOMY="economy")})
         cls._finalize_economy_restore = economy._finalize_economy_restore
         window = cls()
         window.calls = []
-        window._window_lifecycle = NS(closing=False, ready_to_close=True, owner_failures=())
+        window._window_lifecycle = WindowLifecycleController(None)
+        window._window_lifecycle.ready_to_close = True
         window._window_close_finalized = False
         window.gpu_compositor = NS(available=False)
         window._gpu_warm_pending = False

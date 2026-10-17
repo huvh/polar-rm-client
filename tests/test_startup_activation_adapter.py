@@ -45,9 +45,13 @@ def adapter_code():
     tree = ast.parse((ROOT / "rm_client/ui/polar_app.py").read_text(encoding="utf-8"))
     window = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "PolarRMWindow")
     constructor = next(node for node in window.body if isinstance(node, ast.FunctionDef) and node.name == "__init__")
-    call = next(node for node in constructor.body if isinstance(node, ast.Expr)
-                and isinstance(node.value, ast.Call) and isinstance(node.value.func, ast.Name)
-                and node.value.func.id == "activate_startup_session")
+    # The assembled-window abort guard nests the same adapter call in try.
+    # Locate exactly one call without changing the frozen workflow/oracle.
+    calls = [node for node in ast.walk(constructor) if isinstance(node, ast.Expr)
+             and isinstance(node.value, ast.Call) and isinstance(node.value.func, ast.Name)
+             and node.value.func.id == "activate_startup_session"]
+    assert len(calls) == 1, "Expected one startup activation adapter"
+    call = calls[0]
     helpers = [node for node in constructor.body if isinstance(node, ast.FunctionDef)
                and node.name == "preload_startup_feedback"]
     return compile(ast.Module(body=[*helpers, call], type_ignores=[]), "<production-startup-adapter>", "exec")
