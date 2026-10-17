@@ -305,7 +305,10 @@ class OfficialMatchFeed:
         elif name == "RobotStaticStatus":
             robot_id = _field_int(fields, 4)
             alive_state = _field_int(fields, 3)
-            if alive_state == 2:
+            # An absent/default identity is not evidence for a victim. Keep
+            # the established protocol ID range, including non-selectable roles.
+            valid_id = 1 <= robot_id <= 9 or 101 <= robot_id <= 109
+            if 3 in fields and 4 in fields and valid_id and alive_state == 2:
                 kind = "death" if robot_id == local_robot_id else "elimination"
                 events.append(CombatEvent(kind, "referee", True, now, victim_id=robot_id, detail="alive_state"))
         elif name == "RobotRespawnStatus":
@@ -375,18 +378,19 @@ class OfficialMatchFeed:
 
     def _health_transitions(self, health: list[int], alliance: str, now: float) -> list[CombatEvent]:
         previous = self._robot_health
-        self._robot_health = health
+        # The wire roster has five own roles followed by five enemy roles.
+        # Short vectors omit observations; they never move the team boundary.
+        self._robot_health = health[:2 * len(self.ENEMY_ORDER)]
         if not previous:
             return []
         events: list[CombatEvent] = []
-        own_count = min(5, len(health) // 2)
-        for index, current in enumerate(health):
+        own_count = len(self.ENEMY_ORDER)
+        for index in range(own_count, min(len(health), 2 * own_count)):
+            current = health[index]
             before = previous[index] if index < len(previous) else current
             if before <= 0 or current != 0:
                 continue
-            if index < own_count:
-                continue
-            type_id = self.ENEMY_ORDER[(index - own_count) % len(self.ENEMY_ORDER)]
+            type_id = self.ENEMY_ORDER[index - own_count]
             victim_id = 100 + type_id if alliance == "Red" else type_id
             events.append(CombatEvent("elimination", "referee_health", True, now, victim_id=victim_id, detail="health_zero"))
         return events
