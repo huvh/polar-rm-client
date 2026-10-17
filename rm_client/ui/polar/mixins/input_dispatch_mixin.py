@@ -957,7 +957,9 @@ class InputDispatchMixin:
             event.accept()
             return
         active_gui_mode = self.active_clickgui_mode()
-        if active_gui_mode == "PolarPanel" and self.panel_modules_rect.contains(point):
+        # Legacy duck hosts omit visibility; real windows always provide it.
+        gui_visible = getattr(self, "gui_visible", True)
+        if gui_visible and active_gui_mode == "PolarPanel" and self.panel_modules_rect.contains(point):
             modules = self.panel_modules()
             scale = self.get_gui_scale_for_bounds(self.width(), self.height(), 600.0, 440.0, 76.0, 82.0)
             row_h = 22.0 * scale
@@ -969,13 +971,14 @@ class InputDispatchMixin:
             self.frame_scheduler.force()
             event.accept()
             return
-        if active_gui_mode == "PolarPanel" and self.panel_settings_rect.contains(point):
+        if gui_visible and active_gui_mode == "PolarPanel" and self.panel_settings_rect.contains(point):
             key = self.selected_module.name
             self.settings_scroll[key] = max(0.0, self.settings_scroll.get(key, 0.0) + delta)
             self.frame_scheduler.force()
             event.accept()
             return
-        scroll = scroll_target_at(self.gui_scroll_viewports, point)
+        # Cached geometry can outlive closing until the next render.
+        scroll = scroll_target_at(self.gui_scroll_viewports, point) if gui_visible else None
         if scroll is not None:
             key, maximum = scroll.key, scroll.maximum
             if scroll.is_jello:
