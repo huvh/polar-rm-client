@@ -25,3 +25,9 @@ Focus-loss has its own independent fallback. The existing fixture now asserts ex
 Source `9271054b55d427b7f83b77f296a2160b76b3ba65` / public `22aa04b61de8d7dc1acf1a033adfbe6d7475a794` completed **323 PASS / 12 SKIP / 4 INCOMPLETE / 2 FAIL**. The two failed files contain three F12 cases expecting one pending-clear call after a failed reset. Pending clear now occurs independently in the lock observer and in the F12 adapter's fallback. The fixture asserts exactly both calls, preserving all authority, E-stop, re-arm rejection and warning checks. No production change is included in this follow-up.
 
 The two corrected files passed 6 + 21 unittest methods. A new full-profile run is required; the failed profile is not overwritten or relabeled.
+
+## Follow-up complete offline result
+
+Exact tested source `86eace0bb2e731eff0dc271899515b99dd5ce46e`, tree `0058a8787830cca3cbe079eada53b1fa971d62f6`, public equivalent `e47ce1646dfda4fe4034c270d1a694865e00f6c2` completed **325 PASS / 12 SKIP / 4 INCOMPLETE / 0 FAIL**. Aggregate is **NO-GO** because prerequisites remain absent. All 674 declared inputs retained identical start/end SHA256 `8b918e199475605a851642b40d808c81f9b3c35b1e441a5ce1a037615a36d415`.
+
+The four incomplete entries remain the team CRC cross-reference, firmware/dump.cs DT7 comparison, DT7 firmware UI self-test comparison and legacy installation-required firmware patch test. No independent review, Windows/GPU or physical robot qualification was performed. New raw logs are not published. The previous 9271054 failed result remains separate.
