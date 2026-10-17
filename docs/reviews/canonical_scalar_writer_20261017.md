@@ -110,3 +110,16 @@ Independent follow-up passed 25 focused methods. Wrong boolean, missing presence
 guard and reordered write each failed mutation checks with two failures and zero
 errors. No production changes were made to satisfy these old-oracle checks. A new
 complete result is required for the follow-up source; none is claimed here yet.
+
+## Corrected complete result
+
+Local `12e86e9241c7aa655dc326048e83512364259a68` equals public source
+`b59b042847f7f2f2d0e0f4c71acfd5151db20cb7`, tree
+`91d0f28cd7309db2e17c01da1f5b16a626080795`. The selected offline profile
+completed **344 PASS / 12 SKIP / 4 INCOMPLETE / 0 FAIL**. All 693 declared
+inputs retained SHA-256
+`59dba361dc56ad54150bb3d0becb82cb9b8ff6bbde1ee293fac7d0408c8fa282`.
+Aggregate remains **NO-GO** for external prerequisites. The preceding rejected
+342/12/4/2 result and historical fixture identities remain above. No native
+Windows/GPU/audio/robot/portable qualification or transactional-state-freshness
+guarantee follows from this result. Report-only follow-ups change no source.

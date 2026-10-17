@@ -1,6 +1,28 @@
 # Remaining architecture acceptance: evidence-based close-out
 
-## Latest evidence index — 2026-10-17 18:54 UTC
+## Latest evidence index — 2026-10-17 20:11 UTC
+
+- Exact source public `b59b042` / local `12e86e9` completed **344 PASS / 12 SKIP /
+  4 INCOMPLETE / 0 FAIL**, aggregate **NO-GO**. See
+  [canonical production writer](canonical_scalar_writer_20261017.md) for full
+  identities, fingerprints, preserved failed candidate and intentional semantics.
+- The normal raw-feed consumer now retains receipt freshness/events only; decoded
+  adapter owns production scalar publication and air-support eligibility.
+  Explicit compatibility APIs remain, so this is not a globally enforced single
+  writer. Receipt freshness is not successful-state-application proof.
+- [Event validation](event_extension_validation_20261017.md) rejects malformed
+  numeric/deep JSON events without dropping valid raw batch siblings.
+- [Event identity](event_identity_repair_20261017.md) preserves fixed roster
+  mapping and rejects absent/unsupported static identities; enum meanings remain
+  unqualified by that review.
+- Early constructor, cleanup admission, economy input ownership, hidden wheel,
+  and explicit-oracle corrections are recorded in
+  [input-owner follow-up](input_owner_followup_20261017.md).
+- External CRC/firmware/install prerequisites, historical timing causation and
+  native Windows/GPU/audio/portable/device qualification remain open. No whole-
+  project Clean Code or merge-readiness claim is made.
+
+## Earlier evidence index — 2026-10-17 18:54 UTC
 
 This section supersedes historical running-state/unfinished-field-inventory
 statements below; historical evidence and failures remain preserved.
