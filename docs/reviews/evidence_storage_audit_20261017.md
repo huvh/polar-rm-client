@@ -105,3 +105,32 @@ evidence from disposable runtime output.
 Only this audit document was added. No evidence was deleted, moved, rewritten,
 or uploaded, and no mass cleanup was performed. No new raw logs or archives
 were added. No production or test files were changed by this audit.
+
+## Review-display addendum, 2026-10-17
+
+The later review-hygiene change adds only this `.gitattributes` rule:
+
+```gitattributes
+docs/evidence/**/*.log linguist-generated=true
+```
+
+[GitHub's official documentation](https://docs.github.com/en/repositories/working-with-files/managing-files/customizing-how-changed-files-appear-on-github)
+describes generated-file attributes as hiding matching diffs by default and
+excluding them from language statistics. This narrows default review noise to
+execution logs; it is not a code-quality improvement, file-count reduction or
+verification of the reported 3,251-file PR total. GitHub's rendered PR UI was
+not inspected here, so its actual presentation remains unobserved.
+
+Local `git check-attr -z --stdin linguist-generated` over every tracked
+`docs/evidence` path confirmed: all 2,366 `.log` files are `true`; all other
+320 files are `unspecified`, including executable `.py` reviews, `.md` reports,
+`.json` reports/manifests and checksum records. Sample checks also confirmed
+`assets/minecraft_hud/font_default.json` retains `text: unset` and
+`assets/minecraft_hud/UNIFONT_LICENSE.txt` retains both `text: unset` and
+`whitespace: unset`; neither receives the generated marker.
+
+Only `.gitattributes` and this addendum change in this step. Existing font rules
+are preserved. No evidence bytes, paths, archives or history are changed, no
+logs are uploaded, and no executable review or structured report is marked
+by this rule. Existing evidence remains available at its original paths. The
+lossless-consolidation plan above remains a proposal, not an executed migration.

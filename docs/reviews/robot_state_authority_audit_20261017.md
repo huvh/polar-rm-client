@@ -49,7 +49,37 @@ named counterexamples, not whole-state equivalence or hardware qualification.
 Details, source hashes, publication identifier and limits are recorded in
 [Authority projection repair](authority_projection_repair_20261017.md).
 
-## Authority and overwrite order
+## 2026-10-17 addendum: canonical scalar writer in the normal window tick
+
+Accepted source: local `2f95679285b5b16eb38c9c16dfcf5b5967c7d7d3`, public
+`e1fed5dc11e6c4d3b547178f36e0af93e5fa9dac`, shared tree
+`6dc24020fcbfeec9ec8da426aabf259fe5376aa2`.
+
+The normal window raw consumer now retains only `official_feed_at` from the
+feed's update dictionary and still delivers combat events. Decoded backend
+application owns referee scalar telemetry and its frontend row synchronization;
+raw processing no longer overwrites those scalars after that stage. The adapter
+also derives `air_support_can_free` when decoded `left_time` is present, including
+explicit zero. Current-profile omission preserves the value; legacy decoding
+materializes default fields, so its omitted wire value can canonically clear it.
+
+This supersedes the **current-path** two-writer descriptions in the historical
+order and field-group tables below; those findings and original inventory remain
+unchanged as the record of why the repair was needed. Direct callers retain the
+public feed scalar-return API and explicit `apply_official_state` compatibility.
+This is not a universal single writer across demo, POLAR, configuration or direct
+compatibility calls.
+
+Inter-stage arrivals deliberately wait for canonical scalar application; adapter
+failure or transition blocking no longer gets a raw scalar fallback. Receipt
+freshness and event handling remain independent: a fresh packet does not certify
+successful scalar application or an atomic state transaction. Independent focused
+review accepted the change; the aggregate run was still in progress when this
+addendum was written, so no aggregate score is asserted here. Exact baseline,
+changed expectations and remaining boundaries are in
+[Canonical scalar writer](canonical_scalar_writer_20261017.md).
+
+## Authority and overwrite order (historical; see dated addendum above)
 
 `ui/polar_app.py:985-1040` is the normal window sequencing contract:
 

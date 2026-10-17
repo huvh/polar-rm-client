@@ -475,7 +475,22 @@ class RefereeStateCharacterizationTests(unittest.TestCase):
             with self.subTest(case=name):
                 expected = baseline["cases"][name]
                 self.assertEqual(canonical(case), canonical(expected["input"]))
-                self.assertEqual(canonical(observe(case)), canonical(expanded(expected["observed"], baseline)))
+                contract_v2 = expanded(expected["observed"], baseline)
+                # Source 2f956792 intentionally adds exactly this ordered write.
+                # Keep the original fixture; no other trace/state/error delta
+                # is permitted by the canonical scalar-writer contract v2.
+                air_support_writes = {
+                    "AirSupportStatusSync_full_wire": (12, True),
+                    "AirSupportStatusSync_explicit_zeros_wire": (0, False),
+                }
+                if name in air_support_writes:
+                    free_time, eligible = air_support_writes[name]
+                    events = contract_v2["events"]
+                    anchor = ["state.air_support_free_time_sec", free_time]
+                    self.assertEqual(events.count(anchor), 1)
+                    self.assertFalse(any(event[0] == "state.air_support_can_free" for event in events))
+                    events.insert(events.index(anchor) + 1, ["state.air_support_can_free", eligible])
+                self.assertEqual(canonical(observe(case)), canonical(contract_v2))
 
     def test_every_current_downlink_has_wire_and_presence_cases(self):
         inputs = cases()
