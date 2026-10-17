@@ -1,5 +1,17 @@
 # Input ownership and shutdown admission follow-up
 
+## Corrected complete result
+
+Local `f78a489fe3e606daf6cb8b331ec6247eabc38d18` equals public source
+`45628b1ce17618a8c55ee5f9cf1f60e99be50039`, tree
+`aabd31bbbc40f74160d590ee3241a9643df03858`.
+Complete selected offline profile: **341 PASS / 12 SKIP / 4 INCOMPLETE / 0 FAIL**.
+Aggregate remains **NO-GO** for external prerequisites. All 690 declared inputs
+retained SHA-256
+`0a96b8199a1f02538495ff9e33cb441c68199aacf9683d4991157deabd8c122f`.
+Native Windows/GPU/audio/device/portable qualification and historical timing
+causation remain open. Report-only follow-ups change no tested source.
+
 ## Rejected integrated candidate
 
 Local `5cf2ab3c06deceef6e2febd7bc310cda652c3d8f` equals public
