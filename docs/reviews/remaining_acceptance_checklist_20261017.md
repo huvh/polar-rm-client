@@ -1,5 +1,26 @@
 # Remaining architecture acceptance: evidence-based close-out
 
+## Current reference-validation checkpoint — 2026-10-17 21:10 UTC
+
+Exact tested public source `734ff5a8356e9571bd8874883ccc02aa3767c9a0`
+/ local `99167e88675b66a509f9a8266c71175747452a9e`, tree
+`80e30d54bfee9dcb996726f71132510095126cc3`: **349 PASS / 12 SKIP /
+4 INCOMPLETE / 0 FAIL**, **NO-GO**. All 698 declared inputs retained SHA-256
+`921161f1d2ca8a089fedb769cf236407919a33eecc4aaf858a7319efdb5c096e`.
+
+The DT7 validation now rejects an empty application source tree as missing evidence
+and accepts an explicit vendor-dump path without substituting a missing override.
+Independent focused validation: five methods passed; historical scripts produced
+five failure outcomes and no errors. Synthetic fixtures test these preconditions,
+not external compatibility. Actual references remain absent. The legacy patch test
+is deliberately excluded from the read-only aggregate even if artifacts exist;
+separate disposable-copy evidence cannot silently turn its entry into PASS.
+See [external input and qualification handoff](external_acceptance_inputs_20261017.md).
+
+The following dated checkpoints remain historical evidence; no full run is active
+at this update. Native Windows/GPU/audio and historical timing causation remain open.
+
+
 ## Current close-out index — 2026-10-17 20:58 UTC
 
 - Earlier completed audio aggregate is public `d8a90c52d3a52b390c1a014750191dc5b760a3b7`
