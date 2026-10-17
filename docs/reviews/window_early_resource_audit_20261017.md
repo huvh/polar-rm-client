@@ -196,3 +196,45 @@ run remains running at this update. Earlier field-log 346 PASS / 12 SKIP /
 This acceptance closes only the named startup-lock prefix; it does not establish
 all constructor failures, physical neutral output, native media teardown or
 durable audit logging. Skipped/incomplete checks remain unaccepted.
+
+
+## Complete presentation prefix — 2026-10-17 20:50 UTC
+
+New test checkpoint: public `c4ceb891da2155eb3038d2960f3493e1eb7b9fb4`, local
+`4dac2a53357c9a514bb958dc7f7a1a13162df57e`, tree
+`067b71d9f5f0fdb12ae02aad81a110e9264dc7c8`. No production change or resource leak
+was reproduced. `tests/test_window_presentation_prefix_failure.py` constructs
+actual offscreen presentation services completely, then rejects the next
+`create_gpu_services` call before that factory executes. The original exception
+is preserved. All captured presentation fields, including student/chat/hero
+owners, and previously acquired window/backend/vision/wallpaper owners retire;
+window/timer/audio native destroyed signals and field-log idle exit are observed
+before rescue. Thread joins remain three seconds per captured worker.
+
+Author selection: **6 PASS** (one new presentation-prefix method, three early-
+constructor methods, two startup-lock methods). Independent selection: **7 PASS**
+(one new method, three early-constructor methods, three early-factory methods).
+These are different selections, not a combined count of unique tests. Both
+review lanes report deliberate chat-renderer and hero-state retention controls
+producing **1 assertion failure / 0 errors each** before rescue.
+
+No GPU service factory or native GL initialization runs at this rejected prefix.
+Playback/source loading and capture are disabled; native multimedia initialization
+and process-wide font registration can still occur. This is not an active-GPU
+cleanup, physical media teardown, exhaustive constructor or process-global font
+rollback guarantee.
+
+### Completed aggregate update — 2026-10-17 20:58 UTC
+
+Verified directly in `../client-presentation-prefix-full/results.json`, run
+`5631b31e2f9c4d3db84daa1ed959baeb`: **completed, 348 PASS / 12 SKIP /
+4 INCOMPLETE / 0 FAIL, NO-GO** (`passed=false`). Exact tested source is public
+`c4ceb891da2155eb3038d2960f3493e1eb7b9fb4` / local
+`4dac2a53357c9a514bb958dc7f7a1a13162df57e`, tree
+`067b71d9f5f0fdb12ae02aad81a110e9264dc7c8`, not later documentation commits.
+All 697 declared verification inputs have identical start/end SHA-256
+`d042b413836a84354fb61804b469937edbb023585c9c629ed08cc1292ee8e9d4`.
+The fingerprint scope/limits stated above still apply. No aggregate remains
+running at this update. Earlier 347 PASS remains historical startup-lock
+checkpoint evidence. Finite prefix coverage and native qualification limits
+remain unchanged; skipped/incomplete checks are not acceptance.

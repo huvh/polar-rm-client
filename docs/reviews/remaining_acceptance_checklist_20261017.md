@@ -1,6 +1,6 @@
 # Remaining architecture acceptance: evidence-based close-out
 
-## Current close-out index — 2026-10-17 20:47 UTC
+## Current close-out index — 2026-10-17 20:58 UTC
 
 - Earlier completed audio aggregate is public `d8a90c52d3a52b390c1a014750191dc5b760a3b7`
   / local `bd7115ffdcab11c5771fac362aabe97f960b22bd`: **345 PASS / 12 SKIP /
@@ -45,9 +45,27 @@
   identical start/end SHA-256
   `6cc686c50599abfb5801dfdbba299249f345e2bbae854dda338804d0dcc9f15c`.
   This tests the named test-source checkpoint, not later documentation commits;
-  the fingerprint scope/limits above still apply. No aggregate remains running
-  at this update. Other transitive constructor prefixes and native resource
-  lifetimes remain separately scoped.
+  the fingerprint scope/limits above still apply. This completed aggregate
+  predates the next presentation-prefix test checkpoint below.
+- Complete presentation construction followed by rejection of the next GPU
+  factory now has bounded retirement evidence, with no leak reproduced and no
+  production changes. Author **6 PASS** = new1 + early-constructor3 + startup-lock2;
+  independent **7 PASS** = new1 + early-constructor3 + early-factory3. Both lanes'
+  deliberate chat/hero retention controls each fail once with zero errors before
+  rescue. No GPU service factory or native GL initialization occurs in this prefix.
+  Public `c4ceb891da2155eb3038d2960f3493e1eb7b9fb4` / local
+  `4dac2a53357c9a514bb958dc7f7a1a13162df57e`, tree
+  `067b71d9f5f0fdb12ae02aad81a110e9264dc7c8`, now has a **completed** full offline
+  aggregate: **348 PASS / 12 SKIP / 4 INCOMPLETE / 0 FAIL, NO-GO** (`passed=false`).
+  Verified in `../client-presentation-prefix-full/results.json`, run
+  `5631b31e2f9c4d3db84daa1ed959baeb`. All 697 declared verification inputs have
+  identical start/end SHA-256
+  `d042b413836a84354fb61804b469937edbb023585c9c629ed08cc1292ee8e9d4`.
+  This certifies the recorded offline results at that exact test-source
+  checkpoint, not later documentation commits or unrun native paths. The stated
+  fingerprint limits still apply; no aggregate remains running at this update.
+  See the early-window ledger for ownership observations and limits; other
+  transitive prefixes and native active-resource qualification remain open.
 - Historical activation-timeout/DT7-budget causation, external prerequisites and
   native Windows/GPU/audio/portable/device qualification remain open. No complete
   Clean Code, merge-readiness or match-readiness acceptance is asserted.
