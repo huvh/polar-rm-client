@@ -254,8 +254,19 @@ python tools/verify_all.py --test tests/backend_protocol_test.py
 pip 或网络。运行时只认可便携包 `bin/ffmpeg.exe`，OfficialEvent 还会校验
 FFmpeg 与 `BUILD_MANIFEST.json` 的哈希。
 
+构建机需要 Windows、可用桌面/OpenGL 和完整构建依赖。发布脚本不安装依赖；
+先在选定环境手动准备 `requirements.txt` 与 `requirements-build.txt`。
+默认使用仓库 `.venv\Scripts\python.exe`；启动器创建的 `.venv-polar` 或其他
+环境须显式传 `-PythonPath`（相对路径按调用时的工作目录解析）。测试、规格校验与
+PyInstaller 都使用这个解释器，不依赖 PATH 上另一个 `pyinstaller.exe`。
+Linux 验证锁文件不能替代 Windows 打包验证。
+
 ```powershell
+# 也可使用已准备的 .venv-polar；以下创建独立发布环境
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt -r requirements-build.txt
 .\tools\build_release.ps1 `
+  -PythonPath '.\.venv\Scripts\python.exe' `
   -GitRef <explicit-commit> `
   -FfmpegPath '<local-ffmpeg.exe>' `
   -TexasWallpaperPath '<local-texas.mp4>' `

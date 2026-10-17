@@ -6,6 +6,8 @@
 
 # --- Python env / bytecode ---
 .venv/
+# Exact Linux verification environment documented in docs/quality_gates.md
+/.venv-verification/
 venv/
 env/
 __pycache__/

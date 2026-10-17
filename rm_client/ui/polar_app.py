@@ -57,7 +57,7 @@ from .polar.compositor_plan import (
     BackdropTreatment, FinalFrameCompositor, FrameCompositionPlan,
     OverlayScene, motion_layer_needs_refresh,
 )
-from .polar.window_lifecycle import OwnerAction, OwnerActionFailure, WindowLifecycleController, run_owner_actions
+from .polar.window_lifecycle import FinalContextPorts, OwnerAction, OwnerActionFailure, WindowLifecycleController, run_owner_actions
 from .polar.presentation_controller import (
     PanelIntent, PanelPresentationController, dynamic_content_duration,
 )
@@ -460,6 +460,14 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
     tongji_bridge = VisionSelectionField("bridge")
     _vision_source = VisionSelectionField("source")
     _tongji_enabled = VisionSelectionField("tongji_enabled")
+
+    @property
+    def _window_close_finalized(self) -> bool:
+        return self._window_lifecycle.finalized
+
+    @_window_close_finalized.setter
+    def _window_close_finalized(self, value: bool) -> None:
+        self._window_lifecycle.finalized = value
 
     NORMAL_BACKEND_VIDEO_STALE_S = 2.0
 
@@ -3283,32 +3291,23 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
     def _finish_window_shutdown(self) -> None:
         if self._window_close_finalized:
             return
-        self._window_close_finalized = True
-        failures = list(self._window_lifecycle.owner_failures)
-        failures.extend(run_owner_actions((
-            OwnerAction("timer", self.timer.stop),
-            OwnerAction("GPU warmup timer", self._gpu_prewarm_timer.stop),
-            OwnerAction("configuration", lambda: self.flush_auto_save(force=True)),
-        )))
-        try:
-            has_context = self.context() is not None
-        except Exception as exc:
-            _LOG.error("Window GL context inspection failed", exc_info=True)
-            has_context = False
-            failures.append(OwnerActionFailure("GL context", type(exc).__name__, str(exc)))
-        if has_context:
-            try:
-                self.makeCurrent()
-                failures.extend(run_owner_actions(tuple(
+        failures = self._window_lifecycle.finalize(
+            prepare=lambda: (
+                OwnerAction("timer", self.timer.stop),
+                OwnerAction("GPU warmup timer", self._gpu_prewarm_timer.stop),
+                OwnerAction("configuration", lambda: self.flush_auto_save(force=True)),
+            ),
+            context=FinalContextPorts(
+                available=lambda: self.context() is not None,
+                enter=lambda: self.makeCurrent(),
+                releases=lambda: tuple(
                     OwnerAction(name, getattr(self, name).release)
                     for name in ("clickgui_gpu", "vision_wire_gpu", "island_icon_gpu",
                                  "quick_action_wheel_gpu", "gpu_compositor", "startup_gpu", "hud_video_gpu")
-                )))
-            except Exception as exc:
-                _LOG.error("Window GL context cleanup failed", exc_info=True)
-                failures.append(OwnerActionFailure("GL context", type(exc).__name__, str(exc)))
-            finally:
-                failures.extend(run_owner_actions((OwnerAction("GL done", self.doneCurrent),)))
+                ),
+                leave=lambda: OwnerAction("GL done", self.doneCurrent),
+            ),
+        )
         if failures:
             message = "Exit cleanup warnings: " + "; ".join(f.summary for f in failures)
             self.state.push_event(message)

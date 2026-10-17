@@ -53,6 +53,22 @@ def run_owner_actions(actions: tuple[OwnerAction, ...]) -> tuple[OwnerActionFail
 
 
 @dataclass(frozen=True)
+class FinalContextPorts:
+    """Owner-thread context operations; resources are resolved only after entry.
+
+    These callbacks must not dispatch to workers: GL retirement belongs to the
+    context-owning thread. The leave factory resolves its callback in the finally
+    phase, preserving lookup failures separately from release failures. Missing contexts skip GPU work; failed entry still
+    attempts leave, matching Qt window retirement's established contract.
+    """
+
+    available: Callable[[], bool]
+    enter: Callable[[], None]
+    releases: Callable[[], tuple[OwnerAction, ...]]
+    leave: Callable[[], OwnerAction]
+
+
+@dataclass(frozen=True)
 class LifecycleUpdate:
     runtime_allowed: bool
     schedule_close: bool
@@ -70,6 +86,8 @@ class WindowLifecycleController:
 
     def __init__(self, backend: BackendLifecycle) -> None:
         self.backend = backend
+        self.finalized = False
+        self.finalization_failures: tuple[OwnerActionFailure, ...] = ()
         self.closing = False
         self.ready_to_close = False
         self.status_text = ""
@@ -79,6 +97,39 @@ class WindowLifecycleController:
         self._last_notice: tuple[object, ...] | None = None
         self.poll_failures = 0
         self.last_poll_failure: OwnerActionFailure | None = None
+
+    def finalize(self, *, prepare: Callable[[], tuple[OwnerAction, ...]],
+                 context: FinalContextPorts) -> tuple[OwnerActionFailure, ...] | None:
+        """Seal owner retirement before callbacks, independently of diagnostics.
+
+        The caller admits this only after native retirement. A repeated or
+        reentrant call returns None, never replaying timer/config/GL effects.
+        Preparation is resolved after sealing, so even callback lookup reentry
+        cannot replay retirement. UI reporting stays outside this owner and
+        cannot undo the seal.
+        """
+        if self.finalized:
+            return None
+        self.finalized = True
+        failures = list(self.owner_failures)
+        failures.extend(run_owner_actions(prepare()))
+        try:
+            has_context = context.available()
+        except Exception as exc:
+            _LOG.error("Window GL context inspection failed", exc_info=True)
+            has_context = False
+            failures.append(OwnerActionFailure("GL context", type(exc).__name__, str(exc)))
+        if has_context:
+            try:
+                context.enter()
+                failures.extend(run_owner_actions(context.releases()))
+            except Exception as exc:
+                _LOG.error("Window GL context cleanup failed", exc_info=True)
+                failures.append(OwnerActionFailure("GL context", type(exc).__name__, str(exc)))
+            finally:
+                failures.extend(run_owner_actions((context.leave(),)))
+        self.finalization_failures = tuple(failures)
+        return self.finalization_failures
 
     def request_close(self, *, prepare: tuple[OwnerAction, ...], tasks: tuple[TeardownTask, ...]) -> None:
         if self.closing:

@@ -5,6 +5,9 @@
     [string]$Output = "",
     [string]$GitRef = "HEAD",
     [string]$Version = "0.1.0",
+    # Explicit interpreter path; defaults to the historical build environment.
+    # Pass .venv-polar\Scripts\python.exe to reuse the source launcher venv.
+    [string]$PythonPath = "",
     [Parameter(Mandatory=$true)][string]$FfmpegPath,
     [Parameter(Mandatory=$true)][string]$TexasWallpaperPath,
     [Parameter(Mandatory=$true)][string]$VendingWallpaperPath,
@@ -110,6 +113,21 @@ function Get-TreeHash([string]$Python, [string]$Source, [string]$Root) {
     return $value
 }
 
+# Validate the selected environment before creating staging files or running
+# protocol checks. Never guess another interpreter or install packages here.
+$python = if ([string]::IsNullOrWhiteSpace($PythonPath)) {
+    Join-Path $clientRoot ".venv\Scripts\python.exe"
+} else {
+    $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($PythonPath)
+}
+if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
+    throw "Build Python missing: $python. Prepare a Windows environment with requirements.txt and requirements-build.txt, then pass -PythonPath <python.exe>."
+}
+& $python -c "import sys, importlib.util; sys.exit('Python 3.10+ required' if sys.version_info < (3, 10) else ('Install requirements-build.txt in this interpreter' if importlib.util.find_spec('PyInstaller') is None else 0))"
+if ($LASTEXITCODE -ne 0) {
+    throw "Build Python or PyInstaller is unusable: $python. Prepare this interpreter with requirements.txt and requirements-build.txt; no packages were installed by the builder."
+}
+
 $buildSucceeded = $false
 try {
     Assert-Hash $FfmpegPath $expectedFfmpeg "FFmpeg"
@@ -179,7 +197,7 @@ VSVersionInfo(
     }
 
     # 不只要文件在，还要真能加载且不回退
-    & (Join-Path $clientRoot ".venv\Scripts\python.exe") -c @"
+    & $python -c @"
 import sys
 sys.path.insert(0, r'$sourceRoot')
 from rm_client.backend import polar_spec
@@ -203,11 +221,6 @@ print('polar spec OK: %d segments, %d roles, %d warnings'
     Copy-Item -LiteralPath $TexasWallpaperPath -Destination (Join-Path $sourceWallpaperRoot "texas.mp4") -Force
     Copy-Item -LiteralPath $VendingWallpaperPath -Destination (Join-Path $sourceWallpaperRoot "vending-machine.mp4") -Force
 
-    $python = Join-Path $clientRoot ".venv\Scripts\python.exe"
-    $pyinstaller = Join-Path $clientRoot ".venv\Scripts\pyinstaller.exe"
-    if (-not (Test-Path -LiteralPath $python) -or -not (Test-Path -LiteralPath $pyinstaller)) {
-        throw "Build environment missing. Install requirements-build.txt before release; runtime never installs packages."
-    }
     $testLogRoot = Join-Path $stageRoot "test-logs"
 
     # Run against the exact source tree that will be frozen. Runtime state is
@@ -286,7 +299,7 @@ print('polar spec OK: %d segments, %d roles, %d warnings'
         # Scope the observed OpenVINO telemetry opt-out to this invocation;
         # restore the caller's process environment even when freezing fails.
         $env:CI = "true"
-        & $pyinstaller --noconfirm --clean --distpath $distRoot --workpath (Join-Path $stageRoot "work") (Join-Path $sourceRoot "tools\POLAR-RM.spec")
+        & $python -m PyInstaller --noconfirm --clean --distpath $distRoot --workpath (Join-Path $stageRoot "work") (Join-Path $sourceRoot "tools\POLAR-RM.spec")
     } finally {
         if ($null -eq $oldFreezeCi) {
             Remove-Item Env:CI -ErrorAction SilentlyContinue

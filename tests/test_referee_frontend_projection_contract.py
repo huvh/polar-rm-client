@@ -4,6 +4,7 @@ import hashlib
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
 from rm_client.backend.referee.rm2026 import state_adapter
 from rm_client.backend.referee.rm2026.state_adapter import Rm2026StateAdapter
@@ -17,9 +18,22 @@ FIELDS = ('official_robot_health', 'robot_positions', 'robot_statics', 'robot_dy
 def frozen():
     source = FIXTURE.read_bytes()
     assert hashlib.sha256(source).hexdigest() == BASELINE_SHA256
-    namespace = {name: getattr(state_adapter, name) for name in
-                 ('RobotState', 'Any', '_HEALTH_ROLE_ORDER', 'ROBOT_ID_NAMES',
-                  'DEFAULT_MAX_HEALTH', 'BUFF_TYPE_NAMES')}
+    # The function fixture alone is insufficient: its semantic globals must
+    # also be historical values, never fetched from the candidate under test.
+    # Literal values below were independently checked at 1b2f580.
+    namespace = {
+        'RobotState': object, 'Any': object,
+        '_HEALTH_ROLE_ORDER': (1, 2, 3, 4, 7),
+        'DEFAULT_MAX_HEALTH': 600,
+        'ROBOT_ID_NAMES': {
+            1: 'Hero', 2: 'Engineer', 3: 'Infantry', 4: 'Infantry',
+            5: 'Infantry', 6: 'Aerial', 7: 'Sentry', 8: 'Dart', 9: 'Radar',
+        },
+        'BUFF_TYPE_NAMES': {
+            1: 'Attack Boost', 2: 'Defense Boost', 3: 'Heat Cooling',
+            4: 'Chassis Power', 5: 'Health Regen', 6: 'Exchange Ammo', 7: 'Terrain',
+        },
+    }
     exec(compile(source, str(FIXTURE), 'exec'), namespace)
     return namespace['sync_frontend_state']
 
@@ -68,6 +82,23 @@ class RefereeFrontendProjectionContract(unittest.TestCase):
         expected = observe(frozen(), changes, **kwargs)
         self.assertEqual(actual[:3], expected[:3])
         return actual
+
+    def test_frozen_metadata_does_not_follow_candidate_changes(self):
+        changes = {'buffs': [{'buff_type': 1, 'buff_left_time': 5}]}
+        expected = observe(frozen(), changes)[:3]
+        mutations = {
+            '_HEALTH_ROLE_ORDER': (7, 4, 3, 2, 1),
+            'DEFAULT_MAX_HEALTH': 999,
+            'ROBOT_ID_NAMES': {1: 'Wrong hero'},
+            'BUFF_TYPE_NAMES': {1: 'Wrong buff'},
+        }
+        for name, value in mutations.items():
+            with self.subTest(metadata=name), patch.object(state_adapter, name, value):
+                self.assertEqual(observe(frozen(), changes)[:3], expected)
+                self.assertNotEqual(
+                    observe(Rm2026StateAdapter.sync_frontend_state, changes)[:3], expected)
+                with self.assertRaises(AssertionError):
+                    self.compare(changes)
 
     def test_empty_authority_does_not_publish_or_clear_previous_projection(self):
         result = self.compare(dict(official_robot_health=[], robot_positions=[], robot_statics={},

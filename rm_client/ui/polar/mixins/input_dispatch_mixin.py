@@ -26,6 +26,7 @@ from ...jello_locale import LANGUAGE_CHINESE, LANGUAGE_ENGLISH, LANGUAGE_SETTING
 from ....model import Setting
 from ..primitives import InertialScroll
 from ..pointer_interaction import PointerField, PointerInteraction
+from ..hit_testing import topmost_hotspot
 from ..text_editing import ChatEdit, SearchEdit, TextKey, chat_edit, search_edit
 
 __all__ = [
@@ -640,12 +641,10 @@ class InputDispatchMixin:
                 # release even when that dispatch or command publication fails.
                 self.pointer_interaction.own_release()
                 self._control_mouse_point = None
-        for hotspot in reversed(self.hotspots):
-            if hotspot.button not in (None, button):
-                continue
-            if hotspot.rect.contains(point):
-                self.dispatch(hotspot.action, hotspot.payload, point, button, hotspot.rect)
-                return
+        hotspot = topmost_hotspot(self.hotspots, point, button=button)
+        if hotspot is not None:
+            self.dispatch(hotspot.action, hotspot.payload, point, button, hotspot.rect)
+            return
         # Opening/rebuilding a GUI may leave no current hit targets for one
         # frame. The modal still owns that click; never publish it to the map.
         if self.gui_visible:
@@ -704,13 +703,12 @@ class InputDispatchMixin:
         self.hover_tooltip = ""
         hovered_action = ""
         hovered_offer = ""
-        for hotspot in reversed(self.hotspots):
-            if hotspot.rect.contains(self.hover_point):
-                self.hover_tooltip = hotspot.tooltip
-                hovered_action = hotspot.action
-                if hovered_action=="economy_offer":
-                    hovered_offer = str(hotspot.payload)
-                break
+        hotspot = topmost_hotspot(self.hotspots, lambda: self.hover_point)
+        if hotspot is not None:
+            self.hover_tooltip = hotspot.tooltip
+            hovered_action = hotspot.action
+            if hovered_action == "economy_offer":
+                hovered_offer = str(hotspot.payload)
         if self.economy_visible:
             notify_buy_hover(self,hovered_offer,time.perf_counter())
         # 启动页可见时渲染时钟已经按显示器刷新率运行；不再为每个原始
@@ -755,8 +753,7 @@ class InputDispatchMixin:
         interaction = self.pointer_interaction
         if interaction.background_release_owned and event.button() == Qt.MouseButton.LeftButton:
             point = event.position()
-            target = next((h for h in reversed(self.hotspots)
-                           if h.button in (None, 1) and h.rect.contains(point)), None)
+            target = topmost_hotspot(self.hotspots, point, button=1)
             release = interaction.release_background(point, left_button=True,
                 gui_visible=self.gui_visible,
                 background_target=target is not None and target.action == "jello_dismiss_background")

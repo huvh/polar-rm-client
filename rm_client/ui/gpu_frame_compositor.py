@@ -21,6 +21,7 @@ from PySide6.QtOpenGL import (
 
 
 from .render_diagnostics import RenderFault, RenderFaultDiagnostics
+from .framebuffer_storage import FramebufferStorage, framebuffer_slot
 
 _LOG = logging.getLogger(__name__)
 
@@ -298,6 +299,19 @@ class LayerPaintSession:
 class GpuFrameCompositor:
     """在私有 FBO 中顺序合成背景、共享模糊、玻璃和 UI。"""
 
+    background_fbo = framebuffer_slot("background_fbo")
+    control_fbo = framebuffer_slot("control_fbo")
+    blur_temp_fbo = framebuffer_slot("blur_temp_fbo")
+    blur_fbo = framebuffer_slot("blur_fbo")
+    treated_blur_temp_fbo = framebuffer_slot("treated_blur_temp_fbo")
+    treated_blur_fbo = framebuffer_slot("treated_blur_fbo")
+    hud_glass_fbo = framebuffer_slot("hud_glass_fbo")
+    glass_fbo = framebuffer_slot("glass_fbo")
+    overlay_fbo = framebuffer_slot("overlay_fbo")
+    vision_fbo = framebuffer_slot("vision_fbo")
+    dynamic_fbo = framebuffer_slot("dynamic_fbo")
+    target_fbo = framebuffer_slot("target_fbo")
+
     def __init__(self) -> None:
         self.available = False
         self._release_pending = False
@@ -306,23 +320,7 @@ class GpuFrameCompositor:
         self.last_failed_frame: FailedFrameRecovery | None = None
         self.last_rejected_frame: RejectedFrameRecovery | None = None
         self._frame_rejection = ""
-        self.background_fbo: QOpenGLFramebufferObject | None = None
-        self.control_fbo: QOpenGLFramebufferObject | None = None
-        self.blur_temp_fbo: QOpenGLFramebufferObject | None = None
-        self.blur_fbo: QOpenGLFramebufferObject | None = None
-        self.treated_blur_temp_fbo: QOpenGLFramebufferObject | None = None
-        self.treated_blur_fbo: QOpenGLFramebufferObject | None = None
-        self.hud_glass_fbo: QOpenGLFramebufferObject | None = None
-        self.glass_fbo: QOpenGLFramebufferObject | None = None
-        self.overlay_fbo: QOpenGLFramebufferObject | None = None
-        self.vision_fbo: QOpenGLFramebufferObject | None = None
-        self.dynamic_fbo: QOpenGLFramebufferObject | None = None
-        # TargetHUD uses its own texture layer.  Qt's OpenGL paint engine can
-        # leak the antialiased arc mask across the primitive's rectangular
-        # atlas bounds on some Windows drivers.  Keeping the rasterized ring
-        # out of the shared dynamic FBO prevents that driver path from
-        # contaminating ESP and other motion graphics.
-        self.target_fbo: QOpenGLFramebufferObject | None = None
+        self._framebuffers = FramebufferStorage()
         self._size = QSize()
         self._device_pixel_ratio = 1.0
         # Scene metadata belongs to this storage and pixel ratio, not just
@@ -498,21 +496,7 @@ class GpuFrameCompositor:
             return False
         ratio = max(1.0, float(device_pixel_ratio))
         size = QSize(max(1, round(width * ratio)), max(1, round(height * ratio)))
-        if size == self._size and all(
-            fbo is not None
-            for fbo in (
-                self.background_fbo,
-                self.control_fbo,
-                self.blur_fbo,
-                self.treated_blur_fbo,
-                self.hud_glass_fbo,
-                self.glass_fbo,
-                self.overlay_fbo,
-                self.vision_fbo,
-                self.dynamic_fbo,
-                self.target_fbo,
-            )
-        ):
+        if size == self._size and self._framebuffers.reusable():
             if ratio != self._device_pixel_ratio:
                 # Equal physical sizes can still represent different logical
                 # geometry. Retain storage, but redraw its content and blur.
@@ -533,36 +517,10 @@ class GpuFrameCompositor:
         painter_fmt = QOpenGLFramebufferObjectFormat()
         painter_fmt.setAttachment(QOpenGLFramebufferObject.Attachment.CombinedDepthStencil)
         painter_fmt.setInternalTextureFormat(_GL_RGBA8)
-        self.background_fbo = QOpenGLFramebufferObject(size, painter_fmt)
-        self.control_fbo = QOpenGLFramebufferObject(size, painter_fmt)
-        self.blur_temp_fbo = QOpenGLFramebufferObject(size, fmt)
-        self.blur_fbo = QOpenGLFramebufferObject(size, fmt)
-        self.treated_blur_temp_fbo = QOpenGLFramebufferObject(size, fmt)
-        self.treated_blur_fbo = QOpenGLFramebufferObject(size, fmt)
-        self.hud_glass_fbo = QOpenGLFramebufferObject(size, fmt)
-        self.glass_fbo = QOpenGLFramebufferObject(size, fmt)
-        self.overlay_fbo = QOpenGLFramebufferObject(size, painter_fmt)
-        self.vision_fbo = QOpenGLFramebufferObject(size, fmt)
-        self.dynamic_fbo = QOpenGLFramebufferObject(size, painter_fmt)
-        self.target_fbo = QOpenGLFramebufferObject(size, painter_fmt)
-        if not all(
-            fbo.isValid()
-            for fbo in (
-                self.background_fbo,
-                self.control_fbo,
-                self.blur_temp_fbo,
-                self.blur_fbo,
-                self.treated_blur_temp_fbo,
-                self.treated_blur_fbo,
-                self.hud_glass_fbo,
-                self.glass_fbo,
-                self.overlay_fbo,
-                self.vision_fbo,
-                self.dynamic_fbo,
-                self.target_fbo,
-            )
-        ):
-            raise RuntimeError("GPU compositor FBO creation failed")
+        self._framebuffers.allocate(
+            size, create=QOpenGLFramebufferObject,
+            shader_format=fmt, painter_format=painter_fmt,
+        )
         self._size = size
         self._device_pixel_ratio = ratio
         self._blur_valid = False
@@ -2007,18 +1965,7 @@ class GpuFrameCompositor:
         """)
 
     def _destroy_fbos(self) -> None:
-        self.background_fbo = None
-        self.control_fbo = None
-        self.blur_temp_fbo = None
-        self.blur_fbo = None
-        self.treated_blur_temp_fbo = None
-        self.treated_blur_fbo = None
-        self.hud_glass_fbo = None
-        self.glass_fbo = None
-        self.overlay_fbo = None
-        self.vision_fbo = None
-        self.dynamic_fbo = None
-        self.target_fbo = None
+        self._framebuffers.clear()
         self._size = QSize()
         self._blur_valid = False
         self._treated_blur_valid = False

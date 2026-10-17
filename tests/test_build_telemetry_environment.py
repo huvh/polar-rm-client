@@ -72,7 +72,7 @@ class FreezeEnvironmentTests(unittest.TestCase):
         block = source.split('    Push-Location $sourceRoot\n', 1)[1]
         block = block.split('    if ($LASTEXITCODE', 1)[0]
         self.assertLess(block.index('$oldFreezeCi = $env:CI'), block.index('    try {'))
-        self.assertLess(block.index('$env:CI = "true"'), block.index('& $pyinstaller'))
+        self.assertLess(block.index('$env:CI = "true"'), block.index('& $python -m PyInstaller'))
         restore = block.split('} finally {', 1)[1]
         self.assertIn('if ($null -eq $oldFreezeCi)', restore)
         self.assertIn('Remove-Item Env:CI -ErrorAction SilentlyContinue', restore)
