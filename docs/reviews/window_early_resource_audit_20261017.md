@@ -146,3 +146,53 @@ Native multimedia initialization may still occur; playback/source loading is
 suppressed. Physical audio/decoder/device cleanup and audit-log durability remain
 unqualified. The tested window is not passed to a universal partial-object close
 routine, and no such routine is established as safe by these results.
+
+
+## Startup-lock actual-window prefix — 2026-10-17 20:40 UTC
+
+The previously unverified startup lock cleanup prefix now has bounded evidence.
+Test checkpoint: public `f425fbc5124b86262292d0c95c98b170883da283`, local
+`a6cff9bac6151f6298ec7aa521d582266fc28ffb`, tree
+`7d39fb342a0c4f8916c038fda8597ad147d3c7b0`. Production code was unchanged;
+**no retained-owner leak was reproduced**.
+
+`tests/test_window_startup_lock_failure.py` constructs the actual offscreen
+PolarRMWindow and injects reset failure at the startup lock hook, before
+ClientConfigStore and the retained abort boundary. Its two methods cover the
+primary failure and an additional DT7 neutral-cleanup failure. Both preserve the
+original exception, observe reset/DT7/custom-controller/pending cleanup order,
+and assert that configuration construction was never reached. Only diagnostic
+text is retained; exception/LogRecord traceback roots are released deliberately
+before lifetime observations, rather than mistaken for production ownership.
+
+The observed window, warmup timer and both audio pools emit native destroyed
+signals; captured backend, camera, control and field-log references retire.
+Only the real field-log worker may start, and its existing idle retirement is
+observed with a three-second **per-thread** join, not a global shutdown SLA.
+No universal partial-window close is called. Playback/source loading and capture
+are suppressed; native multimedia service initialization can still occur.
+
+The independent log `/tmp/startup-lock-independent.log` records **5 PASS**:
+two new methods plus three neighboring early-window constructor methods.
+Independent deliberate window and kill-pool retention controls each yielded
+**1 assertion failure, 0 errors before rescue**, as reported by the reviewer.
+These controls are test sensitivity evidence, not production defects.
+
+### Completed aggregate update — 2026-10-17 20:47 UTC
+
+Read directly from `../client-startup-lock-full/results.json`, run
+`3f80f3462d5c4118bdb8fb638acff378`: **completed, 347 PASS / 12 SKIP /
+4 INCOMPLETE / 0 FAIL, NO-GO** (`passed=false`). Tested source is exactly public
+`f425fbc5124b86262292d0c95c98b170883da283` / local
+`a6cff9bac6151f6298ec7aa521d582266fc28ffb`, tree
+`7d39fb342a0c4f8916c038fda8597ad147d3c7b0`, not a later documentation commit.
+All 696 declared verification inputs have identical start/end SHA-256
+`6cc686c50599abfb5801dfdbba299249f345e2bbae854dda338804d0dcc9f15c`.
+This fingerprint excludes documentation/assets/external fixtures/installed
+packages and cannot detect transient edits restored between captures. No full
+run remains running at this update. Earlier field-log 346 PASS / 12 SKIP /
+4 INCOMPLETE / 0 FAIL remains historical NO-GO evidence.
+
+This acceptance closes only the named startup-lock prefix; it does not establish
+all constructor failures, physical neutral output, native media teardown or
+durable audit logging. Skipped/incomplete checks remain unaccepted.

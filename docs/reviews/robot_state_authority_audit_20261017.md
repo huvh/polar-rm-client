@@ -197,6 +197,52 @@ or demo defaults without an established constant-value design guarantee;
 projection or production scalar consumer found. This does not establish complete
 dynamic coverage or a runtime defect. No tests were run.
 
+### Bounded follow-up: `max_chassis_energy`
+
+Read-only source disposition at local
+`197f4284e59efc432750e1cf6051c5b8f0e5ed18`; corresponding public source is
+[`a44cf8d477b9733bdfdcd43f9b671260c18d1505`](https://github.com/lulunomaro/polar-rm-client/commit/a44cf8d477b9733bdfdcd43f9b671260c18d1505),
+as recorded in `docs/reviews/field_log_admission_repair_20261017.md`.
+This follow-up inspected source and existing test expectations; it did not run
+additional tests or establish a new runtime qualification.
+
+- Both `rm_client/backend/referee/rm2026/contract.py` and
+  `rm_client/backend/referee/student_legacy/contract.py` define
+  `RobotStaticStatus` field 14 as `uint32 max_chassis_energy`.
+  `rm_client/backend/referee/rm2026/codec.py::_decode_static` decodes it;
+  `rm_client/backend/referee/rm2026/state_adapter.py::_apply_one` retains present
+  values in `state.robot_statics[state.robot_id]`, without scalar projection.
+  `rm_client/backend/referee/student_legacy/state_adapter.py::_apply_one`
+  translates presence by field name and delegates to that shared adapter, so
+  the canonical container also retains the legacy decoded value.
+- `tests/fixtures/referee_state_baseline.json` explicitly records
+  `RobotStaticStatus_only_max_chassis_energy`: field 14 value 24 updates
+  `robot_statics[3]`. The `RobotStaticStatus_full_wire` and
+  `RobotStaticStatus_explicit_zeros_wire` cases also retain this dictionary field.
+  `tests/test_referee_state_characterization.py::test_frozen_ordered_projection_and_partial_failure_state`
+  checks these frozen observations. They do not establish a requirement to
+  project the separate scalar.
+- `rm_client/model.py` declares the scalar default as 100. No production scalar
+  consumer was found in this bounded review. Actual capacitor displays and
+  alerts use `RobotState.effective_capacitor_percent`, calculated from
+  `current_buffer_energy` and `max_buffer_energy`; this is a separate quantity,
+  not evidence for a chassis-energy ratio or a new mapping.
+- Compatibility APIs remain explicit: `VideoBackendMixin.apply_official_state`
+  in `rm_client/ui/polar/mixins/video_backend_mixin.py` can assign existing
+  state attributes from caller-supplied updates. `OfficialMatchFeed.consume`
+  in `rm_client/combat_events.py` still returns public scalar updates, but has
+  no `max_chassis_energy` projection. The tests
+  `test_explicit_direct_apply_compatibility_remains_available` and
+  `test_event_delivery_and_public_scalar_return_are_separate_contracts` in
+  `tests/test_official_scalar_writer_characterization.py` preserve those API
+  contracts; they do not certify external callers of this particular field.
+
+**Disposition:** retain the bounded default-only scalar classification with
+unresolved purpose. No production fix is justified by the inspected evidence.
+This is not proof that the field is dead or immutable, nor certification of
+external consumers, dynamic attribute access, or arbitrary compatibility API
+updates. No mapping or new scalar authority is inferred.
+
 Current `replay.py:1-5,35-60` only summarizes field logs; it is not an established
 RobotState writer. Normal and legacy constructors use `RobotState()` without
 field overrides (`ui/polar_app.py:491`, `legacy_tk_app.py:59`).

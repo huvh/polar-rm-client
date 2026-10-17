@@ -1,6 +1,6 @@
 # Remaining architecture acceptance: evidence-based close-out
 
-## Current close-out index — 2026-10-17 20:37 UTC
+## Current close-out index — 2026-10-17 20:47 UTC
 
 - Earlier completed audio aggregate is public `d8a90c52d3a52b390c1a014750191dc5b760a3b7`
   / local `bd7115ffdcab11c5771fac362aabe97f960b22bd`: **345 PASS / 12 SKIP /
@@ -20,8 +20,8 @@
   `b448096787d185cda7ad5ccf3df23227997c19a350112502d7daf7d1d23d2625`;
   source stability PASS. This fingerprint excludes docs/assets/external fixtures/
   installed packages and cannot detect transient edits restored between captures.
-  No full run remains pending at this update. Drained does not mean lossless or
-  fsynced; offline success is not native or field qualification.
+  This completed result predates the startup-lock test checkpoint below. Drained
+  does not mean lossless or fsynced; offline success is not native qualification.
 - All 242 declared RobotState fields have bounded writer/default-only dispositions.
   Normal referee scalar publication now belongs to the decoded adapter; raw
   consumption retains receipt freshness/events. Compatibility APIs, dynamic
@@ -30,10 +30,24 @@
   cells are discharged by the constructor matrix. The early-window ledger is
   enumerated, with bounded feedback, idle-wallpaper and actual-window prefix
   probes; neither establishes every transitive constructor or native lifetime.
-- Smallest next bounded architecture check: actual-window failure during startup
-  `_clear_control_inputs_for_lock("startup locked")`, before ClientConfigStore and
-  the retained abort boundary. Verify acquired-owner retirement and original-error
-  preservation. This prefix remains **unverified, not a confirmed defect**.
+- The startup-lock actual-window prefix now has bounded independent acceptance:
+  two new tests plus three neighboring constructor tests **5 PASS**. Original
+  error preservation, remaining cleanup attempts and observed owner retirement
+  pass; deliberate window/kill-pool retention each produces **1 FAIL / 0 ERROR**
+  before rescue. No leak was reproduced and production code was unchanged. See
+  [early-window ledger](window_early_resource_audit_20261017.md).
+  New test source public `f425fbc5124b86262292d0c95c98b170883da283` /
+  local `a6cff9bac6151f6298ec7aa521d582266fc28ffb`, tree
+  `7d39fb342a0c4f8916c038fda8597ad147d3c7b0`, now has a **completed** full offline
+  aggregate: **347 PASS / 12 SKIP / 4 INCOMPLETE / 0 FAIL, NO-GO** (`passed=false`).
+  Verified in `../client-startup-lock-full/results.json`, run
+  `3f80f3462d5c4118bdb8fb638acff378`. All 696 declared verification inputs have
+  identical start/end SHA-256
+  `6cc686c50599abfb5801dfdbba299249f345e2bbae854dda338804d0dcc9f15c`.
+  This tests the named test-source checkpoint, not later documentation commits;
+  the fingerprint scope/limits above still apply. No aggregate remains running
+  at this update. Other transitive constructor prefixes and native resource
+  lifetimes remain separately scoped.
 - Historical activation-timeout/DT7-budget causation, external prerequisites and
   native Windows/GPU/audio/portable/device qualification remain open. No complete
   Clean Code, merge-readiness or match-readiness acceptance is asserted.
