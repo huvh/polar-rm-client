@@ -9,6 +9,7 @@ routing; it does not make these handlers independent domain components.
 from __future__ import annotations
 
 import math
+import logging
 import time
 from typing import Any
 
@@ -577,10 +578,53 @@ class InputDispatchMixin:
             state = self._pointer_interaction = PointerInteraction()
         return state
 
+    def _modal_input_blocked(self) -> bool:
+        return bool(getattr(self, "_modal_input_clearing", False)
+                    or getattr(self, "_modal_input_clear_pending", False))
+
+    def _neutralize_modal_inputs(self) -> None:
+        """Retire held input at ownership transfer, including between UI ticks.
+
+        Claim the boundary before publishing: an output callback may reenter Qt.
+        Each independent egress gets a neutral attempt even if another fails.
+        A failed cleanup blocks control until a successful explicit lock reset.
+        """
+        if self._modal_input_blocked():
+            return
+        self._modal_input_clearing = True
+        errors = []
+
+        def attempt(action):
+            try:
+                action()
+                return True
+            except Exception as error:
+                errors.append(error)
+                logging.getLogger(__name__).exception("Modal input neutralization failed")
+                return False
+
+        try:
+            self.control.mock_output = bool(self.backend.mqtt.mock_output)
+            if attempt(lambda: self.control.reset_inputs()):
+                attempt(lambda: self.control.send_from_state(self.state, self.registry))
+            attempt(lambda: self.control.release_direct_dt7())
+            attempt(lambda: self.control.release_custom_controller())
+            self._control_mouse_point = None
+            self._combat_input_was_allowed = False
+            if errors:
+                self._modal_input_clear_pending = True
+                attempt(lambda: self.control.clear_pending())
+                attempt(lambda: self.backend.lock_control("modal input cleanup failed"))
+                # Lock callbacks can fail after partially clearing state.
+                self._modal_input_clear_pending = True
+        finally:
+            self._modal_input_clearing = False
+
     def _lifecycle_owns_input(self) -> bool:
         """A retiring runtime cannot accept edits or new control samples."""
         return bool(
-            getattr(getattr(self, "backend", None), "lifecycle_pending", False)
+            self._modal_input_blocked()
+            or getattr(getattr(self, "backend", None), "lifecycle_pending", False)
             or getattr(self, "configuration_change_pending", False)
             or getattr(getattr(self, "_window_lifecycle", None), "closing", False)
         )
@@ -613,6 +657,7 @@ class InputDispatchMixin:
         self._economy_qualification_token = None
         self._control_mouse_point = None
         self._combat_input_was_allowed = False
+        self._modal_input_clear_pending = False
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
         if self._lifecycle_owns_input():

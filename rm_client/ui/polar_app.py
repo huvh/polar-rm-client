@@ -775,7 +775,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         self.economy_hold_started = 0.0
         self.economy_hold_rect = QRectF()
         self.economy_last_status_sequence = 0
-        self.overlay_coordinator = OverlayCoordinator()
+        self.overlay_coordinator = OverlayCoordinator(on_input_claimed=self._neutralize_modal_inputs)
         self.quick_action_wheel = QuickActionWheelState()
         self.match_chat = MatchChatController()
         self.chat_event_adapter = ChatEventAdapter(self.match_chat)
@@ -910,9 +910,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             # Opening ClickGUI/chat/economy while holding a key must release the
             # robot immediately; waiting for a key-up event would leave motion
             # latched behind the modal input owner.
-            self.control.mock_output = bool(self.backend.mqtt.mock_output)
-            self.control.release_all(self.state, self.registry)
-            self._control_mouse_point = None
+            self._neutralize_modal_inputs()
         self._combat_input_was_allowed = input_allowed
         for motion in self.polar_settings_scroll_motion.values():
             motion.update(ui_dt)
@@ -984,7 +982,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
 
     def _advance_runtime_tick(self, now: float) -> None:
         plan = RuntimeTickPlan.at(now, self._last_control_tick_time, self._last_logic_time)
-        if plan.control_due:
+        if plan.control_due and not self._modal_input_blocked():
             self._last_control_tick_time = now
             self._run_tick_stage(
                 "control.75hz",

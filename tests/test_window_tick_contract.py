@@ -121,7 +121,12 @@ class WindowHarness:
         self.backend.poll_lifecycle = lambda: None
         self._window_lifecycle = polar_app.WindowLifecycleController(self.backend)
         self.on_backend_lifecycle_completion = lambda completion: False
-        self.control = NS(tick=record("control.75hz"), release_all=record("control.release"), mock_output=True)
+        self.control = NS(
+            tick=record("control.75hz"), reset_inputs=record("control.reset"),
+            send_from_state=record("control.release"),
+            release_direct_dt7=record("control.dt7_release"),
+            release_custom_controller=record("control.custom_release"), mock_output=True,
+        )
         self.camera_worker = NS(connected=True)
         self.mqtt = NS(connected=True)
         self.udp = NS(decoded_frame_fresh=lambda age: True)
@@ -211,7 +216,9 @@ class WindowClockContractTests(unittest.TestCase):
         window.input_allowed = False
         window.tick()
         names = [entry[0] for entry in window.calls]
-        self.assertLess(names.index("control.release"), names.index("control.75hz"))
+        self.assertLess(names.index("control.reset"), names.index("control.release"))
+        for action in ("control.release", "control.dt7_release", "control.custom_release"):
+            self.assertLess(names.index(action), names.index("control.75hz"))
         self.assertFalse(window.control.mock_output)
         self.assertIsNone(window._control_mouse_point)
         window.tick(10.02)
