@@ -34,10 +34,10 @@ class WindowFocusLossTests(unittest.TestCase):
         self.assertIsNone(window.backend.safety._qualification)
         self.assertFalse(window.control._dirty)
         ordinary.assert_not_called()
-        # The lock observer and focus-loss fallback independently attempt
-        # neutral even when reset fails. Both calls are idempotent, bounded.
-        self.assertEqual(dt7.call_args_list, [unittest.mock.call(), unittest.mock.call()])
-        self.assertEqual(cc.call_args_list, [unittest.mock.call(), unittest.mock.call()])
+        # The lock observer, release_all, and focus-loss fallback independently
+        # attempt neutral even when reset fails. Calls are idempotent, bounded.
+        self.assertEqual(dt7.call_args_list, [unittest.mock.call()] * 3)
+        self.assertEqual(cc.call_args_list, [unittest.mock.call()] * 3)
         zero.assert_called_once_with()
         self.assertEqual(clear.call_args_list, [unittest.mock.call(), unittest.mock.call()])
         arm.assert_not_called()

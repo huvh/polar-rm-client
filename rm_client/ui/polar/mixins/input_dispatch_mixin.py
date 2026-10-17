@@ -639,6 +639,11 @@ class InputDispatchMixin:
         0x5A 与 0x0311 的链路中立化由后端负责；这里不能保留可重放的旧意图。
         """
 
+        # A reentrant callback joins the existing cleanup owner. It must not
+        # reset that owner's pending latch or recursively publish neutral.
+        if getattr(self, "_lock_input_clearing", False):
+            return
+        self._lock_input_clearing = True
         # Claim input before any output callback can reenter event dispatch.
         self._modal_input_clear_pending = True
         failures = []
@@ -650,22 +655,25 @@ class InputDispatchMixin:
                 failures.append(error)
                 logging.getLogger(__name__).exception("Locked input cleanup failed")
 
-        attempt(lambda: self.control.reset_inputs())
-        attempt(lambda: setattr(self.control, "last_command", None))
-        attempt(lambda: self.pointer_interaction.cancel_epoch())
-        # These links do not expire held input: each needs its own neutral
-        # attempt even when another link or local reset raises.
-        attempt(lambda: self.control.release_direct_dt7())
-        attempt(lambda: self.control.release_custom_controller())
-        attempt(lambda: self.control.clear_pending())
-        self._economy_qualification_token = None
-        self._control_mouse_point = None
-        self._combat_input_was_allowed = False
-        if failures:
-            # Preserve the primary exception for the backend failure latch.
-            # Every secondary failure has already been recorded above.
-            raise failures[0]
-        self._modal_input_clear_pending = False
+        try:
+            attempt(lambda: self.control.reset_inputs())
+            attempt(lambda: setattr(self.control, "last_command", None))
+            attempt(lambda: self.pointer_interaction.cancel_epoch())
+            # These links do not expire held input: each needs its own neutral
+            # attempt even when another link or local reset raises.
+            attempt(lambda: self.control.release_direct_dt7())
+            attempt(lambda: self.control.release_custom_controller())
+            attempt(lambda: self.control.clear_pending())
+            self._economy_qualification_token = None
+            self._control_mouse_point = None
+            self._combat_input_was_allowed = False
+            if failures:
+                # Preserve the primary exception for the backend failure latch.
+                # Every secondary failure has already been recorded above.
+                raise failures[0]
+            self._modal_input_clear_pending = False
+        finally:
+            self._lock_input_clearing = False
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
         if self._lifecycle_owns_input():

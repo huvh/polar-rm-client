@@ -246,13 +246,16 @@ class ControllerAngleRelay:
                 self._thread = worker
                 try:
                     worker.start()
-                except RuntimeError:
+                except Exception:
                     # An unstarted Thread cannot be joined by strict teardown.
                     # A real admission, even a finished worker, keeps its ident
                     # and remains owned until wait_closed confirms cleanup.
                     if worker.ident is None:
-                        self._thread = None
-                        self._owned_config = None
+                        # A reentrant start wrapper may already have admitted
+                        # a successor; this rejection owns only its old slot.
+                        if self._thread is worker:
+                            self._thread = None
+                            self._owned_config = None
                         stop.set()
                     raise
 

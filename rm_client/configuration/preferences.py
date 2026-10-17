@@ -97,6 +97,19 @@ def _validate_new_module_bind(registry: RegistryPort, name: str, value: str,
             raise ValueError(f"{value} 已被模块 {other.name} 使用")
 
 
+def _validate_new_control_binds(registry: RegistryPort, current: Mapping[str, str],
+                                control: Mapping[str, str], module_binds: Mapping[str, str]) -> None:
+    for slot, physical in control.items():
+        low = physical.lower()
+        if low == "none" or low == current[slot].strip().lower():
+            continue  # Preserve historical overlaps, including legacy casing.
+        for module in registry.modules:
+            # Validate the final draft so moving a module shortcut out of the
+            # way in this same change is permitted.
+            if module_binds.get(module.name, module.keybind).lower() == low:
+                raise ValueError(f"{physical} 已被模块 {module.name} 使用")
+
+
 def prepare_preference_draft(
     registry: RegistryPort,
     current_control_binds: Mapping[str, str],
@@ -116,6 +129,7 @@ def prepare_preference_draft(
     _validate_settings(registry, values, access)
     binds = _control_binds(current_control_binds, values)
     _validate_module_binds(registry, module_binds, binds)
+    _validate_new_control_binds(registry, current_control_binds, binds, module_binds)
     for name, value in toggles.items():
         if name not in access.toggles or registry.get(name) is None or type(value) is not bool:
             raise ValueError(f"此页面不能更改模块开关：{name}")

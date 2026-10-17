@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass, replace
 import json
+import logging
 import math
 import time
 from typing import Any
@@ -424,16 +425,30 @@ class KeyboardControlBridge:
         self._dirty = True
 
     def release_all(self, state: RobotState, registry: ModuleRegistry) -> ChassisCommand:
-        """Clear local input and immediately publish one neutral KMC snapshot."""
+        """Clear input and attempt each neutral route, preserving first failure."""
 
-        self.reset_inputs()
-        command = self.send_from_state(state, registry)
+        failures = []
+        try:
+            self.reset_inputs()
+            command = self.send_from_state(state, registry)
+        except Exception as error:
+            # Never publish ordinary input after a failed reset. Independent
+            # native neutral routes must still run if reset/publication fails.
+            failures.append(error)
+            logging.getLogger(__name__).exception("Input reset/neutral publication failed")
         # 上面那一帧走的是普通出口：它可能被闸门拒了、也可能被 max_hz 挡了。
         # 而关窗口 / 失去焦点这两条路调的就是本函数，只清本地等于"手松了、
         # 线上还按着"——DT7 与选手端那两侧都没有过期自动清零。所以这里再各补
         # 一帧强制中立（release_* 自己会抢时隙，多一帧零键无害）。
-        self.release_direct_dt7()
-        self.release_custom_controller()
+        for release in (lambda: self.release_direct_dt7(),
+                        lambda: self.release_custom_controller()):
+            try:
+                release()
+            except Exception as error:
+                failures.append(error)
+                logging.getLogger(__name__).exception("Independent input neutral release failed")
+        if failures:
+            raise failures[0]
         return command
 
     def clear_pending(self) -> None:
