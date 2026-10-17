@@ -604,8 +604,10 @@ class InputDispatchMixin:
                 return False
 
         try:
-            self.control.mock_output = bool(self.backend.mqtt.mock_output)
-            if attempt(lambda: self.control.reset_inputs()):
+            mode_ready = attempt(lambda: setattr(
+                self.control, "mock_output", bool(self.backend.mqtt.mock_output)))
+            inputs_reset = attempt(lambda: self.control.reset_inputs())
+            if mode_ready and inputs_reset:
                 attempt(lambda: self.control.send_from_state(self.state, self.registry))
             attempt(lambda: self.control.release_direct_dt7())
             attempt(lambda: self.control.release_custom_controller())
@@ -637,26 +639,32 @@ class InputDispatchMixin:
         0x5A 与 0x0311 的链路中立化由后端负责；这里不能保留可重放的旧意图。
         """
 
-        self.control.reset_inputs()
-        self.control.last_command = None
-        # A drag/key capture begun in the old epoch must not resume editing
-        # the replacement model when the transition later completes.
-        self.pointer_interaction.cancel_epoch()
-        # 清空本地不等于车上松手。DT7 与官方选手端那两侧都**没有**"过期自动清零"
-        # 的兜底：把最后一帧原样重复到永远。而下面 clear_pending() 正好取消掉
-        # reset_inputs() 立起来的 _dirty，于是心跳从此一帧都不发。
-        # 实测（按着 W 触发本钩子）：帧数 1 -> 1，再空跑 8 个 tick 也是 0 帧
-        # —— 车会带着那个 W 一直开下去。急停那条路径在 backend/manager.py 里
-        # 已经补过松手帧，这里补的是"锁定比赛控制 / 授权换 epoch / 启动即锁定"这一类。
-        self.control.release_direct_dt7()
-        self.control.release_custom_controller()
-        self.control.clear_pending()
-        # Qualification privileges are process-memory capabilities, not UI
-        # flags. Any lock/scene/focus/disconnect epoch destroys the economy
-        # token before another request can be constructed.
+        # Claim input before any output callback can reenter event dispatch.
+        self._modal_input_clear_pending = True
+        failures = []
+
+        def attempt(action):
+            try:
+                action()
+            except Exception as error:
+                failures.append(error)
+                logging.getLogger(__name__).exception("Locked input cleanup failed")
+
+        attempt(lambda: self.control.reset_inputs())
+        attempt(lambda: setattr(self.control, "last_command", None))
+        attempt(lambda: self.pointer_interaction.cancel_epoch())
+        # These links do not expire held input: each needs its own neutral
+        # attempt even when another link or local reset raises.
+        attempt(lambda: self.control.release_direct_dt7())
+        attempt(lambda: self.control.release_custom_controller())
+        attempt(lambda: self.control.clear_pending())
         self._economy_qualification_token = None
         self._control_mouse_point = None
         self._combat_input_was_allowed = False
+        if failures:
+            # Preserve the primary exception for the backend failure latch.
+            # Every secondary failure has already been recorded above.
+            raise failures[0]
         self._modal_input_clear_pending = False
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
