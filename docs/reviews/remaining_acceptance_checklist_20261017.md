@@ -1,5 +1,30 @@
 # Remaining architecture acceptance: evidence-based close-out
 
+## Latest evidence index — 2026-10-17 18:54 UTC
+
+This section supersedes historical running-state/unfinished-field-inventory
+statements below; historical evidence and failures remain preserved.
+
+- Latest completed source is public `5a1c564` / local `2a2fe5c`:
+  **336 PASS / 12 SKIP / 4 INCOMPLETE / 0 FAIL**, aggregate **NO-GO**.
+  [Exact source, fingerprint and limits](receive_time_freshness_20261017.md).
+- [All 242 declared RobotState fields](robot_state_authority_audit_20261017.md)
+  have bounded writer/default-only dispositions. Dynamic alias/extension and
+  runtime semantic coverage are not exhaustive. Partial raw-feed overwrites and
+  roster profile inference have a reproduced correction; receipt-age inflation
+  has a separate reproduced correction.
+- [Early construction ownership](window_early_resource_audit_20261017.md) now
+  records acquisition boundaries and bounded real-QObject failure probes.
+  Remaining factory prefixes and native active-owner qualification stay open.
+- [Principle-based acceptance](clean_code_principle_acceptance_20261017.md)
+  maps the supplied Clean Code chapters to evidence and gaps. No size score or
+  blanket decoupling/completion claim is made.
+- Historical activation timeout and DT7 budget causation, missing external
+  prerequisites, native Windows/GPU/audio/device and portable delivery validation
+  remain open. Later green runs do not close them.
+
+## Historical checkpoints (read with exact source scope)
+
 ## Evidence update at 09:02 UTC (supersedes earlier open-cell descriptions)
 
 - Historical aggregate `93aa839` finished **309 PASS, 12 SKIP, 3 INCOMPLETE,
