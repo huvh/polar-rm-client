@@ -5,6 +5,7 @@ from copy import deepcopy
 from pathlib import Path
 import struct
 import sys
+import time
 from types import SimpleNamespace
 import unittest
 
@@ -65,7 +66,10 @@ class ProjectionHarness:
             raise AssertionError('Test input was rejected by the real selected codec')
         self.adapter._apply_one(self.state, name, decoded)
         before_raw = deepcopy(vars(self.state))
-        self.mqtt.drain_received_messages = lambda: [(name, payload, 1.0)]
+        # Projection fixtures represent freshly queued messages. Delayed and
+        # invalid receipt times have their own real-queue freshness regression.
+        received_at = time.perf_counter()
+        self.mqtt.drain_received_messages = lambda: [(name, payload, received_at)]
         VideoBackendMixin.consume_official_messages(self)
         VideoBackendMixin.apply_official_state(self)
         return before_raw

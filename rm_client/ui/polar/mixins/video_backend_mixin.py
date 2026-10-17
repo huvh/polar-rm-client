@@ -916,11 +916,12 @@ class VideoBackendMixin:
         return side if side in ("Red", "Blue") else "Red"
 
     def consume_official_messages(self) -> None:
-        for topic, payload, _received_at in self.mqtt.drain_received_messages():
+        for topic, payload, received_at in self.mqtt.drain_received_messages():
             events, updates = self.official_feed.consume(
                 topic, payload, alliance=self.alliance_side(),
                 local_robot_id=self.state.robot_id,
                 referee_profile=self.state.referee_profile,
+                received_at=received_at,
             )
             self._official_state_updates.update(updates)
             for event in events:

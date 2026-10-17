@@ -9,6 +9,9 @@ from typing import Any, Iterable
 
 from .referee_profiles import DEFAULT_PROFILE
 
+_RECEIVED_AT_UNSET = object()
+_OFFICIAL_FEED_MAX_AGE_S = 2.5
+
 
 @dataclass(frozen=True)
 class CombatEvent:
@@ -214,15 +217,16 @@ class OfficialMatchFeed:
         self._referee_profile = DEFAULT_PROFILE
         self._seen: dict[tuple[str, int, int], float] = {}
 
-    def is_fresh(self, timeout_s: float = 2.5) -> bool:
-        return self.last_message_at > 0.0 and time.perf_counter() - self.last_message_at <= timeout_s
+    def is_fresh(self, timeout_s: float = _OFFICIAL_FEED_MAX_AGE_S) -> bool:
+        return self.last_message_at > 0.0 and 0.0 <= time.perf_counter() - self.last_message_at <= timeout_s
 
-    def is_kill_data_fresh(self, timeout_s: float = 2.5) -> bool:
+    def is_kill_data_fresh(self, timeout_s: float = _OFFICIAL_FEED_MAX_AGE_S) -> bool:
         """只有可能携带击杀/战亡信息的官方消息才会屏蔽视觉击杀。"""
-        return self.last_kill_data_at > 0.0 and time.perf_counter() - self.last_kill_data_at <= timeout_s
+        return self.last_kill_data_at > 0.0 and 0.0 <= time.perf_counter() - self.last_kill_data_at <= timeout_s
 
     def consume(self, topic: str, payload: bytes, *, alliance: str, local_robot_id: int,
-                referee_profile: str = DEFAULT_PROFILE) -> tuple[list[CombatEvent], dict[str, Any]]:
+                referee_profile: str = DEFAULT_PROFILE,
+                received_at: float | object = _RECEIVED_AT_UNSET) -> tuple[list[CombatEvent], dict[str, Any]]:
         if referee_profile != self._referee_profile:
             self._referee_profile = referee_profile
             self._robot_health = []
@@ -230,14 +234,31 @@ class OfficialMatchFeed:
             self.last_message_at = 0.0
             self.last_kill_data_at = 0.0
             self.last_official_event_at = 0.0
-        now = time.perf_counter()
+        processing_at = time.perf_counter()
+        # Production queues stamp local monotonic receipt time. Only omitted
+        # timestamps preserve the historical direct-call processing-time API.
+        # Explicit invalid/future/stale receipts must never revive freshness.
+        if received_at is _RECEIVED_AT_UNSET:
+            now = processing_at
+        else:
+            if type(received_at) not in (int, float):
+                return [], {}
+            try:
+                now = float(received_at)
+            except (OverflowError, ValueError):
+                return [], {}
+            if (not math.isfinite(now) or now <= 0.0
+                    or not 0.0 <= processing_at - now <= _OFFICIAL_FEED_MAX_AGE_S):
+                return [], {}
         name = _topic_name(topic)
         if name in OFFICIAL_DOWNLINK_MESSAGES:
-            self.last_message_at = now
+            self.last_message_at = max(self.last_message_at, now)
         if name in {"Event", "GlobalUnitStatus", "RobotInjuryStat", "RobotStaticStatus", "CustomByteBlock"}:
-            self.last_kill_data_at = now
+            self.last_kill_data_at = max(self.last_kill_data_at, now)
         fields = decode_proto_fields(payload)
-        updates: dict[str, Any] = {"official_feed_at": now}
+        # Out-of-order direct consumers cannot move the latest receipt back;
+        # individual events still retain their own actual receipt timestamp.
+        updates: dict[str, Any] = {"official_feed_at": max(self.last_message_at, now)}
         events: list[CombatEvent] = []
 
         if name == "GameStatus":
@@ -349,7 +370,7 @@ class OfficialMatchFeed:
         # snapshot. Only a complete pair can independently replace that value.
         filtered = self._dedupe(events)
         if filtered:
-            self.last_official_event_at = now
+            self.last_official_event_at = max(self.last_official_event_at, now)
         return filtered, updates
 
     def _health_transitions(self, health: list[int], alliance: str, now: float) -> list[CombatEvent]:
