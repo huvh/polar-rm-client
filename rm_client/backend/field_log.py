@@ -141,7 +141,7 @@ class RotatingJsonlLogger:
                     start_worker = threading.Thread(
                         target=self._run, name="polar-field-log", daemon=True,
                     )
-                except RuntimeError as exc:
+                except Exception as exc:
                     self._record_admission_failure(exc, None)
                     return False
                 self._worker = start_worker
@@ -151,13 +151,13 @@ class RotatingJsonlLogger:
             # still enqueue, and close can seal ingress while startup proceeds.
             try:
                 start_worker.start()
-            except RuntimeError as exc:
+            except Exception as exc:
                 with self._condition:
                     self._record_admission_failure(exc, start_worker)
                 return False
         return True
 
-    def _record_admission_failure(self, error: RuntimeError, worker: threading.Thread | None) -> None:
+    def _record_admission_failure(self, error: Exception, worker: threading.Thread | None) -> None:
         """Called under the state lock; only a never-admitted owner loses work.
 
         A start wrapper may raise after a real worker started or even finished.
