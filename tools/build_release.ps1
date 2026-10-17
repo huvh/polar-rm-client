@@ -69,6 +69,11 @@ function Invoke-PortablePreflight(
     $startInfo.CreateNoWindow = $true
     $startInfo.RedirectStandardOutput = $true
     $startInfo.RedirectStandardError = $true
+    # A developer's portable-root override wins even over a frozen EXE's
+    # location. Do not let this candidate validate a different installation's
+    # manifest, resources or FFmpeg. Change only the child environment so the
+    # caller retains its override even if process startup or preflight fails.
+    $startInfo.EnvironmentVariables.Remove("POLAR_APP_ROOT")
     $process = [System.Diagnostics.Process]::Start($startInfo)
     if ($null -eq $process) { throw "portable preflight failed to start" }
     $stdoutTask = $process.StandardOutput.ReadToEndAsync()

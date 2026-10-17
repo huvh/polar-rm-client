@@ -42,8 +42,19 @@ class WriterThread:
         no reserved/live worker. Failed construction preserves the old owner;
         failed admission retains the new one for inspection and explicit retry.
         """
-        self.thread = threading.Thread(target=target, name=name, daemon=True)
-        self.thread.start()
+        # Retry admission also needs a reservation: the condition is reentrant,
+        # so a defensive constructor/start wrapper may call close() on this
+        # same owner before the new worker becomes alive. Preserve an initial
+        # reservation until start_reserved releases it outside this boundary.
+        with self._condition:
+            already_reserved = self.starting
+            self.starting = True
+        try:
+            self.thread = threading.Thread(target=target, name=name, daemon=True)
+            self.thread.start()
+        finally:
+            with self._condition:
+                self.starting = already_reserved
 
     def join(self, timeout):
         """Only background/test callers wait; rejected workers cannot be joined."""

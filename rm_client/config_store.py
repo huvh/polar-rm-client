@@ -7,7 +7,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from .configuration.files import FileSnapshot
+from .configuration.files import FileSnapshot, FileWriteError
 from .configuration.validation import CONFIG_VERSION
 from .configuration.registry import apply_profile_modules, prepare_registry_modules
 from .configuration.wheel import mirror_wheel_payload, prepare_wheel_profile
@@ -26,16 +26,26 @@ def _atomic_write(path: Path, serialized: str) -> None:
     fd, temp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent))
     temp_path = Path(temp_name)
     try:
-        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
+        try:
+            handle = os.fdopen(fd, "w", encoding="utf-8", newline="\n")
+        except Exception as cause:
+            # Until fdopen succeeds, the raw descriptor still belongs to us.
+            # Once adopted, only the stream context manager may close it.
+            try:
+                os.close(fd)
+            except Exception as cleanup_error:
+                raise FileWriteError(cause, cleanup_error) from cause
+            raise
+        with handle:
             handle.write(serialized)
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(temp_path, path)
-    except Exception:
+    except Exception as cause:
         try:
             temp_path.unlink(missing_ok=True)
-        except OSError:
-            pass
+        except Exception as cleanup_error:
+            raise FileWriteError(cause, cleanup_error) from cause
         raise
 
 
