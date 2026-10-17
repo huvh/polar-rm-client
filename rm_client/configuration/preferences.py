@@ -99,10 +99,13 @@ def _validate_new_module_bind(registry: RegistryPort, name: str, value: str,
 
 def _validate_new_control_binds(registry: RegistryPort, current: Mapping[str, str],
                                 control: Mapping[str, str], module_binds: Mapping[str, str]) -> None:
-    for slot, physical in control.items():
+    occupied = {physical.strip().lower() for physical in current.values()}
+    for physical in control.values():
         low = physical.lower()
-        if low == "none" or low == current[slot].strip().lower():
-            continue  # Preserve historical overlaps, including legacy casing.
+        if low == "none" or low in occupied:
+            # Historical overlap belongs to the physical key, not its current
+            # protocol slot. Permutations must not create a new conflict.
+            continue
         for module in registry.modules:
             # Validate the final draft so moving a module shortcut out of the
             # way in this same change is permitted.

@@ -53,6 +53,18 @@ class PreferenceBindingConflictTests(unittest.TestCase):
         self.assertEqual([(module.name, value) for module, value in prepared.module_binds],
                          [("TacticalMap", "F5")])
 
+    def test_historically_shared_physical_key_can_move_between_control_slots(self):
+        prepared = self.prepare({("RobotLink", "Bind A"): "D",
+                                 ("RobotLink", "Bind D"): "Q",
+                                 ("RobotLink", "Bind Q"): "A"})
+        self.assertEqual(dict(prepared.control_binds)["D"], "Q")
+        self.assertEqual(self.registry.get("QuickActionWheel").keybind, "Q")
+
+    def test_reintroducing_a_released_shared_key_is_a_new_conflict(self):
+        self.control.binds["Q"] = "None"
+        with self.assertRaisesRegex(ValueError, "QuickActionWheel"):
+            self.prepare({("RobotLink", "Bind D"): "Q"})
+
 
 if __name__ == "__main__":
     unittest.main()
