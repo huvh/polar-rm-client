@@ -78,3 +78,49 @@ for this document.
 This ledger closes the documentation inventory gap. Exhaustive early-constructor
 cleanup acceptance remains open until the bounded failure matrix supplies
 evidence; no blanket rewrite or whole-client clearance follows from this audit.
+
+## Follow-up: three bounded factory-prefix probes
+
+Source `f457c6d222f25ba09d275eab557029d4bbe92492`, 2026-10-17. Added
+`tests/test_early_window_factory_failures.py` and ran its three methods with
+`../client-verification-venv/bin/python`: **3 PASS**. No production code was
+changed for these probes. The original ledger above remains historical evidence;
+this addendum narrows the following specific gaps.
+
+1. **Feedback first service succeeds, second constructor rejects.** The actual
+   KillFxRenderer and its real native SoundPool are constructed; UiAudioManager
+   admission then raises. The original exception is preserved. After references
+   unwind and Qt/GC events drain, the renderer weak reference has retired, no
+   valid native pool remains, and its QObject `destroyed` signal was observed.
+2. **Feedback failure inside the second service.** UiAudioManager constructs its
+   real ReliableAudioPool, then injected preload failure raises. Both first and
+   second native audio pools emit `destroyed` and neither remains valid after
+   draining. This is stronger than a Python weak-reference-only observation.
+3. **Wallpaper executor acquired before ThumbnailDecoder rejects.** The actual
+   ThreadPoolExecutor and VideoWallpaperPlayer are constructed. The injected
+   decoder-constructor failure occurs after executor publication. Its thread set
+   is empty at acquisition and failure; no `threading.Thread.start` call occurs.
+   Both owner weak references retire after unwind. No active native worker was
+   acquired in this prefix, so absence of an explicit executor shutdown here did
+   not reproduce an active-resource leak.
+
+The tests use temporary user directories, empty assets, offscreen Qt, and the
+existing media-preload/local-capture disabling settings. QMediaPlayer and
+QSoundEffect source-loading/playback methods are patched. **Real QMediaDevices
+construction can still initialize a platform multimedia service such as
+PulseAudio.** Thus these tests do not claim that native multimedia initialization
+is absent, nor qualify physical audio output, driver shutdown or real codec
+cleanup. Source-loaded/preloaded production media remains outside these probes.
+
+No actual retained-owner/resource-leak defect was reproduced in these three
+prefixes. They narrow the feedback and idle-wallpaper factory gaps; they do not
+discharge every early-constructor failure, an already-running executor failure,
+or the production-media qualification still identified above.
+
+Diagnostic follow-up at the same production source: the retained-native-object
+assertion compares the observed count, avoiding repr of a rescued/deleted Qt
+wrapper. The three methods pass again. Two in-process rejecting controls that
+deliberately retain respectively the first feedback renderer and the wallpaper
+executor each produce **one assertion failure, zero errors**. These controls
+show the corresponding retirement assertions reject retention; they are not
+production defects or extra qualification of native media.
