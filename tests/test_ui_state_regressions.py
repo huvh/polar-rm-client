@@ -481,16 +481,30 @@ class IdentityAndDisplayTests(unittest.TestCase):
         self.assertFalse(CONTROL_RESERVED_KEYS & {key.lower() for key in CONTROL_BIND_OPTIONS})
 
     def test_lock_hook_discards_last_command_before_releasing_writers(self):
-        cls = extract_class("rm_client/ui/polar/mixins/input_dispatch_mixin.py", "InputDispatchMixin", {"_clear_control_inputs_for_lock"})
+        from PySide6.QtCore import QRectF
+        from rm_client.ui.polar.mixins.input_dispatch_mixin import _cancel_economy_hold_input
+        cls = extract_class(
+            "rm_client/ui/polar/mixins/input_dispatch_mixin.py", "InputDispatchMixin",
+            {"_clear_control_inputs_for_lock"},
+            {"_cancel_economy_hold_input": _cancel_economy_hold_input, "logging": logging},
+        )
         obj = cls()
         from rm_client.ui.polar.pointer_interaction import PointerInteraction
         obj.pointer_interaction = PointerInteraction()
         seen = []
-        obj.control = NS(last_command=NS(vx=1.0), reset_inputs=lambda: None, clear_pending=lambda: None)
+        obj.economy_hold_key = "pending-offer"
+        obj._economy_hold_input_owner = ("mouse", 1)
+        obj.economy_hold_rect = QRectF(1, 2, 30, 40)
+        retired_at_reset = []
+        def reset_inputs():
+            retired_at_reset.append((obj.economy_hold_key, obj._economy_hold_input_owner,
+                                     obj.economy_hold_rect.isNull()))
+        obj.control = NS(last_command=NS(vx=1.0), reset_inputs=reset_inputs, clear_pending=lambda: None)
         obj.control.release_direct_dt7 = lambda: seen.append(obj.control.last_command)
         obj.control.release_custom_controller = lambda: seen.append(obj.control.last_command)
         obj._clear_control_inputs_for_lock()
         self.assertEqual(seen, [None, None])
+        self.assertEqual(retired_at_reset, [("", None, True)])
         self.assertIsNone(obj._economy_qualification_token)
 
     def test_module_installation_fault_is_not_online(self):
