@@ -108,8 +108,10 @@ class KillSoundPool(ReliableAudioPool):
         self._executor: ThreadPoolExecutor | None = None
         self._decoded: dict[str, Path] = {}
         self._converting: set[str] = set()
+        self._decode_admitting = False
         self._conversion_failed: set[str] = set()
         self._waiting: dict[str, list[tuple[float, float]]] = defaultdict(list)
+        self._playback_epoch = 0
         self._closed = False
         self._decodes_finished = threading.Condition()
         self._active_decodes = 0
@@ -126,15 +128,36 @@ class KillSoundPool(ReliableAudioPool):
             return False
         if name in self._decoded or name in self._converting:
             return True
+        if self._decode_admitting:
+            # Another cue may reenter while the executor is being constructed
+            # or submit holds its non-reentrant lock. Use media for this request.
+            return False
         if len(self._converting) >= 32:
             return False
         source = super()._sound_path(name)
         if not source.is_file() or source.suffix.lower() == '.wav':
             return False
-        if self._executor is None:
-            self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='kill-cue-decode')
         self._converting.add(name)
-        future = self._executor.submit(self._decode_owned, source)
+        self._decode_admitting = True
+        try:
+            if self._executor is None:
+                self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='kill-cue-decode')
+            # Construction can reenter owner callbacks. A newly returned idle
+            # executor must not admit work after close already sealed the pool.
+            if self._closed:
+                self._converting.discard(name)
+                self._executor.shutdown(wait=False, cancel_futures=True)
+                return False
+            future = self._executor.submit(self._decode_owned, source)
+        except Exception as exc:
+            # submit may have queued or started work before raising. Retain
+            # the executor/activity owner, never resubmit this cue, and ignore
+            # an unreturned Future's result. Owner-thread fallback is separate
+            # from proving that all uncertain decoder activity has retired.
+            self._converted(name, None, f'{type(exc).__name__}: {exc}')
+            return False
+        finally:
+            self._decode_admitting = False
         def finished(result):
             try:
                 path, error = result.result(), ''
@@ -191,7 +214,11 @@ class KillSoundPool(ReliableAudioPool):
             if self._decoded[name].is_file():
                 return super().play(name, volume)
             self._decoded.pop(name, None)
-        if self._queue_decode(name):
+        playback_epoch = self._playback_epoch
+        queued = self._queue_decode(name)
+        if self._closed or playback_epoch != self._playback_epoch:
+            return False
+        if queued:
             pending = self._waiting[name]
             pending.append((time.monotonic(), volume))
             del pending[:-self.MAX_PENDING]
@@ -207,6 +234,7 @@ class KillSoundPool(ReliableAudioPool):
         if self._closed:
             return
         pending = self._waiting.pop(name, [])
+        playback_epoch = self._playback_epoch
         if path is not None:
             self._decoded[name] = Path(path)
             super().preload((name,))
@@ -215,6 +243,8 @@ class KillSoundPool(ReliableAudioPool):
             self.last_error = f'击杀音效 PCM 解码失败: {name}: {error}'
             _LOG.warning(self.last_error)
         for requested, volume in pending:
+            if self._closed or playback_epoch != self._playback_epoch:
+                break
             if time.monotonic() - requested <= self.MAX_PENDING_AGE:
                 # Exactly one chosen playback path for each queued request.
                 super().play(name, volume)
@@ -222,6 +252,7 @@ class KillSoundPool(ReliableAudioPool):
     def stop(self) -> None:
         # Decode/cache work can finish, but old cues must not replay after a
         # focus restore, audio preference change, or application shutdown.
+        self._playback_epoch += 1
         self._waiting.clear()
         super().stop()
 

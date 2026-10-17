@@ -97,8 +97,9 @@ class KillAudioExecutorAdmissionTests(unittest.TestCase):
                     raise RuntimeError('late executor admission')
             try:
                 with patch.object(pool, '_decode_owned', delayed), patch.object(threading.Thread, 'start', late_start):
-                    with self.assertRaisesRegex(RuntimeError, 'late executor admission'):
-                        pool._queue_decode('cue.ogg')
+                    self.assertFalse(pool._queue_decode('cue.ogg'))
+                    self.assertIn('cue.ogg', pool._conversion_failed)
+                    self.assertNotIn('cue.ogg', pool._converting)
                 pool.close()
                 pool.wait_closed()
                 self.assertTrue(workers[0].is_alive())
