@@ -22,6 +22,7 @@ from PySide6.QtOpenGL import (
 
 from .render_diagnostics import RenderFault, RenderFaultDiagnostics
 from .framebuffer_storage import FramebufferStorage, framebuffer_slot
+from .glass_commands import GlassCommandBuffer, glass_draw_geometry
 
 _LOG = logging.getLogger(__name__)
 
@@ -328,10 +329,7 @@ class GpuFrameCompositor:
         self.fbo_generation = 0
         # 静态 HUD 与逐帧动画镜片必须分开。旧实现只在静态层失效时
         # 清空一个总列表，动态岛和地图镜片会逐帧累积并把画面洗白。
-        self._static_glass_commands: list[GlassCommand] = []
-        self._frame_glass_commands: list[GlassCommand] = []
-        self._recording_static_glass = False
-        self._glass_owner_stack: list[GlassOwner] = [GlassOwner.HUD]
+        self._glass_commands = GlassCommandBuffer(GlassOwner.HUD)
         self._blur_valid = False
         self._treated_blur_valid = False
         # The media texture stays immutable between decoded frames. Mouse
@@ -763,7 +761,7 @@ class GpuFrameCompositor:
         for name in layers:
             if not self._clear_framebuffer(functions, mapping.get(str(name)), str(name)):
                 return False
-        self._frame_glass_commands.clear()
+        self._glass_commands.clear_frame()
         return True
 
     def begin_vision_layer(self, functions) -> bool:
@@ -848,21 +846,39 @@ class GpuFrameCompositor:
                 functions.glBindTexture(_GL_TEXTURE_2D, 0)
         functions.glActiveTexture(_GL_TEXTURE0)
 
+    # Retain the established inspection/mutation aliases while the buffer owns
+    # the lists and recording scope. No second copy of that state is maintained.
+    @property
+    def _static_glass_commands(self) -> list[GlassCommand]:
+        return self._glass_commands.static
+
+    @property
+    def _frame_glass_commands(self) -> list[GlassCommand]:
+        return self._glass_commands.frame
+
+    @property
+    def _glass_owner_stack(self) -> list[GlassOwner]:
+        return self._glass_commands.owners
+
+    @property
+    def _recording_static_glass(self) -> bool:
+        return self._glass_commands.recording_static
+
+    @_recording_static_glass.setter
+    def _recording_static_glass(self, value: bool) -> None:
+        self._glass_commands.recording_static = value
+
     def begin_frame(self, *, rebuild_static_ui: bool = True) -> None:
         self._frame_rejection = ""
-        self._frame_glass_commands.clear()
-        self._recording_static_glass = False
-        self._glass_owner_stack[:] = [GlassOwner.HUD]
-        if rebuild_static_ui:
-            self._static_glass_commands.clear()
+        self._glass_commands.begin_frame(rebuild_static_ui=rebuild_static_ui)
 
     def clear_static_glass(self) -> None:
         """页面切换为全动态场景时，丢弃上一页缓存的玻璃命令。"""
-        self._static_glass_commands.clear()
+        self._glass_commands.clear_static()
 
     def clear_frame_glass(self) -> None:
         """立即丢弃本帧临时镜片，防止页面切换后旧命令再参与一次合成。"""
-        self._frame_glass_commands.clear()
+        self._glass_commands.clear_frame()
 
     def invalidate_transient_layers(self) -> None:
         """Forget every cache whose source changes across a modal scene.
@@ -871,34 +887,29 @@ class GpuFrameCompositor:
         handlers can use it outside ``paintGL``.  The next frame repaints the
         static/dynamic FBOs and rebuilds both blur chains from the live HUD.
         """
-
-        self._static_glass_commands.clear()
-        self._frame_glass_commands.clear()
-        self._recording_static_glass = False
-        self._glass_owner_stack[:] = [GlassOwner.HUD]
+        self._glass_commands.invalidate()
         self._blur_valid = False
         self._treated_blur_valid = False
         self._backdrop_treatment = BackdropTreatment()
 
     def begin_static_glass(self) -> None:
         """将后续镜片记录到可缓存的静态 UI 层。"""
-        self._recording_static_glass = True
+        self._glass_commands.begin_static()
 
     def end_static_glass(self) -> None:
-        self._recording_static_glass = False
+        self._glass_commands.end_static()
 
     @property
     def glass_owner(self) -> GlassOwner:
-        return self._glass_owner_stack[-1]
+        return self._glass_commands.owner
 
     def push_glass_owner(self, owner: GlassOwner | str) -> None:
         if not isinstance(owner, GlassOwner):
             owner = GlassOwner(str(owner))
-        self._glass_owner_stack.append(owner)
+        self._glass_commands.push_owner(owner)
 
     def pop_glass_owner(self) -> None:
-        if len(self._glass_owner_stack) > 1:
-            self._glass_owner_stack.pop()
+        self._glass_commands.pop_owner()
 
     def add_glass(
         self,
@@ -957,8 +968,7 @@ class GpuFrameCompositor:
             QRectF(clip_rect) if clip_rect is not None else None,
             owner,
         )
-        target = self._static_glass_commands if self._recording_static_glass else self._frame_glass_commands
-        target.append(command)
+        self._glass_commands.append(command)
 
     def set_scene_uv_offset(self, x: float, y: float) -> None:
         self._scene_uv_offset = (float(x), float(y))
@@ -1277,13 +1287,7 @@ class GpuFrameCompositor:
             if not destination_fbo.bind():
                 return False
             self.clear_current(functions, transparent=True)
-            glass_commands = (
-                (*self._static_glass_commands, *self._frame_glass_commands)
-                if include_static
-                else tuple(self._frame_glass_commands)
-            )
-            if owners is not None:
-                glass_commands = tuple(command for command in glass_commands if command.owner in owners)
+            glass_commands = self._glass_commands.select(include_static=include_static, owners=owners)
             if not glass_commands:
                 if destination_fbo.release() is False:
                     return False
@@ -1346,29 +1350,13 @@ class GpuFrameCompositor:
 
             ratio = self._device_pixel_ratio
             for command in glass_commands:
-                x = command.rect.left() * ratio
-                y = self._size.height() - command.rect.bottom() * ratio
-                w = command.rect.width() * ratio
-                h = command.rect.height() * ratio
-                if w <= 0.5 or h <= 0.5:
+                geometry = glass_draw_geometry(command, self._size, ratio)
+                if geometry is None:
                     continue
-                clip = command.rect
-                if command.clip_rect is not None:
-                    clip = clip.intersected(command.clip_rect)
-                if clip.isEmpty():
-                    continue
-                clip_x = clip.left() * ratio
-                clip_y = self._size.height() - clip.bottom() * ratio
-                clip_w = clip.width() * ratio
-                clip_h = clip.height() * ratio
-                sx = max(0, int(clip_x))
-                sy = max(0, int(clip_y))
-                sw = min(self._size.width() - sx, max(1, int(clip_w + 0.999)))
-                sh = min(self._size.height() - sy, max(1, int(clip_h + 0.999)))
-                functions.glScissor(sx, sy, sw, sh)
+                functions.glScissor(*geometry.scissor)
                 functions.glUniform4f(
                     self._uniform(self.glass_program, "glassRect"),
-                    float(x), float(y), float(w), float(h),
+                    *(float(value) for value in geometry.rect),
                 )
                 functions.glUniform1f(self._uniform(self.glass_program, "radius"), float(command.radius * ratio))
                 functions.glUniform1f(self._uniform(self.glass_program, "strength"), float(command.strength))

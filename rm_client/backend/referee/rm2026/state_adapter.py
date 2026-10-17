@@ -9,7 +9,7 @@ from typing import Any
 from ....model import RobotState
 from .projection_policy import (
     ProjectileDamageBaseline, ProjectileDamageSample, assess_projectile_damage,
-    select_present_fields,
+    select_present_fields, select_projected_health,
 )
 
 _RUNE_PHASE = {1: "INACTIVE", 2: "ACTIVATING", 3: "ACTIVE"}
@@ -97,7 +97,11 @@ class Rm2026StateAdapter:
             dynamic_hp = int(dynamics.get("current_health", 0))
             # Local 10 Hz telemetry wins over the older 1 Hz team snapshot,
             # including a valid zero at death (not a fallback to stale HP).
-            hp = dynamic_hp if robot_id == int(state.robot_id) and "current_health" in dynamics else global_hp or dynamic_hp
+            hp = select_projected_health(
+                local=robot_id == int(state.robot_id),
+                global_hp=global_hp if robot_id in health_by_id else None,
+                dynamic_hp=dynamic_hp if "current_health" in dynamics else None,
+            )
             hp_max = int(statics.get("max_health", 0)) or DEFAULT_MAX_HEALTH
             alive_state = int(statics.get("alive_state", 1))
             if alive_state == 2 or hp <= 0:
@@ -132,7 +136,11 @@ class Rm2026StateAdapter:
                 global_hp = max(0, int(health_by_id.get(robot_id, 0)))
                 dynamic_hp = int(state.robot_dynamics.get(robot_id, {}).get("current_health", 0))
                 local_dynamics = state.robot_dynamics.get(robot_id, {})
-                hp = dynamic_hp if robot_id == int(state.robot_id) and "current_health" in local_dynamics else global_hp or dynamic_hp
+                hp = select_projected_health(
+                    local=robot_id == int(state.robot_id),
+                    global_hp=global_hp if robot_id in health_by_id else None,
+                    dynamic_hp=dynamic_hp if "current_health" in local_dynamics else None,
+                )
                 hp_max = int(state.robot_statics.get(robot_id, {}).get("max_health", 0)) or DEFAULT_MAX_HEALTH
                 map_robots.append({
                     "id": robot_id,

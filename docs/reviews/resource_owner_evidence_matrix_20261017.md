@@ -1,5 +1,49 @@
 # Concrete resource-owner evidence matrix
 
+## Evidence update at 09:02 UTC (supersedes earlier open-cell descriptions)
+
+- Historical aggregate `93aa839` finished **309 PASS, 12 SKIP, 3 INCOMPLETE,
+  2 FAIL**. It is not a passing final-source certificate. The video retry failure
+  has accepted test-order correction `909c579` (independent report `5564597`).
+  The 30-second activation subprocess timeout remains unexplained: diagnostic
+  `893faa3` and subsequent passing repetitions do not identify its cause.
+- Constructor matrix `060f190`, independently accepted by root in `939f506`,
+  discharges the named serial starter/reader, actual Paho network thread,
+  MQTT cleanup thread and three decoder pipe-thread constructor cells.
+  Five methods plus three rejecting mutation controls cover these cells;
+  they do not certify every native constructor. Earlier instructions to add
+  those exact constructor cases are complete, not a remaining task.
+- Kill-cue audio retirement `cc33702` needed reviewer correction `f367729`.
+  Red `bf85c5f` is retained. Independent 71-test selection plus an additional
+  shutdown/decoder-error drain probe accepts active decode ownership and sealed
+  delayed admission. Idle unregistered Python threads may finish asynchronously.
+  Add this owner to the matrix: active/failed decode drain **T**, delayed entry
+  after seal **T**, actual late executor admission **T**, physical audio **external**.
+- Glass command buffer/per-draw geometry `b08427f` is independently accepted:
+  86 tests and 48 complete baseline/current GL trace pairs. This discharges the
+  selected core-rendering responsibility split while preserving live command
+  payload reads, membership snapshot timing and failed cache publication.
+- Independent detailed reports and raw evidence are in
+  `audio_retirement_independent_20261017.md` and
+  `glass_owner_independent_20261017.md` (review commit `b089ec4`).
+
+Additional unresolved strict-budget evidence: root's running full profile at
+`f34dbda` failed `test_dt7_worker_dispatch.py::DT7WorkerTests::test_no_device_real_time_100hz_tick_retry_budget`:
+maximum 22.028550001778058 ms against the unchanged strict `< 20` ms assertion
+(15 methods, one failure). Source log was independently read at
+`/workspace/shared/clean-ten-hour-baseline/logs/tests__test_dt7_worker_dispatch.stderr.log`.
+The reported isolated passing sample at `750c842` and diagnostics-only `b53d832`
+do not establish its cause or resolve that failure. Do not label the still-running
+aggregate passing or relax the measured region/threshold.
+
+Remaining work is exact-source aggregate reconciliation, unresolved activation
+and DT7 strict-budget failure diagnosis, and the bounded acquisition/state/config/input reviews
+already assigned by the integrating owner. Keep native Windows/PowerShell,
+GPU/device/audio/codec qualification separate. No new speculative rewrite or
+schedule estimate follows from these tests. Earlier historical RED rows are
+retained as evidence; their named accepted corrections determine current status.
+
+
 Source inventory: `1b2f580`. Follow-on candidates are named separately below;
 this document never adds runs from distinct revisions into an aggregate.
 This supplements, and takes priority for immediate work selection over, the

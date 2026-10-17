@@ -323,18 +323,27 @@ class DT7WorkerTests(unittest.TestCase):
             link = self.make()
             started = time.monotonic()
             durations = []
+            caller_cpu_ms = []
             for index in range(250):
+                cpu_begin = time.thread_time()
                 begin = time.perf_counter()
                 link.poll()
                 link.send(pressed_bits=1)
                 if link.release_pending:
                     link.release()
                 durations.append((time.perf_counter() - begin) * 1000)
+                caller_cpu_ms.append((time.thread_time() - cpu_begin) * 1000)
                 time.sleep(max(0, started + (index + 1) / 100 - time.monotonic()))
             elapsed = time.monotonic() - started
             self.assertLessEqual(len(calls), 4)
             self.assertLessEqual(link.release_attempts, 3)
-            self.assertLess(max(durations), 20)
+            slowest = max(range(len(durations)), key=durations.__getitem__)
+            self.assertLess(max(durations), 20, (
+                f"tick={slowest + 1}/{len(durations)}, "
+                f"caller_wall_ms={durations[slowest]:.6f}, "
+                f"caller_thread_cpu_ms={caller_cpu_ms[slowest]:.6f}, "
+                f"scans={len(calls)}, retries={link.release_attempts}; "
+                "CPU interval includes wall-clock bookkeeping; cause not inferred"))
             print(f'250 real-time 100Hz ticks / {elapsed:.3f}s: scans={len(calls)}, retries={link.release_attempts}, caller median={statistics.median(durations):.4f}ms max={max(durations):.4f}ms')
             link.close()
             self.assertTrue(link.wait_closed())

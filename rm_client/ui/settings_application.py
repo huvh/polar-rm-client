@@ -9,6 +9,7 @@ Neither this module nor the emergency shortcut adapter imports either dialog.
 from __future__ import annotations
 
 from ..configuration.preferences import PreferenceCapabilities, prepare_preference_draft
+from ..configuration.quiescence import quiesce_configuration_inputs
 from ..configuration.registry import SettingId
 from ..configuration.transactions import ConfigurationApplyError, apply_configuration_transaction
 from ..model import CONTROL_SLOT_ORDER
@@ -83,9 +84,11 @@ def apply_registry_draft(host, draft, toggles=None, module_binds=None, *, audio_
     previous = host.capture_configuration_restore_point()
 
     def quiesce():
-        host.backend.lock_control("settings applied")
-        host.control.release_all(host.state, host.registry)
-        host.control.clear_pending()
+        quiesce_configuration_inputs(
+            revoke=lambda: host.backend.lock_control("settings applied"),
+            release=lambda: host.control.release_all(host.state, host.registry),
+            clear_pending=lambda: host.control.clear_pending(),
+        )
 
     def update():
         if not host.control.set_binds(dict(prepared.control_binds)):

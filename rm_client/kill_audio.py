@@ -16,6 +16,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import threading
 import time
 import wave
 
@@ -110,6 +111,8 @@ class KillSoundPool(ReliableAudioPool):
         self._conversion_failed: set[str] = set()
         self._waiting: dict[str, list[tuple[float, float]]] = defaultdict(list)
         self._closed = False
+        self._decodes_finished = threading.Condition()
+        self._active_decodes = 0
         self.converted.connect(self._converted, Qt.ConnectionType.QueuedConnection)
         app = QCoreApplication.instance()
         if app is not None:
@@ -131,7 +134,7 @@ class KillSoundPool(ReliableAudioPool):
         if self._executor is None:
             self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='kill-cue-decode')
         self._converting.add(name)
-        future = self._executor.submit(self._cache.decode, source)
+        future = self._executor.submit(self._decode_owned, source)
         def finished(result):
             try:
                 path, error = result.result(), ''
@@ -148,7 +151,23 @@ class KillSoundPool(ReliableAudioPool):
         future.add_done_callback(finished)
         return True
 
+    def _decode_owned(self, source: Path) -> Path | None:
+        # Thread.start can start a worker and then raise before the executor
+        # records it. Track actual decoder entry independently of its futures.
+        with self._decodes_finished:
+            if self._closed:
+                return None
+            self._active_decodes += 1
+        try:
+            return self._cache.decode(source)
+        finally:
+            with self._decodes_finished:
+                self._active_decodes -= 1
+                self._decodes_finished.notify_all()
+
     def preload(self, names):
+        if self._closed:
+            return
         names = tuple(dict.fromkeys(str(name) for name in names))
         super().preload(names)
         if _media_preload_disabled():
@@ -207,7 +226,29 @@ class KillSoundPool(ReliableAudioPool):
         super().stop()
 
     def close(self):
-        self._closed = True
+        """Owner-thread seal: stop Qt playback and cancel unstarted decodes.
+
+        This is deliberately nonblocking for application aboutToQuit callers.
+        A window lifecycle must also wait_closed on its teardown worker before
+        claiming its decoder executor retired.
+        """
+        with self._decodes_finished:
+            self._closed = True
         self.stop()
         if self._executor is not None:
             self._executor.shutdown(wait=False, cancel_futures=True)
+
+    def wait_closed(self) -> None:
+        """Worker-only retirement after close; never call Qt from this boundary."""
+        if not self._closed:
+            raise RuntimeError("Kill audio must be sealed on its owner thread before retirement")
+        try:
+            if self._executor is not None:
+                # Also cancel here if Qt playback failure interrupted close.
+                self._executor.shutdown(wait=True, cancel_futures=True)
+        finally:
+            # An unregistered worker may already be decoding. A delayed task
+            # cannot enter after close seals the same condition above.
+            with self._decodes_finished:
+                while self._active_decodes:
+                    self._decodes_finished.wait()

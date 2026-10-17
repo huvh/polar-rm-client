@@ -218,7 +218,17 @@ class RefereeDomainCharacterizationTests(unittest.TestCase):
         self.assertEqual(public_shape(), self.baseline["public_shape"])
 
     def test_moved_types_and_policy_callers_have_identical_ast(self):
-        self.assertEqual(ast_contracts(), self.baseline["ast_contracts"])
+        expected = dict(self.baseline["ast_contracts"])
+        # Explicit 2026-10-17 bug correction: a present team HP zero must not
+        # resurrect retained non-local dynamic HP. Keep the old fixture pinned
+        # and approve only this exact adapter AST, not a blanket method waiver.
+        # Real-producer/mutation/frozen-delta evidence lives in
+        # test_referee_health_source_selection.py and the ownership ledger.
+        self.assertEqual(expected["Rm2026StateAdapter"],
+            "9835d242b6c63ad847a673aad074404245c12d8d579cc5e02ae4836a0858c263")
+        expected["Rm2026StateAdapter"] = (
+            "4cc3b3499f58fb51d1ca7843f8b673346607141849f69b1f9d02653ba17bd3f3")
+        self.assertEqual(ast_contracts(), expected)
 
     def test_profiles_transport_policy_validation_and_factory_identity(self):
         self.assertEqual(canonical(profile_observations()), canonical(self.baseline["profile_observations"]))

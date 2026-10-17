@@ -181,15 +181,35 @@ class BackendVideoSourceTests(unittest.TestCase):
 
     def test_explicit_retry_retries_failed_native_close_without_replaying_refresh(self):
         native, hevc, socket = self.install_three_owners()
+        socket.close_release.clear()
+        self.addCleanup(socket.close_release.set)
         native.proc.stdout.fail_close = True
         self.backend.set_active_video_source('Synthetic')
         self.backend.native_decoder._stop_worker.join(1)
+        self.assertTrue(socket.close_entered.wait(1))
         self.assertIn(native, self.backend.native_decoder._retired_sessions)
         first = self.backend.native_decoder._stop_worker
         for _ in range(20):
             self.backend.set_active_video_source('Synthetic')
         self.assertIs(self.backend.native_decoder._stop_worker, first)
         self.assertIn('Native 0x0310', self.backend.video_source_snapshot.pending_resources)
+        # Native failure alone does not certify that the independent socket
+        # closer has finished. Preserve the UI retry contract under a forced
+        # overlap rather than depending on which worker wins scheduling.
+        busy = self.backend.video_source_snapshot
+        udp_closer = self.backend.udp._stop_worker
+        self.assertEqual(busy.inflight_resources, ('UDP/HEVC',))
+        self.assertFalse(busy.retryable)
+        with self.assertRaisesRegex(RuntimeError, 'still in flight'):
+            self.backend.retry_active_video_source(expected_generation=busy.generation)
+        self.assertIs(self.backend.native_decoder._stop_worker, first)
+        self.assertIs(self.backend.udp._stop_worker, udp_closer)
+        self.assertEqual(self.backend.video_source_snapshot.generation, busy.generation)
+        socket.close_release.set()
+        self.assertTrue(self.backend.udp.wait_closed())
+        self.assertFalse(socket.is_open)
+        self.assertTrue(self.backend.video_source_snapshot.retryable)
+        self.assertIn(native, self.backend.native_decoder._retired_sessions)
         native.proc.stdout.fail_close = False
         self.backend.retry_active_video_source()
         self.assertTrue(self.backend.native_decoder.wait_closed())

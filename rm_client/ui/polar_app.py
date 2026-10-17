@@ -3270,12 +3270,14 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             TeardownTask("tongji-bridge", self.tongji_bridge.close),
             TeardownTask("wallpaper-video", self.startup_wallpaper.video_player.close),
             TeardownTask("wallpaper-thumbnails", self.startup_wallpaper.close_thumbnail_workers),
+            TeardownTask("kill-audio-decode", self.kill_fx.sounds.wait_closed),
         )
         prepare = (
             OwnerAction("GPU warmup timer", self._gpu_prewarm_timer.stop),
             OwnerAction("window input", lambda: self.setEnabled(False)),
             OwnerAction("local input", lambda: self._clear_control_inputs_for_lock("window closing")),
             OwnerAction("pending configuration", self.cancel_pending_configuration_for_close),
+            OwnerAction("kill audio playback", self.kill_fx.sounds.close),
         )
         self._window_lifecycle.request_close(prepare=prepare, tasks=tasks)
         # The main timer remains alive even if a test/tool had paused it. No

@@ -97,7 +97,11 @@ def rollback_configuration_transaction(
     restore_pending = False
     # Runtime rebuilds may normalize options or companion preferences.
     # Restore exact operator values again even if that rebuild fails.
-    restorations = (snapshot.restore, *(item.rollback for item in reversed(participants)),
+    # Resolving an adapter's rollback callback is part of that participant's
+    # fallible work. Do it inside the same guard as invocation, not while
+    # constructing the plan, so a broken descriptor cannot bypass safety.
+    restorations = (snapshot.restore,
+                    *(lambda item=item: item.rollback() for item in reversed(participants)),
                     restore_runtime, snapshot.restore)
     for restore in restorations:
         try:

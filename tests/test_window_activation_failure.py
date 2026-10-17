@@ -17,7 +17,8 @@ ROOT = Path(__file__).resolve().parents[1]
 class WindowActivationFailureTests(unittest.TestCase):
     def probe(self, fault):
         source = '''
-            import os, tempfile, time, json
+            import os, tempfile, time, json, faulthandler
+            faulthandler.dump_traceback_later(10, repeat=True)
             from unittest.mock import patch
             os.environ.update(CI="true", QT_QPA_PLATFORM="offscreen",
                 POLAR_DISABLE_LOCAL_CAPTURE="1", POLAR_DISABLE_MEDIA_PRELOAD="1")
@@ -98,6 +99,7 @@ class WindowActivationFailureTests(unittest.TestCase):
                         assert not healthy._window_lifecycle.closing
                         assert not healthy._window_close_finalized
                         assert healthy.isEnabled()
+                        assert not healthy.kill_fx.sounds._closed
                         assert not healthy.timer.isActive()
                         assert id(healthy) not in getattr(app, "_polar_client_windows", {})
                         healthy._abort_startup()
@@ -107,11 +109,18 @@ class WindowActivationFailureTests(unittest.TestCase):
                             time.sleep(.001)
                         assert healthy._window_close_finalized
                     assert not network
-                    print(json.dumps(result))
+                    print(json.dumps(result), flush=True)
         '''
-        result = subprocess.run([sys.executable, "-c", textwrap.dedent(source)], cwd=ROOT,
-            env=dict(os.environ, POLAR_ACTIVATION_FAULT=fault), text=True,
-            capture_output=True, timeout=30)
+        try:
+            result = subprocess.run([sys.executable, "-c", textwrap.dedent(source)], cwd=ROOT,
+                env=dict(os.environ, POLAR_ACTIVATION_FAULT=fault), text=True,
+                capture_output=True, timeout=30)
+        except subprocess.TimeoutExpired as failure:
+            # subprocess.run preserves captured bytes on timeout but unittest's
+            # default traceback omits them. Keep native/Python hang evidence.
+            print(f"Probe {fault} stdout: {failure.stdout!r}", file=sys.stderr)
+            print(f"Probe {fault} stderr: {failure.stderr!r}", file=sys.stderr)
+            raise
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         return json.loads(result.stdout.strip().splitlines()[-1])
 

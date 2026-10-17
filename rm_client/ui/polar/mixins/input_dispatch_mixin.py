@@ -27,6 +27,7 @@ from ....model import Setting
 from ..primitives import InertialScroll
 from ..pointer_interaction import PointerField, PointerInteraction
 from ..hit_testing import topmost_hotspot
+from ..drag_editing import apply_slider_ratio, edit_slider, move_panel
 from ..scroll_routing import ScrollFamily, scroll_target_at
 from ..text_editing import ChatEdit, SearchEdit, TextKey, chat_edit, search_edit
 
@@ -47,6 +48,18 @@ _GUI_CACHE_INVALIDATE_ACTIONS = frozenset({
     "jello_mode_dropdown", "jello_mode_select", "jello_open_legacy", "jello_return", "jello_module_press",
     "jello_toggle_language",
 })
+
+
+_QT_POINTER_BUTTONS = {
+    Qt.MouseButton.LeftButton: 1,
+    Qt.MouseButton.MiddleButton: 2,
+    Qt.MouseButton.RightButton: 3,
+}
+
+
+def _pointer_button(event: QMouseEvent) -> int:
+    """Unsupported/compound Qt buttons carry no recognized pointer intent."""
+    return _QT_POINTER_BUTTONS.get(event.button(), 0)
 
 
 _TEXT_KEYS = {
@@ -128,7 +141,7 @@ def _on_action_setting_toggle(self, payload: Any, point: QPointF, button: int, r
 
 def _on_action_setting_slider(self, payload: Any, point: QPointF, button: int, rect: QRectF) -> None:
     setting = payload
-    setting.set_from_ratio((point.x() - rect.left()) / max(1.0, rect.width()))
+    apply_slider_ratio(setting, rect, point)
     self.pointer_interaction.drag = {"type": "slider", "setting": setting, "rect": rect}
     self.after_setting_changed(setting)
 
@@ -605,6 +618,11 @@ class InputDispatchMixin:
         if self._lifecycle_owns_input():
             event.accept()
             return
+        if not _pointer_button(event):
+            # Back/forward/extra buttons must not act as left clicks or consume
+            # a capture owned by one of the three supported buttons.
+            event.accept()
+            return
         self.pointer_interaction.begin_press(left_button=event.button() == Qt.MouseButton.LeftButton)
         if self.handle_escape_menu_mouse(event, "press"):
             return
@@ -726,9 +744,7 @@ class InputDispatchMixin:
             return
         point = event.position()
         if self.pointer_interaction.drag["type"] == "slider":
-            setting: Setting = self.pointer_interaction.drag["setting"]
-            rect: QRectF = self.pointer_interaction.drag["rect"]
-            setting.set_from_ratio((point.x() - rect.left()) / max(1.0, rect.width()))
+            setting = edit_slider(lambda: self.pointer_interaction.drag, point)
             self.after_setting_changed(setting)
         elif self.pointer_interaction.drag["type"] == "jello_module":
             self.pointer_interaction.track_module_drag(point)
@@ -736,16 +752,18 @@ class InputDispatchMixin:
             self.frame_scheduler.force()
         elif self.pointer_interaction.drag["type"] == "old_panel":
             panel = self.old_panels[self.pointer_interaction.drag["category"]]
-            panel["dragged"] = True
-            panel["x"] = point.x() - self.pointer_interaction.drag["offset_x"]
-            panel["y"] = point.y() - self.pointer_interaction.drag["offset_y"]
+            move_panel(panel, point, lambda: self.pointer_interaction.drag, mark_dragged=True)
         elif self.pointer_interaction.drag["type"] == "polar_window":
             panel = self.polar_windows[self.pointer_interaction.drag["category"]]
-            panel["x"] = point.x() - self.pointer_interaction.drag["offset_x"]
-            panel["y"] = point.y() - self.pointer_interaction.drag["offset_y"]
+            move_panel(panel, point, lambda: self.pointer_interaction.drag)
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
         if self._lifecycle_owns_input():
+            event.accept()
+            return
+        if not _pointer_button(event):
+            # Back/forward/extra buttons must not act as left clicks or consume
+            # a capture owned by one of the three supported buttons.
             event.accept()
             return
         interaction = self.pointer_interaction
@@ -1323,11 +1341,7 @@ class InputDispatchMixin:
         handler(self, payload, point, button, rect)
 
     def qt_button(self, event: QMouseEvent) -> int:
-        if event.button() == Qt.MouseButton.RightButton:
-            return 3
-        if event.button() == Qt.MouseButton.MiddleButton:
-            return 2
-        return 1
+        return _pointer_button(event)
 
     def key_name(self, event: QKeyEvent) -> str:
         key = event.key()

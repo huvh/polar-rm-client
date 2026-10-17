@@ -96,3 +96,20 @@ def assess_projectile_damage(
         large_total=sample.large_total,
     )
     return ProjectileDamageDecision(next_baseline, small_delta, large_delta)
+
+
+def select_projected_health(*, local: bool, global_hp: int | None,
+                            dynamic_hp: int | None) -> int:
+    """Choose one HP observation; None means absent, while zero means dead.
+
+    Current-local dynamic telemetry retains its existing priority over the
+    slower team snapshot. For every other robot, an observed global value wins
+    over retained dynamic history, including zero. Missing global slots may
+    still use dynamic history. This chooses a source, not freshness or authority
+    for control; callers retain their existing conversion/clamping boundaries.
+    """
+    if local and dynamic_hp is not None:
+        return dynamic_hp
+    if global_hp is not None:
+        return global_hp
+    return dynamic_hp if dynamic_hp is not None else 0
