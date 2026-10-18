@@ -2065,3 +2065,52 @@ alias/dynamic-access blind spots and scoped-count allowance limitations remain.
 Four incomplete prerequisites still prevent GO. Historical failures, interrupted
 runs and external/native qualification limits are preserved; no global ownership
 or architecture acceptance is inferred and no raw logs are uploaded.
+
+### Release-all primary-error contract: external candidate accepted
+
+A bounded inert audit reproduced `KeyboardControlBridge.release_all` losing its
+first operation error and skipping later independent neutral routes when its
+error logger also raises. A standard `logging.StreamHandler` with a closed
+in-memory stream reproduces this diagnostic failure without a physical device.
+Reset/publication failures can skip both release routes; a DT7 release failure
+can skip the custom-controller route. Focus loss already has an independent
+fallback, so this does not establish missing focus-loss neutralization or any
+physical motion. Output-gate/profile-quiescence caller ordering remains relevant.
+
+The accepted external candidate changes only this method: a local helper records
+the primary operation exception first, then isolates ordinary logger exceptions.
+Capability-checked, guarded `add_note` records diagnostics best-effort. Missing,
+noncallable or raising note capabilities and failing diagnostic `__str__` cannot
+replace the primary ordinary error or cancel subsequent independent attempts.
+Healthy log messages/context and first-error identity remain intact. Operation,
+logger and note `BaseException` propagation is unchanged; this is not a promise
+of continuation after `KeyboardInterrupt`/`SystemExit`. Python 3.10 grammar and
+missing-capability controls were checked, but execution used Python 3.12.
+
+Independent external review accepted the frozen candidate. The original four
+contract methods produce **4 FAIL / 0 ERROR** on baseline and pass on candidate;
+the 18-method new suite produces **19 failing outcomes / 0 ERROR** on baseline.
+Candidate evidence is **23 PASS** (18 new plus five unchanged existing methods),
+the same original four methods PASS, and seven independent controls PASS. Five
+runtime-only mutation variants are rejected. These overlapping selections are
+not added into a unique aggregate count. Initial oracle/runner errors are
+preserved separately in the local packet and are not acceptance evidence.
+
+Evidence: `error-contract-audit-20261018/README.md` and `INDEPENDENT_REVIEW.md`.
+External source SHA-256 is
+`8708271c872b57115c097225987b758447d0a6a58f1aca8daf1b34abd7637c30`;
+new test SHA-256 is
+`deae52f71223be7fd01f7b0af36c388cecd02da3d6b1a31ead08806d34f2195f`.
+Whole-file AST comparison found no change outside `release_all`. Integration is
+in progress; no integrated/full-run result is claimed here. Neutral attempts do
+not prove wire delivery, and no native/hardware or historical-cause acceptance
+is inferred. Raw logs remain local.
+
+Integrated release-all repair is independently accepted at the frozen source
+and new-test hashes. Reviewer ran five complete focused modules: 45 methods
+PASS, plus seven method controls and the original four failure probes against
+repository source. Author selected 42 focused methods and API/static gates
+passed; these selections overlap and are not summed as unique coverage.
+Source/test bytes match the external packet. Whole-file AST outside release_all
+and all preexisting caller/test hashes remain unchanged. No prior assertion or
+harness was edited. Full-source aggregate qualification is pending.

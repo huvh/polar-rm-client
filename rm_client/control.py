@@ -428,14 +428,27 @@ class KeyboardControlBridge:
         """Clear input and attempt each neutral route, preserving first failure."""
 
         failures = []
+
+        def record_failure(error: Exception, message: str) -> None:
+            failures.append(error)
+            try:
+                logging.getLogger(__name__).exception(message)
+            except Exception as diagnostic:
+                # A diagnostic sink cannot cancel independent neutral routes.
+                try:
+                    add_note = getattr(error, "add_note", None)
+                    if callable(add_note):
+                        add_note(f"Neutral-release diagnostic failed: {type(diagnostic).__name__}: {diagnostic}")
+                except Exception:
+                    pass
+
         try:
             self.reset_inputs()
             command = self.send_from_state(state, registry)
         except Exception as error:
             # Never publish ordinary input after a failed reset. Independent
             # native neutral routes must still run if reset/publication fails.
-            failures.append(error)
-            logging.getLogger(__name__).exception("Input reset/neutral publication failed")
+            record_failure(error, "Input reset/neutral publication failed")
         # 上面那一帧走的是普通出口：它可能被闸门拒了、也可能被 max_hz 挡了。
         # 而关窗口 / 失去焦点这两条路调的就是本函数，只清本地等于"手松了、
         # 线上还按着"——DT7 与选手端那两侧都没有过期自动清零。所以这里再各补
@@ -445,8 +458,7 @@ class KeyboardControlBridge:
             try:
                 release()
             except Exception as error:
-                failures.append(error)
-                logging.getLogger(__name__).exception("Independent input neutral release failed")
+                record_failure(error, "Independent input neutral release failed")
         if failures:
             raise failures[0]
         return command
