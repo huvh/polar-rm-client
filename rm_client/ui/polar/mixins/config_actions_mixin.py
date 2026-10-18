@@ -1032,7 +1032,7 @@ class ConfigActionsMixin:
 
     def play_gui_transition_sound(self, kind: str) -> None:
         audio = self.registry.get("AudioFeedback")
-        if not audio or not self.setting_bool(audio, "Enabled", True):
+        if not audio or not audio.enabled or not self.setting_bool(audio, "Enabled", True):
             return
         self.ui_audio.gui_feedback(
             kind,
