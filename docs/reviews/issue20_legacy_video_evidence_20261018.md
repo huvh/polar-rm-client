@@ -148,3 +148,47 @@ H.264 stream; it is not a new universal codec discriminator.
 This software stage adds neither a USB driver nor arbitrary raw-UDP input and
 does not redefine Native 0x0310. Issue 20 remains open for its device-integration
 and hardware acceptance requirements.
+
+## Subsequent manager-to-HUD handoff stage
+
+Published source: [8c51d06fa8a2941322ea710c8efa08a2dbf9bfa0](https://github.com/lulunomaro/polar-rm-client/commit/8c51d06fa8a2941322ea710c8efa08a2dbf9bfa0),
+local `4c63180c9c92c68c5f9252e2dcd1a2b70dfba5dc`, tree
+`dea2bf3cfd9ed523d28f24ec6b2a235dfe44e332` (parent-reported publication mapping;
+local commit/tree inspected). This stage adds
+[test_udp_h264_hud_handoff.py](../../tests/test_udp_h264_hud_handoff.py).
+The accompanying backend comments clarify the shared H.264/H.265 decoder slot
+and that synchronous JPEG decoding still occupies the callback thread; those
+comment changes do not alter executable behavior or establish GPU performance.
+
+- One actual offscreen-window method covers both existing source labels,
+  **Shark UDP** and **UDP HEVC**. Valid bundled H.264, assembled with the Shark
+  envelope and decoded by real FFmpeg, reaches the real manager and normal HUD
+  as a **160×120 QImage/QPixmap**, with backend provenance and readiness true.
+- Author and independent reviewer each passed this method plus the 12 dispatch
+  methods: **13 PASS per selection**, not 26 distinct methods. Replacing the
+  dispatch method in memory with the pre-fix version produces **2 failures,
+  0 errors**, one for each source label, under bounded waits and normal cleanup.
+- Authoritative Hero deployment excludes the UDP lookup. Stopping and closing
+  the UDP decoder clears the normal HUD image and freshness. The fixture's
+  Python audit hook observed no attempted socket operations in its guarded set;
+  this is not a guarantee about all native-library network behavior.
+- `client-renewed20h-full4/results.json` is now **completed: 359 PASS,
+  12 SKIP, 5 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`), run ID
+  `4e373a09ed304adaae9161e537ba2d7f`, for the exact public `8c51d06f` /
+  local `4c63180c` / tree `dea2bf3c` stage above. Its recorded source-at-start
+  is clean. Declared source stability passed with **709 inputs** at both
+  endpoints and SHA-256
+  `e4798ca3fa70537a34633fb0367454fbb9dd2bf9f021da847c4151b9ecbefa89`;
+  the same fingerprint scope and exclusions described above apply.
+- The aggregate individually records H.264 dispatch **12 methods PASS** and HUD
+  handoff **1 method PASS**. Its additional incomplete result is
+  `tests/test_modal_input_epoch.py`: **300-second timeout**, child tree stopped.
+  The retained stack is in GUI transition audio-source preload (`ui_audio.py`),
+  not the H.264 decode/handoff path. This separate unresolved timeout remains
+  part of the aggregate and prevents claiming full acceptance.
+- The completed **358/12/4/0, NO-GO** result above remains the earlier public
+  `32da8ad5` / local `3f94f0f0` stage; it is not a result for this newer commit.
+
+This verifies the client-side manager-to-HUD handoff only. Native GPU/display
+presentation, the physical legacy receiver path, and real-device continuous
+video/disconnect/reconnect acceptance remain pending.

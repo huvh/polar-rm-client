@@ -259,3 +259,64 @@ either focused result below.
   qualification, concurrent-publisher guarantee or crash-durability claim is made.
 
 This addendum changes documentation only and does not publish raw test logs.
+
+## Third repair stage: queued Qt exception counterevidence
+
+The bootstrap repair is local `77557f224ed2a1b0adda23c1c340372d39f2b6af`, public
+[328215e73a81a5d705848e03f0374ff02cc7755c](https://github.com/lulunomaro/polar-rm-client/commit/328215e73a81a5d705848e03f0374ff02cc7755c).
+Source: [verify_all.py](../../tools/verify_all.py), `execute_script`; regression:
+[test_verification_qt_exceptions.py](../../tests/test_verification_qt_exceptions.py).
+
+A real QObject signal delivered through `Qt.QueuedConnection` to a decorated
+slot can report an uncaught assertion through `sys.excepthook`, while unittest
+still prints `OK` and the child exits zero. The production bootstrap reproduced
+that false-PASS behavior. A separate QTimer Python-callable control propagated
+its exception to unittest normally; this finding is not a blanket claim about
+all Qt callbacks or evidence of hidden failures in historical runs.
+
+The child bootstrap now emits a newline-prefixed failure marker on an uncaught
+non-SystemExit hook invocation and delegates to the original hook to preserve
+the traceback. The hook remains installed through shutdown. It does not scan
+arbitrary traceback text, alter the production application's hook, or introduce
+an unraisable-exception policy. Scoped test handlers may explicitly capture and
+assert expected errors. Actual Qt `SystemExit(7)` still terminates the child
+with exit code 7 without a hook marker; nonzero-exit classification remains FAIL.
+
+Baseline: **2 failures, 0 errors** across six new methods. Independent focused
+verification: **57 passed**, comprising **6 Qt**, **7 existing thread** and
+**44 registry** methods. The real subprocess cases include healthy/caught-error
+callbacks, custom handler capture/restoration, uncaught queued assertions,
+unterminated stderr and SystemExit. No historical aggregate is reclassified
+solely because this new counterexample exists.
+
+### Integrated full-run status
+
+The integrated stage, also containing the separately documented H.264 HUD test,
+is local `4c63180c9c92c68c5f9252e2dcd1a2b70dfba5dc`, public
+[8c51d06fa8a2941322ea710c8efa08a2dbf9bfa0](https://github.com/lulunomaro/polar-rm-client/commit/8c51d06fa8a2941322ea710c8efa08a2dbf9bfa0),
+tree `dea2bf3cfd9ed523d28f24ec6b2a235dfe44e332` (parent-verified mapping).
+`client-renewed20h-full4/results.json` was independently verified as **completed:
+359 PASS, 12 SKIP, 5 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`), run ID
+`4e373a09ed304adaae9161e537ba2d7f`. This is an unsuccessful acceptance candidate,
+not a successful acceptance merely because FAIL is zero. Source-at-start records
+the exact local commit/tree above and `dirty: false`. Both declared source
+fingerprints contain **709 inputs**, SHA-256
+`e4798ca3fa70537a34633fb0367454fbb9dd2bf9f021da847c4151b9ecbefa89`;
+source stability is PASS under the previously stated scope/endpoint limitations.
+
+The extra INCOMPLETE is `tests/test_modal_input_epoch.py`: **300-second timeout;
+child tree stopped**. Retained local faulthandler logs show the main thread at
+`ui_audio.py:115`, `QSoundEffect.setSource`, through GUI-transition sound from
+`open_hero_deploy_interface`. Logs also report unavailable audio output and a
+PulseAudio connection failure after its runtime-directory creation failed on a
+read-only filesystem. The inherited `test_window_economy_commands.py` fixture
+assigned `ui_audio_enabled=False`, a flag not consumed by production audio code,
+allowing real native audio into
+an input-ownership test. Scoped fixture isolation is under repair. This stack
+observation does not establish the underlying native Qt cause or a historical
+Escape-menu root cause. Full4 logs remain local and are not uploaded.
+
+The preceding 358-PASS, 12-SKIP, 4-INCOMPLETE, 0-FAIL NO-GO run belongs to public
+`32da8ad` and remains separate from this newer unsuccessful candidate. H.264/HUD details remain in the
+[issue20 evidence report](issue20_legacy_video_evidence_20261018.md).
+Only documentation is changed by this report update; no raw logs are published.

@@ -108,3 +108,70 @@ the RobotState authority ledger or focused regression results. The defensible
 acceptance statement is: **specific cycle/hotspot improvements are verified;
 overall central dependency reduction remains unproven and these static fan-out
 measures increased.** No raw measurement JSON or logs are published by this report.
+
+## 2026-10-18 addendum: renewed repair-stage comparison
+
+This is a separate comparison between exact commits
+`a3c3103d831f5500c79b38685f4a05352d926bfc` and
+`4c63180c9c92c68c5f9252e2dcd1a2b70dfba5dc`. Both `rm_client` trees were exported
+from Git into temporary directories and parsed using the same current
+`tools.quality.metrics.measure_tree` implementation. No application import,
+regression suite or source modification was needed. Historical measurements
+above retain their original endpoints.
+
+The measurement implementation remains byte-identical to the version recorded
+above:
+
+- `tools/quality/metrics.py` SHA-256:
+  `548bcabd7b664a3468d566a0608e40b25ea32ec5bba955c3e22e511481841847`
+- `tools/quality/runtime_sources.py` SHA-256:
+  `e0d560401d7e0eb2b05cdb30c2f4b89db3d58ee2625c7d8dd3da103377d855e7`
+
+| Same metric | `a3c3103` | `4c63180` |
+|---|---:|---:|
+| Parsed Python files | 221 | 221 |
+| Functions | 3,470 | 3,474 |
+| Function-scoped executable AST statements | 37,495 | 37,556 |
+| Decisions | 13,216 | 13,251 |
+| Local import edges | 616 | 616 |
+| Eager non-type-only cycle components | 0 | 0 |
+| Including deferred non-type-only cycle components | 0 | 0 |
+| Window module import fan-out | 94 | 94 |
+| Backend manager import fan-out | 37 | 37 |
+
+Normalized Python-source measurement digests, distinct from Git tree IDs and
+aggregate-verification source fingerprints:
+
+- `a3c3103`: `a21a14d7b30650bcd2bf5b0cc5d1f9f961bc6cafab14432c2162a86f881f527b`
+- `4c63180`: `e76a6489ac0fb9b8b65bb6fe4ad70404ccbccc668f481abf3c6d8f7961900423`
+
+The repair stage therefore leaves measured import coupling unchanged and adds
+61 statements / 35 decisions. This establishes neither global simplification
+nor a quality regression by itself. Correctness repairs require explicit
+handling; these counts do not assess its necessity or clarity.
+
+Three leading observed hotspots at `4c63180`:
+
+1. `InputDispatchMixin.keyPressEvent`, `input_dispatch_mixin.py:1022`:
+   100 decisions / 171 statements. Keyboard characterization and actual-window
+   routing tests exist; ownership ordering makes mechanical rearrangement risky.
+2. `Rm2026StateAdapter._apply_one`, `state_adapter.py:171`:
+   73 decisions / 176 statements. Frozen referee characterization protects field
+   presence, write ordering and error semantics.
+3. `ModuleListMixin.draw_rm_indicators_hud`, `module_list.py:1251`:
+   73 decisions / 89 statements. It combines geometry, diagnostic precedence,
+   localization and tooltips. HUD locale/rendering tests exist, but should not
+   be treated as an exhaustive diagnostic-precedence oracle.
+
+A bounded next proposal, **not implemented by this addendum**, is to compute
+ordered offers per category once inside `ui/cs2_buy_menu.py:build_grid`, reusing
+those lists for both maximum-row/scroll calculation and column rendering.
+Currently these two consumers independently classify the same offers. Before
+changing it, characterize complete draw output, hotspot order/payloads and
+scroll bounds for uneven, empty, unknown-category and supplier cases with the
+existing buy-matrix host. Baseline and candidate should both pass; a changed
+ordering/grouping mutation should fail. This would be a local consistency
+improvement without a new helper/module, not reduced global coupling.
+
+Raw temporary metric reports are not included or published. This addendum
+changes documentation only and claims no new runtime qualification.
