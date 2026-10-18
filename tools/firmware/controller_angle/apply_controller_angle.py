@@ -121,51 +121,146 @@ float GetCustomControllerPos(uint8_t index)
 '''
 
 
+def c_lexical_kinds(text: str) -> str:
+    """Classify code, comments and quoted literals without interpreting C.
+
+    Keep an original-offset map across C's backslash/newline splicing so a
+    continued // comment or split /* opener cannot hide an owned hook. Quoted
+    delimiters and escapes are consumed as literals, never as comment syntax.
+    This is only lexical admission for pinned snippets, not a C/preprocessor
+    verifier (for example, it does not evaluate conditional compilation).
+    """
+    chars, offsets = [], []
+    index = 0
+    while index < len(text):
+        splice = re.match(r"\\\r?\n", text[index:index + 3])
+        if splice:
+            index += len(splice.group())
+        else:
+            chars.append(text[index])
+            offsets.append(index)
+            index += 1
+    logical = "".join(chars)
+    kinds = ["c"] * len(text)
+    index = 0
+    while index < len(logical):
+        start = index
+        if logical.startswith("//", index):
+            newline = logical.find("\n", index + 2)
+            index = len(logical) if newline == -1 else newline
+            kind = "m"
+        elif logical.startswith("/*", index):
+            end = logical.find("*/", index + 2)
+            if end == -1:
+                raise RuntimeError("controller angle source: unterminated C comment")
+            index, kind = end + 2, "m"
+        elif logical[index] in ("\"", "'"):
+            quote = logical[index]
+            index += 1
+            while index < len(logical):
+                if logical[index] == "\\":
+                    index += 2
+                elif logical[index] == quote:
+                    index += 1
+                    break
+                elif logical[index] in "\r\n":
+                    raise RuntimeError("controller angle source: unterminated C literal")
+                else:
+                    index += 1
+            else:
+                raise RuntimeError("controller angle source: unterminated C literal")
+            kind = "q"
+        else:
+            index += 1
+            continue
+        first, last = offsets[start], offsets[index - 1] + 1
+        kinds[first:last] = [kind] * (last - first)
+    return "".join(kinds)
+
+
+def live_code(text: str) -> str:
+    """Preserve offsets/lines while hiding comments and quoted literal text."""
+    return "".join(char if kind == "c" or char in "\r\n" else " "
+                   for char, kind in zip(text, c_lexical_kinds(text)))
+
+
+def live_fragment(text: str, fragment: str, label: str) -> None:
+    start = text.index(fragment)
+    actual = c_lexical_kinds(text)[start:start + len(fragment)]
+    expected = c_lexical_kinds(fragment)
+    if any(real != wanted for char, real, wanted in zip(fragment, actual, expected)
+           if not char.isspace()):
+        raise RuntimeError(f"{label}: controller angle hook is commented out or quoted")
+
+
 def once(text: str, old: str, new: str, label: str) -> str:
     if text.count(old) != 1:
         raise RuntimeError(f"{label}: unsupported or ambiguous source anchor")
+    live_fragment(text, old, label)
     return text.replace(old, new, 1)
 
 
-def patch_referee(text: str) -> str:
-    if MARK in text:
-        if IMPLEMENTATION.strip() not in text:
-            raise RuntimeError("controller angle implementation was edited; refusing to overwrite")
+def installed_once(text: str, fragment: str, label: str) -> None:
+    """A marker is not evidence that its safety-sensitive integration survived."""
+    if text.count(fragment) != 1:
+        raise RuntimeError(f"{label}: installed controller angle hook missing, edited or duplicated")
+    live_fragment(text, fragment, label)
+
+
+def owned_change(text: str, old: str, new: str, label: str, installed: bool) -> str:
+    if installed:
+        installed_once(text, new, label)
         return text
-    text = once(text, "void init_referee_struct_data(void)", IMPLEMENTATION + "\nvoid init_referee_struct_data(void)", "referee implementation")
-    text = once(text, "void init_referee_struct_data(void)\n{", "void init_referee_struct_data(void)\n{\n    CustomControllerAnglesReset();", "referee init")
-    text = once(text, "robot_custom_data_t * GetCustomControllerDataPoint(void) { return &robot_custom_data; }",
+    return once(text, old, new, label)
+
+
+def patch_referee(text: str) -> str:
+    installed = MARK in text
+    if installed:
+        installed_once(text, IMPLEMENTATION.strip(), "referee implementation")
+    else:
+        text = once(text, "void init_referee_struct_data(void)", IMPLEMENTATION + "\nvoid init_referee_struct_data(void)", "referee implementation")
+    text = owned_change(text, "void init_referee_struct_data(void)\n{", "void init_referee_struct_data(void)\n{\n    CustomControllerAnglesReset();", "referee init", installed)
+    text = owned_change(text, "robot_custom_data_t * GetCustomControllerDataPoint(void) { return &robot_custom_data; }",
                 "CustomControllerData_t * GetCustomControllerDataPoint(void) { return &custom_controller_data; }",
-                "raw angle payload source")
-    if "if (frame == 0) return;" not in text:
+                "raw angle payload source", installed)
+    dispatch = re.search(r"^void referee_data_solve\(uint8_t \*\s*frame\)\s*\{.*?^\}", live_code(text), re.M | re.S)
+    if dispatch is None:
+        raise RuntimeError("referee dispatch: controller angle hook missing or edited")
+    # The KM/typed dispatcher may already provide this guard away from the
+    # opening brace, or add a second one. Validate inside this function only.
+    if "if (frame == 0) return;" not in dispatch.group():
+        if installed:
+            raise RuntimeError("referee null frame guard: installed controller angle hook missing or edited")
         text = once(text, "void referee_data_solve(uint8_t * frame)\n{",
                     "void referee_data_solve(uint8_t * frame)\n{\n    if (frame == 0) return;", "null frame guard")
     anchor = "        case CUSTOM_CONTROLLER_CMD_ID: {\n"
     # Header bytes contain payload length even when the optional typed-dispatch
     # patch defers publishing referee_receive_header until after validation.
-    text = once(text, anchor, anchor + "            if (!CustomControllerAnglesAccept(frame + index,\n"
-                "                (uint16_t)((uint16_t)frame[1] | ((uint16_t)frame[2] << 8)))) return;\n", "0x0302 acceptance")
-    text, count = re.subn(r"inline float GetCustomControllerPos\(uint8_t index\)\s*\{.*?\n\}", "", text, flags=re.S)
-    if count != 1:
+    text = owned_change(text, anchor, anchor + "            if (!CustomControllerAnglesAccept(frame + index,\n"
+                "                (uint16_t)((uint16_t)frame[1] | ((uint16_t)frame[2] << 8)))) return;\n", "0x0302 acceptance", installed)
+    legacy = r"inline float GetCustomControllerPos\(uint8_t index\)\s*\{.*?\n\}"
+    if installed:
+        if re.search(legacy, live_code(text), flags=re.S):
+            raise RuntimeError("legacy angle getter remains beside installed controller angle hooks")
+        return text
+    matches = list(re.finditer(legacy, text, flags=re.S))
+    if len(matches) != 1:
         raise RuntimeError("legacy angle getter layout not recognized")
-    return text
+    return once(text, matches[0].group(), "", "legacy angle getter")
 
 
 def patch_header(text: str) -> str:
-    if MARK in text:
-        if DECLARATIONS.strip() not in text:
-            raise RuntimeError("controller angle declarations were edited")
-        return text
-    text = once(text, "extern robot_custom_data_t * GetCustomControllerDataPoint(void);",
+    installed = MARK in text
+    text = owned_change(text, "extern robot_custom_data_t * GetCustomControllerDataPoint(void);",
                 "/* Raw last payload only; control consumers must use the fresh snapshot API. */\n"
-                "extern CustomControllerData_t * GetCustomControllerDataPoint(void);", "raw angle pointer declaration")
-    return once(text, "extern inline float GetCustomControllerPos(uint8_t index);", DECLARATIONS, "referee header")
+                "extern CustomControllerData_t * GetCustomControllerDataPoint(void);", "raw angle pointer declaration", installed)
+    return owned_change(text, "extern inline float GetCustomControllerPos(uint8_t index);", DECLARATIONS, "referee header", installed)
 
 
 def patch_arm(text: str) -> str:
-    if MARK in text:
-        return text
-    text = once(text, "    MA.custom_controller_ready = GetRefereeState();", "    MA.custom_controller_ready = GetCustomControllerOnline();  /* " + MARK + " */", "arm observer")
+    installed = MARK in text
+    text = owned_change(text, "    MA.custom_controller_ready = GetRefereeState();", "    MA.custom_controller_ready = GetCustomControllerOnline();  /* " + MARK + " */", "arm observer", installed)
     old = """            if (MA.custom_controller_ready) {
                 float pos[6] = {0};
                 pos[J0] = GetCustomControllerPos(J0);
@@ -183,24 +278,23 @@ def patch_arm(text: str) -> str:
                 break;
             }
             {"""
-    text = once(text, old, new, "arm snapshot")
+    text = owned_change(text, old, new, "arm snapshot", installed)
     # Division before addition avoids overflow for finite wire values; actual
     # joint reference limits and the existing J0..J2 jump gate remain unchanged.
-    text = once(text, "float vj4_pos = (pos[J4] - pos[J5]) / 2;", "float vj4_pos = pos[J4] / 2.0f - pos[J5] / 2.0f;", "joint differential")
-    text = once(text, "float vj5_pos = (pos[J4] + pos[J5]) / 2;", "float vj5_pos = pos[J4] / 2.0f + pos[J5] / 2.0f;", "joint sum")
-    text = once(text, "void MechanicalArmConsole(void)\n{", """void MechanicalArmConsole(void)
+    text = owned_change(text, "float vj4_pos = (pos[J4] - pos[J5]) / 2;", "float vj4_pos = pos[J4] / 2.0f - pos[J5] / 2.0f;", "joint differential", installed)
+    text = owned_change(text, "float vj5_pos = (pos[J4] + pos[J5]) / 2;", "float vj5_pos = pos[J4] / 2.0f + pos[J5] / 2.0f;", "joint sum", installed)
+    text = owned_change(text, "void MechanicalArmConsole(void)\n{", """void MechanicalArmConsole(void)
 {
     /* Expiry between Reference and Console must not apply the old target. */
     if (MA.mode == MECHANICAL_ARM_FOLLOW && !GetCustomControllerOnline()) {
         MA.custom_controller_ready = false;
         MA.mode = MECHANICAL_ARM_SAFE;
-    }""", "arm output expiry")
+    }""", "arm output expiry", installed)
     return text
 
 
 def patch_sender(text: str) -> str:
-    if MARK in text:
-        return text
+    installed = MARK in text
     old = """    DataConcatenat(data, DATA_LENGTH);
     HAL_UART_Transmit(&huart1, (uint8_t *)(&TX_DATA), sizeof(TX_DATA), 50);"""
     new = """    /* POLAR-CONTROLLER-ANGLE: cc_control_data is only 28 bytes, and the
@@ -210,17 +304,16 @@ def patch_sender(text: str) -> str:
     memcpy(payload, data, CUSTOM_CONTROLLER_ANGLE_COUNT * sizeof(float));
     DataConcatenat(payload, DATA_LENGTH);
     HAL_UART_Transmit(&huart1, (uint8_t *)(&TX_DATA), sizeof(TX_DATA), 50);"""
-    return once(text, old, new, "bounded controller sender")
+    return owned_change(text, old, new, "bounded controller sender", installed)
 
 
 def patch_task(text: str) -> str:
-    if MARK in text:
-        return text
-    return once(text,
+    installed = MARK in text
+    return owned_change(text,
         "        if (xTaskGetTickCount() - lastTick > CUSTOM_CONTROLLER_SEND_TIME) {\n            SendDataToPC((uint8_t *)cc_control_data.pos);",
         "        if ((uint32_t)(xTaskGetTickCount() - lastTick) >= CUSTOM_CONTROLLER_SEND_TIME) {\n"
         "            lastTick = xTaskGetTickCount();  /* POLAR-CONTROLLER-ANGLE: bounded 30 Hz */\n"
-        "            SendDataToPC((uint8_t *)cc_control_data.pos);", "controller rate limit")
+        "            SendDataToPC((uint8_t *)cc_control_data.pos);", "controller rate limit", installed)
 
 
 PATCHERS = (patch_referee, patch_header, patch_arm, patch_sender, patch_task)
