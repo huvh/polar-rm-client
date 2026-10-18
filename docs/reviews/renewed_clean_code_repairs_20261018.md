@@ -1114,3 +1114,24 @@ assertion at line 155 (15 tests, one failure). This failure is retained; remaini
 batch jobs were not run. Baseline equivalence for the color failure is under
 investigation. No all-DPR success or color/physical-display qualification is
 claimed for the endpoint candidate; the original test remains unchanged.
+
+### Completed eighteenth integrated result: default-DPR scope
+
+`client-renewed20h-full18/results.json` was independently read and verified as
+**completed: 382 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `7d2377edfe14410b89fe47d621da6059`. Exact source: local
+`9153e0bf45cab8d12255ede2e03c5b795a22bf5a`, public
+[62ce34fff4e42be4b5521c2be1779728e3213d70](https://github.com/lulunomaro/polar-rm-client/commit/62ce34fff4e42be4b5521c2be1779728e3213d70),
+tree `ad3c124a2371caa74a7696f534b090049a3045e8` (parent-verified public mapping).
+Provenance records `dirty: false` at start. Declared source stability passed with
+**737 inputs** at both endpoints and SHA-256
+`c335e2c633cb21ff1cd669def26c862fe5432d95132b3677f5830ab23d669bfc`.
+The existing source scope, exclusions and endpoint limitations apply.
+
+This aggregate ran at the default DPR; it does not establish all-DPR success.
+Full17's failed aggregate and the separate DPR-2 color-pixel failure above remain
+counterevidence on their respective sources. A separate DPR test correction is
+being applied after full18 and is not covered by this result. Full18 is the
+latest completed offline aggregate, with four incomplete prerequisites still
+preventing GO and native/physical-display qualification still outstanding.
+Only documentation is updated here; no raw logs are uploaded.
