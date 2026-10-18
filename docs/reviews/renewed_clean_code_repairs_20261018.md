@@ -1053,8 +1053,14 @@ reuse; safe re-anchoring to a newly connected robot and same-epoch observation
 or disabled-planning gaps remain outside its contract.
 
 Subsequent integrated author evidence records **131 focused methods PASS**, API
-freeze PASS and static quality gates PASS. Final independent integration review
-is pending. The external-only README and review describe their earlier stage;
+freeze PASS and static quality gates PASS. Independent integration review subsequently passed the same **131 methods**
+with no failures, errors or skips, verified all five frozen hashes before and
+after, and confirmed preserved fixture assertions plus strengthened reset order.
+API/static/bridge logs were inspected by that reviewer, not rerun. The published
+checkpoint is public `1e9171c32f626c19779e62e9a0f67259b761a8f3`, local
+`f59490eea6afe2a18d25944f74eae42f5ad5d7c7`, tree
+`0e59c0d4d311a9fd60ba122f988a17bc06bcdce1` (parent-verified mapping).
+The external-only README and review describe their earlier stage;
 the separate integrated logs supply these later author results. Initial harness
 errors from calling nonexistent `ingest` were retained separately and corrected
 to the real bridge `apply` API before the reported baseline/candidate evidence;
@@ -1073,3 +1079,38 @@ the separately reviewed external candidate. The new regression class differs
 only by standalone import bootstrap; both fixture changes preserve prior
 assertions and extend reset ordering to include divergence invalidation.
 No re-anchoring or same-epoch observation-gap claim is made. Aggregate pending.
+
+
+## Jello animation endpoint: production candidate
+
+A real timer-callback reproduction demonstrated that the epsilon-based
+`JelloReversibleAnimation.active()` could stop its consumer before `update()`
+reached the exact endpoint. It reproduced full17's observed forward progress
+**0.9999937555524715**, which remained unchanged after another 250 ms; reverse
+motion reproduced the corresponding failure to reach zero. This establishes a
+production mechanism capable of the recorded symptom, while preserving the
+original full17 failure and its missing historical callback trace.
+
+The production change is limited to `active()` returning
+`self.progress != self.target`. `update()` already clamps to the exact target;
+its arithmetic, animation durations and original keyboard-test assertions are
+unchanged. Nine new endpoint methods exercise the repair. Independent review
+passed **24 methods** (the nine new methods plus the unchanged fifteen keyboard
+methods). Restoring the old epsilon produced **21 assertion-failure outcomes
+across nine methods, 0 errors**. Review also checked **9,000 arithmetic operations**
+for identical results and **126 fractional cases** for exact termination.
+
+Author focused runs are still finishing at this reporting checkpoint. The
+independent focused acceptance does not constitute a new aggregate result or
+native-display/performance qualification. Full17 remains **379/12/4/1 NO-GO**;
+full16's **380/12/4/0 NO-GO** belongs to its earlier source. No raw logs are
+uploaded, and this update changes only the report.
+
+Author supplementary DPR validation stopped on a separate failure: at DPR 1,
+1.25 and 1.5, the original 15-method keyboard module and new 9-method endpoint
+module each passed. At DPR 2 the original keyboard module passed its exact
+endpoint assertion, then failed the following fixed-coordinate color-pixel
+assertion at line 155 (15 tests, one failure). This failure is retained; remaining
+batch jobs were not run. Baseline equivalence for the color failure is under
+investigation. No all-DPR success or color/physical-display qualification is
+claimed for the endpoint candidate; the original test remains unchanged.

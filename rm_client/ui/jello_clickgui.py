@@ -98,7 +98,9 @@ class JelloReversibleAnimation:
         self.target = self.progress
 
     def active(self) -> bool:
-        return abs(self.target - self.progress) > 0.0001
+        # update() clamps to the exact endpoint. Stopping inside an epsilon
+        # can strand a timer-driven consumer just before it reaches that value.
+        return self.progress != self.target
 
 
 class JelloMainTimeline(JelloReversibleAnimation):
