@@ -2042,3 +2042,26 @@ passed; all seven production-table entry removals were rejected by independently
 specified expectations. Fresh static JSON remained byte-identical to baseline
 `d6ee71f1c5a2b41be06b05e458ebdf00a5de654af1bebfdb7f5212723b920fbe`.
 Baseline/schema/CLI/application source are unchanged. Full aggregate pending.
+
+
+### Completed thirty-first integrated result
+
+`client-renewed20h-full31/results.json` was independently read and verified as
+**completed: 394 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `477d799183534af39c6065dbd5076b2e`. Exact source: local
+`7c3aaa06848bc440e7504fa92986b9ebdbc8b26b`, public
+[2121eb75eb4cbaac1ba55aa4835e236999873f62](https://github.com/lulunomaro/polar-rm-client/commit/2121eb75eb4cbaac1ba55aa4835e236999873f62),
+tree `2d404af8dced2ac8cd70729261f89d05141885ac` (parent-verified public mapping).
+Provenance records `dirty: false` at start. Declared source stability passed with
+**749 inputs** at both endpoints and SHA-256
+`a9ac2e5fdf81074a06e5af60bd3c816b4faded6fffa809789f1d337c43b4e28d`.
+Existing fingerprint scope, exclusions and endpoint limitations apply.
+
+The quality-gate module passed **59 methods**. Aggregate check counts remain
+unchanged because this stage extends an existing test module. This completed run
+supplies integration evidence for the accepted literal owner-write guard; it
+changes neither application source nor the reviewed debt baseline. The rule's
+alias/dynamic-access blind spots and scoped-count allowance limitations remain.
+Four incomplete prerequisites still prevent GO. Historical failures, interrupted
+runs and external/native qualification limits are preserved; no global ownership
+or architecture acceptance is inferred and no raw logs are uploaded.
