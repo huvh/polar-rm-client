@@ -386,6 +386,133 @@ class LintRatchetTests(SourceFixture):
         self.assertEqual(gates.check_report(self.report(), baseline), [])
 
 
+class OwnedCollaboratorWriteTests(SourceFixture):
+    def test_each_reviewed_private_field_rejects_a_caller_write(self):
+        targets = (
+            "self.kill_fx._last_hit_revision", "self.safety._stage_seen",
+            "self.polar_motion._moving_since", "self.polar_motion._last_feedback_segment_at",
+            "self.polar_motion._ever_had_feedback", "self.polar_motion._position_origin",
+            "self.polar_motion._position_now",
+        )
+        for target in targets:
+            with self.subTest(target=target):
+                self.source("rm_client/backend/service.py", f"class Service:\n    def reset(self):\n        {target} = None\n")
+                report = self.report()
+                findings = report["modules"]["rm_client.backend.service"]["findings"]
+                self.assertEqual(len(findings), 1)
+                finding = findings[0]
+                self.assertEqual((finding["path"], finding["scope"], finding["line"], finding["rule"]),
+                                 ("rm_client/backend/service.py", "Service.reset", 3, "cross-owner-private-write"))
+                self.assertIn(target, finding["detail"])
+                self.assertEqual(len(gates.check_report(report, empty_baseline())), 1)
+
+    def test_assignment_forms_and_deletion_reject_nested_targets(self):
+        bodies = (
+            "self.safety._stage_seen: bool = False",
+            "self.kill_fx._last_hit_revision += 1",
+            "del self.polar_motion._position_origin",
+            "self.safety._stage_seen, local = False, 0",
+            "local = self.kill_fx._last_hit_revision = 0",
+            "(a, (self.safety._stage_seen, b)) = (0, (False, 1))",
+        )
+        for body in bodies:
+            with self.subTest(body=body):
+                self.source("rm_client/caller.py", "def update(self):\n    " + body + "\n")
+                violations = self.violations()
+                self.assertEqual(len(violations), 1)
+                self.assertIn("cross-owner-private-write", violations[0])
+
+    def test_owner_writes_reads_and_owned_calls_remain_allowed(self):
+        self.source("rm_client/owner.py", '''
+            class Owner:
+                def reset(self):
+                    self._last_hit_revision = -1
+                    self._stage_seen = False
+                    self._moving_since: float | None = None
+                    self._last_feedback_segment_at = None
+                    self._ever_had_feedback = False
+                    self._position_origin = None
+                    self._position_now = None
+            def observe(self):
+                last = self.kill_fx._last_hit_revision
+                seen = self.safety._stage_seen
+                motion = (self.polar_motion._moving_since, self.polar_motion._last_feedback_segment_at,
+                          self.polar_motion._ever_had_feedback, self.polar_motion._position_origin,
+                          self.polar_motion._position_now)
+                self.safety.clear_stage_evidence()
+                self.polar_motion.reset()
+                return self.kill_fx.consume_hit_revision(last), seen, motion
+        ''')
+        self.assertEqual(self.violations(), [])
+
+    def test_unrelated_objects_public_fields_and_annotations_are_not_writes(self):
+        self.source("rm_client/caller.py", '''
+            def update(self, other):
+                self.kill_fx = other
+                self.safety = other
+                self.polar_motion = other
+                self.other._last_hit_revision = -1
+                self.other._stage_seen = False
+                self.other._moving_since = None
+                other._stage_seen = False
+                self.safety.current_stage = '0'
+                self.polar_motion.state = 'IDLE'
+                self.polar_motion.detail = ''
+                self.safety._stage_seen: bool
+                self.kill_fx._last_hit_revision: int
+                self.polar_motion._moving_since: float | None
+                text = 'self.safety._stage_seen = False'
+                # self.kill_fx._last_hit_revision = 0
+        ''')
+        self.assertEqual(self.violations(), [])
+
+    def test_default_source_scope_excludes_test_fixtures(self):
+        self.source("rm_client/owner.py", "VALUE = 1\n")
+        self.source("tests/test_fixture.py", "self.safety._stage_seen = False\n")
+        report = self.report()
+        self.assertEqual(report["summary"]["files"], 1)
+        self.assertEqual(gates.check_report(report, empty_baseline()), [])
+
+    def test_alias_and_reflective_access_are_explicit_coverage_limits(self):
+        self.source("rm_client/caller.py", '''
+            def update(self):
+                owner = self.safety
+                owner._stage_seen = False
+                setattr(self.safety, '_stage_seen', False)
+                getattr(self, 'safety')._stage_seen = False
+                self.backend.safety._stage_seen = False
+        ''')
+        self.assertEqual(self.violations(), [])
+
+    def test_same_scope_unrelated_lint_allowance_cannot_absorb_private_write(self):
+        source = "def update(self):\n    try:\n        work()\n    except:\n        recover()\n"
+        self.source("rm_client/caller.py", source)
+        baseline = empty_baseline()
+        baseline["lint_debt"] = gates.lint_debt(self.report())
+        self.assertEqual(baseline["lint_debt"], {"rm_client/caller.py:update:bare-except": 1})
+        self.assertEqual(gates.check_report(self.report(), baseline), [])
+        self.source("rm_client/caller.py", source.replace("recover()", "self.safety._stage_seen = False"))
+        self.assertEqual(gates.check_report(self.report(), baseline), [
+            "New lint debt rm_client/caller.py:update:cross-owner-private-write: 0 -> 1"
+        ])
+
+    def test_duplicate_writes_count_separately_and_allowances_are_not_site_fingerprints(self):
+        self.source("rm_client/caller.py", "def reset(self):\n    self.safety._stage_seen = False\n")
+        baseline = empty_baseline()
+        baseline["lint_debt"] = gates.lint_debt(self.report())
+        self.assertEqual(baseline["lint_debt"], {"rm_client/caller.py:reset:cross-owner-private-write": 1})
+        self.source("rm_client/caller.py", "def reset(self):\n    self.safety._stage_seen = False\n    self.safety._stage_seen = True\n")
+        report = self.report()
+        self.assertEqual(len(report["modules"]["rm_client.caller"]["findings"]), 2)
+        self.assertEqual(gates.check_report(report, baseline), [
+            "New lint debt rm_client/caller.py:reset:cross-owner-private-write: 1 -> 2"
+        ])
+        # Only a synthetic allowance: the real reviewed baseline stays at zero.
+        # One different same-scope write can reuse an explicit future allowance.
+        self.source("rm_client/caller.py", "def reset(self):\n    del self.kill_fx._last_hit_revision\n")
+        self.assertEqual(gates.check_report(self.report(), baseline), [])
+
+
 class QualityCliTests(SourceFixture):
     def run_cli(self, *args):
         output = io.StringIO()
@@ -398,6 +525,20 @@ class QualityCliTests(SourceFixture):
         self.assertEqual(code, 2)
         self.assertIn("No Python source files", output)
         self.assertNotIn("PASS:", output)
+
+    def test_private_write_mutation_fails_cli_without_rewriting_baseline(self):
+        source = "def reset(self):\n    self.safety.clear_stage_evidence()\n"
+        self.source("rm_client/backend/service.py", source)
+        baseline = self.source("baseline.json", json.dumps(empty_baseline()))
+        before = baseline.read_bytes()
+        self.assertEqual(self.run_cli("--baseline", str(baseline))[0], 0)
+        self.source("rm_client/backend/service.py", source.replace(
+            "self.safety.clear_stage_evidence()", "self.safety._stage_seen = False"))
+        code, output = self.run_cli("--baseline", str(baseline))
+        self.assertEqual(code, 1, output)
+        self.assertIn("cross-owner-private-write", output)
+        self.assertNotIn("PASS:", output)
+        self.assertEqual(baseline.read_bytes(), before)
 
     def test_malformed_baseline_fails_closed(self):
         self.source("rm_client/a.py", "VALUE = 1")

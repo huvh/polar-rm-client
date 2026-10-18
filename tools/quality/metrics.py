@@ -21,6 +21,14 @@ FUNCTION_NODES = (ast.FunctionDef, ast.AsyncFunctionDef)
 SCOPE_NODES = (*FUNCTION_NODES, ast.ClassDef, ast.Lambda)
 CONTROL_NODES = (ast.If, ast.For, ast.AsyncFor, ast.While, ast.Try, ast.With,
                  ast.AsyncWith, ast.Match)
+# Reviewed caller paths, not inferred receiver types. Internal self._field
+# writes remain with the owner; aliases and reflective access are not resolved.
+OWNED_COLLABORATOR_FIELDS = {
+    "self.kill_fx": frozenset({"_last_hit_revision"}),
+    "self.safety": frozenset({"_stage_seen"}),
+    "self.polar_motion": frozenset({"_moving_since", "_last_feedback_segment_at",
+                                   "_ever_had_feedback", "_position_origin", "_position_now"}),
+}
 
 
 def scoped_nodes(node: ast.AST) -> Iterable[ast.AST]:
@@ -209,6 +217,23 @@ class ModuleVisitor(ast.NodeVisitor):
             self.finding("wildcard-import", node, f"from {node.module or '.'} import *")
 
     visit_ImportFrom = visit_Import
+
+    def visit_Attribute(self, node: ast.Attribute) -> None:
+        path = attribute_path(node)
+        if path and isinstance(node.ctx, (ast.Store, ast.Del)):
+            receiver, _, field = path.rpartition(".")
+            if field in OWNED_COLLABORATOR_FIELDS.get(receiver, ()):
+                self.finding("cross-owner-private-write", node,
+                             f"{path} is owned by its collaborator; use the owned operation")
+        self.generic_visit(node)
+
+    def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
+        if node.value is None:
+            # Annotation-only targets have Store context but do not write.
+            self.generic_visit(node.target)
+            self.visit(node.annotation)
+        else:
+            self.generic_visit(node)
 
     def visit_ExceptHandler(self, node: ast.ExceptHandler) -> None:
         if node.type is None:

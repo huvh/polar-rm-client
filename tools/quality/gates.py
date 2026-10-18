@@ -214,6 +214,7 @@ def render_markdown(report: dict, violations: list[str], limit: int = 20) -> str
               "are reported but excluded from runtime cycles; function-local imports are only in the deferred graph.",
               "The protected pure-domain roots reject forbidden declared dependencies through resolved local helpers, including deferred and type-only edges. This is not a general proof of runtime purity.",
               "State access counts cover literal `self.state.field` and `state.field` paths; they do not establish field ownership.",
+              "The private-write lint rule protects only reviewed literal collaborator paths; owner writes and reads remain allowed, while aliases, reflection and differently named receivers are not resolved. It is a per-scope count ratchet, not a site fingerprint or security boundary: a future explicit allowance could be reused by another same-scope write.",
               "Direct self names include method calls and collaborators, not just mutable fields. No metric here qualifies a robot or GPU.",
               "Historical UI implementation remains included in every total. Its source classification only separates legacy module-name evidence from current-runtime coverage; moving it is not a complexity reduction.", ""]
     return "\n".join(lines)

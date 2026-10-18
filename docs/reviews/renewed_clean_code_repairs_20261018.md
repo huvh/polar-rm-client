@@ -1997,3 +1997,48 @@ already has explicit configuration owners. The local settings-policy scan README
 records these distinctions. No test was executed for that scan, no additional
 pass count or universal configuration-validation claim is added, and no raw logs
 are uploaded.
+
+### Literal owner-write regression gate candidate
+
+The existing `ModuleVisitor` in `tools/quality/metrics.py` now identifies
+`Store`/`Del` on seven reviewed literal private-field paths:
+`self.kill_fx._last_hit_revision`, `self.safety._stage_seen`, and
+`self.polar_motion.{_moving_since,_last_feedback_segment_at,_ever_had_feedback,
+_position_origin,_position_now}`. Existing finding/debt machinery handles the
+new `cross-owner-private-write` rule. Owner-local writes, diagnostic reads,
+owned method calls, unrelated objects and annotation-only targets remain allowed.
+No production source, baseline, report schema or new module is changed.
+
+The author reports **68 focused methods PASS**, API/static PASS and rejection of
+all seven table-entry-removal mutants. The tests enumerate protected fields
+independently of the table. Current-source static JSON before/after is
+byte-identical, SHA-256
+`d6ee71f1c5a2b41be06b05e458ebdf00a5de654af1bebfdb7f5212723b920fbe`;
+this is unchanged measurement, not a coupling or executable-size improvement.
+External independent review accepted the bounded proposal, reran actual-path and
+synthetic mutation controls, and added 20 grouped syntax controls plus debt
+controls. These groups are not repository test-method counts. Final integrated
+review is pending; no new aggregate result is claimed.
+
+This is a `path:scope:rule` **count ratchet**, not a field/site fingerprint.
+No current baseline allowance permits this rule. A future explicitly reviewed
+allowance could be reused by a different protected field/site in the same scope.
+Aliases, deeper/differently named receivers, reflective `setattr`/`getattr`,
+container/descriptor mutations and callee effects remain outside its coverage.
+Literal spelling does not infer object type; future matching names require scope
+review. It is a narrow regression guard, not complete ownership or runtime proof.
+
+Local evidence: `owner-write-gate-proposal-20261018` README, independent review,
+integrated focused/API/static logs and entry-removal controls. Frozen candidate
+SHA-256 values are `0656f37fe7141f14e1c8979900d679e7349deee6dfc14c1ed7d74b45f038db82`
+(metrics), `294878e0d35435fa2e087429b627eb995728bdafca9929ad467cd91de876175f`
+(gates), and `1b92af26a9809d59ea2a300df8c6332a61e77bbc110fa1653487157d6d8d0fc8`
+(quality tests). Raw logs remain local.
+
+Integrated owner-write guard review is accepted at all three frozen hashes:
+68 focused methods passed independently; four actual-path and thirteen synthetic
+mutations were rejected; twenty syntax/control groups and same-scope debt checks
+passed; all seven production-table entry removals were rejected by independently
+specified expectations. Fresh static JSON remained byte-identical to baseline
+`d6ee71f1c5a2b41be06b05e458ebdf00a5de654af1bebfdb7f5212723b920fbe`.
+Baseline/schema/CLI/application source are unchanged. Full aggregate pending.
