@@ -89,9 +89,12 @@ class AngleStreamDecoder:
         self.ignored = 0
         self._last_seq: int | None = None
 
-    def reset(self) -> None:
+    def _discard_partial(self) -> None:
         self.buffer.clear()
         self.partial_at = None
+
+    def reset(self) -> None:
+        self._discard_partial()
         self.latest = None
         self._last_seq = None
 
@@ -296,6 +299,10 @@ class ControllerAngleRelay:
             self.armed = True
             self._arm_epoch += 1
             self._arm_revision = self.decoder.revision
+            # A pre-arm prefix must not become an eligible sample when its
+            # suffix arrives after arm. Preserve the current complete sample
+            # and sequence baseline so their independent timeout still runs.
+            self.decoder._discard_partial()
             self.last_error = "armed; waiting for the next fresh source frame"
             return True, self.last_error
 
@@ -415,12 +422,34 @@ class ControllerAngleRelay:
                     with self._lock:
                         self.decoder.reset()
                         self.disarm("RX backlog dropped; fresh input and re-arm required")
+                with self._lock:
+                    if epoch != self._epoch or stop.is_set():
+                        return
+                    # Read-start is a conservative local receipt bound, not a
+                    # hardware wire timestamp. Never relabel a slow return or
+                    # lock-delayed publication as newly received input.
+                    received_at = self.time_fn()
+                    self._expire(received_at)
+                    read_arm_epoch = self._arm_epoch
                 chunk = rx.read(MAX_CHUNK)
                 with self._lock:
                     if epoch != self._epoch or stop.is_set():
                         return
-                    self.feed(chunk)
-                    pending = self._pending(self.time_fn())
+                    now = self.time_fn()
+                    self._expire(now)
+                    pending = None
+                    if not 0 <= now - received_at < ANGLE_TIMEOUT_S:
+                        self.decoder.reset()
+                        self.disarm("RX read delayed; fresh input and re-arm required")
+                    elif read_arm_epoch != self._arm_epoch:
+                        # A read begun under an older arm/disarm epoch cannot
+                        # satisfy the next-source-frame requirement. This may
+                        # also discard bytes that arrived during that read;
+                        # without wire timestamps, require a later read.
+                        self.decoder._discard_partial()
+                    else:
+                        self.decoder.feed(chunk, received_at)
+                        pending = self._pending(now)
                 if pending is not None:
                     if not config.mock_output and tx is None:
                         tx = self._open(config.tx_port)
