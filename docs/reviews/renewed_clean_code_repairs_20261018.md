@@ -957,3 +957,50 @@ resolved by this passing aggregate.
 Full16 is the latest completed offline aggregate. The four incomplete
 prerequisites still prevent GO; hardware and native-display qualification gaps
 remain. This report update changes no source and uploads no raw logs.
+
+## Analogous lazy-settings coverage repair: candidate evidence
+
+The follow-on audit of `test_settings_cold_start.py` and
+`test_lazy_settings_state.py` reproduced one fixed-35-ms assertion race and four
+coverage gaps: under a queued inert 60 ms callback, tests naming mid-build
+pause/search/cancellation could pass with zero slices and zero controls. Their
+later completed-state assertions remained useful. This establishes test setup
+and intermediate-state coverage deficiencies, not broken production behavior.
+
+The candidate changes only these two test files and their existing shared
+`test_cs2_settings_center.py` helper. A bounded `partial_page` barrier observes
+real entrance completion and real Qt-created controls, with positive slices,
+active uncancelled/error-free construction and `ready == False`. It does not
+call the builder manually or fabricate a populated page. Static review approved
+preservation of all original assertions, the four-steps-per-turn and explicit
+stage-yield budgets, final `slices > 15`, and post-pause/cancel quiet windows.
+A delayed-event variant exercises the same real timer path.
+
+Author runtime evidence records **48 tests PASS**, plus **30 scenario executions**
+across DPR 1, 1.25, 1.5, 2 and 2.5. These are overlapping selections, not 78 unique
+methods. The inspected state summary contains **40 checkpoints**, each with
+**1–2 real controls, exactly 1 slice, active construction and `ready == False`**.
+Four external negative controls reject stopped timers, construction errors,
+cancellation and premature readiness, with bounded diagnostic failures.
+
+The first applied cold-start invocation failed at import because its `PYTHONPATH`
+setup was missing; that setup error is retained separately from the later
+correctly configured runtime evidence. The earlier `TEST_PLAN.md` describes the
+pre-application stage; subsequent runtime JSON and logs supply the results above.
+Independent runtime review is still pending. No production/performance fix or
+new full qualification is claimed: full16 predates this patch and remains tied
+to its own source. Full15's failed run and its original causal uncertainty remain
+unchanged. Only this report is edited; raw logs are not uploaded.
+
+Independent runtime review subsequently accepted this frozen three-test-file
+candidate. It ran 9 selected methods at each DPR 1 and 2.5: **18 executions
+PASS**, zero errors/skips. Sixteen captured checkpoints had 1–2 constructed
+controls, exactly one slice, visible/active builders and timers, no error or
+cancellation, and `ready == False`. These include delayed-event coverage and
+all close/reject/accept variants. Existing F12, no-autosave/no-arm, final
+>15-slice, four-step and explicit-stage-yield assertions passed. Four independent
+negative controls rejected stalled construction, a real generator exception,
+cancellation and premature readiness; the stalled case failed near 1.005 seconds.
+The reviewer did not rerun the author's full 48+30 executions; counts overlap
+and are not aggregated into unique coverage. Candidate hashes and diff checks
+matched. A full aggregate on this changed source remains pending.

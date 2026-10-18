@@ -8,7 +8,7 @@ from unittest.mock import patch
 from PySide6.QtCore import QCoreApplication, QEvent, QTimer, Qt
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QWidget
-from test_cs2_settings_center import APP, Host, ready_page
+from test_cs2_settings_center import APP, Host, ready_page, partial_page
 from rm_client.ui.cs2_settings_center import build_settings_center, CrosshairSettingsPage
 from rm_client.ui.settings_preparation import SettingsBuildQueue
 from rm_client.ui.fonts import FontBook
@@ -45,11 +45,9 @@ class ColdSettingsTests(unittest.TestCase):
         self.assertTrue(all(page.builder.slices == 0 for page in dialog.pages.values()))
 
     def test_rows_yield_and_f12_works_during_loading(self):
-        dialog = self.dialog(); dialog.show(); QTest.qWait(480)
-        page = dialog.pages['界面 / HUD']
-        dialog.tabs.setCurrentWidget(page)
+        dialog = self.dialog()
+        page = partial_page(dialog, '界面 / HUD')
         self.assertFalse(dialog.apply_button.isEnabled())
-        QTest.qWait(35)
         self.assertGreater(page.builder.slices, 0)
         self.assertFalse(page.builder.ready)
         QTest.keyClick(dialog.search, Qt.Key.Key_F12)
@@ -60,10 +58,30 @@ class ColdSettingsTests(unittest.TestCase):
         self.host.auto_save_config.assert_not_called()
         self.host.backend.arm_match.assert_not_called()
 
+    def test_partial_page_waits_past_a_busy_gui_event(self):
+        dialog = self.dialog(); observed = []
+        select = dialog.tabs.setCurrentWidget
+        def select_later(page):
+            def busy_event():
+                select(page)
+                observed.append(page.builder.slices)
+                QTest.qSleep(60)
+                observed.append(page.builder.slices)
+            QTimer.singleShot(0, busy_event)
+        with patch.object(dialog.tabs, 'setCurrentWidget', side_effect=select_later):
+            page = partial_page(dialog, '界面 / HUD')
+        self.assertEqual(observed, [0, 0])
+        self.assertTrue(page.controls)
+        self.assertGreater(page.builder.slices, 0)
+        self.assertFalse(page.builder.ready)
+        QTest.keyClick(dialog.search, Qt.Key.Key_F12)
+        self.host.backend.trigger_estop.assert_called_once()
+        self.host.auto_save_config.assert_not_called()
+        self.host.backend.arm_match.assert_not_called()
+
     def test_hidden_page_pauses_and_revisit_keeps_staged_edits(self):
-        dialog = self.dialog(); dialog.show(); QTest.qWait(480)
-        page = dialog.pages['界面 / HUD']; dialog.tabs.setCurrentWidget(page)
-        QTest.qWait(35)
+        dialog = self.dialog()
+        page = partial_page(dialog, '界面 / HUD')
         dialog.tabs.setCurrentIndex(0)
         count = len(page.controls); slices = page.builder.slices
         QTest.qWait(80)
@@ -103,9 +121,9 @@ class ColdSettingsTests(unittest.TestCase):
             apply.assert_called_once()
 
     def test_cancel_during_load_stops_future_rows_and_keeps_live_values(self):
-        dialog = self.dialog(); dialog.show(); QTest.qWait(480)
-        page = dialog.pages['界面 / HUD']; dialog.tabs.setCurrentWidget(page)
-        QTest.qWait(30); dialog.reject(); QTest.qWait(180)
+        dialog = self.dialog()
+        page = partial_page(dialog, '界面 / HUD')
+        dialog.reject(); QTest.qWait(180)
         count = len(page.controls)
         QTest.qWait(100)
         self.assertEqual(len(page.controls), count)

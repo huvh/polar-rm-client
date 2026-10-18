@@ -7,7 +7,7 @@ from PySide6.QtCore import Qt,QCoreApplication,QEvent,QTimer
 from PySide6.QtWidgets import QPushButton,QMessageBox,QInputDialog
 from PySide6.QtTest import QTest
 from shiboken6 import isValid
-from test_cs2_settings_center import APP,Host,ready_page
+from test_cs2_settings_center import APP,Host,ready_page,partial_page
 from rm_client.ui import cs2_settings_center as settings
 
 
@@ -84,8 +84,8 @@ class LifecycleAudit(Base):
         self.assertEqual(self.host.registry.get('RobotLink').get_setting('Mouse Sensitivity').value,1)
 
     def test_latest_search_wins_mid_build_and_across_pauses(self):
-        d=self.dialog();d.show();QTest.qWait(480)
-        d.search.setText('no matching field');p=d.pages['界面 / HUD'];d.tabs.setCurrentWidget(p);QTest.qWait(30)
+        d=self.dialog();d.search.setText('no matching field')
+        p=partial_page(d,'界面 / HUD')
         d.search.setText('Scale');d.tabs.setCurrentIndex(0);d.search.setText('Jello List Sound')
         self.wait_ready(d,'界面 / HUD')
         self.assertFalse(p.controls[('HUD','Jello List Sound')].isHidden())
@@ -159,8 +159,7 @@ class LifecycleAudit(Base):
     def test_close_cancel_return_each_stop_partial_loading(self):
         for method in ['close','reject','accept']:
             with self.subTest(method=method):
-                d=self.dialog();d.show();QTest.qWait(480)
-                p=d.pages['界面 / HUD'];d.tabs.setCurrentWidget(p);QTest.qWait(25)
+                d=self.dialog();p=partial_page(d,'界面 / HUD')
                 getattr(d,method)();QTest.qWait(180);count=len(p.controls)
                 QTest.qWait(40)
                 self.assertFalse(d.isVisible());self.assertTrue(p.builder.cancelled)

@@ -75,6 +75,42 @@ def ready_page(dialog, name):
     return page
 
 
+def partial_page(dialog, name):
+    """Wait for genuine partial rows, without completing or driving the queue."""
+    from time import monotonic
+    page = dialog.pages[name]
+    deadline = monotonic() + 1
+
+    def fail(phase):
+        builder = page.builder
+        raise AssertionError(
+            f"{phase}: panel_visible={dialog.panel.isVisible()}, "
+            f"page_visible={page.isVisible()}, progress={dialog.timeline.progress}, "
+            f"controls={len(page.controls)}, slices={builder.slices}, "
+            f"ready={builder.ready}, active={builder.active}, "
+            f"timer_remaining_ms={builder.timer.remainingTime()}, "
+            f"cancelled={builder.cancelled}, error={builder.error!r}"
+        )
+
+    def wait_until(predicate, phase):
+        while not predicate():
+            if page.builder.error or page.builder.cancelled or monotonic() >= deadline:
+                fail(phase)
+            QTest.qWait(1)
+
+    if not dialog.isVisible():
+        dialog.show()
+    wait_until(lambda: dialog.panel.isVisible() and not dialog.timeline.active(),
+               "Settings entrance did not finish")
+    dialog.tabs.setCurrentWidget(page)
+    wait_until(lambda: bool(page.controls), "Settings did not construct partial rows")
+    builder = page.builder
+    if (not page.isVisible() or not builder.active or not builder.slices
+            or builder.ready or builder.cancelled or builder.error):
+        fail("Settings did not retain a live partial build")
+    return page
+
+
 class SettingsTests(unittest.TestCase):
     def setUp(self):
         self.host = Host(); self.addCleanup(self.host.deleteLater)
