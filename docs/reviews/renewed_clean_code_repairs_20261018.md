@@ -183,3 +183,79 @@ as the first run. The four prerequisite suites remain incomplete. The completed
 
 Only this report is updated to record the completed second-stage full run.
 No raw logs are included or published.
+
+## Third stage: receive-epoch history and release ZIP publication
+
+The integrated source for this stage is local
+`3f94f0f0a4ac3d0a8313f9fc49808ff021b4652a`, public
+[32da8ad51baf5834fdd77f8ee7c29afc4bd946e2](https://github.com/lulunomaro/polar-rm-client/commit/32da8ad51baf5834fdd77f8ee7c29afc4bd946e2),
+tree `2f08204b1eb2a3dc96fbbe7fb171c6873e3e65b5` (parent-verified mapping).
+The full offline run, `client-renewed20h-full3/results.json`, has completed:
+**358 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`). Its result
+was independently read, run ID `41c9338e5bb543a3a369ee25acaeeab7`, against the
+exact local commit/tree above. Provenance records **dirty: true**: documentation
+was edited or untracked during this stage, so this is not a clean-worktree claim.
+The declared verification source inputs remained unchanged: both endpoint
+fingerprints contain **707 files**, SHA-256
+`8fece1870f64b410d1e3c3d9af90ebcafb45d222af2a942b01e698dde9a96d04`.
+Source stability is PASS under the declared source-input and endpoint limits
+already described above; this excludes documentation, assets, external fixtures,
+installed packages and transient edits restored between captures.
+
+The PowerShell publication suite actually ran through `POLAR_TEST_PWSH`: its
+result is **6 unittest tests passed, 0 skipped**, exit code 0. It was not counted
+as passing through runtime unavailability or a class skip. The four prerequisite
+suites remain INCOMPLETE. The completed 353-PASS and 355-PASS runs above remain
+distinct historical checkpoints. This integrated source also contains the
+separately documented H264 issue 20 correction; its evidence is not folded into
+either focused result below.
+
+### Official-feed receive-epoch retirement
+
+- Local `c0e7ff8`; public `04a1d072`.
+- Source: [combat_events.py](../../rm_client/combat_events.py) and
+  [video_backend_mixin.py](../../rm_client/ui/polar/mixins/video_backend_mixin.py);
+  regression: [test_official_feed_receive_epoch.py](../../tests/test_official_feed_receive_epoch.py).
+- A changed MQTT receive generation now retires the feed's prior health history,
+  event deduplication and freshness clocks before the next raw-message drain.
+  Pending `official_feed_at` is explicitly cleared even for an empty batch.
+  Profile transitions reuse the same reset operation. This prevents inferred
+  events and stale receipt freshness from spanning observed receive sessions.
+- Four regression methods: baseline **2 failures**. Author neighboring selection:
+  **85 passed**; independent selection: **34 passed**. These are different
+  selections and are not additive. The correction does not establish an atomic
+  transaction with callbacks already in flight or a globally atomic state reset.
+
+### Release ZIP publication
+
+- Local `bd171b9`; public `1a8797f`.
+- Source: [build_release.ps1](../../tools/build_release.ps1); regression:
+  [test_release_archive_publication.py](../../tests/test_release_archive_publication.py).
+- Previously the builder removed the old output and wrote the replacement ZIP
+  directly at its final path. Actual PowerShell execution of the original
+  publication block reproduced **4 failures, 0 errors**: missing or locked
+  source input left an incomplete ZIP at the final path and replaced existing
+  sentinel bytes.
+- The existing script now builds a unique sibling ZIP, then uses `File.Replace`
+  for an existing destination or `File.Move` for an absent destination. It marks
+  success only after publication returns. Temporary cleanup is best-effort.
+  Tests cover complete successful archives, failed creation, an injected replace
+  failure and a real directory-destination move failure.
+- Independent review rejected the first cleanup diagnostic: with
+  `WarningPreference=Stop`, a warning after injected deletion failure masked the
+  original creation exception. The added runtime regression failed once before
+  the correction. Explicit `-WarningAction Continue` now preserves the original
+  exception by reference while reporting the retained temporary archive.
+- Final author and independent focused selections each report **38 passed**;
+  these repeated selections are not 76 distinct tests. The harness parses and
+  executes only the production publication helper, never the full builder.
+- Runtime: official Microsoft PowerShell **7.4.11**, Linux x64 portable archive,
+  downloaded from the PowerShell project's GitHub release into scratch only.
+  SHA-256 `55c5429d32256fa0cec4c2529856679f684a41525d78071f78b0fbf1fc3d1f0a`
+  matched the official release's checksum file before execution. The harness
+  redirects runtime cache/config/data into temporary directories and requires
+  an entry marker so runtime startup failure cannot count as expected rejection.
+  No global installation, full Windows release, native Windows filesystem-lock
+  qualification, concurrent-publisher guarantee or crash-durability claim is made.
+
+This addendum changes documentation only and does not publish raw test logs.
