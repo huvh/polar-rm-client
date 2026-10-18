@@ -43,12 +43,23 @@ class OwnerActionFailure:
 def run_owner_actions(actions: tuple[OwnerAction, ...]) -> tuple[OwnerActionFailure, ...]:
     """A failed owner-thread cleanup must not skip an independent resource."""
     failures = []
+
+    def record_failure(name: str, error: Exception) -> None:
+        try:
+            message = str(error)
+        except Exception:
+            message = "<unprintable exception>"
+        failures.append(OwnerActionFailure(name, type(error).__name__, message))
+
     for action in actions:
         try:
             action.run()
         except Exception as exc:
-            _LOG.error("Window owner action %s failed", action.name, exc_info=True)
-            failures.append(OwnerActionFailure(action.name, type(exc).__name__, str(exc)))
+            record_failure(action.name, exc)
+            try:
+                _LOG.error("Window owner action %s failed", action.name, exc_info=True)
+            except Exception as diagnostic:
+                record_failure(f"{action.name} diagnostic", diagnostic)
     return tuple(failures)
 
 

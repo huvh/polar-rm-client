@@ -2147,3 +2147,38 @@ fallback, BaseException propagation and best-effort note limitations remain.
 Neutral attempts do not establish wire delivery, native qualification or a
 historical symptom's cause. All four external prerequisites and historical
 failure/interruption records remain; no raw logs are published.
+
+### Window-owner cleanup diagnostics: integrated candidate
+
+`run_owner_actions` could skip independent resource cleanup and backend shutdown
+admission when a cleanup exception was followed by an ordinary logger exception.
+The close/finalize seals were already set, so repeated calls did not replay the
+omitted work. A standard StreamHandler with closed in-memory stderr reproduces
+this without physical resources. The repair records the primary OwnerActionFailure
+before logging, records an ordinary diagnostic failure separately, and continues
+independent actions. Unprintable ordinary exceptions retain their type with a
+stable fallback message. Process-control BaseExceptions still propagate; primary
+formatting now precedes logging by design. No new module/API or retry policy.
+
+Frozen source SHA-256 `f2e124d765b4f29728919422ed5aa2bfe4150f59b3dbf02ad3347864fefaf71b`;
+new test SHA-256 `63dd82f503370c7f83301f8046676807a2b5f9b4409c7cd14c4844698c7b3f47`.
+Independent external review accepted 48 focused methods (18 new, 30 existing),
+six extra controls and seven rejected runtime-only regressions. The 18 new
+baseline methods reproduce 15 assertion/subtest failures, zero errors. The
+original five probes give three baseline failures and pass on candidate.
+Selections overlap and are not unique aggregate counts. Full-module AST outside
+the changed function is identical. Evidence: window-owner-diagnostic-20261018.
+
+Integrated author selection: 48 PASS; API freeze and static quality gates PASS.
+An initial static-check invocation used a nonexistent script path and did not
+execute a check; the actual tools/quality_gate.py then passed. No threshold or
+old assertion was changed. Independent integrated review and the next aggregate
+are pending. Full32 above qualifies only its earlier source. Direct lifecycle
+context/request/retry/poll diagnostic branches remain outside this repair and
+are being investigated separately. Inert cleanup attempts do not establish
+native resource retirement. No raw logs are published.
+
+Independent integrated review subsequently accepted the exact frozen bytes:
+48 focused methods, six extra controls and five original probes PASS using
+repository imports. Existing tests/assertions and AST outside run_owner_actions
+remain unchanged. Aggregate qualification remains pending for this source stage.
