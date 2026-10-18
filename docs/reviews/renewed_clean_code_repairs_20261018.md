@@ -119,3 +119,67 @@ not imply an architecture-wide reduction in coupling. The completed full offline
 SKIP/INCOMPLETE gates and source-stability scope. It does not establish hardware
 qualification or supersede the historical run with a claim about its original
 raw evidence. This report itself changes only documentation.
+
+## Second stage: receipt age and tactical-map hold
+
+This separate stage is frozen at local
+`9a076129cc4979494137f720c7e8703839a04ad4`, published as
+[46219cc63644d8e379eb8b95f43f95d4e10cc8c3](https://github.com/lulunomaro/polar-rm-client/commit/46219cc63644d8e379eb8b95f43f95d4e10cc8c3),
+tree `88dc0a9f96b9d3e407d94f738e110a20f6659e37` (parent-verified mapping).
+Its full offline run, `client-renewed20h-full2/results.json`, has **completed:
+355 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`). The result
+was independently read, run ID `f5caf4028f5d4c5a8a1f40659642595c`, with the exact
+local commit/tree above and a clean source-at-start worktree. Both source
+fingerprints contain **704 inputs**, SHA-256
+`406db1b4bab783c5576867743d5174dd2395fbf455cef2784364d630ec55c0de`;
+source stability is PASS under the same declared scope and endpoint limitations
+as the first run. The four prerequisite suites remain incomplete. The completed
+353-PASS checkpoint above remains the separate first-stage result.
+
+### MQTT callback-entry receipt time
+
+- Local `300df566dd59361081de349f7523175283e37dbd`; public `c84fe18b`.
+- Source: [mqtt_backend.py](../../rm_client/backend/mqtt_backend.py) and
+  [transports.py](../../rm_client/transports.py); regression:
+  [test_mqtt_callback_receipt_time.py](../../tests/test_mqtt_callback_receipt_time.py).
+- Receipt time was sampled after validation/hooks/decoding. Slow processing could
+  make an older message appear newly received to downstream freshness checks.
+  The backend now captures the monotonic timestamp on callback entry after the
+  client-identity check and carries that same value into both raw and decoded
+  queues. Existing generation/profile/client checks still discard obsolete
+  callbacks before enqueueing.
+- The bridge accepts a keyword-only receipt timestamp for that internal handoff;
+  ordinary three-argument callbacks capture their own entry timestamp. This
+  preserves the existing callback invocation form and avoids resampling the
+  supplied timestamp. It does not add new packet formats or freshness cutoffs.
+- Initial five-method baseline: **4 failures, 0 errors**. Final regression has
+  **6 methods**. Author focused selection: **86 passed**. Independent groups
+  contain **56 unique methods**: 50 plus 12, with six overlapping methods.
+  These totals describe their respective selections rather than additional
+  independent tests to sum together.
+- Tests cover delayed hooks/decoding, preserved event age, discarded stale
+  generations, malformed/unknown packets and direct bridge compatibility.
+  They use repository decoding and controlled clocks without a live broker.
+
+### Tactical-map hold retirement
+
+- Local `9a076129cc4979494137f720c7e8703839a04ad4`; public `46219cc`.
+- Source: [input_dispatch_mixin.py](../../rm_client/ui/polar/mixins/input_dispatch_mixin.py);
+  regression: [test_tactical_map_hold_retirement.py](../../tests/test_tactical_map_hold_retirement.py).
+- A held map input could survive modal/focus/lock boundaries and remain active
+  after the modal closed. Two assignments clear `tactical_map_hold` at the
+  beginning of the existing modal-neutralization and control-lock hooks, before
+  callbacks or reentry can observe the old intent.
+- Three new actual-window methods: baseline **14 failing outcomes, 0 errors**.
+  Author focused selection: **72 passed**; independent selection: **63 passed**,
+  with different neighboring tests. Independent positive controls confirm a
+  properly eligible fresh map-point action still works while retired stale
+  intent is rejected; callback-error probes verify hold retirement precedes
+  cleanup failure.
+- The change adds no new permission or backend authority and does not bypass
+  existing map-command eligibility. Real offscreen Qt routing and inert command
+  recorders establish input ownership, not physical transmission or Windows
+  device qualification.
+
+Only this report is updated to record the completed second-stage full run.
+No raw logs are included or published.
