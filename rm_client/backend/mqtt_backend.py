@@ -193,8 +193,7 @@ class RmMqttBackend(OfficialMqttBridge):
             except Exception as exc:
                 if failure is None:
                     failure = exc
-            self.safety.current_stage = "0"
-            self.safety._stage_seen = False
+            self.safety.clear_stage_evidence()
         finally:
             self._begin_client_cleanup_locked()
         if failure is not None:
@@ -289,8 +288,7 @@ class RmMqttBackend(OfficialMqttBridge):
             self.publish_estop_zero()
             self.stop(publish_status=False, wait=False)
             self.safety.lock_control("unsupported referee profile")
-            self.safety.current_stage = "0"
-            self.safety._stage_seen = False
+            self.safety.clear_stage_evidence()
             raise
         with self._lifecycle_lock:
             if profile.profile_id == self.referee.profile_id:
@@ -300,8 +298,7 @@ class RmMqttBackend(OfficialMqttBridge):
             self.referee = profile
             self.safety.configure_referee_limits(profile.uplink_hz)
             self._lock_safety_locked("referee profile changed")
-            self.safety.current_stage = "0"
-            self.safety._stage_seen = False
+            self.safety.clear_stage_evidence()
             if started:
                 self._request_start_locked()
         self._flush_input_clear()
@@ -324,8 +321,7 @@ class RmMqttBackend(OfficialMqttBridge):
             self.port = port
             self.clear_received_epoch()
             self._lock_safety_locked("MQTT endpoint changed")
-            self.safety.current_stage = "0"
-            self.safety._stage_seen = False
+            self.safety.clear_stage_evidence()
             started = self._started
             if started:
                 self._stop_client_locked()
@@ -385,8 +381,7 @@ class RmMqttBackend(OfficialMqttBridge):
             self.disconnected_at = time.perf_counter()
             self.clear_received_epoch()
             self._lock_safety_locked(reason)
-            self.safety.current_stage = "0"
-            self.safety._stage_seen = False
+            self.safety.clear_stage_evidence()
             self._reconnect_required = self._started
             self._next_reconnect_at = time.perf_counter() + self._reconnect_backoff_s
             self._reconnect_backoff_s = min(5.0, self._reconnect_backoff_s * 2.0)

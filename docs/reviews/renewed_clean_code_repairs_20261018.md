@@ -1324,3 +1324,39 @@ Full21 is the latest completed offline aggregate. Four incomplete prerequisites
 still prevent GO, and detached-target/native/hardware limitations remain. Earlier
 failed and interrupted runs retain their own results. This documentation update
 publishes no raw logs.
+
+## Referee-stage evidence ownership: accepted characterization cleanup
+
+This behavior-preserving cleanup centralizes the existing ordered assignments
+`current_stage = "0"` then `_stage_seen = False` in
+`OfficialSafety.clear_stage_evidence()`. Eight cross-owner sites (three manager,
+five MQTT) and the owner's existing `from_scenario` path delegate at their
+original positions. The three existing production files have a net reduction
+of four lines. No module, policy framework, lock, clock read or notification is
+added, and no existing oracle is changed. This is not a new bug-fix claim.
+
+The exact eleven characterization methods passed against the preserved full21
+baseline modules and the candidate. Two new owner-contract methods bring the
+candidate suite to **13 methods**, covering state-only mutation, independent
+mutable-dictionary snapshots, idempotence and setter-failure assignment order.
+Author focused evidence records **120 methods PASS**, API freeze and static gates
+PASS. Independent review accepted **76 focused methods** and rejected all six
+behavior-changing negative controls, including in-place limiter-dictionary
+mutation. Expanding the helper calls back into the original assignments yields
+full-file AST equivalence for all three production files; the eleven baseline
+characterization methods are AST-identical. Counts from overlapping selections
+are not additive.
+
+Frozen SHA-256 identities:
+- `manager.py`: `9c06ef5260fdc7610043de5d0b275554c2c9f0e22820762974fb9773ceb53a06`
+- `mqtt_backend.py`: `6178c623504210257535d38c4d458f8d8202826cea26c1c6df913a705b3b76c6`
+- `safety.py`: `99ad3496eccb43813e7fe57e720373f667fd8009f48564c02e265542cbf88baf`
+- `test_safety_stage_owner.py`: `46a6902e764f25c3ed98fcb91dc18a34b1f5bca3eb8b6fb9acdd7fe1f9118253`
+
+Observer timing, original exception propagation and partial assignment behavior,
+E-stop, qualification and limiter ownership remain unchanged. Constructor field
+initialization stays direct, avoiding a new virtual call during construction.
+The local packet's README predates independent acceptance; final review logs
+supply the later results above. No new full aggregate, global coupling claim or
+hardware qualification follows. Full21 remains tied to its earlier source;
+this report publishes no raw logs.

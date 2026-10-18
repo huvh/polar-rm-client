@@ -346,8 +346,7 @@ class BackendManager:
             self.mqtt.publish_estop_zero()
             self.mqtt.stop(publish_status=False, wait=False)
             self.safety.lock_control("unsupported referee profile")
-            self.safety.current_stage = "0"
-            self.safety._stage_seen = False
+            self.safety.clear_stage_evidence()
             raise
         if profile.profile_id == self.referee.profile_id and not self._referee_change_requested:
             return
@@ -1587,16 +1586,14 @@ class BackendManager:
             new_id = profile.validate_client_id(str(robot_id))
         except (ValueError, TypeError):
             self.safety.lock_control("invalid referee robot identity")
-            self.safety.current_stage = "0"
-            self.safety._stage_seen = False
+            self.safety.clear_stage_evidence()
             self.mqtt.stop(publish_status=False, wait=False)
             raise
         self._lifecycle.update_pending_identity(new_id)
         if new_id == self.mqtt.client_id:
             return
         self.safety.lock_control("referee robot identity changed")
-        self.safety.current_stage = "0"
-        self.safety._stage_seen = False
+        self.safety.clear_stage_evidence()
         self.mqtt.publish_estop_zero()
         was_started = self.mqtt._started
         self.mqtt.stop(publish_status=False, wait=False)

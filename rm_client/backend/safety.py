@@ -150,10 +150,14 @@ class OfficialSafety:
         )
         # 台架驾驶开关随场景切换（默认 False，只有 LabDebug 的 profile 打开）
         self.allow_dt7_drive = bool(getattr(config.safety, "allow_dt7_drive", False))
-        self.current_stage = "0"
-        self._stage_seen = False
+        self.clear_stage_evidence()
         self._publish_at.clear()
         self.lock_control("scenario changed")
+
+    def clear_stage_evidence(self) -> None:
+        """Forget the referee phase without changing control state or notifying observers."""
+        self.current_stage = "0"
+        self._stage_seen = False
 
     def update_stage(self, current_stage: Any) -> None:
         stage = str(current_stage).strip()
