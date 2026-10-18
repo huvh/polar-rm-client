@@ -2443,3 +2443,81 @@ import 81 focused methods, six inert controls and both original defect methods
 PASS. Complete historical probe retains exactly three expected subtest failures,
 zero errors. Other AST and prior assertions remain unchanged. Next aggregate
 remains pending for this stage.
+
+### Completed thirty-sixth integrated result
+
+`client-renewed20h-full36/results.json` was independently read and verified as
+**completed: 400 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `1f00bda67cee460a982a6daf3b11109c`. Exact source: local
+`62f67446396aa051ea778630d5ad734316a1b2d8`, public
+[a95017730bf0d73cf7912a7f3c456238d3337a88](https://github.com/lulunomaro/polar-rm-client/commit/a95017730bf0d73cf7912a7f3c456238d3337a88),
+tree `be6a652f1950d4ed1f0b74010d6a3901b905ea33` (parent-verified public mapping).
+Provenance records `dirty: false` at start. Declared source stability passed with
+**755 inputs** at both endpoints and SHA-256
+`6704916a36349669d570f1904aafcc1ee70aa3a170cea7377ce937df6dc24eb8`.
+Existing fingerprint scope, exclusions and endpoint limitations apply.
+The new final-context diagnostic module passed 15 methods. Full35's completed
+399/12/4/0 checkpoint remains separate at its own source. Four incomplete
+prerequisites continue to prevent GO.
+
+The final-context diagnostic repair is independently accepted in its integrated
+two-file scope. Two ordinary logger guards and two uses of the existing safe
+formatter preserve original context failures in stored/returned warning records.
+Ordinary diagnostic failure no longer interrupts that storage/warning path.
+Logging still precedes formatting, preserving the healthy logging context and
+operation/logger/formatter process-control order. Secondary diagnostic errors
+are not newly persisted. Finalization seals and finally-leave expression remain
+unchanged; this does not establish additional GL/native resource retirement.
+
+Independent integrated selection: 81 methods PASS; six inert controls and both
+original defect methods PASS separately. The new 15-method suite has 18 failing
+outcomes and zero errors on baseline. Seven supplied mutations and an independent
+formatting-before-logging mutation were rejected. Counts overlap. The unchanged
+historical seven-method probe retains **three intentional failing subtests, zero
+errors**, in its one old ordinary-logger-propagation characterization; the other
+six methods pass. That counterevidence is separate from the aggregate and is not
+relabeled green or hidden by changing the old assertion.
+
+Leave-factory exceptions still propagate and can prevent final result assignment;
+their existing exception-masking precedence remains. Caller warning/event errors
+also remain outside this owner. Actual closeEvent/finish AST controls retain
+superclass-finally behavior after warning success or failure. Existing assertions
+and all unrelated methods remain unchanged. Inert focused resources construct no
+QApplication/window or native GL context. Python 3.10 grammar is checked, while
+runtime evidence uses Python 3.12. Historical results and external prerequisites
+remain; no raw logs are published or universal diagnostic closure claimed.
+
+### Tick-stage diagnostic isolation
+
+A bounded adjacent-owner audit reproduced ordinary Python logger failures
+escaping TickStageRunner._record_error through the actual runtime adapter and
+skipping 13 later inert callbacks, including readiness and polar.link. Counters,
+original error text and timing were already recorded: this is continuation loss,
+not pre-bookkeeping loss. A standard closed in-memory stderr reproduces it.
+No device or spin implementation was executed and no historical timing cause is
+inferred. Only the primary logger.exception and fallback logger.warning calls
+are guarded against ordinary Exception. Field-log emission still follows a
+broken primary logger; fallback logging keeps its active field-log exception.
+Counters, throttle, timing and healthy messages/context remain unchanged.
+
+Source SHA-256 `c13b827a71d4139e29ddc3d78ce7118c81691e3ec9e6faea708bb759458ea5fe`;
+new test `8758a0c9d47e6fef71bd6177a0664b37a917fea9ae50ffe0e0f3e8ea66d81081`.
+New baseline 16 methods reproduce 12 assertion/subtest failures, zero errors.
+Independent candidate: 47 focused methods, eight original probes and seven extra
+inert controls PASS; seven runtime-only mutations rejected. A separate pure
+30-test selection passes with an explicit assertion of no facade/spin imports.
+The 47-test selection includes existing facade-importing window tick tests that
+replace domain guards with inert recorders and construct no window. These scopes
+are distinct and counts overlap. Whole-file AST restores exactly after removing
+the two guards. Failed primary rendering, clock/mapping failures and all
+process-control exceptions remain outside the ordinary logging guards.
+
+Author integrated 47 methods, API freeze and static quality gates PASS. Full36
+above qualifies the earlier source. Independent integrated validation and next
+aggregate are pending. Local packet: tick-diagnostic-isolation-20261018. No raw
+logs are published and no broad runtime/native acceptance is claimed.
+
+Independent integrated review accepted exact source/test bytes: normal-import
+47 focused, pure 30, seven controls and eight original probes PASS. Pure selection
+confirms no facade/spin imports; old tests, runtime adapter and AST outside the
+two guards remain unchanged. Next aggregate qualification is pending.

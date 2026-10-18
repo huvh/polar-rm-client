@@ -183,7 +183,10 @@ class TickStageRunner:
         if now - errors.last_logged_at.get(name, 0.0) < 1.0:
             return
         errors.last_logged_at[name] = now
-        self.logger.exception("UI tick stage failed: %s", name)
+        try:
+            self.logger.exception("UI tick stage failed: %s", name)
+        except Exception:
+            pass  # A diagnostic sink cannot cancel later runtime stages.
         try:
             self.emit(
                 "thread_exception", stage=name, error_type=type(exc).__name__,
@@ -192,7 +195,10 @@ class TickStageRunner:
         except Exception:
             # Reporting a broken backend must not prevent polar overlay or the
             # next safety stage from running when its log sink is broken too.
-            self.logger.warning("UI tick failure diagnostic could not be written", exc_info=True)
+            try:
+                self.logger.warning("UI tick failure diagnostic could not be written", exc_info=True)
+            except Exception:
+                pass  # The field-log fallback has the same isolation boundary.
 
     @staticmethod
     def _record_duration(
