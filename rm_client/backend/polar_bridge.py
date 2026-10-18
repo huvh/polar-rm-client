@@ -418,6 +418,10 @@ class PolarMotionVerifier:
 
     def __init__(self, clock: Callable[[], float] = time.perf_counter) -> None:
         self.clock = clock
+        self.reset()
+
+    def reset(self) -> None:
+        """Discard all motion evidence when the robot transport epoch ends."""
         self.state = "IDLE"
         self.detail = ""
         self.commanded_mps = 0.0

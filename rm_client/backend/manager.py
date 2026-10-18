@@ -564,6 +564,7 @@ class BackendManager:
     def _invalidate_polar_epoch(self, reason: str) -> None:
         self.safety.lock_control(reason)
         self.polar_bridge.reset()
+        self.polar_motion.reset()
         self.polar.request_estop()
         self._polar_gimbal_last = None
         self.polar_chassis_state_seen = False
@@ -1144,11 +1145,7 @@ class BackendManager:
         state.polar_ground_positions = {}
         self.polar_bridge.reset()
         self.polar_arbiter.clear_lockout()
-        self.polar_motion._ever_had_feedback = False
-        self.polar_motion._last_feedback_segment_at = None
-        self.polar_motion._moving_since = None
-        self.polar_motion.state = "IDLE"
-        self.polar_motion.detail = ""
+        self.polar_motion.reset()
         state.official_state_active = False
         state.official_state_at = 0.0
         state.official_robot_health.clear()
@@ -1634,6 +1631,7 @@ class BackendManager:
         self._native_recovery.reset()
         self._native_0310_blocked_until_sps = True
         self.polar_bridge.reset()
+        self.polar_motion.reset()
         self._polar_gimbal_last = None
         self.polar_chassis_state_seen = False
 

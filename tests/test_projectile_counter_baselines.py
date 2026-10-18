@@ -131,7 +131,8 @@ class ProjectileCounterBaselineTests(unittest.TestCase):
         manager._clear_mock_frontend_state = lambda state: None
         manager.polar_bridge = SimpleNamespace(reset=lambda: None)
         manager.polar_arbiter = SimpleNamespace(clear_lockout=lambda: None)
-        manager.polar_motion = SimpleNamespace()
+        from rm_client.backend.polar_bridge import PolarMotionVerifier
+        manager.polar_motion = PolarMotionVerifier()
         manager._reset_state_for_scenario(self.state)
         self.assertFalse(self.state.injury_stats_initialized)
         self.assertEqual(self.state.projectile_hit_revision, revision)
