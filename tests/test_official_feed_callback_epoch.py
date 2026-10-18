@@ -3,6 +3,7 @@ from pathlib import Path
 import sys
 from types import SimpleNamespace
 import unittest
+from unittest.mock import Mock, patch
 
 sys.path[:0] = [str(Path(__file__).resolve().parents[1]), str(Path(__file__).resolve().parent)]
 from test_official_feed_receive_freshness import ReceiveHarness
@@ -93,6 +94,55 @@ class OfficialFeedCallbackEpochTests(unittest.TestCase):
         host.roster([100, 0], 100.5)
         host.consume(100.5)
         self.assertEqual(host.delivered, [101, 102])
+
+    def test_changed_epoch_exception_is_contained_but_old_receipt_is_not_applied(self):
+        from rm_client.ui.polar.tick_controller import TickErrors, TickStageRunner
+        host = self.host()
+        failure = RuntimeError('callback failed after switching')
+        def failed(event):
+            host.switch()
+            raise failure
+        host.on_event = failed
+        host.roster([0, 0], 100.1)
+        errors = TickErrors()
+        emit = Mock()
+        runner = TickStageRunner(host.state.backend_stats, emit, Mock(), lambda: 100.2)
+        with patch('time.perf_counter', return_value=100.2):
+            self.assertFalse(runner.run('official.consume', host.consume_official_messages,
+                                        errors=errors, now=100.2))
+            self.assertTrue(runner.run('official.apply', host.apply_official_state,
+                                       errors=errors, now=100.2))
+        self.assertEqual(errors.count, 1)
+        self.assertIn(str(failure), errors.last_error)
+        self.assertEqual(emit.call_args.kwargs['stage'], 'official.consume')
+        self.assertEqual(host.delivered, [101])
+        self.assertEqual(host.state.official_feed_at, 0.)
+        self.assertFalse(host.state.official_events_online)
+        self.assertEqual(host.official_feed._robot_health, [])
+
+    def test_callback_exception_identity_and_nested_new_history_are_preserved(self):
+        for nested in (False, True):
+            with self.subTest(nested=nested):
+                host = self.host()
+                failure = RuntimeError('original callback error')
+                def failed(event):
+                    host.on_event = lambda event: None
+                    host.switch()
+                    if nested:
+                        host.roster([100, 100], 100.3)
+                        host.consume(100.3)
+                    raise failure
+                host.on_event = failed
+                host.roster([0, 0], 100.1)
+                with patch('time.perf_counter', return_value=100.4):
+                    with self.assertRaises(RuntimeError) as caught:
+                        host.consume_official_messages()
+                    host.apply_official_state()
+                self.assertIs(caught.exception, failure)
+                self.assertEqual(host.delivered, [101])
+                self.assertEqual(host.state.official_feed_at, 100.3 if nested else 0.)
+                self.assertEqual(host.state.official_events_online, nested)
+                self.assertEqual(host.official_feed.last_message_at, 100.3 if nested else 0.)
 
     def test_stable_generation_delivers_entire_batch(self):
         host = self.host()

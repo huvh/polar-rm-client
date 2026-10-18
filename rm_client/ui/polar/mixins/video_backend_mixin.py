@@ -954,8 +954,13 @@ class VideoBackendMixin:
             if "official_feed_at" in updates:
                 self._official_state_updates["official_feed_at"] = updates["official_feed_at"]
             for event in events:
-                self.accept_combat_event(event)
-                if not batch_is_current():
+                try:
+                    self.accept_combat_event(event)
+                finally:
+                    # The next tick stage still applies receipts if this callback
+                    # raises. Synchronize first without swallowing its exception.
+                    current = batch_is_current()
+                if not current:
                     return
 
     def apply_official_state(self) -> None:
