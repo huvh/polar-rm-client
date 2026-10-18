@@ -275,3 +275,89 @@ static import-coupling measures remain unchanged. This neither proves global
 decoupling nor makes the added handling a quality regression. Runtime callback,
 state and ownership coupling remain outside this graph, and zero cycles are not
 whole-project Clean Code acceptance. No raw metric output is published here.
+
+## 2026-10-18 addendum: full12 to full23 ownership-stage comparison
+
+The original completed aggregate reports identify these exact source endpoints;
+their clean-start commits and trees were checked against local Git objects:
+
+- Full12: local `6a802d5c73be8585a0f814997edd38cc8d81243a`, tree
+  `5c24ec773655f730f63892ee48477640bfc8771f` (public `863954d30aa841058a073d2c0020d1468e20ebaf`).
+- Full23: local `1fc3e36fd92c8d38ef7da0c69e268ac9aa4938a2`, tree
+  `03ed0ebd80452670f7c044d3d83e472291beba84` (public `8a7b6abcc3eb5274bfeeef63df508b56e231f226`).
+
+Both were measured with the same CPython 3.12.14 interpreter and identical
+existing metric/gate inputs. These SHA-256 values match at **both** commits:
+
+| Tool/input | SHA-256 |
+|---|---|
+| `tools/quality/metrics.py` | `548bcabd7b664a3468d566a0608e40b25ea32ec5bba955c3e22e511481841847` |
+| `tools/quality/runtime_sources.py` | `e0d560401d7e0eb2b05cdb30c2f4b89db3d58ee2625c7d8dd3da103377d855e7` |
+| `tools/quality/__init__.py` | `8457d57b46817f3bf5fb7a05e89d6a20af64acfdcebae59cad1d4dfee3836f6f` |
+| `tools/quality_gate.py` | `c57181a460b33f071b3a96178b3ac630ab7a51e883e7073cea06082a9b3f71d3` |
+| `tools/quality/gates.py` | `ad5b6ef9c093960b0a89b158bc4a2dc22c4910043f20d13e500ab26f46a6f9bf` |
+| `tools/quality/baseline.json` | `7c468aef442546824fc0c18dc72faa836299a9d17e23e2ab3315401483a1b9f4` |
+
+Scope remains **`rm_client/**/*.py` only**: tests, tools, root `main.py`, assets
+and dependency packages are not counted. All 221 files parse at each endpoint;
+the retained historical UI module and its 50 functions remain included. Metric
+definitions and graph limitations are unchanged from the earlier sections.
+
+| Same metric | Full12 source | Full23 source | Change |
+|---|---:|---:|---:|
+| Parsed Python modules | 221 | 221 | 0 |
+| Functions | 3,481 | 3,487 | +6 |
+| Function-scoped executable AST statements | 37,637 | 37,666 | +29 |
+| Decisions | 13,273 | 13,286 | +13 |
+| Local import edges | 616 | 616 | 0 |
+| Eager / including-deferred cyclic SCCs | 0 / 0 | 0 / 0 | 0 / 0 |
+| Window / manager import fan-out | 94 / 37 | 94 / 37 | 0 / 0 |
+
+Both complete directed import-edge sets, eager and deferred-inclusive, are
+identical; equal totals do not conceal replaced edges. The window source is
+unchanged. Manager counts are 116 → 116 functions, 1,374 → 1,377 statements and
+552 → 554 decisions. Both versions pass the same unchanged static gates.
+Normalized Python-source digests, distinct from Git trees and aggregate-run
+fingerprints, are:
+
+- Full12: `0bd2c9f52b151c0a5cdfb7cb4407409bfa1c7b3caa4cda132c172424e0f795d7`
+- Full23: `305bf5c4ab212259cb51369b90e3c600e344b745f1da156244ca2cc064f19668`
+
+The following commands were replayed from the repository root using local Git
+objects and temporary exports, without checking out either source tree. `PY`
+names the actual verification interpreter; adjust its path for another machine.
+
+```sh
+set -eu
+BEFORE=6a802d5c73be8585a0f814997edd38cc8d81243a
+AFTER=1fc3e36fd92c8d38ef7da0c69e268ac9aa4938a2
+PY=../client-verification-venv/bin/python
+WORK=$(mktemp -d)
+TOOLS='tools/quality_gate.py tools/quality/metrics.py tools/quality/runtime_sources.py tools/quality/gates.py tools/quality/__init__.py tools/quality/baseline.json'
+git diff --exit-code "$BEFORE" "$AFTER" -- $TOOLS
+mkdir -p "$WORK/before" "$WORK/after" "$WORK/tool"
+git archive "$BEFORE" rm_client | tar -x -C "$WORK/before"
+git archive "$AFTER" rm_client | tar -x -C "$WORK/after"
+git archive "$AFTER" $TOOLS | tar -x -C "$WORK/tool"
+(cd "$WORK/tool" && sha256sum $TOOLS)
+PYTHONDONTWRITEBYTECODE=1 "$PY" "$WORK/tool/tools/quality_gate.py" \
+  --root "$WORK/before" --json "$WORK/before.json"
+PYTHONDONTWRITEBYTECODE=1 "$PY" "$WORK/tool/tools/quality_gate.py" \
+  --root "$WORK/after" --json "$WORK/after.json"
+```
+
+The ownership gains are bounded: motion/arbitration/identity evidence uses its
+existing owners at epoch boundaries; safety owns ordered stage invalidation;
+the effect renderer owns hit-revision consumption. The latter two are
+characterized behavior-preserving cleanups, not additional bug-fix counts.
+Angle-reception and process-acquisition repairs add explicit boundary handling.
+No production module was added. These changes support local ownership claims,
+**not global decoupling or size reduction**: graph/fan-out measures are unchanged
+and statements/decisions increase. Static counts cannot establish necessity,
+clarity or runtime correctness of that handling.
+
+No application modules or regression suites were run for this comparison.
+Original full12/full23 NO-GO results and native/external acceptance gaps retain
+their separate meaning; no aggregate counts are added together or upgraded.
+Only this existing report is amended. Raw metric output and logs are not
+published, and all historical comparisons above retain their original scope.
