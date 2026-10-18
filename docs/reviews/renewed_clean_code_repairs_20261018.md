@@ -1668,3 +1668,26 @@ methods and fixtures are AST-identical to the external suites. The unchanged
 existing dispatch file retains its strict timing/count assertions. The direct
 caller is `KeyboardControlBridge._send_direct_dt7`. Historical 22 ms causation
 remains unresolved; no full aggregate on this later source is claimed yet.
+
+
+### Completed twenty-sixth integrated result
+
+`client-renewed20h-full26/results.json` was independently read and verified as
+**completed: 390 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `7b00dd45f3294d97960a0353478669ab`. Exact source: local
+`0d1dc12d0db93a3c7f1e0941a64b4c7c032115f9`, public
+[52492777362cb23e286c5ad00d93b4e52a3ce6ff](https://github.com/lulunomaro/polar-rm-client/commit/52492777362cb23e286c5ad00d93b4e52a3ce6ff),
+tree `905c7522877552ffe52b63e73a003514c46f1326` (parent-verified public mapping).
+Provenance records `dirty: false` at start. Declared source stability passed with
+**745 inputs** at both endpoints and SHA-256
+`8df690ca0b614e1f046dcf44163fad577e5e2124cab41b5de73936dda9904d59`.
+Existing fingerprint scope, exclusions and endpoint limitations apply.
+
+Full26 supplies source-specific integration evidence for the activation-fixture
+isolation and DT7 recovery-condition repair. It does not establish the causes of
+the historical activation timeout or strict DT7 timing failure. Earlier failed,
+interrupted and completed runs retain their own source scope. Four incomplete
+prerequisites still prevent GO; native/hardware and other documented limitations
+remain. A bounded public-reference lookup did not obtain the required exact
+team CRC bytes, so that prerequisite remains missing without substitution.
+Only documentation is updated and no raw logs are uploaded.
