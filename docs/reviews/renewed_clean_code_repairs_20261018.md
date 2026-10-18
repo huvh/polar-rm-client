@@ -1477,3 +1477,24 @@ focused automated acceptance; no new full aggregate or hardware qualification
 is claimed. Full23 remains the latest completed aggregate at its own source.
 Existing counterevidence and incomplete prerequisites remain; raw logs are not
 uploaded.
+
+
+### Completed twenty-fourth integrated result
+
+`client-renewed20h-full24/results.json` was independently read and verified as
+**completed: 387 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `7dd18451a54c41f2b78e49cdca1f1950`. Exact source: local
+`f14ec46ff47c4b61d2f0b71edb3f2e65cb8c28d7`, public
+[77d78194ad01f542365c7184fe02d108ceababcb](https://github.com/lulunomaro/polar-rm-client/commit/77d78194ad01f542365c7184fe02d108ceababcb),
+tree `38230673ef32ac83ab480c922ceac7423428f563` (parent-verified public mapping).
+Provenance records `dirty: false` at start. Declared source stability passed with
+**742 inputs** at both endpoints and SHA-256
+`6bc83e71b5749623ee1485a0bebce2ce6e7bb3c5cf61e2a52a261c14e1552bf5`.
+Existing fingerprint scope, exclusions and endpoint limitations apply.
+
+Full24 is the latest completed offline aggregate and supplies source-specific
+integration evidence for the ClickGUI close pointer-epoch repair. Four incomplete
+prerequisites still prevent GO. Native/hardware, detached-target and other
+previously documented limitations remain. Earlier completed, failed and
+interrupted results retain their own source scope. This update changes only
+documentation and uploads no raw logs.
