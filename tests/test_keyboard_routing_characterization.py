@@ -41,7 +41,8 @@ def labels(result):
 class KeyboardRoutingDifferentialTests(unittest.TestCase):
     def assert_same(self, case, keys, *, fail_at=None):
         expected = run_case(case, keys, baseline=True, fail_at=fail_at,
-                            correct_economy_repeat_release=True)
+                            correct_economy_repeat_release=True,
+                            correct_clickgui_repeat_toggle=True)
         actual = run_case(case, keys, fail_at=fail_at)
         self.assertEqual(actual, expected)
         if fail_at is None:
@@ -50,6 +51,23 @@ class KeyboardRoutingDifferentialTests(unittest.TestCase):
 
     def test_frozen_fixture_integrity(self):
         self.assertEqual(hashlib.sha256(BASELINE_PATH.read_bytes()).hexdigest(), FIXTURE_SHA256)
+
+    def test_clickgui_repeat_correction_is_explicit_and_route_scoped(self):
+        for code, case in ((K.Key_F8, Case()), (K.Key_Shift, Case(right_shift=True))):
+            keys = [Key(code, repeat=True)]
+            original = run_case(case, keys, baseline=True)
+            corrected = run_case(case, keys, baseline=True, correct_clickgui_repeat_toggle=True)
+            self.assertNotEqual(original, corrected)
+            self.assertIn('set_clickgui_visible', labels(original))
+            self.assertNotIn('set_clickgui_visible', labels(corrected))
+            self.assertEqual(run_case(case, keys), corrected)
+            for variant, key in ((case, Key(code)), (case, Key(code, phase='release')),
+                                 (replace(case, hero=True), Key(code, repeat=True)),
+                                 (replace(case, chat=True), Key(code, repeat=True)),
+                                 (case, Key(K.Key_W, repeat=True))):
+                self.assertEqual(run_case(variant, [key], baseline=True),
+                                 run_case(variant, [key], baseline=True,
+                                          correct_clickgui_repeat_toggle=True))
 
     def test_every_key_repeat_and_single_owner(self):
         cases = [Case()] + [Case(**{flag: True}) for flag in FLAGS]

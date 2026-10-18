@@ -396,17 +396,24 @@ class KeyboardCanvas(QWidget):
 
 def build_keyboard_manager(host, manager=None, target=None, parent=None):
     dialog=JelloDialog(parent or host,keyboard=True)
-    dialog.setObjectName("JelloKeyboardManager");dialog.setWindowTitle("Jello · Keybind Manager")
-    available=host.screen().availableGeometry()
-    dialog.resize(min(1280,available.width()-30,max(600,host.width()-20)),
-                  min(860,available.height()-40,max(430,host.height()-20)));dialog.setMinimumSize(600,430)
-    dialog.session=BindingSession(host,manager)
-    dialog.canvas=KeyboardCanvas(dialog,dialog.session,target)
-    dialog.focus_widget=dialog.canvas
-    dialog.panel.layout().setContentsMargins(0,0,0,0);dialog.panel.layout().addWidget(dialog.canvas)
-    dialog.estop_shortcut=install_estop_shortcut(dialog,host)
-    apply_jello_widgets(dialog)
-    return dialog
+    try:
+        dialog.setObjectName("JelloKeyboardManager");dialog.setWindowTitle("Jello · Keybind Manager")
+        available=host.screen().availableGeometry()
+        dialog.resize(min(1280,available.width()-30,max(600,host.width()-20)),
+                      min(860,available.height()-40,max(430,host.height()-20)));dialog.setMinimumSize(600,430)
+        dialog.session=BindingSession(host,manager)
+        dialog.canvas=KeyboardCanvas(dialog,dialog.session,target)
+        dialog.focus_widget=dialog.canvas
+        dialog.panel.layout().setContentsMargins(0,0,0,0);dialog.panel.layout().addWidget(dialog.canvas)
+        dialog.estop_shortcut=install_estop_shortcut(dialog,host)
+        apply_jello_widgets(dialog)
+        return dialog
+    except Exception as error:
+        # The caller cannot clean up a dialog that the factory never returned.
+        try:
+            dialog.deleteLater()
+        finally:
+            raise error
 
 
 def open_keyboard_manager(host, manager=None, target=None):

@@ -1164,7 +1164,9 @@ class InputDispatchMixin:
                 self.search_query = edit.apply(self.search_query)
             return
         if event.key() == Qt.Key.Key_F8 or self.is_right_shift_event(event):
-            self.set_clickgui_visible(not self.gui_visible)
+            # One physical press owns the toggle; OS repeats cannot reverse it.
+            if not event.isAutoRepeat():
+                self.set_clickgui_visible(not self.gui_visible)
             return
         if event.key() == Qt.Key.Key_F9:
             # Jello Sigma is the only public ClickGUI. Legacy renderers are

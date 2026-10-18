@@ -304,7 +304,8 @@ class Harness(current.InputDispatchMixin):
         }
 
 
-def run_case(case: Case, keys: list[Key] | tuple[Key, ...], *, baseline=False, fail_at=None, correct_economy_repeat_release=False):
+def run_case(case: Case, keys: list[Key] | tuple[Key, ...], *, baseline=False, fail_at=None,
+             correct_economy_repeat_release=False, correct_clickgui_repeat_toggle=False):
     host = Harness(case, fail_at)
     accepted, error = [], None
     implementation = BASELINE if baseline else current.InputDispatchMixin
@@ -313,17 +314,27 @@ def run_case(case: Case, keys: list[Key] | tuple[Key, ...], *, baseline=False, f
             event = Event(key, host)
             method = implementation.keyPressEvent if key.phase == "press" else implementation.keyReleaseEvent
             finish_hold = host.finish_economy_hold
+            toggle_gui = host.set_clickgui_visible
             # Explicitly corrected historical behavior, without replacing the
             # frozen route or suppressing any earlier modal-owner observations.
             if (baseline and correct_economy_repeat_release and key.phase == "release"
                     and key.repeat and key.code in (Qt.Key.Key_Return, Qt.Key.Key_Enter)):
                 host.finish_economy_hold = lambda: None
+            # The original fixture intentionally retains the old repeat bug.
+            # Correct only the shared F8/Right-Shift toggle, after all original
+            # priority checks. The distinct Hero-to-ClickGUI route is unchanged.
+            if (baseline and correct_clickgui_repeat_toggle and key.phase == "press"
+                    and key.repeat and not host.hero_deploy_ui.visible
+                    and (key.code == Qt.Key.Key_F8
+                         or (key.code == Qt.Key.Key_Shift and host.case.right_shift))):
+                host.set_clickgui_visible = lambda visible: None
             try:
                 method(host, event)
             except Exception as exc:
                 error = (type(exc).__name__, str(exc))
             finally:
                 host.finish_economy_hold = finish_hold
+                host.set_clickgui_visible = toggle_gui
             accepted.append(event.accepted)
             if error is not None: break
     return host.trace, host.snapshot(), accepted, error
