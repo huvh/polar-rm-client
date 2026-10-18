@@ -684,3 +684,28 @@ separate, including its 723-input fingerprint and 368/12/4/0 NO-GO result.
 No hardware qualification or exhaustive defect coverage follows from these
 counts. This update publishes only the textual evidence summary; raw logs are
 not uploaded.
+
+## Eleventh integrated result: issue-family repairs
+
+The [issue-family audit](issue_family_audit_20261018.md) records the video
+evidence, UI repeated-input/nested-factory, and installer lexical-validation
+repair families, including focused regressions, counterevidence and limits.
+Their integrated checkpoint is local `b45d429b9e410109d227ac28b50a3c0294c84599`,
+public [62c31466b08e4a7d2930b4b07312e08b2742f228](https://github.com/lulunomaro/polar-rm-client/commit/62c31466b08e4a7d2930b4b07312e08b2742f228),
+tree `a709a945e96773ba8ef24fe8a068892b1ae3218e` (parent-verified mapping).
+
+`client-renewed20h-full11/results.json` was independently read and verified as
+**completed: 374 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `7fcbdb0e44a7401ebd911841f636691d`. Source-at-start matches the local
+commit and tree above. Provenance records **dirty: true**; the parent identified
+only the issue-audit document as dirty at start. This is not a clean-worktree
+claim. Declared source stability passed with **729 inputs** at both endpoints,
+SHA-256 `1ebbbe27a4d0bad6eaa2809619fcb70d01517f1b7844f5d4f9f597833a629b43`.
+The previously stated fingerprint scope, exclusions and endpoint limitations
+continue to apply.
+
+This supersedes full10 only as the latest completed offline aggregate. Earlier
+runs, interrupted-run history and raw-evidence loss disclosures remain intact.
+The four incomplete prerequisites still prevent GO; the aggregate does not
+establish native hardware qualification, exhaustive defect coverage or closure
+of the GitHub issues. No raw logs are published by this report update.

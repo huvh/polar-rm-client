@@ -1,7 +1,9 @@
 # GitHub issue 与同类缺陷审查
 
 日期：2026-10-18。GitHub 状态核对时间：09:44–09:45 UTC。
-报告编写时本地基线：`a4f3a2b03796c2c595aad86ef0efb028cf49688b`。
+初始 inventory 的本地基线：`a4f3a2b03796c2c595aad86ef0efb028cf49688b`。
+本次阶段更新分别记录下方视频、UI 与安装器冻结提交及已完成的离线组合结果，
+不将离线结果扩展为原生显示或硬件验收。
 
 ## 范围与结论
 
@@ -118,19 +120,87 @@
   拔插、占用、恢复和退出状态准确；收到字节不能冒充新鲜画面；按改动范围
   回归 HEVC/MJPEG/Webcam/Synthetic/Native，保留 Hero 和控制授权限制。
 
-## 本轮同类缺陷：修复中，不是完成声明
+## 本轮同类缺陷：分阶段修复与验证
 
 | 关联范围 | 已确认或待确认的问题 | 当前状态与验收要求 |
 | --- | --- | --- |
-| #10 固件安装检查 | 真实临时 fixture 已复现 marker-only 的 `--dry-run` 假 PASS。`patch_arm`、`patch_sender`、`patch_task` 遇 marker 直接返回；其他 patcher 的常量块检查也不等于外围钩子完整。 | **已确认，修复中。** 要求完整已安装合同及部分/被修改 marker 负对照；失败须在修改前拒绝，不损伤原文件/快照；干净安装与真正幂等仍成立。 |
-| #20 编码识别 | 有效 H.264 数据在字节偏移 **41,256** 出现 `FF D8`，被误判为 MJPEG。载荷内的字节巧合不能代替合法帧边界。 | **已确认，修复中。** 要求有效样本负对照、合法 MJPEG/envelope 正对照、连续 H.264 及编码切换回归；不能通过普遍关闭 MJPEG 或弱化断言掩盖问题。 |
-| #8 ClickGUI 快捷键 | 普通 F8 的每个自动重复按下事件都会再次切换界面。 | **已确认，修复中。** 要求一次物理按下只切换一次，保留松开后的下一次按下及 Right Shift/F8 行为；不改变 F12 和绑定捕获的既有合同。 |
-| #8/#12 设置工厂生命周期 | 对视频/键盘设置工厂注入晚期异常，连续两次创建失败后仍保留两个 host 子对象。 | **对抗式失败路径已确认，修复中。** 这是异常注入结果，不是已知自然触发的用户症状。要求释放本次取得的 owner、保留原异常且不误销毁 host/兄弟对象，并有重复失败负对照。 |
+| #10 固件安装检查 | 真实临时 fixture 已复现 marker-only 的 `--dry-run` 假 PASS。原 `patch_arm`、`patch_sender`、`patch_task` 遇 marker 直接返回；其他 patcher 的常量块检查也不等于外围钩子完整。 | **修订软件修复已发布，专项复核接受。** 初版 53 PASS 后仍被注释钩子的反例否决，记录保留。修订版增加固定文本与词法检查；不等同于 C 预处理、语义、目标编译或硬件验收。 |
+| #20 编码识别 | 有效 H.264 数据在字节偏移 **41,256** 出现 `FF D8`，被误判为 MJPEG。载荷内的字节巧合不能代替合法帧边界。 | **软件修复已发布，专项复核接受。** 使用 JPEG 解码证据约束从 Annex-B 到 MJPEG 的切换；有效样本负对照及合法 MJPEG/envelope、连续流与编码切换回归见下方。旧设备验收仍未完成。 |
+| #8 ClickGUI 快捷键 | 普通 F8 的每个自动重复按下事件都会再次切换界面。 | **软件修复已发布，专项复核接受。** 忽略切换键的自动重复，保留新的物理按下及既有输入合同；与下列工厂清理共享同一 UI 阶段结果。 |
+| #8/#12 设置工厂生命周期 | 对视频/键盘设置工厂注入晚期异常，连续两次创建失败后仍保留两个 host 子对象。 | **软件修复已发布，专项复核接受。** 清理本次取得的 owner 并保留原异常和 host/兄弟对象。复现属于对抗式异常注入，不是已知自然触发的用户症状；不据此覆盖取得 owner 之前的任意构造失败。 |
 
-本轮新增复现针对编辑前的 `c9180595` / `a4f3a2b` 源快照；测试名及最终
-修复状态待后续复核补充。本报告仅汇总，不包含原始日志，也不把
-正在进行的代码修改、未复核结果或过去的专项通过当作本轮修复完成证据。
-后续应补充最终提交、负对照、独立复核及同一冻结源上的相关回归结果。
+本轮新增复现针对编辑前的 `c9180595` / `a4f3a2b` 源快照。本报告仅汇总，
+不包含原始日志，也不把未复核候选或过去的专项通过当作新阶段的完成证据。
+
+### 已接受的视频软件阶段
+
+- 公开提交：[`3b768cb7fd2b547e91f8a7dd22d06cdd1773cf53`](https://github.com/lulunomaro/polar-rm-client/commit/3b768cb7fd2b547e91f8a7dd22d06cdd1773cf53)。
+  对应本地提交 `11fa4e4df5ccbd0721cb0f8acb76ad2b34ddd5f7`，
+  tree `83f5ba86eef122cc7a90a727de443376242c56f2`。
+- `tests/test_udp_codec_evidence.py` 的完整 11 方法基线负对照产生
+  **9 FAIL / 0 ERROR**；修复后的独立专项选择 **42 PASS**。
+  已有 `tests/test_udp_h264_dispatch.py` 同时更新相关合同回归。
+- 这些是有界软件识别/解码回归，不是旧接收器、原生 GPU 或持续实机视频验收。
+
+### 已接受的 UI 软件阶段
+
+- 公开提交：[`1226c5da68f6c60dd1248b512fb013fd36796a10`](https://github.com/lulunomaro/polar-rm-client/commit/1226c5da68f6c60dd1248b512fb013fd36796a10)。
+  对应本地提交 `de0148fa4d169faddca4066dca8ca4a2cf1325ac`，
+  tree `8945dfa379e49accdc55fcaef7f1240bc0513462`。
+- 新回归为 `tests/test_clickgui_shortcut_repeat.py` 和
+  `tests/test_nested_settings_factory_ownership.py`，最终共 **9 个方法**；
+  基线负对照产生 **11 个失败结果 / 0 ERROR**，专项复核选择 **74 PASS**。
+  失败结果可来自同一方法的多个场景，不按 11 个独立方法计数。
+- 该阶段接受不代表所有 Qt 构造/清理失败路径或目标 Windows 显示环境均已验收。
+
+### 已接受的安装器软件阶段
+
+- 公开提交：[`62c31466b08e4a7d2930b4b07312e08b2742f228`](https://github.com/lulunomaro/polar-rm-client/commit/62c31466b08e4a7d2930b4b07312e08b2742f228)。
+  对应本地提交 `b45d429b9e410109d227ac28b50a3c0294c84599`，
+  tree `a709a945e96773ba8ef24fe8a068892b1ae3218e`。
+- 接受的专项选择为 **107 PASS**：新增安装器守卫 12、控制器 44、帧处理 15、
+  transport 36。新增回归为 `tests/test_controller_angle_installer_guards.py`。
+  关闭词法守卫的 mutation 产生 **11 FAIL / 0 ERROR**。
+- 保留失败历史：初版候选的 53 PASS 没有排除被注释的实际钩子；针对初版的
+  完整 12 方法反例选择仍产生 11 个失败结果，因此初版没有获接受。上述
+  107 PASS 对应修订后的冻结提交，不回写为初版通过。
+- 该守卫限定于固定版本的文本与词法合同，不解释 C 预处理条件，不证明
+  任意 C 语义等价、目标固件编译成功或物理控制器/机械臂安全。
+
+### 组合验证与未完成部分
+
+已直接读取并核对 `client-renewed20h-full11/results.json`：包含上述三个修复
+阶段的离线组合聚合**已完成，374 PASS / 12 SKIP / 4 INCOMPLETE / 0 FAIL，
+NO-GO**（`run_state: completed`、`passed: false`）。
+
+- Run ID：`7fcbdb0e44a7401ebd911841f636691d`；启动时间
+  `2026-10-18T09:58:13Z`；profile 为 `offline`。
+- 精确源码：公开提交
+  [`62c31466b08e4a7d2930b4b07312e08b2742f228`](https://github.com/lulunomaro/polar-rm-client/commit/62c31466b08e4a7d2930b4b07312e08b2742f228)，
+  本地 `b45d429b9e410109d227ac28b50a3c0294c84599`，
+  tree `a709a945e96773ba8ef24fe8a068892b1ae3218e`。
+- 启动时记录 `dirty: true`；启动工作树核对仅本审查文档未提交，可执行
+  源码/测试/工具已提交。不能把这次记录写成整个工作树 clean。
+- 声明源稳定性检查为 PASS：首尾均为 **729 个输入**，SHA-256 均为
+  `1ebbbe27a4d0bad6eaa2809619fcb70d01517f1b7844f5d4f9f597833a629b43`。
+  范围为声明的代码/配置及内部测试 fixture；排除文档、fixture 目录外资产、
+  外部 fixture 和安装包。仅首尾比较，不能排除期间改动后恢复。
+- 计数是所选套件/检查结果，不是源码覆盖率或独立测试方法总数。
+
+剩余四项 INCOMPLETE：队内 CRC 参考对拍；DT7 固件/真实厂商 `dump.cs`
+对照；DT7 UI 的固件 application C 源交叉核对；要求安装的 legacy patch
+测试（刻意排除于只读固件验证）。12 项 SKIP 仍涉及未提供的固件/参考
+fixture。原生桌面/OpenGL/视觉检查及 Tongji 外部集成未被此 offline profile
+选中。真实 Windows、GPU、音频/串口设备、旧图传、机器人和便携净机验收
+没有由本次离线结果建立，整体仍为 NO-GO。
+
+之前 `c9180595ddbdd6ec8a17012b35a62328ae1d762d` 上的 **370 PASS / 12 SKIP /
+4 INCOMPLETE / 0 FAIL，NO-GO** 仍是独立历史阶段；详见
+[第十阶段记录](renewed_clean_code_repairs_20261018.md#tenth-full-run-candidate-shared-selection-policies)。
+它不覆盖本轮新增提交，不能替代本次 full11 的独立结果。42、74、107 和各
+聚合的选择可能重叠，不能相加为覆盖率或独立测试总数。所有四个 issue
+继续保持 open；初版安装器被否决的证据及原生/硬件验收缺口不变。本次只
+更新文字摘要，不发布原始日志。
 
 ## 横向检查与停止条件
 
