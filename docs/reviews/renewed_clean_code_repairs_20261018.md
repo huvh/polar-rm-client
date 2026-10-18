@@ -534,3 +534,37 @@ A separate edge where a callback changes endpoint and then raises is under
 reproduction. This completed run does not establish that edge as repaired or
 exhaustively validate callback reentry. Prior results remain separate. Only this
 document is updated; no raw logs are published.
+
+## Eighth full-run candidate: callback raises after changing epoch
+
+The follow-up identified after full7 is repaired at local
+`17510e2478cc475bb83d462ea2a2cde403d92583`, public
+[415ed09abb32090c5eb34c7b49649f111d406afb](https://github.com/lulunomaro/polar-rm-client/commit/415ed09abb32090c5eb34c7b49649f111d406afb),
+tree `56f7c77a8640a0a299730d4debb0e6bdf72da35b` (parent-verified mapping).
+The same [video backend mixin](../../rm_client/ui/polar/mixins/video_backend_mixin.py)
+now synchronizes the receive epoch in `finally` around each combat-event callback.
+A callback that switches endpoint and raises can no longer skip receipt/history
+retirement before the next tick stage applies state. The original callback
+exception still propagates to the existing stage runner; newer history produced
+by a nested consumer is preserved.
+
+The expanded [callback regression](../../tests/test_official_feed_callback_epoch.py)
+uses the actual `TickStageRunner` boundary. Baseline: **2 failures, 0 errors
+across 6 methods**; independent focused selection **40 passed**. This is the
+bounded exception path missing from the earlier synchronous-reentry repair,
+not a claim of atomic cancellation across arbitrary concurrent threads.
+
+Full8, `client-renewed20h-full8/results.json`, was independently verified as
+**completed: 367 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `b47f401033f04462bf0cf9071367a183`. Source-at-start records the exact local
+`17510e2478cc475bb83d462ea2a2cde403d92583` / tree
+`56f7c77a8640a0a299730d4debb0e6bdf72da35b` stage above and `dirty: false`.
+Expanded-scope source stability passed with **722 inputs** at both endpoints,
+SHA-256 `55846af2322d5fe4c10d2ba4d4f04797f2b278379ce2c1d4a35f73d577eb5632`.
+The same internal-fixture inclusion, exclusions and endpoint limitations apply.
+
+The prior identically counted full7 result belongs to local `875f4f6` and remains
+separate; equal counts do not mean equal source or coverage. This completed run
+covers the bounded exception-path repair, while the four prerequisite suites
+still prevent a complete GO. No raw logs are published, and this update changes
+only documentation.
