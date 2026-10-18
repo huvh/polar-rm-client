@@ -2651,3 +2651,38 @@ Evidence is in the local emergency formatting packet and independent review.
 Python 3.10 grammar checks remain separate from Python 3.12 execution. Historical
 failures, native qualification limits and external prerequisites remain; raw logs
 are not published and no historical timing cause is inferred.
+
+### ClickGUI cache recovery after diagnostic failure
+
+The real draw_gui_cached_layer and ClickGuiLayerCache ASTs reproduced an ordinary
+logger exception skipping cache.clear and compatibility painting. On a failed
+cache-hit draw the entry remains owned. This establishes retained cache and
+skipped fallback, not displayed stale pixels. Builder painter restore/end already
+ran before diagnostic handling and remain unchanged. Original eight-method
+probe: three continuation failures, five controls pass, zero errors.
+
+The candidate guards only the existing logger.exception call. Log, clear and
+fallback order remains unchanged; saved renderer choice, next-frame rebuild,
+coordinates/DPR, painter cleanup and original exception context remain intact.
+BaseException, failed clear and failed fallback retain existing identity/prefix.
+Source SHA-256 `e6b4f42e0eebf8706bda338953f5f8b6a08514efd04ea4915c91b57715d5ff5c`;
+new test `be1856850bf1f9aca5d858e7512e04e6529da531803722be1860aa55d818854f`.
+New baseline 19 methods yield ten assertion/subtest failures, zero errors.
+Independent candidate 19 methods, eight original probes and seven extra inert
+controls PASS; seven runtime-only mutations rejected. Import checks confirm no
+native Qt/GL or facade/cache/manager/spin modules: actual methods/class are
+AST-loaded with inert painter/value objects. Whole-window AST is identical after
+unwrapping this single guard; actual cache source bytes are unchanged.
+
+Author integrated 19 methods, API freeze and static gates PASS. Independent
+integrated validation and next aggregate remain pending. Full38 above applies
+to the earlier source. No native raster/display/GPU qualification or historical
+ESC/fullscreen cause is claimed. Local packet: clickgui-cache-diagnostic-20261018.
+No raw logs published.
+The exposed caller is the legacy cached painter branch; this finding is not
+extended to the primary Jello rendering path.
+
+Independent integrated review accepted exact source/test bytes: repository-source
+19 methods with pure-import assertion, seven controls and eight original probes
+PASS. Cache owner bytes, unrelated window AST and prior assertions are unchanged.
+Aggregate qualification of this stage remains pending.

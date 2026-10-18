@@ -4488,7 +4488,10 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                 device_pixel_ratio=self.devicePixelRatioF(),
             )
         except Exception:
-            _LOG.exception("ClickGUI cache failed; using compatibility painting")
+            try:
+                _LOG.exception("ClickGUI cache failed; using compatibility painting")
+            except Exception:
+                pass  # A failed diagnostic cannot cancel cache recovery.
             # This frame may bypass the cache without changing the user's
             # persisted choice. The next frame can rebuild a healthy cache.
             self.gui_cache.clear()
