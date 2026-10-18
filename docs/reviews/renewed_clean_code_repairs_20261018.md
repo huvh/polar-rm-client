@@ -1163,3 +1163,23 @@ at all five DPRs (80 executions, zero skips/failures). Frozen file SHA-256
 matched before/after each run; diff check passed. Counts overlap and are not
 summed into distinct coverage. This later source is not qualified by full18;
 its aggregate is pending. Native display/DWM/GPU acceptance remains open.
+
+### Completed nineteenth integrated result
+
+`client-renewed20h-full19/results.json` was independently read and verified as
+**completed: 382 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `f1a2d87e97664216845d96765dd2cfd3`. Exact source: local
+`5277b07d0e33f7f7e91a7ae5caac2ff8da698f1c`, public
+[269a050a6a4600301bfd6c6446e9a7cd58bae2ad](https://github.com/lulunomaro/polar-rm-client/commit/269a050a6a4600301bfd6c6446e9a7cd58bae2ad),
+tree `ee783a293e4f8a59a7ea16b5eae6c99aed72adbb` (parent-verified public mapping).
+Provenance records `dirty: false` at start. Declared source stability passed with
+**737 inputs** at both endpoints and SHA-256
+`e528533c923a824e1ec1ff9ff308cf82b07b945c581cf36a3a5b99b016eca795`.
+Existing fingerprint scope, exclusions and endpoint limitations apply.
+
+This is the latest completed offline aggregate. Its equal counts to full18 do
+not imply identical source or coverage. Focused multi-DPR checks remain separate
+from this aggregate; the result does not establish a full-suite DPR matrix or
+native-display qualification. Original full15/full17 failures and the DPR-2
+counterevidence remain preserved. Four incomplete prerequisites still prevent
+GO. This update changes only documentation and publishes no raw logs.
