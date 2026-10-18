@@ -1,9 +1,9 @@
 """UDP 图传后端（对齐 SharkClient udp_bridge + video_decoder 能力）。
 
 - 8 字节 Shark 包头分片重组（复用 FrameAssembler）
-- 帧 codec 自动检测：MJPEG(FFD8) / H.265(HEVC NAL)
+- 帧 codec 自动检测：MJPEG(FFD8) / H.264 / H.265(HEVC NAL)
 - MJPEG 帧直接用 OpenCV 解码为 BGR ndarray（可转 QImage）
-- H.265 帧保留原始 bytes，若本机有 ffmpeg 则提供按需解码工具
+- H.264/H.265 使用同一个持久 FFmpeg 解码槽，切换时先退休旧进程
 - 统计：帧率/码率/丢帧/编解码后端/输出分辨率（对齐 Shark UDP stats）
 """
 
@@ -57,8 +57,8 @@ def _decode_jpeg_bgr(frame: bytes) -> Any:
 def detect_frame_codec(frame: bytes) -> str:
     """返回 'mjpeg' / 'h264' / 'h265' / 'unknown'。
 
-    注意：UDP 链路预期为 MJPEG 或 H.265（Shark 编码选项），H.264 识别
-    仅用于避免把普通 H.264 误判成 H.265。启发式识别不做严格字节流解析。
+    输入仍须经过 Shark 分片重组；识别 Annex-B 不代表支持裸 UDP/USB。
+    启发式识别不做严格字节流解析。
     """
     if len(frame) < 4:
         return "unknown"
@@ -288,6 +288,8 @@ class RmVideoBackend(UDPVideoReceiver):
         # Always construct the decoder. Its start() re-resolves ffmpeg so a
         # bundled binary becoming available before runtime is picked up.
         self.h265_decoder: ContinuousMjpegDecoder | None = ContinuousMjpegDecoder("h265")
+        # Legacy public names denote the single active Annex-B decoder slot.
+        # H.264 and HEVC share its existing stop/retry/health ownership.
         self.h265_recovery = AnnexBRecoveryGate("h265")
         self._udp_sequence_discontinuities = 0
         self._started_at = 0.0
@@ -360,10 +362,28 @@ class RmVideoBackend(UDPVideoReceiver):
                 self._udp_sequence_discontinuities = discontinuities
                 self.h265_recovery.reset()
             codec = detect_frame_codec(frame)
-            # 官方 UDP 源为连续 HEVC；VPS/SPS 只在关键帧出现。锁定后，普通
-            # type 0..31 P/B slices 不能被当成 unknown 丢弃。
-            if codec == "unknown" and self.codec == "h265":
-                codec = "h265"
+            if codec == "h265" and self.codec == "h264":
+                # 0x41/0x01 can mean H.264 non-IDR or layered HEVC VPS.
+                # Keep an established H.264 stream on its non-IDR slices;
+                # ordinary HEVC parameter sets still identify a codec switch.
+                units = iter_annexb_nal_units(frame)
+                if units and (units[0][1][0] & 0x1F) == 1:
+                    codec = "h264"
+            # Parameter sets need not accompany every transport frame. Once
+            # selected, retain the Annex-B codec for unclassified continuation.
+            if codec == "unknown" and self.codec in {"h264", "h265"}:
+                codec = self.codec
+            if codec != self.codec and self.codec in {"h264", "h265", "mjpeg"}:
+                self._h265_generation += 1
+                self.h265_recovery.reset()
+                self.latest_bgr = None
+                self.latest_bgr_at = 0.0
+                self.decoder_backend = "none"
+                if self.h265_decoder is not None:
+                    try:
+                        self.h265_decoder.request_stop()
+                    except Exception as exc:
+                        self.last_error = f"Codec retirement failed: {type(exc).__name__}: {exc}"
             self.codec = codec
             self.last_frame_at = now
             self._frame_times.append(now)
@@ -384,12 +404,16 @@ class RmVideoBackend(UDPVideoReceiver):
         # 解码放到锁外，避免 cv2/ffmpeg 阻塞 UDP 接收线程与 stats()
         if codec == "mjpeg":
             self._decode_mjpeg(frame, generation)
-        elif codec == "h265":
+        elif codec in {"h264", "h265"}:
             with self._lock:
                 if generation is not None and generation != self._video_generation:
                     return
+                if self.codec != codec:
+                    return
                 self.latest_h265 = frame
                 decoder = self.h265_decoder if self.decode_h265 else None
+                if decoder is not None and getattr(decoder, "codec", "h265") != codec:
+                    decoder = self._select_annexb_decoder(codec)
                 decoder_generation = getattr(decoder, "lifecycle_generation", None)
             if decoder is not None:
                 # Preserve lazy first-block startup, including a one-GOP source.
@@ -402,7 +426,7 @@ class RmVideoBackend(UDPVideoReceiver):
                 with self._lock:
                     if generation is not None and generation != self._video_generation:
                         return
-                    if not self.decode_h265:
+                    if not self.decode_h265 or decoder is not self.h265_decoder or self.codec != codec:
                         return
                     if decoder.available:
                         payload = self.h265_recovery.feed(frame)
@@ -421,6 +445,36 @@ class RmVideoBackend(UDPVideoReceiver):
             except Exception:
                 pass
 
+    def _select_annexb_decoder(self, codec: str) -> ContinuousMjpegDecoder | None:
+        """Under _lock, retire the old codec without blocking the UDP caller.
+
+        Blocks arriving during retirement are dropped. The next incarnation
+        requires repeated parameters/keyframe; never replay a stale GOP.
+        """
+        decoder = self.h265_decoder
+        if decoder is not None:
+            try:
+                decoder.request_stop()
+            except Exception as exc:
+                self.last_error = f"Codec retirement failed: {type(exc).__name__}: {exc}"
+                return None
+            recovery = self._h265_restart_thread
+            if (not decoder.cleanup_complete or decoder.stop_status.pending
+                    or (recovery is not None and recovery.is_alive())):
+                return None
+        try:
+            replacement = ContinuousMjpegDecoder(codec)
+            recovery_gate = AnnexBRecoveryGate(codec)
+        except Exception as exc:
+            self.last_error = f"Codec admission failed: {type(exc).__name__}: {exc}"
+            return None
+        self._h265_generation += 1
+        self.h265_decoder = replacement
+        self.h265_recovery = recovery_gate
+        self._h265_next_restart_at = 0.0
+        self._h265_restart_backoff_s = 0.5
+        return self.h265_decoder
+
     def _decode_mjpeg(self, frame: bytes, generation: int | None = None) -> None:
         try:
             # Match only the exact optional envelope already recognized by
@@ -433,6 +487,8 @@ class RmVideoBackend(UDPVideoReceiver):
                 h, w = bgr.shape[:2]
                 with self._lock:
                     if generation is not None and generation != self._video_generation:
+                        return
+                    if self.codec not in {"unknown", "mjpeg"}:
                         return
                     self.latest_bgr = bgr
                     self.latest_bgr_at = time.perf_counter()
@@ -475,7 +531,8 @@ class RmVideoBackend(UDPVideoReceiver):
         now = time.perf_counter()
         h265_frame: Any = None
         h265_at = 0.0
-        if self.decode_h265 and self.h265_decoder is not None and self.h265_decoder.available:
+        if (self.decode_h265 and self.h265_decoder is not None and self.h265_decoder.available
+                and self.codec in {"unknown", getattr(self.h265_decoder, "codec", "h265")}):
             h265_frame, h265_at = self.h265_decoder.latest_with_timestamp(deadline_age)
 
         with self._lock:
@@ -509,7 +566,10 @@ class RmVideoBackend(UDPVideoReceiver):
     def decoded_frame_fresh(self, timeout_s: float = 2.0) -> bool:
         """Cheap HUD connectivity probe without building the full stats tree."""
 
-        h265_at = self.h265_decoder.latest_timestamp() if self.h265_decoder else 0.0
+        decoder = self.h265_decoder
+        h265_at = (decoder.latest_timestamp() if decoder and self.decode_h265
+                   and decoder.available
+                   and self.codec in {"unknown", getattr(decoder, "codec", "h265")} else 0.0)
         with self._lock:
             decoded_at = max(float(self.latest_bgr_at), float(h265_at))
         return bool(
@@ -527,6 +587,7 @@ class RmVideoBackend(UDPVideoReceiver):
                 now = time.perf_counter()
                 if (
                     decoder is None or not self.running or not self.decode_h265
+                    or self.codec not in {"unknown", getattr(decoder, "codec", "h265")}
                     or now < self._h265_next_restart_at
                     or (generation is not None and generation != self._video_generation)
                 ):
@@ -651,7 +712,10 @@ class RmVideoBackend(UDPVideoReceiver):
                 self.h265_decoder.request_stop()
 
     def stats(self) -> dict[str, Any]:
-        h265_at = self.h265_decoder.latest_timestamp() if self.h265_decoder else 0.0
+        decoder = self.h265_decoder
+        h265_at = (decoder.latest_timestamp() if decoder and self.decode_h265
+                   and decoder.available
+                   and self.codec in {"unknown", getattr(decoder, "codec", "h265")} else 0.0)
         h265_frames = self.h265_decoder.frames_decoded if self.h265_decoder else 0
         with self._lock:
             decoded_at = max(float(self.latest_bgr_at), float(h265_at))
@@ -683,7 +747,7 @@ class RmVideoBackend(UDPVideoReceiver):
                 "decoded_frames": self.mjpeg_decoded_frames + h265_frames,
                 "continuous_decoded_seconds": (
                     self.h265_decoder.continuous_decoded_seconds
-                    if self.h265_decoder and self.codec == "h265"
+                    if self.h265_decoder and self.codec in {"h264", "h265"}
                     else max(0.0, decoded_at - self._started_at) if decoded_at > 0.0 else 0.0
                 ),
                 "decoded_frame_at": decoded_at,
@@ -694,6 +758,8 @@ class RmVideoBackend(UDPVideoReceiver):
                 "h265_decoder_restarts": self.h265_decoder_restarts,
                 "h265_recovery_blocked": self.h265_recovery.blocked,
                 "h265_decoder_health": self.h265_decoder.health() if self.h265_decoder else {},
+                "decoder_codec": getattr(self.h265_decoder, "codec", "unknown"),
+                "decoder_error": self.h265_decoder.last_error if self.h265_decoder else "",
                 "last_error": self.last_error,
             }
 
