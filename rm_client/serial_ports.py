@@ -341,7 +341,7 @@ def refresh_port_options(registry, *, nonblocking=False) -> list[str]:
         diffs.append(piece)
     angles = registry.get("ControllerAngles")
     if angles is not None:
-        base = ["Stub"] + [p for p in port_choices() if p not in {"Stub", "Auto"}]
+        base = ["Stub"] + [p for p in port_choices(nonblocking=nonblocking) if p not in {"Stub", "Auto"}]
         for name in ("Angle RX Port", "Angle TX Port"):
             setting = angles.get_setting(name)
             if setting is None:
