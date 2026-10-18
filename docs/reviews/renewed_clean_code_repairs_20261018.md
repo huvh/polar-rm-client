@@ -616,3 +616,28 @@ checkpoint. A replacement aggregate requires a new run with its own run ID and
 fresh provenance after environment restoration; it cannot be treated as a
 continuation or completion of the lost full9. No tests were launched for this
 documentation reconstruction and no raw logs are uploaded.
+
+### Completed recovery run, distinct from interrupted full9
+
+After environment restoration, `client-renewed20h-full9-recovery/results.json`
+was independently read and verified as **completed: 368 PASS, 12 SKIP,
+4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`). This is a new run, ID
+`b5096814df534faa8506eadddcb8da37`, started **2026-10-18 09:20:11 UTC**;
+it does not supply a result for the interrupted full9.
+
+Provenance records local `21e2fb323319e1ed5380c259757eec170f17dfb2`, tree
+`ec5c9c6a2e457147fa674316d34c68ae0befe5f9`, and `dirty: false` at start.
+The parent-verified corresponding public checkpoint is
+[0d0b35dcd3cbec4909147b3f7283ac5b17aecc93](https://github.com/lulunomaro/polar-rm-client/commit/0d0b35dcd3cbec4909147b3f7283ac5b17aecc93).
+Declared source stability passed with **723 inputs** at both endpoints and
+SHA-256 `76ed9b5b98d15c0ef143f7f0b732fbd2fd21ea17b3a28efbd5d3ee0587bf7bbe`.
+The expanded internal-fixture scope and endpoint limitations remain unchanged:
+external fixtures, installed packages, assets outside the fixture directory,
+and transient edits restored between captures are outside this comparison.
+
+This recovery result is the latest verified completed offline aggregate. The
+four incomplete prerequisite checks still prevent GO; offline success does not
+qualify physical hardware. Fresh recovery results/logs are available locally;
+this does not recover any earlier raw evidence lost in the reset. All preceding
+loss disclosures and historical run distinctions remain in force. No raw logs
+are uploaded by this documentation update.
