@@ -804,3 +804,47 @@ still prevent GO; external-reference and hardware qualification gaps remain.
 The earlier 377/12/4/0 recovery result belongs to public `1ec12135`; historical
 failed/interrupted runs and evidence-loss disclosures remain preserved. This
 documentation update changes no source and publishes no raw logs.
+
+## Fifteenth full-run candidate: motion evidence owner reset
+
+Source: local `0de5e521c21e383a0dafb17f508babc7aab0486c`, public
+[1b5e962e3950d874c171b64601445e9ff4c3b73a](https://github.com/lulunomaro/polar-rm-client/commit/1b5e962e3950d874c171b64601445e9ff4c3b73a),
+tree `437b72ede643fe376a807c3108917cd4323f6a8b` (parent-verified mapping).
+The existing `PolarMotionVerifier` in `rm_client/backend/polar_bridge.py` now
+owns a `reset()` operation for all its motion history, retaining its injected
+clock. `BackendManager` replaces five partial field writes with that operation
+and invokes it at three bridge-epoch boundaries. No production module was added;
+this local ownership repair makes no global fanout-reduction claim.
+
+The initial eight methods in `tests/test_polar_motion_epoch.py` produced
+**7 FAIL / 0 ERROR** against the baseline. The final nine-method regression
+passed; independent review passed **95 focused methods**, with **14 historical
+assertions/probes** also passing. These selections are not additive distinct-test
+counts. Two narrow fixture updates in `test_projectile_counter_baselines.py`
+and `test_transport_safety_regressions.py` retained their checks and incorporated
+the reset-order contract. The review packet remains local; raw evidence is not
+uploaded by this report.
+
+Full15, `client-renewed20h-full15/results.json`, was independently read and
+verified as **completed with a failure: 378 PASS, 12 SKIP, 4 INCOMPLETE,
+1 FAIL; NO-GO** (`passed: false`), run ID
+`80e2c7d449a34cf1a81ea548483daf72`. The root started the run at
+**2026-10-18 11:31:38 UTC**. Provenance records the exact local
+`0de5e521c21e383a0dafb17f508babc7aab0486c` / tree
+`437b72ede643fe376a807c3108917cd4323f6a8b` checkpoint above and `dirty: false`.
+Declared source stability passed with **734 inputs** at both endpoints and
+SHA-256 `e99d14f1f2043145356fa36177daf1ee1ba0df0094febba989a894ea0d9eeeb7`.
+Existing scope and endpoint limitations apply.
+
+The failing suite is `tests/test_fullscreen_input_extended.py`: 12 methods ran,
+with one failure in
+`test_lazy_page_f11_nested_modal_f12_and_cancel_preserve_safety`. At line 116,
+the assertion requiring `slices > 0` received zero. This is a failed integrated
+candidate despite the focused motion checks passing. Diagnosis is in progress;
+no root cause, retry pass or weakened threshold is asserted here.
+
+Full14's 378 PASS / 12 SKIP / 4 INCOMPLETE / 0 FAIL at public `210f5a60` remains
+the last completed aggregate without a FAIL, on its own earlier source. It
+still carries NO-GO for the external prerequisites and cannot qualify this
+new candidate. Historical failures and interruptions are preserved. This update
+changes only documentation and uploads no raw logs.
