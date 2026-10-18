@@ -1076,9 +1076,8 @@ class VideoBackendMixin:
         if effect is None or not effect.enabled:
             return
         revision = int(self.state.projectile_hit_revision)
-        if revision == self.kill_fx._last_hit_revision:
+        if not self.kill_fx.consume_hit_revision(revision):
             return
-        self.kill_fx._last_hit_revision = revision
         if not self.setting_bool(effect, "Hit Info", True):
             return
         self.kill_fx.notify_hit(

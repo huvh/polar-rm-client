@@ -1284,6 +1284,13 @@ class KillFxRenderer:
         self._layout_anchor = None
         self._last_hit_revision = -1
 
+    def consume_hit_revision(self, revision: int) -> bool:
+        """Consume a changed hit revision before optional presentation effects."""
+        if revision == self._last_hit_revision:
+            return False
+        self._last_hit_revision = revision
+        return True
+
     # ClickGUI 二级界面逐元素开关；缺省全开，保持预设原有行为。
     ELEMENT_TOGGLES = {
         "kill_feed": "Kill Feed",

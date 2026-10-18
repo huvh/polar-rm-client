@@ -1381,3 +1381,40 @@ exhaustive semantic-coverage claim. Four incomplete prerequisites still prevent
 GO; detached-target and native/hardware limitations remain. All earlier failed,
 interrupted and completed runs retain their own evidence. This update changes
 only documentation and uploads no raw logs.
+
+## Hit-revision ownership: accepted characterization cleanup
+
+`KillFxRenderer.consume_hit_revision()` centralizes the comparison/store pair
+previously performed by `VideoBackendMixin.update_elimination_hit_info` against
+the renderer's private revision. All production access to that private revision
+now belongs to its owner. The two existing production files change by **8
+insertions / 2 deletions**, with no new module or framework. Initialization,
+`clear()` and `notify_hit()` remain AST-unchanged. This is behavior-preserving
+ownership cleanup, not a newly reproduced defect or global decoupling claim.
+
+The caller retains exactly one `int` conversion at its original position and
+preserves operation order. Disabled/missing EliminationFX leaves the revision
+pending; disabled Hit Info consumes it without later replay. Changed revisions,
+including decreasing ones, remain consumed before settings/conversion/notification
+failures; equal revisions and reentrant repeats do not notify again. Existing
+exception and reset semantics are retained; no audio/asset/clock work is added.
+
+The identical **15 characterization methods PASS** against both full baseline
+modules and the candidate. Two owner-contract methods bring the candidate suite
+to **17 methods**. Author evidence records **64 focused methods PASS**, **16
+existing recording-sound assertions PASS**, and API/static gates PASS.
+Independent review accepted **64 focused methods**, **1,000 paired traces**, and
+six mutation variants yielding **seven rejecting checks**. Overlapping selections
+are not added into unique-test or aggregate counts; existing oracles were not
+changed.
+
+Frozen SHA-256 identities:
+- `kill_fx.py`: `42550c0814a6b9d6574e4752e79cc4c3c7e6449eead9c26e7c84e65844a31e75`
+- `video_backend_mixin.py`: `b5350d32fc8531fae5823415995975631e79c0dfb6cf9832599d16bbbcbf3907`
+- `test_kill_hit_revision_owner.py`: `c34910d2103636ef7d956ea8584803e93708c925eec80ccd21c9a234e557908c`
+
+The local packet README predates independent acceptance; the review results above
+are separately reported by the integrating owner. No new aggregate, physical
+audio or hardware qualification is claimed. Full22 remains source-specific,
+and prior counterevidence and external gaps remain intact. Only this report is
+edited; raw logs are not uploaded.
