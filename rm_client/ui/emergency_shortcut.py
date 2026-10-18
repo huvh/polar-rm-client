@@ -12,26 +12,34 @@ from PySide6.QtWidgets import QApplication
 from ..emergency_actions import request_emergency_stop
 
 
+class EstopFilter(QObject):
+    """Use instance ownership, not a per-dialog Qt class closure cycle."""
+    def __init__(self, dialog, host):
+        super().__init__(dialog)
+        self.dialog, self.host = dialog, host
+
+    def eventFilter(self, watched, event):
+        # Most events are layout/style/paint traffic. Do not enter Qt
+        # visibility checks or import Shiboken for every constructed child.
+        if event.type() not in (QEvent.Type.ShortcutOverride, QEvent.Type.KeyPress, QEvent.Type.KeyRelease):
+            return False
+        from shiboken6 import isValid
+        dialog, host = self.dialog, self.host
+        if event.key() == Qt.Key.Key_F12 and isValid(dialog) and dialog.isVisible():
+            if event.type() == QEvent.Type.KeyPress and not event.isAutoRepeat():
+                result = request_emergency_stop(host.backend, host.control)
+                if result.failures:
+                    host.toast(result.message, kind="warning")
+                else:
+                    host.toast(result.message)
+            event.accept()
+            return True
+        return super().eventFilter(watched, event)
+
+
 def install_estop_shortcut(dialog, host):
     # An ordinary WindowShortcut misses nested modal file/import dialogs.
-    class EstopFilter(QObject):
-        def eventFilter(self, watched, event):
-            # Most events are layout/style/paint traffic. Do not enter Qt
-            # visibility checks or import Shiboken for every constructed child.
-            if event.type() not in (QEvent.Type.ShortcutOverride, QEvent.Type.KeyPress, QEvent.Type.KeyRelease):
-                return False
-            from shiboken6 import isValid
-            if event.key() == Qt.Key.Key_F12 and isValid(dialog) and dialog.isVisible():
-                if event.type() == QEvent.Type.KeyPress and not event.isAutoRepeat():
-                    result = request_emergency_stop(host.backend, host.control)
-                    if result.failures:
-                        host.toast(result.message, kind="warning")
-                    else:
-                        host.toast(result.message)
-                event.accept()
-                return True
-            return super().eventFilter(watched, event)
-    filter_ = EstopFilter(dialog)
+    filter_ = EstopFilter(dialog, host)
     app = QApplication.instance()
     app.installEventFilter(filter_)
     dialog.finished.connect(lambda _result: app.removeEventFilter(filter_))

@@ -1850,3 +1850,51 @@ paths. Seventeen selected existing inert controls passed. This is a bounded
 inspection plus focused evidence, not exhaustive epoch coverage or an additional
 aggregate; no real-FFmpeg codec test was selected. Only documentation is updated,
 and no raw logs are uploaded.
+
+## Settings ESTOP filter: Python-wrapper retention repair
+
+Repeated real settings construction/deferred deletion exposed retained Python
+wrappers even though the native QObject ownership census returned to zero.
+Across the same 18 ordinary settings cycles, the baseline retained **294 tracked
+invalid wrappers**; one intentional retain-then-clean sensitivity cycle added
+16, giving **310**, versus **zero** on the candidate. The tracked set comprises
+dialogs, pages, builders, builder timers and selected editors; this is neither
+310 dialogs nor a full heap/byte measurement. All native dialogs were destroyed
+in both versions. The same audit's 80 ClickGUI cycles retained bounded maps and
+stale-capture protection, with zero native descendants/timers/builders after
+cleanup. Separate six-settings-cycle reproduction is corroboration, not another
+count to add to this census.
+
+Causal plain-dialog cohorts distinguish the retained per-call filter class:
+eight dialogs without the filter and eight with an unstored filter leave zero
+wrappers, while the stored-filter cohort retains eight. The repair moves the
+nested `EstopFilter` to module scope and keeps explicit strong dialog/host
+instance references and the same QObject parent. It does not substitute weak
+owner lookup. F12 dispatch logic, application-filter installation, finished
+removal and returned-owner behavior are retained; the event-filter body is
+AST-identical after accounting for the new local aliases.
+
+The unchanged final seven regression methods produce **2 baseline failures,
+0 errors**, specifically wrapper collection in plain and actual settings paths;
+the other five safety controls pass. Candidate author qualification records
+**17 guarded focused methods PASS**, retaining actual emergency service ordering,
+nested-modal F12 behavior, repeat/release/override handling and failure fallback.
+The repeated 18-settings/80-ClickGUI probe also passes. Earlier failed diagnostic
+expectations about persistent scroll keys and instrumentation are preserved
+separately in the local `client-lifecycle-ownership-audit` packet. Final independent
+review accepted the frozen hashes: 19 guarded focused methods passed, with paired
+eight-dialog cohorts, four actual failure paths and three rejecting mutation
+controls. These selections are separate from the author's 17-method result and
+are not summed into unique-test or aggregate totals. The reviewer checked the
+294+16 author census structurally; the full repeated-cycle measurement was not
+independently rerun. Original errors survive the tested exception paths, and
+wrappers collect after traceback release.
+
+Frozen SHA-256 identities:
+- `emergency_shortcut.py`: `476cbd9aceb443c6cf92df0707d87dc54227f6e60483157ad5ebfda87c025e95`
+- `test_emergency_shortcut_lifetime.py`: `c85db203d37daa651f09b1098b0848077c41497808a6b6418c25dc573e9744c7`
+
+This fixes measured Python wrapper/object-graph retention; the native ownership
+baseline was already clean. No native QObject leak, retained-byte/RSS estimate,
+FPS improvement, indefinite-duration result or hardware qualification is claimed.
+No new full aggregate is claimed, and raw logs are not uploaded.
