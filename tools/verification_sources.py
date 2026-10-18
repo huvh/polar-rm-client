@@ -15,9 +15,10 @@ SOURCE_SUFFIXES = frozenset({".py", ".json", ".toml", ".yaml", ".yml", ".ini", "
 SOURCE_SCOPE = {
     "directories": list(SOURCE_DIRECTORIES),
     "suffixes": sorted(SOURCE_SUFFIXES),
+    "all_file_directories": ["tests/fixtures"],
     "root_files": ["main.py", "requirements*.txt"],
     "exclusions": ["hidden directories", "__pycache__"],
-    "limits": "Start/end comparison only; excludes assets, external fixtures, installed packages and transient edits restored between captures.",
+    "limits": "Start/end comparison only; includes all internal tests/fixtures files; excludes assets outside that fixture directory, external fixtures, installed packages and transient edits restored between captures.",
 }
 
 
@@ -35,7 +36,8 @@ def source_files(root: Path) -> list[Path]:
                 # Do not follow a source link outside the selected checkout or
                 # silently exclude a linked directory's unmeasured contents.
                 raise ValueError("Source input must not be a symbolic link")
-            if path.suffix.lower() in SOURCE_SUFFIXES and path.is_file():
+            internal_fixture = parts[:2] == ("tests", "fixtures")
+            if (internal_fixture or path.suffix.lower() in SOURCE_SUFFIXES) and path.is_file():
                 files.add(path)
     files.update(path for path in root.glob("requirements*.txt") if path.is_file())
     if (root / "main.py").is_file():
