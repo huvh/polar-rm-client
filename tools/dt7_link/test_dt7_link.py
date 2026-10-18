@@ -19,6 +19,7 @@ import json
 import re
 import struct
 import sys
+import tempfile
 import types
 from pathlib import Path
 import os
@@ -259,8 +260,8 @@ def test_profile_file() -> None:
            base["cmd_confirmed"]) == ("dji_rc_v1", "rc_check", 0x2000, 961200, True), str(base))
     check("仓库 profile 的默认载荷布局 = Input_Device_Status_RC",
           base["payload_layout"] == "<hhhBBHH" and "mid" not in base["payload_fields"])
-    tmp = ROOT / "configs" / "_t_dt7_profile.json"
-    try:
+    with tempfile.TemporaryDirectory(prefix="polar-dt7-profile-") as directory:
+        tmp = Path(directory) / "profile.json"
         tmp.write_text(json.dumps({"cmd_wire": 70}), encoding="utf-8")
         one = dl.load_profile(str(tmp))
         check("改 profile 就能换号（不改代码）", one["cmd_wire"] == 70)
@@ -287,8 +288,6 @@ def test_profile_file() -> None:
                        encoding="utf-8")
         check("布局与字段不一致在 load 阶段就报出来",
               "不匹配" in dl.load_profile(str(tmp))["_profile_error"])
-    finally:
-        tmp.unlink(missing_ok=True)
 
 
 # ================================================= 7) 闸门 / 互斥 / 松手
@@ -647,15 +646,13 @@ def test_mouse_limit() -> None:
     check("上限设成 int16 边界时按该边界截断",
           struct.unpack_from("<h", dl.decode_dt7_frame(lk3.last_frame)["payload"], 0)[0] == -32767,
           struct.unpack_from("<h", dl.decode_dt7_frame(lk3.last_frame)["payload"], 0))
-    tmp = ROOT / "configs" / "_t_limit.json"
-    try:
+    with tempfile.TemporaryDirectory(prefix="polar-dt7-limit-") as directory:
+        tmp = Path(directory) / "profile.json"
         tmp.write_text(json.dumps({"mouse_limit": "很多"}), encoding="utf-8")
         check("mouse_limit 写错类型要报错（不能静默当成不限制）",
               "mouse_limit" in dl.load_profile(str(tmp))["_profile_error"])
         tmp.write_text(json.dumps({"mouse_limit": -5}), encoding="utf-8")
         check("负上限也要报错", "mouse_limit" in dl.load_profile(str(tmp))["_profile_error"])
-    finally:
-        tmp.unlink(missing_ok=True)
     bad = prof_of(mouse_limit=0)
     bad["_profile_error"] = ""
     lk4 = dl.Dt7KeyMouseLink(safety=OfflineDt7Safety(), port="COM9", profile=bad)
