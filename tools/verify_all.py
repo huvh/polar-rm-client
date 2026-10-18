@@ -197,6 +197,19 @@ def execute_script(path: str, args: list[str]) -> None:
 
     threading.excepthook = report_thread_exception
 
+    # Qt queued slots can report an uncaught exception through sys.excepthook
+    # while unittest still exits successfully. Record the hook invocation, not
+    # arbitrary traceback text. Explicit scoped test handlers remain supported.
+    original_exception_hook = sys.excepthook
+
+    def report_uncaught_exception(kind, value, traceback):
+        if not issubclass(kind, SystemExit):
+            print("\n[FAIL] Uncaught exception reported by verification callback",
+                  file=sys.stderr, flush=True)
+        original_exception_hook(kind, value, traceback)
+
+    sys.excepthook = report_uncaught_exception
+
     def sample_active_test():
         previous = None
         while not done.wait(1.0):

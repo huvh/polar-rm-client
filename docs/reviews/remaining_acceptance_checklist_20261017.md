@@ -1,5 +1,17 @@
 # Remaining architecture acceptance: evidence-based close-out
 
+## Current evidence entry point — 2026-10-18
+
+The active repair stages and their exact source-specific test results are in
+[the renewed repair report](renewed_clean_code_repairs_20261018.md).
+For the separately scoped legacy-video request, see
+[issue 20 evidence and acceptance](issue20_legacy_video_evidence_20261018.md).
+The dated sections below preserve earlier review snapshots; their running or
+remaining-work statements are not instructions to repeat completed work.
+External/native gaps still apply. No report certifies the whole project as
+Clean Code or ready to merge solely from an offline test count.
+
+
 ## Current reference-validation checkpoint — 2026-10-17 21:10 UTC
 
 Exact tested public source `734ff5a8356e9571bd8874883ccc02aa3767c9a0`
