@@ -2521,3 +2521,46 @@ Independent integrated review accepted exact source/test bytes: normal-import
 47 focused, pure 30, seven controls and eight original probes PASS. Pure selection
 confirms no facade/spin imports; old tests, runtime adapter and AST outside the
 two guards remain unchanged. Next aggregate qualification is pending.
+
+### Completed thirty-seventh integrated result
+
+`client-renewed20h-full37/results.json` was independently read and verified as
+**completed: 401 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `3d01d8449b254a228998b8546f66f1e0`. Exact source: local
+`7c85c0426abb7ef689e9b07d3f594d8166b9e80a`, public
+[7b6057433127ebbaa1fd7105e3ccb3bc6ad61d7a](https://github.com/lulunomaro/polar-rm-client/commit/7b6057433127ebbaa1fd7105e3ccb3bc6ad61d7a),
+tree `b7e03c259dc5e64d4cade45b3305dc22bba8ebfd` (parent-verified public mapping).
+Provenance records `dirty: false` at start. Declared source stability passed with
+**756 inputs** at both endpoints and SHA-256
+`58a073c8308a41ae8e985f6f0a3d31350a0bd077ec3e3f86ab0915536c97428e`.
+Existing fingerprint scope, exclusions and endpoint limitations apply.
+The new tick diagnostic module passed 16 methods. Full36's completed
+400/12/4/0 checkpoint remains separate at its own source. Four incomplete
+prerequisites continue to prevent GO.
+
+The tick diagnostic continuation repair is independently accepted in its
+integrated two-file scope. Two ordinary-exception logger guards prevent primary
+or fallback logging failure from skipping later runtime stages. Primary logger
+failure still permits the independent field-log attempt. Existing count/error
+bookkeeping, throttle and finally-duration accounting already survived logger
+failure and remain unchanged. Actual runtime-adapter probes exercise continuation
+with inert callbacks, including the baseline's skipped 13 later callbacks.
+
+Independent integrated evidence: 47 focused methods PASS, seven added inert
+controls PASS and eight unchanged original probes PASS separately. The pure
+30-method selection also passes with a post-run assertion of no facade or spin
+module imports. The 47-method selection imports the facade but substitutes inert
+domain recorders, constructs no QApplication/window/native GL context, and runs
+no spin algorithm. These overlapping selections must not be summed. The new
+16-method baseline suite gives 12 failing outcomes and zero errors; seven
+runtime-only mutations are rejected. Existing tests and actual adapter are
+unchanged; module AST differs only by the two guards.
+
+Initial operation-exception rendering is explicitly outside this repair: a first
+`__str__` failure still leaves count/timing but prevents later text/statistics and
+throttle work. Clock/mapping failures and final-clock exception masking remain.
+BaseExceptions are unsuppressed and finally precedence is unchanged. Fixed clock
+values are fixtures, not timing measurements or a historical-latency explanation.
+Python 3.10 grammar checks are separate from Python 3.12 execution. Evidence is
+in the local tick diagnostic packet and independent review; external prerequisites,
+prior failures and native qualification limits remain. Raw logs are not published.

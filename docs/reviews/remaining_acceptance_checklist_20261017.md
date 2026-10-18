@@ -11,10 +11,10 @@ remaining-work statements are not instructions to repeat completed work.
 External/native gaps still apply. No report certifies the whole project as
 Clean Code or ready to merge solely from an offline test count.
 
-The [completed full36 checkpoint](renewed_clean_code_repairs_20261018.md#completed-thirty-sixth-integrated-result)
-records **400 PASS / 12 SKIP / 4 INCOMPLETE / 0 FAIL, NO-GO** at public source
-`a95017730bf0d73cf7912a7f3c456238d3337a88` / local
-`62f67446396aa051ea778630d5ad734316a1b2d8`.
+The [completed full37 checkpoint](renewed_clean_code_repairs_20261018.md#completed-thirty-seventh-integrated-result)
+records **401 PASS / 12 SKIP / 4 INCOMPLETE / 0 FAIL, NO-GO** at public source
+`7b6057433127ebbaa1fd7105e3ccb3bc6ad61d7a` / local
+`7c85c0426abb7ef689e9b07d3f594d8166b9e80a`.
 This selected offline result does not qualify native/hardware acceptance or later edits.
 Earlier counts below remain historical, source-specific results. Reproduced admission, cleanup,
 input-ownership and receive-epoch defects have source-scoped corrections and
