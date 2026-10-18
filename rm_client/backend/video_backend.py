@@ -950,6 +950,8 @@ class ContinuousMjpegDecoder:
         session = None
         try:
             demuxer = "hevc" if self.codec.lower() in {"h265", "hevc"} else "h264"
+            # Allocate fallible bookkeeping before acquiring a native process.
+            session = _DecoderSession(None, Queue(maxsize=self.INPUT_QUEUE_CHUNKS))
             proc = subprocess.Popen(
                 [
                     ffmpeg, "-v", "error",
@@ -964,7 +966,7 @@ class ContinuousMjpegDecoder:
                 stderr=subprocess.PIPE,
                 bufsize=0,
             )
-            session = _DecoderSession(proc, Queue(maxsize=self.INPUT_QUEUE_CHUNKS))
+            session.proc = proc
             session.threads = [
                 threading.Thread(
                     target=self._run_session_worker, args=(target, session, pipe),
@@ -1005,9 +1007,13 @@ class ContinuousMjpegDecoder:
             with self._lock:
                 if generation == self._generation:
                     self.last_error = str(exc)
-                    if self._session is session:
+                    if session is not None and self._session is session:
                         self._detach_session_locked(clear_latest=True)
-            self._close_retired_session(session)
+            if session is not None and session.proc is not None:
+                if not self._close_retired_session(session):
+                    with self._lock:
+                        if generation == self._generation:
+                            self.last_error = f"{exc}; cleanup: {session.close_error}"
             return False
 
     def write(self, data: bytes, *, expected_generation: int | None = None) -> bool:

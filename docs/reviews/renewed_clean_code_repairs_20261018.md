@@ -1250,3 +1250,48 @@ prove hardware/native behavior, or replace the original failed and interrupted
 runs. Four incomplete prerequisites still prevent GO. Earlier full19 evidence
 remains tied to its own source. This update changes only documentation and
 publishes no raw logs.
+
+## Decoder process-owner acquisition prefix: accepted focused repair
+
+The existing pipe-thread constructor matrix began after `_DecoderSession`
+creation. A separate earlier gap was reproduced in `ContinuousMjpegDecoder`:
+`Popen` returned a process before queue/session bookkeeping was constructed.
+Rejecting either post-spawn allocation returned failure with no retained owner,
+no process cleanup calls, and `cleanup_complete == True`, even after `stop()`.
+The probe used only fake process/pipe objects; no actual subprocess or device
+was acquired. Its first exploratory Queue fault hit an earlier pre-spawn queue
+allocation; that mistaken attempt is disclosed separately from the corrected
+post-spawn reproduction.
+
+The narrow repair in `rm_client/backend/video_backend.py` allocates the queue
+and session before native acquisition, then immediately attaches the returned
+process. Failed spawn leaves no phantom retired session. Acquired-process
+cleanup failure retains the session, blocks replacement, and uses existing
+`stop()` / `wait_closed()` retry. Original startup error and cleanup detail are
+both retained within the applicable generation.
+
+The first candidate was independently rejected: a new stop-admission failure
+could publish its diagnostic after old cleanup returned, then the old startup
+message overwrote it. The added real-cleanup/request-stop interleaving test
+rejects that candidate with **1 failure across 5 methods**. The corrected combined
+write is under the owner lock and checks generation equality. This is bounded
+protection of that new diagnostic write, not proof of every concurrent error path.
+The rejected source/logs remain local evidence. An initial fixture also used
+`stop()` alone for already-retired-owner retry; it was corrected to the existing
+`wait_closed()` contract without changing production retry behavior.
+
+Final `tests/test_decoder_owner_prefix.py` has **5 methods**. Against the preserved
+whole baseline module, the identical suite produces **4 failure outcomes,
+0 errors**; the generation-diagnostic positive control passes. Author focused
+neighbors passed **33 methods**; final independent review accepted **34 focused
+methods** in its selection. These overlapping counts are not additive.
+Frozen source SHA-256:
+`d1dde05f028586f08b0c054e5ee66faadf0af950cad91c7823f81fd9bbd81b34`;
+new-test SHA-256:
+`44931ea3d496e633e8857a5dd0b1389195dca834e6eb1f89d92da39df2822363`.
+Evidence packet: local `decoder-owner-prefix-20261018`, including baseline,
+rejected-candidate and revised focused logs. No raw evidence is uploaded.
+
+No new full aggregate or hardware qualification is claimed for this repair.
+Full20's 383/12/4/0 NO-GO remains tied to its earlier source; historical failed
+runs and unresolved external prerequisites remain preserved.
