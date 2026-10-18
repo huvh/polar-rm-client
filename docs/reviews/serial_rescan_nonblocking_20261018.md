@@ -23,3 +23,7 @@ Integrated independent repository validation: 20 focused plus five controls PASS
 All 763 declared inputs retained start/end SHA256 `b52054c8df5e93e5425f67287acc3b586be26d38c40b1dd2ccdb34e12f44f149`. New regression module passes eleven methods. Counts, clean source and input stability independently verified. These are suite/check counts, not unique methods or native performance evidence. This report-only follow-up changes no tested code.
 
 The four incomplete checks still require authentic team CRC, complete firmware baseline, authentic vendor type dump and separate disposable legacy installer qualification. Native Windows/GPU/audio/video/serial/robot/portable acceptance and historical timeout causation remain open. Initial fixture-isolation gap and old blocking characterization remain disclosed above; historical failed/interrupted runs are retained. No raw logs published.
+
+### Capture-manifest provenance clarification
+
+A retained local capture manifest labels HEAD `9b2bc867a658757fe6572e9941b153d98f8236a2` but records the integrated working-tree serial helper hash `f91a3e6d3af64f8199161c13ade344a26e6f06352d28564c591b5d96d5307c3f`. It is not a pristine baseline snapshot. The actual Git object and saved baseline both hash to `7d9266b6b264d8fe5e1ea5092e3dba5d03bd57be59706587c817c3eda7f10909`. Accepted source/test hashes, separately identified baseline/integrated checks and full44 clean-source provenance remain unaffected. The historical manifest is retained unchanged; this clarification corrects its interpretation.
