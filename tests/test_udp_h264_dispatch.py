@@ -182,9 +182,15 @@ class UdpH264DispatchTests(unittest.TestCase):
         self.assertEqual(self.backend.mjpeg_decoded_frames, 0)
 
     def test_newer_mjpeg_selection_during_start_cannot_queue_old_h264(self):
+        import cv2
+        import numpy as np
+        encoded, jpeg = cv2.imencode('.jpg', np.zeros((24, 32, 3), dtype=np.uint8))
+        self.assertTrue(encoded)
         def start(decoder, **kwargs):
             decoder.available = True
-            self.backend._on_assembled_frame(b'\xff\xd8synthetic routing only')
+            # An established Annex-B stream switches only after a complete,
+            # decodable JPEG; a synthetic SOI can be valid slice payload.
+            self.backend._on_assembled_frame(jpeg.tobytes())
             return True
         with patch.object(ContinuousMjpegDecoder, 'start', start), \
              patch.object(ContinuousMjpegDecoder, 'write') as write, \

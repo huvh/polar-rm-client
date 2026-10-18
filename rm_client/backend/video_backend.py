@@ -353,15 +353,44 @@ class RmVideoBackend(UDPVideoReceiver):
 
     def _on_assembled_frame(self, frame: bytes, generation: int | None = None) -> None:
         now = time.perf_counter()
-        codec = "unknown"
+        codec = detect_frame_codec(frame)
+        validated_mjpeg = None
+        validation_epoch = None
+        if codec == "mjpeg":
+            with self._lock:
+                if generation is not None and generation != self._video_generation:
+                    return
+                previous_codec = self.codec
+                if previous_codec in {"h264", "h265"}:
+                    validation_epoch = (self._video_generation, self._h265_generation)
+            if validation_epoch is not None:
+                # Shark envelopes delimit transport blocks, not necessarily
+                # whole Annex-B NALs. Compressed slice bytes can contain FF D8
+                # at either recognized JPEG offset. Retire an established
+                # codec only for a self-contained, decodable JPEG image.
+                payload = frame if frame.startswith(b"\xff\xd8") else frame[4:]
+                if b"\xff\xd9" in payload[2:]:
+                    try:
+                        validated_mjpeg = _decode_jpeg_bgr(payload)
+                    except Exception:
+                        pass
+                if validated_mjpeg is None:
+                    # Preserve every original byte, including a coincidental
+                    # four-byte envelope, for the active Annex-B decoder.
+                    codec = previous_codec
+                # An in-band block that itself is a valid JPEG is inherently
+                # ambiguous; the supported complete-MJPEG transition wins.
         with self._lock:
             if generation is not None and generation != self._video_generation:
+                return
+            if validation_epoch is not None and validation_epoch != (
+                self._video_generation, self._h265_generation
+            ):
                 return
             discontinuities = self._assembler.sequence_discontinuities
             if discontinuities != self._udp_sequence_discontinuities:
                 self._udp_sequence_discontinuities = discontinuities
                 self.h265_recovery.reset()
-            codec = detect_frame_codec(frame)
             if codec == "h265" and self.codec == "h264":
                 # 0x41/0x01 can mean H.264 non-IDR or layered HEVC VPS.
                 # Keep an established H.264 stream on its non-IDR slices;
@@ -401,9 +430,12 @@ class RmVideoBackend(UDPVideoReceiver):
                         self.fps = (len(window) - 1) / max(1e-6, window[-1] - window[0])
             if codec == "unknown":
                 self.dropped_frames += 1
+            mjpeg_epoch = (self._video_generation, self._h265_generation) if codec == "mjpeg" else None
         # 解码不持有状态锁，避免阻塞 stats()；同步 JPEG 解码仍占用当前回调线程。
         if codec == "mjpeg":
-            self._decode_mjpeg(frame, generation)
+            self._decode_mjpeg(
+                frame, generation, decoded_bgr=validated_mjpeg, expected_epoch=mjpeg_epoch,
+            )
         elif codec in {"h264", "h265"}:
             with self._lock:
                 if generation is not None and generation != self._video_generation:
@@ -475,18 +507,27 @@ class RmVideoBackend(UDPVideoReceiver):
         self._h265_restart_backoff_s = 0.5
         return self.h265_decoder
 
-    def _decode_mjpeg(self, frame: bytes, generation: int | None = None) -> None:
+    def _decode_mjpeg(
+        self, frame: bytes, generation: int | None = None, *, decoded_bgr: Any = None,
+        expected_epoch: tuple[int, int] | None = None,
+    ) -> None:
         try:
             # Match only the exact optional envelope already recognized by
             # detect_frame_codec; raw SOI takes precedence over a prefix.
             payload = frame
             if not frame.startswith(b"\xff\xd8") and frame[4:6] == b"\xff\xd8":
                 payload = frame[4:]
-            bgr = _decode_jpeg_bgr(payload)
+            # A codec-switch candidate was already decoded outside the state
+            # lock. Reuse that image rather than doing the native work twice.
+            bgr = decoded_bgr if decoded_bgr is not None else _decode_jpeg_bgr(payload)
             if bgr is not None:
                 h, w = bgr.shape[:2]
                 with self._lock:
                     if generation is not None and generation != self._video_generation:
+                        return
+                    if expected_epoch is not None and expected_epoch != (
+                        self._video_generation, self._h265_generation
+                    ):
                         return
                     if self.codec not in {"unknown", "mjpeg"}:
                         return
@@ -497,7 +538,9 @@ class RmVideoBackend(UDPVideoReceiver):
                     self.output_width, self.output_height = w, h
         except Exception:
             with self._lock:
-                if generation is None or generation == self._video_generation:
+                if ((generation is None or generation == self._video_generation)
+                        and (expected_epoch is None or expected_epoch == (
+                            self._video_generation, self._h265_generation))):
                     self.decoder_backend = "none"
 
     def _ffmpeg_decode_hevc(self, frame: bytes) -> Any:
