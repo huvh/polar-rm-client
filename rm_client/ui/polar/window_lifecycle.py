@@ -142,6 +142,14 @@ class WindowLifecycleController:
         self.finalization_failures = tuple(failures)
         return self.finalization_failures
 
+    @staticmethod
+    def _failure_record(name: str, error: Exception) -> OwnerActionFailure:
+        try:
+            message = str(error)
+        except Exception:
+            message = "<unprintable exception>"
+        return OwnerActionFailure(name, type(error).__name__, message)
+
     def request_close(self, *, prepare: tuple[OwnerAction, ...], tasks: tuple[TeardownTask, ...]) -> None:
         if self.closing:
             return
@@ -152,9 +160,12 @@ class WindowLifecycleController:
         try:
             self.backend.request_shutdown(teardown_tasks=tasks)
         except Exception as exc:
-            _LOG.error("Window shutdown request failed", exc_info=True)
             self._request_failed = True
-            self.owner_failures += (OwnerActionFailure("shutdown request", type(exc).__name__, str(exc)),)
+            self.owner_failures += (self._failure_record("shutdown request", exc),)
+            try:
+                _LOG.error("Window shutdown request failed", exc_info=True)
+            except Exception:
+                pass
 
     def retry_close(self) -> bool:
         """One user close action may retry completed failures, never live work."""
@@ -164,9 +175,12 @@ class WindowLifecycleController:
         try:
             self.backend.retry_shutdown()
         except Exception as exc:
-            _LOG.error("Window shutdown retry failed", exc_info=True)
             self._request_failed = True
-            self.owner_failures += (OwnerActionFailure("shutdown retry", type(exc).__name__, str(exc)),)
+            self.owner_failures += (self._failure_record("shutdown retry", exc),)
+            try:
+                _LOG.error("Window shutdown retry failed", exc_info=True)
+            except Exception:
+                pass
             return False
         self._request_failed = False
         self._last_notice = None
@@ -179,16 +193,27 @@ class WindowLifecycleController:
         except Exception as exc:
             self.ready_to_close = False
             self.poll_failures += 1
-            failure = OwnerActionFailure("lifecycle poll", type(exc).__name__, str(exc))
-            if failure != self.last_poll_failure:
-                _LOG.error("Window lifecycle polling failed", exc_info=True)
-            self.last_poll_failure = failure
-            # Do not advance a previously armed runtime after losing its owner
-            # completion boundary, even if diagnostic delivery itself failed.
+            # Revoke authority before any fallible message formatting or log
+            # delivery. A broken diagnostic sink cannot skip this safety step.
+            lock_error = None
             try:
                 self.backend.lock_control("lifecycle polling failed")
-            except Exception:
-                _LOG.error("Could not lock after lifecycle polling failure", exc_info=True)
+            except Exception as error:
+                lock_error = error
+            failure = self._failure_record("lifecycle poll", exc)
+            changed = failure != self.last_poll_failure
+            self.last_poll_failure = failure
+            if changed:
+                try:
+                    _LOG.error("Window lifecycle polling failed", exc_info=True)
+                except Exception:
+                    pass
+            if lock_error is not None:
+                try:
+                    _LOG.error("Could not lock after lifecycle polling failure",
+                               exc_info=(type(lock_error), lock_error, lock_error.__traceback__))
+                except Exception:
+                    pass
             message = failure.summary
             self.status_text = message
             key = ("poll", message)

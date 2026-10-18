@@ -2182,3 +2182,87 @@ Independent integrated review subsequently accepted the exact frozen bytes:
 48 focused methods, six extra controls and five original probes PASS using
 repository imports. Existing tests/assertions and AST outside run_owner_actions
 remain unchanged. Aggregate qualification remains pending for this source stage.
+
+### Completed thirty-third integrated result
+
+`client-renewed20h-full33/results.json` was independently read and verified as
+**completed: 396 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `666f4c8624234526bc024c064d95c626`. Exact source: local
+`3c3f792d21aec9f8731bc27a98fa9ddecb5cdfcf`, public
+[accf0c55a5963e47fce49077b8e4161fdde88d8f](https://github.com/lulunomaro/polar-rm-client/commit/accf0c55a5963e47fce49077b8e4161fdde88d8f),
+tree `fa8f4034c052381fae993e46cbca3eb2f4fa460c` (parent-verified public mapping).
+Provenance records `dirty: false` at start. Declared source stability passed with
+**751 inputs** at both endpoints and SHA-256
+`865ad0916f01d22b68d32c5e9196dbdf9829da276bb0796a1d187130f301564a`.
+Existing fingerprint scope, exclusions and endpoint limitations apply.
+The new window-owner diagnostic module passed 18 methods. Full32's completed
+395/12/4/0 checkpoint remains separate at its own source. Four incomplete
+prerequisites continue to prevent GO.
+
+The window-owner diagnostic repair is independently accepted in its integrated
+two-file scope. `run_owner_actions` records primary cleanup failures before
+fallible logging, adds separate diagnostic records on ordinary logger failure,
+and continues independent actions. Safe formatting preserves original exception
+types when ordinary `__str__` fails. Existing close/finalization seals, native
+retirement admission and healthy action/logging order remain unchanged.
+BaseExceptions remain unsuppressed; primary formatting now precedes logging,
+so complete side-effect equivalence for that process-control path is not claimed.
+Direct logger sites outside this aggregator and factories failing before an
+action tuple exists remain outside scope.
+
+The 18-method new suite reproduced 15 failing outcomes, zero errors, on baseline;
+the original five window probes/controls had three failures and two passing
+controls. Independently, integrated selection 48 methods, six extra controls and
+five original probes each passed, as separate overlapping selections. Seven
+runtime-only mutations were rejected. An initial independent harness shadowed
+`TestCase.fail`; its apparent PASS is explicitly excluded, the factory was
+renamed, and corrected assertion sensitivity and controls were rerun. Existing
+assertions and module AST outside `run_owner_actions` remain unchanged.
+
+Evidence is in the local window-owner diagnostic packet's README and independent
+review. No native resources or hardware were used for those inert focused
+selections. Neutral/cleanup attempts do not prove physical retirement. External
+prerequisites, historical failures and interrupted runs remain; no raw logs are
+published and no universal lifecycle diagnostic closure is claimed.
+
+### Lifecycle failure revocation before diagnostics: integrated candidate
+
+A separate bounded audit found direct poll/request/retry error branches were
+still vulnerable after the owner-action aggregator repair. Poll's diagnostic
+exception could prevent BackendManager.lock_control, leave in-memory safety
+MATCH_ARMED, and omit its failed LifecycleUpdate. The actual tick adapter aborts
+that failing frame; a later healthy poll could still observe the retained armed
+state. No physical output is claimed. Request/retry diagnostics could likewise
+prevent their required failure marker and primary record.
+
+The candidate attempts poll revocation before any fallible formatting/logging,
+retains primary error state, notice/log deduplication and failed runtime-denied
+update, and isolates ordinary logger exceptions. Request/retry mark failure and
+record the primary error before logging. A local formatter guards ordinary
+__str__ errors. Lock failure is still distinct: a failed attempt does not prove
+successful locking, and the return remains runtime/close denied. Existing
+secondary logging retains the locking error's traceback. No new result schema,
+retry eligibility, generalized logging framework or module is introduced.
+
+Source SHA-256 `990b379a0cf7069224cd9f16e9dd37078c2740e586dedc3b0f88cb4a784ef09e`;
+new test SHA-256 `1d8039401a4533a3fbbef9ea46450ed4ea7605fec1cb49c205c36c1f0027d4d0`.
+External independent review: 66 focused PASS, six controls PASS, eight mutation
+variants rejected. New 18-method baseline suite: 17 assertion/subtest failures,
+zero errors; all five original defect probes pass on candidate. These overlap.
+The unchanged original eleven-method probe has ten passing methods and one
+preserved old-prefix assertion failure: logger SystemExit retains identity but
+now follows required locking, so its old MATCH_ARMED expectation fails. This
+intentional safety-order change is not described as complete behavioral
+ equivalence. Operation/lock/formatter/logger BaseExceptions are not swallowed.
+
+Author integrated 66-method selection, API freeze and static gates pass. Full33
+above applies only to the earlier source. Independent integrated validation and
+next aggregate are pending. Direct context-finalization diagnostics and separate
+modal/lock input cleanup paths remain outside scope. Local packet:
+window-lifecycle-branch-diagnostic-20261018; no raw logs published.
+
+Independent integrated review accepted both exact frozen hashes: 66 focused,
+six controls and five original defect probes PASS through repository imports.
+The original eleven-method probe retains exactly ten passes and the one
+intentional old-prefix failure, zero errors. All pre-existing assertions and
+other method ASTs are unchanged. Aggregate qualification remains pending.
