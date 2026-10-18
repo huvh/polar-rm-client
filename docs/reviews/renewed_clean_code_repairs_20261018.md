@@ -1821,3 +1821,32 @@ match the external candidate and the full nineteen-method class is AST-identical
 Each existing fixture adds only its one receive_generation=0 field; no prior
 assertion changed. This supersedes the pending-review status immediately above,
 not the pending full-source aggregate qualification.
+
+
+### Completed twenty-eighth integrated result
+
+`client-renewed20h-full28/results.json` was independently read and verified as
+**completed: 393 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `ad3feb015b4949b89301907f5b6ea819`. Exact source: local
+`3823e0aa537248dfb35ff75fa3523904a53c7610`, public
+[3f3ed4f0fff4878c8f28ffb42728a6e25b48ee73](https://github.com/lulunomaro/polar-rm-client/commit/3f3ed4f0fff4878c8f28ffb42728a6e25b48ee73),
+tree `033f7f4134fe92194a43ebdfcb250f099f4162f8` (parent-verified public mapping).
+Provenance records `dirty: false` at start. Declared source stability passed with
+**748 inputs** at both endpoints and SHA-256
+`0313f75b59a24717c70dc52accbe1855c60540868e00f9d7fb256c6e91db6f26`.
+Existing fingerprint scope, exclusions and endpoint limitations apply.
+
+Full28 supplies source-specific integration evidence for the accepted decoded
+MQTT batch repair. Its per-record admission and conservative rollover-drop
+limitations remain; already-executing records are not atomically rolled back.
+Four incomplete prerequisites still prevent GO. Native/hardware requirements,
+exact external-reference gaps and historical causation uncertainties remain.
+Earlier completed, failed and interrupted runs retain their own source scope.
+
+A separate bounded source/consumer inventory in the local
+`final-epoch-sweep-20261018/INVENTORY.md` found no additional demonstrated defect
+in the inspected video, POLAR/referee serial, controller-angle and pending-intent
+paths. Seventeen selected existing inert controls passed. This is a bounded
+inspection plus focused evidence, not exhaustive epoch coverage or an additional
+aggregate; no real-FFmpeg codec test was selected. Only documentation is updated,
+and no raw logs are uploaded.
