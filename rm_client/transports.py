@@ -100,7 +100,9 @@ class FrameAssembler:
             self.invalid_count += 1
             return None
         if existing is None:
-            if len(chunks) >= self.MAX_CHUNKS_PER_FRAME:
+            # Reject impossible accumulation before evicting unrelated frames.
+            if (len(chunks) >= self.MAX_CHUNKS_PER_FRAME
+                    or int(entry["received"]) + len(payload) > total_bytes):
                 self._remove_frame(frame_id, dropped=True)
                 self.invalid_count += 1
                 return None
@@ -112,10 +114,6 @@ class FrameAssembler:
             entry["received"] = int(entry["received"]) + len(payload)
             self.buffered_bytes += len(payload)
         received = int(entry["received"])
-        if received > total_bytes:
-            self._remove_frame(frame_id, dropped=True)
-            self.invalid_count += 1
-            return None
         if received == total_bytes:
             indexes = sorted(chunks)
             if indexes != list(range(len(indexes))):
