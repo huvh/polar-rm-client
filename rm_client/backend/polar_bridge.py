@@ -514,7 +514,11 @@ class PolarMotionVerifier:
                 f"已下发 {self.commanded_mps:.2f} m/s，累计位移 {self.displacement_m:.3f} m"
                 "（固件 ChassisPublish 仅在平衡底盘实现）"
             )
-            if self._moving_since is None:
+            if not trying:
+                # Missing telemetry remains visible while idle, but idle time
+                # is not evidence that a commanded movement failed.
+                self._moving_since = None
+            elif self._moving_since is None:
                 self._moving_since = now
             elif now - self._moving_since > self.STUCK_TIMEOUT_S:
                 self.state = "STUCK"

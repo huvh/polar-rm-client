@@ -848,3 +848,62 @@ the last completed aggregate without a FAIL, on its own earlier source. It
 still carries NO-GO for the external prerequisites and cannot qualify this
 new candidate. Historical failures and interruptions are preserved. This update
 changes only documentation and uploads no raw logs.
+
+## Follow-up candidates after full15 failure
+
+### Separate motion defect: idle time consumed the STUCK budget
+
+A separately reproduced defect in `PolarMotionVerifier` started or advanced the
+missing-feedback motion timer without first testing the existing `trying`
+predicate. With a live link and zero commanded velocity, elapsed idle time could
+therefore produce `STUCK`; a later movement could inherit that elapsed budget.
+The actual manager-tick regression also covers disabled drive publishing zero
+velocity. These are inert software checks, not physical motion measurements.
+
+The scoped candidate in `rm_client/backend/polar_bridge.py` clears
+`_moving_since` when `trying` is false, retaining idle `NO_FEEDBACK` and existing
+start/advance behavior for real attempts. Thresholds, timeouts, authority gates
+and position-relock behavior are unchanged. The new
+`tests/test_polar_motion_idle_budget.py` contains nine methods. The author's
+baseline recorded **9 failure outcomes, 0 errors across 9 methods** (six affected
+methods, including subcases, and three passing positive controls); the author's
+focused selection passed **70 methods**. The baseline checkout was the docs-only
+successor `87faa70d29801add86ffac89b2b15c30833f7c50`; the review packet reports
+byte-identical verifier source against full15's `0de5e521` as well. Independent
+review confirmed that exact checkout and both baseline blobs match Git blob
+`3659a28afdcda79d7e67d552e7bdda18b3ac056c`, reproduced the unchanged baseline
+outcomes, and accepted the candidate with **70 focused methods PASS**, no errors
+or skips. An existing historical verifier function's **14 assertions** and
+strict-timeout, zero-origin and rotation release/repress probes also passed.
+Mutations retaining the timer across release and ignoring angular attempts each
+produced **2 failure outcomes, 0 errors**. These overlapping selections are not
+added into a distinct-test count. Accepted source SHA-256:
+`3f354ac7b473624cbd455805959aadd9e00f5e52c9abd2683e76d49589bb2730`;
+new test SHA-256:
+`f85d2f0d65e92ca8a334c184431cccc4678227a8263ebf499a43ada29b7bb48a`.
+No new aggregate result is claimed for this candidate.
+
+### Lazy fullscreen synchronization diagnosis and pending test repair
+
+The retained diagnosis uses the unchanged original test method and production
+sources. An external wrapper queued one inert 60 ms GUI callback before its
+existing fixed 30 ms wait. **Three of three paired delayed-event trials failed**
+at the original `slices > 0` assertion. At failure, the panel and page were
+visible, entrance animation finished, and the active builder timer was overdue,
+yet no slice had run. An additional event-loop turn dispatched the real callback;
+that observation did not reclassify the failed trial as a pass.
+
+With the same delay, bounded polling for actual visibility and the first real
+slice yielded **three of three paired passes**. The intermediate `slices > 0`
+and `ready == False` checks, F11/F12, nested-modal, neutral-input, no-autosave and
+cancellation assertions were retained. This supports a bounded synchronization
+repair in the test; it is not a UI timing/performance qualification. The test
+repair is ongoing and is not yet recorded as accepted here.
+
+The original full15 did not capture these timer/visibility diagnostics, so its
+exact causal delay cannot be established retroactively. Its failed aggregate
+remains unchanged and published at
+[010ba98bc219a69fc74caa88b647792cc265b2d1](https://github.com/lulunomaro/polar-rm-client/commit/010ba98bc219a69fc74caa88b647792cc265b2d1).
+Neither the separate motion repair nor the paired diagnostic trials erase it.
+Only this textual report is updated; the local review packets and raw logs are
+not uploaded.
