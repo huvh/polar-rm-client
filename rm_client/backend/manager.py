@@ -1136,6 +1136,7 @@ class BackendManager:
         """Discard data from the previous transport epoch before reconnecting."""
 
         self._clear_mock_frontend_state(state)
+        state.clear_native_telemetry()
         # 上一台机器人的队内链路真值不能残留到下一个场景：否则 HUD 会拿
         # 旧机器人姿态接着显示，驾驶门控也会误判链路仍活。
         state.polar_overlay = {}

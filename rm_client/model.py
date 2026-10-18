@@ -400,6 +400,24 @@ class RobotState:
             for label, field_names in self.MODULE_INDICATOR_FIELDS
         )
 
+    def clear_native_telemetry(self) -> None:
+        """Retire the prior source's PDL1 sample and mirror, not operator settings."""
+        self.native_telemetry_at = 0.0
+        self.native_telemetry_unix_ms = 0
+        self.native_telemetry_frame_seq = 0
+        self.native_camera_online = False
+        self.native_gimbal_online = False
+        self.native_gimbal_mode = "UNKNOWN"
+        self.native_bullet_count = 0
+        self.native_bullet_speed = 0.0
+        self.native_yaw_deg = 0.0
+        self.native_yaw_velocity = 0.0
+        self.native_pitch_deg = 0.0
+        self.native_pitch_velocity = 0.0
+        self.native_quaternion = (0.0, 0.0, 0.0, 1.0)
+        self.native_status_text = ""
+        self.backend_stats.pop("native_telemetry", None)
+
     def clear_polar_reported_identity(self) -> None:
         """Discard old-link identity without changing the operator's selection."""
         self.polar_reported_robot_id = 0

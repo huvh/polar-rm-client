@@ -1718,3 +1718,34 @@ SHA-256 `eb026df2bec2412f8dc9983ee12783f08aad1d622936a15104d3911d46f69811`;
 new test `b479a4c73e20cb80b300768803ef0ccdf6615abed82d325e49772ec9338fb41e`.
 Full qualification of this later source remains pending. No external firmware
 installation, raw-log publication or hardware acceptance is claimed.
+
+Publication identity correction for the host-bridge test: local `23f83d4` /
+public `15adfdcd` contains test SHA-256
+`12511e95ce3c2e5434cccf69040bf2c514b2335e6d42693d815465e88704ed49`,
+not the earlier frozen-review hash above. Before staging, the fixture replaced
+Python-3.11-only unittest.enterContext with ExitStack plus addCleanup for the
+project's Python 3.10 minimum. Assertions and production bytes did not change.
+The final hash was independently rechecked and all ten methods passed with
+native process creation rejected; the author's 22 focused methods also passed.
+This is source/API compatibility review, not an actual Python 3.10 runtime run.
+The earlier hash records the prior reviewed snapshot; this paragraph identifies
+the published bytes and subsequent final review without rewriting that history.
+
+## Retire native telemetry as one scenario-owned sample
+
+A real PDL1 sample with 42 rounds survived scenario/profile reset in 14 model
+fields and its `backend_stats.native_telemetry` mirror. Fresh official ammo-zero
+updates without fresh PDL1 then left readiness reporting the old native sample
+as recent/ready. This is an inert state/readiness reproduction, not actuation.
+`RobotState.clear_native_telemetry()` now restores that owned sample group to
+its dataclass defaults and removes only its diagnostic mirror; the existing
+scenario/profile reset calls it once. Endpoint/shutdown policy is not broadened.
+
+Author and independent focused selections each passed 127 methods. Independent
+whole-baseline replay of the same 13 caller/characterization methods produced
+seven failures/zero errors. Fifteen omission controls reject retention of any
+one sample field or its mirror. Whole-state comparison preserves other settings,
+scalars and diagnostics; actual scenario tests retain four native-video lifetime
+counters, selected role and latched E-stop. All three frozen source/test hashes
+were verified unchanged. External/native acceptance and other boundary-design
+limitations remain. Combined-source aggregate qualification is pending.
