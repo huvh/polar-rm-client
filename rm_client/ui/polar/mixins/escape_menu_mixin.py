@@ -45,6 +45,7 @@ class EscapeMenuMixin:
         # Neutralize held input immediately; backend tick/telemetry/estop keep
         # running. Closing never restores a captured key/button or arms control.
         self._escape_menu_visible = visible
+        self._escape_menu_pressed = None
         self._neutralize_modal_inputs()
         # Preserve failed neutral-send retry state for the normal backend tick.
         self._control_mouse_point = None
@@ -53,7 +54,6 @@ class EscapeMenuMixin:
         self._escape_menu_visible = visible
         self._escape_menu_confirm_exit = False
         self._escape_menu_selected = 0
-        self._escape_menu_pressed = None
         self.hotspots.clear()
         self.invalidate_transient_overlay_scene()
         self.frame_scheduler.force()
@@ -68,6 +68,8 @@ class EscapeMenuMixin:
     def activate_escape_menu_choice(self, index: int) -> None:
         if not self.escape_menu_visible:
             return
+        # A page action retires its old mouse capture before callbacks or layout changes.
+        self._escape_menu_pressed = None
         if getattr(self, "_escape_menu_confirm_exit", False):
             if index == 0:
                 self._escape_menu_confirm_exit = False
@@ -105,12 +107,14 @@ class EscapeMenuMixin:
         self._escape_menu_key_releases = pending
         if not event.isAutoRepeat():
             if event.key() == Qt.Key.Key_Escape:
+                self._escape_menu_pressed = None
                 if getattr(self, "_escape_menu_confirm_exit", False):
                     self._escape_menu_confirm_exit = False
                     self._escape_menu_selected = 0
                 else:
                     self.set_escape_menu_visible(False)
             elif event.key() in (Qt.Key.Key_Up, Qt.Key.Key_Down, Qt.Key.Key_Left, Qt.Key.Key_Right, Qt.Key.Key_Tab):
+                self._escape_menu_pressed = None
                 step = -1 if event.key() in (Qt.Key.Key_Up, Qt.Key.Key_Left) or (event.key() == Qt.Key.Key_Tab and event.modifiers() & Qt.KeyboardModifier.ShiftModifier) else 1
                 self._escape_menu_selected = (self._escape_menu_selected + step) % len(self.escape_menu_choices())
             elif event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space):
