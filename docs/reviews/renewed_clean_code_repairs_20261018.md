@@ -444,3 +444,93 @@ The completed 362-PASS checkpoint remains the distinct fifth-stage result.
 Full4's timeout and full5's test-only isolation remain recorded above; this run
 does not establish resolution of an underlying production native-audio hang.
 This update changes only documentation and publishes no raw logs.
+
+## Provenance follow-up: internal fixture inputs
+
+Local `746c38a07382884147d745251caf941c46cae249`, public
+[633fd33fc6052bf46b01f71a2325d5e8856a770b](https://github.com/lulunomaro/polar-rm-client/commit/633fd33fc6052bf46b01f71a2325d5e8856a770b),
+tree `948917300944b64e325c1d3eb1cff3b71486e657` (parent-verified remote mapping).
+
+The old suffix-based scope omitted four consumed internal text fixture oracles:
+`angle_port_admission_baseline.txt`, `polar_health_baseline.txt`,
+`tactical_map_71ebb0f.py.txt` and `rm_indicators_caption_baseline.py.txt` under
+`tests/fixtures`. [verification_sources.py](../../tools/verification_sources.py)
+now fingerprints all regular files under that directory, regardless of suffix.
+Existing symlink rejection and hidden-directory/cache exclusions remain in place;
+metadata explicitly declares this broader internal-fixture scope. Assets outside
+that directory, external fixtures and installed packages remain outside scope,
+and start/end equality still cannot exclude restored transient changes.
+
+[test_verification_fixture_inputs.py](../../tests/test_verification_fixture_inputs.py)
+uses temporary trees to cover inclusion and add/change/rename/remove behavior,
+with rejection/exclusion controls. Baseline: **8 failing subcases across 4
+methods, 0 errors**. Independent focused verification: **30 methods passed**.
+No fixture oracle content was edited by this repair.
+
+This identifies an old measurement gap, not evidence that any historical oracle
+was mutated. The prior **715-input** result measures only its declared old scope;
+it must not be retroactively described as covering these text fixtures. The
+latest completed full run remains **365 PASS / 12 SKIP / 4 INCOMPLETE / 0 FAIL,
+NO-GO** at local `47a8be46` / public `5008a8f`. At the provenance-repair checkpoint no full aggregate had yet been established;
+the subsequently completed seventh-stage result below measures the expanded
+scope. Past results remain intact; this report update publishes no raw logs.
+
+## Seventh full-run candidate: callback epochs and bounded map diagnostic
+
+### Retire a drained event batch after callback epoch changes
+
+Local `eb75e0291e424e0edf62f55606937fc6d04f7cf3`, public
+[856db3e79aff8af52c3ef2e2871988d095158285](https://github.com/lulunomaro/polar-rm-client/commit/856db3e79aff8af52c3ef2e2871988d095158285),
+tree `3f3f7fc4df1278fdf5fed8d0e3cdc53fab8da6e6`.
+[video_backend_mixin.py](../../rm_client/ui/polar/mixins/video_backend_mixin.py)
+now synchronizes the official-feed receive generation around raw consumption
+and combat-event callbacks. If a synchronous callback switches endpoint/profile,
+the already-drained old batch is retired; a reentrant consumer's newer state is
+preserved. This establishes synchronous callback-reentry behavior, not atomic
+cancellation against arbitrary concurrent thread changes.
+
+[test_official_feed_callback_epoch.py](../../tests/test_official_feed_callback_epoch.py):
+baseline **3 failures, 0 errors across 4 methods**; independently verified
+focused selection **38 passed**. Scalar authority remains with decoded backend
+application; this does not grant raw events a new telemetry writer.
+
+### Reproducible tactical-map diagnostic, without a cache change
+
+Local `875f4f6f0f0533ae77014c0f120cf563d901b70f`, public
+[0d9161582b0a245c06ee5fadd067d95ec9aca682](https://github.com/lulunomaro/polar-rm-client/commit/0d9161582b0a245c06ee5fadd067d95ec9aca682),
+tree `b6a84410bbb0474694ea1cbca7902e27b40c95b2`.
+The [diagnostic script](../../tools/diagnostics/profile_tactical_map.py) reuses
+the actual-window test host and production map painter for four scenes, each
+with **48 frames** covering two transition cycles. Independent execution found
+matching corresponding raster pixels and hotspot traces. Details and timing
+limits are in the [architecture comparison report](same_metric_architecture_comparison_20261017.md).
+No production cache was changed; measured draw times are observations rather
+than performance thresholds or native GPU/FPS results.
+
+The script forces Qt offscreen. Its finite workload has no internal timeout:
+an external process watchdog is required to bound a hang. It inherits the host's
+partial-construction cleanup limitations, and Qt multimedia initialization may
+occur. No hardware stream, native display or historical-stutter root cause is
+established by this diagnostic.
+
+### Completed seventh-stage integrated result
+
+`client-renewed20h-full7/results.json` was independently verified as **completed:
+367 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`), run ID
+`84446a49f66341f6ab5373fec96a1a67`. Source-at-start is the exact local
+`875f4f6f0f0533ae77014c0f120cf563d901b70f` / tree
+`b6a84410bbb0474694ea1cbca7902e27b40c95b2` stage, public `0d916158` above.
+Provenance records **dirty: true**; the parent identified this renewed report as
+the only dirty file at start. It is not a clean-full-worktree claim.
+
+Source stability is PASS with **722 declared inputs** at both endpoints and
+SHA-256 `79b5657b0893577a4e00a7199fd074972b71947fc117586db465721ae7812c07`.
+This run explicitly includes all internal `tests/fixtures` regular files under
+the expanded scope, retaining hidden/cache exclusions and the documented
+external-assets/packages/transient-edit limitations. Earlier 715-input evidence
+retains its old scope; no historical coverage is rewritten.
+
+A separate edge where a callback changes endpoint and then raises is under
+reproduction. This completed run does not establish that edge as repaired or
+exhaustively validate callback reentry. Prior results remain separate. Only this
+document is updated; no raw logs are published.
