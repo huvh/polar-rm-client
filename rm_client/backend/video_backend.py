@@ -401,7 +401,7 @@ class RmVideoBackend(UDPVideoReceiver):
                         self.fps = (len(window) - 1) / max(1e-6, window[-1] - window[0])
             if codec == "unknown":
                 self.dropped_frames += 1
-        # 解码放到锁外，避免 cv2/ffmpeg 阻塞 UDP 接收线程与 stats()
+        # 解码不持有状态锁，避免阻塞 stats()；同步 JPEG 解码仍占用当前回调线程。
         if codec == "mjpeg":
             self._decode_mjpeg(frame, generation)
         elif codec in {"h264", "h265"}:
