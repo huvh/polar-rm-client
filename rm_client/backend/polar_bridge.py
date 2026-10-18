@@ -652,6 +652,10 @@ class PolarControlArbiter:
             self.state, self.reason = "CLIENT", "客户端已接管云台"
             self._converged = True
 
+    def invalidate_pending_divergence(self) -> None:
+        """Discard old-epoch conflict timing without clearing lockout or slew state."""
+        self._divergent_since = None
+
     def clear_lockout(self) -> None:
         if self.state == "LOCKOUT":
             self.state, self.reason = "PASSIVE", "已清除抢环锁出，等待重新交权"

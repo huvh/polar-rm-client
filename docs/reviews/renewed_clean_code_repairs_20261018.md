@@ -1029,3 +1029,47 @@ separately identified public `358920a4` source. It cannot qualify the newer
 full17 candidate. This new failure and full15's counterevidence are retained;
 external prerequisites and hardware gaps remain. Only documentation is updated,
 and no raw logs are uploaded.
+
+## Pending-divergence epoch ownership: integrated candidate
+
+A separate deterministic reproduction at local
+`0e5964e6fb7f32f43f1ac57e75fb8d19b516aa67` showed that the arbiter's pending
+divergence timestamp survived transport-epoch retirement. The first fresh joint
+feedback after a boundary could therefore immediately enter `LOCKOUT` using
+elapsed time from the old epoch. Identical external baseline/candidate tests
+produced **9 assertion-failure outcomes, 0 errors across 11 baseline methods**
+(seven affected methods, including boundary subcases, and four positive methods)
+versus **11 candidate methods PASS**. Independent external review verified the
+saved source against that exact commit and replayed both outcomes, plus **14
+historical authority/slew/lockout assertions** and additional convergence probes.
+
+The seven added production lines give the existing `PolarControlArbiter` an
+owner method clearing only `_divergent_since`, called at the three existing
+manager bridge-epoch boundaries. Established endpoint/reconnect/reconfigure/
+shutdown `LOCKOUT`, command slew references, settings and clock remain intact;
+scenario reset retains its existing explicit-clear behavior. No generic reset
+framework or new production module is introduced. This repairs old-epoch timer
+reuse; safe re-anchoring to a newly connected robot and same-epoch observation
+or disabled-planning gaps remain outside its contract.
+
+Subsequent integrated author evidence records **131 focused methods PASS**, API
+freeze PASS and static quality gates PASS. Final independent integration review
+is pending. The external-only README and review describe their earlier stage;
+the separate integrated logs supply these later author results. Initial harness
+errors from calling nonexistent `ingest` were retained separately and corrected
+to the real bridge `apply` API before the reported baseline/candidate evidence;
+they are not product failures.
+
+No aggregate qualification is claimed for this integrated candidate. Full17's
+Jello assertion failure remains unresolved counterevidence, and the other Jello
+candidate under diagnosis is not accepted by these arbiter checks. Earlier
+failed runs and full16's source-specific result are preserved. Only this report
+is edited, and no raw review packets or logs are uploaded.
+
+Final integrated independent review accepted the frozen five-file arbiter
+candidate: the exact 131-method focused selection passed with zero failures,
+errors or skips. Source hashes matched before/after and production bytes matched
+the separately reviewed external candidate. The new regression class differs
+only by standalone import bootstrap; both fixture changes preserve prior
+assertions and extend reset ordering to include divergence invalidation.
+No re-anchoring or same-epoch observation-gap claim is made. Aggregate pending.

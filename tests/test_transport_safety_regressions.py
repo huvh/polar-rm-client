@@ -448,11 +448,12 @@ class TransportSafetyTests(unittest.TestCase):
         events = []
         backend = SimpleNamespace(safety=SimpleNamespace(lock_control=lambda reason: events.append("lock")),
             polar_bridge=SimpleNamespace(reset=lambda: events.append("telemetry")),
+            polar_arbiter=SimpleNamespace(invalidate_pending_divergence=lambda: events.append("divergence")),
             polar_motion=SimpleNamespace(reset=lambda: events.append("motion")),
             polar=SimpleNamespace(request_estop=lambda: events.append("intent")),
             _polar_gimbal_last=(1, 2), polar_chassis_state_seen=True)
         manager_method("_invalidate_polar_epoch")(backend, "changed")
-        self.assertEqual(events, ["lock", "telemetry", "motion", "intent"])
+        self.assertEqual(events, ["lock", "telemetry", "divergence", "motion", "intent"])
         self.assertIsNone(backend._polar_gimbal_last)
         self.assertFalse(backend.polar_chassis_state_seen)
 
