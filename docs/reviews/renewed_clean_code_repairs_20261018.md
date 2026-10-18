@@ -1295,3 +1295,32 @@ rejected-candidate and revised focused logs. No raw evidence is uploaded.
 No new full aggregate or hardware qualification is claimed for this repair.
 Full20's 383/12/4/0 NO-GO remains tied to its earlier source; historical failed
 runs and unresolved external prerequisites remain preserved.
+
+
+### Completed twenty-first integrated result
+
+`client-renewed20h-full21/results.json` was independently read and verified as
+**completed: 384 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `636093d980664bbe92db0e09e8095973`. Exact source: local
+`04cdd8366da105fa337a9018ee01dc18ae53d9fb`, public
+[b4e6a15338fe7703b3e4b71961773a58a7640d55](https://github.com/lulunomaro/polar-rm-client/commit/b4e6a15338fe7703b3e4b71961773a58a7640d55),
+tree `52cebad65a68c1ac1d282de2d258c8cedbf05d8f` (parent-verified public mapping).
+Provenance records `dirty: false` at start. Declared source stability passed with
+**739 inputs** at both endpoints and SHA-256
+`43f5eadf941cd8d0c238d945f40856ab3da36c0cfae67414564b5bb25a5f1bb0`.
+The new `test_decoder_owner_prefix.py` entry explicitly records **5 methods PASS**.
+Existing fingerprint scope, exclusions and endpoint limitations apply.
+
+A separate bounded read-only inspection found no additional actionable acquisition
+ownership defect in active `CameraCaptureWorker`, `UDPVideoReceiver` and the
+`RmVideoBackend.start()` wrapper. Camera acquisition is worker-local within
+try/finally, with failed release retained; UDP creates its session before socket
+acquisition and publishes the socket before bind. Existing admission/close tests
+map the inspected cases. This was source/test inspection, not a new test run,
+exhaustive interleaving proof or native-driver qualification; historical Tk
+`CameraFeed` was excluded.
+
+Full21 is the latest completed offline aggregate. Four incomplete prerequisites
+still prevent GO, and detached-target/native/hardware limitations remain. Earlier
+failed and interrupted runs retain their own results. This documentation update
+publishes no raw logs.
