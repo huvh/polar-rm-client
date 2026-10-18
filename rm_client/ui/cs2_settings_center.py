@@ -6,6 +6,8 @@ deliberately excluded: a preferences page must never act as an Arm shortcut.
 """
 from __future__ import annotations
 
+import logging
+
 from PySide6.QtCore import Qt, QEvent, QObject
 from PySide6.QtGui import QFont, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
@@ -380,73 +382,90 @@ def build_settings_center(host):
     """Non-modal construction for visual/regression tests; open owns input lock."""
     from .cs2_video_settings import open_video_settings
     use_jello_font_book(getattr(host, "fonts", None))
-    dialog = JelloDialog(host); dialog.setWindowTitle("POLAR · Jello 设置")
-    dialog.setObjectName("JelloSettingsCenter")
-    screen = host.screen()
-    available = screen.availableGeometry() if screen else host.rect()
-    dialog.resize(min(1280,available.width()-30,max(720,host.width()-20)),
-                  min(840,available.height()-40,max(540,host.height()-20)))
-    dialog.setMinimumSize(720, 540)
-    center = host.mapToGlobal(host.rect().center())
-    dialog.move(max(available.left(), min(center.x() - dialog.width() // 2, available.right() - dialog.width())),
-                max(available.top(), min(center.y() - dialog.height() // 2, available.bottom() - dialog.height())))
-    root = dialog.panel.layout()
-    top = QHBoxLayout(); root.addLayout(top)
-    title = QLabel("Jello · 设置"); title.setFont(jello_font(36,True)); title.setStyleSheet("font-size:36px;font-weight:500;color:#666666;"); top.addWidget(title)
-    top.addStretch()
-    search = QLineEdit(); search.setPlaceholderText("搜索鼠标、键位、声音、HUD…")
-    search.setMaximumWidth(370); top.addWidget(search)
-    tabs = QTabWidget(); tabs.setObjectName("SettingsTabs"); root.addWidget(tabs, 1)
-    video = open_video_settings(host, embedded=True); tabs.addTab(video, "视频")
-    defaults = build_default_registry()
-    # Lightweight shells preserve tab identity and drafts. Only the selected
-    # page builds, after the entrance animation, in bounded GUI-thread slices.
-    pages = {}
-    for page in PAGES:
-        widget = RegistrySettingsPage(host, page, defaults, deferred=True)
-        pages[page] = widget; tabs.addTab(widget, page)
-    crosshair_scroll = CrosshairSettingsPage(host)
-    tabs.insertTab(4, crosshair_scroll, "准星")
-    deferred_pages = (*pages.values(), crosshair_scroll)
-    search.textChanged.connect(lambda text: [page.filter(text) for page in pages.values()])
-    status = QLabel("F12 急停始终有效 · 设置不暂停裁判监测 · 返回后不会自动恢复操控")
-    status.setWordWrap(True); root.addWidget(status)
-    row = QHBoxLayout(); root.addLayout(row)
-    reset = QPushButton("恢复当前页默认值"); row.addWidget(reset); row.addStretch()
-    apply = QPushButton("应用当前页"); back = QPushButton("返回")
-    apply.setProperty("primary",True)
-    row.addWidget(apply); row.addWidget(back)
-    def apply_current():
-        widget = tabs.currentWidget()
-        try:
-            widget.apply_draft()
-            status.setText("当前页已应用；操控保持锁定，重新驾驶前需人工确认。视频重启项另有标注。")
-        except (OSError, ValueError, TypeError) as exc:
-            status.setText("未完整应用：" + str(exc))
-    def reset_current():
-        widget = tabs.currentWidget()
-        if QMessageBox.question(dialog, "恢复默认", "只恢复当前页的编辑值，点击应用后才生效。继续？") == QMessageBox.StandardButton.Yes:
-            widget.reset_draft()
-    apply.clicked.connect(apply_current); reset.clicked.connect(reset_current); back.clicked.connect(dialog.accept)
-    def current_changed(_index=None):
-        current = tabs.currentWidget()
+    dialog = JelloDialog(host)
+    try:
+        dialog.setWindowTitle("POLAR · Jello 设置")
+        dialog.setObjectName("JelloSettingsCenter")
+        screen = host.screen()
+        available = screen.availableGeometry() if screen else host.rect()
+        dialog.resize(min(1280,available.width()-30,max(720,host.width()-20)),
+                      min(840,available.height()-40,max(540,host.height()-20)))
+        dialog.setMinimumSize(720, 540)
+        center = host.mapToGlobal(host.rect().center())
+        dialog.move(max(available.left(), min(center.x() - dialog.width() // 2, available.right() - dialog.width())),
+                    max(available.top(), min(center.y() - dialog.height() // 2, available.bottom() - dialog.height())))
+        root = dialog.panel.layout()
+        top = QHBoxLayout(); root.addLayout(top)
+        title = QLabel("Jello · 设置"); title.setFont(jello_font(36,True)); title.setStyleSheet("font-size:36px;font-weight:500;color:#666666;"); top.addWidget(title)
+        top.addStretch()
+        search = QLineEdit(); search.setPlaceholderText("搜索鼠标、键位、声音、HUD…")
+        search.setMaximumWidth(370); top.addWidget(search)
+        tabs = QTabWidget(); tabs.setObjectName("SettingsTabs"); root.addWidget(tabs, 1)
+        video = open_video_settings(host, embedded=True); tabs.addTab(video, "视频")
+        defaults = build_default_registry()
+        # Lightweight shells preserve tab identity and drafts. Only the selected
+        # page builds, after the entrance animation, in bounded GUI-thread slices.
+        pages = {}
+        for page in PAGES:
+            widget = RegistrySettingsPage(host, page, defaults, deferred=True)
+            pages[page] = widget; tabs.addTab(widget, page)
+        crosshair_scroll = CrosshairSettingsPage(host)
+        tabs.insertTab(4, crosshair_scroll, "准星")
+        deferred_pages = (*pages.values(), crosshair_scroll)
+        search.textChanged.connect(lambda text: [page.filter(text) for page in pages.values()])
+        status = QLabel("F12 急停始终有效 · 设置不暂停裁判监测 · 返回后不会自动恢复操控")
+        status.setWordWrap(True); root.addWidget(status)
+        row = QHBoxLayout(); root.addLayout(row)
+        reset = QPushButton("恢复当前页默认值"); row.addWidget(reset); row.addStretch()
+        apply = QPushButton("应用当前页"); back = QPushButton("返回")
+        apply.setProperty("primary",True)
+        row.addWidget(apply); row.addWidget(back)
+        def apply_current():
+            widget = tabs.currentWidget()
+            try:
+                widget.apply_draft()
+                status.setText("当前页已应用；操控保持锁定，重新驾驶前需人工确认。视频重启项另有标注。")
+            except (OSError, ValueError, TypeError) as exc:
+                status.setText("未完整应用：" + str(exc))
+        def reset_current():
+            widget = tabs.currentWidget()
+            if QMessageBox.question(dialog, "恢复默认", "只恢复当前页的编辑值，点击应用后才生效。继续？") == QMessageBox.StandardButton.Yes:
+                widget.reset_draft()
+        apply.clicked.connect(apply_current); reset.clicked.connect(reset_current); back.clicked.connect(dialog.accept)
+        def current_changed(_index=None):
+            current = tabs.currentWidget()
+            for page in deferred_pages:
+                page.builder.set_active(page is current)
+            if isinstance(current, RegistrySettingsPage):
+                current.refresh_clean_draft()
+            builder = getattr(current, "builder", None)
+            ready = builder is None or builder.ready
+            apply.setEnabled(ready); reset.setEnabled(ready)
+        tabs.currentChanged.connect(current_changed)
         for page in deferred_pages:
-            page.builder.set_active(page is current)
-        if isinstance(current, RegistrySettingsPage):
-            current.refresh_clean_draft()
-        builder = getattr(current, "builder", None)
-        ready = builder is None or builder.ready
-        apply.setEnabled(ready); reset.setEnabled(ready)
-    tabs.currentChanged.connect(current_changed)
-    for page in deferred_pages:
-        page.builder.finished.connect(current_changed)
-        dialog.finished.connect(page.builder.cancel)
-    dialog.tabs, dialog.pages, dialog.crosshair = tabs, pages, crosshair_scroll
+            page.builder.finished.connect(current_changed)
+            dialog.finished.connect(page.builder.cancel)
+        dialog.tabs, dialog.pages, dialog.crosshair = tabs, pages, crosshair_scroll
 
-    dialog.search, dialog.status, dialog.apply_button = search, status, apply
-    apply_jello_widgets(dialog)
-    dialog.estop_shortcut = install_estop_shortcut(dialog, host)
-    return dialog
+        dialog.search, dialog.status, dialog.apply_button = search, status, apply
+        apply_jello_widgets(dialog)
+        dialog.estop_shortcut = install_estop_shortcut(dialog, host)
+        return dialog
+    except Exception as error:
+        # A failed factory never hands ownership to open_settings_center.
+        # Revoke queued builders now, then retire only this dialog's Qt tree.
+        try:
+            for builder in dialog.findChildren(SettingsBuildQueue):
+                try:
+                    builder.cancel()
+                except Exception:
+                    logging.getLogger(__name__).exception("Failed settings builder cancellation")
+        finally:
+            try:
+                dialog.deleteLater()
+            finally:
+                # Cleanup/diagnostic failures must not replace the build error.
+                raise error
 
 
 def open_settings_center(host):
