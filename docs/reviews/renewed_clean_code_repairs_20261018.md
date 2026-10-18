@@ -1749,3 +1749,24 @@ scalars and diagnostics; actual scenario tests retain four native-video lifetime
 counters, selected role and latched E-stop. All three frozen source/test hashes
 were verified unchanged. External/native acceptance and other boundary-design
 limitations remain. Combined-source aggregate qualification is pending.
+
+
+### Completed twenty-seventh integrated result
+
+`client-renewed20h-full27/results.json` was independently read and verified as
+**completed: 392 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `225dc8585ffb425db146f235d30a96a6`. Exact source: local
+`bce40e30301f563e842442b3d05c3689c138654e`, public
+[64fcacc77bfd047756006190a7a2390308bd20ef](https://github.com/lulunomaro/polar-rm-client/commit/64fcacc77bfd047756006190a7a2390308bd20ef),
+tree `c7b052dfb2dae3f7b55a65e5f64b03656c16de95` (parent-verified public mapping).
+Provenance records `dirty: false` at start. Declared source stability passed with
+**747 inputs** at both endpoints and SHA-256
+`76fac03a0fe4ace6eea8769d352a2080d92813965242e6ae18d5e82c9128600d`.
+Existing fingerprint scope, exclusions and endpoint limitations apply.
+
+This is source-specific integration evidence for the native-telemetry scenario/
+profile reset and host-bridge fixture cleanup stages. Four incomplete prerequisites
+still prevent GO. It supplies no Python 3.10 runtime qualification or native/
+hardware acceptance, and does not establish historical timeout/timing causes.
+Earlier failed, interrupted and completed runs retain their own source scope.
+Only documentation is updated; raw logs are not uploaded.
