@@ -1360,3 +1360,24 @@ The local packet's README predates independent acceptance; final review logs
 supply the later results above. No new full aggregate, global coupling claim or
 hardware qualification follows. Full21 remains tied to its earlier source;
 this report publishes no raw logs.
+
+
+### Completed twenty-second integrated result
+
+`client-renewed20h-full22/results.json` was independently read and verified as
+**completed: 385 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `ba1af2ed9b8d421b98fc48848d724d8b`. Exact source: local
+`c7e71c1f23af4d447d3aa2ae714baf982d3fa169`, public
+[51b78544ccda723c3a0cead4971d50db86f0e649](https://github.com/lulunomaro/polar-rm-client/commit/51b78544ccda723c3a0cead4971d50db86f0e649),
+tree `70068698f1c93289b2c2463732b330a2f6a42884` (parent-verified public mapping).
+Provenance records `dirty: false` at start. Declared source stability passed with
+**740 inputs** at both endpoints and SHA-256
+`e0b10fbf6e6f435ff59b96ebd3fea367901352fb31f2e97473233e465a8a88b1`.
+Existing fingerprint scope, exclusions and endpoint limitations apply.
+
+Full22 is the latest completed offline aggregate. It supplies source-specific
+integration evidence for the stage-owner cleanup, not a global decoupling or
+exhaustive semantic-coverage claim. Four incomplete prerequisites still prevent
+GO; detached-target and native/hardware limitations remain. All earlier failed,
+interrupted and completed runs retain their own evidence. This update changes
+only documentation and uploads no raw logs.
