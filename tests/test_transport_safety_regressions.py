@@ -446,7 +446,7 @@ class TransportSafetyTests(unittest.TestCase):
 
     def test_epoch_reset_clears_old_telemetry_and_input(self):
         events = []
-        backend = SimpleNamespace(safety=SimpleNamespace(lock_control=lambda reason: events.append("lock")),
+        backend = SimpleNamespace(state=None, safety=SimpleNamespace(lock_control=lambda reason: events.append("lock")),
             polar_bridge=SimpleNamespace(reset=lambda: events.append("telemetry")),
             polar_arbiter=SimpleNamespace(invalidate_pending_divergence=lambda: events.append("divergence")),
             polar_motion=SimpleNamespace(reset=lambda: events.append("motion")),

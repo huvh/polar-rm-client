@@ -1183,3 +1183,48 @@ from this aggregate; the result does not establish a full-suite DPR matrix or
 native-display qualification. Original full15/full17 failures and the DPR-2
 counterevidence remain preserved. Four incomplete prerequisites still prevent
 GO. This update changes only documentation and publishes no raw logs.
+
+## Reported role identity across epochs: external candidate
+
+At baseline `5277b07d0e33f7f7e91a7ae5caac2ff8da698f1c`, the bridge discarded old
+reported identity at an epoch boundary while the model scalar could retain it
+and select the new connection's drive role. A real manager/bridge/policy/model
+reproduction with recording-only transport showed an old hero identity selecting
+a 2.0 m/s cap instead of the selected infantry's 1.5 m/s after fresh IMU-only
+telemetry. Old unsupported roles could instead block the new selected role.
+
+The identical external regression runs **14 methods**: baseline **16 assertion-
+failure outcomes, 0 errors**, candidate **14 PASS**. Independent external review
+verified the pinned model/manager bytes and replayed both outcomes. Additional
+identity-only probes checked selective/idempotent removal, unrelated-overlay
+preservation, replay prevention, independent overlay ownership and established
+LOCKOUT preservation. Initial harness import errors were retained separately
+and corrected before these results; they are not product failures.
+
+The proposed owner operation clears only `polar_reported_robot_id` and its
+replayable model-overlay key, called at the three existing epoch paths. Operator
+selection, fresh current-epoch report precedence, same-epoch partial-message
+retention, unsupported-role blocks, genuine E-stop and established LOCKOUT
+remain unchanged. Repository call-site review found current production GUI/tick/
+configuration callers use the same attached `RobotState`.
+
+**Outstanding limitation:** callers using a detached explicit target while
+`manager.state` is absent or different can still retain stale identity through
+endpoint/shutdown invalidation. An independent probe reproduced that retention.
+The external candidate is accepted for the actual attached-state path, not every
+optional explicit-target arrangement; broader target ownership needs a separate
+contract and repair.
+
+Four-file integration is in progress. No integrated acceptance, publication or
+new aggregate result is claimed here; full19 remains tied to its own source.
+This section makes no claim about the separate spin investigation. Only this
+report is edited and no raw packets or logs are uploaded.
+
+Final integrated identity review accepted the actual attached-state GUI scope.
+Author and independent reviewer each ran the same 165-method focused selection:
+all passed, no errors/skips. The existing nine role-alignment functions passed;
+API/static/diff gates passed. Four frozen file hashes matched before/after.
+Production bytes match the external candidate; the regression class differs
+only by import setup. The isolated transport fixture adds only `state=None`
+and preserves every prior reset-order/cleanup assertion. The detached explicit
+target limitation above remains unresolved. No aggregate on this source yet.

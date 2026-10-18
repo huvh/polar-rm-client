@@ -564,6 +564,8 @@ class BackendManager:
     def _invalidate_polar_epoch(self, reason: str) -> None:
         self.safety.lock_control(reason)
         self.polar_bridge.reset()
+        if self.state is not None:
+            self.state.clear_polar_reported_identity()
         self.polar_arbiter.invalidate_pending_divergence()
         self.polar_motion.reset()
         self.polar.request_estop()
@@ -1145,6 +1147,7 @@ class BackendManager:
         state.polar_ally_hp = {}
         state.polar_ground_positions = {}
         self.polar_bridge.reset()
+        state.clear_polar_reported_identity()
         self.polar_arbiter.invalidate_pending_divergence()
         self.polar_arbiter.clear_lockout()
         self.polar_motion.reset()
@@ -1633,6 +1636,8 @@ class BackendManager:
         self._native_recovery.reset()
         self._native_0310_blocked_until_sps = True
         self.polar_bridge.reset()
+        if self.state is not None:
+            self.state.clear_polar_reported_identity()
         self.polar_arbiter.invalidate_pending_divergence()
         self.polar_motion.reset()
         self._polar_gimbal_last = None

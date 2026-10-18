@@ -400,6 +400,11 @@ class RobotState:
             for label, field_names in self.MODULE_INDICATOR_FIELDS
         )
 
+    def clear_polar_reported_identity(self) -> None:
+        """Discard old-link identity without changing the operator's selection."""
+        self.polar_reported_robot_id = 0
+        self.polar_overlay.pop("polar_reported_robot_id", None)
+
     def apply_polar_overlay(self) -> None:
         """把队内 0x5A 链路的真值回写到本状态对象。
 
