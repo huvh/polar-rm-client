@@ -29,6 +29,7 @@ from rm_client.backend.safety import ControlState
 from rm_client.backend.video_backend import RmVideoBackend
 from rm_client.economy import EconomyOffer, EconomyRequest
 from rm_client.scenarios import SCENARIOS
+from rm_client.ui_audio import ReliableAudioPool
 from rm_client.ui.polar_app import PolarRMWindow
 from window_lifecycle_helpers import close_window_safely, settle_window_lifecycle
 
@@ -47,11 +48,32 @@ class WindowEconomyCommands(unittest.TestCase):
             start = patch.object(backend, "start")
             start.start()
             self.addCleanup(start.stop)
+        # Input/economy fixtures retain the real QObject pool and feedback
+        # routing, but never ask Qt to load or play a native audio source.
+        # Install before window construction because it eagerly preloads cues.
+        self.audio_preloads = []
+        self.audio_media_preloads = []
+        self.audio_plays = []
+
+        def preload(_pool, names):
+            self.audio_preloads.append(tuple(names))
+
+        def preload_media(_pool, names, voices_per_sound=1):
+            self.audio_media_preloads.append((tuple(names), voices_per_sound))
+
+        def play(_pool, name, volume):
+            self.audio_plays.append((name, volume))
+            return True
+
+        for name, recorder in (("preload", preload), ("preload_media", preload_media),
+                               ("play", play)):
+            audio = patch.object(ReliableAudioPool, name, recorder)
+            audio.start()
+            self.addCleanup(audio.stop)
         self.window = PolarRMWindow()
         self.addCleanup(self.close_window)
         settle_window_lifecycle(self.window, APP)
         self.window.timer.stop()
-        self.window.ui_audio_enabled = False
         self.window.home_visible = False
         self.window.gui_visible = False
         self.window.economy_visible = True
