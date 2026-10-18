@@ -3325,6 +3325,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         """A lost foreground window is an unconditional control epoch break."""
 
         def release_inputs() -> None:
+            self.cancel_quick_action_wheel()
             self.control.mock_output = bool(self.backend.mqtt.mock_output)
             self.control.release_all(self.state, self.registry)
 

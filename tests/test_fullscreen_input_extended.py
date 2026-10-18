@@ -19,6 +19,8 @@ from test_startup_settings_fullscreen import APP, Host
 from rm_client.ui import fullscreen_composition as composition
 from rm_client.ui.cs2_settings_center import build_settings_center
 from rm_client.ui.cs2_video_settings import VideoPreferences, apply_window_settings
+from rm_client.ui.overlay_coordinator import OverlayCoordinator
+from rm_client.ui.quick_action_wheel import QuickActionWheelState
 
 ROOT = Path(__file__).resolve().parents[1]
 # Reuse the production focus-loss body in a QWidget harness. The GL window
@@ -27,7 +29,8 @@ source = ROOT / 'rm_client/ui/polar_app.py'
 tree = ast.parse(source.read_text())
 window = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == 'PolarRMWindow')
 focus_method = next(n for n in window.body if isinstance(n, ast.FunctionDef) and n.name == 'focusOutEvent')
-cls = ast.ClassDef(name='FocusHost', bases=[ast.Name(id='Host',ctx=ast.Load())], keywords=[],body=[focus_method],decorator_list=[])
+cancel_radial = next(n for n in window.body if isinstance(n, ast.FunctionDef) and n.name == 'cancel_quick_action_wheel')
+cls = ast.ClassDef(name='FocusHost', bases=[ast.Name(id='Host',ctx=ast.Load())], keywords=[],body=[focus_method,cancel_radial],decorator_list=[])
 from rm_client.emergency_actions import request_focus_loss
 scope={'Host':Host, 'request_focus_loss': request_focus_loss}
 exec(compile(ast.fix_missing_locations(ast.Module(body=[cls],type_ignores=[])),str(source),'exec'),scope)
@@ -36,6 +39,8 @@ FocusHost=scope['FocusHost']
 class InputLifecycleTests(unittest.TestCase):
     def setUp(self):
         self.host = FocusHost()
+        self.host.quick_action_wheel = QuickActionWheelState()
+        self.host.overlay_coordinator = OverlayCoordinator()
         self.host.hotspots=[]
         self.host.backend.mqtt.publish_estop_zero=Mock(return_value=(True,''))
         self.host.backend.trigger_estop.side_effect=lambda: (self.host._clear_control_inputs_for_lock('E-stop'), (True,''))[1]
@@ -100,6 +105,20 @@ class InputLifecycleTests(unittest.TestCase):
         for kind in (QEvent.Type.ShortcutOverride,QEvent.Type.KeyPress,QEvent.Type.KeyRelease):
             APP.sendEvent(self.host,QKeyEvent(kind,Qt.Key.Key_F11,Qt.KeyboardModifier.NoModifier,'',True))
         self.assertEqual(self.host.backend.lock_control.call_count,calls)
+        self.neutral()
+    def test_focus_loss_cancels_radial_without_taking_failure_fallback(self):
+        wheel = self.host.quick_action_wheel
+        wheel.open(300,200,self.host.width(),self.host.height())
+        wheel.update_pointer(wheel.center_x,wheel.center_y-80)
+        self.host.overlay_coordinator.begin_radial()
+        self.hold()
+        releases = self.host.control.release_all.call_count
+        APP.sendEvent(self.host,QFocusEvent(QEvent.Type.FocusOut))
+        self.assertFalse(wheel.active)
+        self.assertEqual(wheel.selected_index,-1)
+        self.assertFalse(self.host.overlay_coordinator.radial_active)
+        self.assertEqual(self.host.control.release_all.call_count,releases+1)
+        self.host.toast.assert_not_called()
         self.neutral()
     def test_escape_menu_f11_preserves_menu_and_keys_do_not_leak_after_close(self):
         self.host.home_visible=False

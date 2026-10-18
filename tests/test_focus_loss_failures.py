@@ -43,6 +43,7 @@ class FocusLossFailureTests(unittest.TestCase):
                     raise RuntimeError(name + " failed")
                 return result
             return call
+        host.cancel_quick_action_wheel = action("cancel-radial")
         host.control = SimpleNamespace(mock_output=False,
             release_all=action("release"), reset_inputs=action("reset"),
             release_direct_dt7=action("dt7"), release_custom_controller=action("cc"),
@@ -55,14 +56,14 @@ class FocusLossFailureTests(unittest.TestCase):
     def test_authority_revocation_precedes_fallible_input_release(self):
         host = self.host()
         host.focusOutEvent(object())
-        self.assertEqual(host.trace, ["lock", "release", "zero", "clear", "qt-focus"])
+        self.assertEqual(host.trace, ["lock", "cancel-radial", "release", "zero", "clear", "qt-focus"])
         self.assertEqual(host.student_ui.dragging, "")
         self.assertEqual(host.warnings, [])
 
     def test_release_failure_still_locks_resets_releases_both_links_and_clears(self):
         host = self.host({"release"})
         host.focusOutEvent(object())
-        self.assertEqual(host.trace, ["lock", "release", "reset", "dt7", "cc", "zero", "clear", "qt-focus"])
+        self.assertEqual(host.trace, ["lock", "cancel-radial", "release", "reset", "dt7", "cc", "zero", "clear", "qt-focus"])
         self.assertIn("release failed", host.warnings[0][0])
 
     def test_each_outer_stop_failure_cannot_skip_other_effects_or_qt(self):
@@ -70,16 +71,22 @@ class FocusLossFailureTests(unittest.TestCase):
             with self.subTest(failure=failure):
                 host = self.host({failure})
                 host.focusOutEvent(object())
-                self.assertEqual(host.trace, ["lock", "release", "zero", "clear", "qt-focus"])
+                self.assertEqual(host.trace, ["lock", "cancel-radial", "release", "zero", "clear", "qt-focus"])
                 self.assertIn(failure + " failed", host.warnings[0][0])
 
     def test_all_failures_remain_observable_and_independent(self):
         host = self.host({"lock", "release", "reset", "dt7", "cc", "zero", "clear"})
         host.focusOutEvent(object())
-        self.assertEqual(host.trace, ["lock", "release", "reset", "dt7", "cc", "zero", "clear", "qt-focus"])
-        for name in host.trace[:-1]:
+        self.assertEqual(host.trace, ["lock", "cancel-radial", "release", "reset", "dt7", "cc", "zero", "clear", "qt-focus"])
+        for name in ("lock", "release", "reset", "dt7", "cc", "zero", "clear"):
             self.assertIn(name + " failed", host.warnings[0][0])
         self.assertNotIn("LOCKED", host.warnings[0][0])
+
+    def test_radial_cancel_failure_preserves_neutral_fallback_and_qt(self):
+        host = self.host({"cancel-radial"})
+        host.focusOutEvent(object())
+        self.assertEqual(host.trace, ["lock", "cancel-radial", "reset", "dt7", "cc", "zero", "clear", "qt-focus"])
+        self.assertIn("cancel-radial failed", host.warnings[0][0])
 
     def test_rejected_neutral_is_reported_and_does_not_skip_pending_clear(self):
         host = self.host(rejected=True)
@@ -98,7 +105,7 @@ class FocusLossFailureTests(unittest.TestCase):
                 return True, ""
         host.backend.mqtt = BrokenMqtt()
         host.focusOutEvent(object())
-        self.assertEqual(host.trace, ["lock", "reset", "dt7", "cc", "zero", "clear", "qt-focus"])
+        self.assertEqual(host.trace, ["lock", "cancel-radial", "reset", "dt7", "cc", "zero", "clear", "qt-focus"])
         self.assertIn("mode lookup failed", host.warnings[0][0])
 
     def test_reporting_failure_still_delegates_to_qt(self):

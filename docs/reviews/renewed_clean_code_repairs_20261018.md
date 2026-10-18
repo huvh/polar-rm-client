@@ -1498,3 +1498,55 @@ prerequisites still prevent GO. Native/hardware, detached-target and other
 previously documented limitations remain. Earlier completed, failed and
 interrupted results retain their own source scope. This update changes only
 documentation and uploads no raw logs.
+
+## Radial focus loss: integrated candidate, final review pending
+
+The documented radial contract is hold Q, point at an existing action, then
+release to execute. An actual window retained the active wheel, radial owner
+and old selection after `focusOutEvent` had broken its control epoch. A fresh Q
+press could then be consumed without a fresh selection, and its release could
+execute the stale ClickGUI action. A lost original release could also leave the
+wheel consuming input. This is a bounded correction to transient gesture
+ownership, rather than a policy that all overlays close on focus loss.
+
+One production line calls `cancel_quick_action_wheel()` first inside the existing
+focus-loss release callback. Authority revocation is attempted before that
+callback. The existing cancellation owner clears selection and radial ownership
+before refresh callbacks; refresh failure still reaches the existing independent
+neutral/reset fallback and Qt-finally delegation. Two AST-extracted focus
+fixtures explicitly wire the new owner and assert normal-path execution, so a
+missing fixture method cannot silently pass through fallback. Existing failure
+and neutralization assertions are retained and extended.
+
+The external **11-method** baseline produced **7 failures, 0 errors**, with four
+positive controls passing. Its candidate passed all 11; independent review
+replayed both and passed seven additional order checks, including rejection of
+before-revocation and after-release placements. Integrated author evidence records
+**128 focused methods PASS**, API freeze PASS and static gates PASS. Final
+integrated independent acceptance is pending at this report checkpoint; these
+selections are not summed into an aggregate or unique-test count.
+
+Frozen integration SHA-256 identities:
+- `polar_app.py`: `831c571f674631d841fbf2c16adffc12828e62c5af00a8503bc0c69f40445cd7`
+- `test_radial_focus_loss.py`: `3ff6986909aad436d8001b8800c10b956f6282f67cc30da84f292100c432bec3`
+- `test_focus_loss_failures.py`: `ac2b2bd721ac470adebc034c69a54165636771e47260d089fbb4438671f19e37`
+- `test_fullscreen_input_extended.py`: `9fbb0bd38915026a341aa68fe48b80d0d8c0a2d05bb5927394c9cca482476967`
+
+The direct fullscreen route preserves the wheel and selection when no FocusOut
+is delivered. Whether native fullscreen generates FocusOut remains unverified;
+a delivered FocusOut follows this cancellation rule. Chat drafts, ClickGUI and
+ordinary hold/release behavior are preserved in the scoped probes. Reentry
+coverage begins at cancellation and covers refresh and subsequent neutral
+publication, not arbitrary injected input before that callback. Evidence is
+from the local `radial-focus-20261018` packet and integrated logs, using inert
+sinks and offscreen windows. Full24 remains the latest completed aggregate at
+its own source; no new aggregate, native-focus or hardware qualification is
+claimed, and no raw logs are uploaded.
+
+Final integrated independent review accepted all four frozen files: 128 focused
+methods passed. Production matches the externally reviewed single call; all 11
+radial methods are AST-identical to the external suite. Two negative controls
+reject silent fallback: missing cancellation ownership fails retirement, and
+an exception after retirement fails the normal-release count. Fixture wiring
+is therefore resolved within this scope. Native fullscreen-generated FocusOut
+and broader arbitrary reentry remain unverified. Aggregate pending.
