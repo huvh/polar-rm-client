@@ -1135,3 +1135,31 @@ being applied after full18 and is not covered by this result. Full18 is the
 latest completed offline aggregate, with four incomplete prerequisites still
 preventing GO and native/physical-display qualification still outstanding.
 Only documentation is updated here; no raw logs are uploaded.
+
+## Separate DPR-aware checkbox test correction
+
+The DPR-2 color failure was reproduced on both the old epsilon predicate and
+endpoint-fixed source with exact progress 1 and a stopped timer. The image was
+200x80 for a 100x40 logical widget; blue indicator pixels occupied physical
+rows 26..53 while the test sampled physical row 20. Sampling the original
+logical row after conversion by the captured image DPR was blue in both.
+This is a test-coordinate correction, not a production color/geometry fix.
+
+Only `tests/test_jello_settings_keyboard.py` changes: map the original logical
+scan x=0..29, y=20 to image coordinates and add a synthetic mapping regression.
+The strict blue >180 / red <100 predicates, original 90/70ms durations,
+120/100ms waits, exact 1/0 endpoint assertions, cleanup and all other original
+methods remain. The card origin (0,0) is invariant and unchanged.
+
+Author and independent external checks each passed 3 focused methods at DPR
+1, 1.25, 1.5, 2 and 2.5 (15 executions per selection). Actual capture DPR and
+physical dimensions matched; fractional rounding and all scan points were
+in bounds. Four negative controls reject raw coordinates, red=100, blue=180,
+and blue outside the sampled logical row. The original failure is retained.
+
+After applying the exact reviewed patch, the complete 16-method module passed
+at all five DPRs (80 executions, zero skips/failures). Frozen file SHA-256
+`cdbc2081fd219b6cdb42a90309f7fb9795f0f688fb2f1adac849d34c20163755`
+matched before/after each run; diff check passed. Counts overlap and are not
+summed into distinct coverage. This later source is not qualified by full18;
+its aggregate is pending. Native display/DWM/GPU acceptance remains open.
