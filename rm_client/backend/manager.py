@@ -1933,9 +1933,12 @@ class BackendManager:
         """消费解码队列并写入 RobotState；返回本次应用的消息条数。"""
         if self._backend_transition_blocks_work():
             return 0
+        generation = self.mqtt.receive_generation
         messages = self.mqtt.drain_decoded()
         count = 0
         for _topic, name, data, _ts in messages:
+            if self.mqtt.receive_generation != generation:
+                break
             try:
                 # Disable synthetic state before applying the first official
                 # message. This preserves a first MapClick/Buff update instead

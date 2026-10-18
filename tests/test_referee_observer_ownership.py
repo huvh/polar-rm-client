@@ -32,7 +32,7 @@ class RefereeObserverOwnership(unittest.TestCase):
         def drain():
             batch, backend.queue = backend.queue, []
             return batch
-        backend.mqtt = SimpleNamespace(drain_decoded=drain)
+        backend.mqtt = SimpleNamespace(drain_decoded=drain, receive_generation=0)
         return backend, RobotState()
 
     def enqueue(self, backend, name, payload):

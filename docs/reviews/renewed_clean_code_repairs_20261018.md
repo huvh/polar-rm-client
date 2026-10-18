@@ -1770,3 +1770,54 @@ still prevent GO. It supplies no Python 3.10 runtime qualification or native/
 hardware acceptance, and does not establish historical timeout/timing causes.
 Earlier failed, interrupted and completed runs retain their own source scope.
 Only documentation is updated; raw logs are not uploaded.
+
+## Decoded MQTT batch: epoch-admission candidate
+
+The real MQTT owner can retire its receive queues on disconnect while the
+manager still holds an already-drained decoded list. An inert reproduction
+pauses the observer after one record, invokes the real disconnect callback on
+another thread, then observes a second old heat record applied after retirement.
+Its original receipt time is retained; no invented current timestamp is alleged.
+Earlier raw-message/event consumer fixes remain intact and address a later stage;
+they cannot undo this earlier canonical scalar write.
+
+The three-line change snapshots `receive_generation` before draining and checks
+it before each decoded record. Retirement stops admission of the remaining list
+without clearing new queues or undoing newer nested state. Per-record exception
+behavior and final current-state stats/frontend synchronization are unchanged.
+The rejected v1 skipped final sync after retirement; its passing initial suite
+missed first-record HUD projection and nested applied-counter refresh. Those
+positive contracts are now asserted, and the rejected source/logs remain in the
+local packet. Two explicit existing MQTT doubles gain `receive_generation=0`;
+no production `getattr` fallback or weakening of existing assertions is added.
+
+The same external **19 methods** against whole preserved modules produce
+**10 baseline failures, 0 errors**, versus **19 candidate PASS**. Independent
+external review reproduced both, passed 27 existing fixture-module methods with
+in-memory field wiring, and rejected seven runtime-only negative controls.
+Four-file integration retains the production bytes and AST-identical complete
+regression class. Author evidence records **165 focused methods PASS** and
+API/static gates PASS. Final integrated independent review is pending at this
+checkpoint; overlapping selections are not aggregate or unique-test totals.
+
+Frozen SHA-256 identities:
+- `manager.py`: `2885aa1553298065ae47b6a5997b105425d7148fb752082fbf2e0e9d1f34acec`
+- `test_mqtt_decoded_batch_epoch.py`: `6612ad3fbb9b339687ce08a988c0b4f075e53505dd38a53d6f0d118d2919ebf9`
+- `top_match_bar_integration_test.py`: `4abf02df4eb92171439d5fdd640add1fa982048efb56487d02a6237e7c9588f5`
+- `test_referee_observer_ownership.py`: `2e50eb8900aa5c8f43c28b014a0692017bb035064f19219702a4800933f92a41`
+
+This is next-record admission, not atomic rollback of a record already executing
+when another thread disconnects. Rollover between snapshot and drain may
+conservatively discard a newly drained batch; lossless atomic pairing would
+require a broader drain contract. Same-generation nesting and source precedence
+remain unchanged. Evidence is in the local `decoded-mqtt-epoch-20261018` packet;
+no native I/O or new aggregate qualification is claimed. Full27 remains qualified
+only at its own source, prior failures/limitations remain, and no raw logs are
+uploaded.
+
+Final integrated decoded-batch review is accepted: 165 focused methods passed
+independently with zero errors/skips. All four hashes matched; manager bytes
+match the external candidate and the full nineteen-method class is AST-identical.
+Each existing fixture adds only its one receive_generation=0 field; no prior
+assertion changed. This supersedes the pending-review status immediately above,
+not the pending full-source aggregate qualification.
