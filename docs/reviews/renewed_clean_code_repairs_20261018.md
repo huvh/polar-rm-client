@@ -763,3 +763,44 @@ This is the latest completed offline aggregate. Earlier results and evidence
 loss disclosures remain distinct. Four incomplete prerequisites still prevent
 GO; physical-link safety and hardware qualification remain outstanding. No raw
 logs are published by this documentation update.
+
+## Fourteenth full-run candidate: tool output hygiene
+
+The scoped tool repair is local `689f2e175c994ab1352bc7816fca56377113cc2e`, public
+[210f5a60223b28d45514f9177da04a281d6e88c9](https://github.com/lulunomaro/polar-rm-client/commit/210f5a60223b28d45514f9177da04a281d6e88c9),
+tree `8838f18a4e971d0efd1bde9403e37eb8dd745195` (parent-verified mapping).
+`tools/dt7_link/test_dt7_link.py` uses `TemporaryDirectory` for its temporary
+configs instead of fixed filenames, preserving pre-existing sentinel files.
+`tools/economy_live_capture.py` defers output-directory creation until use and
+selects an OS-appropriate output path, avoiding import-time directory creation.
+Repository configs were not changed.
+
+Independent review passed the **6 methods** in
+`tests/test_tool_output_hygiene.py`; the baseline produced **12 failure outcomes,
+0 errors across those 6 methods**. Checks include cleanup after a write followed
+by `OSError` or `KeyboardInterrupt`. The extracted DT7 profile's 10 assertions
+and mouse check's 8 assertions remain unchanged. Separately, the author reported
+**116 DT7 CLI checks with 2 external prerequisites missing, INCOMPLETE**; that
+CLI result is not presented as an independent review pass or external validation.
+
+The bounded hygiene audit reported **4,129 tracked files**, with no accidental
+runtime files identified. Its **2,366 tracked files matching ignore rules** were
+historical `docs/evidence` material and remain preserved. No blanket deletion
+or ignore-rule expansion accompanies this repair.
+
+Full14, `client-renewed20h-full14/results.json`, was independently read and
+verified as **completed: 378 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO**
+(`passed: false`), run ID `4f398ad92b8e4e38ba762080d5a7d8b0`. The root started
+this run at **2026-10-18 11:13:27 UTC**. Provenance matches the exact local
+`689f2e175c994ab1352bc7816fca56377113cc2e` / tree
+`8838f18a4e971d0efd1bde9403e37eb8dd745195` checkpoint above and records
+`dirty: false` at start. Declared source stability passed with **733 inputs**
+at both endpoints and SHA-256
+`96353d352a83e642da6f8cb9041305ef307bf8b036e578ee43e57b822b1eda2d`.
+The existing fingerprint scope, exclusions and endpoint limitations apply.
+
+This is the latest completed offline aggregate. Four incomplete prerequisites
+still prevent GO; external-reference and hardware qualification gaps remain.
+The earlier 377/12/4/0 recovery result belongs to public `1ec12135`; historical
+failed/interrupted runs and evidence-loss disclosures remain preserved. This
+documentation update changes no source and publishes no raw logs.
