@@ -1041,6 +1041,12 @@ class ConfigActionsMixin:
         )
 
     def preview_elimination_fx(self, *, single: bool = False) -> None:
+        def deliver_preview(event: CombatEvent) -> None:
+            lifecycle = getattr(self, "_window_lifecycle", None)
+            if lifecycle is not None and lifecycle.closing:
+                return
+            self.accept_combat_event(event)
+
         module = self.registry.get("EliminationFX")
         sequence = "Single" if single else self.setting_mode(module, "Preview Sequence", "Normal 1-6")
         if sequence == "All Kill Types":
@@ -1061,7 +1067,7 @@ class ConfigActionsMixin:
                 score_delta=100,
                 tags=("ELIMINATION", "ARMOR HIT") if kill_type != "DESTROY_VEHICLE" else ("ROBOT DESTROYED",),
             )
-            QTimer.singleShot(index * 650, lambda queued=event: self.accept_combat_event(queued))
+            QTimer.singleShot(index * 650, lambda queued=event: deliver_preview(queued))
 
     def handle_calibration_action(self, action_name: str) -> None:
         module = self.registry.get("CameraCalibration")
