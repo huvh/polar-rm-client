@@ -175,3 +175,61 @@ improvement without a new helper/module, not reduced global coupling.
 
 Raw temporary metric reports are not included or published. This addendum
 changes documentation only and claims no new runtime qualification.
+
+## 2026-10-18 addendum: finite tactical-map CPU-raster elapsed-time observation
+
+At measured source `47a8be46cd88f0e351c0a8f926fca1af19b3e62e`, read-only inspection
+found no recurring map-file decoding: `official_map_image` caches loaded images,
+including failures. The resampling method `official_map_display_image` has no
+production callers. Rounded-mask preprocessing is on a real presentation path:
+`polar_app.py`'s GPU motion-layer painter calls `paint_hud_motion_overlay`, then
+`draw_tactical_map_hud`, `draw_official_map` and conditionally `_rounded_map_layer`.
+The diagnostic below executes that map painter on a raster device; it does not
+exercise the native GPU device or measure frame presentation.
+
+The original bounded observation used Linux, Qt offscreen, both checked-in map
+PNGs, DPR 1, 1920×1080, fixed telemetry/time and a 24-frame collapsed→expanded→
+collapsed geometry sequence repeated once without clearing image/mask caches.
+The first cycle for later scenes still shares process-wide Qt/font state.
+
+| Scene | First-cycle median elapsed ms | Warm-cycle median elapsed ms |
+|---|---:|---:|
+| RMUC standard | 3.08 | 2.85 |
+| RMUC liquid | 2.77 | 2.35 |
+| RMUL standard | 2.99 | 3.04 |
+| RMUL liquid | 2.95 | 2.91 |
+
+The first draw in the process took **20.94 ms**, versus **1.69 ms** for its warm
+counterpart. This is a cold-draw observation, not an isolated diagnosis of font
+initialization or the historical Tab stutter. Image decoding was timed separately
+and excluded from these draw durations. Every corresponding frame in the two
+cycles matched raster pixels and hotspot action/payload/geometry traces. RMUL
+liquid retained some rounded-cache churn, but its warm total draw maximum was
+3.65 ms in this sample. These observations do not justify a cache change.
+No cache implementation was changed.
+
+The reusable developer diagnostic is
+[`tools/diagnostics/profile_tactical_map.py`](../../tools/diagnostics/profile_tactical_map.py):
+
+```sh
+# Linux example: an external process watchdog bounds hangs as well as work.
+timeout 60s python tools/diagnostics/profile_tactical_map.py
+```
+
+Use the repository test dependencies and an external process watchdog appropriate
+to your platform. The finite 192-frame workload has no internal timeout. The
+diagnostic forces Qt offscreen before importing the host. It explicitly reuses the actual-window
+`test_tactical_map_contract` host and fixture rather than adding a runtime API.
+The script resolves repository paths relative to itself, prints JSON summaries
+including source/renderer/asset identities, allocation totals and consistency
+checks, and exits nonzero on pixel/hotspot inconsistency. It performs no full
+suite, network exercise, capture, playback or native GL presentation; Qt
+multimedia initialization is possible. Setup/cleanup, hashing and image decoding
+are outside the measured draw interval, while instrumentation overhead remains
+inside. Cold decoding may already benefit from the OS file cache. Timing values
+are observations, not thresholds or guarantees, and may differ between runs.
+The clock measures CPU-raster elapsed duration, not process CPU time. HEAD plus
+renderer/asset hashes do not establish a full clean dependency snapshot. Normal
+cleanup uses the existing test host; a failure during its initial setup inherits
+that host's partial-construction cleanup limitations. No new partial-window
+teardown is attempted. Raw profiling output is not included or published.
