@@ -6,10 +6,11 @@ import unittest
 from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import test_window_activation_failure as activation_tests
+import test_window_constructor_failure as constructor_tests
 
 
 class ActivationAudioIsolationTests(unittest.TestCase):
-    def guarded_probe(self, fault):
+    def guarded_probe(self, fault, *, constructor=False):
         run = subprocess.run
         guard = '''
 from unittest.mock import Mock
@@ -43,11 +44,13 @@ for name in ('QSoundEffect', 'QMediaPlayer', 'QAudioOutput'):
 assert audio_preferences.selected_output.cache_info().currsize == 0
 """
         def guarded(args, **kwargs):
-            self.assertEqual(kwargs['timeout'], 30)
+            self.assertEqual(kwargs['timeout'], 15 if constructor else 30)
             self.assertTrue(kwargs['capture_output'])
             self.assertEqual(args[1], '-c')
             return run([args[0], '-c', guard + args[2] + restoration], **kwargs)
         with patch('test_window_activation_failure.subprocess.run', side_effect=guarded):
+            if constructor:
+                return constructor_tests.WindowConstructorFailureTests().probe_timer_admission(fault)
             return activation_tests.WindowActivationFailureTests().probe(fault)
 
     def test_timer_failure_retires_without_native_audio(self):
@@ -57,6 +60,22 @@ assert audio_preferences.selected_output.cache_info().currsize == 0
     def test_unavailable_rescue_retains_owner_without_native_audio(self):
         self.assertEqual(self.guarded_probe('timer_unavailable'), dict(timer=False, closing=True,
             retained=True, pending=True, finalized=False, pending_after_events=True, starts=0))
+
+    def test_constructor_failures_retire_without_native_audio(self):
+        for fault in ('after', 'before', 'diagnostics'):
+            with self.subTest(fault=fault):
+                self.assertEqual(self.guarded_probe(fault, constructor=True), {
+                    'timer_published': True, 'active_timers': 1, 'closing': True,
+                    'retained': True, 'pending_before_events': True,
+                    'starts_before_events': 0, 'starts_after_events': 0,
+                    'finalized': True, 'pending_after_events': False})
+
+    def test_constructor_unavailable_timer_preserves_retained_owner(self):
+        self.assertEqual(self.guarded_probe('unavailable', constructor=True), {
+            'timer_published': True, 'active_timers': 0, 'closing': True,
+            'retained': True, 'pending_before_events': True,
+            'starts_before_events': 0, 'starts_after_events': 0,
+            'finalized': False, 'pending_after_events': True})
 
 
 if __name__ == '__main__':

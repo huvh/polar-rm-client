@@ -1929,3 +1929,42 @@ No additional defect or source change was proposed. This bounded class-family
 check is not proof against all GUI reference cycles, arbitrary constructor
 failures or indefinite operation; it supplies no heap-byte, FPS or native-device
 claim. Only documentation is updated and no raw logs are uploaded.
+
+### Accepted neighboring constructor-test audio isolation (focused evidence)
+
+`tests/test_window_constructor_failure.py` now reuses the existing, unchanged
+`isolated_activation_audio` helper from `test_window_activation_failure.py`.
+Its `ExitStack` covers real window construction through deferred cleanup;
+the existing guard suite adds constructor-route checks without a duplicate
+fake helper or production change. Native audio constructors/device queries are
+isolated while the actual window, audio managers/Qt pools, timers, abort and
+rescue paths remain exercised.
+
+Independent review (`client-constructor-audio-independent-review/REVIEW.md`)
+approved all four actual guarded constructor routes (`after`, `before`,
+`diagnostics`, `unavailable`) and the four-method audio-isolation suite. The
+traced routes recorded zero native-audio and network attempts. Three negative
+controls rejected the saved baseline, removal of isolation, and a deliberately
+swallowed native `QSoundEffect` attempt; the latter is detected by the access
+ledger after cleanup. Static comparison confirmed the original **15-second**
+subprocess deadline, five child assertions, four original methods, fault
+injectors, network guard and expected cleanup/rescue dictionaries are unchanged.
+The unavailable-timer route still observes incomplete ownership before rescue.
+
+The author separately ran **21 general focused methods** and four direct/runpy
+constructor tests successfully. Those selections are not additional independent
+isolation proof. The review's initial extra metadata-command classifier used an
+incorrect expected Git command shape; its failed trace and corrected replay are
+preserved locally. The strict process guard blocked the metadata lookup in both;
+no subprocess permission was relaxed.
+
+Frozen SHA-256:
+- `tests/test_window_constructor_failure.py`:
+  `e62120e2b54153fb47961968b1292a057d33be30dd3a13f5c7c18c4db122a3f9`
+- `tests/test_activation_audio_isolation.py`:
+  `02438946342551ec82123f6fa1cb6937c6b2d72bb59509ff0ce1798b5fdca0d3`
+
+This is accepted test isolation, with no new aggregate result yet. It does not
+establish any historical timeout's cause or qualify native audio/device cleanup.
+Full29 remains the last completed aggregate at its recorded source; raw evidence
+remains local and is not uploaded.

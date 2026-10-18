@@ -1,17 +1,21 @@
 """Retained cleanup for final timer admission before construction returns.
 
-Only native transport starts and one terminal timer fault are substituted.
+Native transport starts, audio boundaries and one terminal timer fault are substituted.
 The baseline expected failure documented an actual launch escape.
 """
 from __future__ import annotations
 
 import json
+import inspect
 import os
 from pathlib import Path
 import subprocess
 import sys
 import textwrap
 import unittest
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from test_window_activation_failure import isolated_activation_audio
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -29,11 +33,12 @@ class WindowConstructorFailureTests(unittest.TestCase):
             os.environ.update(CI="true", QT_QPA_PLATFORM="offscreen",
                               POLAR_DISABLE_LOCAL_CAPTURE="1",
                               POLAR_DISABLE_MEDIA_PRELOAD="1", POLAR_AUTOSTART="1")
-            with tempfile.TemporaryDirectory() as directory:
+            with tempfile.TemporaryDirectory() as directory, ExitStack() as audio_stack:
                 os.environ["POLAR_USER_DATA_ROOT"] = directory
                 import shiboken6
                 from PySide6.QtCore import QEvent, QTimer
                 from PySide6.QtWidgets import QApplication
+                audio_stack.enter_context(isolated_activation_audio())
                 from rm_client.ui.polar_app import PolarRMWindow
                 from rm_client.ui.polar import qt_application
                 from rm_client.ui.polar.qt_application import launch_qt_application
@@ -144,7 +149,8 @@ class WindowConstructorFailureTests(unittest.TestCase):
                     print("CONSTRUCTOR_RESULT=" + json.dumps(result, sort_keys=True))
         '''
         result = subprocess.run(
-            [sys.executable, "-c", textwrap.dedent(source)], cwd=ROOT,
+            [sys.executable, "-c", inspect.getsource(isolated_activation_audio) + "\n"
+             + textwrap.dedent(source)], cwd=ROOT,
             capture_output=True, text=True, timeout=15,
             env={**os.environ, "PYTHONPATH": str(ROOT), "POLAR_TEST_TIMER_FAULT": fault},
         )
