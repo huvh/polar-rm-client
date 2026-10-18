@@ -2852,3 +2852,60 @@ seven controls and pure 46 PASS with no native/facade/manager/spin imports. Old
 characterizer's expected-escape assertion remains failed because return is now
 normal. Source outside one guard, timing owner and prior assertions are unchanged.
 Aggregate qualification remains pending for this stage.
+
+### Completed forty-first integrated result
+
+`client-renewed20h-full41/results.json` was independently read and verified as
+**completed: 405 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `f33fe762d4cd4f849ce94a290258c489`. Exact source: local
+`0a5300752ef1be7921c9fdf3cdf86a0d4e1e8fe1`, public
+[8b91d04ff5743368203a4463f06404d62a16296a](https://github.com/lulunomaro/polar-rm-client/commit/8b91d04ff5743368203a4463f06404d62a16296a),
+tree `df1fc7a9d2a61fe268da8febcd6a5ad49d55dd2b` (parent-verified public mapping).
+Provenance records `dirty: false` at start. Declared source stability passed with
+**760 inputs** at both endpoints and SHA-256
+`8f2fba1954f9e5f10de0a5c67f938a63ae9fc363b61c4e9d24e39b6d04cf195d`.
+Existing fingerprint scope, exclusions and endpoint limitations apply.
+The new final-tick diagnostic module passed 16 methods. Full40's completed
+404/12/4/0 checkpoint remains separate at its own source. Four incomplete
+prerequisites continue to prevent GO.
+
+The final tick-warning guard is independently accepted in its integrated two-file
+scope. Ordinary fallback warning failure now permits normal callback return after
+field-log failure, without retry or recursive logging. Metrics and all eight
+preceding top-level callbacks already completed on baseline; no later internal
+stage, bookkeeping, timer schedule or authority is restored. Report consumption,
+five-second start-time cadence, timing resets and exclusion of diagnostic overhead
+remain unchanged. BaseException identity/prefix and clock/mapping/prior-callback
+failure boundaries remain.
+
+Independent integrated evidence: 46 focused methods PASS, seven extra controls
+PASS, and a separate pure 46-method import check PASS without Qt/GL, facade,
+manager or spin implementation imports. Counts overlap. Baseline new16 gives
+11 failing outcomes, zero errors; seven mutation variants are rejected. The
+unchanged old 25-case characterizer passes on baseline but stops at its first
+expected-escape assertion on candidate, which now returns normally. That retained
+counterevidence is not reported as 25 candidate passes. Actual on_tick/publication
+AST and pure timing owner use inert callbacks; native scheduling, GPU behavior
+and historical timing causation remain untested.
+
+### Bounded eleven-slice diagnostic inventory
+
+The final-eleven-slice mapping at this same local source/tree records accepted
+function-AST equality and accepted test-byte equality for neutral release,
+owner-action aggregation, lifecycle direct failures, modal cleanup, lock cleanup,
+final-context storage, runtime-stage diagnostics, emergency formatting, legacy
+ClickGUI cache fallback, close refusal and final timing-warning return. Sequential
+changes to shared files are compared by complete function AST rather than wrongly
+requiring historical whole-file identity. This mapping parses source/hashes only;
+it is neither another test run nor eleven independent field incidents.
+
+No additional justified high-impact source defect was identified within that
+named inventory. This does not certify universal Clean Code or fault containment.
+Explicit remaining contracts include process-control propagation, pre-attempt
+lookup, fallible formatting/toasts, leave-factory/finally masking, differing
+revocation prefixes and inert-versus-native ownership limits. Native Windows,
+GL/audio/video/serial/robot/portable evidence, authentic external references and
+disposable installation qualification remain required. Historical activation and
+strict DT7 timing causes remain unresolved. No new abstraction or global coupling
+claim follows from these bounded repairs. Prior failed/interrupted records and
+changed-characterization results remain intact; raw logs are not published.
