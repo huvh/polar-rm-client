@@ -2768,3 +2768,52 @@ The reviewer's first original-probe invocation retained its hardcoded frozen
 baseline path and reproduced the two baseline failures; that log is preserved,
 and the corrected integrated run is separate. Source outside the single guard,
 dependencies and prior assertions are unchanged. Aggregate remains pending.
+
+### Completed fortieth integrated result
+
+`client-renewed20h-full40/results.json` was independently read and verified as
+**completed: 404 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `bbfc4a256f5b48169f33fa4805264324`. Exact source: local
+`ea88c71c305d2081dd6c3e26a72afbbb96951a05`, public
+[faf97c19f92a18f4086ad5f4316e48598c11feb7](https://github.com/lulunomaro/polar-rm-client/commit/faf97c19f92a18f4086ad5f4316e48598c11feb7),
+tree `f3e388e37bc70b38a37a32c95bd186363c6235e5` (parent-verified public mapping).
+Provenance records `dirty: false` at start. Declared source stability passed with
+**759 inputs** at both endpoints and SHA-256
+`4b1724116089369b718d8cf24dfa7116eb87e7cef1e4d0f991fb2d34c63c7f15`.
+Existing fingerprint scope, exclusions and endpoint limitations apply.
+The new close-admission diagnostic module passed 17 methods. Full39's completed
+403/12/4/0 checkpoint remains separate at its own source. Four incomplete
+prerequisites continue to prevent GO.
+
+The close-admission diagnostic repair is independently accepted in its integrated
+two-file scope. One ordinary logger guard restores the existing warning, False
+return and actual closeEvent adapter's event.ignore path after failed preparation.
+Draft state is retained and shutdown does not start; later explicit successful
+admission can still begin shutdown once. Save-required authority revocation was
+already performed before preparation/logging on baseline and candidate. No-save
+behavior gains no locking policy. A late manager log failure still reports an
+incomplete stop despite local LOCKED state.
+
+Independent integrated evidence: 38 focused methods PASS, seven extra controls
+PASS, pure 17-method import-boundary check PASS and six original probes PASS in
+separate overlapping selections. The new 17-method baseline suite gives eight
+failing outcomes, zero errors; seven mutations are rejected. The first integrated
+original-probe invocation accidentally selected its hardcoded frozen baseline,
+producing its expected two failures. That log is retained. Corrected explicit
+integrated window/current-manager source selection changes no assertions and
+passes all six probes; the initial result is not relabeled a candidate failure.
+
+Actual window/manager/persistence AST and pure safety/emergency owners execute
+with inert collaborators. No Qt/GL, facade, manager implementation or spin imports
+occur in the pure check. The initially accepted close event is inert: native Qt
+exception dispatch, real window destruction and physical neutral delivery were
+not exercised. Formatting/toasts, property lookup, truthiness, event.ignore,
+shutdown admission and ready finalization remain outside the logger guard;
+BaseExceptions preserve existing identity/prefix. Some failures can still occur
+before revocation or leave the inert event unignored, so no blanket fail-closed
+claim is made. Existing assertions and owners remain unchanged.
+
+Evidence is in the local close-admission packet and independent review. The
+separate final-tick warning observation is not included. Python 3.10 grammar
+checks are distinct from Python 3.12 execution. Historical results and external
+prerequisites remain; raw logs are not published.
