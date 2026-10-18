@@ -255,6 +255,8 @@ class EconomyMixin:
         self._economy_pending_overlay = None
         if pending_overlay is not None:
             def open_pending_overlay() -> None:
+                if generation != self._economy_generation:
+                    return
                 if pending_overlay == OverlayKind.CLICKGUI:
                     self.set_clickgui_visible(True)
                 elif pending_overlay == OverlayKind.CHAT:
