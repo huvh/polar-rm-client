@@ -1,6 +1,7 @@
 """Isolated integration tests: fake host/transport only, no application startup."""
 from __future__ import annotations
 import ast
+from copy import deepcopy
 import logging
 import os
 from pathlib import Path
@@ -19,7 +20,7 @@ CLASS = next(n for n in TREE.body if isinstance(n, ast.ClassDef) and n.name == "
 NAMES = {"apply_updates", "_notify_referee_view"}
 FUNCS = [n for n in CLASS.body if isinstance(n, ast.FunctionDef) and n.name in NAMES]
 MODULE = ast.Module(body=[ast.ImportFrom(module="__future__", names=[ast.alias(name="annotations")], level=0)] + FUNCS, type_ignores=[])
-NAMESPACE = {"_LOG": logging.getLogger("test.top_match_bar")}
+NAMESPACE = {"_LOG": logging.getLogger("test.top_match_bar"), "deepcopy": deepcopy}
 exec(compile(ast.fix_missing_locations(MODULE), str(SOURCE), "exec"), NAMESPACE)
 
 

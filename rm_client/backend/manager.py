@@ -1905,7 +1905,7 @@ class BackendManager:
             observer = getattr(self, "referee_view_observer", None)
             if observer is None:
                 return
-            observer(name, dict(data), float(timestamp))
+            observer(name, deepcopy(data), float(timestamp))
             self._referee_view_error = ""
         except Exception as exc:
             try:
