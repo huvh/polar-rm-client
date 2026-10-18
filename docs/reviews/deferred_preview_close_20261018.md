@@ -16,3 +16,11 @@ Reproduce: python -m unittest discover -s tests -p test_deferred_preview_close.p
 This source is newer than full42 (406 PASS / 12 SKIP / 4 INCOMPLETE / 0 FAIL at public8b3cfc1). Aggregate qualification of this repair is pending. Overall remains NO-GO: authentic external references, disposable installer qualification, native Windows/device acceptance and historical timing causes remain open.
 
 Integrated independent validation also passed 28 focused tests and eight controls at the exact frozen hashes; API freeze and static gates pass.
+
+## Completed full43 qualification
+
+**407 PASS / 12 SKIP / 4 INCOMPLETE / 0 FAIL**, selected offline scope remains **NO-GO**. Run `1a875329fcb94b0c918ef5b94941380f`, clean local code `e21b7f6c42c4faabac1f14dc855d0695ae9a07e0`, public code `7c5f61113ab02b678a59c7bb077767116d90d84f`, identical tree `faa30c897b0ce467a9df5e06954cc57274f58b7e`.
+
+All 762 declared inputs retain start/end fingerprint `e31e3848576fa09fca799f6d5b6a2f2da89ddb61a0cb1388b312f0b5d620876d`. New preview module passes all eleven methods. Result, clean provenance and source stability independently checked. Counts are suites/checks, not unique methods; start/end scope excludes external assets/dependencies and restored transient edits.
+
+Four incomplete prerequisites remain authentic team CRC, complete firmware baseline, authentic vendor type dump and separate disposable legacy installer qualification. Windows/GPU/audio/video/serial/robot/portable acceptance and historical timeout causation remain unresolved. This documentation-only follow-up does not change tested code. Prior failed/interrupted records retained; no raw logs uploaded.
