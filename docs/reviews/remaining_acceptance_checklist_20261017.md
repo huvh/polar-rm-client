@@ -11,13 +11,10 @@ remaining-work statements are not instructions to repeat completed work.
 External/native gaps still apply. No report certifies the whole project as
 Clean Code or ready to merge solely from an offline test count.
 
-The [completed full24 checkpoint](renewed_clean_code_repairs_20261018.md#completed-twenty-fourth-integrated-result)
-records **387 PASS / 12 SKIP / 4 INCOMPLETE / 0 FAIL, NO-GO** at public source
-`77d78194ad01f542365c7184fe02d108ceababcb` / local
-`f14ec46ff47c4b61d2f0b71edb3f2e65cb8c28d7`.
-Full19's 382/12/4/0 result at `269a050a` (published report `e7c2e72`) remains
-separate historical evidence. Full24 does not close the detached explicit-target
-identity limitation or native/external acceptance.
+The [completed full25 checkpoint](renewed_clean_code_repairs_20261018.md#completed-twenty-fifth-integrated-result)
+records **388 PASS / 12 SKIP / 4 INCOMPLETE / 0 FAIL, NO-GO** at public source
+`fa30c45771fdaf7723226ee5712dce19648987a9`.
+This selected offline result does not qualify native/hardware acceptance or later edits.
 Earlier counts below remain historical, source-specific results. Reproduced admission, cleanup,
 input-ownership and receive-epoch defects have source-scoped corrections and
 negative controls documented there. Those discharged cases are distinct from

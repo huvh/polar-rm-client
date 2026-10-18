@@ -1550,3 +1550,19 @@ reject silent fallback: missing cancellation ownership fails retirement, and
 an exception after retirement fails the normal-release count. Fixture wiring
 is therefore resolved within this scope. Native fullscreen-generated FocusOut
 and broader arbitrary reentry remain unverified. Aggregate pending.
+
+## Completed twenty-fifth integrated result
+
+Selected offline aggregate full25 completed **388 PASS / 12 SKIP / 4 INCOMPLETE /
+0 FAIL**, still **NO-GO**, run `bab15560d77049dcb6414be57ea6c738`.
+Exact tested local source `9b22c93844fb6143446a7b025e984f233411a78d` corresponds
+to public `fa30c45771fdaf7723226ee5712dce19648987a9`, tree
+`2967f407b4808016a2f03f9eec6227cb80d551d5`. Run-start worktree was clean.
+All 743 declared inputs retained identical start/end SHA-256
+`30bd54f2eae2e843c2cc4e04837e35fdf427a7e560a3ef796014afa037db5117`.
+This source includes the independently reviewed focus-loss radial cancellation
+and explicit fixture-owner wiring. Counts are suites/checks, not unique tests
+or native/hardware coverage. The unchanged external prerequisite failures and
+all earlier failed/interrupted results remain. Native fullscreen-generated
+FocusOut is unverified; direct offscreen fullscreen routing is a narrower check.
+Later changes require their own qualification. New raw logs remain private.
