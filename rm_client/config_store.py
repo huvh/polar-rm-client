@@ -22,6 +22,21 @@ def validate_client_config(data: Any, registry: Any = None) -> None:
         prepare_wheel_profile(registry, data, modules or {})
 
 
+def _decode_config_json(text: str) -> Any:
+    """Treat parser nesting exhaustion as rejected configuration content."""
+    try:
+        return json.loads(text)
+    except RecursionError as exc:
+        raise ValueError("Configuration JSON nesting exceeds decoder capacity") from exc
+
+
+def _encode_config_json(payload: dict[str, Any]) -> str:
+    try:
+        return json.dumps(payload, ensure_ascii=False, indent=2, allow_nan=False)
+    except RecursionError as exc:
+        raise ValueError("Configuration JSON nesting exceeds encoder capacity") from exc
+
+
 def _atomic_write(path: Path, serialized: str) -> None:
     fd, temp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent))
     temp_path = Path(temp_name)
@@ -84,7 +99,7 @@ class ClientConfigStore:
         if not path.exists():
             return None
         try:
-            data = json.loads(path.read_text(encoding="utf-8"))
+            data = _decode_config_json(path.read_text(encoding="utf-8"))
             validate_client_config(data)
         except (OSError, UnicodeError, ValueError, OverflowError):
             return None
@@ -96,7 +111,7 @@ class ClientConfigStore:
         payload["version"] = CONFIG_VERSION
         payload["profile"] = self.clean_profile_name(profile)
         validate_client_config(payload)
-        serialized = json.dumps(payload, ensure_ascii=False, indent=2, allow_nan=False)
+        serialized = _encode_config_json(payload)
         # Replacement is atomic under normal OS operation, so readers do not
         # observe a partially written profile. Directory metadata is not
         # fsynced here; power-loss/crash durability is not promised.
@@ -131,7 +146,7 @@ class ClientConfigStore:
 
     def load_startup_preferences(self) -> dict[str, Any] | None:
         try:
-            data = json.loads((self.config_dir / ".startup.json").read_text(encoding="utf-8"))
+            data = _decode_config_json((self.config_dir / ".startup.json").read_text(encoding="utf-8"))
             if not isinstance(data, dict) or not isinstance(data.get("profile"), str) or type(data.get("load_on_start")) is not bool:
                 return None
             return {"profile": self.clean_profile_name(data["profile"]), "load_on_start": data["load_on_start"]}
@@ -153,11 +168,14 @@ class ClientConfigStore:
         source = Path(source)
         if source.suffix.lower() != ".json" or not source.exists():
             raise ValueError("只能导入已经存在的 .json 配置文件。")
-        data = json.loads(source.read_text(encoding="utf-8"))
+        data = _decode_config_json(source.read_text(encoding="utf-8"))
         validate_client_config(data, registry)
         name = self.clean_profile_name(source.stem)
         target = self.profile_path(name)
         if source.resolve() != target.resolve():
+            # Compact validation can accept more nesting than the indented
+            # encoder. Reject unsupported content before replacing a backup.
+            _encode_config_json(dict(data, version=CONFIG_VERSION, profile=name))
             if target.exists():
                 # Keep the prior bytes recoverable even when the previous
                 # profile itself was corrupt. A failed backup aborts import.

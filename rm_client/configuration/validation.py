@@ -34,7 +34,7 @@ def _validate_json(data: Any) -> None:
     _require(type(version) is int and 0 <= version <= CONFIG_VERSION, "version")
     try:
         json.dumps(data, allow_nan=False)
-    except (TypeError, ValueError, OverflowError) as exc:
+    except (TypeError, ValueError, OverflowError, RecursionError) as exc:
         raise ValueError("Configuration must contain finite JSON values") from exc
 
 
