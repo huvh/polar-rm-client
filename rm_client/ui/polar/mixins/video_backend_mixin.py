@@ -915,7 +915,8 @@ class VideoBackendMixin:
             side = self.setting_mode(self.registry.get("MatchMode"), "Alliance", "Red")
         return side if side in ("Red", "Blue") else "Red"
 
-    def consume_official_messages(self) -> None:
+    def _sync_official_feed_generation(self):
+        """Reset old receipt/history once, preserving a reentrant newer consumer."""
         generation = getattr(self.mqtt, "receive_generation", None)
         if generation is not None:
             previous = getattr(self, "_official_feed_receive_generation", generation)
@@ -925,13 +926,27 @@ class VideoBackendMixin:
                 # Explicit compatibility scalar updates retain their own policy.
                 self._official_state_updates["official_feed_at"] = 0.0
             self._official_feed_receive_generation = generation
+        return generation
+
+    def consume_official_messages(self) -> None:
+        generation = VideoBackendMixin._sync_official_feed_generation(self)
+
+        def batch_is_current():
+            # UI callbacks may synchronously switch endpoint/profile and even
+            # consume the new queue. Never continue the already-drained batch.
+            return VideoBackendMixin._sync_official_feed_generation(self) == generation
+
         for topic, payload, received_at in self.mqtt.drain_received_messages():
+            if not batch_is_current():
+                return
             events, updates = self.official_feed.consume(
                 topic, payload, alliance=self.alliance_side(),
                 local_robot_id=self.state.robot_id,
                 referee_profile=self.state.referee_profile,
                 received_at=received_at,
             )
+            if not batch_is_current():
+                return
             # Decoded backend application owns scalar telemetry. A raw packet
             # arriving between tick stages must not publish it ahead of the
             # canonical adapter (or bypass an apply failure/transition block).
@@ -940,6 +955,8 @@ class VideoBackendMixin:
                 self._official_state_updates["official_feed_at"] = updates["official_feed_at"]
             for event in events:
                 self.accept_combat_event(event)
+                if not batch_is_current():
+                    return
 
     def apply_official_state(self) -> None:
         if not self._official_state_updates:
