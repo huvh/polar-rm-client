@@ -1968,3 +1968,32 @@ This is accepted test isolation, with no new aggregate result yet. It does not
 establish any historical timeout's cause or qualify native audio/device cleanup.
 Full29 remains the last completed aggregate at its recorded source; raw evidence
 remains local and is not uploaded.
+
+
+### Completed thirtieth integrated result
+
+`client-renewed20h-full30/results.json` was independently read and verified as
+**completed: 394 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `23d8b665aefa4374b8b5d4fa0774393f`. Exact source: local
+`76865f1bc3164252396c6969add6983178126353`, public
+[afc252e5c4b7a22bcf9886837b3341d0473cb38f](https://github.com/lulunomaro/polar-rm-client/commit/afc252e5c4b7a22bcf9886837b3341d0473cb38f),
+tree `65af73140b2c6b3fb4d3883cc86977ec8e0b1390` (parent-verified public mapping).
+Provenance records `dirty: false` at start. Declared source stability passed with
+**749 inputs** at both endpoints and SHA-256
+`c0840788d562acec1a1e5b0925d229a4bafbb1b3461b7ae2c3bf98a9e36958ee`.
+Existing fingerprint scope, exclusions and endpoint limitations apply.
+
+Both `test_window_constructor_failure` and `test_activation_audio_isolation`
+passed four methods each. This supplies source-specific integration evidence for
+the neighboring constructor fixture's audio isolation. It does not establish a
+historical timeout cause or qualify native audio/device behavior. Four incomplete
+prerequisites still prevent GO; earlier failed/interrupted evidence and all
+external acceptance limits remain intact.
+
+A separate read-only settings-policy scan found no justified behavior-preserving
+consolidation in its examined manager/UI readers. Missing, false, zero, malformed
+and default-valued settings have distinct existing semantics; numeric validation
+already has explicit configuration owners. The local settings-policy scan README
+records these distinctions. No test was executed for that scan, no additional
+pass count or universal configuration-validation claim is added, and no raw logs
+are uploaded.
