@@ -34,6 +34,7 @@ from rm_client.backend.video_backend import RmVideoBackend
 from rm_client.ui.polar.mixins import video_backend_mixin as video
 from rm_client.ui.polar_app import PolarRMWindow
 from rm_client.vision import CapturedFrame
+from rm_client.tongji_yolo import LocalAlignedVision
 from window_lifecycle_helpers import close_window_safely, settle_window_lifecycle
 
 APP = QApplication.instance() or QApplication([])
@@ -537,15 +538,16 @@ class NormalVideoTimelineContractTests(unittest.TestCase):
         window._vision_source = "Local"
         observed = []
 
-        def submit(sequence, width, height, bgr):
+        def submit(_token, sequence, width, height, bgr):
             observed.append(self.snapshot())
             self.assertEqual((sequence, width, height), (5, 4, 2))
             self.assertFalse(np.shares_memory(bgr, self.bgr))
             self.assertTrue(np.array_equal(bgr, self.bgr))
             raise RuntimeError("submit failed")
 
-        with patch.object(window.local_vision, "running", True), \
-             patch.object(window.local_vision, "submit", side_effect=submit), \
+        with patch.dict(os.environ, {"POLAR_DISABLE_LOCAL_CAPTURE": "0"}), \
+             patch.object(window.local_vision, "running", True), \
+             patch.object(window.local_vision, "_submit_for_input", side_effect=submit), \
              patch.object(window.backend, "latest_video_frame", return_value=(self.bgr, 6.0, "udp")):
             with self.assertRaisesRegex(RuntimeError, "submit failed"):
                 window.consume_backend_video_frame()
@@ -568,20 +570,23 @@ class NormalVideoTimelineContractTests(unittest.TestCase):
                     window._vision_source = source
                     return self.bgr, 6.0, "udp"
 
-                with patch.object(window.local_vision, "running", running), \
-                     patch.object(window.local_vision, "submit") as submit, \
+                with patch.dict(os.environ, {"POLAR_DISABLE_LOCAL_CAPTURE": "0"}), \
+                     patch.object(window.local_vision, "running", running), \
+                     patch.object(window.local_vision, "_submit_for_input") as submit, \
                      patch.object(window.backend, "latest_video_frame", side_effect=latest):
                     window.consume_backend_video_frame()
                 self.assertEqual(submit.call_count, int(submitted))
                 self.assertEqual(self.snapshot()[:6], ("udp hevc", "backend", 6.0, 7, 31, 5 if submitted else 4))
 
-    def test_backend_submit_uses_worker_and_source_observed_after_decode_callbacks(self):
+    def test_backend_source_change_rejects_old_input_after_decode_owner_replacement(self):
         window = self.window
         self.seed(mode="udp hevc", source="webcam", at=5.0)
         window._vision_source = "Local"
         original_worker = window.local_vision
         trace = []
-        replacement = SimpleNamespace(submit=lambda *args: trace.append(("submit", self.snapshot(), args)))
+        replacement = LocalAlignedVision(original_worker.model_path, original_worker.device)
+        replacement.running = True
+        replacement._submit_for_input = lambda _token, *args: trace.append(("submit", self.snapshot(), args))
 
         class ChangingWorker:
             @property
@@ -597,11 +602,12 @@ class NormalVideoTimelineContractTests(unittest.TestCase):
             return self.bgr, 6.0, "udp"
 
         try:
-            with patch.object(window.backend, "latest_video_frame", side_effect=latest):
+            with patch.dict(os.environ, {"POLAR_DISABLE_LOCAL_CAPTURE": "0"}), \
+                 patch.object(window.backend, "latest_video_frame", side_effect=latest):
                 window.consume_backend_video_frame()
-            self.assertEqual(trace[0], ("running", 6.0, 31))
-            self.assertEqual(trace[1][0], "submit")
-            self.assertEqual(trace[1][1][:6], ("udp hevc", "webcam", 6.0, 7, 31, 5))
+            self.assertEqual(trace, [("running", 6.0, 31)])
+            self.assertEqual(self.snapshot()[:6], ("udp hevc", "backend", 6.0, 7, 31, 4))
+            self.assertIsNone(replacement._pending)
             self.assertIs(window.local_vision, replacement)
             self.assertEqual(window.frame_image.pixelColor(0, 0).blue(), 255)
             self.assertEqual(window._normal_backend_mode, "udp hevc")
@@ -620,8 +626,9 @@ class NormalVideoTimelineContractTests(unittest.TestCase):
             self.source.value = "Synthetic"
             self.assertTrue(window.clear_normal_backend_video_frame())
 
-        with patch.object(window.local_vision, "running", True), \
-             patch.object(window.local_vision, "submit", side_effect=submit), \
+        with patch.dict(os.environ, {"POLAR_DISABLE_LOCAL_CAPTURE": "0"}), \
+             patch.object(window.local_vision, "running", True), \
+             patch.object(window.local_vision, "_submit_for_input", side_effect=submit), \
              patch.object(window.backend, "latest_video_frame", return_value=(self.bgr, 6.0, "udp")):
             window.consume_backend_video_frame()
         self.assertEqual(observed, [("udp hevc", "backend", 6.0, 7, 31, 5)])

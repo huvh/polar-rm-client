@@ -361,7 +361,7 @@ class LocalAlignedVision:
         self._detector: TongjiYoloV5 | None = None
         self._thread: threading.Thread | None = None
         self._lock = threading.Lock()
-        self._pending: tuple[int, int, int, Any] | None = None
+        self._pending: tuple[int, int, int, Any, int] | None = None
         self._latest: tuple[int, int, int, int, list[dict[str, Any]], float, float, dict[str, Any] | None] | None = None
         self._prediction = MultiArmorPrediction()
         self._target_selector = LocalTargetSelector()
@@ -377,6 +377,10 @@ class LocalAlignedVision:
         self._close_lock = threading.Lock()
         self._closing = False
         self._epoch = 0
+        # Camera/backend input identity is independent of detector lifetime.
+        self._input_source_key: tuple[Any, ...] | None = None
+        self._input_generation = 0
+        self._history_input_generation = 0
 
     def configure(self, model_path: Path, device: str, *, wait: bool = True) -> None:
         with self._lifecycle_lock:
@@ -489,19 +493,44 @@ class LocalAlignedVision:
                 with self._lifecycle_lock:
                     self._closing = False
 
-    def submit(self, sequence: int, width: int, height: int, bgr: Any) -> None:
+    def _set_input_source(self, key: tuple[Any, ...] | None) -> None:
+        """Retire old input without stopping/reloading the detector owner."""
         with self._lifecycle_lock:
-            if not self.running:
+            if key == self._input_source_key:
                 return
-            epoch = self._epoch
+            self._input_source_key = key
+            self._input_generation += 1
+            with self._lock:
+                self._pending = None
+                self._latest = None
+
+    def _capture_input_token(self, kind: str | None = None) -> tuple[int, int] | None:
+        """Snapshot this owner's lifetime/input identity, including while stopped."""
+        with self._lifecycle_lock:
+            if kind is not None and (
+                self._input_source_key is None or self._input_source_key[0] != kind
+            ):
+                return None
+            return self._epoch, self._input_generation
+
+    def _submit_for_input(
+        self, token: tuple[int, int] | None, sequence: int, width: int, height: int, bgr: Any
+    ) -> None:
+        """Submit only to the same owner from which the token was captured."""
+        with self._lifecycle_lock:
+            if not self.running or token != (self._epoch, self._input_generation):
+                return
         # A frame copy must not hold the short revocation/publication lock.
         frame = bgr.copy()
         with self._lifecycle_lock:
-            if not self.running or epoch != self._epoch:
+            if not self.running or token != (self._epoch, self._input_generation):
                 return
             with self._lock:
-                self._pending = (sequence, width, height, frame)
+                self._pending = (sequence, width, height, frame, self._input_generation)
             self._pending_event.set()
+
+    def submit(self, sequence: int, width: int, height: int, bgr: Any) -> None:
+        self._submit_for_input(self._capture_input_token(), sequence, width, height, bgr)
 
     def latest(self, timeout_ms: float = 350.0) -> tuple[int, int, int, int, list[dict[str, Any]], float, float, dict[str, Any] | None] | None:
         with self._lock:
@@ -533,16 +562,30 @@ class LocalAlignedVision:
                 pending_event.clear()
                 if stop_event.is_set():
                     break
-                with self._lock:
-                    pending = self._pending
-                    self._pending = None
-                if pending is None:
-                    continue
-                sequence, width, height, bgr = pending
+                with self._lifecycle_lock:
+                    if not self.running or epoch != self._epoch or stop_event.is_set():
+                        break
+                    with self._lock:
+                        pending = self._pending
+                        self._pending = None
+                    if pending is None or pending[4] != self._input_generation:
+                        continue
+                sequence, width, height, bgr, input_generation = pending
+                if self._history_input_generation != input_generation:
+                    # Only the inference worker mutates tracking history. The
+                    # selector reset preserves its FOV and monotonic track ID.
+                    self._target_selector.reset()
+                    self._loss_probe.reset()
+                    self._prediction.reset()
+                    self._held_payload = []
+                    self._history_input_generation = input_generation
                 started = time.perf_counter()
                 detections = detector.detect(bgr)
-                if stop_event.is_set():
-                    break
+                with self._lifecycle_lock:
+                    if not self.running or epoch != self._epoch or stop_event.is_set():
+                        break
+                    if input_generation != self._input_generation:
+                        continue
                 elapsed = max(0.0001, time.perf_counter() - started)
                 payload: list[dict[str, Any]] = []
                 loss_evidence: dict[str, Any] | None = None
@@ -626,6 +669,8 @@ class LocalAlignedVision:
                 with self._lifecycle_lock:
                     if not self.running or epoch != self._epoch or stop_event.is_set():
                         break
+                    if input_generation != self._input_generation:
+                        continue
                     self.inference_fps = 1.0 / elapsed
                     self.latency_ms = elapsed * 1000.0
                     with self._lock:

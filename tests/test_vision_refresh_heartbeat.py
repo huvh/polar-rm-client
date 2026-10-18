@@ -114,7 +114,9 @@ class VisionRefreshHeartbeatTests(unittest.TestCase):
                 return 2 if name == "UDP Port" else default
             host = RefreshHost(
                 _window_lifecycle=SimpleNamespace(closing=False),
-                backend=SimpleNamespace(set_active_video_source=lambda _: None),
+                state=SimpleNamespace(deploy_mode=0),
+                backend=SimpleNamespace(set_active_video_source=lambda _: None,
+                                        video_source_snapshot=SimpleNamespace(generation=0)),
                 registry=SimpleNamespace(get=lambda _: module), setting_mode=mode,
                 setting_bool=lambda *args: True, get_setting_number=number,
                 _client_asset_path=lambda *args: Path(__file__),

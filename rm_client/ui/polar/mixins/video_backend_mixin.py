@@ -273,6 +273,7 @@ class VideoBackendMixin:
             # normal webcam sampler and make the Apple-island/
             # AndroidLiquidGlass console the locked foreground workspace.
             self._camera_activation.pause_admitted_capture()
+            self.local_vision._set_input_source(("inactive", "deploy"))
             self._hero_native_wait_started = now
             if self.economy_phase != EconomyScenePhase.CLOSED:
                 self._economy_generation += 1
@@ -443,6 +444,7 @@ class VideoBackendMixin:
             return
         if os.environ.get("POLAR_DISABLE_LOCAL_CAPTURE", "").lower() in ("1", "true", "yes"):
             self._camera_activation.suspend(reason="local capture disabled")
+            self.local_vision._set_input_source(("inactive", "disabled"))
             return
         source = self.registry.get("CameraFeed")
         source_setting = source.get_setting("Source") if source else None
@@ -450,18 +452,46 @@ class VideoBackendMixin:
             # A hidden webcam must not keep sampling or feeding local vision
             # after UDP/Native/Synthetic takes ownership of CameraFeed.
             self._camera_activation.suspend()
+            self._sync_local_vision_input(str(source_setting.value).strip().lower())
             return
         camera_id = int(self.get_setting_number(source, "Camera ID", 0))
         capture_width = int(self.get_setting_number(source, "Capture Width", 960))
         capture_height = int(self.get_setting_number(source, "Capture Height", 540))
+
+        def discard_frame() -> None:
+            self.local_vision._set_input_source(("inactive", "camera"))
+            self.clear_normal_backend_video_frame()
+
         self._camera_activation.ensure(
             (camera_id, capture_width, capture_height),
             bind_frame_sink=self._bind_camera_frame_sink,
-            discard_frame=lambda: self.clear_normal_backend_video_frame(),
+            discard_frame=discard_frame,
         )
 
     def _bind_camera_frame_sink(self) -> None:
+        # A fresh capture session may reuse its configuration. Retire input
+        # history before admitting its callback without restarting the model.
+        self.local_vision._set_input_source(("inactive", "camera"))
+        self._sync_local_vision_input("webcam")
         self.camera_worker.on_frame = self.on_captured_camera_frame
+
+    def _sync_local_vision_input(self, normalized_mode: str):
+        """Publish source ownership on the UI thread, before frame admission."""
+        local = self.local_vision
+        if os.environ.get("POLAR_DISABLE_LOCAL_CAPTURE", "").lower() in ("1", "true", "yes"):
+            key = ("inactive", "disabled")
+        elif self.hero_deploy_video_cut_active():
+            key = ("inactive", "deploy")
+        elif normalized_mode == "synthetic":
+            key = ("inactive", "synthetic")
+        elif normalized_mode == "webcam":
+            camera = self.camera_worker
+            key = ("webcam", camera, camera.camera_id, camera.size)
+        else:
+            backend = self.backend
+            key = ("backend", backend, normalized_mode, backend.video_source_snapshot.generation)
+        local._set_input_source(key)
+        return local, key
 
     def draw_video(self, p: QPainter, width: int, height: int) -> None:
         if self.hero_deploy_video_cut_active():
@@ -519,15 +549,15 @@ class VideoBackendMixin:
         selection = self._vision_selection
         owners = selection.workers()
         try:
-            self.backend.set_active_video_source(
-                self.setting_mode(self.registry.get("CameraFeed"), "Source", "")
-            )
+            source_mode = self.setting_mode(self.registry.get("CameraFeed"), "Source", "")
+            self.backend.set_active_video_source(source_mode)
         except Exception:
             # A failed source transition must not leave old inference or input
             # workers active. Preserve the source error for profile rollback;
             # independent stop faults are reported without hiding that cause.
             self._stop_vision_workers(owners)
             raise
+        self._sync_local_vision_input(str(source_mode).strip().lower())
         if os.environ.get("POLAR_DISABLE_LOCAL_CAPTURE", "").lower() in ("1", "true", "yes"):
             selection.disable_capture()
             failure = self._stop_vision_workers(owners)
@@ -570,10 +600,15 @@ class VideoBackendMixin:
             self.local_vision.start()
 
     def on_captured_camera_frame(self, frame: CapturedFrame) -> None:
-        if self.hero_deploy_video_cut_active():
+        local = self.local_vision
+        token = local._capture_input_token("webcam")
+        if token is None or self.hero_deploy_video_cut_active():
+            return
+        source = self.setting_mode(self.registry.get("CameraFeed"), "Source", "Webcam")
+        if source != "Webcam" or not self.camera_worker.running or self.camera_worker.latest_frame() is not frame:
             return
         if self._vision_source in ("Local", "Auto"):
-            self.local_vision.submit(frame.sequence, frame.width, frame.height, frame.bgr)
+            local._submit_for_input(token, frame.sequence, frame.width, frame.height, frame.bgr)
 
     def consume_hero_native_video_frame(self) -> bool:
         """Read only the judge-system CustomByteBlock/0x0310 decoder."""
@@ -665,6 +700,7 @@ class VideoBackendMixin:
         camera_module = self.registry.get("CameraFeed")
         source_mode = self.setting_mode(camera_module, "Source", "Webcam")
         normalized_mode = source_mode.strip().lower()
+        self._sync_local_vision_input(normalized_mode)
         if self._normal_video_timeline.mode_changed(normalized_mode):
             self.clear_normal_backend_video_frame()
             self._normal_video_timeline.select_mode(normalized_mode)
@@ -697,6 +733,8 @@ class VideoBackendMixin:
         camera_module = self.registry.get("CameraFeed")
         source_mode = self.setting_mode(camera_module, "Source", "Webcam")
         normalized_mode = source_mode.strip().lower()
+        input_owner, input_source = self._sync_local_vision_input(normalized_mode)
+        _, input_generation = input_owner._capture_input_token()
         if self._normal_video_timeline.mode_changed(normalized_mode):
             self.clear_normal_backend_video_frame()
             self._normal_video_timeline.select_mode(normalized_mode)
@@ -735,8 +773,16 @@ class VideoBackendMixin:
         # screen; the decoded backend frame is the only live image, so local
         # vision must consume it or detection/ESP silently lose all input.
         if self._vision_source in ("Local", "Auto") and self.local_vision.running:
-            self._backend_vision_sequence = int(getattr(self, "_backend_vision_sequence", 0)) + 1
-            self.local_vision.submit(self._backend_vision_sequence, width, height, bgr)
+            # Decode/copy may reenter source selection or replace the local
+            # owner. A current owner may accept this frame only while its
+            # original backend source admission still matches.
+            current_mode = self.setting_mode(self.registry.get("CameraFeed"), "Source", "Webcam").strip().lower()
+            local, current_source = self._sync_local_vision_input(current_mode)
+            token = local._capture_input_token("backend")
+            _, current_generation = input_owner._capture_input_token()
+            if current_source == input_source and current_generation == input_generation:
+                self._backend_vision_sequence = int(getattr(self, "_backend_vision_sequence", 0)) + 1
+                local._submit_for_input(token, self._backend_vision_sequence, width, height, bgr)
         self.frame_image = image
         self._normal_video_timeline.publish_backend_frame()
         self.frame_pixmap = QPixmap.fromImage(image)
