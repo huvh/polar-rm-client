@@ -2604,3 +2604,50 @@ Independent integrated review accepted exact source/test hashes: normal-import
 probes PASS. Other source/caller AST and prior assertions are unchanged. Early
 formatter BaseException and late estop_active/display distinctions remain.
 Aggregate qualification is pending for this source stage.
+
+### Completed thirty-eighth integrated result
+
+`client-renewed20h-full38/results.json` was independently read and verified as
+**completed: 402 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `b29c273fd6234389b65841253d557731`. Exact source: local
+`5ab04204c7061b515943bc19446e999726612f23`, public
+[e84258e5255b36c61616ec979ea02ea61ad9359a](https://github.com/lulunomaro/polar-rm-client/commit/e84258e5255b36c61616ec979ea02ea61ad9359a),
+tree `b7e2a230bf84957fd163edf1a4530b06802bc64a` (parent-verified public mapping).
+Provenance records `dirty: false` at start. Declared source stability passed with
+**757 inputs** at both endpoints and SHA-256
+`1ef349e909703402aa5885179add695a9d4c9ab79795a708fc79e8b4bdc53a05`.
+Existing fingerprint scope, exclusions and endpoint limitations apply.
+The new emergency formatting module passed 17 methods. Full37's completed
+401/12/4/0 checkpoint remains separate at its own source. Four incomplete
+prerequisites continue to prevent GO.
+
+The emergency/focus-loss formatting repair is independently accepted in its
+integrated two-file scope. One private formatter and four replacement expressions
+preserve the original operation type when ordinary exception rendering fails,
+so later independent fallback/cleanup attempts are reached and failed attempts
+remain reported incomplete. Type-before-render evaluation is preserved; broken
+formatting is not retried. Existing manager/safety/caller AST and prior assertions
+are unchanged. This is deterministic fault injection, not a reported field incident.
+
+Independent integrated evidence: 25 focused methods PASS, seven added inert
+controls PASS and eight unchanged original probes PASS separately. The new
+17-method baseline suite gives 24 failing outcomes, zero errors; original eight
+baseline probes give four failures, zero errors. Eight runtime-only mutations
+are rejected. Counts overlap. Actual manager lock/E-stop and focus-event methods
+are source-loaded AST with inert collaborators and real in-memory safety; the
+post-run assertion confirms no facade, manager implementation module or spin
+imports. This is not full-window or native-device execution.
+
+Ordinary early manager failure now reaches fallback LOCKED and token revocation,
+without claiming E-stop completion. A late E-stop failure retains `estop_active`
+while the existing fallback displays control_state LOCKED. Explicit unchanged
+counterevidence remains: early formatter `SystemExit` still propagates before
+fallback lock and retains prior QUALIFICATION/token on baseline and candidate.
+Pre-attempt input-method lookup failure can still skip later clear. BaseExceptions
+remain unsuppressed, and focus superclass-finally precedence is retained. No
+universal all-exception revocation or physical neutral delivery is claimed.
+
+Evidence is in the local emergency formatting packet and independent review.
+Python 3.10 grammar checks remain separate from Python 3.12 execution. Historical
+failures, native qualification limits and external prerequisites remain; raw logs
+are not published and no historical timing cause is inferred.
