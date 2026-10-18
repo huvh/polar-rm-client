@@ -1243,6 +1243,16 @@ class BackendManager:
             "decoder_restart", source="native_0310", restarted=restarted, health=health,
         )
 
+    def _native_video_selected(self, state: RobotState | None) -> bool:
+        """Recovery and chunk admission share source/deploy activation policy.
+
+        The caller supplies its authoritative state; chunk application can use
+        a different state object from the manager's current UI state.
+        """
+        return self._active_video_source in {
+            "native", "native 0x0310", "0x0310",
+        } or int(getattr(state, "deploy_mode", 0)) == 1
+
     def _recover_video_decoders(self) -> None:
         """Schedule at most one recovery; the UI tick never tears down pipes."""
 
@@ -1254,9 +1264,7 @@ class BackendManager:
             if health.get("first_frame_timeout") or health.get("stale"):
                 self.udp._request_h265_restart()
 
-        native_selected = self._active_video_source in {
-            "native", "native 0x0310", "0x0310",
-        } or int(getattr(self.state, "deploy_mode", 0) if self.state is not None else 0) == 1
+        native_selected = self._native_video_selected(self.state)
         if not native_selected or self._native_restart_thread is not None:
             return
         health = self.native_decoder.health()
@@ -1782,9 +1790,7 @@ class BackendManager:
         """Apply continuity decisions while checking live decoder availability."""
         if self._video_source_failures:
             return
-        native_selected = self._active_video_source in {
-            "native", "native 0x0310", "0x0310",
-        } or int(getattr(state, "deploy_mode", 0)) == 1
+        native_selected = self._native_video_selected(state)
         if not native_selected:
             # An unselected Native stream must not wake ffmpeg or
             # retain a partial recovery epoch in the background.

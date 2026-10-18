@@ -1092,18 +1092,8 @@ class InputDispatchMixin:
             return
         chat_module = self.registry.get("MatchChat")
         quick_wheel_module = self.registry.get("QuickActionWheel")
-        chat_key = bool(
-            chat_module
-            and chat_module.enabled
-            and chat_module.keybind != "None"
-            and self.keybind_matches(chat_module.keybind, key_name, event)
-        )
-        wheel_key = bool(
-            quick_wheel_module
-            and quick_wheel_module.enabled
-            and quick_wheel_module.keybind != "None"
-            and self.keybind_matches(quick_wheel_module.keybind, key_name, event)
-        )
+        chat_key = self._enabled_overlay_binding_matches(chat_module, key_name, event)
+        wheel_key = self._enabled_overlay_binding_matches(quick_wheel_module, key_name, event)
         if self.match_chat.input_open:
             edit = _chat_key_edit(event)
             edit.apply(self.match_chat, close=lambda: self.close_match_chat(clear=False))
@@ -1126,18 +1116,8 @@ class InputDispatchMixin:
             return
         economy_module = self.registry.get("EconomyPanel")
         projectile_module = self.registry.get("ProjectileShop")
-        economy_key = bool(
-            economy_module
-            and economy_module.enabled
-            and economy_module.keybind != "None"
-            and self.keybind_matches(economy_module.keybind, key_name, event)
-        )
-        projectile_key = bool(
-            projectile_module
-            and projectile_module.enabled
-            and projectile_module.keybind != "None"
-            and self.keybind_matches(projectile_module.keybind, key_name, event)
-        )
+        economy_key = self._enabled_overlay_binding_matches(economy_module, key_name, event)
+        projectile_key = self._enabled_overlay_binding_matches(projectile_module, key_name, event)
         if event.key() == Qt.Key.Key_Escape and self.economy_visible:
             self.close_economy_workspace()
             return
@@ -1266,12 +1246,7 @@ class InputDispatchMixin:
             return
         quick_wheel_module = self.registry.get("QuickActionWheel")
         key_name = self.key_name(event)
-        wheel_key = bool(
-            quick_wheel_module
-            and quick_wheel_module.enabled
-            and quick_wheel_module.keybind != "None"
-            and self.keybind_matches(quick_wheel_module.keybind, key_name, event)
-        )
+        wheel_key = self._enabled_overlay_binding_matches(quick_wheel_module, key_name, event)
         if self.quick_action_wheel.active or self.overlay_coordinator.radial_active:
             if wheel_key and not event.isAutoRepeat():
                 self.finish_quick_action_wheel()
@@ -1459,6 +1434,15 @@ class InputDispatchMixin:
             return text.upper()
         seq = QKeySequence(key).toString()
         return seq or ""
+
+    def _enabled_overlay_binding_matches(self, module, key_name: str, event: QKeyEvent) -> bool:
+        """Match an overlay opener against its current enabled binding."""
+        return bool(
+            module
+            and module.enabled
+            and module.keybind != "None"
+            and self.keybind_matches(module.keybind, key_name, event)
+        )
 
     def keybind_matches(self, bind: str, key_name: str, event: QKeyEvent) -> bool:
         normalized_bind = bind.strip().lower()
