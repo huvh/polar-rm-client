@@ -641,3 +641,46 @@ qualify physical hardware. Fresh recovery results/logs are available locally;
 this does not recover any earlier raw evidence lost in the reset. All preceding
 loss disclosures and historical run distinctions remain in force. No raw logs
 are uploaded by this documentation update.
+
+## Tenth full-run candidate: shared selection policies
+
+Two behavior-preserving policy consolidations are frozen at local
+`d23443a224672e3ac05b34d15394d14525c33eea`, public
+[c9180595ddbdd6ec8a17012b35a62328ae1d762d](https://github.com/lulunomaro/polar-rm-client/commit/c9180595ddbdd6ec8a17012b35a62328ae1d762d),
+tree `695e8b9e2d1d2b1bccb8805439b134350b71b26d` (parent-verified mapping).
+Each helper remains in its existing module; no imports or helper modules were
+added. These are characterized consolidations, with no claim of a repaired
+behavioral defect, performance improvement or global coupling reduction.
+
+- `InputDispatchMixin._enabled_overlay_binding_matches` replaces five repeated
+  checks in `rm_client/ui/polar/mixins/input_dispatch_mixin.py`. Module presence,
+  enabled state, the `"None"` binding sentinel and the existing matcher retain
+  their short-circuit order. The two methods in
+  `tests/test_enabled_overlay_binding_contract.py` passed on both baseline and
+  candidate. Independent focused review passed **40** methods. Removing the
+  enabled guard produced **31 failure outcomes, 0 errors** in the mutation check.
+- `BackendManager._native_video_selected` in `rm_client/backend/manager.py`
+  serves decoder recovery and chunk admission. Each caller explicitly supplies
+  its authoritative state: recovery uses `self.state`, while chunk application
+  uses its supplied state, which may be a different object. Source aliases and
+  exact `deploy_mode == 1` selection are retained. The five methods in
+  `tests/test_native_video_activation.py` passed on the baseline; independent
+  candidate review passed **50** focused methods. Mutating the mode condition
+  to `>= 1` produced **8 failure outcomes, 0 errors**.
+
+Full10, `client-renewed20h-full10/results.json`, was independently read and
+verified as **completed: 370 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO**
+(`passed: false`), run ID `df060d09f95d431eb3ee76d49ad04177`. The root started
+this run at **2026-10-18 09:34:40 UTC**. Provenance records the exact local
+`d23443a224672e3ac05b34d15394d14525c33eea` / tree
+`695e8b9e2d1d2b1bccb8805439b134350b71b26d` checkpoint above and `dirty: false`
+at start. Declared source stability passed with **725 inputs** at both endpoints,
+SHA-256 `9c76ffca46b0eadde71db4e29e79db76ef925ae83670b32b2455153ced07cf66`.
+The same expanded internal-fixture scope and endpoint limitations apply.
+
+This is the latest verified completed offline aggregate; the four incomplete
+prerequisite checks still prevent GO. The earlier completed recovery run remains
+separate, including its 723-input fingerprint and 368/12/4/0 NO-GO result.
+No hardware qualification or exhaustive defect coverage follows from these
+counts. This update publishes only the textual evidence summary; raw logs are
+not uploaded.
