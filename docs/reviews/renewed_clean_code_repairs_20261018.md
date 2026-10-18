@@ -2114,3 +2114,36 @@ passed; these selections overlap and are not summed as unique coverage.
 Source/test bytes match the external packet. Whole-file AST outside release_all
 and all preexisting caller/test hashes remain unchanged. No prior assertion or
 harness was edited. Full-source aggregate qualification is pending.
+
+### Completed thirty-second integrated result
+
+`client-renewed20h-full32/results.json` was independently read and verified as
+**completed: 395 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `473d68f61e7e4547aed21ce49585c637`. Exact source: local
+`39f1a3ee687c68075734291127c1bae4809a0851`, public
+[ace24675e3451780fb0f9a38b73d1fe799f10201](https://github.com/lulunomaro/polar-rm-client/commit/ace24675e3451780fb0f9a38b73d1fe799f10201),
+tree `3abb53c649f258243cd549c98b0f787862bb690d` (parent-verified public mapping).
+Provenance records `dirty: false` at start. Declared source stability passed with
+**750 inputs** at both endpoints and SHA-256
+`01fb67422f895f75f68a419dace1868f0086bbf8994f0032fa7c40cc39360d5d`.
+Existing fingerprint scope, exclusions and endpoint limitations apply.
+
+The new release-logging module passed 18 methods and the existing release-all
+module passed five. Full31 remains a separate historical 394/12/4/0 checkpoint
+at its own source; this result does not rewrite any historical failure.
+
+The release-all diagnostic isolation candidate has now passed final integrated
+review. Both source/test files exactly match the accepted external hashes; prior
+assertions and callers are unchanged. Independently, the matched bounded
+selection passed 42 methods, seven method-only controls passed, and the original
+four contract probes passed. These overlapping selections are kept separate.
+An initial broader 45-method selection also passed but included two existing
+real-window tests and an additional quiescence case; it is not described as
+entirely inert-double-only. Author API/static results remain separately attributed.
+
+The fix preserves the first ordinary operation exception and subsequent
+independent neutral attempts when logging also fails. Existing focus-loss
+fallback, BaseException propagation and best-effort note limitations remain.
+Neutral attempts do not establish wire delivery, native qualification or a
+historical symptom's cause. All four external prerequisites and historical
+failure/interruption records remain; no raw logs are published.
