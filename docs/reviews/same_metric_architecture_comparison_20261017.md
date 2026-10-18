@@ -233,3 +233,45 @@ renderer/asset hashes do not establish a full clean dependency snapshot. Normal
 cleanup uses the existing test host; a failure during its initial setup inherits
 that host's partial-construction cleanup limitations. No new partial-window
 teardown is attempted. Raw profiling output is not included or published.
+
+## 2026-10-18 addendum: full10 to full12 source comparison
+
+This separate comparison uses the exact source checkpoints recorded in the
+[renewed repair report](renewed_clean_code_repairs_20261018.md), preserving all
+historical endpoints above:
+
+- Full10: public `c9180595ddbdd6ec8a17012b35a62328ae1d762d`, local
+  `d23443a224672e3ac05b34d15394d14525c33eea`, tree
+  `695e8b9e2d1d2b1bccb8805439b134350b71b26d`.
+- Full12: public `863954d30aa841058a073d2c0020d1468e20ebaf`, local
+  `6a802d5c73be8585a0f814997edd38cc8d81243a`, tree
+  `5c24ec773655f730f63892ee48477640bfc8771f`.
+
+Both committed `rm_client` trees were exported with `git archive` into temporary
+directories and measured by the same existing `measure_tree` implementation;
+all 221 Python files parsed at each endpoint. Tool hashes still match the
+original method: `metrics.py` SHA-256
+`548bcabd7b664a3468d566a0608e40b25ea32ec5bba955c3e22e511481841847`,
+`runtime_sources.py` SHA-256
+`e0d560401d7e0eb2b05cdb30c2f4b89db3d58ee2625c7d8dd3da103377d855e7`.
+No application imports, regression tests or source edits were required.
+
+| Same metric | Full10 source | Full12 source |
+|---|---:|---:|
+| Functions | 3,479 | 3,481 |
+| Function-scoped executable AST statements | 37,579 | 37,637 |
+| Decisions | 13,246 | 13,273 |
+| Local import edges | 616 | 616 |
+| Eager / including-deferred cycle components | 0 / 0 | 0 / 0 |
+| Window / manager import fan-out | 94 / 37 | 94 / 37 |
+
+Normalized Python-source digests, distinct from Git trees and aggregate-run
+fingerprints, are respectively
+`2871233fffd8f8c1ba1847ae15cb9373c034e34cf0f9e43402a8dd192849518a`
+and `0bd2c9f52b151c0a5cdfb7cb4407409bfa1c7b3caa4cda132c172424e0f795d7`.
+
+The repair stage adds 58 statements, 27 decisions and two functions while these
+static import-coupling measures remain unchanged. This neither proves global
+decoupling nor makes the added handling a quality regression. Runtime callback,
+state and ownership coupling remain outside this graph, and zero cycles are not
+whole-project Clean Code acceptance. No raw metric output is published here.
