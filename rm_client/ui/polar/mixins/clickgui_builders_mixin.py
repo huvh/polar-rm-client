@@ -94,6 +94,8 @@ class ClickGuiBuildersMixin:
         play_sound: bool = True,
     ) -> None:
         visible = bool(visible)
+        if not visible and self.gui_visible:
+            self.pointer_interaction.cancel_epoch()
         self._jello_background_press = None
         if visible:
             self.close_student_panel(immediate=True)

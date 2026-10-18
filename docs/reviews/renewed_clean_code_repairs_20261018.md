@@ -1440,3 +1440,40 @@ with four incomplete prerequisites still preventing GO. Native/hardware and
 other documented limitations remain. All earlier results and counterevidence
 retain their historical source scope. Only documentation is updated and no raw
 logs are uploaded.
+
+## ClickGUI close: accepted pointer-epoch repair
+
+An actual pending module press could survive closing ClickGUI through F8,
+RightShift, Escape or a programmatic call, then toggle the module and autosave
+on its later hidden release. A moved module could assign a hotbar slot, and a
+held slider could continue changing its hidden value. The existing pointer
+owner already provides cancellation with ownership of the stale left release.
+Two production lines in `ClickGuiBuildersMixin.set_clickgui_visible` now call
+`pointer_interaction.cancel_epoch()` on a genuine visible-to-hidden request,
+before close-side callbacks can reenter release handling. Redundant opening and
+already-hidden closing preserve other captures. Fullscreen overlay policy and
+radial behavior are unchanged.
+
+The author's identical integrated **17-method** suite produced **11 FAIL,
+0 ERROR**, with six positive controls passing on the baseline; all 17 pass with
+the repair. Author qualification records **97 focused methods PASS**, API freeze
+PASS and static gates PASS. Independent review recorded **143 executions** across
+DPR 1, 1.5 and 2: 97 focused methods at DPR 1, 17 capture methods at each additional
+DPR, and four independent route methods at each DPR. These overlapping selections
+and repeated DPR executions are not 143 distinct tests or an aggregate result.
+The corrected independent baseline harness produced **12 relevant subcase
+failures, 0 errors** across four methods. Earlier harness attempts with errors
+remain in the local packet and are not counted as valid defect evidence.
+Negative controls rejected unconditional already-hidden cancellation (**4 failure
+outcomes**) and cancellation delayed until after callbacks (**2 failure outcomes**).
+
+Reviewed frozen SHA-256 identities:
+- `clickgui_builders_mixin.py`: `853bb8a813633ced5b1de5aaacddb50912cee16fa80f4494e67cf0a17b64250a`
+- `test_clickgui_close_capture.py`: `b1d0df6aa42aae38a6b73ba22e5a9709b3ad977b36d867e678c90907d0b732db`
+
+Evidence was read from the local `clickgui-close-pointer-20261018` README and
+`client-clickgui-close-independent-review` matrix and test summaries. This is
+focused automated acceptance; no new full aggregate or hardware qualification
+is claimed. Full23 remains the latest completed aggregate at its own source.
+Existing counterevidence and incomplete prerequisites remain; raw logs are not
+uploaded.
