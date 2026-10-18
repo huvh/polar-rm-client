@@ -709,3 +709,28 @@ runs, interrupted-run history and raw-evidence loss disclosures remain intact.
 The four incomplete prerequisites still prevent GO; the aggregate does not
 establish native hardware qualification, exhaustive defect coverage or closure
 of the GitHub issues. No raw logs are published by this report update.
+
+## Twelfth integrated result: second UI repair stage
+
+The [issue-family audit's second UI supplement](issue_family_audit_20261018.md#第二次-ui-补充旧弹出操作与启动确认)
+records stale keyboard Add/Remove actions, nested-modal repaint and
+`BindingPicker` cleanup, plus startup confirmation Return/Enter and mapped
+numeric-key auto-repeat handling. Independent focused review passed **91**
+methods; the baseline produced **33 failure outcomes across 19 methods**.
+The initial candidate's nested-modal gap remains documented in that audit.
+
+Integrated source: local `6a802d5c73be8585a0f814997edd38cc8d81243a`, public
+[863954d30aa841058a073d2c0020d1468e20ebaf](https://github.com/lulunomaro/polar-rm-client/commit/863954d30aa841058a073d2c0020d1468e20ebaf),
+tree `5c24ec773655f730f63892ee48477640bfc8771f` (parent-verified mapping).
+`client-renewed20h-full12/results.json` was independently read and verified as
+**completed: 376 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `9c2130f8c2084ceba8f4d8e6023a65d1`. Source-at-start matches this local
+commit and tree, with `dirty: false`. Declared source stability passed with
+**731 inputs** at both endpoints and SHA-256
+`60b1df8c68fe76765d0e0db3319a0773a1b48ff11651e90ce343b4003ebcf64e`.
+The previously documented scope, exclusions and endpoint limitations apply.
+
+This is the latest completed offline aggregate. Earlier stage results and loss
+disclosures are preserved. Four incomplete prerequisites still prevent GO;
+these results do not establish native hardware qualification or exhaustive
+issue closure. This update publishes no raw logs.
