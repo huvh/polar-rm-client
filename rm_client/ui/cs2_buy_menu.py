@@ -129,7 +129,8 @@ def build_grid(host, width, height):
     grid = layout.offers_pane
     gap, heading_h = 12*scale, 34*scale
     column_w = (grid.width()-4*gap)/5
-    max_rows = max(5, max((sum(o.category==key for o in offers) for key in COLUMNS),default=0))
+    category_offers = {key: [offer for offer in offers if offer.category == key] for key in COLUMNS}
+    max_rows = max(5, max((len(items) for items in category_offers.values()), default=0))
     row_h = max(68*scale, (grid.height()-heading_h-4*gap)/5)
     overflow = max(0,max_rows*(row_h+gap)-gap+heading_h-grid.height())
     host.economy_offers_scroll.set_bounds(overflow)
@@ -138,7 +139,7 @@ def build_grid(host, width, height):
         x = grid.left()+column*(column_w+gap)
         heading = QRectF(x,grid.top(),column_w,heading_h)
         label(heading,f"{column+1}  {TITLES[key]}",size=14,bold=True,align=Qt.AlignCenter)
-        items = [o for o in offers if o.category==key]
+        items = category_offers[key]
         if key == "supplier":
             data = presentation_data(host.state).get("reloading",{}) or {}
             zone = data.get("in_supplier_zone")
