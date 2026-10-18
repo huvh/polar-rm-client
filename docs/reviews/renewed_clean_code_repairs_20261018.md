@@ -568,3 +568,51 @@ separate; equal counts do not mean equal source or coverage. This completed run
 covers the bounded exception-path repair, while the four prerequisite suites
 still prevent a complete GO. No raw logs are published, and this update changes
 only documentation.
+
+## Ninth full-run candidate: settings factory failure cleanup
+
+This section is reconstructed from retained findings after the cloud workspace
+reset. The original uncommitted ninth-stage report text and local raw logs were
+lost; this is a disclosed summary, not a recovery of those exact bytes.
+
+The settings-factory repair was already pushed and is restored at public
+[c83c8b94a77120e585bf73b8c677ba2e7c282af2](https://github.com/lulunomaro/polar-rm-client/commit/c83c8b94a77120e585bf73b8c677ba2e7c282af2),
+tree `b9de9c287c004cc499beaa74a2a12134b5af3599`. Its earlier local commit
+`47696619dea44da7634d3d4503b3ba864f96ae0a` is a historical provenance reference;
+it is not assumed to exist as an object in the restored clone.
+
+`rm_client/ui/cs2_settings_center.py` guards setup after acquiring the
+factory-created `JelloDialog`. If subsequent setup raises, it cancels acquired
+page builders, schedules the acquired dialog for deletion with `deleteLater()`,
+and preserves the original exception. Tests preserve host-owned sibling dialogs
+and the successful construction path. Failure inside the initial `JelloDialog`
+constructor, before the factory acquires the dialog, remains outside this repair.
+
+The actual-Qt baseline reproduced retained dialogs increasing from one to two
+on repeated failures. The three methods in
+`tests/test_settings_factory_failure_cleanup.py` produced **5 FAIL / 0 ERROR**
+baseline outcomes. The author's focused selection passed **77** methods;
+independent review passed **68** in a different selection. These are retained
+pre-reset findings, not reruns in the restored workspace, and the selections
+must not be added as distinct-test counts.
+
+### Interrupted ninth-stage aggregate and recovery boundary
+
+The root runner started full9 at **09:14:45 UTC** from a clean worktree at the
+settings-factory checkpoint. Cloud shell transport disconnected during that run.
+Recovery checks confirmed the old repository/results were absent and no
+`verify_all` process remained. **No completed full9 result was recovered or is
+claimed.** Its output directory was `client-renewed20h-full9`; the lost run must
+not be assigned a passing aggregate score.
+
+The published full8 summary above remains the latest verified completed result:
+**367 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO**, at its separately identified
+source and run ID. Its original local raw results/logs were also lost in this
+reset. The historical verification is retained as published evidence, not
+represented as freshly reverified against locally available raw files.
+
+The restored clone's public commit and tree match the pushed settings-factory
+checkpoint. A replacement aggregate requires a new run with its own run ID and
+fresh provenance after environment restoration; it cannot be treated as a
+continuation or completion of the lost full9. No tests were launched for this
+documentation reconstruction and no raw logs are uploaded.

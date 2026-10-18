@@ -11,6 +11,14 @@ remaining-work statements are not instructions to repeat completed work.
 External/native gaps still apply. No report certifies the whole project as
 Clean Code or ready to merge solely from an offline test count.
 
+The [published full8 checkpoint](renewed_clean_code_repairs_20261018.md#eighth-full-run-candidate-callback-raises-after-changing-epoch)
+records **367 PASS / 12 SKIP / 4 INCOMPLETE / 0 FAIL, NO-GO** at its named
+source; it does not certify subsequent changes. Reproduced admission, cleanup,
+input-ownership and receive-epoch defects have source-scoped corrections and
+negative controls documented there. Those discharged cases are distinct from
+remaining native/external qualification and broader cross-service coupling;
+passing their tests is not universal ownership or architecture acceptance.
+
 
 ## Current reference-validation checkpoint — 2026-10-17 21:10 UTC
 
