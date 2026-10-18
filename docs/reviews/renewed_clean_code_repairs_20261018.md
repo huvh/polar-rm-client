@@ -1691,3 +1691,30 @@ prerequisites still prevent GO; native/hardware and other documented limitations
 remain. A bounded public-reference lookup did not obtain the required exact
 team CRC bytes, so that prerequisite remains missing without substitution.
 Only documentation is updated and no raw logs are uploaded.
+
+## Legacy host-bridge self-test transaction prefix
+
+The direct mutable `tools/firmware/host_bridge/test_host_bridge.py` route reset
+preexisting firmware edits before entering its restoration `try/finally`.
+Checkout partial failure or apply-launch OSError/KeyboardInterrupt could lose
+those edits. Canonical verify_all already forces READ_ONLY=1; that path was not
+the reproduced mutation route and its INCOMPLETE result remains unchanged.
+
+The scoped fix enters the existing transaction before preparation, takes the
+snapshot before mutation, owns restoration before checkout, and removes the
+duplicate manual restore. No real firmware checkout/process was exercised:
+actual helper/main code used disposable trees and rejected native spawning.
+The unchanged final ten-method suite produced five baseline failures/zero errors
+and passes on the candidate. Independent review passed those ten methods plus
+22 inert transaction scenarios, including partial checkout, absent/present
+headers, CDC bytes, OSError/KeyboardInterrupt/SystemExit and unrelated sentinels.
+Two mutations reject late cleanup ownership and double restoration.
+
+The validation/compiler/behavior body, finally, reporting and read-only branch
+are AST-preserved. If restoration succeeds, original exception identity is
+preserved; if restoration itself fails, that failure remains raised with the
+original chained, not falsely reported as successful rollback. Frozen source
+SHA-256 `eb026df2bec2412f8dc9983ee12783f08aad1d622936a15104d3911d46f69811`;
+new test `b479a4c73e20cb80b300768803ef0ccdf6615abed82d325e49772ec9338fb41e`.
+Full qualification of this later source remains pending. No external firmware
+installation, raw-log publication or hardware acceptance is claimed.
