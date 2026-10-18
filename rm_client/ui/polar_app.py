@@ -3233,7 +3233,10 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         try:
             accepted = self.prepare_configuration_for_close()
         except Exception as exc:
-            _LOG.error("Close configuration admission failed", exc_info=True)
+            try:
+                _LOG.error("Close configuration admission failed", exc_info=True)
+            except Exception:
+                pass  # A diagnostic sink cannot cancel admission refusal.
             self.toast(f"关闭保存检查失败：{type(exc).__name__}: {exc}", kind="warning")
             accepted = False
         if not accepted:

@@ -2686,3 +2686,85 @@ Independent integrated review accepted exact source/test bytes: repository-sourc
 19 methods with pure-import assertion, seven controls and eight original probes
 PASS. Cache owner bytes, unrelated window AST and prior assertions are unchanged.
 Aggregate qualification of this stage remains pending.
+
+### Completed thirty-ninth integrated result
+
+`client-renewed20h-full39/results.json` was independently read and verified as
+**completed: 403 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `0c2b55f9f3df4266a88776801ba0044b`. Exact source: local
+`71a183b2e2156c73e3df53cbb97f875d897fe883`, public
+[360059ce12c34668af9a7ee54a1bc45111d5065f](https://github.com/lulunomaro/polar-rm-client/commit/360059ce12c34668af9a7ee54a1bc45111d5065f),
+tree `0549d3010ef718648009339d8bbf7c0a6ad686d7` (parent-verified public mapping).
+Provenance records `dirty: false` at start. Declared source stability passed with
+**758 inputs** at both endpoints and SHA-256
+`e92a183df9d8e37cb386fa81b4aeefb807cebb8c53b7d9dc50ed09e6081e16aa`.
+Existing fingerprint scope, exclusions and endpoint limitations apply.
+The new cache diagnostic module passed 19 methods. Full38's completed
+402/12/4/0 checkpoint remains separate at its own source. Four incomplete
+prerequisites continue to prevent GO.
+
+The ClickGUI cache diagnostic repair is independently accepted in its integrated
+two-file scope. One ordinary logger guard lets the existing cache clear and
+compatibility fallback continue after diagnostic failure. Exact log context and
+log-before-clear-before-fallback order remain. The cache owner, local painter
+finally cleanup, saved renderer preference and next-frame recovery are unchanged.
+The affected callers are legacy cached panel modes, not the primary Jello painter.
+
+Independent integrated evidence: 19 methods PASS, seven extra inert controls PASS
+and eight unchanged original probes PASS separately. Original baseline probes
+retain three failures, zero errors, and five positive controls. The same new
+19-method suite produces ten failing outcomes and zero errors on baseline. These overlapping
+selections are not summed. Post-run assertions confirm no Qt/GL or facade/cache/
+manager/spin module imports. Actual window/cache AST is exercised with inert
+image/painter collaborators; the facade-importing real-raster neighbor was not
+run in this focused packet. Pre-existing tracked assertions remain unchanged.
+
+Proven effects are retained cache entries and skipped fallback on baseline.
+Displayed stale pixels, wrong-key selection and native GPU effects were not
+established; retained same-key images are not automatically semantically stale.
+Local painter cleanup already preceded logging, so no new resource-leak repair
+is claimed. BaseExceptions and clear/fallback errors still propagate according
+to their original policy. Evidence is in the local ClickGUI cache packet and
+independent review. Historical failures and external/native qualification gaps
+remain; raw logs are not published.
+
+### Close refusal survives diagnostic failure
+
+An ordinary logger exception after close-admission preparation failed could
+prevent the False return and the actual closeEvent adapter's event.ignore().
+Six original inert methods give two baseline failures and four controls passing,
+zero errors; standard closed stderr reproduces it. Actual manager lock AST and
+real in-memory safety show authority was already revoked, shutdown was not
+started, and the draft was retained. The inert event remains initially accepted
+on the failing baseline; native Qt closing or resource leakage is not established.
+
+Only the existing admission logger receives an ordinary Exception guard. Log,
+toast and False-return order remains unchanged; successful and pending-save
+paths remain unchanged. Frozen source SHA-256
+`bf493a5217b467c362a960b4d1572f4b3db013f7f41edc68fd02f4a8b3875439`;
+new test `d3d2ae33cccf9b6b0938bd5183fd78769cf5951b5c78d7fe8d620f9992cd744c`.
+New baseline 17 methods reproduce eight assertion/subtest failures, zero errors.
+Independent candidate 38 focused (17 new, 21 save-owner neighbors), original six
+probes and seven controls PASS; seven runtime-only mutants rejected. Four
+retained-boundary controls also pass on baseline. Whole-source bytes restore
+exactly after unwrapping the guard; actual caller/manager/persistence snapshots
+and old assertions remain unchanged. Pure-import boundaries pass.
+
+Formatting, toast and property errors and process-control exceptions retain their
+explicit propagation boundaries. Author integrated 38 methods, API freeze and
+static gates PASS; independent integrated and aggregate qualification pending.
+Full39 above applies to the earlier source. Local packet:
+close-admission-diagnostic-20261018. No raw logs published.
+
+A separate final tick-performance warning probe covers 25 inert cases: metrics
+and all earlier runtime/frame-request work complete before warning escape, with
+no later callback in that adapter. No lost internal continuation or bookkeeping
+was established, so no tick-performance patch is bundled or historical timing
+cause inferred.
+
+Independent integrated review accepted exact source/test bytes: 38 focused,
+seven controls, pure 17 and six original probes PASS through integrated source.
+The reviewer's first original-probe invocation retained its hardcoded frozen
+baseline path and reproduced the two baseline failures; that log is preserved,
+and the corrected integrated run is separate. Source outside the single guard,
+dependencies and prior assertions are unchanged. Aggregate remains pending.
