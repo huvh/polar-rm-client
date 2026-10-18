@@ -734,3 +734,32 @@ This is the latest completed offline aggregate. Earlier stage results and loss
 disclosures are preserved. Four incomplete prerequisites still prevent GO;
 these results do not establish native hardware qualification or exhaustive
 issue closure. This update publishes no raw logs.
+
+
+## Thirteenth-stage recovery result: angle receipt boundary
+
+The [issue-family audit](issue_family_audit_20261018.md#角度接收边界补充延迟读取与授权代际)
+records the controller-angle read-start receipt time, arm-generation and partial
+frame retirement repair. Its local-read bound does not recover hardware sample
+time or establish the age of bytes already queued in OS buffers.
+
+The original full13, run `0d123dd22d4342eea7894821c91320e0`, remained incomplete
+after the environment transition; its partial files are preserved. The distinct
+`client-renewed20h-full13-recovery/results.json` was independently read and
+verified as **completed: 377 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO**
+(`passed: false`), run ID `109252f3f53e4ee6b7afdcadcbc264ee`. This does not
+retroactively pass the interrupted run.
+
+Recovery provenance matches local `3970e7f8ce2b7d4eceec2216ffd1cac7b8065ab9`,
+public [1ec12135bfc40576d2e15aaaa97d3e909e3e5a5f](https://github.com/lulunomaro/polar-rm-client/commit/1ec12135bfc40576d2e15aaaa97d3e909e3e5a5f),
+tree `09e3660966d6a60919a9bdeadae80e6d193d0d17` (parent-verified public mapping).
+It records **dirty: true**; the parent identified only the issue-audit document
+as dirty at start. Declared source stability passed with **732 inputs** at both
+endpoints and SHA-256
+`d86522325be259656961ba6acac5e25967d71fa4ef20db126f6b6bad4572e096`.
+Existing fingerprint scope and endpoint limitations apply.
+
+This is the latest completed offline aggregate. Earlier results and evidence
+loss disclosures remain distinct. Four incomplete prerequisites still prevent
+GO; physical-link safety and hardware qualification remain outstanding. No raw
+logs are published by this documentation update.
