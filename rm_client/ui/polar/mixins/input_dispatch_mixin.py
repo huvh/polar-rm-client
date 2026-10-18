@@ -628,7 +628,16 @@ class InputDispatchMixin:
                 return True
             except Exception as error:
                 errors.append(error)
-                logging.getLogger(__name__).exception("Modal input neutralization failed")
+                try:
+                    logging.getLogger(__name__).exception("Modal input neutralization failed")
+                except Exception as diagnostic:
+                    # Reporting cannot cancel neutral attempts or their latch.
+                    try:
+                        add_note = getattr(error, "add_note", None)
+                        if callable(add_note):
+                            add_note(f"Modal input diagnostic failed: {type(diagnostic).__name__}: {diagnostic}")
+                    except Exception:
+                        pass
                 return False
 
         try:
@@ -683,7 +692,16 @@ class InputDispatchMixin:
                 action()
             except Exception as error:
                 failures.append(error)
-                logging.getLogger(__name__).exception("Locked input cleanup failed")
+                try:
+                    logging.getLogger(__name__).exception("Locked input cleanup failed")
+                except Exception as diagnostic:
+                    # Keep the primary error and attempt every independent clear.
+                    try:
+                        add_note = getattr(error, "add_note", None)
+                        if callable(add_note):
+                            add_note(f"Locked input diagnostic failed: {type(diagnostic).__name__}: {diagnostic}")
+                    except Exception:
+                        pass
 
         try:
             attempt(lambda: self.control.reset_inputs())

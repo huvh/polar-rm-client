@@ -2266,3 +2266,93 @@ six controls and five original defect probes PASS through repository imports.
 The original eleven-method probe retains exactly ten passes and the one
 intentional old-prefix failure, zero errors. All pre-existing assertions and
 other method ASTs are unchanged. Aggregate qualification remains pending.
+
+### Completed thirty-fourth integrated result
+
+`client-renewed20h-full34/results.json` was independently read and verified as
+**completed: 397 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `f46f07ccb25943b496aefaca4ad37a77`. Exact source: local
+`cbe07f8bffb932b8ae47ea3fd00254580d5015ea`, public
+[f842ac33b6c4162b5e12996fe0c56993b3f81e34](https://github.com/lulunomaro/polar-rm-client/commit/f842ac33b6c4162b5e12996fe0c56993b3f81e34),
+tree `607476d6cb57ae37a45e4bbf253dcc85764d5d57` (parent-verified public mapping).
+Provenance records `dirty: false` at start. Declared source stability passed with
+**752 inputs** at both endpoints and SHA-256
+`e035f9df7356076067500fc76e8efbb8052a66a3573b4045777a1b91e91cf78d`.
+Existing fingerprint scope, exclusions and endpoint limitations apply.
+The new lifecycle diagnostic module passed 18 methods. Full33's completed
+396/12/4/0 checkpoint remains separate at its own source. Four incomplete
+prerequisites continue to prevent GO.
+
+The lifecycle branch diagnostic repair is independently accepted in its two-file
+integrated scope. Request/retry bookkeeping records the original fault before
+fallible diagnostics. Failed polling attempts safety revocation before formatting
+or logging; ordinary logger failures cannot leave stale close permission or
+allow a later healthy poll to inherit unrevoked authority. Existing action
+aggregator, finalization policy, duplicate-fault suppression and original failure
+records remain. The secondary log retains the actual lock exception/traceback.
+
+Independent integrated evidence: 66 focused methods, six independent controls
+and five original ordinary-defect probes PASS as overlapping selections. The new
+18-method suite gives 17 failing outcomes, zero errors, on its baseline. Eight
+runtime-only mutations are rejected. Existing assertions remain unchanged.
+The entire original eleven-method characterization remains **10 PASS / 1 FAIL /
+0 ERROR**: its old-prefix control verifies the same logger `SystemExit`, then
+expects MATCH_ARMED. The accepted candidate is LOCKED because revocation now
+precedes diagnostics. This deliberate safety-first prefix change is preserved as
+counterevidence, separate from the aggregate, and is not relabeled green.
+BaseExceptions remain unsuppressed; no claim of unchanged interrupted prefixes
+is made. A lock-operation BaseException still exits before further reporting.
+
+Evidence: the local window-lifecycle branch packet's README and independent
+review. Focused callbacks are inert; actual runtime is Python 3.12, with Python
+3.10 grammar checks only. Context/finalization diagnostic branches and separately
+deferred input-owner findings are outside this repair. No native retirement,
+physical safety or universal diagnostic closure is qualified. Prior failures,
+interrupted runs and external prerequisites remain; raw logs are not published.
+
+### Modal and locked-input diagnostic isolation: composed integration
+
+Two separately reviewed changes affect only the existing nested attempt helpers
+in InputDispatchMixin._neutralize_modal_inputs and _clear_control_inputs_for_lock.
+Ordinary logger failures previously interrupted later UI cleanup. Modal cleanup
+could also miss its persistent failure latch and subsequent backend lock; the
+actual radial entry claims overlay ownership while still armed, so there is no
+prior backend revocation on that path. The lock-hook path differs: the actual
+manager has already locked authority and attempted backend neutral admission,
+and ordinarily requeues a failing hook. Its defect is skipped later UI cleanup
+and replacement of the primary exception, not missing upstream neutral admission.
+
+Both helpers retain primary errors first, guard ordinary diagnostic exceptions,
+and optionally add a guarded note. Ordinary modal failures remain absorbed with
+a persistent gate and later lock; the lock hook still raises its first primary
+error and retains its latch/requeue contract. Healthy behavior, action order,
+conditional publication, reentry and explicit recovery remain unchanged.
+Operation/logger/note BaseExceptions still propagate; no ordinary-error cleanup
+guarantee is extended to them. A failed lock attempt is not successful revocation.
+
+The two method-only patches were composed without overwriting either candidate.
+Final source SHA-256 `3768efa91b57ce9a333bb2f926e2bb0058bb24f130674598449a3df769203369`;
+modal test `922cd685a028673902f6deca8094e45d2eeea791680a91266893689a3d62cc1e`;
+lock test `788d5439f5623e5aa76e41daaf7f1b059e495a0793fac176c268ef75d69702a6`.
+Independent AST/byte comparison proves both accepted methods and unchanged
+surrounding code. Preexisting assertions/caller fixtures remain unchanged.
+
+Modal baseline: 15 methods, 20 failing assertions/subtests, zero errors; candidate
+20 PASS includes 15 inert new methods and five existing offscreen fixtures.
+Independent actual-window radial controls establish later real in-memory safety
+locking and persistent gating on ordinary failure, plus healthy/process-control
+counterexamples. Three mutations are rejected. Lock baseline: 16 methods,
+19 failing assertions/subtests, zero errors; candidate 22 PASS includes six
+existing offscreen neighbors. Six extra controls and eight original probes PASS;
+five mutations rejected. The initial note-access mutation harness error is
+retained; final absent-note-safe assertions reject the mutant without errors.
+
+After composition, independent combined 37 methods, lock 22, six controls and
+eight original probes PASS; separately modal 20 and four actual-window controls
+PASS. Author selected 36 methods, API freeze and static gates PASS. These
+selections overlap, so their totals are not added as unique coverage. Offscreen
+window fixtures use inert transports/audio; no physical wire/native presentation
+acceptance is inferred. Full34 above applies to the prior source; aggregate
+qualification of this composed stage is pending. Evidence: modal-input-diagnostic,
+modal-input-composed-review and lock-input-diagnostic packets, dated 20261018.
+No raw logs are published.
