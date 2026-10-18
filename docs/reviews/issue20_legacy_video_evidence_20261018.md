@@ -184,11 +184,20 @@ comment changes do not alter executable behavior or establish GPU performance.
   handoff **1 method PASS**. Its additional incomplete result is
   `tests/test_modal_input_epoch.py`: **300-second timeout**, child tree stopped.
   The retained stack is in GUI transition audio-source preload (`ui_audio.py`),
-  not the H.264 decode/handoff path. This separate unresolved timeout remains
-  part of the aggregate and prevents claiming full acceptance.
+  not the H.264 decode/handoff path. That timeout remains part of this historical
+  aggregate; the later fixture-isolation result is recorded below.
 - The completed **358/12/4/0, NO-GO** result above remains the earlier public
   `32da8ad5` / local `3f94f0f0` stage; it is not a result for this newer commit.
 
 This verifies the client-side manager-to-HUD handoff only. Native GPU/display
 presentation, the physical legacy receiver path, and real-device continuous
 video/disconnect/reconnect acceptance remain pending.
+
+
+Later checkpoint: public `80a78695eb6d422dc81593759c71db69623c2e2f`
+completed **362 PASS / 12 SKIP / 4 INCOMPLETE / 0 FAIL, NO-GO**. After test-only
+native-audio isolation, the modal-input suite passed all five methods at the
+unchanged timeout. See the [fifth-stage result](renewed_clean_code_repairs_20261018.md#completed-fifth-stage-integrated-result)
+for exact source/fingerprint provenance. This preserves full4's timeout history
+and establishes neither a production audio fix nor physical legacy-video
+compatibility; the hardware limits above still apply.

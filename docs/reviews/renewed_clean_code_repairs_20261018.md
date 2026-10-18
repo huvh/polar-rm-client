@@ -320,3 +320,65 @@ The preceding 358-PASS, 12-SKIP, 4-INCOMPLETE, 0-FAIL NO-GO run belongs to publi
 `32da8ad` and remains separate from this newer unsuccessful candidate. H.264/HUD details remain in the
 [issue20 evidence report](issue20_legacy_video_evidence_20261018.md).
 Only documentation is changed by this report update; no raw logs are published.
+
+## Fifth full-run stage: fixture isolation and buy-grid category reuse
+
+### Input-fixture native audio isolation
+
+Local `11a26761afab65ce9326616443082da4a060c6e1`, public
+[c95649cf55d6d041b6cd9cec2843277f90815399](https://github.com/lulunomaro/polar-rm-client/commit/c95649cf55d6d041b6cd9cec2843277f90815399).
+Only test files change: the shared
+[test_window_economy_commands.py](../../tests/test_window_economy_commands.py)
+fixture and [test_input_fixture_audio_isolation.py](../../tests/test_input_fixture_audio_isolation.py).
+
+Before constructing the real window, the fixture replaces `ReliableAudioPool`
+preload/media-preload/play methods with inert call recorders. It retains the
+QObject pool and production feedback routing while removing native source
+loading/playback from these input tests. The ineffective `ui_audio_enabled`
+assignment is removed. Patches are registered for cleanup, including setup
+failure, so neighboring tests do not inherit this isolation.
+
+Independent verification: **32 focused methods passed**; safe baseline controls
+using mocked native constructors produced **2 failures, 0 errors**. These checks
+cover the intended boundary and normal/setup-failure restoration. This is a
+fixture-isolation repair, not a production audio fix or a diagnosis of the
+native backend's underlying stall. Full4's timeout evidence remains valid and
+separate.
+
+### Reuse existing ordered offer categories
+
+Local `80e71dd0f15db91dfecc6a0fe1646f65ff71a20a`, public
+[80a78695eb6d422dc81593759c71db69623c2e2f](https://github.com/lulunomaro/polar-rm-client/commit/80a78695eb6d422dc81593759c71db69623c2e2f).
+[cs2_buy_menu.py](../../rm_client/ui/cs2_buy_menu.py), `build_grid`, now constructs
+the existing ordered category lists once and reuses them for row counts and
+column rendering. The original filters/order are retained without adding a
+helper module or changing the category definition.
+
+[Category characterization](../../tests/test_buy_grid_category_characterization.py)
+compares the same **18 draw/interaction traces** against baseline `1fb3650`,
+whose actual module hash was verified. Candidate selection: **8 methods passed**;
+separate baseline validation: **1 method passed**. Order/grouping negative
+controls produced **12** and **15 failing outcomes**, respectively, with
+**0 errors**. These results substantiate this local behavior-preserving reuse;
+they establish neither a project-wide coupling reduction nor a performance
+score.
+
+### Completed fifth-stage integrated result
+
+The integrated source is local `80e71dd0f15db91dfecc6a0fe1646f65ff71a20a`, public
+`80a78695eb6d422dc81593759c71db69623c2e2f`, tree
+`702021b8362abf6162bd34b555ba4577b4929b2d` (parent-verified mapping).
+`client-renewed20h-full5/results.json` was independently verified as **completed:
+362 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`), run ID
+`99c6df2d7ce04152b37c369cc9612b08`. Source-at-start records the exact local
+commit/tree above and `dirty: false`. Both source endpoints contain **712 inputs**,
+SHA-256 `8b60aa16e38cf069ae0207694423aa166bc345cd027e8a8bbfc737a20d824c0c`;
+source stability is PASS under the previously stated scope/endpoint limitations.
+
+With the same 300-second child timeout, `tests/test_modal_input_epoch.py` passed
+**5 methods** in 1.501 seconds; it did not time out in this run. Full4's timeout
+is retained as a separate unsuccessful candidate. This result validates the
+scoped fixture isolation; it does not claim that a production native-audio hang
+was fixed. The four external/integration prerequisite suites remain incomplete,
+so full acceptance is still NO-GO. This update changes only documentation and
+publishes no raw logs.
