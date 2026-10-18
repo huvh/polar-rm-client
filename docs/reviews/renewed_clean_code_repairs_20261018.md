@@ -1418,3 +1418,25 @@ are separately reported by the integrating owner. No new aggregate, physical
 audio or hardware qualification is claimed. Full22 remains source-specific,
 and prior counterevidence and external gaps remain intact. Only this report is
 edited; raw logs are not uploaded.
+
+
+### Completed twenty-third integrated result
+
+`client-renewed20h-full23/results.json` was independently read and verified as
+**completed: 386 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `612db0098f8146e4a15114335ea5bc76`. Exact source: local
+`1fc3e36fd92c8d38ef7da0c69e268ac9aa4938a2`, public
+[8a7b6abcc3eb5274bfeeef63df508b56e231f226](https://github.com/lulunomaro/polar-rm-client/commit/8a7b6abcc3eb5274bfeeef63df508b56e231f226),
+tree `03ed0ebd80452670f7c044d3d83e472291beba84` (parent-verified public mapping).
+Provenance records `dirty: false` at start. Declared source stability passed with
+**741 inputs** at both endpoints and SHA-256
+`3e6c908d8f3257bcbd6ee4a96b63bc0b4711fee04d1b9699e40d681da0bf662b`.
+Existing fingerprint scope, exclusions and endpoint limitations apply.
+
+This is source-specific integration evidence for the behavior-preserving
+hit-revision ownership cleanup; it does not turn that refactor into a new bug
+fix or prove global decoupling. Full23 is the latest completed offline aggregate,
+with four incomplete prerequisites still preventing GO. Native/hardware and
+other documented limitations remain. All earlier results and counterevidence
+retain their historical source scope. Only documentation is updated and no raw
+logs are uploaded.
