@@ -1422,6 +1422,8 @@ class StartupSceneMixin:
             key = mapping.get(event.key())
             if key is None:
                 return False
+            if event.isAutoRepeat():
+                return True
             self.apply_robot_profile(str(key), close_home=True)
             self.auto_save_config()
             return True
@@ -1439,6 +1441,8 @@ class StartupSceneMixin:
             key = mapping.get(event.key())
             if key is None:
                 return False
+            if event.isAutoRepeat():
+                return True
             self.apply_match_mode(str(key), close_home=False)
             self.reset_startup_page_animation("robot")
             self.begin_startup_page_transition("robot")
@@ -1454,6 +1458,9 @@ class StartupSceneMixin:
         key = mapping.get(event.key())
         if key is None:
             return False
+        # One physical selection confirms one page, including numeric shortcuts.
+        if event.isAutoRepeat():
+            return True
         self.apply_scenario(str(key), close_home=False)
         next_page = self.startup_page_after_scenario()
         self.reset_startup_page_animation(next_page)
