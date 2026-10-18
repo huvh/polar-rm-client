@@ -2356,3 +2356,90 @@ acceptance is inferred. Full34 above applies to the prior source; aggregate
 qualification of this composed stage is pending. Evidence: modal-input-diagnostic,
 modal-input-composed-review and lock-input-diagnostic packets, dated 20261018.
 No raw logs are published.
+
+### Completed thirty-fifth integrated result
+
+`client-renewed20h-full35/results.json` was independently read and verified as
+**completed: 399 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `4f82d8a9f4ef42e69f56c4398eaa887d`. Exact source: local
+`86136deedd53eca01cb715d41769859c94c97c9d`, public
+[ada3739f55c7acf63d89be7c1f545496dd0be356](https://github.com/lulunomaro/polar-rm-client/commit/ada3739f55c7acf63d89be7c1f545496dd0be356),
+tree `a7cfce7678c984aff720f0845ae1e5d45ed83797` (parent-verified public mapping).
+Provenance records `dirty: false` at start. Declared source stability passed with
+**754 inputs** at both endpoints and SHA-256
+`f9d2fb5132806e87cc7b9150a6dc874c56d187f0814ef03a3304890040c3ec66`.
+Existing fingerprint scope, exclusions and endpoint limitations apply.
+The new lock and modal diagnostic modules passed 16 and 15 methods respectively.
+Full34's completed 397/12/4/0 checkpoint remains separate at its own source.
+Four incomplete prerequisites continue to prevent GO.
+
+The composed modal/lock input diagnostic repairs preserve their different caller
+contracts. Modal cleanup absorbs ordinary operation errors, continues independent
+neutral attempts and retains its failed-cleanup latch; direct radial/ClickGUI
+admission does not already revoke backend authority. Lock cleanup retains its
+first-error rethrow contract after independent UI actions. Its manager caller
+already revokes authority/adopts backend neutral before the hook and requeues
+ordinary failure; direct startup/shutdown calls have different surrounding owners.
+Both nested helpers isolate ordinary diagnostic/optional-note failures without
+replacing the original errors. Best-effort notes introduce no durable diagnostic
+channel or Python 3.11 dependency. BaseExceptions remain unsuppressed.
+
+Independent composition checks verify each method matches its accepted external
+candidate, the whole file equals precisely those two replacements, and existing
+tests/assertions remain unchanged. Integrated combined selection: 37 PASS; lock
+selection: 22 PASS; six independent lock controls and eight original lock probes
+PASS separately. These selections overlap. Modal external review separately
+passed 20 methods, paired four actual radial/safety scenarios and rejected three
+mutations. Baseline new suites remain modal 15 methods/20 failing outcomes and
+lock 16 methods/19 failing outcomes, each zero errors. Five lock mutations were
+rejected. Counts are not unique defect or aggregate-method totals.
+
+Preserved process-control counterevidence: on both baseline and candidate, actual
+manager logger `SystemExit` propagates after revocation/backend-neutral admission,
+without ordinary-failure requeue or diagnostic recording. The request is consumed,
+the persistent UI latch stays set and transient guard clears. Remaining actions
+are not promised after process-control interruption. Modal and lock behavior must
+not be collapsed into a universal prior-revocation or continuation claim.
+
+Evidence is in the modal and lock input diagnostic packets and independent
+reviews. New lock methods/controls are inert; six integrated neighbor methods use
+actual offscreen Qt windows with backend starts/audio load/play patched and
+capture/preload disabled. Python 3.10 grammar/capability checks are not a Python
+3.10 runtime result. Physical neutral acknowledgment, native presentation and
+hardware behavior remain unqualified. Historical evidence and external blockers
+remain; no raw logs are published.
+
+### Final-context failure storage through broken diagnostics
+
+The remaining two final-context error handlers could lose their stored failure
+records and the actual window adapter's warnings when ordinary logging raised.
+The context-entry/release-factory finally path already attempted doneCurrent;
+no additional skipped GL retirement is established. The repair guards only the
+two logger calls and uses the existing safe failure-record formatter. Existing
+logging-before-formatting order, finalized seal, no-retry behavior and finally
+leave expression are preserved. The explicit leave-factory exception propagation
+contract remains unchanged, including its exception masking precedence.
+
+Frozen source SHA-256 `c617f4fcbbb897a8219613676324b9309d58608d5765977c298a4455fe7f119e`;
+new test `2897884fe2efda990b35866ade6ef70da734ee9dd22508d8b9214d1f18a6b3b3`.
+New baseline 15 methods produce 18 assertion/subtest failures, zero errors.
+Independent external candidate: 81 focused methods and six inert controls PASS;
+eight runtime-only mutations rejected, including formatting before logging.
+The original unchanged seven-method probe retains three expected subtest failures
+in one characterization requiring ordinary logger propagation. Both original
+defect methods pass. This intentional ordinary-exception absorption is documented
+separately from aggregate results. Operation/logger/formatter BaseException
+identity and prefixes remain preserved; no universal retirement guarantee.
+
+Whole-file AST differs only in these two guards/formatter calls. Actual
+closeEvent/finish adapter controls verify warning delivery and superclass-finally
+behavior. Author integrated 81 methods, API freeze and static gates PASS;
+independent integrated review and aggregate qualification are pending. Full35
+above qualifies only the prior source. Evidence: window-final-context-diagnostic-
+20261018 local packet. No raw logs published.
+
+Independent integrated review accepted exact frozen source/test bytes: normal-
+import 81 focused methods, six inert controls and both original defect methods
+PASS. Complete historical probe retains exactly three expected subtest failures,
+zero errors. Other AST and prior assertions remain unchanged. Next aggregate
+remains pending for this stage.

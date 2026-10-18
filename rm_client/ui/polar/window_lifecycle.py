@@ -127,16 +127,22 @@ class WindowLifecycleController:
         try:
             has_context = context.available()
         except Exception as exc:
-            _LOG.error("Window GL context inspection failed", exc_info=True)
+            try:
+                _LOG.error("Window GL context inspection failed", exc_info=True)
+            except Exception:
+                pass  # Reporting cannot erase the sealed owner's failure record.
             has_context = False
-            failures.append(OwnerActionFailure("GL context", type(exc).__name__, str(exc)))
+            failures.append(self._failure_record("GL context", exc))
         if has_context:
             try:
                 context.enter()
                 failures.extend(run_owner_actions(context.releases()))
             except Exception as exc:
-                _LOG.error("Window GL context cleanup failed", exc_info=True)
-                failures.append(OwnerActionFailure("GL context", type(exc).__name__, str(exc)))
+                try:
+                    _LOG.error("Window GL context cleanup failed", exc_info=True)
+                except Exception:
+                    pass  # Preserve the primary context failure and finally-leave.
+                failures.append(self._failure_record("GL context", exc))
             finally:
                 failures.extend(run_owner_actions((context.leave(),)))
         self.finalization_failures = tuple(failures)
