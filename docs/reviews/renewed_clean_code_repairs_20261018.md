@@ -907,3 +907,28 @@ remains unchanged and published at
 Neither the separate motion repair nor the paired diagnostic trials erase it.
 Only this textual report is updated; the local review packets and raw logs are
 not uploaded.
+
+### Accepted test-only synchronization repair after paired diagnosis
+
+Independent review accepted the frozen fullscreen test SHA-256
+`a3f13e2f576b83d0026127de16db6547501a4329f69dd46c44ef7e272e193648`.
+Bounded condition waits observe entrance completion and the first actual build
+slice, while preserving `ready == False`. The original safety scenario is shared
+with a delayed-event variant; a real Qt callback activates the production timer
+and remains busy for 60 ms before yielding. No production scheduler changes.
+
+Author runs passed all 13 methods at each DPR 1, 1.25, 1.5, 2 and 2.5 (65
+executions, not 65 unique methods). Independent runs passed 13 methods at DPR 1
+and 2.5. AST review confirmed the original first-slice assertion and all 22
+subsequent safety statements remain unchanged, as do the other original methods.
+Independent negative controls fail for stalled timers, construction errors,
+cancellation and premature readiness. The reviewer also reproduced the original
+fixed-wait failure from `0de5e521`, including an active overdue timer and zero
+slices, then observed a real slice on a subsequent event turn. That failed trial
+remains a failure. Full15's exact original delay remains unproven; these focused
+results do not replace its failed aggregate or qualify native presentation.
+
+The separate idle-budget source is published at
+`c1f10208eda6cddce504340f3af525710c23d709` (local `cc19379e442a2d3607bfa180dbf02930bdbae108`,
+tree `8c677d18b723b838530ce0d9dc7432a8af4c1a91`). A new aggregate is pending for
+the combined accepted source and test repair. No raw logs are included.

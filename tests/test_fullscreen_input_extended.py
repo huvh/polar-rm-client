@@ -7,6 +7,7 @@ this does not qualify physical-display DWM/GPU presentation or robot hardware.
 import ast
 import os
 from pathlib import Path
+from time import monotonic
 import unittest
 from unittest.mock import Mock, patch
 import shiboken6
@@ -110,9 +111,55 @@ class InputLifecycleTests(unittest.TestCase):
         QTest.keyRelease(self.host,Qt.Key.Key_W)
         self.host.handle_control_key_event.assert_not_called(); self.neutral()
     def test_lazy_page_f11_nested_modal_f12_and_cancel_preserve_safety(self):
+        self._exercise_lazy_page_interruptions()
+
+    def test_delayed_lazy_page_still_interrupts_mid_build_safely(self):
+        self._exercise_lazy_page_interruptions(delayed_event=True)
+
+    def _wait_for_settings_state(self, dialog, page, predicate, milestone):
+        # The deadline detects a stuck UI. Elapsed time alone is not evidence
+        # that Qt dispatched an entrance tick or a queued construction slice.
+        deadline = monotonic() + 1
+        while not predicate():
+            builder = page.builder
+            if builder.error or builder.cancelled or monotonic() >= deadline:
+                self.fail(
+                    f"{milestone}: panel_visible={dialog.panel.isVisible()}, "
+                    f"page_visible={page.isVisible()}, progress={dialog.timeline.progress}, "
+                    f"slices={builder.slices}, ready={builder.ready}, active={builder.active}, "
+                    f"timer_remaining_ms={builder.timer.remainingTime()}, "
+                    f"cancelled={builder.cancelled}, error={builder.error!r}"
+                )
+            QTest.qWait(1)
+
+    def _exercise_lazy_page_interruptions(self, *, delayed_event=False):
         dialog=build_settings_center(self.host); self.children.append(dialog)
-        dialog.show(); QTest.qWait(480)
-        page=dialog.pages['界面 / HUD']; dialog.tabs.setCurrentWidget(page); QTest.qWait(30)
+        page=dialog.pages['界面 / HUD']; dialog.show()
+        self._wait_for_settings_state(
+            dialog, page,
+            lambda: dialog.panel.isVisible() and not dialog.timeline.active(),
+            "Settings entrance did not finish",
+        )
+        delayed_slices=[]
+        def select_page():
+            dialog.tabs.setCurrentWidget(page)
+            if delayed_event:
+                # Activate the real timer inside this event, then keep the
+                # event busy beyond the old 30 ms wait without pumping Qt.
+                delayed_slices.append(page.builder.slices)
+                QTest.qSleep(60)
+                delayed_slices.append(page.builder.slices)
+        if delayed_event:
+            QTimer.singleShot(0,select_page)
+        else:
+            select_page()
+        self._wait_for_settings_state(
+            dialog, page, lambda: page.builder.slices > 0,
+            "Settings did not execute their first build slice",
+        )
+        if delayed_event:
+            self.assertEqual(delayed_slices,[0,0])
+        self.assertEqual(page.builder.error,""); self.assertTrue(page.builder.active)
         self.assertGreater(page.builder.slices,0); self.assertFalse(page.builder.ready)
         self.hold(); self.key(widget=dialog.search); self.neutral(); self.assertTrue(dialog.isVisible())
         nested=QInputDialog(dialog); self.children.append(nested); errors=[]
