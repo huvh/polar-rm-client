@@ -2817,3 +2817,38 @@ Evidence is in the local close-admission packet and independent review. The
 separate final-tick warning observation is not included. Python 3.10 grammar
 checks are distinct from Python 3.12 execution. Historical results and external
 prerequisites remain; raw logs are not published.
+
+### Final timing-warning callback return
+
+The separate final timing-warning characterization established ordinary warning
+exceptions escaping the final on_tick callback after metrics and all prior
+runtime/frame work already completed. The new bounded repair restores normal
+callback return only. It does not restore lost earlier work or establish a
+historical timing cause. Only the warning call receives an ordinary Exception
+guard; publication, copies, five-second reporting window, rate/state accounting
+and original active field-log error context remain unchanged.
+
+Source SHA-256 `2cc2baa24a4d0df7f38861f1cddbe9674a87f3f78856174d11b5fa903f85bee8`;
+new test `5ecf3b7ec4c2474cb4b63e5748dd6c931bf0149dc94a8f6f2dde014dfed97899`.
+New baseline 16 methods yield 11 assertion/subtest failures, zero errors.
+Independent candidate 46 focused/pure-import methods and seven extra controls
+PASS; seven runtime mutants rejected. Five retained-boundary controls also pass
+baseline. The unchanged original 25-case characterizer passes baseline and
+retains its expected-escape assertion failure on candidate; this is documented
+changed-return counterevidence, not relabeled green. Metrics/prior callbacks
+remain preserved in the original proof. Reentry does not replay a consumed report.
+
+Actual on_tick/publication AST and the real pure TickDiagnostics owner are used;
+no facade/native/spin implementation is imported. Complete source bytes/AST
+restore after removing the single guard; timing owner and old assertions remain
+unchanged. Field/logger BaseException, malformed report and metric-property
+failure boundaries retain their previous behavior. Author integrated 46 methods,
+API freeze and static gates PASS; independent integrated and next aggregate
+qualification are pending. Full40 applies to its earlier source. Local packet:
+final-tick-warning-20261018. No raw logs published.
+
+Independent integrated review accepted exact hashes: normal-import 46 focused,
+seven controls and pure 46 PASS with no native/facade/manager/spin imports. Old
+characterizer's expected-escape assertion remains failed because return is now
+normal. Source outside one guard, timing owner and prior assertions are unchanged.
+Aggregate qualification remains pending for this stage.

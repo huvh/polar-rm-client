@@ -1072,7 +1072,10 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         try:
             self.backend.field_log.emit("ui_tick_timing", **metrics)
         except Exception:
-            _LOG.warning("UI timing diagnostic could not be written", exc_info=True)
+            try:
+                _LOG.warning("UI timing diagnostic could not be written", exc_info=True)
+            except Exception:
+                pass  # Timing diagnostics must not prevent the callback returning.
 
     def _run_tick_stage(self, name: str, callback: Any, now: float | None = None) -> bool:
         """Keep backend, vision and diagnostic faults inside their tick boundary."""
