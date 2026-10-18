@@ -615,6 +615,7 @@ class InputDispatchMixin:
         Each independent egress gets a neutral attempt even if another fails.
         A failed cleanup blocks control until a successful explicit lock reset.
         """
+        self.tactical_map_hold = False
         _cancel_economy_hold_input(self)
         if self._modal_input_blocked():
             return
@@ -666,6 +667,7 @@ class InputDispatchMixin:
         0x5A 与 0x0311 的链路中立化由后端负责；这里不能保留可重放的旧意图。
         """
 
+        self.tactical_map_hold = False
         _cancel_economy_hold_input(self)
         # A reentrant callback joins the existing cleanup owner. It must not
         # reset that owner's pending latch or recursively publish neutral.
