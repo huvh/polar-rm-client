@@ -1004,3 +1004,28 @@ cancellation and premature readiness; the stalled case failed near 1.005 seconds
 The reviewer did not rerun the author's full 48+30 executions; counts overlap
 and are not aggregated into unique coverage. Candidate hashes and diff checks
 matched. A full aggregate on this changed source remains pending.
+
+### Seventeenth integrated result: failed candidate
+
+`client-renewed20h-full17/results.json` was independently read and verified as
+**completed with a failure: 379 PASS, 12 SKIP, 4 INCOMPLETE, 1 FAIL; NO-GO**
+(`passed: false`), run ID `e4ac0881ab634d9d8171359a15e9af52`. Source-at-start is
+local `0e5964e6fb7f32f43f1ac57e75fb8d19b516aa67`, public `c14e551`
+(parent-verified mapping), tree `f88346131ab815380cc8df1c1c931e3b9eb90835`,
+with `dirty: false`. Declared source stability passed with **735 inputs** at
+both endpoints and SHA-256
+`8780de7ad2d25b2cb7cb2c7670c9a80825fe67d3cb18bfa731851715dcf24549`.
+The existing fingerprint scope and endpoint limitations apply.
+
+`tests/test_jello_settings_keyboard.py` ran **15 methods with 1 failure**.
+In `test_jello_checkbox_90_70ms_color_and_rounding`, line 154 performed
+`QTest.qWait(120)` and then required `box.motion.progress == 1`; the observed
+value was **0.9999937555524715**. Diagnosis is ongoing. No cause, repaired
+behavior or passing retry is inferred from the proximity of that value to one,
+and the failed assertion is not weakened or reclassified here.
+
+Full16 remains the prior zero-FAIL aggregate, **380/12/4/0 NO-GO**, on its
+separately identified public `358920a4` source. It cannot qualify the newer
+full17 candidate. This new failure and full15's counterevidence are retained;
+external prerequisites and hardware gaps remain. Only documentation is updated,
+and no raw logs are uploaded.
