@@ -382,3 +382,65 @@ scoped fixture isolation; it does not claim that a production native-audio hang
 was fixed. The four external/integration prerequisite suites remain incomplete,
 so full acceptance is still NO-GO. This update changes only documentation and
 publishes no raw logs.
+
+## Sixth full-run stage: GUI audio, fragment isolation and caption extraction
+
+### Respect GUI audio module activation
+
+Local `7e6404747e72c163da15d7a5a55d18c1d919d7e1`, public `bd1c520`.
+[config_actions_mixin.py](../../rm_client/ui/polar/mixins/config_actions_mixin.py)
+adds the missing module-enabled condition to normal GUI transition sound
+admission, alongside the existing setting check. Explicit previews and the
+self-disable acknowledgement retain their existing behavior. The
+[test_gui_audio_activation.py](../../tests/test_gui_audio_activation.py)
+regression has six new methods; baseline **1 failure, 0 errors**, independent
+focused selection **41 passed**. This is a specific activation-policy correction,
+not a claim to fix or explain the native audio stall observed in full4.
+
+### Reject impossible fragments before pressure eviction
+
+Local `683dc07fc34e3119b73513ba88ffd3fc6322490c`, public `4b10bf6`.
+[FrameAssembler](../../rm_client/transports.py) now rejects accumulated payload
+larger than the frame's declared total before admitting that fragment and
+potentially evicting unrelated frames. The malformed frame is still removed and
+counted; a valid sibling can survive and complete. The
+[test_frame_assembler_pressure_isolation.py](../../tests/test_frame_assembler_pressure_isolation.py)
+regression uses a **5-byte buffer budget**, avoiding giant allocations. Five new
+methods: baseline **1 failure, 0 errors**; independent focused selection
+**54 passed**. This preserves existing framing and does not establish a legacy
+receiver protocol or unlimited resilience to arbitrary traffic.
+
+### Extract diagnostic-caption priority without changing painting behavior
+
+Local `47a8be46cd88f0e351c0a8f926fca1af19b3e62e`, public
+`5008a8f235b0b1075191d08382dde7ac8ac7d3f3`.
+[module_list.py](../../rm_client/ui/polar/renderers/module_list.py) extracts one
+pure `_polar_link_caption` helper in the same module. It separates caption/tone
+selection from painting while retaining diagnostic priority and the order in
+which later tooltip-only errors occur.
+
+[test_rm_indicator_caption_contract.py](../../tests/test_rm_indicator_caption_contract.py)
+compares the frozen full-method fixture and candidate: **5 methods passed on
+each**. Author focused selection **60 passed**; independent selection **19 passed**,
+with different neighbors. Wrong-priority mutation produced **2 failures**;
+early-tooltip mutation produced **1 failure**. Evidence covers panel raster and
+recorded text commands, not native glyph appearance, GPU performance or a global
+coupling reduction. No helper module or new framework was introduced.
+
+### Completed sixth-stage integrated result
+
+The integrated source is local `47a8be46cd88f0e351c0a8f926fca1af19b3e62e`, public
+[5008a8f235b0b1075191d08382dde7ac8ac7d3f3](https://github.com/lulunomaro/polar-rm-client/commit/5008a8f235b0b1075191d08382dde7ac8ac7d3f3),
+tree `cd0b0a832f4ec3e9ff2d19b4c689a8b528ad9076` (parent-verified mapping).
+`client-renewed20h-full6/results.json` was independently verified as **completed:
+365 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`), run ID
+`9882f26f0d404472a821ef5844c859a9`. Source-at-start records the exact local
+commit/tree above and `dirty: false`. Both source endpoints contain **715 inputs**,
+SHA-256 `bd6f7d07f0957bbab44fcc3ca6b59acfda47dc3ab1f59acff48ea5916df20760`;
+source stability is PASS under the previously stated scope/endpoint limitations.
+No check reports a new timeout. The four prerequisite suites remain incomplete.
+
+The completed 362-PASS checkpoint remains the distinct fifth-stage result.
+Full4's timeout and full5's test-only isolation remain recorded above; this run
+does not establish resolution of an underlying production native-audio hang.
+This update changes only documentation and publishes no raw logs.
