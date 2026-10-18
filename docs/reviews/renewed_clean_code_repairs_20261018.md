@@ -898,7 +898,8 @@ slice yielded **three of three paired passes**. The intermediate `slices > 0`
 and `ready == False` checks, F11/F12, nested-modal, neutral-input, no-autosave and
 cancellation assertions were retained. This supports a bounded synchronization
 repair in the test; it is not a UI timing/performance qualification. The test
-repair is ongoing and is not yet recorded as accepted here.
+repair was still pending acceptance at this diagnostic checkpoint; subsequent
+acceptance and integrated results are recorded below.
 
 The original full15 did not capture these timer/visibility diagnostics, so its
 exact causal delay cannot be established retroactively. Its failed aggregate
@@ -930,5 +931,29 @@ results do not replace its failed aggregate or qualify native presentation.
 
 The separate idle-budget source is published at
 `c1f10208eda6cddce504340f3af525710c23d709` (local `cc19379e442a2d3607bfa180dbf02930bdbae108`,
-tree `8c677d18b723b838530ce0d9dc7432a8af4c1a91`). A new aggregate is pending for
-the combined accepted source and test repair. No raw logs are included.
+tree `8c677d18b723b838530ce0d9dc7432a8af4c1a91`). The combined accepted source
+and test repair was subsequently tested in full16 below. No raw logs are included.
+
+### Completed sixteenth integrated result
+
+`client-renewed20h-full16/results.json` was independently read and verified as
+**completed: 380 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `a36e52193ccc44f9b8425b65b584b904`. Exact source: local
+`59fccabbe5d1ef5458ead95db227e0beefdf5083`, public
+[358920a40ea0fb74335be2695a551dffa0e6448d](https://github.com/lulunomaro/polar-rm-client/commit/358920a40ea0fb74335be2695a551dffa0e6448d),
+tree `1a84932d774c6ccf3753e1a247c581bfb9f69a93` (parent-verified public mapping).
+Provenance records `dirty: false` at start. Declared source stability passed with
+**735 inputs** at both endpoints and SHA-256
+`39a607e09f6d85f0176f08e4e5e726736d5ebba10e625c52a80fd88d93abb165`.
+The existing fingerprint scope, exclusions and endpoint limitations apply.
+
+The aggregate explicitly records `test_fullscreen_input_extended.py` **13 methods
+PASS** and `test_polar_motion_idle_budget.py` **9 methods PASS**. These results
+belong to this frozen source. An analogous test patch applied after this run is
+not qualified by full16. Full15's original failure remains counterevidence;
+its precise environmental cause is still unknown and is not retroactively
+resolved by this passing aggregate.
+
+Full16 is the latest completed offline aggregate. The four incomplete
+prerequisites still prevent GO; hardware and native-display qualification gaps
+remain. This report update changes no source and uploads no raw logs.
