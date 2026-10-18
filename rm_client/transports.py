@@ -526,10 +526,14 @@ class OfficialMqttBridge(MQTTTransport):
         self._received_lock = threading.Lock()
         self._command_publish_at: dict[str, float] = {}
 
-    def _on_message(self, client, userdata, msg) -> None:
+    def _on_message(self, client, userdata, msg, *, received_at: float | None = None) -> None:
+        # Preserve callback-entry age across validation/hooks in the backend.
+        # Direct three-argument bridge callbacks still capture their own entry.
+        if received_at is None:
+            received_at = time.perf_counter()
         super()._on_message(client, userdata, msg)
         with self._received_lock:
-            self._received_messages.append((str(msg.topic), bytes(msg.payload), time.perf_counter()))
+            self._received_messages.append((str(msg.topic), bytes(msg.payload), received_at))
 
     def drain_received_messages(self) -> list[tuple[str, bytes, float]]:
         """在 UI 主线程读取 MQTT 回调缓存，避免回调线程直接修改界面状态。"""

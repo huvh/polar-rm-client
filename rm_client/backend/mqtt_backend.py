@@ -404,6 +404,7 @@ class RmMqttBackend(OfficialMqttBridge):
     def _on_message(self, client, userdata, msg) -> None:
         if client is not self.client:
             return
+        received_at = time.perf_counter()
         generation = self.receive_generation
         profile = self.referee
         payload = bytes(msg.payload)
@@ -430,12 +431,12 @@ class RmMqttBackend(OfficialMqttBridge):
         with self._decoded_lock:
             if generation != self.receive_generation or profile is not self.referee or client is not self.client:
                 return
-            super()._on_message(client, userdata, msg)
+            super()._on_message(client, userdata, msg, received_at=received_at)
             if name == "GameStatus" and 5 in data.get("__present__", ()):
                 self.safety.update_stage(data["current_stage"])
             if len(self._decoded) == self._decoded.maxlen:
                 self.queue_overflows += 1
-            self._decoded.append((topic, name, data, time.perf_counter()))
+            self._decoded.append((topic, name, data, received_at))
 
     # ------------------------------------------------------------------
     # 解码结果消费（UI 主线程）
