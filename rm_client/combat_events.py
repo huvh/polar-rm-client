@@ -233,11 +233,15 @@ class OfficialMatchFeed:
     ENEMY_ORDER = (1, 2, 3, 4, 7)
 
     def __init__(self) -> None:
+        self._referee_profile = DEFAULT_PROFILE
+        self.reset()
+
+    def reset(self) -> None:
+        """Discard event history and freshness at a receive-session boundary."""
         self.last_message_at = 0.0
         self.last_kill_data_at = 0.0
         self.last_official_event_at = 0.0
         self._robot_health: list[int] = []
-        self._referee_profile = DEFAULT_PROFILE
         self._seen: dict[tuple[str, int, int], float] = {}
 
     def is_fresh(self, timeout_s: float = _OFFICIAL_FEED_MAX_AGE_S) -> bool:
@@ -252,11 +256,7 @@ class OfficialMatchFeed:
                 received_at: float | object = _RECEIVED_AT_UNSET) -> tuple[list[CombatEvent], dict[str, Any]]:
         if referee_profile != self._referee_profile:
             self._referee_profile = referee_profile
-            self._robot_health = []
-            self._seen.clear()
-            self.last_message_at = 0.0
-            self.last_kill_data_at = 0.0
-            self.last_official_event_at = 0.0
+            self.reset()
         processing_at = time.perf_counter()
         # Production queues stamp local monotonic receipt time. Only omitted
         # timestamps preserve the historical direct-call processing-time API.

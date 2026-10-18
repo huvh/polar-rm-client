@@ -916,6 +916,15 @@ class VideoBackendMixin:
         return side if side in ("Red", "Blue") else "Red"
 
     def consume_official_messages(self) -> None:
+        generation = getattr(self.mqtt, "receive_generation", None)
+        if generation is not None:
+            previous = getattr(self, "_official_feed_receive_generation", generation)
+            if previous != generation:
+                self.official_feed.reset()
+                # Clear an unapplied old receipt even when this batch is empty.
+                # Explicit compatibility scalar updates retain their own policy.
+                self._official_state_updates["official_feed_at"] = 0.0
+            self._official_feed_receive_generation = generation
         for topic, payload, received_at in self.mqtt.drain_received_messages():
             events, updates = self.official_feed.consume(
                 topic, payload, alliance=self.alliance_side(),
