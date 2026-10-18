@@ -153,22 +153,37 @@ class AsyncDt7KeyMouseLink:
 
     def send(self, **kwargs):
         self.poll()
+        recovery = None
         with self._cv:
             if self._closing:
                 return False, "DT7 writer closed"
-            # A fresh explicit qualification/re-arm may clear the fault, but
-            # never an unfinished neutral barrier or a mere reconnection.
+            # Snapshot a fresh explicit qualification/re-arm. Real policy can
+            # deliver input-clear observers, so never evaluate it under _cv.
+            if (self._fault and self.safety is not None
+                    and self._epoch() != getattr(self, "_fault_epoch", None)):
+                recovery = (self._generation, self._fault,
+                            getattr(self, "_fault_epoch", None), self.safety, self._epoch())
+        if recovery is not None:
+            generation, fault, fault_epoch, safety, epoch = recovery
+            allowed, _ = safety.can_transmit_dt7(
+                qualification_token=kwargs.get("qualification_token"))
+        with self._cv:
+            if self._closing:
+                return False, "DT7 writer closed"
+            if recovery is not None:
+                # Release (even already-neutral), a successor fault, another
+                # recovery, or a safety transition invalidates this proposal.
+                if (generation != self._generation or fault != self._fault
+                        or fault_epoch != getattr(self, "_fault_epoch", None)
+                        or safety is not self.safety or epoch != self._epoch()):
+                    return False, self.last_error or self._fault or fault
+                if (allowed and str(getattr(getattr(safety, "control_state", None), "value", ""))
+                        in {"MATCH_ARMED", "QUALIFICATION"}
+                        and not self.release_pending and self._link.wire_neutral):
+                    self._fault = ""
+                    self._fault_reported = False
             if self._fault:
-                if self._epoch() != getattr(self, "_fault_epoch", None) and self.safety is not None:
-                    allowed, _ = self.safety.can_transmit_dt7(
-                        qualification_token=kwargs.get("qualification_token"))
-                    if (allowed and str(getattr(getattr(self.safety, "control_state", None), "value", ""))
-                            in {"MATCH_ARMED", "QUALIFICATION"}
-                            and not self.release_pending and self._link.wire_neutral):
-                        self._fault = ""
-                        self._fault_reported = False
-                if self._fault:
-                    return False, self.last_error or self._fault
+                return False, self.last_error or self._fault
             if self.release_pending:
                 return False, self.last_error or "DT7 neutral pending"
             created = time.monotonic()

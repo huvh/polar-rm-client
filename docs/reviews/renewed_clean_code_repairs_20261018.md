@@ -1609,3 +1609,62 @@ baseline failures. Native cleanup behavior and historical timeout causation
 remain unqualified; no production audio fix or new aggregate result is claimed.
 Earlier failed runs and external acceptance gaps remain intact. Raw logs are
 not uploaded.
+
+## DT7 recovery policy: concrete condition-blocking repair candidate
+
+An event-barrier probe established a current blocking path: an expired explicit
+qualification during fault recovery invokes real `OfficialSafety` policy, which
+revokes control and synchronously reaches the manager's presentation observer
+while `AsyncDt7KeyMouseLink.send` owns `_cv`. Holding that inert observer prevents
+another thread from admitting neutral release. The six original structural
+methods characterize this defect and confirm that discovery, ordinary/neutral
+writes and the other tested observer boundaries already run outside the condition.
+This does not identify the cause of the historical **22.028550001778058 ms**
+failure: that old no-device fixture did not enter qualification recovery.
+
+The candidate changes only the existing worker's `send` implementation. It
+captures recovery generation, fault text/epoch, safety identity and safety epoch
+under the condition, evaluates the real policy outside it, then revalidates the
+snapshot under the condition before clearing the fault and admitting an intent.
+Closing, release (including already-neutral release), changed fault/epoch,
+same-text fault ABA, policy replacement and overlapping recovery invalidate
+stale results. Existing approval, armed state, pending/exhausted neutral and
+confirmed wire-neutral gates remain. Final worker/pre-write authorization is
+unchanged. The observer may still delay its own sending caller; it no longer
+holds the worker condition throughout that callback. This does not serialize
+every independent mutation of the safety object.
+
+External evidence: the 19-method candidate-contract suite produced **14 failure
+outcomes, 0 errors** on the saved baseline and **19 PASS** on the candidate.
+Independent external review passed those 19, four additional policy controls,
+and all 15 existing dispatch methods (**38 methods in these selections**), plus
+replayed the six original structural probes separately. Eight runtime-only
+removed-guard variants were rejected with assertion failures and zero errors.
+The unchanged strict `<20 ms` 250-tick gate reported a maximum **0.8688 ms** in
+that review; this is one observed sample, not a historical-cause diagnosis or a
+universal latency guarantee.
+
+Integration adds 25 methods from the external 19-method suite and six additional
+unchanged-policy controls, retaining their test bodies. Author logs record
+**65 focused methods PASS**, eight selected existing dispatch methods PASS,
+and API/static gates PASS. Final integrated independent review is pending at
+this checkpoint. Overlapping selections are not summed into aggregate counts.
+Frozen SHA-256 identities:
+- `dt7_worker.py`: `7a8a602cf4e6cdfbf6c38a73e5b277379c1139bf1ac387b3ac80ae6ae75e998a`
+- `test_dt7_recovery_policy.py`: `240cf50783e3455d4e11b6c2752b0a920ae779c61078662fc79107b02879734d`
+
+Evidence was read from the local `dt7-condition-probe-20261018` author and
+independent-review packets and integration logs. Probes use inert serial/write
+boundaries and event barriers; timeout guards are not timing-gate replacements.
+No new aggregate or hardware qualification is claimed. A later accepted-source
+aggregate may cover this repair together with activation fixture isolation;
+previous results retain their exact source scope and all external gaps remain.
+No raw logs are uploaded.
+
+Final integrated independent review accepted the frozen DT7 source/test pair:
+65 focused methods and eight selected existing dispatch methods passed (73
+executions). Production bytes match the reviewed external candidate; all 25 new
+methods and fixtures are AST-identical to the external suites. The unchanged
+existing dispatch file retains its strict timing/count assertions. The direct
+caller is `KeyboardControlBridge._send_direct_dt7`. Historical 22 ms causation
+remains unresolved; no full aggregate on this later source is claimed yet.
