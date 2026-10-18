@@ -104,6 +104,32 @@ function Invoke-PortablePreflight(
     return $report
 }
 
+function Publish-ReleaseArchive([string]$Source, [string]$Destination) {
+    # Build beside the destination so final publication stays on one volume.
+    # Never remove the previous candidate before its replacement is complete.
+    $candidate = Join-Path (Split-Path -Parent $Destination) (
+        ".polar-release-" + [guid]::NewGuid().ToString("N") + ".zip")
+    try {
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        [System.IO.Compression.ZipFile]::CreateFromDirectory(
+            $Source, $candidate,
+            [System.IO.Compression.CompressionLevel]::Optimal, $true)
+        if ([System.IO.File]::Exists($Destination)) {
+            [System.IO.File]::Replace($candidate, $Destination, [NullString]::Value)
+        } else {
+            [System.IO.File]::Move($candidate, $Destination)
+        }
+    }
+    finally {
+        # Cleanup must not mask publication failure or turn success into failure.
+        try {
+            if ([System.IO.File]::Exists($candidate)) {
+                [System.IO.File]::Delete($candidate)
+            }
+        } catch { Write-Warning "Temporary release archive retained: $candidate" -WarningAction Continue }
+    }
+}
+
 function Get-TreeHash([string]$Python, [string]$Source, [string]$Root) {
     $script = "from pathlib import Path; from rm_client.runtime_paths import RuntimePaths; print(RuntimePaths.hash_tree(Path(__import__('sys').argv[1])))"
     $oldPythonPath = $env:PYTHONPATH
@@ -548,17 +574,7 @@ print(json.dumps({'default_profile': get_profile().profile_id, 'protocol_version
 
     $destination = Split-Path -Parent $outputPath
     New-Item -ItemType Directory -Force $destination | Out-Null
-    if (Test-Path -LiteralPath $outputPath) { Remove-Item -LiteralPath $outputPath -Force }
-    # Windows PowerShell's Compress-Archive intermittently reports copied EXE
-    # files as in use even after an exclusive-open probe succeeds. The BCL ZIP
-    # implementation uses ordinary read sharing and is deterministic here.
-    Add-Type -AssemblyName System.IO.Compression.FileSystem
-    [System.IO.Compression.ZipFile]::CreateFromDirectory(
-        $portable,
-        $outputPath,
-        [System.IO.Compression.CompressionLevel]::Optimal,
-        $true
-    )
+    Publish-ReleaseArchive $portable $outputPath
     $buildSucceeded = $true
     Write-Host "Self-contained field candidate built: $outputPath"
 }
