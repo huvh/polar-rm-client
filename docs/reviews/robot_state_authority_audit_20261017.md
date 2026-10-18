@@ -79,6 +79,37 @@ addendum was written, so no aggregate score is asserted here. Exact baseline,
 changed expectations and remaining boundaries are in
 [Canonical scalar writer](canonical_scalar_writer_20261017.md).
 
+## 2026-10-18 addendum: epoch-owned motion and reported identity
+
+The historical field scan and line references below are retained, not regenerated
+as a current whole-source inventory. Subsequent source-specific repairs are
+recorded in the [renewed report](renewed_clean_code_repairs_20261018.md).
+`PolarMotionVerifier.reset()` owns motion-history retirement while retaining its
+clock. `PolarControlArbiter.invalidate_pending_divergence()` retires only pending
+conflict timing; established lockout and slew references retain their documented
+policy. Neither operation establishes safe re-anchoring to another robot or
+redefines same-epoch observation gaps.
+
+At frozen local `9584d4b3a1cb4a291f8f440c840d3cb8a7173f33` / public `44f5437`,
+`model.py:403-406` adds `clear_polar_reported_identity()`: it clears the reported
+scalar and removes its replayable model-overlay key without altering selected
+`robot_id`. Existing manager epoch paths invoke identity/divergence/motion
+retirement at `manager.py:568-570`, `1150-1153` and `1640-1642`.
+Fresh reported-role precedence, same-epoch partial telemetry retention,
+unsupported-role drive blocking and genuine E-stop remain unchanged.
+
+Independent integration review passed the 165-method focused selection for the
+actual attached-state GUI path. Current production GUI/tick/configuration callers
+use that same attached `RobotState`. **The detached explicit-target arrangement
+remains a demonstrated limitation:** with `manager.state` absent or different,
+endpoint/shutdown retirement can leave the separately supplied target's old
+reported identity intact. Do not call this universal target/epoch ownership.
+Full20 subsequently completed on this source: **383 PASS / 12 SKIP /
+4 INCOMPLETE / 0 FAIL, NO-GO**, run `aeba0c43ae7741d3b6aa586d605b2d93`;
+see the renewed report for exact provenance and fingerprint. This does not close
+the detached-target limitation, external/hardware acceptance or exhaustive
+dynamic writer/semantic coverage.
+
 ## Authority and overwrite order (historical; see dated addendum above)
 
 `ui/polar_app.py:985-1040` is the normal window sequencing contract:

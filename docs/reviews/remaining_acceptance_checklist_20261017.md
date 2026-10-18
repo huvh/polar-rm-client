@@ -11,9 +11,13 @@ remaining-work statements are not instructions to repeat completed work.
 External/native gaps still apply. No report certifies the whole project as
 Clean Code or ready to merge solely from an offline test count.
 
-The [published full8 checkpoint](renewed_clean_code_repairs_20261018.md#eighth-full-run-candidate-callback-raises-after-changing-epoch)
-records **367 PASS / 12 SKIP / 4 INCOMPLETE / 0 FAIL, NO-GO** at its named
-source; it does not certify subsequent changes. Reproduced admission, cleanup,
+The [completed full20 checkpoint](renewed_clean_code_repairs_20261018.md#completed-twentieth-integrated-result)
+records **383 PASS / 12 SKIP / 4 INCOMPLETE / 0 FAIL, NO-GO** at public source
+`44f5437` / local `9584d4b3a1cb4a291f8f440c840d3cb8a7173f33`.
+Full19's 382/12/4/0 result at `269a050a` (published report `e7c2e72`) remains
+separate historical evidence. Full20 does not close the detached explicit-target
+identity limitation or native/external acceptance.
+Earlier counts below remain historical, source-specific results. Reproduced admission, cleanup,
 input-ownership and receive-epoch defects have source-scoped corrections and
 negative controls documented there. Those discharged cases are distinct from
 remaining native/external qualification and broader cross-service coupling;

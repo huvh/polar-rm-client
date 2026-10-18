@@ -61,6 +61,20 @@ cells. Fake native release proves bookkeeping, never physical neutral or driver
 behavior. The evidence lists below identify exact suites and representative
 methods so cells can be revisited without a new broad audit.
 
+### Historical baseline inventory; later dispositions apply
+
+The table below preserves the `1b2f580` inventory, not current open-task status.
+For the named cells, read the later evidence before scheduling new work:
+constructor matrix `060f190` (independent acceptance `939f506`, summarized above)
+discharges serial starter/reader, Paho network/cleanup thread and the three
+decoder pipe-thread constructor cells; wallpaper `643accd`, UDP `8a354c0`, and
+thumbnail `a23999f` discharge the specific gaps/RED cases described in the named
+follow-on sections below. Those source-scoped acceptances do not rewrite the
+baseline cells or qualify arbitrary constructor interleavings/native behavior.
+The [renewed report](renewed_clean_code_repairs_20261018.md) records subsequent
+integrated checkpoints and preserved failures. Unexplained historical timing
+failures and native/external qualification remain separate obligations.
+
 | Production owner | Constructor rejection | Start rejection | Admitted late error | Blocked/failed close retained | Explicit retry / replacement veto | Late-result revocation |
 | --- | --- | --- | --- | --- | --- | --- |
 | Serial starter + reader | G: inspected suites inject start, not constructor | T: same | T: same | T: resource-close, serial-reader | T: resource-close, serial-starter | T: serial lifecycle + starter |

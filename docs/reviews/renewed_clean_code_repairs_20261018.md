@@ -1228,3 +1228,25 @@ Production bytes match the external candidate; the regression class differs
 only by import setup. The isolated transport fixture adds only `state=None`
 and preserves every prior reset-order/cleanup assertion. The detached explicit
 target limitation above remains unresolved. No aggregate on this source yet.
+
+
+### Completed twentieth integrated result
+
+`client-renewed20h-full20/results.json` was independently read and verified as
+**completed: 383 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `aeba0c43ae7741d3b6aa586d605b2d93`. Exact source: local
+`9584d4b3a1cb4a291f8f440c840d3cb8a7173f33`, public `44f5437`
+(parent-verified mapping), tree `31b43f12886d90f15405cd61917b84c6a1cf280e`.
+Provenance records `dirty: false` at start. Documentation was edited during the
+run; this is a clean-start claim, not an unchanged-whole-worktree claim.
+Declared source stability passed with **738 inputs** at both endpoints and
+SHA-256 `42aeb4182f8cc9bd13c00b76653f5c3f894f058ae78d18c93f49ab7648402741`.
+Documentation is outside that fingerprint; the other established scope,
+exclusions and endpoint limitations remain applicable.
+
+This is the latest completed offline aggregate for the attached-state identity
+repair. It does not close the demonstrated detached explicit-target limitation,
+prove hardware/native behavior, or replace the original failed and interrupted
+runs. Four incomplete prerequisites still prevent GO. Earlier full19 evidence
+remains tied to its own source. This update changes only documentation and
+publishes no raw logs.
