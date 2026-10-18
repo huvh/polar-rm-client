@@ -2564,3 +2564,43 @@ values are fixtures, not timing measurements or a historical-latency explanation
 Python 3.10 grammar checks are separate from Python 3.12 execution. Evidence is
 in the local tick diagnostic packet and independent review; external prerequisites,
 prior failures and native qualification limits remain. Raw logs are not published.
+
+### Emergency/focus-loss failure formatting
+
+The emergency owner constructed StopFailure records with unguarded str(error)
+before later independent cleanup. An ordinary formatting exception could cancel
+E-stop fallback locking, focus-loss neutral fallbacks or pending clear after a
+zero-publication failure. The actual AST-loaded focus adapter still reached Qt
+finally, but later dragging clear was skipped. The initial eight-method inert
+probe has four continuation failures and four controls passing, zero errors.
+No physical output or generic backend-revocation failure is inferred.
+
+One private formatter now captures the original type before str and substitutes
+an unprintable-message marker only on ordinary formatting exceptions, at the
+four existing conversion sites. Normal text, evaluation order, action order,
+status and rejected-reason handling remain unchanged. No new class/API/framework.
+Frozen source SHA-256 `9e7e1bb3ac2d5a624d86c6ed6ca6720a18d515771eb4ffde3a0f203f34823055`;
+new test `1489e61b8ba97d328c258dc9b1dba0af156f2b888d0c0a632037e5897964b0e2`.
+New 17-method baseline produces 24 assertion/subtest failures, zero errors.
+Independent candidate 25 focused methods, eight original probes and seven extra
+controls PASS; eight in-memory mutations rejected. Pure-import verification
+confirms no facade, manager-module or spin imports; actual manager methods are
+AST-loaded and use real in-memory OfficialSafety with inert callbacks.
+
+An early ordinary manager stop failure now reaches fallback LOCKED. A late failure
+retains estop_active, while existing fallback projects displayed control_state to
+LOCKED. A formatter SystemExit still propagates before fallback and can retain
+prior QUALIFICATION/token state, identically on baseline and candidate. No
+process-control cleanup guarantee is introduced. Pre-attempt method lookup
+failures and failed lock operations remain explicit boundaries.
+
+Author integrated 25 methods, API freeze and static gates PASS. Independent
+integrated validation and next aggregate are pending; full37 above applies only
+to its earlier source. Local packet: emergency-formatting-20261018. No raw logs
+published or native qualification inferred.
+
+Independent integrated review accepted exact source/test hashes: normal-import
+25 PASS with no facade/manager/spin imports, seven controls and eight original
+probes PASS. Other source/caller AST and prior assertions are unchanged. Early
+formatter BaseException and late estop_active/display distinctions remain.
+Aggregate qualification is pending for this source stage.

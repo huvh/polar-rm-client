@@ -45,12 +45,21 @@ class StopResult:
         return self.status
 
 
+def _failure_record(operation: str, error: Exception) -> StopFailure:
+    error_type = type(error).__name__
+    try:
+        message = str(error)
+    except Exception:
+        message = "<unprintable exception>"
+    return StopFailure(operation, error_type, message)
+
+
 def _attempt(operation: str, action: Callable[[], object], failures: list[StopFailure]) -> bool:
     try:
         action()
         return True
     except Exception as error:
-        failures.append(StopFailure(operation, type(error).__name__, str(error)))
+        failures.append(_failure_record(operation, error))
         return False
 
 
@@ -65,7 +74,7 @@ def request_emergency_stop(backend: EmergencyBackend, inputs: PendingInputs) -> 
         ok, reason = backend.trigger_estop()
         status = "E-STOP ACTIVE" if ok else f"E-STOP ACTIVE ({reason})"
     except Exception as error:
-        failures.append(StopFailure("backend E-stop", type(error).__name__, str(error)))
+        failures.append(_failure_record("backend E-stop", error))
         # A driver may fail before the backend reaches its local E-stop latch.
         # Revoke authority independently before touching fallible UI state.
         _attempt("fallback control lock", lambda: backend.lock_control("E-stop request failed"), failures)
@@ -83,7 +92,7 @@ def request_control_lock(backend: ControlLock, inputs: PendingInputs,
         if not ok:
             failures.append(StopFailure("neutral publication", "Rejected", reason))
     except Exception as error:
-        failures.append(StopFailure("neutral publication", type(error).__name__, str(error)))
+        failures.append(_failure_record("neutral publication", error))
     _clear_inputs(inputs, failures)
     return StopResult("Match control LOCKED" if locked else "Control lock INCOMPLETE", tuple(failures))
 
@@ -119,7 +128,7 @@ def request_focus_loss(
         if not ok:
             failures.append(StopFailure("neutral publication", "Rejected", reason))
     except Exception as error:
-        failures.append(StopFailure("neutral publication", type(error).__name__, str(error)))
+        failures.append(_failure_record("neutral publication", error))
     _attempt("pending input clear", lambda: inputs.clear_pending(), failures)
     return StopResult("Focus-loss control LOCKED" if locked else "Focus-loss control lock INCOMPLETE",
                       tuple(failures))
