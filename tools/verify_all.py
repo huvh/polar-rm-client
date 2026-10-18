@@ -183,6 +183,20 @@ def execute_script(path: str, args: list[str]) -> None:
     faulthandler.dump_traceback_later(120, repeat=True)
     done = threading.Event()
 
+    # Child-process bootstrap only. Keep this hook through interpreter shutdown:
+    # non-daemon workers may fail after runpy and our cleanup have returned.
+    # A test can replace the hook to explicitly capture/assert expected errors;
+    # this is not universal accounting for custom exception-handling policies.
+    original_thread_hook = threading.excepthook
+
+    def report_thread_exception(args):
+        if not issubclass(args.exc_type, SystemExit):
+            print("\n[FAIL] Uncaught exception in verification worker thread",
+                  file=sys.stderr, flush=True)
+        original_thread_hook(args)
+
+    threading.excepthook = report_thread_exception
+
     def sample_active_test():
         previous = None
         while not done.wait(1.0):
