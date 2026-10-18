@@ -1898,3 +1898,34 @@ This fixes measured Python wrapper/object-graph retention; the native ownership
 baseline was already clean. No native QObject leak, retained-byte/RSS estimate,
 FPS improvement, indefinite-duration result or hardware qualification is claimed.
 No new full aggregate is claimed, and raw logs are not uploaded.
+
+
+### Completed twenty-ninth integrated result
+
+`client-renewed20h-full29/results.json` was independently read and verified as
+**completed: 394 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `fbdfbf7845eb4c0c92f1c641660cbd75`. Exact source: local
+`cb61372d25719d2c5157010ffce682f2f51e9e6f`, public
+[5ae75ce674391e43dd51e85e3501d58fbe18e289](https://github.com/lulunomaro/polar-rm-client/commit/5ae75ce674391e43dd51e85e3501d58fbe18e289),
+tree `9382d549fcff1e65558064ec5b96f11a2234d85d` (parent-verified public mapping).
+Provenance records `dirty: false` at start. Declared source stability passed with
+**749 inputs** at both endpoints and SHA-256
+`a2358a9a6d81118cc53550bde72e239b3e639cfcb0d4d7fbb1d6799ad70689ca`.
+Existing fingerprint scope, exclusions and endpoint limitations apply.
+
+Full29 supplies source-specific integration evidence for the ESTOP filter
+Python-wrapper retention repair. Four incomplete prerequisites still prevent
+GO; external/native acceptance and previously documented design limits remain.
+No historical failed or interrupted result is superseded at its original source.
+
+A separate bounded same-family scan parsed 221 production Python files without
+errors and found only the two remaining function-local Qt classes, crosshair
+Editor and Preview. Its actual offscreen factory/modal/settings probes collected
+all **96 tracked wrappers across 24 cycles** (24 Editors and 72 Previews), with
+zero residual host descendants/timers/builders and zero native-boundary guard
+calls. The local `client-local-qt-class-audit/REVIEW.md` records eight embedded,
+eight modal, four ready-settings and four partial-settings cancellation cycles.
+No additional defect or source change was proposed. This bounded class-family
+check is not proof against all GUI reference cycles, arbitrary constructor
+failures or indefinite operation; it supplies no heap-byte, FPS or native-device
+claim. Only documentation is updated and no raw logs are uploaded.
