@@ -5,6 +5,7 @@ Each probe is isolated because a broken constructor cannot return its owner.
 """
 from pathlib import Path
 import json
+import inspect
 import os
 import subprocess
 import sys
@@ -14,18 +15,47 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def isolated_activation_audio():
+    """Keep real feedback owners while replacing their native audio boundaries."""
+    from contextlib import ExitStack
+    from unittest.mock import MagicMock, patch
+    from rm_client import ui_audio, audio_preferences, kill_audio
+
+    stack = ExitStack()
+    device = MagicMock(name="inert audio device")
+    device.isNull.return_value = True
+    devices = MagicMock(name="inert media devices")
+    devices.audioOutputs.return_value = []
+    devices.defaultAudioOutput.return_value = device
+    # All three modules capture QMediaDevices at import time.
+    for module in (ui_audio, audio_preferences, kill_audio):
+        stack.enter_context(patch.object(module, "QMediaDevices", devices))
+    for name in ("QSoundEffect", "QMediaPlayer", "QAudioOutput"):
+        def construct(*args, _name=name, **kwargs):
+            native = MagicMock(name="inert " + _name)
+            native.play.side_effect = AssertionError("unexpected activation playback")
+            return native
+        stack.enter_context(patch.object(ui_audio, name,
+                                        MagicMock(name=name, side_effect=construct)))
+    audio_preferences.selected_output.cache_clear()
+    stack.callback(audio_preferences.selected_output.cache_clear)
+    return stack
+
+
 class WindowActivationFailureTests(unittest.TestCase):
     def probe(self, fault):
         source = '''
             import os, tempfile, time, json, faulthandler
             faulthandler.dump_traceback_later(10, repeat=True)
             from unittest.mock import patch
+            from contextlib import ExitStack
             os.environ.update(CI="true", QT_QPA_PLATFORM="offscreen",
                 POLAR_DISABLE_LOCAL_CAPTURE="1", POLAR_DISABLE_MEDIA_PRELOAD="1")
-            with tempfile.TemporaryDirectory() as directory:
+            with tempfile.TemporaryDirectory() as directory, ExitStack() as resources:
                 os.environ["POLAR_USER_DATA_ROOT"] = directory
                 from PySide6.QtWidgets import QApplication
                 from PySide6.QtCore import QTimer
+                resources.enter_context(isolated_activation_audio())
                 from rm_client.ui import polar_app
                 from rm_client.ui.polar_app import PolarRMWindow
                 from rm_client.ui.polar.qt_application import launch_qt_application
@@ -112,7 +142,7 @@ class WindowActivationFailureTests(unittest.TestCase):
                     print(json.dumps(result), flush=True)
         '''
         try:
-            result = subprocess.run([sys.executable, "-c", textwrap.dedent(source)], cwd=ROOT,
+            result = subprocess.run([sys.executable, "-c", inspect.getsource(isolated_activation_audio) + "\n" + textwrap.dedent(source)], cwd=ROOT,
                 env=dict(os.environ, POLAR_ACTIVATION_FAULT=fault), text=True,
                 capture_output=True, timeout=30)
         except subprocess.TimeoutExpired as failure:

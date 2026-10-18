@@ -1566,3 +1566,46 @@ or native/hardware coverage. The unchanged external prerequisite failures and
 all earlier failed/interrupted results remain. Native fullscreen-generated
 FocusOut is unverified; direct offscreen fullscreen routing is a narrower check.
 Later changes require their own qualification. New raw logs remain private.
+
+## Activation fixture: accepted native-audio isolation
+
+A deterministic recording-only probe of the actual activation child reached
+**18 QSoundEffect constructions and 18 setSource calls** before its injected
+timer-factory failure, despite `POLAR_DISABLE_MEDIA_PRELOAD=1`. That flag guards
+compressed-media preload; `UiAudioManager` still eagerly preloads WAV cues.
+The probe doubled multimedia construction/device queries and observed the exact
+expected retirement dictionary through real abort/rescue handling. This proves
+a present fixture isolation gap, not the cause of the historical 30-second
+timeout at `93aa839`.
+
+The repair changes only `tests/test_window_activation_failure.py` and adds
+`tests/test_activation_audio_isolation.py`. Real window, UiAudioManager,
+QObject audio pools, timers, abort and rescue remain. An ExitStack replaces the
+native multimedia constructors and all three captured QMediaDevices aliases;
+normal and exceptional exits restore aliases and clear the cached device result.
+The unchanged five activation routes retain their original expected retirement
+states. Independent AST comparison confirms all ten child assertions, three
+drain loops, fault injectors, network guard and **30-second timeout** remain.
+
+The same two new guarded methods against the saved whole baseline produce
+**2 FAIL, 0 ERROR**. The candidate's **19-method focused selection PASS** is a
+general neighboring-test result: its existing constructor-failure neighbors still
+have unisolated audio assembly, so this is explicitly not an isolation claim for
+all 19. Independent review separately ran **all five activation fault routes**
+with native constructors/device queries guarded before application imports and
+verified zero guarded calls, real owners and timer/abort/rescue execution.
+Baseline and removed-isolation controls fail at QMediaDevices; an intentionally
+swallowed QSoundEffect attempt is rejected by the call ledger. A separate process
+guard blocked the backend's Git metadata lookup, without launching that process.
+
+Accepted frozen SHA-256 identities:
+- `test_window_activation_failure.py`: `8c217b5004584f44f5026ba8422294ae89e9722cc2577230cb06dbfb77ed34dd`
+- `test_activation_audio_isolation.py`: `fe01c03c8abc4a5646fca1025588940190243be6b915833241e2fe9f0529bc33`
+
+The local `activation-native-boundary-20261018` packet retains the recording
+probe, exact baseline, focused results and the initial failed invocation that
+mistyped a neighboring module name. That setup error is separate from the valid
+baseline failures. Native cleanup behavior and historical timeout causation
+remain unqualified; no production audio fix or new aggregate result is claimed.
+Earlier failed runs and external acceptance gaps remain intact. Raw logs are
+not uploaded.
