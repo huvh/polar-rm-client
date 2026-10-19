@@ -142,16 +142,20 @@ class CameraCalibrationManager:
         return profile
 
     def export_tongji_yaml(self, name: str, device: str = "AUTO") -> Path | None:
-        profile = self.profile or self.load(name)
-        if profile is None:
-            self.last_error = "没有可导出的标定 profile"
+        try:
+            profile = self.profile or self.load(name)
+            if profile is None:
+                self.last_error = "没有可导出的标定 profile"
+                return None
+            base = self.workspace / "同济自瞄" / "sp_vision_25" / "configs" / "demo.yaml"
+            target = self.workspace / "同济自瞄" / "sp_vision_25" / "configs" / f"{name}.yaml"
+            if not base.exists():
+                self.last_error = f"未找到同济基础配置：{base}"
+                return None
+            text = base.read_text(encoding="utf-8", errors="replace")
+        except OSError as exc:
+            self.last_error = str(exc)
             return None
-        base = self.workspace / "同济自瞄" / "sp_vision_25" / "configs" / "demo.yaml"
-        target = self.workspace / "同济自瞄" / "sp_vision_25" / "configs" / f"{name}.yaml"
-        if not base.exists():
-            self.last_error = f"未找到同济基础配置：{base}"
-            return None
-        text = base.read_text(encoding="utf-8", errors="replace")
         values = {
             "camera_matrix": profile.camera_matrix,
             "distort_coeffs": profile.distort_coeffs,
@@ -169,7 +173,11 @@ class CameraCalibrationManager:
             text += f"\ndevice: {device}\n"
         text += f"\n# POLAR desktop calibration profile: {profile.name}\n"
         text += f"# resolution: {profile.width}x{profile.height}, rms_error_px: {profile.rms_error_px:.4f}\n"
-        target.write_text(text, encoding="utf-8")
+        try:
+            target.write_text(text, encoding="utf-8")
+        except OSError as exc:
+            self.last_error = str(exc)
+            return None
         self.last_error = ""
         return target
 
