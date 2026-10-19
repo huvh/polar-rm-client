@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 import json
+import math
 from pathlib import Path
 import re
 from typing import Any
@@ -19,6 +20,29 @@ class CalibrationProfile:
     distort_coeffs: list[float]
     rms_error_px: float
     sample_count: int
+
+
+def _validated_profile(raw: Any) -> CalibrationProfile:
+    """Check persisted value types before publishing a loaded profile.
+
+    Finite int/float values retain the existing numeric compatibility. Shape,
+    ranges and calibration quality remain the existing consumers' policy.
+    """
+    profile = CalibrationProfile(**raw)
+    if not isinstance(profile.name, str):
+        raise ValueError("Invalid calibration value: name")
+    for field in ("width", "height", "board_columns", "board_rows",
+                  "square_size_mm", "rms_error_px", "sample_count"):
+        value = getattr(profile, field)
+        if type(value) not in (int, float) or not math.isfinite(value):
+            raise ValueError(f"Invalid calibration value: {field}")
+    for field in ("camera_matrix", "distort_coeffs"):
+        values = getattr(profile, field)
+        if not isinstance(values, list) or any(
+                type(value) not in (int, float) or not math.isfinite(value)
+                for value in values):
+            raise ValueError(f"Invalid calibration value: {field}")
+    return profile
 
 
 class CameraCalibrationManager:
@@ -45,8 +69,8 @@ class CameraCalibrationManager:
             return None
         try:
             raw = json.loads(path.read_text(encoding="utf-8"))
-            profile = CalibrationProfile(**raw)
-        except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
+            profile = _validated_profile(raw)
+        except (OSError, ValueError, TypeError, OverflowError, json.JSONDecodeError) as exc:
             self.last_error = str(exc)
             return None
         self.profile = profile
