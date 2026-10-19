@@ -2,13 +2,14 @@
 from __future__ import annotations
 
 import ast
+from collections import defaultdict
 from contextlib import redirect_stdout
 from functools import lru_cache
 import io
 from pathlib import Path
 import sys
 import tempfile
-from types import ModuleType, SimpleNamespace
+from types import MethodType, ModuleType, SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
@@ -16,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if not (ROOT / 'rm_client').is_dir():
     ROOT = Path('/workspace/scratch/8fc313400f06/client-clean-recovered')
 SMOKE_SOURCE = ROOT / 'tests/smoke_test.py'
+AUDIO_HELPER_SOURCE = ROOT / 'tests/test_window_activation_failure.py'
 
 
 def selected_function(path, name, namespace):
@@ -52,8 +54,14 @@ class SmokeAudioIsolationTests(unittest.TestCase):
         self.ui.selected_output = self.preferences.selected_output
         self.ui.QUrl = SimpleNamespace(fromLocalFile=lambda value: value)
         self.ui._effect_status_listener = lambda *_: (lambda: None)
+        self.ui._media_error_listener = lambda *_: (lambda: None)
+        self.ui.cue_volume = lambda value: float(value)
         self.preload = selected_function(ROOT / 'rm_client/ui_audio.py', 'preload', self.ui.__dict__)
-        self.helper = selected_function(ROOT / 'tests/test_window_activation_failure.py', 'isolated_activation_audio', {})
+        self.play = selected_function(ROOT / 'rm_client/ui_audio.py', 'play', self.ui.__dict__)
+        self.fallback = selected_function(ROOT / 'rm_client/ui_audio.py', '_play_fallback', self.ui.__dict__)
+        self.feedback = selected_function(ROOT / 'rm_client/ui_audio.py', 'gui_feedback', {})
+        self.transition = selected_function(ROOT / 'rm_client/ui/polar/mixins/config_actions_mixin.py', 'play_gui_transition_sound', {})
+        self.helper = selected_function(AUDIO_HELPER_SOURCE, 'isolated_activation_audio', {})
         self.original_aliases = {
             (name, key): getattr(module, key)
             for name, module in self.modules.items() if name != 'rm_client'
@@ -63,7 +71,16 @@ class SmokeAudioIsolationTests(unittest.TestCase):
         self.addCleanup(temp.cleanup)
         path = Path(temp.name) / 'cue.wav'
         path.write_bytes(b'inert fixture, never decoded')
-        self.pool = SimpleNamespace(_sound_path=lambda _: path, _effects={}, voices_per_sound=2)
+        self.media_path = Path(temp.name) / 'cue.ogg'
+        self.media_path.write_bytes(b'inert fixture, never decoded')
+        self.pool = SimpleNamespace(root=Path(temp.name),
+            _sound_path=lambda name: self.media_path if name.endswith('.ogg') else path,
+            _effects={}, voices_per_sound=2, _pending=defaultdict(list),
+            _media_effects={}, _media_indices=defaultdict(int),
+            _fallback=[], _fallback_index=0, _fallback_voices=2)
+        self.pool.preload = MethodType(self.preload, self.pool)
+        self.pool.play = MethodType(self.play, self.pool)
+        self.pool._play_fallback = MethodType(self.fallback, self.pool)
         self.module_patch = patch.dict(sys.modules, self.modules)
         self.module_patch.start()
         self.addCleanup(self.module_patch.stop)
@@ -160,6 +177,77 @@ class SmokeAudioIsolationTests(unittest.TestCase):
             self.preload(self.pool, ['cue.wav'])
             with self.assertRaisesRegex(AssertionError, 'unexpected activation playback'):
                 self.pool._effects['cue.wav'][0].play()
+        self.assertFalse(self.native_calls)
+        self.assert_restored()
+
+    def test_smoke_allows_actual_ready_sound_effect_playback(self):
+        voices = []
+        def exercise():
+            self.preload(self.pool, ['cue.wav'])
+            voice = self.pool._effects['cue.wav'][0]
+            voice.status.return_value = self.ui.QSoundEffect.Status.Ready
+            voice.isPlaying.return_value = False
+            self.assertTrue(self.pool.play('cue.wav', 45))
+            self.assertEqual(self.pool.backend, 'QSoundEffect')
+            voice.setVolume.assert_called_once_with(0.45)
+            voice.play.assert_called_once_with()
+            voices.append(voice)
+        runner, _ = self.runner([('test_ready', exercise)])
+        with redirect_stdout(io.StringIO()): self.assertEqual(runner(), 0)
+        self.assertEqual(len(voices), 1)
+        self.assertFalse(self.native_calls)
+        self.assert_restored()
+
+    def test_smoke_allows_actual_fallback_and_preloaded_media_playback(self):
+        def exercise():
+            self.assertTrue(self.pool.play('cue.ogg', 60))
+            self.assertEqual(self.pool.backend, 'QMediaPlayer')
+            player, output = self.pool._fallback[0]
+            player.play.assert_called_once_with()
+            output.setVolume.assert_called_once_with(0.6)
+            player.reset_mock()
+            output.reset_mock()
+            self.pool._media_effects['cue.ogg'] = [(player, output)]
+            self.assertTrue(self.pool.play('cue.ogg', 25))
+            player.play.assert_called_once_with()
+            output.setVolume.assert_called_once_with(0.25)
+        runner, _ = self.runner([('test_media', exercise)])
+        with redirect_stdout(io.StringIO()): self.assertEqual(runner(), 0)
+        self.assertFalse(self.native_calls)
+        self.assert_restored()
+
+    def test_actual_gui_feedback_runs_then_primary_assertion_still_propagates(self):
+        failure = AssertionError('original layout assertion')
+        records = []
+        def exercise():
+            manager = SimpleNamespace(pool=self.pool)
+            manager.gui_feedback = MethodType(self.feedback, manager)
+            host = SimpleNamespace(
+                registry=SimpleNamespace(get=lambda _: SimpleNamespace(enabled=True)),
+                setting_bool=lambda *_: True,
+                get_setting_number=lambda *_: 45.0,
+                setting_mode=lambda *_: 'Polar UI', ui_audio=manager)
+            self.transition(host, 'expand')
+            self.assertEqual(self.pool.last_sound, 'polar_ui/panel_transition.wav')
+            player, output = self.pool._fallback[0]
+            player.play.assert_called_once_with()
+            output.setVolume.assert_called_once_with(0.45)
+            records.append('feedback reached inert playback')
+            raise failure
+        runner, _ = self.runner([('test_layout', exercise)])
+        stream = io.StringIO()
+        with redirect_stdout(stream), self.assertRaises(AssertionError) as caught:
+            runner()
+        self.assertIs(caught.exception, failure)
+        self.assertEqual(records, ['feedback reached inert playback'])
+        self.assertNotIn('[PASS]', stream.getvalue())
+        self.assertFalse(self.native_calls)
+        self.assert_restored()
+
+    def test_activation_default_still_rejects_media_playback(self):
+        with self.helper():
+            with self.assertRaisesRegex(AssertionError, 'unexpected activation playback'):
+                self.pool.play('cue.ogg', 45)
         self.assertFalse(self.native_calls)
         self.assert_restored()
 

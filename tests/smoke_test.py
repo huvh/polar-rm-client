@@ -4190,7 +4190,7 @@ def run_all_smoke_tests() -> int:
         before = len(SMOKE_SKIPS)
         try:
             # Keep native audio inert through each test's construction and cleanup.
-            with isolated_activation_audio():
+            with isolated_activation_audio(allow_playback=True):
                 test()
         except unittest.SkipTest as exc:
             SMOKE_SKIPS.append(str(exc))

@@ -15,8 +15,8 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def isolated_activation_audio():
-    """Keep real feedback owners while replacing their native audio boundaries."""
+def isolated_activation_audio(*, allow_playback=False):
+    """Keep real feedback owners; only interaction smokes opt into inert play."""
     from contextlib import ExitStack
     from unittest.mock import MagicMock, patch
     from rm_client import ui_audio, audio_preferences, kill_audio
@@ -33,7 +33,9 @@ def isolated_activation_audio():
     for name in ("QSoundEffect", "QMediaPlayer", "QAudioOutput"):
         def construct(*args, _name=name, **kwargs):
             native = MagicMock(name="inert " + _name)
-            native.play.side_effect = AssertionError("unexpected activation playback")
+            native.play.return_value = None
+            if not allow_playback:
+                native.play.side_effect = AssertionError("unexpected activation playback")
             return native
         stack.enter_context(patch.object(ui_audio, name,
                                         MagicMock(name=name, side_effect=construct)))
