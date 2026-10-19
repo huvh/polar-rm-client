@@ -24,6 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from window_lifecycle_helpers import close_window_safely, settle_window_lifecycle
+from test_window_activation_failure import isolated_activation_audio
 
 from rm_client.config_store import ClientConfigStore, apply_registry_config, export_client_config
 from rm_client.combat_events import CombatEvent, OfficialMatchFeed, VisionKillDetector
@@ -4188,7 +4189,9 @@ def run_all_smoke_tests() -> int:
         print(f"RUN {name}", flush=True)
         before = len(SMOKE_SKIPS)
         try:
-            test()
+            # Keep native audio inert through each test's construction and cleanup.
+            with isolated_activation_audio():
+                test()
         except unittest.SkipTest as exc:
             SMOKE_SKIPS.append(str(exc))
             print(f"[SKIP] {name}: {exc}", flush=True)

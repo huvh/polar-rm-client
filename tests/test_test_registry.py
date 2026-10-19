@@ -484,7 +484,8 @@ class SmokeSelectionTests(unittest.TestCase):
         path = ROOT / "tests/smoke_test.py"
         tree = ast.parse(path.read_text())
         node = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "run_all_smoke_tests")
-        namespace = {"__name__": "isolated_smoke", "unittest": unittest, "SMOKE_SKIPS": []}
+        namespace = {"__name__": "isolated_smoke", "unittest": unittest, "SMOKE_SKIPS": [],
+                     "isolated_activation_audio": contextlib.nullcontext}
         exec(compile(ast.Module(body=[node], type_ignores=[]), str(path), "exec"), namespace)
         return namespace
 
