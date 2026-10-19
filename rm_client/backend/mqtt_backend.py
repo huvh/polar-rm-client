@@ -16,7 +16,9 @@ from typing import Any, Callable
 from ..transports import MqttPublishRecord, OfficialMqttBridge
 from .referee.registry import DEFAULT_PROFILE, get_profile
 from .referee.validation import InvalidRefereePayload, validate_message
+from .referee.wire import decode_fields, _u
 from .referee.rm2026_v2 import codec as v2_codec
+from .referee.rm2026_v2.economy_rules import request_decision
 from .referee.rm2026_v2.observations import WireSnapshot, observe
 from .safety import OfficialSafety
 from .mqtt_cleanup import MqttClientResources
@@ -296,15 +298,19 @@ class RmMqttBackend(OfficialMqttBridge):
         """
         with self._lifecycle_lock:
             with self._decoded_lock:
-                context = self._v2_wire_context
-                snapshot = self._v2_wire_snapshot
-                if (context is None or snapshot is None
-                        or context[0] is not self.referee
-                        or context[1] is not self.client
-                        or context[2] != str(self.client_id)
-                        or snapshot.receive_generation != self.receive_generation):
-                    return None
-                return snapshot
+                return self._v2_wire_snapshot_locked()
+
+    def _v2_wire_snapshot_locked(self) -> WireSnapshot | None:
+        """Caller holds lifecycle then decoded; never reacquire either lock."""
+        context = self._v2_wire_context
+        snapshot = self._v2_wire_snapshot
+        if (context is None or snapshot is None
+                or context[0] is not self.referee
+                or context[1] is not self.client
+                or context[2] != str(self.client_id)
+                or snapshot.receive_generation != self.receive_generation):
+            return None
+        return snapshot
 
     def set_referee_profile(self, profile_id: str) -> None:
         try:
@@ -487,6 +493,9 @@ class RmMqttBackend(OfficialMqttBridge):
     def publish_topic(self, topic: str, payload: bytes, *, qos: int = 1,
                       now: float | None = None, intent: str = "control",
                       qualification_token: str | None = None) -> tuple[bool, str]:
+        if self._uses_v2_request_guard(self.referee, topic):
+            return self._publish_v2_request(topic, payload, qos=qos,
+                                            qualification_token=qualification_token)
         with self._lifecycle_lock:
             client, generation = self.client, self._lifecycle_generation
             authority_generation = self.safety.control_generation
@@ -545,6 +554,61 @@ class RmMqttBackend(OfficialMqttBridge):
             self.last_error = str(exc)
             self._emit_event("publish_result", topic=topic, ok=False, reason=self.last_error, intent=intent)
             return False, str(exc)
+
+    @staticmethod
+    def _uses_v2_request_guard(profile: Any, topic: str) -> bool:
+        return (profile.codec is v2_codec
+                and profile.protocol_version == v2_codec.PROTOCOL_VERSION
+                and topic in ("AirSupportCommand", "SentryCtrlCommand"))
+
+    def _publish_v2_request(self, topic: str, payload: bytes, *, qos: int,
+                            qualification_token: str | None) -> tuple[bool, str]:
+        """One immutable payload and one policy for every V2 economy entry."""
+        try:
+            with self._lifecycle_lock:
+                profile, safety = self.referee, self.safety
+                client, generation = self.client, self._lifecycle_generation
+                authority_generation = safety.control_generation
+                mock_output = self.mock_output
+                with self._decoded_lock:
+                    snapshot = self._v2_wire_snapshot_locked()
+            payload = bytes(payload)
+            if not self._uses_v2_request_guard(profile, topic):
+                raise RuntimeError("V2 request profile changed; command discarded")
+            valid, reason = profile.validate_publish(topic, qos)
+            if not valid:
+                raise InvalidRefereePayload(reason)
+            validate_message(topic, payload, profile.codec.FIELDS)
+            command_id = _u(decode_fields(payload), 1)
+            current = time.perf_counter()
+            allowed, reason, _estimate = request_decision(topic, command_id, snapshot, now=current)
+            if not allowed:
+                raise ValueError(reason)
+            allowed, reason = safety.can_publish(topic, now=current, intent="economy",
+                                                 qualification_token=qualification_token)
+            if not allowed:
+                raise ValueError(reason)
+            self._publish_record(topic, payload, qos)
+            info = self._publish_current(
+                client, generation, topic, payload, qos,
+                authority_generation=authority_generation,
+                v2_context=(profile, safety, snapshot, qualification_token, mock_output),
+            )
+            if mock_output:
+                reason = "mock"
+            else:
+                rc = getattr(info, "rc", 0)
+                mqtt = getattr(self, "_mqtt", None)
+                if rc != 0 and (mqtt is None or rc != mqtt.MQTT_ERR_SUCCESS):
+                    raise RuntimeError(f"MQTT publish not queued (rc={rc})")
+                self.messages_sent += 1
+                reason = "ok"
+        except Exception as exc:
+            reason = self.last_error = str(exc)
+            self._emit_event("publish_result", topic=topic, ok=False, reason=reason, intent="economy")
+            return False, reason
+        self._emit_event("publish_result", topic=topic, ok=True, reason=reason, intent="economy")
+        return True, reason
 
     def _publish_record(self, topic: str, payload: bytes, qos: int) -> MqttPublishRecord:
         record = MqttPublishRecord(
@@ -617,7 +681,8 @@ class RmMqttBackend(OfficialMqttBridge):
 
     def _publish_current(self, client: Any, generation: int, topic: str,
                          payload: bytes, qos: int, *,
-                         authority_generation: int | None = None) -> Any:
+                         authority_generation: int | None = None,
+                         v2_context: tuple | None = None) -> Any:
         # Admission may precede a stop/restart. Never redirect an old command
         # into a replacement session, even if its new connection is already up.
         # Paho publish enqueues on nonblocking sockets; no observers run here.
@@ -633,6 +698,37 @@ class RmMqttBackend(OfficialMqttBridge):
                     self.safety.estop_active
                     or authority_generation != self.safety.control_generation):
                 raise RuntimeError("MQTT control authority changed; command discarded")
+            if self._uses_v2_request_guard(self.referee, topic) or v2_context is not None:
+                if v2_context is None or authority_generation is None:
+                    raise RuntimeError("V2 request context required; command discarded")
+                profile, safety, snapshot, token, mock_output = v2_context
+                with self._decoded_lock:
+                    if (profile is not self.referee or safety is not self.safety
+                            or mock_output != self.mock_output or snapshot is None
+                            or not self._uses_v2_request_guard(profile, topic)
+                            or snapshot is not self._v2_wire_snapshot_locked()):
+                        raise RuntimeError("V2 request evidence changed; command discarded")
+                    if type(payload) is not bytes:
+                        raise InvalidRefereePayload("V2 final payload must be frozen bytes")
+                    validate_message(topic, payload, profile.codec.FIELDS)
+                    command_id = _u(decode_fields(payload), 1)
+                    current = time.perf_counter()
+                    allowed, reason = safety.can_publish_v2_economy_current(
+                        topic, now=current, qualification_token=token)
+                    if not allowed:
+                        raise RuntimeError(reason)
+                    allowed, reason, _estimate = request_decision(
+                        topic, command_id, snapshot, now=current)
+                    if not allowed:
+                        raise RuntimeError(reason)
+                    if mock_output:
+                        return None
+                    info = client.publish(topic, payload, qos=qos)
+                    rc = getattr(info, "rc", 0)
+                    mqtt = getattr(self, "_mqtt", None)
+                    if rc == 0 or (mqtt is not None and rc == mqtt.MQTT_ERR_SUCCESS):
+                        safety.mark_published(topic, now=current)
+                    return info
             return client.publish(topic, payload, qos=qos)
 
     def publish_estop_zero(self, *, _expected_session: tuple[Any, int] | None = None) -> tuple[bool, str]:

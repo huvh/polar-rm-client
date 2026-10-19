@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+import math
 import secrets
 import time
 from typing import Any, Callable, Iterable
@@ -292,6 +293,46 @@ class OfficialSafety:
             # toggle the manager's live flag and inject unwanted zero frames.
             if name != "DT7KeyboardMouseControl" and previous >= 0.0 and current - previous < 1.0 / limit_hz:
                 return self._deny(f"{name} exceeds {limit_hz:g} Hz")
+        return True, "ok"
+
+    def can_publish_v2_economy_current(
+        self, topic: str, *, now: float, qualification_token: str | None = None,
+    ) -> tuple[bool, str]:
+        """Read-only final V2 request check; never revoke or notify under locks.
+
+        This is deliberately limited to the two reviewed economy topics. The
+        regular can_publish call still owns initial denial/expiry effects.
+        V2 live business requests require MATCH even with qualification.
+        """
+        if topic not in {"AirSupportCommand", "SentryCtrlCommand"}:
+            return False, "unsupported V2 economy topic"
+        try:
+            if type(now) not in (int, float) or not math.isfinite(now) or now < 0:
+                return False, "invalid V2 admission clock"
+        except OverflowError:
+            return False, "invalid V2 admission clock"
+        if self.estop_active or self.control_state == ControlState.ESTOP:
+            return False, "E-stop active"
+        if not self.allow_mqtt_publish:
+            return False, "current scenario does not allow real MQTT publishing"
+        if self.control_state == ControlState.QUALIFICATION:
+            token = self._qualification
+            if (token is None or now > token.expires_at or not qualification_token
+                    or not secrets.compare_digest(qualification_token, token.value)
+                    or "economy" not in token.intents):
+                return False, "qualification token invalid or expired"
+        elif self.control_state == ControlState.MATCH_ARMED:
+            if "economy" not in self._authorized_capabilities:
+                return False, "capability economy remains LOCKED MOCK"
+        else:
+            return False, "match control is not armed or qualified"
+        if not self.is_fighting():
+            return False, "V2 live economy requests require MATCH"
+        if self.enforce_official_limits:
+            previous = self._publish_at.get(topic, -1.0)
+            limit_hz = self._topic_limit_hz.get(topic, self._publish_limit_hz)
+            if previous >= 0.0 and now - previous < 1.0 / limit_hz:
+                return False, f"{topic} exceeds {limit_hz:g} Hz"
         return True, "ok"
 
     def can_transmit_dt7(self, *, qualification_token: str | None = None,
