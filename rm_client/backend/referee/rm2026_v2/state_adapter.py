@@ -41,3 +41,13 @@ class Rm2026V2StateAdapter(Rm2026StateAdapter):
             state.end_reason = reason
         # SentryStatusSync uses the common presence-filtered dict update.
         # Its is_powered key means strengthened/boosted, not electrical power.
+
+    def _apply_air_support_observations(self, state: RobotState, data: dict[str, Any]) -> None:
+        # Preserve presence and raw enums; illumination is not lock eligibility.
+        # Convert both fields before publishing either direct-mapping value.
+        targeted = int(data["is_being_targeted"]) if "is_being_targeted" in data else None
+        shooter = int(data["shooter_status"]) if "shooter_status" in data else None
+        if "is_being_targeted" in data:
+            state.air_support_is_being_targeted = targeted
+        if "shooter_status" in data:
+            state.air_support_shooter_status = shooter

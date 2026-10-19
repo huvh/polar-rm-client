@@ -1164,6 +1164,7 @@ class BackendManager:
         state.path_plan.clear()
         state.tech_core.clear()
         state.performance_sync.clear()
+        state.clear_air_support_observations()
         state.rune_status.clear()
         state.sentry_status.clear()
         state.dart_status.clear()

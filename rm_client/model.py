@@ -91,6 +91,9 @@ class RobotState:
     air_support_can_free: bool = False
     air_support_free_time_sec: int = 0
     air_support_cost_coins: int = 0
+    # V2 raw observations: None is unobserved; these are not permissions.
+    air_support_is_being_targeted: int | None = field(default=None, init=False)
+    air_support_shooter_status: int | None = field(default=None, init=False)
     economy_mock_mode: bool = True
     economy_managed: bool = False
     economy_status_revision: int = 0
@@ -406,6 +409,11 @@ class RobotState:
             )
             for label, field_names in self.MODULE_INDICATOR_FIELDS
         )
+
+    def clear_air_support_observations(self) -> None:
+        """Retire V2 aerial observations without changing legacy support state."""
+        self.air_support_is_being_targeted = None
+        self.air_support_shooter_status = None
 
     def clear_match_settlement(self) -> None:
         """Retire this round's V2 observations without changing common stage data."""

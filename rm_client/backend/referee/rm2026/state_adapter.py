@@ -174,6 +174,9 @@ class Rm2026StateAdapter:
                           previous_round: int, stage: int | None) -> None:
         """V1 has no settlement fields; version owners may project them here."""
 
+    def _apply_air_support_observations(self, state: RobotState, data: dict[str, Any]) -> None:
+        """Version owners may project additional aerial observations here."""
+
     def _apply_one(self, state: RobotState, name: str, data: dict[str, Any]) -> None:
         data, present = self._select_present_fields(name, data)
         economy_before = self._economy_signature(state)
@@ -332,6 +335,7 @@ class Rm2026StateAdapter:
             if "left_time" in data:
                 state.air_support_can_free = state.air_support_free_time_sec > 0
             state.air_support_cost_coins = int(data.get("cost_coins", state.air_support_cost_coins))
+            self._apply_air_support_observations(state, data)
         elif name == "GlobalSpecialMechanism":
             ids = [int(v) for v in data.get("mechanism_id", ())]
             times = [int(v) for v in data.get("mechanism_time_sec", ())]

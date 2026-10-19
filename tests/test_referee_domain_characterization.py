@@ -244,6 +244,12 @@ class RefereeDomainCharacterizationTests(unittest.TestCase):
             "e0a512c95a7c6a5e57cbbd5dd3ba57fa7c96516075f794734708b55da98c3c04")
         expected["Rm2026StateAdapter"] = (
             "b432c021b5fb337838ec61ef15f9b27236dca43823a88040b21470c1c115c957")
+        # V2-only aerial observations add one private no-op hook/call.
+        # Preserve all earlier accepted hashes and the old behavioral fixture.
+        self.assertEqual(expected["Rm2026StateAdapter"],
+            "b432c021b5fb337838ec61ef15f9b27236dca43823a88040b21470c1c115c957")
+        expected["Rm2026StateAdapter"] = (
+            "bcb3bcc629ca2414a91bedb052b72af4cecd26b42a58fb8490009c065043b704")
         self.assertEqual(ast_contracts(), expected)
 
     def test_profiles_transport_policy_validation_and_factory_identity(self):
