@@ -1,0 +1,1704 @@
+{
+  "source_sha256": "8fdc484c58d503a3fb68f7c0515ae618b68eb2b058a8c876e1add5eeb8a7d81b",
+  "kind": "synthetic independent protobuf fixtures; not captured or device-qualified",
+  "topics": [
+    {
+      "topic": "KeyboardMouseControl",
+      "rate": "75Hz",
+      "max_qos": 1,
+      "section": "2.2.1",
+      "direction": "uplink",
+      "fields": [
+        {
+          "cardinality": "optional",
+          "type": "int32",
+          "name": "mouse_x",
+          "number": 1
+        },
+        {
+          "cardinality": "optional",
+          "type": "int32",
+          "name": "mouse_y",
+          "number": 2
+        },
+        {
+          "cardinality": "optional",
+          "type": "int32",
+          "name": "mouse_z",
+          "number": 3
+        },
+        {
+          "cardinality": "optional",
+          "type": "bool",
+          "name": "left_button_down",
+          "number": 4
+        },
+        {
+          "cardinality": "optional",
+          "type": "bool",
+          "name": "right_button_down",
+          "number": 5
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "keyboard_value",
+          "number": 6
+        },
+        {
+          "cardinality": "optional",
+          "type": "bool",
+          "name": "mid_button_down",
+          "number": 7
+        }
+      ],
+      "disposition": "encoded",
+      "encoder": "encode_keyboard_mouse_control",
+      "arguments": {
+        "mouse_x": -2,
+        "mouse_y": 3,
+        "mouse_z": -4,
+        "left_button_down": true,
+        "right_button_down": false,
+        "keyboard_value": 257,
+        "mid_button_down": true
+      },
+      "wire_hex": "08feffffffffffffffff01100318fcffffffffffffffff01200128003081023801"
+    },
+    {
+      "topic": "CustomControl",
+      "rate": "75Hz",
+      "max_qos": 1,
+      "section": "2.2.2",
+      "direction": "uplink",
+      "fields": [
+        {
+          "cardinality": "optional",
+          "type": "bytes",
+          "name": "data",
+          "number": 1
+        }
+      ],
+      "disposition": "encoded",
+      "encoder": "encode_custom_control",
+      "arguments": {
+        "data": {
+          "hex": "010200ff"
+        }
+      },
+      "wire_hex": "0a04010200ff"
+    },
+    {
+      "topic": "GameStatus",
+      "rate": "5Hz",
+      "max_qos": 1,
+      "section": "2.2.3",
+      "direction": "downlink",
+      "fields": [
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "current_round",
+          "number": 1
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "total_rounds",
+          "number": 2
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "red_score",
+          "number": 3
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "blue_score",
+          "number": 4
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "current_stage",
+          "number": 5
+        },
+        {
+          "cardinality": "optional",
+          "type": "int32",
+          "name": "stage_countdown_sec",
+          "number": 6
+        },
+        {
+          "cardinality": "optional",
+          "type": "int32",
+          "name": "stage_elapsed_sec",
+          "number": 7
+        },
+        {
+          "cardinality": "optional",
+          "type": "bool",
+          "name": "is_paused",
+          "number": 8
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "game_result",
+          "number": 9
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "end_reason",
+          "number": 10
+        }
+      ],
+      "disposition": "decoded",
+      "wire_hex": "0865106618672068280530faffffffffffffffff0138f9ffffffffffffffff01400148025009",
+      "expected": {
+        "current_round": 101,
+        "total_rounds": 102,
+        "red_score": 103,
+        "blue_score": 104,
+        "current_stage": 5,
+        "stage_countdown_sec": -6,
+        "stage_elapsed_sec": -7,
+        "is_paused": true,
+        "game_result": 2,
+        "end_reason": 9
+      }
+    },
+    {
+      "topic": "GlobalUnitStatus",
+      "rate": "1Hz",
+      "max_qos": 1,
+      "section": "2.2.4",
+      "direction": "downlink",
+      "fields": [
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "base_health",
+          "number": 1
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "base_status",
+          "number": 2
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "base_shield",
+          "number": 3
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "outpost_health",
+          "number": 4
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "outpost_status",
+          "number": 5
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "enemy_base_health",
+          "number": 6
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "enemy_base_status",
+          "number": 7
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "enemy_base_shield",
+          "number": 8
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "enemy_outpost_health",
+          "number": 9
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "enemy_outpost_status",
+          "number": 10
+        },
+        {
+          "cardinality": "repeated",
+          "type": "uint32",
+          "name": "robot_health",
+          "number": 11
+        },
+        {
+          "cardinality": "repeated",
+          "type": "int32",
+          "name": "robot_bullets",
+          "number": 12
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "total_damage_ally",
+          "number": 13
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "total_damage_enemy",
+          "number": 14
+        }
+      ],
+      "disposition": "decoded",
+      "wire_hex": "08651066186720682869306a386b406c486d506e5a0365ca01620bfdffffffffffffffff010468717072",
+      "expected": {
+        "base_health": 101,
+        "base_status": 102,
+        "base_shield": 103,
+        "outpost_health": 104,
+        "outpost_status": 105,
+        "enemy_base_health": 106,
+        "enemy_base_status": 107,
+        "enemy_base_shield": 108,
+        "enemy_outpost_health": 109,
+        "enemy_outpost_status": 110,
+        "robot_health": [
+          101,
+          202
+        ],
+        "robot_bullets": [
+          -3,
+          4
+        ],
+        "total_damage_ally": 113,
+        "total_damage_enemy": 114
+      }
+    },
+    {
+      "topic": "GlobalLogisticsStatus",
+      "rate": "1Hz",
+      "max_qos": 1,
+      "section": "2.2.5",
+      "direction": "downlink",
+      "fields": [
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "remaining_economy",
+          "number": 1
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint64",
+          "name": "total_economy_obtained",
+          "number": 2
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "tech_level",
+          "number": 3
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "encryption_level",
+          "number": 4
+        }
+      ],
+      "disposition": "decoded",
+      "wire_hex": "0865106618672068",
+      "expected": {
+        "remaining_economy": 101,
+        "total_economy_obtained": 102,
+        "tech_level": 103,
+        "encryption_level": 104
+      }
+    },
+    {
+      "topic": "GlobalSpecialMechanism",
+      "rate": "1Hz",
+      "max_qos": 1,
+      "section": "2.2.6",
+      "direction": "downlink",
+      "fields": [
+        {
+          "cardinality": "repeated",
+          "type": "uint32",
+          "name": "mechanism_id",
+          "number": 1
+        },
+        {
+          "cardinality": "repeated",
+          "type": "int32",
+          "name": "mechanism_time_sec",
+          "number": 2
+        }
+      ],
+      "disposition": "decoded",
+      "wire_hex": "0a0365ca01120bfdffffffffffffffff0104",
+      "expected": {
+        "mechanism_id": [
+          101,
+          202
+        ],
+        "mechanism_time_sec": [
+          -3,
+          4
+        ]
+      }
+    },
+    {
+      "topic": "Event",
+      "rate": "触发式",
+      "max_qos": 1,
+      "section": "2.2.7",
+      "direction": "downlink",
+      "fields": [
+        {
+          "cardinality": "optional",
+          "type": "int32",
+          "name": "event_id",
+          "number": 1
+        },
+        {
+          "cardinality": "optional",
+          "type": "string",
+          "name": "param",
+          "number": 2
+        }
+      ],
+      "disposition": "decoded",
+      "wire_hex": "08ffffffffffffffffff01120766697874757265",
+      "expected": {
+        "event_id": -1,
+        "param": "fixture"
+      }
+    },
+    {
+      "topic": "RobotInjuryStat",
+      "rate": "1Hz",
+      "max_qos": 1,
+      "section": "2.2.8",
+      "direction": "downlink",
+      "fields": [
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "total_damage",
+          "number": 1
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "collision_damage",
+          "number": 2
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "small_projectile_damage",
+          "number": 3
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "large_projectile_damage",
+          "number": 4
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "dart_splash_damage",
+          "number": 5
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "module_offline_damage",
+          "number": 6
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "offline_damage",
+          "number": 7
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "penalty_damage",
+          "number": 8
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "server_kill_damage",
+          "number": 9
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "killer_id",
+          "number": 10
+        }
+      ],
+      "disposition": "decoded",
+      "wire_hex": "08651066186720682869306a386b406c486d506e",
+      "expected": {
+        "total_damage": 101,
+        "collision_damage": 102,
+        "small_projectile_damage": 103,
+        "large_projectile_damage": 104,
+        "dart_splash_damage": 105,
+        "module_offline_damage": 106,
+        "offline_damage": 107,
+        "penalty_damage": 108,
+        "server_kill_damage": 109,
+        "killer_id": 110
+      }
+    },
+    {
+      "topic": "RobotRespawnStatus",
+      "rate": "1Hz",
+      "max_qos": 1,
+      "section": "2.2.9",
+      "direction": "downlink",
+      "fields": [
+        {
+          "cardinality": "optional",
+          "type": "bool",
+          "name": "is_pending_respawn",
+          "number": 1
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "total_respawn_progress",
+          "number": 2
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "current_respawn_progress",
+          "number": 3
+        },
+        {
+          "cardinality": "optional",
+          "type": "bool",
+          "name": "can_free_respawn",
+          "number": 4
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "gold_cost_for_respawn",
+          "number": 5
+        },
+        {
+          "cardinality": "optional",
+          "type": "bool",
+          "name": "can_pay_for_respawn",
+          "number": 6
+        }
+      ],
+      "disposition": "decoded",
+      "wire_hex": "080110661867200128693001",
+      "expected": {
+        "is_pending_respawn": true,
+        "total_respawn_progress": 102,
+        "current_respawn_progress": 103,
+        "can_free_respawn": true,
+        "gold_cost_for_respawn": 105,
+        "can_pay_for_respawn": true
+      }
+    },
+    {
+      "topic": "RobotStaticStatus",
+      "rate": "1Hz",
+      "max_qos": 1,
+      "section": "2.2.10",
+      "direction": "downlink",
+      "fields": [
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "connection_state",
+          "number": 1
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "field_state",
+          "number": 2
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "alive_state",
+          "number": 3
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "robot_id",
+          "number": 4
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "robot_type",
+          "number": 5
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "performance_system_shooter",
+          "number": 6
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "performance_system_chassis",
+          "number": 7
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "level",
+          "number": 8
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "max_health",
+          "number": 9
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "max_heat",
+          "number": 10
+        },
+        {
+          "cardinality": "optional",
+          "type": "float",
+          "name": "heat_cooldown_rate",
+          "number": 11
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "max_power",
+          "number": 12
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "max_buffer_energy",
+          "number": 13
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "max_chassis_energy",
+          "number": 14
+        }
+      ],
+      "disposition": "decoded",
+      "wire_hex": "08651066186720682869306a386b406c486d506e5d00003441607068717072",
+      "expected": {
+        "connection_state": 101,
+        "field_state": 102,
+        "alive_state": 103,
+        "robot_id": 104,
+        "robot_type": 105,
+        "performance_system_shooter": 106,
+        "performance_system_chassis": 107,
+        "level": 108,
+        "max_health": 109,
+        "max_heat": 110,
+        "heat_cooldown_rate": 11.25,
+        "max_power": 112,
+        "max_buffer_energy": 113,
+        "max_chassis_energy": 114
+      }
+    },
+    {
+      "topic": "RobotDynamicStatus",
+      "rate": "10Hz",
+      "max_qos": 1,
+      "section": "2.2.11",
+      "direction": "downlink",
+      "fields": [
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "current_health",
+          "number": 1
+        },
+        {
+          "cardinality": "optional",
+          "type": "float",
+          "name": "current_heat",
+          "number": 2
+        },
+        {
+          "cardinality": "optional",
+          "type": "float",
+          "name": "last_projectile_fire_rate",
+          "number": 3
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "current_chassis_energy",
+          "number": 4
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "current_buffer_energy",
+          "number": 5
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "current_experience",
+          "number": 6
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "experience_for_upgrade",
+          "number": 7
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "total_projectiles_fired",
+          "number": 8
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "remaining_ammo",
+          "number": 9
+        },
+        {
+          "cardinality": "optional",
+          "type": "bool",
+          "name": "is_out_of_combat",
+          "number": 10
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "out_of_combat_countdown",
+          "number": 11
+        },
+        {
+          "cardinality": "optional",
+          "type": "bool",
+          "name": "can_remote_heal",
+          "number": 12
+        },
+        {
+          "cardinality": "optional",
+          "type": "bool",
+          "name": "can_remote_ammo",
+          "number": 13
+        }
+      ],
+      "disposition": "decoded",
+      "wire_hex": "086515000010401d0000504020682869306a386b406c486d5001586f60016801",
+      "expected": {
+        "current_health": 101,
+        "current_heat": 2.25,
+        "last_projectile_fire_rate": 3.25,
+        "current_chassis_energy": 104,
+        "current_buffer_energy": 105,
+        "current_experience": 106,
+        "experience_for_upgrade": 107,
+        "total_projectiles_fired": 108,
+        "remaining_ammo": 109,
+        "is_out_of_combat": true,
+        "out_of_combat_countdown": 111,
+        "can_remote_heal": true,
+        "can_remote_ammo": true
+      }
+    },
+    {
+      "topic": "RobotModuleStatus",
+      "rate": "1Hz",
+      "max_qos": 1,
+      "section": "2.2.12",
+      "direction": "downlink",
+      "fields": [
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "power_manager",
+          "number": 1
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "rfid",
+          "number": 2
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "light_strip",
+          "number": 3
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "small_shooter",
+          "number": 4
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "big_shooter",
+          "number": 5
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "uwb",
+          "number": 6
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "armor",
+          "number": 7
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "video_transmission",
+          "number": 8
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "capacitor",
+          "number": 9
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "main_controller",
+          "number": 10
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "laser_detection_module",
+          "number": 11
+        }
+      ],
+      "disposition": "decoded",
+      "wire_hex": "08651066186720682869306a386b406c486d506e586f",
+      "expected": {
+        "power_manager": 101,
+        "rfid": 102,
+        "light_strip": 103,
+        "small_shooter": 104,
+        "big_shooter": 105,
+        "uwb": 106,
+        "armor": 107,
+        "video_transmission": 108,
+        "capacitor": 109,
+        "main_controller": 110,
+        "laser_detection_module": 111
+      }
+    },
+    {
+      "topic": "RobotPosition",
+      "rate": "1Hz",
+      "max_qos": 1,
+      "section": "2.2.13",
+      "direction": "downlink",
+      "fields": [
+        {
+          "cardinality": "optional",
+          "type": "float",
+          "name": "x",
+          "number": 1
+        },
+        {
+          "cardinality": "optional",
+          "type": "float",
+          "name": "y",
+          "number": 2
+        },
+        {
+          "cardinality": "optional",
+          "type": "float",
+          "name": "z",
+          "number": 3
+        },
+        {
+          "cardinality": "optional",
+          "type": "float",
+          "name": "yaw",
+          "number": 4
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "robot_id",
+          "number": 5
+        }
+      ],
+      "disposition": "decoded",
+      "wire_hex": "0d0000a03f15000010401d0000504025000088402869",
+      "expected": {
+        "x": 1.25,
+        "y": 2.25,
+        "z": 3.25,
+        "yaw": 4.25,
+        "robot_id": 105
+      }
+    },
+    {
+      "topic": "Buff",
+      "rate": "获得触发，持有期间1Hz",
+      "max_qos": 1,
+      "section": "2.2.14",
+      "direction": "downlink",
+      "fields": [
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "robot_id",
+          "number": 1
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "buff_type",
+          "number": 2
+        },
+        {
+          "cardinality": "optional",
+          "type": "int32",
+          "name": "buff_level",
+          "number": 3
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "buff_max_time",
+          "number": 4
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "buff_left_time",
+          "number": 5
+        }
+      ],
+      "disposition": "decoded",
+      "wire_hex": "0865106618fdffffffffffffffff0120682869",
+      "expected": {
+        "robot_id": 101,
+        "buff_type": 102,
+        "buff_level": -3,
+        "buff_max_time": 104,
+        "buff_left_time": 105
+      }
+    },
+    {
+      "topic": "PenaltyInfo",
+      "rate": "触发式",
+      "max_qos": 1,
+      "section": "2.2.15",
+      "direction": "downlink",
+      "fields": [
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "penalty_type",
+          "number": 1
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "penalty_effect_sec",
+          "number": 2
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "total_penalty_num",
+          "number": 3
+        }
+      ],
+      "disposition": "decoded",
+      "wire_hex": "086510661867",
+      "expected": {
+        "penalty_type": 101,
+        "penalty_effect_sec": 102,
+        "total_penalty_num": 103
+      }
+    },
+    {
+      "topic": "RobotPathPlanInfo",
+      "rate": "触发式",
+      "max_qos": 1,
+      "section": "2.2.16",
+      "direction": "downlink",
+      "fields": [
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "intention",
+          "number": 1
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "start_pos_x",
+          "number": 2
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "start_pos_y",
+          "number": 3
+        },
+        {
+          "cardinality": "repeated",
+          "type": "int32",
+          "name": "offset_x",
+          "number": 4
+        },
+        {
+          "cardinality": "repeated",
+          "type": "int32",
+          "name": "offset_y",
+          "number": 5
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "sender_id",
+          "number": 6
+        }
+      ],
+      "disposition": "decoded",
+      "wire_hex": "086510661867220bfdffffffffffffffff01042a0bfdffffffffffffffff0104306a",
+      "expected": {
+        "intention": 101,
+        "start_pos_x": 102,
+        "start_pos_y": 103,
+        "offset_x": [
+          -3,
+          4
+        ],
+        "offset_y": [
+          -3,
+          4
+        ],
+        "sender_id": 106
+      }
+    },
+    {
+      "topic": "MapClickInfo",
+      "rate": "触发式，继承§1.3.1限制",
+      "max_qos": 1,
+      "section": "2.2.17",
+      "direction": "downlink",
+      "fields": [
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "is_send_all",
+          "number": 1
+        },
+        {
+          "cardinality": "optional",
+          "type": "bytes",
+          "name": "robot_id",
+          "number": 2
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "mode",
+          "number": 3
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "enemy_id",
+          "number": 4
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "ascii",
+          "number": 5
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "type",
+          "number": 6
+        },
+        {
+          "cardinality": "optional",
+          "type": "float",
+          "name": "map_x",
+          "number": 7
+        },
+        {
+          "cardinality": "optional",
+          "type": "float",
+          "name": "map_y",
+          "number": 8
+        }
+      ],
+      "disposition": "decoded",
+      "wire_hex": "08651204010200ff186720682869306a3d0000e8404500000441",
+      "expected": {
+        "is_send_all": 101,
+        "robot_id": {
+          "hex": "010200ff"
+        },
+        "mode": 103,
+        "enemy_id": 104,
+        "ascii": 105,
+        "type": 106,
+        "map_x": 7.25,
+        "map_y": 8.25
+      }
+    },
+    {
+      "topic": "MapClickCmd",
+      "rate": "触发式，继承§1.3.1限制",
+      "max_qos": 1,
+      "section": "2.2.18",
+      "direction": "uplink",
+      "fields": [
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "is_send_all",
+          "number": 1
+        },
+        {
+          "cardinality": "optional",
+          "type": "bytes",
+          "name": "robot_id",
+          "number": 2
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "mode",
+          "number": 3
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "enemy_id",
+          "number": 4
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "ascii",
+          "number": 5
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "type",
+          "number": 6
+        },
+        {
+          "cardinality": "optional",
+          "type": "float",
+          "name": "map_x",
+          "number": 7
+        },
+        {
+          "cardinality": "optional",
+          "type": "float",
+          "name": "map_y",
+          "number": 8
+        }
+      ],
+      "disposition": "encoded",
+      "encoder": "encode_map_click_cmd",
+      "arguments": {
+        "is_send_all": 1,
+        "robot_id": {
+          "hex": "01020304050607"
+        },
+        "mode": 2,
+        "enemy_id": 103,
+        "ascii_code": 65,
+        "mark_type": 3,
+        "map_x": 2.25,
+        "map_y": 3.5
+      },
+      "wire_hex": "080112070102030405060718032067284130023d000010404500006040"
+    },
+    {
+      "topic": "RadarInfoToClient",
+      "rate": "触发式",
+      "max_qos": 1,
+      "section": "2.2.19",
+      "direction": "downlink",
+      "fields": [],
+      "disposition": "unavailable: official wrapper schema incomplete"
+    },
+    {
+      "topic": "CustomByteBlock",
+      "rate": "50Hz",
+      "max_qos": 1,
+      "section": "2.2.20",
+      "direction": "downlink",
+      "fields": [
+        {
+          "cardinality": "optional",
+          "type": "bytes",
+          "name": "data",
+          "number": 1
+        }
+      ],
+      "disposition": "decoded",
+      "wire_hex": "0a04010200ff",
+      "expected": {
+        "data": {
+          "hex": "010200ff"
+        }
+      }
+    },
+    {
+      "topic": "AssemblyCommand",
+      "rate": "触发≤10Hz",
+      "max_qos": 1,
+      "section": "2.2.21",
+      "direction": "uplink",
+      "fields": [
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "operation",
+          "number": 1
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "difficulty",
+          "number": 2
+        }
+      ],
+      "disposition": "encoded",
+      "encoder": "encode_assembly_command",
+      "arguments": {
+        "operation": 2,
+        "difficulty": 3
+      },
+      "wire_hex": "08021003"
+    },
+    {
+      "topic": "TechCoreMotionStateSync",
+      "rate": "1Hz",
+      "max_qos": 1,
+      "section": "2.2.22",
+      "direction": "downlink",
+      "fields": [
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "maximum_difficulty_level",
+          "number": 1
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "basic_state",
+          "number": 2
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "putin_state",
+          "number": 3
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "move_state",
+          "number": 4
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "rotate_state",
+          "number": 5
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "enemy_core_status",
+          "number": 6
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "remain_time_all",
+          "number": 7
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "remain_time_step",
+          "number": 8
+        }
+      ],
+      "disposition": "decoded",
+      "wire_hex": "08651066186720682869306a386b406c",
+      "expected": {
+        "maximum_difficulty_level": 101,
+        "basic_state": 102,
+        "putin_state": 103,
+        "move_state": 104,
+        "rotate_state": 105,
+        "enemy_core_status": 106,
+        "remain_time_all": 107,
+        "remain_time_step": 108
+      }
+    },
+    {
+      "topic": "RobotPerformanceSelectionCommand",
+      "rate": "触发≤10Hz",
+      "max_qos": 1,
+      "section": "2.2.23",
+      "direction": "uplink",
+      "fields": [
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "shooter",
+          "number": 1
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "chassis",
+          "number": 2
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "sentry_control",
+          "number": 3
+        }
+      ],
+      "disposition": "encoded",
+      "encoder": "encode_robot_performance_selection_command",
+      "arguments": {
+        "shooter": 1,
+        "chassis": 2,
+        "sentry_control": 3
+      },
+      "wire_hex": "080110021803"
+    },
+    {
+      "topic": "RobotPerformanceSelectionSync",
+      "rate": "1Hz",
+      "max_qos": 1,
+      "section": "2.2.24",
+      "direction": "downlink",
+      "fields": [
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "shooter",
+          "number": 1
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "chassis",
+          "number": 2
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "sentry_control",
+          "number": 3
+        }
+      ],
+      "disposition": "decoded",
+      "wire_hex": "086510661867",
+      "expected": {
+        "shooter": 101,
+        "chassis": 102,
+        "sentry_control": 103
+      }
+    },
+    {
+      "topic": "CommonCommand",
+      "rate": "触发≤10Hz",
+      "max_qos": 1,
+      "section": "2.2.25",
+      "direction": "uplink",
+      "fields": [
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "cmd_type",
+          "number": 1
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "param",
+          "number": 2
+        }
+      ],
+      "disposition": "encoded",
+      "encoder": "encode_common_command",
+      "arguments": {
+        "cmd_type": 5,
+        "param": 10
+      },
+      "wire_hex": "0805100a"
+    },
+    {
+      "topic": "HeroDeployModeEventCommand",
+      "rate": "触发≤10Hz",
+      "max_qos": 1,
+      "section": "2.2.26",
+      "direction": "uplink",
+      "fields": [
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "mode",
+          "number": 1
+        }
+      ],
+      "disposition": "encoded",
+      "encoder": "encode_hero_deploy_mode_event_command",
+      "arguments": {
+        "mode": 1
+      },
+      "wire_hex": "0801"
+    },
+    {
+      "topic": "DeployModeStatusSync",
+      "rate": "1Hz",
+      "max_qos": 1,
+      "section": "2.2.27",
+      "direction": "downlink",
+      "fields": [
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "status",
+          "number": 1
+        }
+      ],
+      "disposition": "decoded",
+      "wire_hex": "0801",
+      "expected": {
+        "status": 1
+      }
+    },
+    {
+      "topic": "RuneActivateCommand",
+      "rate": "触发≤10Hz",
+      "max_qos": 1,
+      "section": "2.2.28",
+      "direction": "uplink",
+      "fields": [
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "activate",
+          "number": 1
+        }
+      ],
+      "disposition": "encoded",
+      "encoder": "encode_rune_activate_command",
+      "arguments": {
+        "activate": 1
+      },
+      "wire_hex": "0801"
+    },
+    {
+      "topic": "RuneStatusSync",
+      "rate": "1Hz",
+      "max_qos": 1,
+      "section": "2.2.29",
+      "direction": "downlink",
+      "fields": [
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "rune_status",
+          "number": 1
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "activated_arms",
+          "number": 2
+        },
+        {
+          "cardinality": "optional",
+          "type": "float",
+          "name": "average_rings",
+          "number": 3
+        }
+      ],
+      "disposition": "decoded",
+      "wire_hex": "086510661d00005040",
+      "expected": {
+        "rune_status": 101,
+        "activated_arms": 102,
+        "average_rings": 3.25
+      }
+    },
+    {
+      "topic": "SentryStatusSync",
+      "rate": "1Hz",
+      "max_qos": 1,
+      "section": "2.2.30",
+      "direction": "downlink",
+      "fields": [
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "posture_id",
+          "number": 1
+        },
+        {
+          "cardinality": "optional",
+          "type": "bool",
+          "name": "is_weakened",
+          "number": 2
+        },
+        {
+          "cardinality": "optional",
+          "type": "bool",
+          "name": "is_powered",
+          "number": 3
+        }
+      ],
+      "disposition": "decoded",
+      "wire_hex": "086510011801",
+      "expected": {
+        "posture_id": 101,
+        "is_weakened": true,
+        "is_powered": true
+      }
+    },
+    {
+      "topic": "DartCommand",
+      "rate": "触发≤10Hz",
+      "max_qos": 1,
+      "section": "2.2.31",
+      "direction": "uplink",
+      "fields": [
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "target_id",
+          "number": 1
+        },
+        {
+          "cardinality": "optional",
+          "type": "bool",
+          "name": "open",
+          "number": 2
+        },
+        {
+          "cardinality": "optional",
+          "type": "bool",
+          "name": "launch_confirm",
+          "number": 3
+        }
+      ],
+      "disposition": "encoded",
+      "encoder": "encode_dart_command",
+      "arguments": {
+        "target_id": 3,
+        "open_gate": true,
+        "launch_confirm": false
+      },
+      "wire_hex": "080310011800"
+    },
+    {
+      "topic": "DartSelectTargetStatusSync",
+      "rate": "1Hz",
+      "max_qos": 1,
+      "section": "2.2.32",
+      "direction": "downlink",
+      "fields": [
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "target_id",
+          "number": 1
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "open",
+          "number": 2
+        }
+      ],
+      "disposition": "decoded",
+      "wire_hex": "08651066",
+      "expected": {
+        "target_id": 101,
+        "open": 102
+      }
+    },
+    {
+      "topic": "SentryCtrlCommand",
+      "rate": "触发≤10Hz",
+      "max_qos": 1,
+      "section": "2.2.33",
+      "direction": "uplink",
+      "fields": [
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "command_id",
+          "number": 1
+        }
+      ],
+      "disposition": "encoded",
+      "encoder": "encode_sentry_ctrl_command",
+      "arguments": {
+        "command_id": 12
+      },
+      "wire_hex": "080c"
+    },
+    {
+      "topic": "SentryCtrlResult",
+      "rate": "触发式",
+      "max_qos": 1,
+      "section": "2.2.34",
+      "direction": "downlink",
+      "fields": [
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "command_id",
+          "number": 1
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "result_code",
+          "number": 2
+        }
+      ],
+      "disposition": "decoded",
+      "wire_hex": "08651066",
+      "expected": {
+        "command_id": 101,
+        "result_code": 102
+      }
+    },
+    {
+      "topic": "AirSupportCommand",
+      "rate": "触发式",
+      "max_qos": 1,
+      "section": "2.2.35",
+      "direction": "uplink",
+      "fields": [
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "command_id",
+          "number": 1
+        }
+      ],
+      "disposition": "encoded",
+      "encoder": "encode_air_support_command",
+      "arguments": {
+        "command_id": 3
+      },
+      "wire_hex": "0803"
+    },
+    {
+      "topic": "AirSupportStatusSync",
+      "rate": "1Hz",
+      "max_qos": 1,
+      "section": "2.2.36",
+      "direction": "downlink",
+      "fields": [
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "airsupport_status",
+          "number": 1
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "left_time",
+          "number": 2
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "cost_coins",
+          "number": 3
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "is_being_targeted",
+          "number": 4
+        },
+        {
+          "cardinality": "optional",
+          "type": "uint32",
+          "name": "shooter_status",
+          "number": 5
+        }
+      ],
+      "disposition": "decoded",
+      "wire_hex": "08011066186720012802",
+      "expected": {
+        "airsupport_status": 1,
+        "left_time": 102,
+        "cost_coins": 103,
+        "is_being_targeted": 1,
+        "shooter_status": 2
+      }
+    }
+  ]
+}
