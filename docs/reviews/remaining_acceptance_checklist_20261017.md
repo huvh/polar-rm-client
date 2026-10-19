@@ -19,6 +19,7 @@ Later stages have separate reports:
 - [V2 decoded-wire observations / failed full53](referee_v2_wire_observations_20261019.md#aggregate-status)
 - [Device-manager fixture isolation and timing evidence / full54](device_manager_fixture_isolation_20261019.md#completed-full54-qualification)
 - [V2 aerial request prerequisites / full54](referee_v2_air_decision_20261019.md#published-source-and-current-qualification)
+- [V2 final MQTT command admission / full55](referee_v2_publish_guard_20261019.md#completed-full55-qualification)
 - [Official-client parity implementation and acceptance plan](official_client_parity_plan_20261019.md)
 
 For the separately scoped legacy-video request, see
@@ -28,7 +29,18 @@ remaining-work statements are not instructions to repeat completed work.
 External/native gaps still apply. No report certifies the whole project as
 Clean Code or ready to merge solely from an offline test count.
 
-The latest [completed full54 checkpoint](device_manager_fixture_isolation_20261019.md#completed-full54-qualification)
+The latest [completed full55 checkpoint](referee_v2_publish_guard_20261019.md#completed-full55-qualification)
+records **420 PASS / 12 SKIP / 4 INCOMPLETE / 0 FAIL, NO-GO** at public source
+`38e8e398eecd6fc3f562cc0c19aaa93b42c71dc5` / local
+`c2d5d7003c576d6548f4cd3229632ebd4ed859a0`, shared tree
+`d6e9610da00ee225beb8a09fbd0c78eff998d793`.
+The new guard26 methods pass. The two V2 economy topics use fixed economy intent,
+immutable payload bytes and final current-session/snapshot/Safety checks at enqueue.
+V2 remains unregistered; Sentry eligibility, frontend/qualification integration and
+native/external prerequisites remain open. Full51/full53 timing counterevidence is
+unchanged; a later passing sample supplies no historical cause closure.
+
+The earlier [completed full54 checkpoint](device_manager_fixture_isolation_20261019.md#completed-full54-qualification)
 records **419 PASS / 12 SKIP / 4 INCOMPLETE / 0 FAIL, NO-GO** at public source
 `0751cd42ed6391f4698ae52944b6c1715e34ac45` / local
 `419e91c5a177a3ee7771dba12c81932f68c9950f`, shared tree
