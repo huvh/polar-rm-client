@@ -1,9 +1,15 @@
 # Remaining architecture acceptance: evidence-based close-out
 
-## Current evidence entry point — 2026-10-18
+## Current evidence entry point — 2026-10-19
 
-The active repair stages and their exact source-specific test results are in
+The earlier repair stages and their exact source-specific test results are in
 [the renewed repair report](renewed_clean_code_repairs_20261018.md).
+Later stages have separate reports:
+- [Economy deferred overlay epochs / full42](economy_deferred_overlay_epoch_20261018.md#completed-full42-qualification)
+- [Deferred elimination preview close guard / full43](deferred_preview_close_20261018.md#completed-full43-qualification)
+- [Nonblocking serial rescan / full44](serial_rescan_nonblocking_20261018.md#completed-full44-qualification)
+- [Camera input handoff / full45](camera_input_handoff_20261018.md#completed-full45-qualification)
+
 For the separately scoped legacy-video request, see
 [issue 20 evidence and acceptance](issue20_legacy_video_evidence_20261018.md).
 The dated sections below preserve earlier review snapshots; their running or
@@ -11,7 +17,15 @@ remaining-work statements are not instructions to repeat completed work.
 External/native gaps still apply. No report certifies the whole project as
 Clean Code or ready to merge solely from an offline test count.
 
-The [completed full41 checkpoint](renewed_clean_code_repairs_20261018.md#completed-forty-first-integrated-result)
+The latest [completed full45 checkpoint](camera_input_handoff_20261018.md#completed-full45-qualification)
+records **410 PASS / 12 SKIP / 4 INCOMPLETE / 0 FAIL, NO-GO** at public source
+`a6946e44b56ba7178781281a474bf695e9b40414` / local
+`0338e19a11f0efbc1486e3e24f40ca41f0c9fc0c`.
+These are selected offline suite/check counts, not unique test methods.
+External prerequisites, native Windows/device acceptance and historical timeout
+causation remain open; this result does not qualify later source edits.
+
+The earlier [completed full41 checkpoint](renewed_clean_code_repairs_20261018.md#completed-forty-first-integrated-result)
 records **405 PASS / 12 SKIP / 4 INCOMPLETE / 0 FAIL, NO-GO** at public source
 `8b91d04ff5743368203a4463f06404d62a16296a` / local
 `0a5300752ef1be7921c9fdf3cdf86a0d4e1e8fe1`.
