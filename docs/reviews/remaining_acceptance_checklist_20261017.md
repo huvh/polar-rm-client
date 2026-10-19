@@ -11,6 +11,7 @@ Later stages have separate reports:
 - [Camera input handoff / full45](camera_input_handoff_20261018.md#completed-full45-qualification)
 - [Saved calibration validation / full46 timeout](calibration_config_load_validation_20261019.md#qualification-limits-and-aggregate-follow-up)
 - [Smoke audio isolation / failed full47 and completed full48](smoke_audio_isolation_20261019.md#completed-full48-qualification)
+- [Saved calibration export errors / full49](calibration_export_errors_20261019.md#completed-full49-qualification)
 
 For the separately scoped legacy-video request, see
 [issue 20 evidence and acceptance](issue20_legacy_video_evidence_20261018.md).
@@ -19,15 +20,22 @@ remaining-work statements are not instructions to repeat completed work.
 External/native gaps still apply. No report certifies the whole project as
 Clean Code or ready to merge solely from an offline test count.
 
-The latest [completed full48 checkpoint](smoke_audio_isolation_20261019.md#completed-full48-qualification)
+The latest [completed full49 checkpoint](calibration_export_errors_20261019.md#completed-full49-qualification)
+records **413 PASS / 12 SKIP / 4 INCOMPLETE / 0 FAIL, NO-GO** at public source
+`db46402ae238a60db2df8623dc345781229d6c43` / local
+`667a7dd1d3332a95d134c844cb5c894be5ca4b91`.
+The new export-error regression passes 21 methods; smoke completes 71/71 functions
+in 8.611 seconds with inert per-test audio. Full46’s timeout and full47’s fixture
+failure remain in the linked reports. These are selected offline suite/check
+counts, not unique test methods. External prerequisites, native Windows/device
+acceptance and historical timeout causation remain open; this result does not
+qualify later source edits.
+
+The earlier [completed full48 checkpoint](smoke_audio_isolation_20261019.md#completed-full48-qualification)
 records **412 PASS / 12 SKIP / 4 INCOMPLETE / 0 FAIL, NO-GO** at public source
 `66293a014251d561f94ef899874d38721d9fe031` / local
 `fe9609ee6ee205efe17d3e7a3f911827adb66473`.
 Smoke completes 71/71 functions in 8.068 seconds with inert per-test audio.
-Full46’s timeout and full47’s fixture failure remain in the linked reports.
-These are selected offline suite/check counts, not unique test methods.
-External prerequisites, native Windows/device acceptance and historical timeout
-causation remain open; this result does not qualify later source edits.
 
 The earlier [completed full45 checkpoint](camera_input_handoff_20261018.md#completed-full45-qualification)
 records **410 PASS / 12 SKIP / 4 INCOMPLETE / 0 FAIL, NO-GO** at public source
