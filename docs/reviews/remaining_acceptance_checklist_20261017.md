@@ -16,6 +16,7 @@ Later stages have separate reports:
 - [V2 settlement/Sentry projection / failed full51](referee_v2_projection_20261019.md#completed-full51-qualification)
 - [V2 rule-price and command-membership foundation / failed full51](referee_v2_action_rules_20261019.md#aggregate-status-and-remaining-acceptance)
 - [V2 aerial observation projection / full52](referee_v2_air_projection_20261019.md#completed-full52-qualification)
+- [V2 decoded-wire observations / failed full53](referee_v2_wire_observations_20261019.md#aggregate-status)
 - [Official-client parity implementation and acceptance plan](official_client_parity_plan_20261019.md)
 
 For the separately scoped legacy-video request, see
@@ -25,7 +26,21 @@ remaining-work statements are not instructions to repeat completed work.
 External/native gaps still apply. No report certifies the whole project as
 Clean Code or ready to merge solely from an offline test count.
 
-The latest [completed full52 checkpoint](referee_v2_air_projection_20261019.md#completed-full52-qualification)
+The latest [completed full53 checkpoint](referee_v2_wire_observations_20261019.md#aggregate-status)
+records **417 PASS / 12 SKIP / 4 INCOMPLETE / 1 FAIL, NO-GO** at public source
+`df33b91491513902ff57eba38f39da3103687f33` / local
+`dabebe448b4eb942fa8221b15e34ff7f910df05b`, shared tree
+`abb6e127f2b744c2736f23ce7f61ff1531293ce6`.
+The new wire-observation module passes18 methods. The existing device-manager
+nonblocking test fails at0.0912815240008058s against its unchanged strict<0.05s
+gate for1000 tick calls with status assertions; cause remains unresolved.
+The failing test and checked device-path files are byte-identical to full52.
+The nine-topic/61-scalar snapshot records decoded-wire receipts, independent
+of later RobotState/UI publication. It adds no RobotState fields, command
+permission or selectable profile. External/native and final action admission
+remain open; passing focused checks do not replace this failed aggregate.
+
+The earlier [completed full52 checkpoint](referee_v2_air_projection_20261019.md#completed-full52-qualification)
 records **417 PASS / 12 SKIP / 4 INCOMPLETE / 0 FAIL, NO-GO** at public source
 `b58dca157bd60dc7738507328e504bef6baac3bb` / local
 `650ec01c7dfb879311139378e9bd53619399b7e4`, shared tree

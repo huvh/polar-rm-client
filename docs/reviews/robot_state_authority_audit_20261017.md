@@ -22,6 +22,10 @@ certificate of the later repair. At source
 `2c18604c8b4af4bca95003c4a267a765d29fe96524a5f672af8107a83396c334`.
 This rescan did not rerun tests or regenerate every writer-reference line.
 
+## 2026-10-19 note: separate V2 decoded-wire receipt owner
+
+The [V2 wire-observation report](referee_v2_wire_observations_20261019.md) describes a separate immutable MQTT receipt snapshot at local `dabebe448b4eb942fa8221b15e34ff7f910df05b` / public `df33b91491513902ff57eba38f39da3103687f33`. It adds no RobotState fields or projection writes. Its nine-topic/61-scalar coverage is decoded-wire evidence, not proof of successful UI/state publication, peer authentication or action eligibility. Future decisions must use individual original receipts and current safety/qualification; unstamped RobotState defaults cannot fill evidence gaps. The historical field inventories below are unchanged. Full53 failed a separate unchanged device-manager timing check and remains NO-GO.
+
 ## 2026-10-19 addendum: unregistered V2 aerial observations
 
 At local `650ec01c7dfb879311139378e9bd53619399b7e4` / public `b58dca157bd60dc7738507328e504bef6baac3bb`, shared tree `2e97032d9084fa4a65881690901d52d66d962630`, two optional raw RobotState fields extend the declared count from245 to247. The earlier242-field census and245-field addendum below remain historical; this is not a regenerated whole-source writer inventory.
