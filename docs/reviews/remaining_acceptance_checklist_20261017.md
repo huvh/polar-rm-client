@@ -15,6 +15,7 @@ Later stages have separate reports:
 - [Unregistered V2 codec foundation / full50](referee_v2_codec_foundation_20261019.md#full50-qualification-and-remaining-acceptance)
 - [V2 settlement/Sentry projection / failed full51](referee_v2_projection_20261019.md#completed-full51-qualification)
 - [V2 rule-price and command-membership foundation / failed full51](referee_v2_action_rules_20261019.md#aggregate-status-and-remaining-acceptance)
+- [V2 aerial observation projection / full52](referee_v2_air_projection_20261019.md#completed-full52-qualification)
 - [Official-client parity implementation and acceptance plan](official_client_parity_plan_20261019.md)
 
 For the separately scoped legacy-video request, see
@@ -24,7 +25,19 @@ remaining-work statements are not instructions to repeat completed work.
 External/native gaps still apply. No report certifies the whole project as
 Clean Code or ready to merge solely from an offline test count.
 
-The latest [completed full51 checkpoint](referee_v2_projection_20261019.md#completed-full51-qualification)
+The latest [completed full52 checkpoint](referee_v2_air_projection_20261019.md#completed-full52-qualification)
+records **417 PASS / 12 SKIP / 4 INCOMPLETE / 0 FAIL, NO-GO** at public source
+`b58dca157bd60dc7738507328e504bef6baac3bb` / local
+`650ec01c7dfb879311139378e9bd53619399b7e4`, shared tree
+`2e97032d9084fa4a65881690901d52d66d962630`.
+The new aerial projection21 and existing DT7 worker-dispatch15 methods pass.
+This later passing timing sample does not explain or erase failed full51 below.
+V2 remains unregistered; the [aerial authority addendum](robot_state_authority_audit_20261017.md#2026-10-19-addendum-unregistered-v2-aerial-observations)
+records247 declared fields while retaining earlier inventories. Raw observations
+do not grant action permission or fresh-source authority. External/native and
+action/frontend acceptance remain open; later source edits are not qualified.
+
+The earlier [completed full51 checkpoint](referee_v2_projection_20261019.md#completed-full51-qualification)
 records **415 PASS / 12 SKIP / 4 INCOMPLETE / 1 FAIL, NO-GO** at public source
 `eb9c052f4859a68259558a1bcf67f2997cc321e4` / local
 `9ee192547a49747cc22232ff716b5889917daa0d`, shared tree

@@ -22,6 +22,16 @@ certificate of the later repair. At source
 `2c18604c8b4af4bca95003c4a267a765d29fe96524a5f672af8107a83396c334`.
 This rescan did not rerun tests or regenerate every writer-reference line.
 
+## 2026-10-19 addendum: unregistered V2 aerial observations
+
+At local `650ec01c7dfb879311139378e9bd53619399b7e4` / public `b58dca157bd60dc7738507328e504bef6baac3bb`, shared tree `2e97032d9084fa4a65881690901d52d66d962630`, two optional raw RobotState fields extend the declared count from245 to247. The earlier242-field census and245-field addendum below remain historical; this is not a regenerated whole-source writer inventory.
+
+- air_support_is_being_targeted and air_support_shooter_status default toNone and are excluded from the constructor with init=False. None means unobserved; explicit0 and unknown raw integer values remain distinct. Dataclass fields/asdict/equality deliberately include the additions.
+- Rm2026V2StateAdapter._apply_air_support_observations owns their present-only writes. Both conversions complete before either new field is published; existing common-field partial effects and exception behavior remain. The common adapter hook is a no-op for V1 and Student.
+- RobotState.clear_air_support_observations clears exactly the pair. BackendManager._reset_state_for_scenario invokes it at the existing scenario/profile boundary. Normal stage and match-mode seed policy, legacy aerial scalars and existing economy acknowledgement behavior are unchanged.
+
+The observations do not establish role, target, receipt freshness, eligibility, price or acknowledgement. V2 remains unregistered; current-session authority and action/frontend admission remain later work. This closes the aerial value-projection item listed as pending in the earlier addendum, without replacing that source-specific record. See the [aerial projection report](referee_v2_air_projection_20261019.md#completed-full52-qualification) for full52's417/12/4/0 NO-GO result and the preserved failed full51 boundary.
+
 ## 2026-10-19 addendum: unregistered V2 settlement observations
 
 The V2 projection stage adds three runtime-only RobotState dataclass fields, bringing the declared count from 242 to 245. The historical 242-field scan, digests and writer line references below remain historical. This bounded addendum documents the three additions; it does not claim a regenerated whole-source writer inventory.
