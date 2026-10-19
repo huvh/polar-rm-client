@@ -16,6 +16,8 @@ from typing import Any, Callable
 from ..transports import MqttPublishRecord, OfficialMqttBridge
 from .referee.registry import DEFAULT_PROFILE, get_profile
 from .referee.validation import InvalidRefereePayload, validate_message
+from .referee.rm2026_v2 import codec as v2_codec
+from .referee.rm2026_v2.observations import WireSnapshot, observe
 from .safety import OfficialSafety
 from .mqtt_cleanup import MqttClientResources
 
@@ -45,6 +47,8 @@ class RmMqttBackend(OfficialMqttBridge):
         self.connected_at = 0.0
         self._decoded: deque[tuple[str, str, dict[str, Any], float]] = deque(maxlen=512)
         self._decoded_lock = threading.Lock()
+        self._v2_wire_snapshot: WireSnapshot | None = None
+        self._v2_wire_context: tuple[Any, Any, str] | None = None
         self._started = False
         self._on_connect_hook: Callable[[], None] | None = None
         self.event_hook: Callable[[str, dict[str, Any]], None] | None = None
@@ -278,8 +282,29 @@ class RmMqttBackend(OfficialMqttBridge):
         with self._decoded_lock:
             self.receive_generation += 1
             self._decoded.clear()
+            self._v2_wire_snapshot = None
+            self._v2_wire_context = None
         with self._received_lock:
             self._received_messages.clear()
+
+    def v2_wire_snapshot(self) -> WireSnapshot | None:
+        """Return immutable receipt evidence, never projected state/permission.
+
+        Match the existing lifecycle -> decoded order. The callback reducer
+        takes decoded only and cannot call back into lifecycle/GUI owners.
+        A held older snapshot is not a reusable action-admission witness.
+        """
+        with self._lifecycle_lock:
+            with self._decoded_lock:
+                context = self._v2_wire_context
+                snapshot = self._v2_wire_snapshot
+                if (context is None or snapshot is None
+                        or context[0] is not self.referee
+                        or context[1] is not self.client
+                        or context[2] != str(self.client_id)
+                        or snapshot.receive_generation != self.receive_generation):
+                    return None
+                return snapshot
 
     def set_referee_profile(self, profile_id: str) -> None:
         try:
@@ -402,6 +427,8 @@ class RmMqttBackend(OfficialMqttBridge):
         received_at = time.perf_counter()
         generation = self.receive_generation
         profile = self.referee
+        is_v2 = profile.codec is v2_codec and profile.protocol_version == v2_codec.PROTOCOL_VERSION
+        client_id = str(self.client_id) if is_v2 else ""
         payload = bytes(msg.payload)
         self.messages_received += 1
         self.bytes_received += len(payload)
@@ -426,6 +453,18 @@ class RmMqttBackend(OfficialMqttBridge):
         with self._decoded_lock:
             if generation != self.receive_generation or profile is not self.referee or client is not self.client:
                 return
+            if is_v2:
+                if client_id != str(self.client_id):
+                    return
+                context = self._v2_wire_context
+                previous = self._v2_wire_snapshot if (context is not None
+                    and context[0] is profile and context[1] is client
+                    and context[2] == client_id) else None
+                snapshot = observe(previous, profile_id=profile.profile_id,
+                                   receive_generation=generation, client_id=client_id,
+                                   message=name, data=data, received_at=received_at)
+                self._v2_wire_snapshot = snapshot
+                self._v2_wire_context = (profile, client, client_id)
             super()._on_message(client, userdata, msg, received_at=received_at)
             if name == "GameStatus" and 5 in data.get("__present__", ()):
                 self.safety.update_stage(data["current_stage"])
