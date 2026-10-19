@@ -29,7 +29,10 @@ class ManagerNonblockingTests(unittest.TestCase):
         self.backend = BackendManager(workspace=self.temp.name, scenario_key='LabDebug')
         self.state = RobotState()
         self.backend.state = self.state
-        with patch.object(serial_ports, 'port_snapshot', return_value=[]):
+        with patch.object(serial_ports, 'port_snapshot', return_value=[]), \
+             patch.object(serial_ports, 'list_serial_ports', return_value=[]), \
+             patch.object(serial_ports, '_scan_serial_ports',
+                          side_effect=AssertionError('unexpected physical serial enumeration')):
             self.registry = build_default_registry()
         self.control = KeyboardControlBridge(publisher=None, mock_output=True)
         self.backend.polar.request_start = lambda: None  # no hardware in this fixture
