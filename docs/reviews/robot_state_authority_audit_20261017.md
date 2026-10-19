@@ -22,6 +22,18 @@ certificate of the later repair. At source
 `2c18604c8b4af4bca95003c4a267a765d29fe96524a5f672af8107a83396c334`.
 This rescan did not rerun tests or regenerate every writer-reference line.
 
+## 2026-10-19 addendum: unregistered V2 settlement observations
+
+The V2 projection stage adds three runtime-only RobotState dataclass fields, bringing the declared count from 242 to 245. The historical 242-field scan, digests and writer line references below remain historical. This bounded addendum documents the three additions; it does not claim a regenerated whole-source writer inventory.
+
+- game_result and end_reason are optional raw V2 GameStatus observations, written by Rm2026V2StateAdapter._apply_settlement only when locally admitted. None means unobserved/inapplicable; explicit 0 draw and 255 unavailable remain distinct.
+- settlement_round is the same owner’s local stored-round witness. It can bind default 1 or a retained pre-reset round when stage 5 arrives without a round field. It does not establish a freshly observed official round, a vendor sequence or command authority.
+- RobotState.clear_match_settlement retires all three together. The V2 hook calls it on explicit round change/nonsettlement stage. BackendManager._reset_state_for_scenario and PersistenceMixin.seed_match_state call it at their existing stage-reset boundaries.
+
+SentryStatusSync.is_powered is an additional present-only key in the existing sentry_status dictionary, meaning strengthened/boosted status (是否强化). The dictionary remains owned by the common presence-filtered adapter update and existing scenario/profile reset; this adds no separate dataclass field or electrical-power gate.
+
+V1 does not project these V2-only observations. The V2 profile remains unregistered, and current UI consumers do not display these fields. Fresh peer round/stage admission, endpoint/session freshness, aerial targeting/shooter projection and action admission remain later work. See the [separate V2 projection report](referee_v2_projection_20261019.md) for source identity, regression evidence and limits.
+
 ## Subsequent reproduced defect and accepted repair
 
 The original overlap finding below was a documentation gap at the time of the

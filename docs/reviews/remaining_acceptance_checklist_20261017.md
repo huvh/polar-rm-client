@@ -13,6 +13,8 @@ Later stages have separate reports:
 - [Smoke audio isolation / failed full47 and completed full48](smoke_audio_isolation_20261019.md#completed-full48-qualification)
 - [Saved calibration export errors / full49](calibration_export_errors_20261019.md#completed-full49-qualification)
 - [Unregistered V2 codec foundation / full50](referee_v2_codec_foundation_20261019.md#full50-qualification-and-remaining-acceptance)
+- [V2 settlement/Sentry projection / failed full51](referee_v2_projection_20261019.md#completed-full51-qualification)
+- [V2 rule-price and command-membership foundation / failed full51](referee_v2_action_rules_20261019.md#aggregate-status-and-remaining-acceptance)
 - [Official-client parity implementation and acceptance plan](official_client_parity_plan_20261019.md)
 
 For the separately scoped legacy-video request, see
@@ -22,7 +24,21 @@ remaining-work statements are not instructions to repeat completed work.
 External/native gaps still apply. No report certifies the whole project as
 Clean Code or ready to merge solely from an offline test count.
 
-The latest [completed full50 checkpoint](referee_v2_codec_foundation_20261019.md#full50-qualification-and-remaining-acceptance)
+The latest [completed full51 checkpoint](referee_v2_projection_20261019.md#completed-full51-qualification)
+records **415 PASS / 12 SKIP / 4 INCOMPLETE / 1 FAIL, NO-GO** at public source
+`eb9c052f4859a68259558a1bcf67f2997cc321e4` / local
+`9ee192547a49747cc22232ff716b5889917daa0d`, shared tree
+`1efcd44a59a2f70a5722ba25622d5ad82ae76625`.
+The new projection32 and price12 methods pass, as do the existing codec24 methods.
+The existing DT7 real-time retry-budget test fails at20.113138998567592ms against
+its unchanged strict20ms gate; cause remains unresolved. This failed aggregate
+is not replaced by the passing focused checks or the prior full50 sample.
+V2 remains unregistered. The [authority addendum](robot_state_authority_audit_20261017.md#2026-10-19-addendum-unregistered-v2-settlement-observations)
+records245 declared fields while preserving the historical242-field inventory.
+Current stored-round witnesses do not prove fresh peer round identity, and later
+freshness/UI/action/native/external qualification remains open.
+
+The earlier [completed full50 checkpoint](referee_v2_codec_foundation_20261019.md#full50-qualification-and-remaining-acceptance)
 records **414 PASS / 12 SKIP / 4 INCOMPLETE / 0 FAIL, NO-GO** at public source
 `287a6b4861ea6880b699ac154a3fa1e6167d0af7` / local
 `c96c378b1c0a44fe931daf09bbcb95b85c5c0f34`.
