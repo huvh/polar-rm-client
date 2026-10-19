@@ -12,6 +12,8 @@ Later stages have separate reports:
 - [Saved calibration validation / full46 timeout](calibration_config_load_validation_20261019.md#qualification-limits-and-aggregate-follow-up)
 - [Smoke audio isolation / failed full47 and completed full48](smoke_audio_isolation_20261019.md#completed-full48-qualification)
 - [Saved calibration export errors / full49](calibration_export_errors_20261019.md#completed-full49-qualification)
+- [Unregistered V2 codec foundation / full50](referee_v2_codec_foundation_20261019.md#full50-qualification-and-remaining-acceptance)
+- [Official-client parity implementation and acceptance plan](official_client_parity_plan_20261019.md)
 
 For the separately scoped legacy-video request, see
 [issue 20 evidence and acceptance](issue20_legacy_video_evidence_20261018.md).
@@ -20,7 +22,16 @@ remaining-work statements are not instructions to repeat completed work.
 External/native gaps still apply. No report certifies the whole project as
 Clean Code or ready to merge solely from an offline test count.
 
-The latest [completed full49 checkpoint](calibration_export_errors_20261019.md#completed-full49-qualification)
+The latest [completed full50 checkpoint](referee_v2_codec_foundation_20261019.md#full50-qualification-and-remaining-acceptance)
+records **414 PASS / 12 SKIP / 4 INCOMPLETE / 0 FAIL, NO-GO** at public source
+`287a6b4861ea6880b699ac154a3fa1e6167d0af7` / local
+`c96c378b1c0a44fe931daf09bbcb95b85c5c0f34`.
+The new V2 codec regression passes 24 methods. The profile remains unregistered;
+Radar is explicitly unsupported. This qualifies the bounded offline foundation,
+not state/UI integration, official-software interoperability or hardware.
+The four external/integration prerequisites remain open; later edits are not covered.
+
+The earlier [completed full49 checkpoint](calibration_export_errors_20261019.md#completed-full49-qualification)
 records **413 PASS / 12 SKIP / 4 INCOMPLETE / 0 FAIL, NO-GO** at public source
 `db46402ae238a60db2df8623dc345781229d6c43` / local
 `667a7dd1d3332a95d134c844cb5c894be5ca4b91`.
