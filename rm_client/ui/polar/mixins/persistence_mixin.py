@@ -180,6 +180,7 @@ class PersistenceMixin:
         self.state.stage_elapsed_sec = 0
         self.state.start_time = time.perf_counter()
         # 赛制选择只初始化展示数据，不能冒充权威裁判的比赛阶段。
+        self.state.clear_match_settlement()
         self.state.current_stage = "NOT_STARTED"
         self.state.alliance_color = self.alliance_side()
         if config.key == "RMUL3v3":

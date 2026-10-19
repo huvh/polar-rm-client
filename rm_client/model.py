@@ -46,6 +46,13 @@ class RobotState:
     stage_elapsed_sec: int = 0
     current_round: int = 1
     total_rounds: int = 1
+    # V2 observations only. None is unobserved/inapplicable; an explicit 255
+    # remains the wire's unavailable value, never a fabricated draw (0).
+    game_result: int | None = field(default=None, init=False)
+    end_reason: int | None = field(default=None, init=False)
+    # Local freshness witness: a stage-5 receipt belongs to this round.
+    # This is not a vendor-defined sequence number or an authority flag.
+    settlement_round: int | None = field(default=None, init=False)
     red_score: int = 0
     blue_score: int = 0
     ally_victory_points: int = 200
@@ -399,6 +406,12 @@ class RobotState:
             )
             for label, field_names in self.MODULE_INDICATOR_FIELDS
         )
+
+    def clear_match_settlement(self) -> None:
+        """Retire this round's V2 observations without changing common stage data."""
+        self.game_result = None
+        self.end_reason = None
+        self.settlement_round = None
 
     def clear_native_telemetry(self) -> None:
         """Retire the prior source's PDL1 sample and mirror, not operator settings."""

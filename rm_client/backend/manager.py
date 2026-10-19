@@ -1186,6 +1186,7 @@ class BackendManager:
         state.deploy_mode = 0
         state.deploy_status_revision += 1
         state.deploy_status_at = 0.0
+        state.clear_match_settlement()
         state.current_stage = "NOT_STARTED"
         for key in ("respawn_status", "student_legacy_roster", "student_legacy_fields"):
             state.backend_stats.pop(key, None)

@@ -168,15 +168,23 @@ class Rm2026StateAdapter:
                 })
             state.buff_rows = buff_rows
 
+    _select_present_fields = staticmethod(select_present_fields)
+
+    def _apply_settlement(self, state: RobotState, data: dict[str, Any],
+                          previous_round: int, stage: int | None) -> None:
+        """V1 has no settlement fields; version owners may project them here."""
+
     def _apply_one(self, state: RobotState, name: str, data: dict[str, Any]) -> None:
-        data, present = select_present_fields(name, data)
+        data, present = self._select_present_fields(name, data)
         economy_before = self._economy_signature(state)
         if name == "GameStatus":
-            state.current_round = int(data.get("current_round", state.current_round))
+            previous_round = state.current_round
+            state.current_round = int(data.get("current_round", previous_round))
             state.total_rounds = int(data.get("total_rounds", state.total_rounds))
             state.red_score = int(data.get("red_score", state.red_score))
             state.blue_score = int(data.get("blue_score", state.blue_score))
             stage = int(data["current_stage"]) if "current_stage" in data else None
+            self._apply_settlement(state, data, previous_round, stage)
             if stage is not None:
                 state.current_stage = _STAGE_STR.get(stage, str(stage))
                 self.host.safety.update_stage(stage)

@@ -236,6 +236,14 @@ class RefereeDomainCharacterizationTests(unittest.TestCase):
             "4cc3b3499f58fb51d1ca7843f8b673346607141849f69b1f9d02653ba17bd3f3")
         expected["Rm2026StateAdapter"] = (
             "e0a512c95a7c6a5e57cbbd5dd3ba57fa7c96516075f794734708b55da98c3c04")
+        # Unregistered V2 projection adds two private hooks plus one captured
+        # prior-round value. Whole-file AST restoration and unchanged ordered
+        # V1/Student behavior are covered by the V2 projection review packet.
+        # Retain every previous accepted hash rather than waiving this class.
+        self.assertEqual(expected["Rm2026StateAdapter"],
+            "e0a512c95a7c6a5e57cbbd5dd3ba57fa7c96516075f794734708b55da98c3c04")
+        expected["Rm2026StateAdapter"] = (
+            "b432c021b5fb337838ec61ef15f9b27236dca43823a88040b21470c1c115c957")
         self.assertEqual(ast_contracts(), expected)
 
     def test_profiles_transport_policy_validation_and_factory_identity(self):

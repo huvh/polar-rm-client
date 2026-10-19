@@ -17,12 +17,18 @@ def select_present_fields(name: str, data: dict[str, Any]) -> tuple[dict[str, An
     Direct compatibility callers without metadata retain their legacy mapping;
     codec results are filtered through the year-specific field-number contract.
     """
+    return _select_present_fields(name, data, FIELDS, ALIASES)
+
+
+def _select_present_fields(name: str, data: dict[str, Any], fields: dict,
+                           aliases: dict) -> tuple[dict[str, Any], frozenset[int]]:
+    """Apply the explicitly selected version's table without mutating it."""
     present = frozenset(data.get("__present__", ()))
     if "__present__" not in data:
         return data, present
     keys = {
-        ALIASES.get((name, field_name), field_name)
-        for number, (field_name, _kind, _repeated) in FIELDS.get(name, {}).items()
+        aliases.get((name, field_name), field_name)
+        for number, (field_name, _kind, _repeated) in fields.get(name, {}).items()
         if number in present
     }
     return {key: value for key, value in data.items() if key in keys or key == "__present__"}, present
