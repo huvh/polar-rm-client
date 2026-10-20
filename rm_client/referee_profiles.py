@@ -12,6 +12,7 @@ from types import MappingProxyType
 
 DEFAULT_PROFILE = "rm2026-v1.3.1"
 STUDENT_PREVIEW_PROFILE = "rm2026-v1.1.0-student-readonly"
+V2_PROFILE = "rm2026-v2.0.0"
 
 
 class UnsupportedRefereeProfile(ValueError):
@@ -43,6 +44,11 @@ _DEFINITIONS = MappingProxyType({
         mqtt_host="127.0.0.1", mqtt_port=3333, client_ip="192.168.12.2",
         udp_port=3334, udp_codec="hevc", read_only=True,
     ),
+    V2_PROFILE: RefereeProfileDefinition(
+        profile_id=V2_PROFILE, year=2026, protocol_version="2.0.0",
+        mqtt_host="192.168.12.1", mqtt_port=3333, client_ip="192.168.12.2",
+        udp_port=3334, udp_codec="hevc",
+    ),
 })
 
 
@@ -56,9 +62,8 @@ def get_profile_definition(profile_id: str = DEFAULT_PROFILE) -> RefereeProfileD
     except KeyError as exc:
         if str(profile_id).lower() in {"rm2026-v2", "rm2026-v2.0", "rm2026-v2.0.0"}:
             raise UnsupportedRefereeProfile(
-                "RM2026 V2.0.0 is recognized but NOT supported; this client supports "
-                "V1.3.1 and the read-only V1.1.0 student profile. No V2 control "
-                "or automatic protocol downgrade is allowed."
+                "Unsupported V2 alias; select exactly rm2026-v2.0.0 for the "
+                "partial telemetry and supervised Air profile. No automatic fallback."
             ) from exc
         raise UnsupportedRefereeProfile(
             f"Unsupported referee profile {profile_id!r}; no automatic fallback"

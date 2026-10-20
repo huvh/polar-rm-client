@@ -250,10 +250,27 @@ class RefereeDomainCharacterizationTests(unittest.TestCase):
             "b432c021b5fb337838ec61ef15f9b27236dca43823a88040b21470c1c115c957")
         expected["Rm2026StateAdapter"] = (
             "bcb3bcc629ca2414a91bedb052b72af4cecd26b42a58fb8490009c065043b704")
+        # Explicit opt-in V2 runtime branches; historical fixture remains pinned.
+        self.assertEqual(expected['EconomyCommandBridge'], '7b35cb977c1e24746a7fcebf75acf311030ef1f6e27fbedc24205956bde0b733')
+        expected['EconomyCommandBridge'] = 'dd830c44d074c70fbc536343b3df08ccefdb28019cf2bdef5ac484c1b7e6b46a'
+        self.assertEqual(expected['RefereeProfile'], '5871581885bd8b42c3d5f2aac64ea03f67c6f5e7c58665e4da7cddff426428ae')
+        expected['RefereeProfile'] = 'a5f768e2953025d487c973df1b8c156a6b62edd5fc0d77223e6ba11d3ecc24f4'
         self.assertEqual(ast_contracts(), expected)
 
     def test_profiles_transport_policy_validation_and_factory_identity(self):
-        self.assertEqual(canonical(profile_observations()), canonical(self.baseline["profile_observations"]))
+        actual = profile_observations()
+        expected = json.loads(json.dumps(self.baseline["profile_observations"]))
+        # Preserve every V1/Student observation. The third exact opt-in profile
+        # has dedicated runtime tests, rather than rewriting the old fixture.
+        v2 = actual["profiles"].pop("rm2026-v2.0.0")
+        self.assertEqual(v2["adapter"]["type"], "rm_client.backend.referee.rm2026_v2.state_adapter.Rm2026V2StateAdapter")
+        self.assertTrue(v2["adapter"]["same_host"])
+        for alias in ("rm2026-v2", "rm2026-v2.0", "RM2026-V2.0.0"):
+            old = expected["rejected"][repr(alias)]
+            self.assertIn("recognized but NOT supported", old["message"])
+            old["message"] = ("Unsupported V2 alias; select exactly rm2026-v2.0.0 for the "
+                              "partial telemetry and supervised Air profile. No automatic fallback.")
+        self.assertEqual(canonical(actual), canonical(expected))
 
     def test_every_offer_field_and_failure(self):
         for key, values in offer_cases():

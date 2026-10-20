@@ -7,7 +7,7 @@ import struct
 import time
 from typing import Any, Iterable
 
-from .referee_profiles import DEFAULT_PROFILE
+from .referee_profiles import DEFAULT_PROFILE, V2_PROFILE
 
 _RECEIVED_AT_UNSET = object()
 _OFFICIAL_FEED_MAX_AGE_S = 2.5
@@ -274,6 +274,8 @@ class OfficialMatchFeed:
                     or not 0.0 <= processing_at - now <= _OFFICIAL_FEED_MAX_AGE_S):
                 return [], {}
         name = _topic_name(topic)
+        if referee_profile == V2_PROFILE and name == "RadarInfoToClient":
+            return [], {}
         if name in OFFICIAL_DOWNLINK_MESSAGES:
             self.last_message_at = max(self.last_message_at, now)
         if name in {"Event", "GlobalUnitStatus", "RobotInjuryStat", "RobotStaticStatus", "CustomByteBlock"}:
@@ -308,7 +310,7 @@ class OfficialMatchFeed:
             # Current field 6 is enemy_base_health, never a roster. The legacy
             # roster has no reviewed role order and is diagnostic-only in its
             # decoded adapter; raw feedback must not bypass that quarantine.
-            health_values = fields.get(11, []) if referee_profile == DEFAULT_PROFILE else []
+            health_values = fields.get(11, []) if referee_profile in {DEFAULT_PROFILE, V2_PROFILE} else []
             health = [number for value in health_values for number in _packed_uints(value)]
             updates.update({
                 "base_health": _field_int(fields, 1),

@@ -31,9 +31,10 @@ from ....control import (build_dt7_selftest_report, evaluate_dt7_hold,
                          KEYBOARD_BITS)
 from ....emergency_actions import request_control_lock, request_emergency_stop
 from ....hero_lob import HeroLobPlanner
+from ....referee_profiles import V2_PROFILE
 from ....model import PRIMARY_GUI_MODE, Module, Setting
 from ....qualification_observations import (
-    QualificationEvidence, economy_evidence, estop_evidence, firmware_zero_evidence,
+    QualificationEvidence, economy_evidence, v2_air_evidence, estop_evidence, firmware_zero_evidence,
     hero_evidence, recovery_evidence, soak_evidence, video_evidence,
 )
 from ...overlay_coordinator import OverlayKind
@@ -47,6 +48,65 @@ class QualificationRefresh(Enum):
     """Explicit UI completion behavior, including legacy cancellation paths."""
     SKIP = "skip"
     REQUIRED = "required"
+
+
+
+def _observe_v2_air_evidence(host: Any) -> QualificationEvidence:
+    backend = host.backend
+    mqtt = backend.mqtt
+    session = backend.qualification.session
+    attempt = getattr(host, "_v2_air_qualification_attempt", None)
+    snapshot = mqtt.v2_wire_snapshot()
+    owners = (backend, mqtt, backend.referee, mqtt.referee, mqtt.client, session)
+    context = (getattr(session, "session_id", ""), getattr(session, "operator", ""),
+               getattr(session, "referee_profile", ""), getattr(session, "robot_id", ""),
+               backend.referee.profile_id, mqtt.receive_generation, str(mqtt.client_id),
+               bool(mqtt.connected), bool(mqtt.mock_output), host.scenario_manager.current.key)
+    inputs = dict(
+        attempt=attempt, snapshot=snapshot, owners=owners,
+        session_id=context[0], operator=context[1], session_profile=context[2],
+        session_robot_id=context[3], profile_id=context[4], receive_generation=context[5],
+        client_id=context[6], connected=context[7],
+        transport_is_mock=context[8] or context[9] != "OfficialEvent")
+    evidence = v2_air_evidence(**inputs, now=time.perf_counter())
+    if evidence.passed:
+        # The immutable value above may have been retired by a concurrent MQTT
+        # callback. Require the same current snapshot immediately before PASS;
+        # never hold an MQTT lock across evidence persistence or user callbacks.
+        current_backend = host.backend
+        current_mqtt = current_backend.mqtt
+        current_snapshot = current_mqtt.v2_wire_snapshot()
+        current_session = current_backend.qualification.session
+        current_owners = (host.backend, host.backend.mqtt, current_backend.referee,
+                          current_mqtt.referee, current_mqtt.client, current_session)
+        current_context = (getattr(current_session, "session_id", ""), getattr(current_session, "operator", ""),
+                           getattr(current_session, "referee_profile", ""), getattr(current_session, "robot_id", ""),
+                           current_backend.referee.profile_id, current_mqtt.receive_generation,
+                           str(current_mqtt.client_id), bool(current_mqtt.connected),
+                           bool(current_mqtt.mock_output), host.scenario_manager.current.key)
+        if (current_context != context
+                or any(old is not current for old, current in zip(owners, current_owners))
+                or getattr(host, "_v2_air_qualification_attempt", None) is not attempt):
+            evidence = QualificationEvidence(evidence.key, False,
+                {**evidence.measured, "reason": "Air observation changed during review; observe a new supervised attempt",
+                 "retire_attempt": True}, evidence.threshold)
+        elif current_snapshot is not snapshot:
+            # A same-scope refresh can be reviewed explicitly again. Never
+            # PASS this changed read, but retire an actually replaced scope or
+            # invalid current context according to the same pure evaluator.
+            current_evidence = v2_air_evidence(**{**inputs, "snapshot": current_snapshot}, now=time.perf_counter())
+            evidence = QualificationEvidence(evidence.key, False,
+                {**current_evidence.measured, "reason": "Air snapshot refreshed during review; explicitly observe again",
+                 "retire_attempt": not current_evidence.passed and current_evidence.measured.get("retire_attempt", False)},
+                evidence.threshold)
+        else:
+            # The getter may wait even if the immutable value is unchanged.
+            # Sample after that wait so an aged receipt cannot become PASS.
+            evidence = v2_air_evidence(**inputs, now=time.perf_counter())
+    if (evidence.measured.get("retire_attempt")
+            and getattr(host, "_v2_air_qualification_attempt", None) is attempt):
+        host._v2_air_qualification_attempt = None
+    return evidence
 
 
 class ConfigActionsMixin:
@@ -442,6 +502,7 @@ class ConfigActionsMixin:
             ui_text("Robot firmware SHA-256:", chinese_enabled(self.registry)))
         if not ok:
             return QualificationRefresh.SKIP
+        self._v2_air_qualification_attempt = None
         self.backend.qualification.new_session(
             robot_id=str(self.state.robot_id), firmware_hash=firmware_hash,
             match_mode=self.match_mode_manager.current.key,
@@ -452,6 +513,7 @@ class ConfigActionsMixin:
         return QualificationRefresh.REQUIRED
 
     def _reset_qualification_session(self) -> QualificationRefresh:
+        self._v2_air_qualification_attempt = None
         self.backend.qualification.reset()
         self.backend.lock_control("qualification reset")
         self._qualification_runtime_baseline = self._capture_qualification_runtime_baseline()
@@ -562,7 +624,10 @@ class ConfigActionsMixin:
         }
         evidence = observers[command](self._qualification_baseline())
         self._record_automatic_evidence(evidence)
-        self.toast(f"{evidence.key}: {'PASS' if evidence.passed else 'BLOCKED'}")
+        if command == QualificationCommand.ECONOMY and self.backend.referee.profile_id == V2_PROFILE:
+            self.toast(f"{evidence.key}: {'PASS' if evidence.passed else 'BLOCKED'} · {evidence.measured.get('reason', '')}")
+        else:
+            self.toast(f"{evidence.key}: {'PASS' if evidence.passed else 'BLOCKED'}")
 
     def _observe_estop_evidence(self, baseline: dict) -> QualificationEvidence:
         safety = self.backend.stats().get("safety_evidence", {})
@@ -590,6 +655,9 @@ class ConfigActionsMixin:
             baseline_at=float(baseline.get("captured_at_perf", 0.0)), deploy_mode=int(self.state.deploy_mode))
 
     def _observe_economy_evidence(self, baseline: dict) -> QualificationEvidence:
+        if self.backend.referee.profile_id == V2_PROFILE:
+            return _observe_v2_air_evidence(self)
+        self._v2_air_qualification_attempt = None
         latest = self.economy_bridge.latest
         return economy_evidence(succeeded=latest is not None and latest.status == "succeeded",
             request_is_mock=latest is None or latest.request.mock,

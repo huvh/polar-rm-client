@@ -550,9 +550,9 @@ class TransportSafetyTests(unittest.TestCase):
                                      "polar stop", "udp stop", "decoder stop"})
         self.assertIn("MQTT unavailable", backend.lifecycle_snapshot.failures[0].error)
 
-    def test_v2_is_explicitly_unsupported(self):
-        with self.assertRaisesRegex(UnsupportedRefereeProfile, "NOT supported"):
-            get_profile("rm2026-v2.0.0")
+    def test_v2_alias_is_explicitly_unsupported(self):
+        with self.assertRaisesRegex(UnsupportedRefereeProfile, "Unsupported V2 alias"):
+            get_profile("rm2026-v2")
 
     def test_cc_shipped_key_table_matches_documented_hid_values(self):
         from rm_client.backend.cc_link import HID_USAGE, load_key_usage, keys_to_two_usages

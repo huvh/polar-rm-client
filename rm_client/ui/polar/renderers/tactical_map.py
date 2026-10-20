@@ -24,11 +24,16 @@ from PySide6.QtGui import (
     QPolygonF,
 )
 # Event-command dialogs remain an ordered UI/backend interaction.
-from PySide6.QtWidgets import QInputDialog
+from PySide6.QtWidgets import QInputDialog, QMessageBox
 
 # 相对导入层级：rm_client/ui/polar/renderers/ → .... = rm_client、... = rm_client.ui
 from ....match_modes import FieldLayout, MatchModeConfig
 from ....model import Module
+from ....referee_profiles import V2_PROFILE
+from ....qualification_observations import V2AirAttempt, same_v2_air_owners
+from ....backend.referee.rm2026_v2.economy_rules import request_decision
+from ....backend.referee.rm2026_v2.observations import WireSnapshot
+from ....student_ui import v2_status_rows
 from ....vision import VisionTarget
 from ...animation import Easings
 from ...paint import draw_bar, glow_rect, rounded_rect, text_width, with_alpha
@@ -56,6 +61,206 @@ __all__ = [
 
 # RadarInfoToClient 断供后标记保留时长；期间线性淡出，超时整体隐藏。
 _RADAR_TTL_SEC = RADAR_TTL_SECONDS
+
+
+
+_V2_AIR_CHOICES = (
+    "0 · Cancel active support / 取消支援",
+    "1 · Free-time support / 免费支援",
+    "2 · Allow continuing paid support / 允许持续付费支援",
+    "3 · Release countermeasure and call / 解除反制并呼叫",
+)
+_V2_AIR_LIMITS = (
+    "V2 partial: reviewed telemetry + supervised Air requests. Normal arming qualification pending.\n"
+    "V2 部分功能：遥测与受监督 Air 请求；常规解锁资格尚待审查。\n"
+    "Other event commands, KMC/custom/map and Radar are unavailable in this profile."
+)
+
+
+def _v2_air_context(host: Any) -> tuple:
+    """Capture actual owners; equality of dataclass profile values is insufficient."""
+    backend = host.backend
+    mqtt = backend.mqtt
+    session = backend.qualification.session
+    owners = (backend, mqtt, backend.referee, mqtt.referee, mqtt.client, session)
+    snapshot = mqtt.v2_wire_snapshot()
+    scope = tuple(snapshot.get(message, field).value
+                  if snapshot is not None and snapshot.get(message, field) is not None else None
+                  for message, field in (("GameStatus", "current_round"),
+                                         ("RobotStaticStatus", "robot_id"),
+                                         ("RobotStaticStatus", "robot_type")))
+    values = (backend.referee.profile_id, mqtt.referee.profile_id,
+              mqtt.receive_generation, str(mqtt.client_id), bool(mqtt.mock_output),
+              bool(mqtt.connected), host.scenario_manager.current.key,
+              getattr(session, "session_id", ""), getattr(session, "operator", ""),
+              getattr(session, "referee_profile", ""), getattr(session, "robot_id", ""), scope)
+    scope_revision = snapshot.scope_revision if snapshot is not None else None
+    return owners, values, snapshot, getattr(host, "_economy_qualification_token", None), scope_revision
+
+
+def _same_v2_air_context(before: tuple, after: tuple, *, token: bool = True) -> bool:
+    return (same_v2_air_owners(before[0], after[0]) and before[1] == after[1]
+            and before[4] == after[4]
+            and (not token or before[3] == after[3]))
+
+
+def _v2_air_snapshot_current(context: tuple) -> bool:
+    owners, values, snapshot, _token, _scope_revision = context
+    return (values[0] == values[1] == V2_PROFILE and values[5]
+            and values[6] == "OfficialEvent" and type(snapshot) is WireSnapshot
+            and (snapshot.profile_id, snapshot.receive_generation, snapshot.client_id)
+                == (V2_PROFILE, values[2], values[3]))
+
+
+def _v2_air_premise(snapshot: WireSnapshot, command_id: int, estimate: int | None) -> tuple:
+    """Compare relevant values/price, not refreshed receipts or unrelated telemetry."""
+    keys = [("GameStatus", "current_stage"), ("GameStatus", "current_round"),
+            ("RobotStaticStatus", "robot_id"), ("RobotStaticStatus", "robot_type"),
+            ("AirSupportStatusSync", "airsupport_status")]
+    if command_id != 0:
+        keys += [("RobotStaticStatus", "connection_state"), ("RobotStaticStatus", "field_state"),
+                 ("PenaltyInfo", "penalty_type"), ("AirSupportStatusSync", "shooter_status")]
+    if command_id in (1, 2):
+        keys.append(("AirSupportStatusSync", "left_time"))
+    if command_id in (2, 3):
+        keys.append(("GlobalLogisticsStatus", "remaining_economy"))
+    if command_id == 3:
+        keys.append(("RobotStaticStatus", "level"))
+    return (estimate, tuple((message, field, snapshot.get(message, field).value
+                            if snapshot.get(message, field) is not None else None)
+                           for message, field in keys))
+
+
+def _v2_air_observed_text(host: Any, context: tuple, now: float) -> str:
+    _owners, values, snapshot, _token, _scope_revision = context
+    rows = v2_status_rows(host.state, snapshot, now=now, profile_id=values[0],
+                         connected=values[5], receive_generation=values[2], client_id=values[3])
+    return "Observed telemetry / 观测值（并非请求确认）:\n" + "\n".join(
+        f"{label}: {value}" for label, value in rows)
+
+
+def _open_v2_air_dialog(host: Any) -> None:
+    """One explicit command, at most one refreshed confirmation, no automatic retry."""
+    attempt_started = accepted_enqueue = submitted_mock = False
+    try:
+        admission = _v2_air_context(host)
+        if not _v2_air_snapshot_current(admission):
+            host._v2_air_qualification_attempt = None
+            host.toast("V2 Air requires current connected OfficialEvent wire observations")
+            return
+        now = time.perf_counter()
+        decisions = [request_decision("AirSupportCommand", index, admission[2], now=now)
+                     for index in range(4)]
+        status = "\n".join(f"{_V2_AIR_CHOICES[index]}: {reason}"
+                           for index, (_allowed, reason, _cost) in enumerate(decisions))
+        choice, accepted = QInputDialog.getItem(
+            host, "V2 Air · partial / 部分功能", _V2_AIR_LIMITS + "\n\n" +
+            _v2_air_observed_text(host, admission, now) + "\n\nRequest conditions / 请求条件:\n" + status,
+            _V2_AIR_CHOICES, 0, False)
+        if not accepted or choice not in _V2_AIR_CHOICES:
+            return
+        command_id = _V2_AIR_CHOICES.index(choice)
+        for confirmation in range(2):
+            current = _v2_air_context(host)
+            if not _same_v2_air_context(admission, current) or not _v2_air_snapshot_current(current):
+                host._v2_air_qualification_attempt = None
+                host.toast("Air dialog context changed; reopen it for the current profile/session")
+                return
+            now = time.perf_counter()
+            allowed, reason, estimate = request_decision("AirSupportCommand", command_id, current[2], now=now)
+            if not allowed:
+                host.toast(reason)
+                return
+            if current[3] is not None:
+                session = current[0][5]
+                if (session is None or not session.operator.strip() or session.referee_profile != V2_PROFILE
+                        or session.robot_id != str(current[1][-1][1])):
+                    host.toast("Supervised Air requires a matching V2 session and named operator")
+                    return
+            premise = _v2_air_premise(current[2], command_id, estimate)
+            if command_id == 2:
+                charge = ("Free time first, then continuing consumption at 1 coin/second. "
+                          "There is no fixed total or promised duration.\n"
+                          "免费时长优先，用尽后按 1 金币/秒持续消耗；无固定总价或预定持续时间。")
+            elif command_id == 3:
+                charge = (f"Estimated release fee only: {estimate} coins. Subsequent support mode and total are unconfirmed.\n"
+                          f"仅解除反制费用估价：{estimate} 金币；后续支援模式和总价未确认。")
+            else:
+                charge = "Cancel active support." if command_id == 0 else "Request the observed free support time only."
+            mode = "MOCK: no live request / 模拟请求" if current[1][4] else "Live request / 正式请求"
+            message = ("Conditions or cost changed; review again.\n" if confirmation else "")
+            message += (f"{choice}\n{mode}\n{charge}\n{reason}\n\n" +
+                        _v2_air_observed_text(host, current, now) +
+                        "\n\nSubmit this one request? No unique request/payment ACK will be available.")
+            answer = QMessageBox.question(host, "Confirm V2 Air request / 确认请求", message,
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
+            if answer != QMessageBox.StandardButton.Yes:
+                return
+            checked = _v2_air_context(host)
+            if not _same_v2_air_context(admission, checked) or not _v2_air_snapshot_current(checked):
+                host._v2_air_qualification_attempt = None
+                host.toast("Air dialog context changed; request discarded")
+                return
+            checked_at = time.perf_counter()
+            allowed, reason, estimate = request_decision("AirSupportCommand", command_id, checked[2], now=checked_at)
+            if not allowed:
+                host.toast(reason)
+                return
+            if premise != _v2_air_premise(checked[2], command_id, estimate):
+                if confirmation == 0:
+                    continue
+                host.toast("Air conditions changed again; reopen the dialog. No request was sent.")
+                return
+            break
+
+        # A dialog decision is never authority. The existing final MQTT/Safety
+        # guard rechecks the frozen command against current evidence and owners.
+        owners, values, snapshot, qualification_token, scope_revision = checked
+        backend, mqtt, profile, _mqtt_profile, _client, session = owners
+        host._v2_air_qualification_attempt = None
+        if qualification_token is not None:
+            host._economy_qualification_token = None
+        try:
+            attempt_started = True
+            if qualification_token is None:
+                ok, reason = backend.publish_air_support(command_id)
+            else:
+                ok = mqtt.publish_air_support_command(profile.codec.encode_air_support_command(command_id),
+                    qualification_token=qualification_token)
+                reason = ("mock" if values[4] else "ok") if ok else mqtt.last_error
+            accepted_enqueue = bool(ok)
+            submitted_mock = values[4] or reason == "mock"
+            returned_at = time.perf_counter()
+        finally:
+            if qualification_token is not None:
+                backend.lock_control("economy qualification command attempted")
+        after = _v2_air_context(host)
+        if (ok and qualification_token is not None and not values[4]
+                and _same_v2_air_context(checked, after, token=False)
+                and _v2_air_snapshot_current(after) and after[3] is None):
+            relevant = "shooter_status" if command_id == 3 else "airsupport_status"
+            old_status = snapshot.get("AirSupportStatusSync", relevant).value
+            host._v2_air_qualification_attempt = V2AirAttempt(
+                owners=owners, scope_revision=scope_revision,
+                session_id=session.session_id, operator=session.operator,
+                profile_id=V2_PROFILE, receive_generation=values[2], client_id=values[3],
+                robot_id=values[-1][1], current_round=values[-1][0], command_id=command_id,
+                old_status=old_status, returned_at=returned_at)
+        if not ok:
+            host.toast(reason or "Air request rejected")
+        elif values[4] or reason == "mock":
+            host.toast("MOCK Air request recorded; no live enqueue or qualification evidence")
+        else:
+            host.toast("请求已提交，待服务器处理；未取得逐请求确认")
+    except Exception as exc:
+        host._v2_air_qualification_attempt = None
+        if accepted_enqueue:
+            outcome = "MOCK Air request recorded" if submitted_mock else "请求已提交，待服务器处理；未取得逐请求确认"
+            host.toast(f"{outcome} · qualification observation unavailable: {exc}")
+        elif attempt_started:
+            host.toast(f"V2 Air attempt ended with an error: {exc}; no automatic retry")
+        else:
+            host.toast(f"V2 Air dialog failed: {exc}")
 
 
 def _radar_coord_to_m(value: float, span_m: float) -> float:
@@ -676,6 +881,10 @@ class TacticalMapMixin:
         Everything funnels through the backend publishers, so MATCH_ARMED
         capability checks, rate limits, and mock gating still apply.
         """
+
+        if self.backend.referee.profile_id == V2_PROFILE:
+            _open_v2_air_dialog(self)
+            return
 
         commands = (
             "Rune Activate (energy mechanism)",

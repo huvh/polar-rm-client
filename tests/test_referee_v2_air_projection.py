@@ -239,13 +239,13 @@ class V2AirProjectionTests(unittest.TestCase):
         self.assertEqual((self.state.economy_status_revision,
                           self.state.economy_command_status), (8, ''))
 
-    def test_observed_status_does_not_grant_permission_or_register_v2(self):
+    def test_observed_status_does_not_grant_permission_or_accept_v2_alias(self):
         before = copy.deepcopy(vars(self.host.safety))
         self.deliver(is_being_targeted=1, shooter_status=2)
         self.assertEqual(vars(self.host.safety), before)
         self.assertEqual(self.host.safety.control_state, ControlState.LOCKED)
         with self.assertRaises(UnsupportedRefereeProfile):
-            get_profile('rm2026-v2.0.0')
+            get_profile('rm2026-v2')
 
 
 if __name__ == '__main__':

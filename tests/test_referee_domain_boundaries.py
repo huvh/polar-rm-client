@@ -82,7 +82,7 @@ assert "rm_client.economy" not in sys.modules
     def test_registry_metadata_does_not_construct_adapters_or_transactions(self):
         self.assert_isolated('''
 from rm_client.backend.referee.registry import get_profile, supported_profiles
-assert len(supported_profiles()) == 2
+assert supported_profiles() == ("rm2026-v1.3.1", "rm2026-v1.1.0-student-readonly", "rm2026-v2.0.0")
 profile = get_profile()
 assert profile.codec.encode_common_command(1, 10) == b"\\x08\\x01\\x10\\x0a"
 assert profile.validate_publish("CommonCommand", 1) == (True, "ok")

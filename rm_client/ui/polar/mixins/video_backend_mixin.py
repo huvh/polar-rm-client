@@ -219,6 +219,9 @@ class VideoBackendMixin:
         return True
 
     def send_hero_deploy_request(self, mode: int) -> bool:
+        if self.backend.referee.profile_id == "rm2026-v2.0.0":
+            self.toast("V2 preview: Hero requests are pending review; no command submitted")
+            return False
         mode = 1 if int(mode) else 0
         module = self.registry.get("HeroLob")
         if self.hero_deploy_ui.pending_mode is not None:

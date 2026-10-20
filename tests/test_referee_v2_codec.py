@@ -46,14 +46,14 @@ def restore_bytes(value):
 
 
 class RefereeV2CodecTests(unittest.TestCase):
-    def test_source_and_version_are_pinned_without_registration(self):
+    def test_source_and_version_are_pinned_with_explicit_partial_registration(self):
         self.assertEqual(contract.SOURCE_SHA256, FIXTURE["source_sha256"])
         self.assertEqual(codec.PROTOCOL_VERSION, "2.0.0")
         self.assertEqual(v1.PROTOCOL_VERSION, "1.3.1")
         self.assertEqual(referee_profiles.DEFAULT_PROFILE, "rm2026-v1.3.1")
         self.assertEqual(referee_profiles.supported_profiles(),
-                         ("rm2026-v1.3.1", "rm2026-v1.1.0-student-readonly"))
-        for name in ("rm2026-v2.0.0", "2.0.0", "rm2027-v1.0.0"):
+                         ("rm2026-v1.3.1", "rm2026-v1.1.0-student-readonly", "rm2026-v2.0.0"))
+        for name in ("rm2026-v2", "rm2026-v2.0", "RM2026-V2.0.0", "2.0.0", "rm2027-v1.0.0"):
             with self.subTest(profile=name), self.assertRaises(referee_profiles.UnsupportedRefereeProfile):
                 registry.get_profile(name)
 

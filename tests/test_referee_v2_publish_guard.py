@@ -402,7 +402,7 @@ class V2PublishGuardTests(unittest.TestCase):
         self.assertEqual(backend.publish_topic('AirSupportCommand', payload, now=12.0), (True, 'mock'))
         self.assertIs(backend.publish_records[-1].payload, payload)
         self.assertEqual(backend.messages_sent, 0)
-        with self.assertRaises(ValueError): get_profile('rm2026-v2.0.0')
+        with self.assertRaises(ValueError): get_profile('rm2026-v2')
 
 
 if __name__ == '__main__':

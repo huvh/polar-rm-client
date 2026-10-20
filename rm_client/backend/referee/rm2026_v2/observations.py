@@ -38,6 +38,9 @@ class WireSnapshot:
     client_id: str
     received_at: float
     observations: tuple[WireObservation, ...]
+    # Local retirement witness, not a peer sequence or authentication token.
+    # Appended with a default to retain the existing five-argument constructor.
+    scope_revision: int = 0
 
     def get(self, message: str, field: str) -> WireObservation | None:
         return next((item for item in self.observations
@@ -77,14 +80,17 @@ def observe(previous: WireSnapshot | None, *, profile_id: str,
     if not pending:
         return previous
     retained = {(item.message, item.field): item for item in previous.observations} if same_context else {}
+    scope_revision = previous.scope_revision if same_context else 0
     scope = [item for item in pending if (item.message, item.field) in _SCOPE_FIELDS]
     if any((item.message, item.field) in retained
            and retained[item.message, item.field].value != item.value for item in scope):
         retained.clear()
+        scope_revision += 1
     elif any((item.message, item.field) not in retained for item in scope):
         # A first identity/round binding cannot relabel unbound peer samples.
         # Keep already observed scope keys so partial bindings can accumulate.
         retained = {key: value for key, value in retained.items() if key in _SCOPE_FIELDS}
+        scope_revision += 1
     retained.update(((item.message, item.field), item) for item in pending)
     return WireSnapshot(profile_id, receive_generation, client_id, received_at,
-                        tuple(retained[key] for key in sorted(retained)))
+                        tuple(retained[key] for key in sorted(retained)), scope_revision)

@@ -104,8 +104,11 @@ class EconomyCommandBridge:
         quantity = max(1, int(quantity))
         mock = self.sender is None if mock is None else bool(mock)
         command_param = offer.command_param * quantity if offer.command_param > 0 else 0
-        from .backend.referee.registry import DEFAULT_PROFILE, get_profile
-        codec = get_profile(getattr(state, "referee_profile", DEFAULT_PROFILE)).codec
+        from .backend.referee.registry import DEFAULT_PROFILE, V2_PROFILE, get_profile
+        profile = get_profile(getattr(state, "referee_profile", DEFAULT_PROFILE))
+        if profile.profile_id == V2_PROFILE:
+            raise ValueError("V2 partial profile: legacy economy offers are unavailable; use the supervised Air dialog")
+        codec = profile.codec
         payload = (
             codec.encode_air_support_command(offer.command_type)
             if offer.topic == "AirSupportCommand"
@@ -157,6 +160,12 @@ class EconomyCommandBridge:
         if transaction is None or transaction.status != "pending":
             return transaction
         now = time.perf_counter() if now is None else float(now)
+        from .referee_profiles import V2_PROFILE
+        if getattr(state, "referee_profile", "") == V2_PROFILE:
+            transaction.status = "rejected"
+            transaction.message = "协议已切换至 V2；旧经济请求已终止，不代表服务器撤销"
+            transaction.completed_at = now
+            return transaction
         if transaction.request.mock and now >= transaction.mock_complete_at:
             self._apply_mock(state, transaction)
             transaction.status = "succeeded"

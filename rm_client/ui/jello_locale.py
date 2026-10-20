@@ -844,6 +844,8 @@ def setting_label(value: str, chinese: bool) -> str:
 
 def option_label(value: Any, chinese: bool) -> str:
     text = str(value)
+    if text == "rm2026-v2.0.0":
+        return "RM2026 V2.0.0 · 遥测/监督空中请求预览" if chinese else "RM2026 V2.0.0 · telemetry/supervised Air preview"
     if not chinese:
         return text
     if text in MODULE_ZH:

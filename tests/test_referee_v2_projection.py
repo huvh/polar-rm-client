@@ -348,10 +348,11 @@ class V2ProjectionTests(unittest.TestCase):
                 self.assertEqual(self.host.safety.current_stage, '5')
                 self.assertEqual(self.values(), (None, None, None))
 
-    def test_profile_remains_unregistered(self):
-        self.assertNotIn('rm2026-v2.0.0', supported_profiles())
+    def test_profile_is_explicitly_registered_without_alias_fallback(self):
+        self.assertIn('rm2026-v2.0.0', supported_profiles())
+        self.assertIs(get_profile('rm2026-v2.0.0').codec, codec)
         with self.assertRaises(UnsupportedRefereeProfile):
-            get_profile('rm2026-v2.0.0')
+            get_profile('rm2026-v2')
 
 
 if __name__ == '__main__':

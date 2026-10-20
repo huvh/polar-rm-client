@@ -385,7 +385,9 @@ class RmMqttBackend(OfficialMqttBridge):
             self._schedule_reconnect(f"connect rejected: {reason_code}", client=client)
             return
         self._emit_event("mqtt_connect", host=self.host, port=self.port)
-        client.subscribe([(name, profile.max_qos) for name in sorted(profile.codec.DOWNLINK_MESSAGES)])
+        downlinks = (v2_codec.DECODABLE_MESSAGES if profile.codec is v2_codec
+                     else profile.codec.DOWNLINK_MESSAGES)
+        client.subscribe([(name, profile.max_qos) for name in sorted(downlinks)])
         with self._lifecycle_lock:
             if client is not self.client or generation != self._lifecycle_generation:
                 return

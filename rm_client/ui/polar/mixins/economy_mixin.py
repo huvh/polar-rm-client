@@ -38,6 +38,7 @@ from ...economy_glass import draw_economy_glass, draw_economy_glass_capsule, dra
 from ....economy_values import CATEGORY_TITLES, EconomyContext, EconomyOffer
 from ....economy import EconomyRequest, available_actions
 from ....robot_profiles import profile_by_key
+from ....referee_profiles import V2_PROFILE
 from ..primitives import EconomyScenePhase
 from ...economy_presentation import EconomyConfirmationState
 from ...economy_selection import selected_offer
@@ -171,6 +172,10 @@ class EconomyMixin:
 
     def send_economy_request(self, request: EconomyRequest) -> bool:
         """Send a confirmed economy request without mutating local match state."""
+        if self.backend.referee.profile_id == V2_PROFILE:
+            self._v2_air_qualification_attempt = None
+            self.mqtt.last_error = "V2 legacy economy requests unavailable; use the explicit Air menu"
+            return False
         if request.mock:
             return True
         if self.scenario_manager.current.key != "OfficialEvent":
@@ -274,6 +279,10 @@ class EconomyMixin:
             QTimer.singleShot(0, open_pending_overlay)
 
     def open_economy_workspace(self, category: str | None = None) -> None:
+        if self.backend.referee.profile_id == V2_PROFILE:
+            self.toast("V2 fixed-price Economy unavailable; opening supervised Air requests. Normal arming qualification pending.")
+            self.open_event_command_menu()
+            return
         self.close_student_panel(immediate=True)
         if self.hero_deploy_video_cut_active():
             self.open_hero_deploy_interface()
@@ -382,6 +391,10 @@ class EconomyMixin:
                 return
 
     def submit_economy_offer(self, offer: EconomyOffer) -> None:
+        if self.backend.referee.profile_id == V2_PROFILE:
+            self._v2_air_qualification_attempt = None
+            self.toast("V2 legacy offers, including captured/mock offers, are unavailable; use the Air menu")
+            return
         unavailable = unavailable_offer_reason(offer)
         if unavailable is not None:
             self.toast(unavailable)
@@ -1061,12 +1074,18 @@ class EconomyMixin:
         confirmation, and then record the lifecycle result.
         """
 
+        self._v2_air_qualification_attempt = None
         if self.scenario_manager.current.key != "OfficialEvent":
             self.toast("Economy qualification requires OfficialEvent")
             return
         if self.backend.qualification.session is None:
             self.toast("Create a qualification session first")
             return
+        if self.backend.referee.profile_id == V2_PROFILE:
+            session = self.backend.qualification.session
+            if session.referee_profile != V2_PROFILE or not session.operator.strip():
+                self.toast("Create a V2 qualification session with a named operator first")
+                return
         token = self.backend.begin_qualification({"economy"}, ttl_s=30.0)
         self._economy_qualification_token = token.value
         self.backend.field_log.emit(
@@ -1074,7 +1093,10 @@ class EconomyMixin:
             expires_at=token.expires_at,
             session_id=self.backend.qualification.session.session_id,
         )
-        self.toast("Economy test window active for 30 s; send one supervised request")
+        if self.backend.referee.profile_id == V2_PROFILE:
+            self.toast("30 s supervised Air window: use Event commands during MATCH only, then explicitly Observe Economy. Status change is not a unique ACK; normal arming qualification pending.")
+        else:
+            self.toast("Economy test window active for 30 s; send one supervised request")
 
 
 _QUALNAME_PINNED_MEMBERS = (

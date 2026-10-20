@@ -10,11 +10,12 @@ from types import MappingProxyType
 from typing import Any, Mapping
 
 from ...referee_profiles import (
-    DEFAULT_PROFILE, STUDENT_PREVIEW_PROFILE, RefereeProfileDefinition,
+    DEFAULT_PROFILE, STUDENT_PREVIEW_PROFILE, V2_PROFILE, RefereeProfileDefinition,
     UnsupportedRefereeProfile, get_profile_definition, supported_profiles,
 )
 from .rm2026 import codec
 from .student_legacy import codec as student_codec
+from .rm2026_v2 import codec as v2_codec
 
 @dataclass(frozen=True, slots=True)
 class RefereeProfile:
@@ -46,6 +47,8 @@ class RefereeProfile:
             return False, f"{self.profile_id}: READ ONLY; no control/economy uplink"
         if str(topic) not in self.codec.UPLINK_MESSAGES:
             return False, f"{self.profile_id}: not an official uplink topic: {topic}"
+        if self.profile_id == V2_PROFILE and topic != "AirSupportCommand":
+            return False, "V2 partial profile: only supervised Air requests are supported; this uplink is pending review"
         if isinstance(qos, bool) or qos not in range(self.max_qos + 1):
             return False, f"{self.profile_id}: QoS must be 0..{self.max_qos}"
         return True, "ok"
@@ -58,13 +61,16 @@ class RefereeProfile:
         if self.profile_id == STUDENT_PREVIEW_PROFILE:
             from .student_legacy.state_adapter import StudentLegacyStateAdapter
             return StudentLegacyStateAdapter(host)
+        if self.profile_id == V2_PROFILE:
+            from .rm2026_v2.state_adapter import Rm2026V2StateAdapter
+            return Rm2026V2StateAdapter(host)
         raise UnsupportedRefereeProfile(self.profile_id)
 
     def available_actions(self, state: Any) -> list:
         if self.profile_id == DEFAULT_PROFILE:
             from .rm2026.economy_rules import available_actions
             return available_actions(state)
-        if self.read_only:
+        if self.read_only or self.profile_id == V2_PROFILE:
             return []
         raise UnsupportedRefereeProfile(self.profile_id)
 
@@ -105,7 +111,15 @@ _RM2026 = _assemble_profile(
 _STUDENT = _assemble_profile(
     get_profile_definition(STUDENT_PREVIEW_PROFILE), student_codec, MappingProxyType({}),
 )
-_PROFILES = MappingProxyType({_RM2026.profile_id: _RM2026, _STUDENT.profile_id: _STUDENT})
+_V2 = _assemble_profile(
+    get_profile_definition(V2_PROFILE), v2_codec,
+    # A conservative local Air cap; it is not a vendor-specified frequency.
+    MappingProxyType({"AirSupportCommand": 10.0}),
+)
+_PROFILES = MappingProxyType({
+    _RM2026.profile_id: _RM2026, _STUDENT.profile_id: _STUDENT,
+    _V2.profile_id: _V2,
+})
 
 
 def get_profile(profile_id: str = DEFAULT_PROFILE) -> RefereeProfile:

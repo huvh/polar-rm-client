@@ -10,7 +10,6 @@ from dataclasses import dataclass, field
 import math
 from typing import Any
 
-
 PANEL_MODULES = {
     "InjuryStatistics": "damage",
     "MatchSettlement": "settlement",
@@ -136,6 +135,164 @@ def settlement_rows(state: Any) -> tuple[tuple[str, str], ...]:
         ("破甲次数", value_text(data.get("armor_breaks"))),
         ("能量机关", rune_summary(state) or "—"),
     )
+
+
+_V2_PROFILE_ID = "rm2026-v2.0.0"
+# A conservative local display age, not an official TTL or atomic peer snapshot.
+_V2_DISPLAY_MAX_AGE_S = 2.0
+_V2_STAGE_NAMES = {0: "NOT_STARTED", 1: "PREPARE", 2: "SELF_CHECK",
+                   3: "COUNTDOWN", 4: "MATCH", 5: "SETTLEMENT"}
+_V2_END_REASONS = {
+    1: "基地被摧毁", 2: "基地剩余血量", 3: "前哨站剩余血量",
+    4: "前哨站是否被击毁过", 5: "全队总攻击伤害",
+    6: "全队机器人总剩余血量", 7: "平局", 8: "异常终止",
+    9: "主裁判手动判定胜负",
+}
+
+
+def _v2_display_value(snapshot: Any, message: str, field: str,
+                      now: float, expected: type = int) -> Any:
+    observation = snapshot.get(message, field)
+    if observation is None:
+        raise ValueError("未收到")
+    receipt = getattr(observation, "received_at", None)
+    try:
+        fresh = (type(receipt) in (int, float) and math.isfinite(receipt)
+                 and receipt >= 0 and 0 <= now - receipt <= _V2_DISPLAY_MAX_AGE_S)
+    except (OverflowError, TypeError, ValueError):
+        fresh = False
+    if not fresh:
+        raise ValueError("已过期或时间无效")
+    value = getattr(observation, "value", None)
+    if type(value) is not expected:
+        raise ValueError("字段类型无效")
+    return value
+
+
+def _v2_display_context(state: Any, snapshot: Any, *, now: float,
+                        profile_id: str, connected: bool, receive_generation: int,
+                        client_id: str, settlement: bool = False) -> str:
+    """Validate supplied current-owner evidence without querying any owner."""
+    try:
+        if type(now) not in (int, float) or not math.isfinite(now) or now < 0:
+            return "时钟无效"
+    except (OverflowError, TypeError, ValueError):
+        return "时钟无效"
+    if connected is not True:
+        return "未连接或来源已变更"
+    # This module also supplies model/catalog defaults and must not import a
+    # backend. The renderer obtains the actual immutable MQTT snapshot; this
+    # pure seam validates its data shape and never grants request authority.
+    if (snapshot is None or getattr(snapshot, "profile_id", None) != _V2_PROFILE_ID
+            or not callable(getattr(snapshot, "get", None))
+            or profile_id != _V2_PROFILE_ID
+            or getattr(state, "referee_profile", None) != _V2_PROFILE_ID
+            or type(receive_generation) is not int
+            or type(getattr(snapshot, "receive_generation", None)) is not int
+            or snapshot.receive_generation != receive_generation
+            or type(client_id) is not str or getattr(snapshot, "client_id", None) != client_id
+            or type(getattr(state, "robot_id", None)) is not int
+            or client_id != str(state.robot_id)):
+        return "当前来源未核实"
+    try:
+        round_id = _v2_display_value(snapshot, "GameStatus", "current_round", now)
+        stage = _v2_display_value(snapshot, "GameStatus", "current_stage", now)
+    except ValueError as exc:
+        return f"局次 / 阶段{exc}"
+    if (type(getattr(state, "current_round", None)) is not int
+            or round_id != state.current_round
+            or stage not in _V2_STAGE_NAMES
+            or _V2_STAGE_NAMES[stage] != getattr(state, "current_stage", None)):
+        return "局次 / 阶段未同步"
+    if settlement and (stage != 5 or state.current_stage != "SETTLEMENT"
+                       or type(getattr(state, "settlement_round", None)) is not int
+                       or round_id != state.settlement_round):
+        return "当前结算未核实"
+    return ""
+
+
+def v2_settlement_rows(state: Any, snapshot: Any, *, now: float,
+                       profile_id: str, connected: bool, receive_generation: int,
+                       client_id: str) -> tuple[tuple[str, str], ...]:
+    """Live V2 outcomes, separate from the frontend's frozen statistics tuple.
+
+    Callers obtain and recheck the actual MQTT owner's snapshot. A model default
+    or retained outcome alone never establishes a current observed result.
+    """
+    if profile_id != _V2_PROFILE_ID:
+        return ()
+    context_error = _v2_display_context(
+        state, snapshot, now=now, profile_id=profile_id, connected=connected,
+        receive_generation=receive_generation, client_id=client_id, settlement=True)
+    rows = []
+    for field, label, labels in (("game_result", "本局结果（当前）", {0: "平局", 1: "红方胜利", 2: "蓝方胜利"}),
+                                 ("end_reason", "结束原因（当前）", _V2_END_REASONS)):
+        try:
+            if context_error:
+                raise ValueError(context_error)
+            value = _v2_display_value(snapshot, "GameStatus", field, now)
+            canonical = getattr(state, field, None)
+            if type(canonical) is not int or value != canonical:
+                raise ValueError("尚未同步到当前状态")
+            text = labels.get(value, "不可用（255）" if value == 255 else f"未知值（{value}）")
+        except ValueError as exc:
+            text = f"不可用 · {exc}"
+        rows.append((label, text))
+    return tuple(rows)
+
+
+def v2_status_rows(state: Any, snapshot: Any, *, now: float,
+                   profile_id: str, connected: bool, receive_generation: int,
+                   client_id: str) -> tuple[tuple[str, str], ...]:
+    """Presence-bearing observations only; no request eligibility or ACK.
+
+    is_powered means strengthened, not electrical power. Illumination is not a
+    release permission. cost_coins is accumulated spending, never a fee quote.
+    """
+    if profile_id != _V2_PROFILE_ID:
+        return ()
+    context_error = _v2_display_context(
+        state, snapshot, now=now, profile_id=profile_id, connected=connected,
+        receive_generation=receive_generation, client_id=client_id)
+    sentry = getattr(state, "sentry_status", {})
+    sentry = sentry if isinstance(sentry, dict) else {}
+    fields = (
+        ("SentryStatusSync", "is_powered", "哨兵强化（观测）", sentry.get("is_powered"), bool,
+         {False: "未强化", True: "已强化"}, ""),
+        ("AirSupportStatusSync", "airsupport_status", "空中支援（观测）",
+         getattr(state, "air_support_active", None), int, {0: "未支援", 1: "支援中"}, ""),
+        ("AirSupportStatusSync", "left_time", "免费剩余（观测）",
+         getattr(state, "air_support_free_time_sec", None), int, None, " s"),
+        ("AirSupportStatusSync", "cost_coins", "累计支出（观测）",
+         getattr(state, "air_support_cost_coins", None), int, None, " 金币"),
+        ("AirSupportStatusSync", "is_being_targeted", "空中照射（观测）",
+         getattr(state, "air_support_is_being_targeted", None), int, {0: "未被照射", 1: "被照射"}, ""),
+        ("AirSupportStatusSync", "shooter_status", "发射机构（观测）",
+         getattr(state, "air_support_shooter_status", None), int,
+         {0: "锁定 / 不可解除", 1: "正常", 2: "锁定 / 可付费解除"}, ""),
+    )
+    rows = []
+    for message, field, label, canonical, expected, labels, suffix in fields:
+        try:
+            if context_error:
+                raise ValueError(context_error)
+            value = _v2_display_value(snapshot, message, field, now, expected)
+            if field == "airsupport_status":
+                same = type(canonical) is bool and value in (0, 1) and bool(value) is canonical
+            else:
+                same = type(canonical) is expected and value == canonical
+            if not same:
+                raise ValueError("尚未同步到当前状态")
+            if labels is not None:
+                text = labels.get(value, f"未知值（{value}）")
+            elif value < 0:
+                text = f"未知值（{value}）"
+            else:
+                text = f"{value}{suffix}"
+        except ValueError as exc:
+            text = f"不可用 · {exc}"
+        rows.append((label, text))
+    return tuple(rows)
 
 
 @dataclass
