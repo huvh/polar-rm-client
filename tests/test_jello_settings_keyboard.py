@@ -7,7 +7,7 @@ from types import SimpleNamespace as NS
 import unittest
 from unittest.mock import Mock, patch
 from PySide6.QtCore import QPointF, Qt, QTimer
-from PySide6.QtGui import QKeyEvent, QColor
+from PySide6.QtGui import QKeyEvent, QColor, QImage
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QDialog
 from rm_client.ui.jello_widgets import JelloDialog, JelloCheckBox, JelloComboBox, ease_out_back, jello_font
@@ -15,7 +15,27 @@ from rm_client.ui.jello_clickgui import JelloMainTimeline, JelloReversibleAnimat
 from rm_client.ui.jello_keybinds import (ALL_KEYS, NATIVE_KEYS, BindingSession, KeyboardCanvas,
                                         BindingPicker, build_keyboard_manager, open_keyboard_manager)
 from rm_client.ui.cs2_settings_center import build_settings_center
-from test_cs2_settings_center import Host, APP
+from test_cs2_settings_center import Host, APP, ready_page
+
+
+def logical_pixel_color(image, x, y):
+    """Sample widget-logical coordinates in a captured image's physical pixels."""
+    ratio=image.devicePixelRatio()
+    return image.pixelColor(round(x*ratio),round(y*ratio))
+
+
+class LogicalPixelProbeTests(unittest.TestCase):
+    def test_integer_and_fractional_image_dpr_keep_logical_sample_and_origin(self):
+        for ratio,point in ((1,(7,9)),(1.25,(9,11)),(1.5,(10,14)),(2,(14,18)),(2.5,(18,22))):
+            with self.subTest(dpr=ratio):
+                image=QImage(80,60,QImage.Format.Format_ARGB32)
+                image.setDevicePixelRatio(ratio);image.fill(QColor('#ff0000'))
+                expected=QColor('#0080ff')
+                image.setPixelColor(*point,expected)
+                image.setPixelColor(0,0,QColor(0,0,0,0))
+                self.assertEqual(logical_pixel_color(image,7,9),expected)
+                self.assertEqual(logical_pixel_color(image,0,0).alpha(),0)
+                self.assertEqual(logical_pixel_color(image,20,20),QColor('#ff0000'))
 
 
 class JelloKeyboardTests(unittest.TestCase):
@@ -83,7 +103,7 @@ class JelloKeyboardTests(unittest.TestCase):
 
     def test_keyboard_edits_only_settings_page_draft(self):
         dialog=build_settings_center(self.host)
-        page=dialog.pages['键盘 / 鼠标']
+        page=ready_page(dialog,'键盘 / 鼠标')
         session=BindingSession(self.host,page)
         target=next(e for e in session.entries if e.identity==('module','TacticalMap'))
         session.assign(target,'F10');session.apply()
@@ -152,13 +172,15 @@ class JelloKeyboardTests(unittest.TestCase):
         box=JelloCheckBox();box.resize(100,40);box.show()
         box.setChecked(True);self.assertEqual((box.motion.forward_duration,box.motion.reverse_duration),(.09,.07))
         QTest.qWait(120);self.assertEqual(box.motion.progress,1)
-        image=box.grab().toImage();self.assertTrue(any(image.pixelColor(x,20).blue()>180 and image.pixelColor(x,20).red()<100 for x in range(30)))
+        image=box.grab().toImage()
+        colors=(logical_pixel_color(image,x,20) for x in range(30))
+        self.assertTrue(any(color.blue()>180 and color.red()<100 for color in colors))
         box.setChecked(False);QTest.qWait(100);self.assertEqual(box.motion.progress,0)
         box.deleteLater();APP.processEvents()
 
     def test_binding_button_opens_keyboard_not_old_one_key_overlay(self):
         dialog=build_settings_center(self.host)
-        button=dialog.pages['键盘 / 鼠标'].module_bind_controls['TacticalMap']
+        button=ready_page(dialog,'键盘 / 鼠标').module_bind_controls['TacticalMap']
         with patch('rm_client.ui.jello_keybinds.open_keyboard_manager') as open_:
             button.button.click()
         open_.assert_called_once_with(self.host,dialog.pages['键盘 / 鼠标'],('module','TacticalMap'))

@@ -1,6 +1,7 @@
 """Isolated integration tests: fake host/transport only, no application startup."""
 from __future__ import annotations
 import ast
+from copy import deepcopy
 import logging
 import os
 from pathlib import Path
@@ -19,12 +20,13 @@ CLASS = next(n for n in TREE.body if isinstance(n, ast.ClassDef) and n.name == "
 NAMES = {"apply_updates", "_notify_referee_view"}
 FUNCS = [n for n in CLASS.body if isinstance(n, ast.FunctionDef) and n.name in NAMES]
 MODULE = ast.Module(body=[ast.ImportFrom(module="__future__", names=[ast.alias(name="annotations")], level=0)] + FUNCS, type_ignores=[])
-NAMESPACE = {"_LOG": logging.getLogger("test.top_match_bar")}
+NAMESPACE = {"_LOG": logging.getLogger("test.top_match_bar"), "deepcopy": deepcopy}
 exec(compile(ast.fix_missing_locations(MODULE), str(SOURCE), "exec"), NAMESPACE)
 
 
 class FakeBackend:
     apply_updates = NAMESPACE["apply_updates"]
+    _backend_transition_blocks_work = lambda self: False
     _notify_referee_view = NAMESPACE["_notify_referee_view"]
 
     def __init__(self, observer=None):
@@ -33,7 +35,7 @@ class FakeBackend:
         self._apply_error_count = self._official_state_updates_count = 0
         self._last_apply_error = ""
         self.queue = [("/GameStatus", "GameStatus", {"stage_countdown_sec": 85}, 10.0)]
-        self.mqtt = NS(drain_decoded=self.drain)
+        self.mqtt = NS(drain_decoded=self.drain, receive_generation=0)
         self.order = []
 
     def drain(self):

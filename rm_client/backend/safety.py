@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+import math
 import secrets
 import time
 from typing import Any, Callable, Iterable
@@ -40,6 +41,23 @@ class QualificationToken:
     expires_at: float
 
 
+@dataclass(frozen=True, slots=True)
+class InputClearTraceFrame:
+    filename: str
+    function: str
+    line_number: int
+
+
+@dataclass(frozen=True, slots=True)
+class InputClearFailure:
+    """Bounded observer evidence without retained frames, locals, or payloads."""
+
+    reason: str
+    exception_type: str
+    frames: tuple[InputClearTraceFrame, ...]
+    trace_truncated: bool
+
+
 class OfficialSafety:
     """Gate all real control output while keeping mock diagnostics usable.
 
@@ -67,7 +85,34 @@ class OfficialSafety:
         self._authorized_capabilities: frozenset[str] = frozenset()
         self.last_reason = "startup lock"
         self.last_transition_at = time.perf_counter()
+        self.control_generation = 0
         self.input_clear_hook: Callable[[str], None] | None = None
+        self.input_clear_failure_count = 0
+        self._input_clear_failures: tuple[InputClearFailure, ...] = ()
+
+    @property
+    def input_clear_failures(self) -> tuple[InputClearFailure, ...]:
+        """Latest eight failures; successful delivery never erases prior evidence."""
+        return self._input_clear_failures
+
+    def _record_input_clear_failure(self, reason: str, error: Exception) -> None:
+        # Walk at most twelve frames, without linecache/source I/O or logging
+        # handlers on this safety-critical path. Never retain exception objects.
+        frames = []
+        trace = error.__traceback__
+        while trace is not None and len(frames) < 12:
+            code = trace.tb_frame.f_code
+            frames.append(InputClearTraceFrame(code.co_filename[:512], code.co_name[:128], trace.tb_lineno))
+            trace = trace.tb_next
+        failure = InputClearFailure(
+            reason[:256] if isinstance(reason, str) else "<invalid clear reason>",
+            f"{type(error).__module__}.{type(error).__qualname__}"[:256],
+            tuple(frames), trace is not None,
+        )
+        self.input_clear_failure_count += 1
+        # Immutable replacement also isolates the DT7 worker's shallow policy
+        # snapshot: recording there cannot mutate the owner's diagnostics.
+        self._input_clear_failures = (*self._input_clear_failures[-7:], failure)
 
     def _notify_input_clear(self, reason: str) -> None:
         hook = self.input_clear_hook
@@ -75,9 +120,9 @@ class OfficialSafety:
             return
         try:
             hook(str(reason))
-        except Exception:
+        except Exception as error:
             # Safety state transitions must never depend on diagnostics/UI.
-            pass
+            self._record_input_clear_failure(reason, error)
 
     def configure(
         self,
@@ -106,10 +151,14 @@ class OfficialSafety:
         )
         # 台架驾驶开关随场景切换（默认 False，只有 LabDebug 的 profile 打开）
         self.allow_dt7_drive = bool(getattr(config.safety, "allow_dt7_drive", False))
-        self.current_stage = "0"
-        self._stage_seen = False
+        self.clear_stage_evidence()
         self._publish_at.clear()
         self.lock_control("scenario changed")
+
+    def clear_stage_evidence(self) -> None:
+        """Forget the referee phase without changing control state or notifying observers."""
+        self.current_stage = "0"
+        self._stage_seen = False
 
     def update_stage(self, current_stage: Any) -> None:
         stage = str(current_stage).strip()
@@ -122,13 +171,15 @@ class OfficialSafety:
     def is_fighting(self) -> bool:
         return self._stage_seen and self.current_stage in FIGHTING_STAGES
 
-    def lock_control(self, reason: str = "operator lock") -> None:
+    def lock_control(self, reason: str = "operator lock", *, notify: bool = True) -> None:
         self.control_state = ControlState.LOCKED
         self._qualification = None
         self._authorized_capabilities = frozenset()
         self.last_reason = str(reason)
         self.last_transition_at = time.perf_counter()
-        self._notify_input_clear(self.last_reason)
+        self.control_generation += 1
+        if notify:
+            self._notify_input_clear(self.last_reason)
 
     def begin_qualification(
         self,
@@ -149,6 +200,7 @@ class OfficialSafety:
         self.control_state = ControlState.QUALIFICATION
         self.last_reason = "qualification token active"
         self.last_transition_at = current
+        self.control_generation += 1
         self._notify_input_clear("qualification epoch started")
         return token
 
@@ -164,6 +216,7 @@ class OfficialSafety:
         self.control_state = ControlState.MATCH_ARMED
         self.last_reason = "operator armed verified evidence"
         self.last_transition_at = time.perf_counter()
+        self.control_generation += 1
         self._notify_input_clear("match control armed; neutral input required")
 
     @staticmethod
@@ -242,6 +295,46 @@ class OfficialSafety:
                 return self._deny(f"{name} exceeds {limit_hz:g} Hz")
         return True, "ok"
 
+    def can_publish_v2_economy_current(
+        self, topic: str, *, now: float, qualification_token: str | None = None,
+    ) -> tuple[bool, str]:
+        """Read-only final V2 request check; never revoke or notify under locks.
+
+        This is deliberately limited to the two reviewed economy topics. The
+        regular can_publish call still owns initial denial/expiry effects.
+        V2 live business requests require MATCH even with qualification.
+        """
+        if topic not in {"AirSupportCommand", "SentryCtrlCommand"}:
+            return False, "unsupported V2 economy topic"
+        try:
+            if type(now) not in (int, float) or not math.isfinite(now) or now < 0:
+                return False, "invalid V2 admission clock"
+        except OverflowError:
+            return False, "invalid V2 admission clock"
+        if self.estop_active or self.control_state == ControlState.ESTOP:
+            return False, "E-stop active"
+        if not self.allow_mqtt_publish:
+            return False, "current scenario does not allow real MQTT publishing"
+        if self.control_state == ControlState.QUALIFICATION:
+            token = self._qualification
+            if (token is None or now > token.expires_at or not qualification_token
+                    or not secrets.compare_digest(qualification_token, token.value)
+                    or "economy" not in token.intents):
+                return False, "qualification token invalid or expired"
+        elif self.control_state == ControlState.MATCH_ARMED:
+            if "economy" not in self._authorized_capabilities:
+                return False, "capability economy remains LOCKED MOCK"
+        else:
+            return False, "match control is not armed or qualified"
+        if not self.is_fighting():
+            return False, "V2 live economy requests require MATCH"
+        if self.enforce_official_limits:
+            previous = self._publish_at.get(topic, -1.0)
+            limit_hz = self._topic_limit_hz.get(topic, self._publish_limit_hz)
+            if previous >= 0.0 and now - previous < 1.0 / limit_hz:
+                return False, f"{topic} exceeds {limit_hz:g} Hz"
+        return True, "ok"
+
     def can_transmit_dt7(self, *, qualification_token: str | None = None,
                          now: float | None = None) -> tuple[bool, str]:
         intent = "dt7_selftest" if qualification_token else "dt7_control"
@@ -264,6 +357,7 @@ class OfficialSafety:
         self._authorized_capabilities = frozenset()
         self.last_reason = "E-stop triggered"
         self.last_transition_at = self.estop_at
+        self.control_generation += 1
         self._notify_input_clear(self.last_reason)
 
     def release_estop(self) -> None:

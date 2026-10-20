@@ -418,6 +418,10 @@ class PolarMotionVerifier:
 
     def __init__(self, clock: Callable[[], float] = time.perf_counter) -> None:
         self.clock = clock
+        self.reset()
+
+    def reset(self) -> None:
+        """Discard all motion evidence when the robot transport epoch ends."""
         self.state = "IDLE"
         self.detail = ""
         self.commanded_mps = 0.0
@@ -510,7 +514,11 @@ class PolarMotionVerifier:
                 f"已下发 {self.commanded_mps:.2f} m/s，累计位移 {self.displacement_m:.3f} m"
                 "（固件 ChassisPublish 仅在平衡底盘实现）"
             )
-            if self._moving_since is None:
+            if not trying:
+                # Missing telemetry remains visible while idle, but idle time
+                # is not evidence that a commanded movement failed.
+                self._moving_since = None
+            elif self._moving_since is None:
                 self._moving_since = now
             elif now - self._moving_since > self.STUCK_TIMEOUT_S:
                 self.state = "STUCK"
@@ -643,6 +651,10 @@ class PolarControlArbiter:
         if self.state != "CLIENT":
             self.state, self.reason = "CLIENT", "客户端已接管云台"
             self._converged = True
+
+    def invalidate_pending_divergence(self) -> None:
+        """Discard old-epoch conflict timing without clearing lockout or slew state."""
+        self._divergent_since = None
 
     def clear_lockout(self) -> None:
         if self.state == "LOCKOUT":

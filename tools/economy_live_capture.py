@@ -5,7 +5,8 @@ Requirements (audit):
 - MUST capture animation mid-frames (not just force progress=1.0).
 - MUST verify economy panel pixels are actually present in the screenshot.
 - MUST report actual window size and DPR.
-- Output: C:\\tmp\\polar-rm-validation\\
+- Output: C:\\tmp\\polar-rm-validation\\ on Windows; repository
+  tmp_economy_live_capture/ on POSIX.
 """
 
 from __future__ import annotations
@@ -25,8 +26,8 @@ from PySide6.QtWidgets import QApplication
 
 from rm_client.ui.polar_app import PolarRMWindow
 
-OUT = Path(r"C:\tmp\polar-rm-validation")
-OUT.mkdir(parents=True, exist_ok=True)
+OUT = (Path(r"C:\tmp\polar-rm-validation") if sys.platform == "win32"
+       else ROOT / "tmp_economy_live_capture")
 
 RESOLUTIONS = [
     ("1280x720", 1280, 720),
@@ -179,6 +180,7 @@ def main(argv: list[str] | None = None) -> int:
         help="Fail when the configured camera or UDP source has not produced a real frame.",
     )
     args = parser.parse_args(argv)
+    OUT.mkdir(parents=True, exist_ok=True)
     surface = QSurfaceFormat()
     surface.setVersion(3, 3)
     surface.setProfile(QSurfaceFormat.OpenGLContextProfile.CoreProfile)

@@ -1,0 +1,189 @@
+# Baseline draw method before caption extraction; characterization oracle only.
+def draw_rm_indicators_hud(self, p: QPainter, width: int) -> None:
+    # Buff 指示：优先裁判 Buff 解码（RobotState.buff_indicator_state），
+    # LabDebug mock 行无 buff_type 时自动回退旧演示布尔。
+    atk_buf, def_buf, buff_detail = self.state.buff_indicator_state()
+    indicators = [
+        (label, on)
+        for label, on in (
+            ("FRIC", bool(self.state.friction_wheel)),
+            ("LOCK", bool(self.state.lock_state)),
+            ("ATKBUF", atk_buf),
+            ("DEFBUF", def_buf),
+            ("ANTIRO", bool(self.state.anti_rotation)),
+            ("PTE", bool(self.state.pte_ready)),
+            ("JUP", bool(self.state.jump_ready)),
+            ("WHE", bool(self.state.wheel_online)),
+            ("LES", bool(self.state.les_online)),
+        )
+        if self.rm_indicator_visible(label)
+    ]
+    # 官方模块在线状态（RobotModuleStatus 已解码进 robot_module_status）：
+    # 有真实数据时追加一行模块芯片；LabDebug/无数据时不占位、面板不拉高。
+    indicators += list(self.state.robot_module_indicator_state())
+    # 队内 0x5A 链路芯片：仅在链路参与工作时出现，以免改变官方/实验室
+    # 的既有视觉基线。LNK=下位机在供数，DRV=底盘驾驶已授权，
+    # GIM=云台控制权在客户端（视觉 NUC 占用或抢环锁出时为关）。
+    if bool(getattr(self.state, "polar_link_active", False)):
+        indicators += [
+            ("LNK", True),
+            ("DRV", bool(getattr(self.state, "polar_drive_armed", False))),
+            ("GIM", bool(getattr(self.state, "polar_gimbal_client", False))),
+            # MOT 亮 = 已交叉验证“给了速度且车确实在动”；不亮时要区分
+            # 是没给速度（IDLE）还是发了但没动（STUCK），看下方诊断行。
+            ("MOT", str(getattr(self.state, "polar_motion_state", "IDLE")) == "OK"),
+        ]
+    rows = -(-len(indicators) // 3)
+    chips_bottom = 36 + rows * 28
+    # 链路诊断：连上时要显示端口/段数/仲裁态；连不上时必须把原因摊开，
+    # 否则操作员只看到 LNK 灯灭，分不清是没插、选错口还是固件没回。仅
+    # 在台架/实车场景或链路已活跃时占位，不影响官方/实验室视觉基线。
+    polar_stats = dict((getattr(self.state, "backend_stats", {}) or {}).get("polar_link") or {})
+    polar_wanted = bool(
+        polar_stats
+        and (
+            bool(getattr(self.state, "polar_link_active", False))
+            or str(polar_stats.get("port") or "")
+            in ("Auto",)
+            # 不能再把场景名当条件：队内 0x5A 链路是独立于场景的并行通道，
+            # 在大疆官方场景下配了 COM 口也要显示诊断面板。
+            or bool(str(polar_stats.get("port") or "").strip())
+            and str(polar_stats.get("port") or "").strip() != "Stub"
+        )
+    )
+    link_extra = 20 if polar_wanted else 0
+    # 链路活着时多给一行：排错时最需要的是“我指令 X / 车实测 Y”并排看到。
+    if bool(getattr(self.state, "polar_link_active", False)):
+        link_extra += 20
+    rect = QRectF(width - 244, 78, 220, max(172, chips_bottom + 30 + link_extra))
+    active = self.anim.value("hud.rm_indicators", 1.0, self.anim_duration(0.26), Easings.ease_out_pow4, initial=0.0)
+    p.save()
+    p.setOpacity(active)
+    glow_rect(p, rect, 8, 0.06 if self.hud_clean() else 0.16)
+    rounded_rect(p, rect, 8, self.hud_surface(0.72), self.hud_panel_outline(0.09))
+    self.draw_text(p, rect.adjusted(12, 8, -12, -rect.height() + 29), hud_text("RMIndicatorsHud", chinese_enabled(self.registry)), self.font("poppins_bold", 10), THEME.text)
+    chip_w = 62
+    for i, (label, enabled) in enumerate(indicators):
+        col = i % 3
+        row = i // 3
+        chip = QRectF(rect.left() + 12 + col * (chip_w + 6), rect.top() + 36 + row * 28, chip_w, 21)
+        enabled_anim = self.anim.value(f"hud.ind.{label}", 1.0 if enabled else 0.0, self.anim_duration(0.18), Easings.ease_out_quad, initial=0.0)
+        fill = with_alpha(self.hud_success() if enabled else self.hud_accent(), 0.12 + 0.44 * enabled_anim)
+        rounded_rect(p, chip, 6, fill, color("#ffffff", 0.08))
+        self.draw_text(p, chip, hud_text(label, chinese_enabled(self.registry)), self.font("poppins_medium", 7.3), THEME.text if enabled else THEME.muted, Qt.AlignmentFlag.AlignCenter)
+        if label in ("ATKBUF", "DEFBUF") and buff_detail:
+            kind = "攻击增益" if label == "ATKBUF" else "防御/回复增益"
+            state_text = "生效" if enabled else "无"
+            self.add_hotspot(chip, "buff_indicator", label, tooltip=f"{kind}：{state_text} | {buff_detail}")
+    ammo = f"17mm {self.state.projectile_allowance_17mm} | 42mm {self.state.projectile_allowance_42mm}"
+    ammo_rect = QRectF(rect.left() + 12, rect.top() + chips_bottom + 4, rect.width() - 24, 18)
+    self.draw_text(p, ammo_rect, ammo, self.font("poppins_regular", 8.2), THEME.muted, Qt.AlignmentFlag.AlignVCenter)
+    if polar_wanted:
+        decode = dict(polar_stats.get("decode") or {})
+        authority_info = polar_stats.get("authority")
+        if not isinstance(authority_info, dict):
+            authority_info = {}
+        authority = str(authority_info.get("state") or "-")
+        link_alive = bool(polar_stats.get("link_alive"))
+        motion = dict(polar_stats.get("motion") or {})
+        motion_state = str(motion.get("state") or "IDLE")
+        if link_alive:
+            # 兵种上屏：限幅与驾驶权限现在跟“实际连的那台车”走，
+            # 操作员必须能看到现在算的是哪台、限速多少，否则选错车无从发现。
+            # Role hud_code remains a diagnostic identifier in either language.
+            role_tag = str(polar_stats.get("role_hud_code") or "?")
+            role_id = int(polar_stats.get("role_id") or 0)
+            role_limit = float(polar_stats.get("role_max_linear_mps") or 0.0)
+            base = hud_template(
+                "ROBOT {port} · {segments} seg · {role}#{id} {limit}m/s",
+                chinese_enabled(self.registry),
+                port=polar_stats.get('resolved_port') or polar_stats.get('port'),
+                segments=int(polar_stats.get('segments_received') or 0),
+                role=role_tag, id=role_id, limit=f"{role_limit:.2f}",
+            )
+            # 选错车是事故级信息（限速不同、给哨兵下驾驶指令会破坏自动巡线），
+            # 优先于其他一切状态上屏。
+            if str(polar_stats.get("role_mismatch") or ""):
+                link_text = (
+                    f"{base} · " + hud_template(
+                        "ROLE MISMATCH UI#{selected}!=ROBOT#{reported}", chinese_enabled(self.registry),
+                        selected=int(polar_stats.get('role_selected_id') or 0),
+                        reported=int(polar_stats.get('role_reported_id') or 0),
+                    )
+                )
+                link_color = self.hud_warning()
+            elif str(polar_stats.get("role_drive_block") or ""):
+                link_text = f"{base} · {hud_text('DRIVE BLOCKED', chinese_enabled(self.registry))}"
+                link_color = self.hud_warning()
+            # 车辆不响应是比仲裁态更紧急的信息，优先上屏。
+            elif motion_state in ("STUCK", "NO_FEEDBACK", "STALE_FEEDBACK", "NO_MOTION"):
+                link_text = f"{base} · {hud_text(motion_state, chinese_enabled(self.registry))}"
+                link_color = self.hud_warning()
+            else:
+                link_text = f"{base} · {hud_text(authority, chinese_enabled(self.registry))}"
+                link_color = self.hud_success() if motion_state == "OK" else self.hud_accent()
+        else:
+            # Error codes and port names remain exact diagnostic identifiers.
+            code = str(polar_stats.get("last_error_code") or "") or "NO_STREAM"
+            port = str(polar_stats.get("port") or "-")
+            link_text = f"{hud_text('LINK OFF', chinese_enabled(self.registry))} · {code} · {port}"
+            link_color = self.hud_warning()
+        link_rect = QRectF(rect.left() + 12, rect.top() + chips_bottom + 22, rect.width() - 24, 16)
+        self.draw_text(p, link_rect, link_text, self.font("poppins_medium", 7.6), link_color, Qt.AlignmentFlag.AlignVCenter)
+        detail = (
+            f"兵种 {polar_stats.get('role_label') or '?'}（编号 {int(polar_stats.get('role_id') or 0)}）"
+            f"· {polar_stats.get('role_chassis') or '?'} · 限速 "
+            f"{float(polar_stats.get('role_max_linear_mps') or 0.0):.2f} m/s / "
+            f"{float(polar_stats.get('role_max_yaw_rps') or 0.0):.2f} rad/s\n"
+        )
+        if not polar_stats.get("role_known", True):
+            detail += "⚠ 该兵种的固件参数未能查证，已按保守限速执行，请核对 robot_param_*.h\n"
+        mismatch_text = str(polar_stats.get("role_mismatch") or "")
+        if mismatch_text:
+            detail += f"⚠ {mismatch_text}\n"
+        drive_block_text = str(polar_stats.get("role_drive_block") or "")
+        if drive_block_text:
+            detail += f"⚠ {drive_block_text}\n"
+        detail += (
+            f"端口 {polar_stats.get('port')} → {polar_stats.get('resolved_port') or '未解析'}\n"
+            f"状态码 {polar_stats.get('last_error_code') or 'OK'}\n"
+            f"原因 {polar_stats.get('last_error') or '无'}\n"
+            f"已收段 {polar_stats.get('segment_counts')}\n"
+            f"CRC8 错 {decode.get('crc8_errors', 0)} / CRC16 错 {decode.get('crc16_errors', 0)} / "
+            f"长度错 {decode.get('length_errors', 0)} / 未知段 {decode.get('unknown_segments', 0)}\n"
+            f"仲裁 {authority}：{str(authority_info.get('reason') or '')}\n"
+            f"车辆响应 {motion_state}：{str(motion.get('detail') or '')}\n"
+            f"指令 {float(motion.get('commanded_mps') or 0.0):.2f} m/s / 实测 {float(motion.get('measured_mps') or 0.0):.2f} m/s\n"
+            f"已探测到：{(polar_stats.get('detected_ports') or ['无'])[:4]}\n"
+            f"发送 {int(polar_stats.get('frames_sent') or 0)} 帧（含 {int(polar_stats.get('zero_frames_sent') or 0)} 帧归零）"
+        )
+        self.add_hotspot(link_rect, "polar_link", "diagnostics", tooltip=detail[:500])
+        if link_alive:
+            # 第 3 行：实测速度 + 云台姿态。全 ASCII（HUD 字体无 CJK 字形）。
+            overlay = getattr(self.state, "polar_overlay", {}) or {}
+            spd = float(overlay.get("measured_vx_mps", 0.0) or 0.0)
+            lat = float(overlay.get("measured_vy_mps", 0.0) or 0.0)
+            yaw_rate = float(overlay.get("measured_wz_rps", 0.0) or 0.0)
+            gimbal_yaw = float(overlay.get("gimbal_yaw_deg", 0.0) or 0.0)
+            gimbal_pitch = float(overlay.get("gimbal_pitch_deg", 0.0) or 0.0)
+            telem_text = (
+                f"v {spd:+.2f}/{lat:+.2f}  w {yaw_rate:+.2f}  G {gimbal_yaw:+.0f}/{gimbal_pitch:+.0f}"
+            )
+            telem_rect = QRectF(rect.left() + 12, rect.top() + chips_bottom + 38, rect.width() - 24, 16)
+            self.draw_text(
+                p, telem_rect, telem_text, self.font("poppins_medium", 7.4),
+                THEME.muted, Qt.AlignmentFlag.AlignVCenter,
+            )
+            self.add_hotspot(
+                telem_rect,
+                "polar_link",
+                "telemetry",
+                tooltip=(
+                    f"实测速度 vx {spd:+.3f} / vy {lat:+.3f} m/s，角速度 {yaw_rate:+.3f} rad/s\n"
+                    f"云台 yaw {gimbal_yaw:+.2f}° / pitch {gimbal_pitch:+.2f}°\n"
+                    f"底盘驾驶授权：{'开' if getattr(self.state, 'polar_drive_armed', False) else '关'}"
+                    f"　云台控制权：{getattr(self.state, 'polar_authority_state', 'PASSIVE')}\n"
+                    f"{getattr(self.state, 'polar_authority_reason', '')}"
+                )[:500],
+            )
+    p.restore()

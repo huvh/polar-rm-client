@@ -1,0 +1,2911 @@
+# Renewed clean-code repairs: 2026-10-18
+
+## Frozen stage and evidence status
+
+Four bounded repairs are frozen at local commit
+`0b5692b74ba4ee8b40dc7183a23b779d946f8478`, published as
+[1b03e46251aca63d186bf484ff0bf9efe2a7fabe](https://github.com/lulunomaro/polar-rm-client/commit/1b03e46251aca63d186bf484ff0bf9efe2a7fabe),
+with tree `a68108aed5472938d3aa5ff0a87add9e301e74ba`.
+Local/public commit mappings are parent-verified; connector-created commits have
+different IDs. The full offline run has **completed: 353 PASS, 12 SKIP,
+4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`). Independently read local result:
+`client-renewed20h-full1/results.json`, run ID
+`5105544384da4bb49b4a3eee725df69f`. Its source-at-start records the exact local
+commit/tree above and a clean worktree.
+
+Declared source stability passed: both endpoints contain **702 inputs** with
+SHA-256 `b0a7c5e6efa6080ec8d7506b0ba844b4f72c5bc34b78d0d1c6d1cdfde4f9dd86`.
+The scope covers declared code/configuration suffixes under `rm_client`, `tests`,
+`tools` and `configs`, plus root `main.py` and `requirements*.txt`. It excludes
+assets, external fixtures, installed packages and documentation; endpoint
+identity does not rule out transient edits restored between captures.
+
+The four incomplete suites still require the team CRC reference, selected
+firmware and vendor dump for DT7 comparisons, or the separately mutable legacy
+patch-installation test. Their unchanged gates prevent a complete GO.
+
+The prior 349-PASS aggregate is historical remote evidence. Its original local
+raw logs and verification environment were lost during workspace reset; this
+stage does not claim to have rerun or independently re-established that result.
+No raw logs are published with this report.
+
+## 1. Referee observer ownership
+
+- Local `d026144ff9063d1434820d862892c3c2215e5483`; public `c021923`.
+- Source: [manager.py](../../rm_client/backend/manager.py),
+  `_notify_referee_view`; regression:
+  [test_referee_observer_ownership.py](../../tests/test_referee_observer_ownership.py).
+- A shallow copy of decoded data retained nested list/dictionary aliases. A
+  presentation observer could mutate authoritative state even before raising
+  its own handled exception. The boundary now deep-copies the observer payload;
+  observer failure accounting remains separate from state application.
+- Four new methods exercise real repository codecs/adapters and the manager
+  application path, including current/legacy profiles, retained references and
+  nested decoded dictionaries. Baseline: **5 failing outcomes, 0 errors**.
+  Independent selections: **26 passed** and **23 passed**; these are different
+  selections, not a claim of 49 distinct tests.
+- The existing top-match-bar integration fixture imports `deepcopy` and exposes
+  it in the extracted-method execution namespace; its original assertions are
+  unchanged. No MQTT, serial or hardware session was needed to establish this
+  ownership defect.
+
+## 2. Configuration nesting rejection before mutation
+
+- Local `4a1858d51c6fa0a693dd5a0fd9b5aa20fe9a10b5`; public `d2a4a17`.
+- Source: [config_store.py](../../rm_client/config_store.py) and
+  [validation.py](../../rm_client/configuration/validation.py); regression:
+  [test_config_json_nesting.py](../../tests/test_config_json_nesting.py).
+- Excessively nested JSON could escape the established rejection policy as
+  `RecursionError` during decoding or encoding. Narrow JSON helpers translate
+  this expected content failure into `ValueError`; loaders retain their ordinary
+  rejection result. Validation likewise rejects encoder recursion exhaustion.
+- Import now preflights the actual indented encoder before replacing a backup.
+  Compact validation alone can succeed where indented encoding fails. The
+  negative control removing this preflight produced **1 failure**, demonstrating
+  that backup preservation requires the added ordering.
+- Nine new methods: baseline **9 error outcomes**. Independent focused selection
+  **44 passed**; author selection **48 passed**, with different neighboring tests.
+  Temporary files verify unchanged profile/startup/backup bytes on rejection and
+  ordinary successful paths. Runtime recursion limits were not changed.
+- These checks establish normal-operation rejection and file preservation;
+  they do not establish power-loss durability or a universal nesting limit.
+
+## 3. Uncaught worker-thread counterevidence
+
+- Local `53fd636dfa1026a8ad2665f50105b8a2dcadace7`; public `1bd831b`.
+- Source: [verify_all.py](../../tools/verify_all.py), `execute_script`; regression:
+  [test_verification_thread_exceptions.py](../../tests/test_verification_thread_exceptions.py).
+- A real worker could raise an uncaught assertion while unittest printed `OK`
+  and the child exited zero. The runner consequently classified the check PASS.
+  The child bootstrap now installs a thread exception hook before starting its
+  watcher. It synchronously emits an anchored failure marker, then delegates to
+  the original hook to retain the traceback. Existing classification recognizes
+  the marker; there is no generic traceback-text rejection rule.
+- The hook remains installed through interpreter shutdown so late non-daemon
+  failures are visible. Main-thread exit behavior is unchanged. Thread
+  `SystemExit` retains default ignored semantics. Caught exceptions and scoped
+  custom hooks explicitly capturing expected errors remain supported; this is
+  not universal accounting for custom exception-handling policies.
+- Initial six-method baseline: **2 failures, 0 errors**. Independent review
+  rejected the first candidate because unterminated stderr could prefix the
+  marker and hide it from anchored classification. A new real-bootstrap
+  regression reproduced that failure; the marker now starts with a newline.
+  Revised **7 methods passed**. Failed-candidate evidence remains separate.
+- Existing registry suite: **44 passed on rerun**. Its first run had one failure
+  from an additional source-stability failure while shared sources were changing;
+  that unsuccessful run is retained rather than counted as a clean pass.
+  Nothing here establishes hidden thread failures in the historical 349 run.
+
+## 4. Escape-menu capture retirement
+
+- Local `0b5692b74ba4ee8b40dc7183a23b779d946f8478`; public `1b03e462`.
+- Source: [escape_menu_mixin.py](../../rm_client/ui/polar/mixins/escape_menu_mixin.py);
+  regression: [test_escape_menu_capture_epochs.py](../../tests/test_escape_menu_capture_epochs.py).
+- A mouse press retained across keyboard navigation or a menu-page change could
+  activate a different action when released. Capture is now cleared before page
+  actions, navigation and visibility-transition callbacks. Fresh same-page mouse
+  and keyboard interactions remain covered.
+- Baseline: **5 failing outcomes, 0 errors**. Independent focused selection:
+  **62 passed**; author selection **58 passed**, with different neighbors.
+  Tests route real Qt events through a QWidget host and production mixins;
+  settings/close effects are inert recorders. This is not physical Windows,
+  display-device or robot qualification.
+
+## Scope and follow-through
+
+The repairs use existing ownership, rejection, classification and input-routing
+boundaries. They add no new framework, relax no external-reference gate, and do
+not imply an architecture-wide reduction in coupling. The completed full offline result above preserves the remaining
+SKIP/INCOMPLETE gates and source-stability scope. It does not establish hardware
+qualification or supersede the historical run with a claim about its original
+raw evidence. This report itself changes only documentation.
+
+## Second stage: receipt age and tactical-map hold
+
+This separate stage is frozen at local
+`9a076129cc4979494137f720c7e8703839a04ad4`, published as
+[46219cc63644d8e379eb8b95f43f95d4e10cc8c3](https://github.com/lulunomaro/polar-rm-client/commit/46219cc63644d8e379eb8b95f43f95d4e10cc8c3),
+tree `88dc0a9f96b9d3e407d94f738e110a20f6659e37` (parent-verified mapping).
+Its full offline run, `client-renewed20h-full2/results.json`, has **completed:
+355 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`). The result
+was independently read, run ID `f5caf4028f5d4c5a8a1f40659642595c`, with the exact
+local commit/tree above and a clean source-at-start worktree. Both source
+fingerprints contain **704 inputs**, SHA-256
+`406db1b4bab783c5576867743d5174dd2395fbf455cef2784364d630ec55c0de`;
+source stability is PASS under the same declared scope and endpoint limitations
+as the first run. The four prerequisite suites remain incomplete. The completed
+353-PASS checkpoint above remains the separate first-stage result.
+
+### MQTT callback-entry receipt time
+
+- Local `300df566dd59361081de349f7523175283e37dbd`; public `c84fe18b`.
+- Source: [mqtt_backend.py](../../rm_client/backend/mqtt_backend.py) and
+  [transports.py](../../rm_client/transports.py); regression:
+  [test_mqtt_callback_receipt_time.py](../../tests/test_mqtt_callback_receipt_time.py).
+- Receipt time was sampled after validation/hooks/decoding. Slow processing could
+  make an older message appear newly received to downstream freshness checks.
+  The backend now captures the monotonic timestamp on callback entry after the
+  client-identity check and carries that same value into both raw and decoded
+  queues. Existing generation/profile/client checks still discard obsolete
+  callbacks before enqueueing.
+- The bridge accepts a keyword-only receipt timestamp for that internal handoff;
+  ordinary three-argument callbacks capture their own entry timestamp. This
+  preserves the existing callback invocation form and avoids resampling the
+  supplied timestamp. It does not add new packet formats or freshness cutoffs.
+- Initial five-method baseline: **4 failures, 0 errors**. Final regression has
+  **6 methods**. Author focused selection: **86 passed**. Independent groups
+  contain **56 unique methods**: 50 plus 12, with six overlapping methods.
+  These totals describe their respective selections rather than additional
+  independent tests to sum together.
+- Tests cover delayed hooks/decoding, preserved event age, discarded stale
+  generations, malformed/unknown packets and direct bridge compatibility.
+  They use repository decoding and controlled clocks without a live broker.
+
+### Tactical-map hold retirement
+
+- Local `9a076129cc4979494137f720c7e8703839a04ad4`; public `46219cc`.
+- Source: [input_dispatch_mixin.py](../../rm_client/ui/polar/mixins/input_dispatch_mixin.py);
+  regression: [test_tactical_map_hold_retirement.py](../../tests/test_tactical_map_hold_retirement.py).
+- A held map input could survive modal/focus/lock boundaries and remain active
+  after the modal closed. Two assignments clear `tactical_map_hold` at the
+  beginning of the existing modal-neutralization and control-lock hooks, before
+  callbacks or reentry can observe the old intent.
+- Three new actual-window methods: baseline **14 failing outcomes, 0 errors**.
+  Author focused selection: **72 passed**; independent selection: **63 passed**,
+  with different neighboring tests. Independent positive controls confirm a
+  properly eligible fresh map-point action still works while retired stale
+  intent is rejected; callback-error probes verify hold retirement precedes
+  cleanup failure.
+- The change adds no new permission or backend authority and does not bypass
+  existing map-command eligibility. Real offscreen Qt routing and inert command
+  recorders establish input ownership, not physical transmission or Windows
+  device qualification.
+
+Only this report is updated to record the completed second-stage full run.
+No raw logs are included or published.
+
+## Third stage: receive-epoch history and release ZIP publication
+
+The integrated source for this stage is local
+`3f94f0f0a4ac3d0a8313f9fc49808ff021b4652a`, public
+[32da8ad51baf5834fdd77f8ee7c29afc4bd946e2](https://github.com/lulunomaro/polar-rm-client/commit/32da8ad51baf5834fdd77f8ee7c29afc4bd946e2),
+tree `2f08204b1eb2a3dc96fbbe7fb171c6873e3e65b5` (parent-verified mapping).
+The full offline run, `client-renewed20h-full3/results.json`, has completed:
+**358 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`). Its result
+was independently read, run ID `41c9338e5bb543a3a369ee25acaeeab7`, against the
+exact local commit/tree above. Provenance records **dirty: true**: documentation
+was edited or untracked during this stage, so this is not a clean-worktree claim.
+The declared verification source inputs remained unchanged: both endpoint
+fingerprints contain **707 files**, SHA-256
+`8fece1870f64b410d1e3c3d9af90ebcafb45d222af2a942b01e698dde9a96d04`.
+Source stability is PASS under the declared source-input and endpoint limits
+already described above; this excludes documentation, assets, external fixtures,
+installed packages and transient edits restored between captures.
+
+The PowerShell publication suite actually ran through `POLAR_TEST_PWSH`: its
+result is **6 unittest tests passed, 0 skipped**, exit code 0. It was not counted
+as passing through runtime unavailability or a class skip. The four prerequisite
+suites remain INCOMPLETE. The completed 353-PASS and 355-PASS runs above remain
+distinct historical checkpoints. This integrated source also contains the
+separately documented H264 issue 20 correction; its evidence is not folded into
+either focused result below.
+
+### Official-feed receive-epoch retirement
+
+- Local `c0e7ff8`; public `04a1d072`.
+- Source: [combat_events.py](../../rm_client/combat_events.py) and
+  [video_backend_mixin.py](../../rm_client/ui/polar/mixins/video_backend_mixin.py);
+  regression: [test_official_feed_receive_epoch.py](../../tests/test_official_feed_receive_epoch.py).
+- A changed MQTT receive generation now retires the feed's prior health history,
+  event deduplication and freshness clocks before the next raw-message drain.
+  Pending `official_feed_at` is explicitly cleared even for an empty batch.
+  Profile transitions reuse the same reset operation. This prevents inferred
+  events and stale receipt freshness from spanning observed receive sessions.
+- Four regression methods: baseline **2 failures**. Author neighboring selection:
+  **85 passed**; independent selection: **34 passed**. These are different
+  selections and are not additive. The correction does not establish an atomic
+  transaction with callbacks already in flight or a globally atomic state reset.
+
+### Release ZIP publication
+
+- Local `bd171b9`; public `1a8797f`.
+- Source: [build_release.ps1](../../tools/build_release.ps1); regression:
+  [test_release_archive_publication.py](../../tests/test_release_archive_publication.py).
+- Previously the builder removed the old output and wrote the replacement ZIP
+  directly at its final path. Actual PowerShell execution of the original
+  publication block reproduced **4 failures, 0 errors**: missing or locked
+  source input left an incomplete ZIP at the final path and replaced existing
+  sentinel bytes.
+- The existing script now builds a unique sibling ZIP, then uses `File.Replace`
+  for an existing destination or `File.Move` for an absent destination. It marks
+  success only after publication returns. Temporary cleanup is best-effort.
+  Tests cover complete successful archives, failed creation, an injected replace
+  failure and a real directory-destination move failure.
+- Independent review rejected the first cleanup diagnostic: with
+  `WarningPreference=Stop`, a warning after injected deletion failure masked the
+  original creation exception. The added runtime regression failed once before
+  the correction. Explicit `-WarningAction Continue` now preserves the original
+  exception by reference while reporting the retained temporary archive.
+- Final author and independent focused selections each report **38 passed**;
+  these repeated selections are not 76 distinct tests. The harness parses and
+  executes only the production publication helper, never the full builder.
+- Runtime: official Microsoft PowerShell **7.4.11**, Linux x64 portable archive,
+  downloaded from the PowerShell project's GitHub release into scratch only.
+  SHA-256 `55c5429d32256fa0cec4c2529856679f684a41525d78071f78b0fbf1fc3d1f0a`
+  matched the official release's checksum file before execution. The harness
+  redirects runtime cache/config/data into temporary directories and requires
+  an entry marker so runtime startup failure cannot count as expected rejection.
+  No global installation, full Windows release, native Windows filesystem-lock
+  qualification, concurrent-publisher guarantee or crash-durability claim is made.
+
+This addendum changes documentation only and does not publish raw test logs.
+
+## Third repair stage: queued Qt exception counterevidence
+
+The bootstrap repair is local `77557f224ed2a1b0adda23c1c340372d39f2b6af`, public
+[328215e73a81a5d705848e03f0374ff02cc7755c](https://github.com/lulunomaro/polar-rm-client/commit/328215e73a81a5d705848e03f0374ff02cc7755c).
+Source: [verify_all.py](../../tools/verify_all.py), `execute_script`; regression:
+[test_verification_qt_exceptions.py](../../tests/test_verification_qt_exceptions.py).
+
+A real QObject signal delivered through `Qt.QueuedConnection` to a decorated
+slot can report an uncaught assertion through `sys.excepthook`, while unittest
+still prints `OK` and the child exits zero. The production bootstrap reproduced
+that false-PASS behavior. A separate QTimer Python-callable control propagated
+its exception to unittest normally; this finding is not a blanket claim about
+all Qt callbacks or evidence of hidden failures in historical runs.
+
+The child bootstrap now emits a newline-prefixed failure marker on an uncaught
+non-SystemExit hook invocation and delegates to the original hook to preserve
+the traceback. The hook remains installed through shutdown. It does not scan
+arbitrary traceback text, alter the production application's hook, or introduce
+an unraisable-exception policy. Scoped test handlers may explicitly capture and
+assert expected errors. Actual Qt `SystemExit(7)` still terminates the child
+with exit code 7 without a hook marker; nonzero-exit classification remains FAIL.
+
+Baseline: **2 failures, 0 errors** across six new methods. Independent focused
+verification: **57 passed**, comprising **6 Qt**, **7 existing thread** and
+**44 registry** methods. The real subprocess cases include healthy/caught-error
+callbacks, custom handler capture/restoration, uncaught queued assertions,
+unterminated stderr and SystemExit. No historical aggregate is reclassified
+solely because this new counterexample exists.
+
+### Integrated full-run status
+
+The integrated stage, also containing the separately documented H.264 HUD test,
+is local `4c63180c9c92c68c5f9252e2dcd1a2b70dfba5dc`, public
+[8c51d06fa8a2941322ea710c8efa08a2dbf9bfa0](https://github.com/lulunomaro/polar-rm-client/commit/8c51d06fa8a2941322ea710c8efa08a2dbf9bfa0),
+tree `dea2bf3cfd9ed523d28f24ec6b2a235dfe44e332` (parent-verified mapping).
+`client-renewed20h-full4/results.json` was independently verified as **completed:
+359 PASS, 12 SKIP, 5 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`), run ID
+`4e373a09ed304adaae9161e537ba2d7f`. This is an unsuccessful acceptance candidate,
+not a successful acceptance merely because FAIL is zero. Source-at-start records
+the exact local commit/tree above and `dirty: false`. Both declared source
+fingerprints contain **709 inputs**, SHA-256
+`e4798ca3fa70537a34633fb0367454fbb9dd2bf9f021da847c4151b9ecbefa89`;
+source stability is PASS under the previously stated scope/endpoint limitations.
+
+The extra INCOMPLETE is `tests/test_modal_input_epoch.py`: **300-second timeout;
+child tree stopped**. Retained local faulthandler logs show the main thread at
+`ui_audio.py:115`, `QSoundEffect.setSource`, through GUI-transition sound from
+`open_hero_deploy_interface`. Logs also report unavailable audio output and a
+PulseAudio connection failure after its runtime-directory creation failed on a
+read-only filesystem. The inherited `test_window_economy_commands.py` fixture
+assigned `ui_audio_enabled=False`, a flag not consumed by production audio code,
+allowing real native audio into
+an input-ownership test. Scoped fixture isolation is under repair. This stack
+observation does not establish the underlying native Qt cause or a historical
+Escape-menu root cause. Full4 logs remain local and are not uploaded.
+
+The preceding 358-PASS, 12-SKIP, 4-INCOMPLETE, 0-FAIL NO-GO run belongs to public
+`32da8ad` and remains separate from this newer unsuccessful candidate. H.264/HUD details remain in the
+[issue20 evidence report](issue20_legacy_video_evidence_20261018.md).
+Only documentation is changed by this report update; no raw logs are published.
+
+## Fifth full-run stage: fixture isolation and buy-grid category reuse
+
+### Input-fixture native audio isolation
+
+Local `11a26761afab65ce9326616443082da4a060c6e1`, public
+[c95649cf55d6d041b6cd9cec2843277f90815399](https://github.com/lulunomaro/polar-rm-client/commit/c95649cf55d6d041b6cd9cec2843277f90815399).
+Only test files change: the shared
+[test_window_economy_commands.py](../../tests/test_window_economy_commands.py)
+fixture and [test_input_fixture_audio_isolation.py](../../tests/test_input_fixture_audio_isolation.py).
+
+Before constructing the real window, the fixture replaces `ReliableAudioPool`
+preload/media-preload/play methods with inert call recorders. It retains the
+QObject pool and production feedback routing while removing native source
+loading/playback from these input tests. The ineffective `ui_audio_enabled`
+assignment is removed. Patches are registered for cleanup, including setup
+failure, so neighboring tests do not inherit this isolation.
+
+Independent verification: **32 focused methods passed**; safe baseline controls
+using mocked native constructors produced **2 failures, 0 errors**. These checks
+cover the intended boundary and normal/setup-failure restoration. This is a
+fixture-isolation repair, not a production audio fix or a diagnosis of the
+native backend's underlying stall. Full4's timeout evidence remains valid and
+separate.
+
+### Reuse existing ordered offer categories
+
+Local `80e71dd0f15db91dfecc6a0fe1646f65ff71a20a`, public
+[80a78695eb6d422dc81593759c71db69623c2e2f](https://github.com/lulunomaro/polar-rm-client/commit/80a78695eb6d422dc81593759c71db69623c2e2f).
+[cs2_buy_menu.py](../../rm_client/ui/cs2_buy_menu.py), `build_grid`, now constructs
+the existing ordered category lists once and reuses them for row counts and
+column rendering. The original filters/order are retained without adding a
+helper module or changing the category definition.
+
+[Category characterization](../../tests/test_buy_grid_category_characterization.py)
+compares the same **18 draw/interaction traces** against baseline `1fb3650`,
+whose actual module hash was verified. Candidate selection: **8 methods passed**;
+separate baseline validation: **1 method passed**. Order/grouping negative
+controls produced **12** and **15 failing outcomes**, respectively, with
+**0 errors**. These results substantiate this local behavior-preserving reuse;
+they establish neither a project-wide coupling reduction nor a performance
+score.
+
+### Completed fifth-stage integrated result
+
+The integrated source is local `80e71dd0f15db91dfecc6a0fe1646f65ff71a20a`, public
+`80a78695eb6d422dc81593759c71db69623c2e2f`, tree
+`702021b8362abf6162bd34b555ba4577b4929b2d` (parent-verified mapping).
+`client-renewed20h-full5/results.json` was independently verified as **completed:
+362 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`), run ID
+`99c6df2d7ce04152b37c369cc9612b08`. Source-at-start records the exact local
+commit/tree above and `dirty: false`. Both source endpoints contain **712 inputs**,
+SHA-256 `8b60aa16e38cf069ae0207694423aa166bc345cd027e8a8bbfc737a20d824c0c`;
+source stability is PASS under the previously stated scope/endpoint limitations.
+
+With the same 300-second child timeout, `tests/test_modal_input_epoch.py` passed
+**5 methods** in 1.501 seconds; it did not time out in this run. Full4's timeout
+is retained as a separate unsuccessful candidate. This result validates the
+scoped fixture isolation; it does not claim that a production native-audio hang
+was fixed. The four external/integration prerequisite suites remain incomplete,
+so full acceptance is still NO-GO. This update changes only documentation and
+publishes no raw logs.
+
+## Sixth full-run stage: GUI audio, fragment isolation and caption extraction
+
+### Respect GUI audio module activation
+
+Local `7e6404747e72c163da15d7a5a55d18c1d919d7e1`, public `bd1c520`.
+[config_actions_mixin.py](../../rm_client/ui/polar/mixins/config_actions_mixin.py)
+adds the missing module-enabled condition to normal GUI transition sound
+admission, alongside the existing setting check. Explicit previews and the
+self-disable acknowledgement retain their existing behavior. The
+[test_gui_audio_activation.py](../../tests/test_gui_audio_activation.py)
+regression has six new methods; baseline **1 failure, 0 errors**, independent
+focused selection **41 passed**. This is a specific activation-policy correction,
+not a claim to fix or explain the native audio stall observed in full4.
+
+### Reject impossible fragments before pressure eviction
+
+Local `683dc07fc34e3119b73513ba88ffd3fc6322490c`, public `4b10bf6`.
+[FrameAssembler](../../rm_client/transports.py) now rejects accumulated payload
+larger than the frame's declared total before admitting that fragment and
+potentially evicting unrelated frames. The malformed frame is still removed and
+counted; a valid sibling can survive and complete. The
+[test_frame_assembler_pressure_isolation.py](../../tests/test_frame_assembler_pressure_isolation.py)
+regression uses a **5-byte buffer budget**, avoiding giant allocations. Five new
+methods: baseline **1 failure, 0 errors**; independent focused selection
+**54 passed**. This preserves existing framing and does not establish a legacy
+receiver protocol or unlimited resilience to arbitrary traffic.
+
+### Extract diagnostic-caption priority without changing painting behavior
+
+Local `47a8be46cd88f0e351c0a8f926fca1af19b3e62e`, public
+`5008a8f235b0b1075191d08382dde7ac8ac7d3f3`.
+[module_list.py](../../rm_client/ui/polar/renderers/module_list.py) extracts one
+pure `_polar_link_caption` helper in the same module. It separates caption/tone
+selection from painting while retaining diagnostic priority and the order in
+which later tooltip-only errors occur.
+
+[test_rm_indicator_caption_contract.py](../../tests/test_rm_indicator_caption_contract.py)
+compares the frozen full-method fixture and candidate: **5 methods passed on
+each**. Author focused selection **60 passed**; independent selection **19 passed**,
+with different neighbors. Wrong-priority mutation produced **2 failures**;
+early-tooltip mutation produced **1 failure**. Evidence covers panel raster and
+recorded text commands, not native glyph appearance, GPU performance or a global
+coupling reduction. No helper module or new framework was introduced.
+
+### Completed sixth-stage integrated result
+
+The integrated source is local `47a8be46cd88f0e351c0a8f926fca1af19b3e62e`, public
+[5008a8f235b0b1075191d08382dde7ac8ac7d3f3](https://github.com/lulunomaro/polar-rm-client/commit/5008a8f235b0b1075191d08382dde7ac8ac7d3f3),
+tree `cd0b0a832f4ec3e9ff2d19b4c689a8b528ad9076` (parent-verified mapping).
+`client-renewed20h-full6/results.json` was independently verified as **completed:
+365 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`), run ID
+`9882f26f0d404472a821ef5844c859a9`. Source-at-start records the exact local
+commit/tree above and `dirty: false`. Both source endpoints contain **715 inputs**,
+SHA-256 `bd6f7d07f0957bbab44fcc3ca6b59acfda47dc3ab1f59acff48ea5916df20760`;
+source stability is PASS under the previously stated scope/endpoint limitations.
+No check reports a new timeout. The four prerequisite suites remain incomplete.
+
+The completed 362-PASS checkpoint remains the distinct fifth-stage result.
+Full4's timeout and full5's test-only isolation remain recorded above; this run
+does not establish resolution of an underlying production native-audio hang.
+This update changes only documentation and publishes no raw logs.
+
+## Provenance follow-up: internal fixture inputs
+
+Local `746c38a07382884147d745251caf941c46cae249`, public
+[633fd33fc6052bf46b01f71a2325d5e8856a770b](https://github.com/lulunomaro/polar-rm-client/commit/633fd33fc6052bf46b01f71a2325d5e8856a770b),
+tree `948917300944b64e325c1d3eb1cff3b71486e657` (parent-verified remote mapping).
+
+The old suffix-based scope omitted four consumed internal text fixture oracles:
+`angle_port_admission_baseline.txt`, `polar_health_baseline.txt`,
+`tactical_map_71ebb0f.py.txt` and `rm_indicators_caption_baseline.py.txt` under
+`tests/fixtures`. [verification_sources.py](../../tools/verification_sources.py)
+now fingerprints all regular files under that directory, regardless of suffix.
+Existing symlink rejection and hidden-directory/cache exclusions remain in place;
+metadata explicitly declares this broader internal-fixture scope. Assets outside
+that directory, external fixtures and installed packages remain outside scope,
+and start/end equality still cannot exclude restored transient changes.
+
+[test_verification_fixture_inputs.py](../../tests/test_verification_fixture_inputs.py)
+uses temporary trees to cover inclusion and add/change/rename/remove behavior,
+with rejection/exclusion controls. Baseline: **8 failing subcases across 4
+methods, 0 errors**. Independent focused verification: **30 methods passed**.
+No fixture oracle content was edited by this repair.
+
+This identifies an old measurement gap, not evidence that any historical oracle
+was mutated. The prior **715-input** result measures only its declared old scope;
+it must not be retroactively described as covering these text fixtures. The
+latest completed full run remains **365 PASS / 12 SKIP / 4 INCOMPLETE / 0 FAIL,
+NO-GO** at local `47a8be46` / public `5008a8f`. At the provenance-repair checkpoint no full aggregate had yet been established;
+the subsequently completed seventh-stage result below measures the expanded
+scope. Past results remain intact; this report update publishes no raw logs.
+
+## Seventh full-run candidate: callback epochs and bounded map diagnostic
+
+### Retire a drained event batch after callback epoch changes
+
+Local `eb75e0291e424e0edf62f55606937fc6d04f7cf3`, public
+[856db3e79aff8af52c3ef2e2871988d095158285](https://github.com/lulunomaro/polar-rm-client/commit/856db3e79aff8af52c3ef2e2871988d095158285),
+tree `3f3f7fc4df1278fdf5fed8d0e3cdc53fab8da6e6`.
+[video_backend_mixin.py](../../rm_client/ui/polar/mixins/video_backend_mixin.py)
+now synchronizes the official-feed receive generation around raw consumption
+and combat-event callbacks. If a synchronous callback switches endpoint/profile,
+the already-drained old batch is retired; a reentrant consumer's newer state is
+preserved. This establishes synchronous callback-reentry behavior, not atomic
+cancellation against arbitrary concurrent thread changes.
+
+[test_official_feed_callback_epoch.py](../../tests/test_official_feed_callback_epoch.py):
+baseline **3 failures, 0 errors across 4 methods**; independently verified
+focused selection **38 passed**. Scalar authority remains with decoded backend
+application; this does not grant raw events a new telemetry writer.
+
+### Reproducible tactical-map diagnostic, without a cache change
+
+Local `875f4f6f0f0533ae77014c0f120cf563d901b70f`, public
+[0d9161582b0a245c06ee5fadd067d95ec9aca682](https://github.com/lulunomaro/polar-rm-client/commit/0d9161582b0a245c06ee5fadd067d95ec9aca682),
+tree `b6a84410bbb0474694ea1cbca7902e27b40c95b2`.
+The [diagnostic script](../../tools/diagnostics/profile_tactical_map.py) reuses
+the actual-window test host and production map painter for four scenes, each
+with **48 frames** covering two transition cycles. Independent execution found
+matching corresponding raster pixels and hotspot traces. Details and timing
+limits are in the [architecture comparison report](same_metric_architecture_comparison_20261017.md).
+No production cache was changed; measured draw times are observations rather
+than performance thresholds or native GPU/FPS results.
+
+The script forces Qt offscreen. Its finite workload has no internal timeout:
+an external process watchdog is required to bound a hang. It inherits the host's
+partial-construction cleanup limitations, and Qt multimedia initialization may
+occur. No hardware stream, native display or historical-stutter root cause is
+established by this diagnostic.
+
+### Completed seventh-stage integrated result
+
+`client-renewed20h-full7/results.json` was independently verified as **completed:
+367 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`), run ID
+`84446a49f66341f6ab5373fec96a1a67`. Source-at-start is the exact local
+`875f4f6f0f0533ae77014c0f120cf563d901b70f` / tree
+`b6a84410bbb0474694ea1cbca7902e27b40c95b2` stage, public `0d916158` above.
+Provenance records **dirty: true**; the parent identified this renewed report as
+the only dirty file at start. It is not a clean-full-worktree claim.
+
+Source stability is PASS with **722 declared inputs** at both endpoints and
+SHA-256 `79b5657b0893577a4e00a7199fd074972b71947fc117586db465721ae7812c07`.
+This run explicitly includes all internal `tests/fixtures` regular files under
+the expanded scope, retaining hidden/cache exclusions and the documented
+external-assets/packages/transient-edit limitations. Earlier 715-input evidence
+retains its old scope; no historical coverage is rewritten.
+
+A separate edge where a callback changes endpoint and then raises is under
+reproduction. This completed run does not establish that edge as repaired or
+exhaustively validate callback reentry. Prior results remain separate. Only this
+document is updated; no raw logs are published.
+
+## Eighth full-run candidate: callback raises after changing epoch
+
+The follow-up identified after full7 is repaired at local
+`17510e2478cc475bb83d462ea2a2cde403d92583`, public
+[415ed09abb32090c5eb34c7b49649f111d406afb](https://github.com/lulunomaro/polar-rm-client/commit/415ed09abb32090c5eb34c7b49649f111d406afb),
+tree `56f7c77a8640a0a299730d4debb0e6bdf72da35b` (parent-verified mapping).
+The same [video backend mixin](../../rm_client/ui/polar/mixins/video_backend_mixin.py)
+now synchronizes the receive epoch in `finally` around each combat-event callback.
+A callback that switches endpoint and raises can no longer skip receipt/history
+retirement before the next tick stage applies state. The original callback
+exception still propagates to the existing stage runner; newer history produced
+by a nested consumer is preserved.
+
+The expanded [callback regression](../../tests/test_official_feed_callback_epoch.py)
+uses the actual `TickStageRunner` boundary. Baseline: **2 failures, 0 errors
+across 6 methods**; independent focused selection **40 passed**. This is the
+bounded exception path missing from the earlier synchronous-reentry repair,
+not a claim of atomic cancellation across arbitrary concurrent threads.
+
+Full8, `client-renewed20h-full8/results.json`, was independently verified as
+**completed: 367 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `b47f401033f04462bf0cf9071367a183`. Source-at-start records the exact local
+`17510e2478cc475bb83d462ea2a2cde403d92583` / tree
+`56f7c77a8640a0a299730d4debb0e6bdf72da35b` stage above and `dirty: false`.
+Expanded-scope source stability passed with **722 inputs** at both endpoints,
+SHA-256 `55846af2322d5fe4c10d2ba4d4f04797f2b278379ce2c1d4a35f73d577eb5632`.
+The same internal-fixture inclusion, exclusions and endpoint limitations apply.
+
+The prior identically counted full7 result belongs to local `875f4f6` and remains
+separate; equal counts do not mean equal source or coverage. This completed run
+covers the bounded exception-path repair, while the four prerequisite suites
+still prevent a complete GO. No raw logs are published, and this update changes
+only documentation.
+
+## Ninth full-run candidate: settings factory failure cleanup
+
+This section is reconstructed from retained findings after the cloud workspace
+reset. The original uncommitted ninth-stage report text and local raw logs were
+lost; this is a disclosed summary, not a recovery of those exact bytes.
+
+The settings-factory repair was already pushed and is restored at public
+[c83c8b94a77120e585bf73b8c677ba2e7c282af2](https://github.com/lulunomaro/polar-rm-client/commit/c83c8b94a77120e585bf73b8c677ba2e7c282af2),
+tree `b9de9c287c004cc499beaa74a2a12134b5af3599`. Its earlier local commit
+`47696619dea44da7634d3d4503b3ba864f96ae0a` is a historical provenance reference;
+it is not assumed to exist as an object in the restored clone.
+
+`rm_client/ui/cs2_settings_center.py` guards setup after acquiring the
+factory-created `JelloDialog`. If subsequent setup raises, it cancels acquired
+page builders, schedules the acquired dialog for deletion with `deleteLater()`,
+and preserves the original exception. Tests preserve host-owned sibling dialogs
+and the successful construction path. Failure inside the initial `JelloDialog`
+constructor, before the factory acquires the dialog, remains outside this repair.
+
+The actual-Qt baseline reproduced retained dialogs increasing from one to two
+on repeated failures. The three methods in
+`tests/test_settings_factory_failure_cleanup.py` produced **5 FAIL / 0 ERROR**
+baseline outcomes. The author's focused selection passed **77** methods;
+independent review passed **68** in a different selection. These are retained
+pre-reset findings, not reruns in the restored workspace, and the selections
+must not be added as distinct-test counts.
+
+### Interrupted ninth-stage aggregate and recovery boundary
+
+The root runner started full9 at **09:14:45 UTC** from a clean worktree at the
+settings-factory checkpoint. Cloud shell transport disconnected during that run.
+Recovery checks confirmed the old repository/results were absent and no
+`verify_all` process remained. **No completed full9 result was recovered or is
+claimed.** Its output directory was `client-renewed20h-full9`; the lost run must
+not be assigned a passing aggregate score.
+
+The published full8 summary above remains the latest verified completed result:
+**367 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO**, at its separately identified
+source and run ID. Its original local raw results/logs were also lost in this
+reset. The historical verification is retained as published evidence, not
+represented as freshly reverified against locally available raw files.
+
+The restored clone's public commit and tree match the pushed settings-factory
+checkpoint. A replacement aggregate requires a new run with its own run ID and
+fresh provenance after environment restoration; it cannot be treated as a
+continuation or completion of the lost full9. No tests were launched for this
+documentation reconstruction and no raw logs are uploaded.
+
+### Completed recovery run, distinct from interrupted full9
+
+After environment restoration, `client-renewed20h-full9-recovery/results.json`
+was independently read and verified as **completed: 368 PASS, 12 SKIP,
+4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`). This is a new run, ID
+`b5096814df534faa8506eadddcb8da37`, started **2026-10-18 09:20:11 UTC**;
+it does not supply a result for the interrupted full9.
+
+Provenance records local `21e2fb323319e1ed5380c259757eec170f17dfb2`, tree
+`ec5c9c6a2e457147fa674316d34c68ae0befe5f9`, and `dirty: false` at start.
+The parent-verified corresponding public checkpoint is
+[0d0b35dcd3cbec4909147b3f7283ac5b17aecc93](https://github.com/lulunomaro/polar-rm-client/commit/0d0b35dcd3cbec4909147b3f7283ac5b17aecc93).
+Declared source stability passed with **723 inputs** at both endpoints and
+SHA-256 `76ed9b5b98d15c0ef143f7f0b732fbd2fd21ea17b3a28efbd5d3ee0587bf7bbe`.
+The expanded internal-fixture scope and endpoint limitations remain unchanged:
+external fixtures, installed packages, assets outside the fixture directory,
+and transient edits restored between captures are outside this comparison.
+
+This recovery result is the latest verified completed offline aggregate. The
+four incomplete prerequisite checks still prevent GO; offline success does not
+qualify physical hardware. Fresh recovery results/logs are available locally;
+this does not recover any earlier raw evidence lost in the reset. All preceding
+loss disclosures and historical run distinctions remain in force. No raw logs
+are uploaded by this documentation update.
+
+## Tenth full-run candidate: shared selection policies
+
+Two behavior-preserving policy consolidations are frozen at local
+`d23443a224672e3ac05b34d15394d14525c33eea`, public
+[c9180595ddbdd6ec8a17012b35a62328ae1d762d](https://github.com/lulunomaro/polar-rm-client/commit/c9180595ddbdd6ec8a17012b35a62328ae1d762d),
+tree `695e8b9e2d1d2b1bccb8805439b134350b71b26d` (parent-verified mapping).
+Each helper remains in its existing module; no imports or helper modules were
+added. These are characterized consolidations, with no claim of a repaired
+behavioral defect, performance improvement or global coupling reduction.
+
+- `InputDispatchMixin._enabled_overlay_binding_matches` replaces five repeated
+  checks in `rm_client/ui/polar/mixins/input_dispatch_mixin.py`. Module presence,
+  enabled state, the `"None"` binding sentinel and the existing matcher retain
+  their short-circuit order. The two methods in
+  `tests/test_enabled_overlay_binding_contract.py` passed on both baseline and
+  candidate. Independent focused review passed **40** methods. Removing the
+  enabled guard produced **31 failure outcomes, 0 errors** in the mutation check.
+- `BackendManager._native_video_selected` in `rm_client/backend/manager.py`
+  serves decoder recovery and chunk admission. Each caller explicitly supplies
+  its authoritative state: recovery uses `self.state`, while chunk application
+  uses its supplied state, which may be a different object. Source aliases and
+  exact `deploy_mode == 1` selection are retained. The five methods in
+  `tests/test_native_video_activation.py` passed on the baseline; independent
+  candidate review passed **50** focused methods. Mutating the mode condition
+  to `>= 1` produced **8 failure outcomes, 0 errors**.
+
+Full10, `client-renewed20h-full10/results.json`, was independently read and
+verified as **completed: 370 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO**
+(`passed: false`), run ID `df060d09f95d431eb3ee76d49ad04177`. The root started
+this run at **2026-10-18 09:34:40 UTC**. Provenance records the exact local
+`d23443a224672e3ac05b34d15394d14525c33eea` / tree
+`695e8b9e2d1d2b1bccb8805439b134350b71b26d` checkpoint above and `dirty: false`
+at start. Declared source stability passed with **725 inputs** at both endpoints,
+SHA-256 `9c76ffca46b0eadde71db4e29e79db76ef925ae83670b32b2455153ced07cf66`.
+The same expanded internal-fixture scope and endpoint limitations apply.
+
+This is the latest verified completed offline aggregate; the four incomplete
+prerequisite checks still prevent GO. The earlier completed recovery run remains
+separate, including its 723-input fingerprint and 368/12/4/0 NO-GO result.
+No hardware qualification or exhaustive defect coverage follows from these
+counts. This update publishes only the textual evidence summary; raw logs are
+not uploaded.
+
+## Eleventh integrated result: issue-family repairs
+
+The [issue-family audit](issue_family_audit_20261018.md) records the video
+evidence, UI repeated-input/nested-factory, and installer lexical-validation
+repair families, including focused regressions, counterevidence and limits.
+Their integrated checkpoint is local `b45d429b9e410109d227ac28b50a3c0294c84599`,
+public [62c31466b08e4a7d2930b4b07312e08b2742f228](https://github.com/lulunomaro/polar-rm-client/commit/62c31466b08e4a7d2930b4b07312e08b2742f228),
+tree `a709a945e96773ba8ef24fe8a068892b1ae3218e` (parent-verified mapping).
+
+`client-renewed20h-full11/results.json` was independently read and verified as
+**completed: 374 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `7fcbdb0e44a7401ebd911841f636691d`. Source-at-start matches the local
+commit and tree above. Provenance records **dirty: true**; the parent identified
+only the issue-audit document as dirty at start. This is not a clean-worktree
+claim. Declared source stability passed with **729 inputs** at both endpoints,
+SHA-256 `1ebbbe27a4d0bad6eaa2809619fcb70d01517f1b7844f5d4f9f597833a629b43`.
+The previously stated fingerprint scope, exclusions and endpoint limitations
+continue to apply.
+
+This supersedes full10 only as the latest completed offline aggregate. Earlier
+runs, interrupted-run history and raw-evidence loss disclosures remain intact.
+The four incomplete prerequisites still prevent GO; the aggregate does not
+establish native hardware qualification, exhaustive defect coverage or closure
+of the GitHub issues. No raw logs are published by this report update.
+
+## Twelfth integrated result: second UI repair stage
+
+The [issue-family audit's second UI supplement](issue_family_audit_20261018.md#第二次-ui-补充旧弹出操作与启动确认)
+records stale keyboard Add/Remove actions, nested-modal repaint and
+`BindingPicker` cleanup, plus startup confirmation Return/Enter and mapped
+numeric-key auto-repeat handling. Independent focused review passed **91**
+methods; the baseline produced **33 failure outcomes across 19 methods**.
+The initial candidate's nested-modal gap remains documented in that audit.
+
+Integrated source: local `6a802d5c73be8585a0f814997edd38cc8d81243a`, public
+[863954d30aa841058a073d2c0020d1468e20ebaf](https://github.com/lulunomaro/polar-rm-client/commit/863954d30aa841058a073d2c0020d1468e20ebaf),
+tree `5c24ec773655f730f63892ee48477640bfc8771f` (parent-verified mapping).
+`client-renewed20h-full12/results.json` was independently read and verified as
+**completed: 376 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `9c2130f8c2084ceba8f4d8e6023a65d1`. Source-at-start matches this local
+commit and tree, with `dirty: false`. Declared source stability passed with
+**731 inputs** at both endpoints and SHA-256
+`60b1df8c68fe76765d0e0db3319a0773a1b48ff11651e90ce343b4003ebcf64e`.
+The previously documented scope, exclusions and endpoint limitations apply.
+
+This is the latest completed offline aggregate. Earlier stage results and loss
+disclosures are preserved. Four incomplete prerequisites still prevent GO;
+these results do not establish native hardware qualification or exhaustive
+issue closure. This update publishes no raw logs.
+
+
+## Thirteenth-stage recovery result: angle receipt boundary
+
+The [issue-family audit](issue_family_audit_20261018.md#角度接收边界补充延迟读取与授权代际)
+records the controller-angle read-start receipt time, arm-generation and partial
+frame retirement repair. Its local-read bound does not recover hardware sample
+time or establish the age of bytes already queued in OS buffers.
+
+The original full13, run `0d123dd22d4342eea7894821c91320e0`, remained incomplete
+after the environment transition; its partial files are preserved. The distinct
+`client-renewed20h-full13-recovery/results.json` was independently read and
+verified as **completed: 377 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO**
+(`passed: false`), run ID `109252f3f53e4ee6b7afdcadcbc264ee`. This does not
+retroactively pass the interrupted run.
+
+Recovery provenance matches local `3970e7f8ce2b7d4eceec2216ffd1cac7b8065ab9`,
+public [1ec12135bfc40576d2e15aaaa97d3e909e3e5a5f](https://github.com/lulunomaro/polar-rm-client/commit/1ec12135bfc40576d2e15aaaa97d3e909e3e5a5f),
+tree `09e3660966d6a60919a9bdeadae80e6d193d0d17` (parent-verified public mapping).
+It records **dirty: true**; the parent identified only the issue-audit document
+as dirty at start. Declared source stability passed with **732 inputs** at both
+endpoints and SHA-256
+`d86522325be259656961ba6acac5e25967d71fa4ef20db126f6b6bad4572e096`.
+Existing fingerprint scope and endpoint limitations apply.
+
+This is the latest completed offline aggregate. Earlier results and evidence
+loss disclosures remain distinct. Four incomplete prerequisites still prevent
+GO; physical-link safety and hardware qualification remain outstanding. No raw
+logs are published by this documentation update.
+
+## Fourteenth full-run candidate: tool output hygiene
+
+The scoped tool repair is local `689f2e175c994ab1352bc7816fca56377113cc2e`, public
+[210f5a60223b28d45514f9177da04a281d6e88c9](https://github.com/lulunomaro/polar-rm-client/commit/210f5a60223b28d45514f9177da04a281d6e88c9),
+tree `8838f18a4e971d0efd1bde9403e37eb8dd745195` (parent-verified mapping).
+`tools/dt7_link/test_dt7_link.py` uses `TemporaryDirectory` for its temporary
+configs instead of fixed filenames, preserving pre-existing sentinel files.
+`tools/economy_live_capture.py` defers output-directory creation until use and
+selects an OS-appropriate output path, avoiding import-time directory creation.
+Repository configs were not changed.
+
+Independent review passed the **6 methods** in
+`tests/test_tool_output_hygiene.py`; the baseline produced **12 failure outcomes,
+0 errors across those 6 methods**. Checks include cleanup after a write followed
+by `OSError` or `KeyboardInterrupt`. The extracted DT7 profile's 10 assertions
+and mouse check's 8 assertions remain unchanged. Separately, the author reported
+**116 DT7 CLI checks with 2 external prerequisites missing, INCOMPLETE**; that
+CLI result is not presented as an independent review pass or external validation.
+
+The bounded hygiene audit reported **4,129 tracked files**, with no accidental
+runtime files identified. Its **2,366 tracked files matching ignore rules** were
+historical `docs/evidence` material and remain preserved. No blanket deletion
+or ignore-rule expansion accompanies this repair.
+
+Full14, `client-renewed20h-full14/results.json`, was independently read and
+verified as **completed: 378 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO**
+(`passed: false`), run ID `4f398ad92b8e4e38ba762080d5a7d8b0`. The root started
+this run at **2026-10-18 11:13:27 UTC**. Provenance matches the exact local
+`689f2e175c994ab1352bc7816fca56377113cc2e` / tree
+`8838f18a4e971d0efd1bde9403e37eb8dd745195` checkpoint above and records
+`dirty: false` at start. Declared source stability passed with **733 inputs**
+at both endpoints and SHA-256
+`96353d352a83e642da6f8cb9041305ef307bf8b036e578ee43e57b822b1eda2d`.
+The existing fingerprint scope, exclusions and endpoint limitations apply.
+
+This is the latest completed offline aggregate. Four incomplete prerequisites
+still prevent GO; external-reference and hardware qualification gaps remain.
+The earlier 377/12/4/0 recovery result belongs to public `1ec12135`; historical
+failed/interrupted runs and evidence-loss disclosures remain preserved. This
+documentation update changes no source and publishes no raw logs.
+
+## Fifteenth full-run candidate: motion evidence owner reset
+
+Source: local `0de5e521c21e383a0dafb17f508babc7aab0486c`, public
+[1b5e962e3950d874c171b64601445e9ff4c3b73a](https://github.com/lulunomaro/polar-rm-client/commit/1b5e962e3950d874c171b64601445e9ff4c3b73a),
+tree `437b72ede643fe376a807c3108917cd4323f6a8b` (parent-verified mapping).
+The existing `PolarMotionVerifier` in `rm_client/backend/polar_bridge.py` now
+owns a `reset()` operation for all its motion history, retaining its injected
+clock. `BackendManager` replaces five partial field writes with that operation
+and invokes it at three bridge-epoch boundaries. No production module was added;
+this local ownership repair makes no global fanout-reduction claim.
+
+The initial eight methods in `tests/test_polar_motion_epoch.py` produced
+**7 FAIL / 0 ERROR** against the baseline. The final nine-method regression
+passed; independent review passed **95 focused methods**, with **14 historical
+assertions/probes** also passing. These selections are not additive distinct-test
+counts. Two narrow fixture updates in `test_projectile_counter_baselines.py`
+and `test_transport_safety_regressions.py` retained their checks and incorporated
+the reset-order contract. The review packet remains local; raw evidence is not
+uploaded by this report.
+
+Full15, `client-renewed20h-full15/results.json`, was independently read and
+verified as **completed with a failure: 378 PASS, 12 SKIP, 4 INCOMPLETE,
+1 FAIL; NO-GO** (`passed: false`), run ID
+`80e2c7d449a34cf1a81ea548483daf72`. The root started the run at
+**2026-10-18 11:31:38 UTC**. Provenance records the exact local
+`0de5e521c21e383a0dafb17f508babc7aab0486c` / tree
+`437b72ede643fe376a807c3108917cd4323f6a8b` checkpoint above and `dirty: false`.
+Declared source stability passed with **734 inputs** at both endpoints and
+SHA-256 `e99d14f1f2043145356fa36177daf1ee1ba0df0094febba989a894ea0d9eeeb7`.
+Existing scope and endpoint limitations apply.
+
+The failing suite is `tests/test_fullscreen_input_extended.py`: 12 methods ran,
+with one failure in
+`test_lazy_page_f11_nested_modal_f12_and_cancel_preserve_safety`. At line 116,
+the assertion requiring `slices > 0` received zero. This is a failed integrated
+candidate despite the focused motion checks passing. Diagnosis is in progress;
+no root cause, retry pass or weakened threshold is asserted here.
+
+Full14's 378 PASS / 12 SKIP / 4 INCOMPLETE / 0 FAIL at public `210f5a60` remains
+the last completed aggregate without a FAIL, on its own earlier source. It
+still carries NO-GO for the external prerequisites and cannot qualify this
+new candidate. Historical failures and interruptions are preserved. This update
+changes only documentation and uploads no raw logs.
+
+## Follow-up candidates after full15 failure
+
+### Separate motion defect: idle time consumed the STUCK budget
+
+A separately reproduced defect in `PolarMotionVerifier` started or advanced the
+missing-feedback motion timer without first testing the existing `trying`
+predicate. With a live link and zero commanded velocity, elapsed idle time could
+therefore produce `STUCK`; a later movement could inherit that elapsed budget.
+The actual manager-tick regression also covers disabled drive publishing zero
+velocity. These are inert software checks, not physical motion measurements.
+
+The scoped candidate in `rm_client/backend/polar_bridge.py` clears
+`_moving_since` when `trying` is false, retaining idle `NO_FEEDBACK` and existing
+start/advance behavior for real attempts. Thresholds, timeouts, authority gates
+and position-relock behavior are unchanged. The new
+`tests/test_polar_motion_idle_budget.py` contains nine methods. The author's
+baseline recorded **9 failure outcomes, 0 errors across 9 methods** (six affected
+methods, including subcases, and three passing positive controls); the author's
+focused selection passed **70 methods**. The baseline checkout was the docs-only
+successor `87faa70d29801add86ffac89b2b15c30833f7c50`; the review packet reports
+byte-identical verifier source against full15's `0de5e521` as well. Independent
+review confirmed that exact checkout and both baseline blobs match Git blob
+`3659a28afdcda79d7e67d552e7bdda18b3ac056c`, reproduced the unchanged baseline
+outcomes, and accepted the candidate with **70 focused methods PASS**, no errors
+or skips. An existing historical verifier function's **14 assertions** and
+strict-timeout, zero-origin and rotation release/repress probes also passed.
+Mutations retaining the timer across release and ignoring angular attempts each
+produced **2 failure outcomes, 0 errors**. These overlapping selections are not
+added into a distinct-test count. Accepted source SHA-256:
+`3f354ac7b473624cbd455805959aadd9e00f5e52c9abd2683e76d49589bb2730`;
+new test SHA-256:
+`f85d2f0d65e92ca8a334c184431cccc4678227a8263ebf499a43ada29b7bb48a`.
+No new aggregate result is claimed for this candidate.
+
+### Lazy fullscreen synchronization diagnosis and pending test repair
+
+The retained diagnosis uses the unchanged original test method and production
+sources. An external wrapper queued one inert 60 ms GUI callback before its
+existing fixed 30 ms wait. **Three of three paired delayed-event trials failed**
+at the original `slices > 0` assertion. At failure, the panel and page were
+visible, entrance animation finished, and the active builder timer was overdue,
+yet no slice had run. An additional event-loop turn dispatched the real callback;
+that observation did not reclassify the failed trial as a pass.
+
+With the same delay, bounded polling for actual visibility and the first real
+slice yielded **three of three paired passes**. The intermediate `slices > 0`
+and `ready == False` checks, F11/F12, nested-modal, neutral-input, no-autosave and
+cancellation assertions were retained. This supports a bounded synchronization
+repair in the test; it is not a UI timing/performance qualification. The test
+repair was still pending acceptance at this diagnostic checkpoint; subsequent
+acceptance and integrated results are recorded below.
+
+The original full15 did not capture these timer/visibility diagnostics, so its
+exact causal delay cannot be established retroactively. Its failed aggregate
+remains unchanged and published at
+[010ba98bc219a69fc74caa88b647792cc265b2d1](https://github.com/lulunomaro/polar-rm-client/commit/010ba98bc219a69fc74caa88b647792cc265b2d1).
+Neither the separate motion repair nor the paired diagnostic trials erase it.
+Only this textual report is updated; the local review packets and raw logs are
+not uploaded.
+
+### Accepted test-only synchronization repair after paired diagnosis
+
+Independent review accepted the frozen fullscreen test SHA-256
+`a3f13e2f576b83d0026127de16db6547501a4329f69dd46c44ef7e272e193648`.
+Bounded condition waits observe entrance completion and the first actual build
+slice, while preserving `ready == False`. The original safety scenario is shared
+with a delayed-event variant; a real Qt callback activates the production timer
+and remains busy for 60 ms before yielding. No production scheduler changes.
+
+Author runs passed all 13 methods at each DPR 1, 1.25, 1.5, 2 and 2.5 (65
+executions, not 65 unique methods). Independent runs passed 13 methods at DPR 1
+and 2.5. AST review confirmed the original first-slice assertion and all 22
+subsequent safety statements remain unchanged, as do the other original methods.
+Independent negative controls fail for stalled timers, construction errors,
+cancellation and premature readiness. The reviewer also reproduced the original
+fixed-wait failure from `0de5e521`, including an active overdue timer and zero
+slices, then observed a real slice on a subsequent event turn. That failed trial
+remains a failure. Full15's exact original delay remains unproven; these focused
+results do not replace its failed aggregate or qualify native presentation.
+
+The separate idle-budget source is published at
+`c1f10208eda6cddce504340f3af525710c23d709` (local `cc19379e442a2d3607bfa180dbf02930bdbae108`,
+tree `8c677d18b723b838530ce0d9dc7432a8af4c1a91`). The combined accepted source
+and test repair was subsequently tested in full16 below. No raw logs are included.
+
+### Completed sixteenth integrated result
+
+`client-renewed20h-full16/results.json` was independently read and verified as
+**completed: 380 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `a36e52193ccc44f9b8425b65b584b904`. Exact source: local
+`59fccabbe5d1ef5458ead95db227e0beefdf5083`, public
+[358920a40ea0fb74335be2695a551dffa0e6448d](https://github.com/lulunomaro/polar-rm-client/commit/358920a40ea0fb74335be2695a551dffa0e6448d),
+tree `1a84932d774c6ccf3753e1a247c581bfb9f69a93` (parent-verified public mapping).
+Provenance records `dirty: false` at start. Declared source stability passed with
+**735 inputs** at both endpoints and SHA-256
+`39a607e09f6d85f0176f08e4e5e726736d5ebba10e625c52a80fd88d93abb165`.
+The existing fingerprint scope, exclusions and endpoint limitations apply.
+
+The aggregate explicitly records `test_fullscreen_input_extended.py` **13 methods
+PASS** and `test_polar_motion_idle_budget.py` **9 methods PASS**. These results
+belong to this frozen source. An analogous test patch applied after this run is
+not qualified by full16. Full15's original failure remains counterevidence;
+its precise environmental cause is still unknown and is not retroactively
+resolved by this passing aggregate.
+
+Full16 is the latest completed offline aggregate. The four incomplete
+prerequisites still prevent GO; hardware and native-display qualification gaps
+remain. This report update changes no source and uploads no raw logs.
+
+## Analogous lazy-settings coverage repair: candidate evidence
+
+The follow-on audit of `test_settings_cold_start.py` and
+`test_lazy_settings_state.py` reproduced one fixed-35-ms assertion race and four
+coverage gaps: under a queued inert 60 ms callback, tests naming mid-build
+pause/search/cancellation could pass with zero slices and zero controls. Their
+later completed-state assertions remained useful. This establishes test setup
+and intermediate-state coverage deficiencies, not broken production behavior.
+
+The candidate changes only these two test files and their existing shared
+`test_cs2_settings_center.py` helper. A bounded `partial_page` barrier observes
+real entrance completion and real Qt-created controls, with positive slices,
+active uncancelled/error-free construction and `ready == False`. It does not
+call the builder manually or fabricate a populated page. Static review approved
+preservation of all original assertions, the four-steps-per-turn and explicit
+stage-yield budgets, final `slices > 15`, and post-pause/cancel quiet windows.
+A delayed-event variant exercises the same real timer path.
+
+Author runtime evidence records **48 tests PASS**, plus **30 scenario executions**
+across DPR 1, 1.25, 1.5, 2 and 2.5. These are overlapping selections, not 78 unique
+methods. The inspected state summary contains **40 checkpoints**, each with
+**1–2 real controls, exactly 1 slice, active construction and `ready == False`**.
+Four external negative controls reject stopped timers, construction errors,
+cancellation and premature readiness, with bounded diagnostic failures.
+
+The first applied cold-start invocation failed at import because its `PYTHONPATH`
+setup was missing; that setup error is retained separately from the later
+correctly configured runtime evidence. The earlier `TEST_PLAN.md` describes the
+pre-application stage; subsequent runtime JSON and logs supply the results above.
+Independent runtime review is still pending. No production/performance fix or
+new full qualification is claimed: full16 predates this patch and remains tied
+to its own source. Full15's failed run and its original causal uncertainty remain
+unchanged. Only this report is edited; raw logs are not uploaded.
+
+Independent runtime review subsequently accepted this frozen three-test-file
+candidate. It ran 9 selected methods at each DPR 1 and 2.5: **18 executions
+PASS**, zero errors/skips. Sixteen captured checkpoints had 1–2 constructed
+controls, exactly one slice, visible/active builders and timers, no error or
+cancellation, and `ready == False`. These include delayed-event coverage and
+all close/reject/accept variants. Existing F12, no-autosave/no-arm, final
+>15-slice, four-step and explicit-stage-yield assertions passed. Four independent
+negative controls rejected stalled construction, a real generator exception,
+cancellation and premature readiness; the stalled case failed near 1.005 seconds.
+The reviewer did not rerun the author's full 48+30 executions; counts overlap
+and are not aggregated into unique coverage. Candidate hashes and diff checks
+matched. A full aggregate on this changed source remains pending.
+
+### Seventeenth integrated result: failed candidate
+
+`client-renewed20h-full17/results.json` was independently read and verified as
+**completed with a failure: 379 PASS, 12 SKIP, 4 INCOMPLETE, 1 FAIL; NO-GO**
+(`passed: false`), run ID `e4ac0881ab634d9d8171359a15e9af52`. Source-at-start is
+local `0e5964e6fb7f32f43f1ac57e75fb8d19b516aa67`, public `c14e551`
+(parent-verified mapping), tree `f88346131ab815380cc8df1c1c931e3b9eb90835`,
+with `dirty: false`. Declared source stability passed with **735 inputs** at
+both endpoints and SHA-256
+`8780de7ad2d25b2cb7cb2c7670c9a80825fe67d3cb18bfa731851715dcf24549`.
+The existing fingerprint scope and endpoint limitations apply.
+
+`tests/test_jello_settings_keyboard.py` ran **15 methods with 1 failure**.
+In `test_jello_checkbox_90_70ms_color_and_rounding`, line 154 performed
+`QTest.qWait(120)` and then required `box.motion.progress == 1`; the observed
+value was **0.9999937555524715**. Diagnosis is ongoing. No cause, repaired
+behavior or passing retry is inferred from the proximity of that value to one,
+and the failed assertion is not weakened or reclassified here.
+
+Full16 remains the prior zero-FAIL aggregate, **380/12/4/0 NO-GO**, on its
+separately identified public `358920a4` source. It cannot qualify the newer
+full17 candidate. This new failure and full15's counterevidence are retained;
+external prerequisites and hardware gaps remain. Only documentation is updated,
+and no raw logs are uploaded.
+
+## Pending-divergence epoch ownership: integrated candidate
+
+A separate deterministic reproduction at local
+`0e5964e6fb7f32f43f1ac57e75fb8d19b516aa67` showed that the arbiter's pending
+divergence timestamp survived transport-epoch retirement. The first fresh joint
+feedback after a boundary could therefore immediately enter `LOCKOUT` using
+elapsed time from the old epoch. Identical external baseline/candidate tests
+produced **9 assertion-failure outcomes, 0 errors across 11 baseline methods**
+(seven affected methods, including boundary subcases, and four positive methods)
+versus **11 candidate methods PASS**. Independent external review verified the
+saved source against that exact commit and replayed both outcomes, plus **14
+historical authority/slew/lockout assertions** and additional convergence probes.
+
+The seven added production lines give the existing `PolarControlArbiter` an
+owner method clearing only `_divergent_since`, called at the three existing
+manager bridge-epoch boundaries. Established endpoint/reconnect/reconfigure/
+shutdown `LOCKOUT`, command slew references, settings and clock remain intact;
+scenario reset retains its existing explicit-clear behavior. No generic reset
+framework or new production module is introduced. This repairs old-epoch timer
+reuse; safe re-anchoring to a newly connected robot and same-epoch observation
+or disabled-planning gaps remain outside its contract.
+
+Subsequent integrated author evidence records **131 focused methods PASS**, API
+freeze PASS and static quality gates PASS. Independent integration review subsequently passed the same **131 methods**
+with no failures, errors or skips, verified all five frozen hashes before and
+after, and confirmed preserved fixture assertions plus strengthened reset order.
+API/static/bridge logs were inspected by that reviewer, not rerun. The published
+checkpoint is public `1e9171c32f626c19779e62e9a0f67259b761a8f3`, local
+`f59490eea6afe2a18d25944f74eae42f5ad5d7c7`, tree
+`0e59c0d4d311a9fd60ba122f988a17bc06bcdce1` (parent-verified mapping).
+The external-only README and review describe their earlier stage;
+the separate integrated logs supply these later author results. Initial harness
+errors from calling nonexistent `ingest` were retained separately and corrected
+to the real bridge `apply` API before the reported baseline/candidate evidence;
+they are not product failures.
+
+No aggregate qualification is claimed for this integrated candidate. Full17's
+Jello assertion failure remains unresolved counterevidence, and the other Jello
+candidate under diagnosis is not accepted by these arbiter checks. Earlier
+failed runs and full16's source-specific result are preserved. Only this report
+is edited, and no raw review packets or logs are uploaded.
+
+Final integrated independent review accepted the frozen five-file arbiter
+candidate: the exact 131-method focused selection passed with zero failures,
+errors or skips. Source hashes matched before/after and production bytes matched
+the separately reviewed external candidate. The new regression class differs
+only by standalone import bootstrap; both fixture changes preserve prior
+assertions and extend reset ordering to include divergence invalidation.
+No re-anchoring or same-epoch observation-gap claim is made. Aggregate pending.
+
+
+## Jello animation endpoint: production candidate
+
+A real timer-callback reproduction demonstrated that the epsilon-based
+`JelloReversibleAnimation.active()` could stop its consumer before `update()`
+reached the exact endpoint. It reproduced full17's observed forward progress
+**0.9999937555524715**, which remained unchanged after another 250 ms; reverse
+motion reproduced the corresponding failure to reach zero. This establishes a
+production mechanism capable of the recorded symptom, while preserving the
+original full17 failure and its missing historical callback trace.
+
+The production change is limited to `active()` returning
+`self.progress != self.target`. `update()` already clamps to the exact target;
+its arithmetic, animation durations and original keyboard-test assertions are
+unchanged. Nine new endpoint methods exercise the repair. Independent review
+passed **24 methods** (the nine new methods plus the unchanged fifteen keyboard
+methods). Restoring the old epsilon produced **21 assertion-failure outcomes
+across nine methods, 0 errors**. Review also checked **9,000 arithmetic operations**
+for identical results and **126 fractional cases** for exact termination.
+
+Author focused runs are still finishing at this reporting checkpoint. The
+independent focused acceptance does not constitute a new aggregate result or
+native-display/performance qualification. Full17 remains **379/12/4/1 NO-GO**;
+full16's **380/12/4/0 NO-GO** belongs to its earlier source. No raw logs are
+uploaded, and this update changes only the report.
+
+Author supplementary DPR validation stopped on a separate failure: at DPR 1,
+1.25 and 1.5, the original 15-method keyboard module and new 9-method endpoint
+module each passed. At DPR 2 the original keyboard module passed its exact
+endpoint assertion, then failed the following fixed-coordinate color-pixel
+assertion at line 155 (15 tests, one failure). This failure is retained; remaining
+batch jobs were not run. Baseline equivalence for the color failure is under
+investigation. No all-DPR success or color/physical-display qualification is
+claimed for the endpoint candidate; the original test remains unchanged.
+
+### Completed eighteenth integrated result: default-DPR scope
+
+`client-renewed20h-full18/results.json` was independently read and verified as
+**completed: 382 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `7d2377edfe14410b89fe47d621da6059`. Exact source: local
+`9153e0bf45cab8d12255ede2e03c5b795a22bf5a`, public
+[62ce34fff4e42be4b5521c2be1779728e3213d70](https://github.com/lulunomaro/polar-rm-client/commit/62ce34fff4e42be4b5521c2be1779728e3213d70),
+tree `ad3c124a2371caa74a7696f534b090049a3045e8` (parent-verified public mapping).
+Provenance records `dirty: false` at start. Declared source stability passed with
+**737 inputs** at both endpoints and SHA-256
+`c335e2c633cb21ff1cd669def26c862fe5432d95132b3677f5830ab23d669bfc`.
+The existing source scope, exclusions and endpoint limitations apply.
+
+This aggregate ran at the default DPR; it does not establish all-DPR success.
+Full17's failed aggregate and the separate DPR-2 color-pixel failure above remain
+counterevidence on their respective sources. A separate DPR test correction is
+being applied after full18 and is not covered by this result. Full18 is the
+latest completed offline aggregate, with four incomplete prerequisites still
+preventing GO and native/physical-display qualification still outstanding.
+Only documentation is updated here; no raw logs are uploaded.
+
+## Separate DPR-aware checkbox test correction
+
+The DPR-2 color failure was reproduced on both the old epsilon predicate and
+endpoint-fixed source with exact progress 1 and a stopped timer. The image was
+200x80 for a 100x40 logical widget; blue indicator pixels occupied physical
+rows 26..53 while the test sampled physical row 20. Sampling the original
+logical row after conversion by the captured image DPR was blue in both.
+This is a test-coordinate correction, not a production color/geometry fix.
+
+Only `tests/test_jello_settings_keyboard.py` changes: map the original logical
+scan x=0..29, y=20 to image coordinates and add a synthetic mapping regression.
+The strict blue >180 / red <100 predicates, original 90/70ms durations,
+120/100ms waits, exact 1/0 endpoint assertions, cleanup and all other original
+methods remain. The card origin (0,0) is invariant and unchanged.
+
+Author and independent external checks each passed 3 focused methods at DPR
+1, 1.25, 1.5, 2 and 2.5 (15 executions per selection). Actual capture DPR and
+physical dimensions matched; fractional rounding and all scan points were
+in bounds. Four negative controls reject raw coordinates, red=100, blue=180,
+and blue outside the sampled logical row. The original failure is retained.
+
+After applying the exact reviewed patch, the complete 16-method module passed
+at all five DPRs (80 executions, zero skips/failures). Frozen file SHA-256
+`cdbc2081fd219b6cdb42a90309f7fb9795f0f688fb2f1adac849d34c20163755`
+matched before/after each run; diff check passed. Counts overlap and are not
+summed into distinct coverage. This later source is not qualified by full18;
+its aggregate is pending. Native display/DWM/GPU acceptance remains open.
+
+### Completed nineteenth integrated result
+
+`client-renewed20h-full19/results.json` was independently read and verified as
+**completed: 382 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `f1a2d87e97664216845d96765dd2cfd3`. Exact source: local
+`5277b07d0e33f7f7e91a7ae5caac2ff8da698f1c`, public
+[269a050a6a4600301bfd6c6446e9a7cd58bae2ad](https://github.com/lulunomaro/polar-rm-client/commit/269a050a6a4600301bfd6c6446e9a7cd58bae2ad),
+tree `ee783a293e4f8a59a7ea16b5eae6c99aed72adbb` (parent-verified public mapping).
+Provenance records `dirty: false` at start. Declared source stability passed with
+**737 inputs** at both endpoints and SHA-256
+`e528533c923a824e1ec1ff9ff308cf82b07b945c581cf36a3a5b99b016eca795`.
+Existing fingerprint scope, exclusions and endpoint limitations apply.
+
+This is the latest completed offline aggregate. Its equal counts to full18 do
+not imply identical source or coverage. Focused multi-DPR checks remain separate
+from this aggregate; the result does not establish a full-suite DPR matrix or
+native-display qualification. Original full15/full17 failures and the DPR-2
+counterevidence remain preserved. Four incomplete prerequisites still prevent
+GO. This update changes only documentation and publishes no raw logs.
+
+## Reported role identity across epochs: external candidate
+
+At baseline `5277b07d0e33f7f7e91a7ae5caac2ff8da698f1c`, the bridge discarded old
+reported identity at an epoch boundary while the model scalar could retain it
+and select the new connection's drive role. A real manager/bridge/policy/model
+reproduction with recording-only transport showed an old hero identity selecting
+a 2.0 m/s cap instead of the selected infantry's 1.5 m/s after fresh IMU-only
+telemetry. Old unsupported roles could instead block the new selected role.
+
+The identical external regression runs **14 methods**: baseline **16 assertion-
+failure outcomes, 0 errors**, candidate **14 PASS**. Independent external review
+verified the pinned model/manager bytes and replayed both outcomes. Additional
+identity-only probes checked selective/idempotent removal, unrelated-overlay
+preservation, replay prevention, independent overlay ownership and established
+LOCKOUT preservation. Initial harness import errors were retained separately
+and corrected before these results; they are not product failures.
+
+The proposed owner operation clears only `polar_reported_robot_id` and its
+replayable model-overlay key, called at the three existing epoch paths. Operator
+selection, fresh current-epoch report precedence, same-epoch partial-message
+retention, unsupported-role blocks, genuine E-stop and established LOCKOUT
+remain unchanged. Repository call-site review found current production GUI/tick/
+configuration callers use the same attached `RobotState`.
+
+**Outstanding limitation:** callers using a detached explicit target while
+`manager.state` is absent or different can still retain stale identity through
+endpoint/shutdown invalidation. An independent probe reproduced that retention.
+The external candidate is accepted for the actual attached-state path, not every
+optional explicit-target arrangement; broader target ownership needs a separate
+contract and repair.
+
+Four-file integration is in progress. No integrated acceptance, publication or
+new aggregate result is claimed here; full19 remains tied to its own source.
+This section makes no claim about the separate spin investigation. Only this
+report is edited and no raw packets or logs are uploaded.
+
+Final integrated identity review accepted the actual attached-state GUI scope.
+Author and independent reviewer each ran the same 165-method focused selection:
+all passed, no errors/skips. The existing nine role-alignment functions passed;
+API/static/diff gates passed. Four frozen file hashes matched before/after.
+Production bytes match the external candidate; the regression class differs
+only by import setup. The isolated transport fixture adds only `state=None`
+and preserves every prior reset-order/cleanup assertion. The detached explicit
+target limitation above remains unresolved. No aggregate on this source yet.
+
+
+### Completed twentieth integrated result
+
+`client-renewed20h-full20/results.json` was independently read and verified as
+**completed: 383 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `aeba0c43ae7741d3b6aa586d605b2d93`. Exact source: local
+`9584d4b3a1cb4a291f8f440c840d3cb8a7173f33`, public `44f5437`
+(parent-verified mapping), tree `31b43f12886d90f15405cd61917b84c6a1cf280e`.
+Provenance records `dirty: false` at start. Documentation was edited during the
+run; this is a clean-start claim, not an unchanged-whole-worktree claim.
+Declared source stability passed with **738 inputs** at both endpoints and
+SHA-256 `42aeb4182f8cc9bd13c00b76653f5c3f894f058ae78d18c93f49ab7648402741`.
+Documentation is outside that fingerprint; the other established scope,
+exclusions and endpoint limitations remain applicable.
+
+This is the latest completed offline aggregate for the attached-state identity
+repair. It does not close the demonstrated detached explicit-target limitation,
+prove hardware/native behavior, or replace the original failed and interrupted
+runs. Four incomplete prerequisites still prevent GO. Earlier full19 evidence
+remains tied to its own source. This update changes only documentation and
+publishes no raw logs.
+
+## Decoder process-owner acquisition prefix: accepted focused repair
+
+The existing pipe-thread constructor matrix began after `_DecoderSession`
+creation. A separate earlier gap was reproduced in `ContinuousMjpegDecoder`:
+`Popen` returned a process before queue/session bookkeeping was constructed.
+Rejecting either post-spawn allocation returned failure with no retained owner,
+no process cleanup calls, and `cleanup_complete == True`, even after `stop()`.
+The probe used only fake process/pipe objects; no actual subprocess or device
+was acquired. Its first exploratory Queue fault hit an earlier pre-spawn queue
+allocation; that mistaken attempt is disclosed separately from the corrected
+post-spawn reproduction.
+
+The narrow repair in `rm_client/backend/video_backend.py` allocates the queue
+and session before native acquisition, then immediately attaches the returned
+process. Failed spawn leaves no phantom retired session. Acquired-process
+cleanup failure retains the session, blocks replacement, and uses existing
+`stop()` / `wait_closed()` retry. Original startup error and cleanup detail are
+both retained within the applicable generation.
+
+The first candidate was independently rejected: a new stop-admission failure
+could publish its diagnostic after old cleanup returned, then the old startup
+message overwrote it. The added real-cleanup/request-stop interleaving test
+rejects that candidate with **1 failure across 5 methods**. The corrected combined
+write is under the owner lock and checks generation equality. This is bounded
+protection of that new diagnostic write, not proof of every concurrent error path.
+The rejected source/logs remain local evidence. An initial fixture also used
+`stop()` alone for already-retired-owner retry; it was corrected to the existing
+`wait_closed()` contract without changing production retry behavior.
+
+Final `tests/test_decoder_owner_prefix.py` has **5 methods**. Against the preserved
+whole baseline module, the identical suite produces **4 failure outcomes,
+0 errors**; the generation-diagnostic positive control passes. Author focused
+neighbors passed **33 methods**; final independent review accepted **34 focused
+methods** in its selection. These overlapping counts are not additive.
+Frozen source SHA-256:
+`d1dde05f028586f08b0c054e5ee66faadf0af950cad91c7823f81fd9bbd81b34`;
+new-test SHA-256:
+`44931ea3d496e633e8857a5dd0b1389195dca834e6eb1f89d92da39df2822363`.
+Evidence packet: local `decoder-owner-prefix-20261018`, including baseline,
+rejected-candidate and revised focused logs. No raw evidence is uploaded.
+
+No new full aggregate or hardware qualification is claimed for this repair.
+Full20's 383/12/4/0 NO-GO remains tied to its earlier source; historical failed
+runs and unresolved external prerequisites remain preserved.
+
+
+### Completed twenty-first integrated result
+
+`client-renewed20h-full21/results.json` was independently read and verified as
+**completed: 384 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `636093d980664bbe92db0e09e8095973`. Exact source: local
+`04cdd8366da105fa337a9018ee01dc18ae53d9fb`, public
+[b4e6a15338fe7703b3e4b71961773a58a7640d55](https://github.com/lulunomaro/polar-rm-client/commit/b4e6a15338fe7703b3e4b71961773a58a7640d55),
+tree `52cebad65a68c1ac1d282de2d258c8cedbf05d8f` (parent-verified public mapping).
+Provenance records `dirty: false` at start. Declared source stability passed with
+**739 inputs** at both endpoints and SHA-256
+`43f5eadf941cd8d0c238d945f40856ab3da36c0cfae67414564b5bb25a5f1bb0`.
+The new `test_decoder_owner_prefix.py` entry explicitly records **5 methods PASS**.
+Existing fingerprint scope, exclusions and endpoint limitations apply.
+
+A separate bounded read-only inspection found no additional actionable acquisition
+ownership defect in active `CameraCaptureWorker`, `UDPVideoReceiver` and the
+`RmVideoBackend.start()` wrapper. Camera acquisition is worker-local within
+try/finally, with failed release retained; UDP creates its session before socket
+acquisition and publishes the socket before bind. Existing admission/close tests
+map the inspected cases. This was source/test inspection, not a new test run,
+exhaustive interleaving proof or native-driver qualification; historical Tk
+`CameraFeed` was excluded.
+
+Full21 is the latest completed offline aggregate. Four incomplete prerequisites
+still prevent GO, and detached-target/native/hardware limitations remain. Earlier
+failed and interrupted runs retain their own results. This documentation update
+publishes no raw logs.
+
+## Referee-stage evidence ownership: accepted characterization cleanup
+
+This behavior-preserving cleanup centralizes the existing ordered assignments
+`current_stage = "0"` then `_stage_seen = False` in
+`OfficialSafety.clear_stage_evidence()`. Eight cross-owner sites (three manager,
+five MQTT) and the owner's existing `from_scenario` path delegate at their
+original positions. The three existing production files have a net reduction
+of four lines. No module, policy framework, lock, clock read or notification is
+added, and no existing oracle is changed. This is not a new bug-fix claim.
+
+The exact eleven characterization methods passed against the preserved full21
+baseline modules and the candidate. Two new owner-contract methods bring the
+candidate suite to **13 methods**, covering state-only mutation, independent
+mutable-dictionary snapshots, idempotence and setter-failure assignment order.
+Author focused evidence records **120 methods PASS**, API freeze and static gates
+PASS. Independent review accepted **76 focused methods** and rejected all six
+behavior-changing negative controls, including in-place limiter-dictionary
+mutation. Expanding the helper calls back into the original assignments yields
+full-file AST equivalence for all three production files; the eleven baseline
+characterization methods are AST-identical. Counts from overlapping selections
+are not additive.
+
+Frozen SHA-256 identities:
+- `manager.py`: `9c06ef5260fdc7610043de5d0b275554c2c9f0e22820762974fb9773ceb53a06`
+- `mqtt_backend.py`: `6178c623504210257535d38c4d458f8d8202826cea26c1c6df913a705b3b76c6`
+- `safety.py`: `99ad3496eccb43813e7fe57e720373f667fd8009f48564c02e265542cbf88baf`
+- `test_safety_stage_owner.py`: `46a6902e764f25c3ed98fcb91dc18a34b1f5bca3eb8b6fb9acdd7fe1f9118253`
+
+Observer timing, original exception propagation and partial assignment behavior,
+E-stop, qualification and limiter ownership remain unchanged. Constructor field
+initialization stays direct, avoiding a new virtual call during construction.
+The local packet's README predates independent acceptance; final review logs
+supply the later results above. No new full aggregate, global coupling claim or
+hardware qualification follows. Full21 remains tied to its earlier source;
+this report publishes no raw logs.
+
+
+### Completed twenty-second integrated result
+
+`client-renewed20h-full22/results.json` was independently read and verified as
+**completed: 385 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `ba1af2ed9b8d421b98fc48848d724d8b`. Exact source: local
+`c7e71c1f23af4d447d3aa2ae714baf982d3fa169`, public
+[51b78544ccda723c3a0cead4971d50db86f0e649](https://github.com/lulunomaro/polar-rm-client/commit/51b78544ccda723c3a0cead4971d50db86f0e649),
+tree `70068698f1c93289b2c2463732b330a2f6a42884` (parent-verified public mapping).
+Provenance records `dirty: false` at start. Declared source stability passed with
+**740 inputs** at both endpoints and SHA-256
+`e0b10fbf6e6f435ff59b96ebd3fea367901352fb31f2e97473233e465a8a88b1`.
+Existing fingerprint scope, exclusions and endpoint limitations apply.
+
+Full22 is the latest completed offline aggregate. It supplies source-specific
+integration evidence for the stage-owner cleanup, not a global decoupling or
+exhaustive semantic-coverage claim. Four incomplete prerequisites still prevent
+GO; detached-target and native/hardware limitations remain. All earlier failed,
+interrupted and completed runs retain their own evidence. This update changes
+only documentation and uploads no raw logs.
+
+## Hit-revision ownership: accepted characterization cleanup
+
+`KillFxRenderer.consume_hit_revision()` centralizes the comparison/store pair
+previously performed by `VideoBackendMixin.update_elimination_hit_info` against
+the renderer's private revision. All production access to that private revision
+now belongs to its owner. The two existing production files change by **8
+insertions / 2 deletions**, with no new module or framework. Initialization,
+`clear()` and `notify_hit()` remain AST-unchanged. This is behavior-preserving
+ownership cleanup, not a newly reproduced defect or global decoupling claim.
+
+The caller retains exactly one `int` conversion at its original position and
+preserves operation order. Disabled/missing EliminationFX leaves the revision
+pending; disabled Hit Info consumes it without later replay. Changed revisions,
+including decreasing ones, remain consumed before settings/conversion/notification
+failures; equal revisions and reentrant repeats do not notify again. Existing
+exception and reset semantics are retained; no audio/asset/clock work is added.
+
+The identical **15 characterization methods PASS** against both full baseline
+modules and the candidate. Two owner-contract methods bring the candidate suite
+to **17 methods**. Author evidence records **64 focused methods PASS**, **16
+existing recording-sound assertions PASS**, and API/static gates PASS.
+Independent review accepted **64 focused methods**, **1,000 paired traces**, and
+six mutation variants yielding **seven rejecting checks**. Overlapping selections
+are not added into unique-test or aggregate counts; existing oracles were not
+changed.
+
+Frozen SHA-256 identities:
+- `kill_fx.py`: `42550c0814a6b9d6574e4752e79cc4c3c7e6449eead9c26e7c84e65844a31e75`
+- `video_backend_mixin.py`: `b5350d32fc8531fae5823415995975631e79c0dfb6cf9832599d16bbbcbf3907`
+- `test_kill_hit_revision_owner.py`: `c34910d2103636ef7d956ea8584803e93708c925eec80ccd21c9a234e557908c`
+
+The local packet README predates independent acceptance; the review results above
+are separately reported by the integrating owner. No new aggregate, physical
+audio or hardware qualification is claimed. Full22 remains source-specific,
+and prior counterevidence and external gaps remain intact. Only this report is
+edited; raw logs are not uploaded.
+
+
+### Completed twenty-third integrated result
+
+`client-renewed20h-full23/results.json` was independently read and verified as
+**completed: 386 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `612db0098f8146e4a15114335ea5bc76`. Exact source: local
+`1fc3e36fd92c8d38ef7da0c69e268ac9aa4938a2`, public
+[8a7b6abcc3eb5274bfeeef63df508b56e231f226](https://github.com/lulunomaro/polar-rm-client/commit/8a7b6abcc3eb5274bfeeef63df508b56e231f226),
+tree `03ed0ebd80452670f7c044d3d83e472291beba84` (parent-verified public mapping).
+Provenance records `dirty: false` at start. Declared source stability passed with
+**741 inputs** at both endpoints and SHA-256
+`3e6c908d8f3257bcbd6ee4a96b63bc0b4711fee04d1b9699e40d681da0bf662b`.
+Existing fingerprint scope, exclusions and endpoint limitations apply.
+
+This is source-specific integration evidence for the behavior-preserving
+hit-revision ownership cleanup; it does not turn that refactor into a new bug
+fix or prove global decoupling. Full23 is the latest completed offline aggregate,
+with four incomplete prerequisites still preventing GO. Native/hardware and
+other documented limitations remain. All earlier results and counterevidence
+retain their historical source scope. Only documentation is updated and no raw
+logs are uploaded.
+
+## ClickGUI close: accepted pointer-epoch repair
+
+An actual pending module press could survive closing ClickGUI through F8,
+RightShift, Escape or a programmatic call, then toggle the module and autosave
+on its later hidden release. A moved module could assign a hotbar slot, and a
+held slider could continue changing its hidden value. The existing pointer
+owner already provides cancellation with ownership of the stale left release.
+Two production lines in `ClickGuiBuildersMixin.set_clickgui_visible` now call
+`pointer_interaction.cancel_epoch()` on a genuine visible-to-hidden request,
+before close-side callbacks can reenter release handling. Redundant opening and
+already-hidden closing preserve other captures. Fullscreen overlay policy and
+radial behavior are unchanged.
+
+The author's identical integrated **17-method** suite produced **11 FAIL,
+0 ERROR**, with six positive controls passing on the baseline; all 17 pass with
+the repair. Author qualification records **97 focused methods PASS**, API freeze
+PASS and static gates PASS. Independent review recorded **143 executions** across
+DPR 1, 1.5 and 2: 97 focused methods at DPR 1, 17 capture methods at each additional
+DPR, and four independent route methods at each DPR. These overlapping selections
+and repeated DPR executions are not 143 distinct tests or an aggregate result.
+The corrected independent baseline harness produced **12 relevant subcase
+failures, 0 errors** across four methods. Earlier harness attempts with errors
+remain in the local packet and are not counted as valid defect evidence.
+Negative controls rejected unconditional already-hidden cancellation (**4 failure
+outcomes**) and cancellation delayed until after callbacks (**2 failure outcomes**).
+
+Reviewed frozen SHA-256 identities:
+- `clickgui_builders_mixin.py`: `853bb8a813633ced5b1de5aaacddb50912cee16fa80f4494e67cf0a17b64250a`
+- `test_clickgui_close_capture.py`: `b1d0df6aa42aae38a6b73ba22e5a9709b3ad977b36d867e678c90907d0b732db`
+
+Evidence was read from the local `clickgui-close-pointer-20261018` README and
+`client-clickgui-close-independent-review` matrix and test summaries. This is
+focused automated acceptance; no new full aggregate or hardware qualification
+is claimed. Full23 remains the latest completed aggregate at its own source.
+Existing counterevidence and incomplete prerequisites remain; raw logs are not
+uploaded.
+
+
+### Completed twenty-fourth integrated result
+
+`client-renewed20h-full24/results.json` was independently read and verified as
+**completed: 387 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `7dd18451a54c41f2b78e49cdca1f1950`. Exact source: local
+`f14ec46ff47c4b61d2f0b71edb3f2e65cb8c28d7`, public
+[77d78194ad01f542365c7184fe02d108ceababcb](https://github.com/lulunomaro/polar-rm-client/commit/77d78194ad01f542365c7184fe02d108ceababcb),
+tree `38230673ef32ac83ab480c922ceac7423428f563` (parent-verified public mapping).
+Provenance records `dirty: false` at start. Declared source stability passed with
+**742 inputs** at both endpoints and SHA-256
+`6bc83e71b5749623ee1485a0bebce2ce6e7bb3c5cf61e2a52a261c14e1552bf5`.
+Existing fingerprint scope, exclusions and endpoint limitations apply.
+
+Full24 is the latest completed offline aggregate and supplies source-specific
+integration evidence for the ClickGUI close pointer-epoch repair. Four incomplete
+prerequisites still prevent GO. Native/hardware, detached-target and other
+previously documented limitations remain. Earlier completed, failed and
+interrupted results retain their own source scope. This update changes only
+documentation and uploads no raw logs.
+
+## Radial focus loss: integrated candidate, final review pending
+
+The documented radial contract is hold Q, point at an existing action, then
+release to execute. An actual window retained the active wheel, radial owner
+and old selection after `focusOutEvent` had broken its control epoch. A fresh Q
+press could then be consumed without a fresh selection, and its release could
+execute the stale ClickGUI action. A lost original release could also leave the
+wheel consuming input. This is a bounded correction to transient gesture
+ownership, rather than a policy that all overlays close on focus loss.
+
+One production line calls `cancel_quick_action_wheel()` first inside the existing
+focus-loss release callback. Authority revocation is attempted before that
+callback. The existing cancellation owner clears selection and radial ownership
+before refresh callbacks; refresh failure still reaches the existing independent
+neutral/reset fallback and Qt-finally delegation. Two AST-extracted focus
+fixtures explicitly wire the new owner and assert normal-path execution, so a
+missing fixture method cannot silently pass through fallback. Existing failure
+and neutralization assertions are retained and extended.
+
+The external **11-method** baseline produced **7 failures, 0 errors**, with four
+positive controls passing. Its candidate passed all 11; independent review
+replayed both and passed seven additional order checks, including rejection of
+before-revocation and after-release placements. Integrated author evidence records
+**128 focused methods PASS**, API freeze PASS and static gates PASS. Final
+integrated independent acceptance is pending at this report checkpoint; these
+selections are not summed into an aggregate or unique-test count.
+
+Frozen integration SHA-256 identities:
+- `polar_app.py`: `831c571f674631d841fbf2c16adffc12828e62c5af00a8503bc0c69f40445cd7`
+- `test_radial_focus_loss.py`: `3ff6986909aad436d8001b8800c10b956f6282f67cc30da84f292100c432bec3`
+- `test_focus_loss_failures.py`: `ac2b2bd721ac470adebc034c69a54165636771e47260d089fbb4438671f19e37`
+- `test_fullscreen_input_extended.py`: `9fbb0bd38915026a341aa68fe48b80d0d8c0a2d05bb5927394c9cca482476967`
+
+The direct fullscreen route preserves the wheel and selection when no FocusOut
+is delivered. Whether native fullscreen generates FocusOut remains unverified;
+a delivered FocusOut follows this cancellation rule. Chat drafts, ClickGUI and
+ordinary hold/release behavior are preserved in the scoped probes. Reentry
+coverage begins at cancellation and covers refresh and subsequent neutral
+publication, not arbitrary injected input before that callback. Evidence is
+from the local `radial-focus-20261018` packet and integrated logs, using inert
+sinks and offscreen windows. Full24 remains the latest completed aggregate at
+its own source; no new aggregate, native-focus or hardware qualification is
+claimed, and no raw logs are uploaded.
+
+Final integrated independent review accepted all four frozen files: 128 focused
+methods passed. Production matches the externally reviewed single call; all 11
+radial methods are AST-identical to the external suite. Two negative controls
+reject silent fallback: missing cancellation ownership fails retirement, and
+an exception after retirement fails the normal-release count. Fixture wiring
+is therefore resolved within this scope. Native fullscreen-generated FocusOut
+and broader arbitrary reentry remain unverified. Aggregate pending.
+
+## Completed twenty-fifth integrated result
+
+Selected offline aggregate full25 completed **388 PASS / 12 SKIP / 4 INCOMPLETE /
+0 FAIL**, still **NO-GO**, run `bab15560d77049dcb6414be57ea6c738`.
+Exact tested local source `9b22c93844fb6143446a7b025e984f233411a78d` corresponds
+to public `fa30c45771fdaf7723226ee5712dce19648987a9`, tree
+`2967f407b4808016a2f03f9eec6227cb80d551d5`. Run-start worktree was clean.
+All 743 declared inputs retained identical start/end SHA-256
+`30bd54f2eae2e843c2cc4e04837e35fdf427a7e560a3ef796014afa037db5117`.
+This source includes the independently reviewed focus-loss radial cancellation
+and explicit fixture-owner wiring. Counts are suites/checks, not unique tests
+or native/hardware coverage. The unchanged external prerequisite failures and
+all earlier failed/interrupted results remain. Native fullscreen-generated
+FocusOut is unverified; direct offscreen fullscreen routing is a narrower check.
+Later changes require their own qualification. New raw logs remain private.
+
+## Activation fixture: accepted native-audio isolation
+
+A deterministic recording-only probe of the actual activation child reached
+**18 QSoundEffect constructions and 18 setSource calls** before its injected
+timer-factory failure, despite `POLAR_DISABLE_MEDIA_PRELOAD=1`. That flag guards
+compressed-media preload; `UiAudioManager` still eagerly preloads WAV cues.
+The probe doubled multimedia construction/device queries and observed the exact
+expected retirement dictionary through real abort/rescue handling. This proves
+a present fixture isolation gap, not the cause of the historical 30-second
+timeout at `93aa839`.
+
+The repair changes only `tests/test_window_activation_failure.py` and adds
+`tests/test_activation_audio_isolation.py`. Real window, UiAudioManager,
+QObject audio pools, timers, abort and rescue remain. An ExitStack replaces the
+native multimedia constructors and all three captured QMediaDevices aliases;
+normal and exceptional exits restore aliases and clear the cached device result.
+The unchanged five activation routes retain their original expected retirement
+states. Independent AST comparison confirms all ten child assertions, three
+drain loops, fault injectors, network guard and **30-second timeout** remain.
+
+The same two new guarded methods against the saved whole baseline produce
+**2 FAIL, 0 ERROR**. The candidate's **19-method focused selection PASS** is a
+general neighboring-test result: its existing constructor-failure neighbors still
+have unisolated audio assembly, so this is explicitly not an isolation claim for
+all 19. Independent review separately ran **all five activation fault routes**
+with native constructors/device queries guarded before application imports and
+verified zero guarded calls, real owners and timer/abort/rescue execution.
+Baseline and removed-isolation controls fail at QMediaDevices; an intentionally
+swallowed QSoundEffect attempt is rejected by the call ledger. A separate process
+guard blocked the backend's Git metadata lookup, without launching that process.
+
+Accepted frozen SHA-256 identities:
+- `test_window_activation_failure.py`: `8c217b5004584f44f5026ba8422294ae89e9722cc2577230cb06dbfb77ed34dd`
+- `test_activation_audio_isolation.py`: `fe01c03c8abc4a5646fca1025588940190243be6b915833241e2fe9f0529bc33`
+
+The local `activation-native-boundary-20261018` packet retains the recording
+probe, exact baseline, focused results and the initial failed invocation that
+mistyped a neighboring module name. That setup error is separate from the valid
+baseline failures. Native cleanup behavior and historical timeout causation
+remain unqualified; no production audio fix or new aggregate result is claimed.
+Earlier failed runs and external acceptance gaps remain intact. Raw logs are
+not uploaded.
+
+## DT7 recovery policy: concrete condition-blocking repair candidate
+
+An event-barrier probe established a current blocking path: an expired explicit
+qualification during fault recovery invokes real `OfficialSafety` policy, which
+revokes control and synchronously reaches the manager's presentation observer
+while `AsyncDt7KeyMouseLink.send` owns `_cv`. Holding that inert observer prevents
+another thread from admitting neutral release. The six original structural
+methods characterize this defect and confirm that discovery, ordinary/neutral
+writes and the other tested observer boundaries already run outside the condition.
+This does not identify the cause of the historical **22.028550001778058 ms**
+failure: that old no-device fixture did not enter qualification recovery.
+
+The candidate changes only the existing worker's `send` implementation. It
+captures recovery generation, fault text/epoch, safety identity and safety epoch
+under the condition, evaluates the real policy outside it, then revalidates the
+snapshot under the condition before clearing the fault and admitting an intent.
+Closing, release (including already-neutral release), changed fault/epoch,
+same-text fault ABA, policy replacement and overlapping recovery invalidate
+stale results. Existing approval, armed state, pending/exhausted neutral and
+confirmed wire-neutral gates remain. Final worker/pre-write authorization is
+unchanged. The observer may still delay its own sending caller; it no longer
+holds the worker condition throughout that callback. This does not serialize
+every independent mutation of the safety object.
+
+External evidence: the 19-method candidate-contract suite produced **14 failure
+outcomes, 0 errors** on the saved baseline and **19 PASS** on the candidate.
+Independent external review passed those 19, four additional policy controls,
+and all 15 existing dispatch methods (**38 methods in these selections**), plus
+replayed the six original structural probes separately. Eight runtime-only
+removed-guard variants were rejected with assertion failures and zero errors.
+The unchanged strict `<20 ms` 250-tick gate reported a maximum **0.8688 ms** in
+that review; this is one observed sample, not a historical-cause diagnosis or a
+universal latency guarantee.
+
+Integration adds 25 methods from the external 19-method suite and six additional
+unchanged-policy controls, retaining their test bodies. Author logs record
+**65 focused methods PASS**, eight selected existing dispatch methods PASS,
+and API/static gates PASS. Final integrated independent review is pending at
+this checkpoint. Overlapping selections are not summed into aggregate counts.
+Frozen SHA-256 identities:
+- `dt7_worker.py`: `7a8a602cf4e6cdfbf6c38a73e5b277379c1139bf1ac387b3ac80ae6ae75e998a`
+- `test_dt7_recovery_policy.py`: `240cf50783e3455d4e11b6c2752b0a920ae779c61078662fc79107b02879734d`
+
+Evidence was read from the local `dt7-condition-probe-20261018` author and
+independent-review packets and integration logs. Probes use inert serial/write
+boundaries and event barriers; timeout guards are not timing-gate replacements.
+No new aggregate or hardware qualification is claimed. A later accepted-source
+aggregate may cover this repair together with activation fixture isolation;
+previous results retain their exact source scope and all external gaps remain.
+No raw logs are uploaded.
+
+Final integrated independent review accepted the frozen DT7 source/test pair:
+65 focused methods and eight selected existing dispatch methods passed (73
+executions). Production bytes match the reviewed external candidate; all 25 new
+methods and fixtures are AST-identical to the external suites. The unchanged
+existing dispatch file retains its strict timing/count assertions. The direct
+caller is `KeyboardControlBridge._send_direct_dt7`. Historical 22 ms causation
+remains unresolved; no full aggregate on this later source is claimed yet.
+
+
+### Completed twenty-sixth integrated result
+
+`client-renewed20h-full26/results.json` was independently read and verified as
+**completed: 390 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `7b00dd45f3294d97960a0353478669ab`. Exact source: local
+`0d1dc12d0db93a3c7f1e0941a64b4c7c032115f9`, public
+[52492777362cb23e286c5ad00d93b4e52a3ce6ff](https://github.com/lulunomaro/polar-rm-client/commit/52492777362cb23e286c5ad00d93b4e52a3ce6ff),
+tree `905c7522877552ffe52b63e73a003514c46f1326` (parent-verified public mapping).
+Provenance records `dirty: false` at start. Declared source stability passed with
+**745 inputs** at both endpoints and SHA-256
+`8df690ca0b614e1f046dcf44163fad577e5e2124cab41b5de73936dda9904d59`.
+Existing fingerprint scope, exclusions and endpoint limitations apply.
+
+Full26 supplies source-specific integration evidence for the activation-fixture
+isolation and DT7 recovery-condition repair. It does not establish the causes of
+the historical activation timeout or strict DT7 timing failure. Earlier failed,
+interrupted and completed runs retain their own source scope. Four incomplete
+prerequisites still prevent GO; native/hardware and other documented limitations
+remain. A bounded public-reference lookup did not obtain the required exact
+team CRC bytes, so that prerequisite remains missing without substitution.
+Only documentation is updated and no raw logs are uploaded.
+
+## Legacy host-bridge self-test transaction prefix
+
+The direct mutable `tools/firmware/host_bridge/test_host_bridge.py` route reset
+preexisting firmware edits before entering its restoration `try/finally`.
+Checkout partial failure or apply-launch OSError/KeyboardInterrupt could lose
+those edits. Canonical verify_all already forces READ_ONLY=1; that path was not
+the reproduced mutation route and its INCOMPLETE result remains unchanged.
+
+The scoped fix enters the existing transaction before preparation, takes the
+snapshot before mutation, owns restoration before checkout, and removes the
+duplicate manual restore. No real firmware checkout/process was exercised:
+actual helper/main code used disposable trees and rejected native spawning.
+The unchanged final ten-method suite produced five baseline failures/zero errors
+and passes on the candidate. Independent review passed those ten methods plus
+22 inert transaction scenarios, including partial checkout, absent/present
+headers, CDC bytes, OSError/KeyboardInterrupt/SystemExit and unrelated sentinels.
+Two mutations reject late cleanup ownership and double restoration.
+
+The validation/compiler/behavior body, finally, reporting and read-only branch
+are AST-preserved. If restoration succeeds, original exception identity is
+preserved; if restoration itself fails, that failure remains raised with the
+original chained, not falsely reported as successful rollback. Frozen source
+SHA-256 `eb026df2bec2412f8dc9983ee12783f08aad1d622936a15104d3911d46f69811`;
+new test `b479a4c73e20cb80b300768803ef0ccdf6615abed82d325e49772ec9338fb41e`.
+Full qualification of this later source remains pending. No external firmware
+installation, raw-log publication or hardware acceptance is claimed.
+
+Publication identity correction for the host-bridge test: local `23f83d4` /
+public `15adfdcd` contains test SHA-256
+`12511e95ce3c2e5434cccf69040bf2c514b2335e6d42693d815465e88704ed49`,
+not the earlier frozen-review hash above. Before staging, the fixture replaced
+Python-3.11-only unittest.enterContext with ExitStack plus addCleanup for the
+project's Python 3.10 minimum. Assertions and production bytes did not change.
+The final hash was independently rechecked and all ten methods passed with
+native process creation rejected; the author's 22 focused methods also passed.
+This is source/API compatibility review, not an actual Python 3.10 runtime run.
+The earlier hash records the prior reviewed snapshot; this paragraph identifies
+the published bytes and subsequent final review without rewriting that history.
+
+## Retire native telemetry as one scenario-owned sample
+
+A real PDL1 sample with 42 rounds survived scenario/profile reset in 14 model
+fields and its `backend_stats.native_telemetry` mirror. Fresh official ammo-zero
+updates without fresh PDL1 then left readiness reporting the old native sample
+as recent/ready. This is an inert state/readiness reproduction, not actuation.
+`RobotState.clear_native_telemetry()` now restores that owned sample group to
+its dataclass defaults and removes only its diagnostic mirror; the existing
+scenario/profile reset calls it once. Endpoint/shutdown policy is not broadened.
+
+Author and independent focused selections each passed 127 methods. Independent
+whole-baseline replay of the same 13 caller/characterization methods produced
+seven failures/zero errors. Fifteen omission controls reject retention of any
+one sample field or its mirror. Whole-state comparison preserves other settings,
+scalars and diagnostics; actual scenario tests retain four native-video lifetime
+counters, selected role and latched E-stop. All three frozen source/test hashes
+were verified unchanged. External/native acceptance and other boundary-design
+limitations remain. Combined-source aggregate qualification is pending.
+
+
+### Completed twenty-seventh integrated result
+
+`client-renewed20h-full27/results.json` was independently read and verified as
+**completed: 392 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `225dc8585ffb425db146f235d30a96a6`. Exact source: local
+`bce40e30301f563e842442b3d05c3689c138654e`, public
+[64fcacc77bfd047756006190a7a2390308bd20ef](https://github.com/lulunomaro/polar-rm-client/commit/64fcacc77bfd047756006190a7a2390308bd20ef),
+tree `c7b052dfb2dae3f7b55a65e5f64b03656c16de95` (parent-verified public mapping).
+Provenance records `dirty: false` at start. Declared source stability passed with
+**747 inputs** at both endpoints and SHA-256
+`76fac03a0fe4ace6eea8769d352a2080d92813965242e6ae18d5e82c9128600d`.
+Existing fingerprint scope, exclusions and endpoint limitations apply.
+
+This is source-specific integration evidence for the native-telemetry scenario/
+profile reset and host-bridge fixture cleanup stages. Four incomplete prerequisites
+still prevent GO. It supplies no Python 3.10 runtime qualification or native/
+hardware acceptance, and does not establish historical timeout/timing causes.
+Earlier failed, interrupted and completed runs retain their own source scope.
+Only documentation is updated; raw logs are not uploaded.
+
+## Decoded MQTT batch: epoch-admission candidate
+
+The real MQTT owner can retire its receive queues on disconnect while the
+manager still holds an already-drained decoded list. An inert reproduction
+pauses the observer after one record, invokes the real disconnect callback on
+another thread, then observes a second old heat record applied after retirement.
+Its original receipt time is retained; no invented current timestamp is alleged.
+Earlier raw-message/event consumer fixes remain intact and address a later stage;
+they cannot undo this earlier canonical scalar write.
+
+The three-line change snapshots `receive_generation` before draining and checks
+it before each decoded record. Retirement stops admission of the remaining list
+without clearing new queues or undoing newer nested state. Per-record exception
+behavior and final current-state stats/frontend synchronization are unchanged.
+The rejected v1 skipped final sync after retirement; its passing initial suite
+missed first-record HUD projection and nested applied-counter refresh. Those
+positive contracts are now asserted, and the rejected source/logs remain in the
+local packet. Two explicit existing MQTT doubles gain `receive_generation=0`;
+no production `getattr` fallback or weakening of existing assertions is added.
+
+The same external **19 methods** against whole preserved modules produce
+**10 baseline failures, 0 errors**, versus **19 candidate PASS**. Independent
+external review reproduced both, passed 27 existing fixture-module methods with
+in-memory field wiring, and rejected seven runtime-only negative controls.
+Four-file integration retains the production bytes and AST-identical complete
+regression class. Author evidence records **165 focused methods PASS** and
+API/static gates PASS. Final integrated independent review is pending at this
+checkpoint; overlapping selections are not aggregate or unique-test totals.
+
+Frozen SHA-256 identities:
+- `manager.py`: `2885aa1553298065ae47b6a5997b105425d7148fb752082fbf2e0e9d1f34acec`
+- `test_mqtt_decoded_batch_epoch.py`: `6612ad3fbb9b339687ce08a988c0b4f075e53505dd38a53d6f0d118d2919ebf9`
+- `top_match_bar_integration_test.py`: `4abf02df4eb92171439d5fdd640add1fa982048efb56487d02a6237e7c9588f5`
+- `test_referee_observer_ownership.py`: `2e50eb8900aa5c8f43c28b014a0692017bb035064f19219702a4800933f92a41`
+
+This is next-record admission, not atomic rollback of a record already executing
+when another thread disconnects. Rollover between snapshot and drain may
+conservatively discard a newly drained batch; lossless atomic pairing would
+require a broader drain contract. Same-generation nesting and source precedence
+remain unchanged. Evidence is in the local `decoded-mqtt-epoch-20261018` packet;
+no native I/O or new aggregate qualification is claimed. Full27 remains qualified
+only at its own source, prior failures/limitations remain, and no raw logs are
+uploaded.
+
+Final integrated decoded-batch review is accepted: 165 focused methods passed
+independently with zero errors/skips. All four hashes matched; manager bytes
+match the external candidate and the full nineteen-method class is AST-identical.
+Each existing fixture adds only its one receive_generation=0 field; no prior
+assertion changed. This supersedes the pending-review status immediately above,
+not the pending full-source aggregate qualification.
+
+
+### Completed twenty-eighth integrated result
+
+`client-renewed20h-full28/results.json` was independently read and verified as
+**completed: 393 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `ad3feb015b4949b89301907f5b6ea819`. Exact source: local
+`3823e0aa537248dfb35ff75fa3523904a53c7610`, public
+[3f3ed4f0fff4878c8f28ffb42728a6e25b48ee73](https://github.com/lulunomaro/polar-rm-client/commit/3f3ed4f0fff4878c8f28ffb42728a6e25b48ee73),
+tree `033f7f4134fe92194a43ebdfcb250f099f4162f8` (parent-verified public mapping).
+Provenance records `dirty: false` at start. Declared source stability passed with
+**748 inputs** at both endpoints and SHA-256
+`0313f75b59a24717c70dc52accbe1855c60540868e00f9d7fb256c6e91db6f26`.
+Existing fingerprint scope, exclusions and endpoint limitations apply.
+
+Full28 supplies source-specific integration evidence for the accepted decoded
+MQTT batch repair. Its per-record admission and conservative rollover-drop
+limitations remain; already-executing records are not atomically rolled back.
+Four incomplete prerequisites still prevent GO. Native/hardware requirements,
+exact external-reference gaps and historical causation uncertainties remain.
+Earlier completed, failed and interrupted runs retain their own source scope.
+
+A separate bounded source/consumer inventory in the local
+`final-epoch-sweep-20261018/INVENTORY.md` found no additional demonstrated defect
+in the inspected video, POLAR/referee serial, controller-angle and pending-intent
+paths. Seventeen selected existing inert controls passed. This is a bounded
+inspection plus focused evidence, not exhaustive epoch coverage or an additional
+aggregate; no real-FFmpeg codec test was selected. Only documentation is updated,
+and no raw logs are uploaded.
+
+## Settings ESTOP filter: Python-wrapper retention repair
+
+Repeated real settings construction/deferred deletion exposed retained Python
+wrappers even though the native QObject ownership census returned to zero.
+Across the same 18 ordinary settings cycles, the baseline retained **294 tracked
+invalid wrappers**; one intentional retain-then-clean sensitivity cycle added
+16, giving **310**, versus **zero** on the candidate. The tracked set comprises
+dialogs, pages, builders, builder timers and selected editors; this is neither
+310 dialogs nor a full heap/byte measurement. All native dialogs were destroyed
+in both versions. The same audit's 80 ClickGUI cycles retained bounded maps and
+stale-capture protection, with zero native descendants/timers/builders after
+cleanup. Separate six-settings-cycle reproduction is corroboration, not another
+count to add to this census.
+
+Causal plain-dialog cohorts distinguish the retained per-call filter class:
+eight dialogs without the filter and eight with an unstored filter leave zero
+wrappers, while the stored-filter cohort retains eight. The repair moves the
+nested `EstopFilter` to module scope and keeps explicit strong dialog/host
+instance references and the same QObject parent. It does not substitute weak
+owner lookup. F12 dispatch logic, application-filter installation, finished
+removal and returned-owner behavior are retained; the event-filter body is
+AST-identical after accounting for the new local aliases.
+
+The unchanged final seven regression methods produce **2 baseline failures,
+0 errors**, specifically wrapper collection in plain and actual settings paths;
+the other five safety controls pass. Candidate author qualification records
+**17 guarded focused methods PASS**, retaining actual emergency service ordering,
+nested-modal F12 behavior, repeat/release/override handling and failure fallback.
+The repeated 18-settings/80-ClickGUI probe also passes. Earlier failed diagnostic
+expectations about persistent scroll keys and instrumentation are preserved
+separately in the local `client-lifecycle-ownership-audit` packet. Final independent
+review accepted the frozen hashes: 19 guarded focused methods passed, with paired
+eight-dialog cohorts, four actual failure paths and three rejecting mutation
+controls. These selections are separate from the author's 17-method result and
+are not summed into unique-test or aggregate totals. The reviewer checked the
+294+16 author census structurally; the full repeated-cycle measurement was not
+independently rerun. Original errors survive the tested exception paths, and
+wrappers collect after traceback release.
+
+Frozen SHA-256 identities:
+- `emergency_shortcut.py`: `476cbd9aceb443c6cf92df0707d87dc54227f6e60483157ad5ebfda87c025e95`
+- `test_emergency_shortcut_lifetime.py`: `c85db203d37daa651f09b1098b0848077c41497808a6b6418c25dc573e9744c7`
+
+This fixes measured Python wrapper/object-graph retention; the native ownership
+baseline was already clean. No native QObject leak, retained-byte/RSS estimate,
+FPS improvement, indefinite-duration result or hardware qualification is claimed.
+No new full aggregate is claimed, and raw logs are not uploaded.
+
+
+### Completed twenty-ninth integrated result
+
+`client-renewed20h-full29/results.json` was independently read and verified as
+**completed: 394 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `fbdfbf7845eb4c0c92f1c641660cbd75`. Exact source: local
+`cb61372d25719d2c5157010ffce682f2f51e9e6f`, public
+[5ae75ce674391e43dd51e85e3501d58fbe18e289](https://github.com/lulunomaro/polar-rm-client/commit/5ae75ce674391e43dd51e85e3501d58fbe18e289),
+tree `9382d549fcff1e65558064ec5b96f11a2234d85d` (parent-verified public mapping).
+Provenance records `dirty: false` at start. Declared source stability passed with
+**749 inputs** at both endpoints and SHA-256
+`a2358a9a6d81118cc53550bde72e239b3e639cfcb0d4d7fbb1d6799ad70689ca`.
+Existing fingerprint scope, exclusions and endpoint limitations apply.
+
+Full29 supplies source-specific integration evidence for the ESTOP filter
+Python-wrapper retention repair. Four incomplete prerequisites still prevent
+GO; external/native acceptance and previously documented design limits remain.
+No historical failed or interrupted result is superseded at its original source.
+
+A separate bounded same-family scan parsed 221 production Python files without
+errors and found only the two remaining function-local Qt classes, crosshair
+Editor and Preview. Its actual offscreen factory/modal/settings probes collected
+all **96 tracked wrappers across 24 cycles** (24 Editors and 72 Previews), with
+zero residual host descendants/timers/builders and zero native-boundary guard
+calls. The local `client-local-qt-class-audit/REVIEW.md` records eight embedded,
+eight modal, four ready-settings and four partial-settings cancellation cycles.
+No additional defect or source change was proposed. This bounded class-family
+check is not proof against all GUI reference cycles, arbitrary constructor
+failures or indefinite operation; it supplies no heap-byte, FPS or native-device
+claim. Only documentation is updated and no raw logs are uploaded.
+
+### Accepted neighboring constructor-test audio isolation (focused evidence)
+
+`tests/test_window_constructor_failure.py` now reuses the existing, unchanged
+`isolated_activation_audio` helper from `test_window_activation_failure.py`.
+Its `ExitStack` covers real window construction through deferred cleanup;
+the existing guard suite adds constructor-route checks without a duplicate
+fake helper or production change. Native audio constructors/device queries are
+isolated while the actual window, audio managers/Qt pools, timers, abort and
+rescue paths remain exercised.
+
+Independent review (`client-constructor-audio-independent-review/REVIEW.md`)
+approved all four actual guarded constructor routes (`after`, `before`,
+`diagnostics`, `unavailable`) and the four-method audio-isolation suite. The
+traced routes recorded zero native-audio and network attempts. Three negative
+controls rejected the saved baseline, removal of isolation, and a deliberately
+swallowed native `QSoundEffect` attempt; the latter is detected by the access
+ledger after cleanup. Static comparison confirmed the original **15-second**
+subprocess deadline, five child assertions, four original methods, fault
+injectors, network guard and expected cleanup/rescue dictionaries are unchanged.
+The unavailable-timer route still observes incomplete ownership before rescue.
+
+The author separately ran **21 general focused methods** and four direct/runpy
+constructor tests successfully. Those selections are not additional independent
+isolation proof. The review's initial extra metadata-command classifier used an
+incorrect expected Git command shape; its failed trace and corrected replay are
+preserved locally. The strict process guard blocked the metadata lookup in both;
+no subprocess permission was relaxed.
+
+Frozen SHA-256:
+- `tests/test_window_constructor_failure.py`:
+  `e62120e2b54153fb47961968b1292a057d33be30dd3a13f5c7c18c4db122a3f9`
+- `tests/test_activation_audio_isolation.py`:
+  `02438946342551ec82123f6fa1cb6937c6b2d72bb59509ff0ce1798b5fdca0d3`
+
+This is accepted test isolation, with no new aggregate result yet. It does not
+establish any historical timeout's cause or qualify native audio/device cleanup.
+Full29 remains the last completed aggregate at its recorded source; raw evidence
+remains local and is not uploaded.
+
+
+### Completed thirtieth integrated result
+
+`client-renewed20h-full30/results.json` was independently read and verified as
+**completed: 394 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `23d8b665aefa4374b8b5d4fa0774393f`. Exact source: local
+`76865f1bc3164252396c6969add6983178126353`, public
+[afc252e5c4b7a22bcf9886837b3341d0473cb38f](https://github.com/lulunomaro/polar-rm-client/commit/afc252e5c4b7a22bcf9886837b3341d0473cb38f),
+tree `65af73140b2c6b3fb4d3883cc86977ec8e0b1390` (parent-verified public mapping).
+Provenance records `dirty: false` at start. Declared source stability passed with
+**749 inputs** at both endpoints and SHA-256
+`c0840788d562acec1a1e5b0925d229a4bafbb1b3461b7ae2c3bf98a9e36958ee`.
+Existing fingerprint scope, exclusions and endpoint limitations apply.
+
+Both `test_window_constructor_failure` and `test_activation_audio_isolation`
+passed four methods each. This supplies source-specific integration evidence for
+the neighboring constructor fixture's audio isolation. It does not establish a
+historical timeout cause or qualify native audio/device behavior. Four incomplete
+prerequisites still prevent GO; earlier failed/interrupted evidence and all
+external acceptance limits remain intact.
+
+A separate read-only settings-policy scan found no justified behavior-preserving
+consolidation in its examined manager/UI readers. Missing, false, zero, malformed
+and default-valued settings have distinct existing semantics; numeric validation
+already has explicit configuration owners. The local settings-policy scan README
+records these distinctions. No test was executed for that scan, no additional
+pass count or universal configuration-validation claim is added, and no raw logs
+are uploaded.
+
+### Literal owner-write regression gate candidate
+
+The existing `ModuleVisitor` in `tools/quality/metrics.py` now identifies
+`Store`/`Del` on seven reviewed literal private-field paths:
+`self.kill_fx._last_hit_revision`, `self.safety._stage_seen`, and
+`self.polar_motion.{_moving_since,_last_feedback_segment_at,_ever_had_feedback,
+_position_origin,_position_now}`. Existing finding/debt machinery handles the
+new `cross-owner-private-write` rule. Owner-local writes, diagnostic reads,
+owned method calls, unrelated objects and annotation-only targets remain allowed.
+No production source, baseline, report schema or new module is changed.
+
+The author reports **68 focused methods PASS**, API/static PASS and rejection of
+all seven table-entry-removal mutants. The tests enumerate protected fields
+independently of the table. Current-source static JSON before/after is
+byte-identical, SHA-256
+`d6ee71f1c5a2b41be06b05e458ebdf00a5de654af1bebfdb7f5212723b920fbe`;
+this is unchanged measurement, not a coupling or executable-size improvement.
+External independent review accepted the bounded proposal, reran actual-path and
+synthetic mutation controls, and added 20 grouped syntax controls plus debt
+controls. These groups are not repository test-method counts. Final integrated
+review is pending; no new aggregate result is claimed.
+
+This is a `path:scope:rule` **count ratchet**, not a field/site fingerprint.
+No current baseline allowance permits this rule. A future explicitly reviewed
+allowance could be reused by a different protected field/site in the same scope.
+Aliases, deeper/differently named receivers, reflective `setattr`/`getattr`,
+container/descriptor mutations and callee effects remain outside its coverage.
+Literal spelling does not infer object type; future matching names require scope
+review. It is a narrow regression guard, not complete ownership or runtime proof.
+
+Local evidence: `owner-write-gate-proposal-20261018` README, independent review,
+integrated focused/API/static logs and entry-removal controls. Frozen candidate
+SHA-256 values are `0656f37fe7141f14e1c8979900d679e7349deee6dfc14c1ed7d74b45f038db82`
+(metrics), `294878e0d35435fa2e087429b627eb995728bdafca9929ad467cd91de876175f`
+(gates), and `1b92af26a9809d59ea2a300df8c6332a61e77bbc110fa1653487157d6d8d0fc8`
+(quality tests). Raw logs remain local.
+
+Integrated owner-write guard review is accepted at all three frozen hashes:
+68 focused methods passed independently; four actual-path and thirteen synthetic
+mutations were rejected; twenty syntax/control groups and same-scope debt checks
+passed; all seven production-table entry removals were rejected by independently
+specified expectations. Fresh static JSON remained byte-identical to baseline
+`d6ee71f1c5a2b41be06b05e458ebdf00a5de654af1bebfdb7f5212723b920fbe`.
+Baseline/schema/CLI/application source are unchanged. Full aggregate pending.
+
+
+### Completed thirty-first integrated result
+
+`client-renewed20h-full31/results.json` was independently read and verified as
+**completed: 394 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `477d799183534af39c6065dbd5076b2e`. Exact source: local
+`7c3aaa06848bc440e7504fa92986b9ebdbc8b26b`, public
+[2121eb75eb4cbaac1ba55aa4835e236999873f62](https://github.com/lulunomaro/polar-rm-client/commit/2121eb75eb4cbaac1ba55aa4835e236999873f62),
+tree `2d404af8dced2ac8cd70729261f89d05141885ac` (parent-verified public mapping).
+Provenance records `dirty: false` at start. Declared source stability passed with
+**749 inputs** at both endpoints and SHA-256
+`a9ac2e5fdf81074a06e5af60bd3c816b4faded6fffa809789f1d337c43b4e28d`.
+Existing fingerprint scope, exclusions and endpoint limitations apply.
+
+The quality-gate module passed **59 methods**. Aggregate check counts remain
+unchanged because this stage extends an existing test module. This completed run
+supplies integration evidence for the accepted literal owner-write guard; it
+changes neither application source nor the reviewed debt baseline. The rule's
+alias/dynamic-access blind spots and scoped-count allowance limitations remain.
+Four incomplete prerequisites still prevent GO. Historical failures, interrupted
+runs and external/native qualification limits are preserved; no global ownership
+or architecture acceptance is inferred and no raw logs are uploaded.
+
+### Release-all primary-error contract: external candidate accepted
+
+A bounded inert audit reproduced `KeyboardControlBridge.release_all` losing its
+first operation error and skipping later independent neutral routes when its
+error logger also raises. A standard `logging.StreamHandler` with a closed
+in-memory stream reproduces this diagnostic failure without a physical device.
+Reset/publication failures can skip both release routes; a DT7 release failure
+can skip the custom-controller route. Focus loss already has an independent
+fallback, so this does not establish missing focus-loss neutralization or any
+physical motion. Output-gate/profile-quiescence caller ordering remains relevant.
+
+The accepted external candidate changes only this method: a local helper records
+the primary operation exception first, then isolates ordinary logger exceptions.
+Capability-checked, guarded `add_note` records diagnostics best-effort. Missing,
+noncallable or raising note capabilities and failing diagnostic `__str__` cannot
+replace the primary ordinary error or cancel subsequent independent attempts.
+Healthy log messages/context and first-error identity remain intact. Operation,
+logger and note `BaseException` propagation is unchanged; this is not a promise
+of continuation after `KeyboardInterrupt`/`SystemExit`. Python 3.10 grammar and
+missing-capability controls were checked, but execution used Python 3.12.
+
+Independent external review accepted the frozen candidate. The original four
+contract methods produce **4 FAIL / 0 ERROR** on baseline and pass on candidate;
+the 18-method new suite produces **19 failing outcomes / 0 ERROR** on baseline.
+Candidate evidence is **23 PASS** (18 new plus five unchanged existing methods),
+the same original four methods PASS, and seven independent controls PASS. Five
+runtime-only mutation variants are rejected. These overlapping selections are
+not added into a unique aggregate count. Initial oracle/runner errors are
+preserved separately in the local packet and are not acceptance evidence.
+
+Evidence: `error-contract-audit-20261018/README.md` and `INDEPENDENT_REVIEW.md`.
+External source SHA-256 is
+`8708271c872b57115c097225987b758447d0a6a58f1aca8daf1b34abd7637c30`;
+new test SHA-256 is
+`deae52f71223be7fd01f7b0af36c388cecd02da3d6b1a31ead08806d34f2195f`.
+Whole-file AST comparison found no change outside `release_all`. Integration is
+in progress; no integrated/full-run result is claimed here. Neutral attempts do
+not prove wire delivery, and no native/hardware or historical-cause acceptance
+is inferred. Raw logs remain local.
+
+Integrated release-all repair is independently accepted at the frozen source
+and new-test hashes. Reviewer ran five complete focused modules: 45 methods
+PASS, plus seven method controls and the original four failure probes against
+repository source. Author selected 42 focused methods and API/static gates
+passed; these selections overlap and are not summed as unique coverage.
+Source/test bytes match the external packet. Whole-file AST outside release_all
+and all preexisting caller/test hashes remain unchanged. No prior assertion or
+harness was edited. Full-source aggregate qualification is pending.
+
+### Completed thirty-second integrated result
+
+`client-renewed20h-full32/results.json` was independently read and verified as
+**completed: 395 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `473d68f61e7e4547aed21ce49585c637`. Exact source: local
+`39f1a3ee687c68075734291127c1bae4809a0851`, public
+[ace24675e3451780fb0f9a38b73d1fe799f10201](https://github.com/lulunomaro/polar-rm-client/commit/ace24675e3451780fb0f9a38b73d1fe799f10201),
+tree `3abb53c649f258243cd549c98b0f787862bb690d` (parent-verified public mapping).
+Provenance records `dirty: false` at start. Declared source stability passed with
+**750 inputs** at both endpoints and SHA-256
+`01fb67422f895f75f68a419dace1868f0086bbf8994f0032fa7c40cc39360d5d`.
+Existing fingerprint scope, exclusions and endpoint limitations apply.
+
+The new release-logging module passed 18 methods and the existing release-all
+module passed five. Full31 remains a separate historical 394/12/4/0 checkpoint
+at its own source; this result does not rewrite any historical failure.
+
+The release-all diagnostic isolation candidate has now passed final integrated
+review. Both source/test files exactly match the accepted external hashes; prior
+assertions and callers are unchanged. Independently, the matched bounded
+selection passed 42 methods, seven method-only controls passed, and the original
+four contract probes passed. These overlapping selections are kept separate.
+An initial broader 45-method selection also passed but included two existing
+real-window tests and an additional quiescence case; it is not described as
+entirely inert-double-only. Author API/static results remain separately attributed.
+
+The fix preserves the first ordinary operation exception and subsequent
+independent neutral attempts when logging also fails. Existing focus-loss
+fallback, BaseException propagation and best-effort note limitations remain.
+Neutral attempts do not establish wire delivery, native qualification or a
+historical symptom's cause. All four external prerequisites and historical
+failure/interruption records remain; no raw logs are published.
+
+### Window-owner cleanup diagnostics: integrated candidate
+
+`run_owner_actions` could skip independent resource cleanup and backend shutdown
+admission when a cleanup exception was followed by an ordinary logger exception.
+The close/finalize seals were already set, so repeated calls did not replay the
+omitted work. A standard StreamHandler with closed in-memory stderr reproduces
+this without physical resources. The repair records the primary OwnerActionFailure
+before logging, records an ordinary diagnostic failure separately, and continues
+independent actions. Unprintable ordinary exceptions retain their type with a
+stable fallback message. Process-control BaseExceptions still propagate; primary
+formatting now precedes logging by design. No new module/API or retry policy.
+
+Frozen source SHA-256 `f2e124d765b4f29728919422ed5aa2bfe4150f59b3dbf02ad3347864fefaf71b`;
+new test SHA-256 `63dd82f503370c7f83301f8046676807a2b5f9b4409c7cd14c4844698c7b3f47`.
+Independent external review accepted 48 focused methods (18 new, 30 existing),
+six extra controls and seven rejected runtime-only regressions. The 18 new
+baseline methods reproduce 15 assertion/subtest failures, zero errors. The
+original five probes give three baseline failures and pass on candidate.
+Selections overlap and are not unique aggregate counts. Full-module AST outside
+the changed function is identical. Evidence: window-owner-diagnostic-20261018.
+
+Integrated author selection: 48 PASS; API freeze and static quality gates PASS.
+An initial static-check invocation used a nonexistent script path and did not
+execute a check; the actual tools/quality_gate.py then passed. No threshold or
+old assertion was changed. Independent integrated review and the next aggregate
+are pending. Full32 above qualifies only its earlier source. Direct lifecycle
+context/request/retry/poll diagnostic branches remain outside this repair and
+are being investigated separately. Inert cleanup attempts do not establish
+native resource retirement. No raw logs are published.
+
+Independent integrated review subsequently accepted the exact frozen bytes:
+48 focused methods, six extra controls and five original probes PASS using
+repository imports. Existing tests/assertions and AST outside run_owner_actions
+remain unchanged. Aggregate qualification remains pending for this source stage.
+
+### Completed thirty-third integrated result
+
+`client-renewed20h-full33/results.json` was independently read and verified as
+**completed: 396 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `666f4c8624234526bc024c064d95c626`. Exact source: local
+`3c3f792d21aec9f8731bc27a98fa9ddecb5cdfcf`, public
+[accf0c55a5963e47fce49077b8e4161fdde88d8f](https://github.com/lulunomaro/polar-rm-client/commit/accf0c55a5963e47fce49077b8e4161fdde88d8f),
+tree `fa8f4034c052381fae993e46cbca3eb2f4fa460c` (parent-verified public mapping).
+Provenance records `dirty: false` at start. Declared source stability passed with
+**751 inputs** at both endpoints and SHA-256
+`865ad0916f01d22b68d32c5e9196dbdf9829da276bb0796a1d187130f301564a`.
+Existing fingerprint scope, exclusions and endpoint limitations apply.
+The new window-owner diagnostic module passed 18 methods. Full32's completed
+395/12/4/0 checkpoint remains separate at its own source. Four incomplete
+prerequisites continue to prevent GO.
+
+The window-owner diagnostic repair is independently accepted in its integrated
+two-file scope. `run_owner_actions` records primary cleanup failures before
+fallible logging, adds separate diagnostic records on ordinary logger failure,
+and continues independent actions. Safe formatting preserves original exception
+types when ordinary `__str__` fails. Existing close/finalization seals, native
+retirement admission and healthy action/logging order remain unchanged.
+BaseExceptions remain unsuppressed; primary formatting now precedes logging,
+so complete side-effect equivalence for that process-control path is not claimed.
+Direct logger sites outside this aggregator and factories failing before an
+action tuple exists remain outside scope.
+
+The 18-method new suite reproduced 15 failing outcomes, zero errors, on baseline;
+the original five window probes/controls had three failures and two passing
+controls. Independently, integrated selection 48 methods, six extra controls and
+five original probes each passed, as separate overlapping selections. Seven
+runtime-only mutations were rejected. An initial independent harness shadowed
+`TestCase.fail`; its apparent PASS is explicitly excluded, the factory was
+renamed, and corrected assertion sensitivity and controls were rerun. Existing
+assertions and module AST outside `run_owner_actions` remain unchanged.
+
+Evidence is in the local window-owner diagnostic packet's README and independent
+review. No native resources or hardware were used for those inert focused
+selections. Neutral/cleanup attempts do not prove physical retirement. External
+prerequisites, historical failures and interrupted runs remain; no raw logs are
+published and no universal lifecycle diagnostic closure is claimed.
+
+### Lifecycle failure revocation before diagnostics: integrated candidate
+
+A separate bounded audit found direct poll/request/retry error branches were
+still vulnerable after the owner-action aggregator repair. Poll's diagnostic
+exception could prevent BackendManager.lock_control, leave in-memory safety
+MATCH_ARMED, and omit its failed LifecycleUpdate. The actual tick adapter aborts
+that failing frame; a later healthy poll could still observe the retained armed
+state. No physical output is claimed. Request/retry diagnostics could likewise
+prevent their required failure marker and primary record.
+
+The candidate attempts poll revocation before any fallible formatting/logging,
+retains primary error state, notice/log deduplication and failed runtime-denied
+update, and isolates ordinary logger exceptions. Request/retry mark failure and
+record the primary error before logging. A local formatter guards ordinary
+__str__ errors. Lock failure is still distinct: a failed attempt does not prove
+successful locking, and the return remains runtime/close denied. Existing
+secondary logging retains the locking error's traceback. No new result schema,
+retry eligibility, generalized logging framework or module is introduced.
+
+Source SHA-256 `990b379a0cf7069224cd9f16e9dd37078c2740e586dedc3b0f88cb4a784ef09e`;
+new test SHA-256 `1d8039401a4533a3fbbef9ea46450ed4ea7605fec1cb49c205c36c1f0027d4d0`.
+External independent review: 66 focused PASS, six controls PASS, eight mutation
+variants rejected. New 18-method baseline suite: 17 assertion/subtest failures,
+zero errors; all five original defect probes pass on candidate. These overlap.
+The unchanged original eleven-method probe has ten passing methods and one
+preserved old-prefix assertion failure: logger SystemExit retains identity but
+now follows required locking, so its old MATCH_ARMED expectation fails. This
+intentional safety-order change is not described as complete behavioral
+ equivalence. Operation/lock/formatter/logger BaseExceptions are not swallowed.
+
+Author integrated 66-method selection, API freeze and static gates pass. Full33
+above applies only to the earlier source. Independent integrated validation and
+next aggregate are pending. Direct context-finalization diagnostics and separate
+modal/lock input cleanup paths remain outside scope. Local packet:
+window-lifecycle-branch-diagnostic-20261018; no raw logs published.
+
+Independent integrated review accepted both exact frozen hashes: 66 focused,
+six controls and five original defect probes PASS through repository imports.
+The original eleven-method probe retains exactly ten passes and the one
+intentional old-prefix failure, zero errors. All pre-existing assertions and
+other method ASTs are unchanged. Aggregate qualification remains pending.
+
+### Completed thirty-fourth integrated result
+
+`client-renewed20h-full34/results.json` was independently read and verified as
+**completed: 397 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `f46f07ccb25943b496aefaca4ad37a77`. Exact source: local
+`cbe07f8bffb932b8ae47ea3fd00254580d5015ea`, public
+[f842ac33b6c4162b5e12996fe0c56993b3f81e34](https://github.com/lulunomaro/polar-rm-client/commit/f842ac33b6c4162b5e12996fe0c56993b3f81e34),
+tree `607476d6cb57ae37a45e4bbf253dcc85764d5d57` (parent-verified public mapping).
+Provenance records `dirty: false` at start. Declared source stability passed with
+**752 inputs** at both endpoints and SHA-256
+`e035f9df7356076067500fc76e8efbb8052a66a3573b4045777a1b91e91cf78d`.
+Existing fingerprint scope, exclusions and endpoint limitations apply.
+The new lifecycle diagnostic module passed 18 methods. Full33's completed
+396/12/4/0 checkpoint remains separate at its own source. Four incomplete
+prerequisites continue to prevent GO.
+
+The lifecycle branch diagnostic repair is independently accepted in its two-file
+integrated scope. Request/retry bookkeeping records the original fault before
+fallible diagnostics. Failed polling attempts safety revocation before formatting
+or logging; ordinary logger failures cannot leave stale close permission or
+allow a later healthy poll to inherit unrevoked authority. Existing action
+aggregator, finalization policy, duplicate-fault suppression and original failure
+records remain. The secondary log retains the actual lock exception/traceback.
+
+Independent integrated evidence: 66 focused methods, six independent controls
+and five original ordinary-defect probes PASS as overlapping selections. The new
+18-method suite gives 17 failing outcomes, zero errors, on its baseline. Eight
+runtime-only mutations are rejected. Existing assertions remain unchanged.
+The entire original eleven-method characterization remains **10 PASS / 1 FAIL /
+0 ERROR**: its old-prefix control verifies the same logger `SystemExit`, then
+expects MATCH_ARMED. The accepted candidate is LOCKED because revocation now
+precedes diagnostics. This deliberate safety-first prefix change is preserved as
+counterevidence, separate from the aggregate, and is not relabeled green.
+BaseExceptions remain unsuppressed; no claim of unchanged interrupted prefixes
+is made. A lock-operation BaseException still exits before further reporting.
+
+Evidence: the local window-lifecycle branch packet's README and independent
+review. Focused callbacks are inert; actual runtime is Python 3.12, with Python
+3.10 grammar checks only. Context/finalization diagnostic branches and separately
+deferred input-owner findings are outside this repair. No native retirement,
+physical safety or universal diagnostic closure is qualified. Prior failures,
+interrupted runs and external prerequisites remain; raw logs are not published.
+
+### Modal and locked-input diagnostic isolation: composed integration
+
+Two separately reviewed changes affect only the existing nested attempt helpers
+in InputDispatchMixin._neutralize_modal_inputs and _clear_control_inputs_for_lock.
+Ordinary logger failures previously interrupted later UI cleanup. Modal cleanup
+could also miss its persistent failure latch and subsequent backend lock; the
+actual radial entry claims overlay ownership while still armed, so there is no
+prior backend revocation on that path. The lock-hook path differs: the actual
+manager has already locked authority and attempted backend neutral admission,
+and ordinarily requeues a failing hook. Its defect is skipped later UI cleanup
+and replacement of the primary exception, not missing upstream neutral admission.
+
+Both helpers retain primary errors first, guard ordinary diagnostic exceptions,
+and optionally add a guarded note. Ordinary modal failures remain absorbed with
+a persistent gate and later lock; the lock hook still raises its first primary
+error and retains its latch/requeue contract. Healthy behavior, action order,
+conditional publication, reentry and explicit recovery remain unchanged.
+Operation/logger/note BaseExceptions still propagate; no ordinary-error cleanup
+guarantee is extended to them. A failed lock attempt is not successful revocation.
+
+The two method-only patches were composed without overwriting either candidate.
+Final source SHA-256 `3768efa91b57ce9a333bb2f926e2bb0058bb24f130674598449a3df769203369`;
+modal test `922cd685a028673902f6deca8094e45d2eeea791680a91266893689a3d62cc1e`;
+lock test `788d5439f5623e5aa76e41daaf7f1b059e495a0793fac176c268ef75d69702a6`.
+Independent AST/byte comparison proves both accepted methods and unchanged
+surrounding code. Preexisting assertions/caller fixtures remain unchanged.
+
+Modal baseline: 15 methods, 20 failing assertions/subtests, zero errors; candidate
+20 PASS includes 15 inert new methods and five existing offscreen fixtures.
+Independent actual-window radial controls establish later real in-memory safety
+locking and persistent gating on ordinary failure, plus healthy/process-control
+counterexamples. Three mutations are rejected. Lock baseline: 16 methods,
+19 failing assertions/subtests, zero errors; candidate 22 PASS includes six
+existing offscreen neighbors. Six extra controls and eight original probes PASS;
+five mutations rejected. The initial note-access mutation harness error is
+retained; final absent-note-safe assertions reject the mutant without errors.
+
+After composition, independent combined 37 methods, lock 22, six controls and
+eight original probes PASS; separately modal 20 and four actual-window controls
+PASS. Author selected 36 methods, API freeze and static gates PASS. These
+selections overlap, so their totals are not added as unique coverage. Offscreen
+window fixtures use inert transports/audio; no physical wire/native presentation
+acceptance is inferred. Full34 above applies to the prior source; aggregate
+qualification of this composed stage is pending. Evidence: modal-input-diagnostic,
+modal-input-composed-review and lock-input-diagnostic packets, dated 20261018.
+No raw logs are published.
+
+### Completed thirty-fifth integrated result
+
+`client-renewed20h-full35/results.json` was independently read and verified as
+**completed: 399 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `4f82d8a9f4ef42e69f56c4398eaa887d`. Exact source: local
+`86136deedd53eca01cb715d41769859c94c97c9d`, public
+[ada3739f55c7acf63d89be7c1f545496dd0be356](https://github.com/lulunomaro/polar-rm-client/commit/ada3739f55c7acf63d89be7c1f545496dd0be356),
+tree `a7cfce7678c984aff720f0845ae1e5d45ed83797` (parent-verified public mapping).
+Provenance records `dirty: false` at start. Declared source stability passed with
+**754 inputs** at both endpoints and SHA-256
+`f9d2fb5132806e87cc7b9150a6dc874c56d187f0814ef03a3304890040c3ec66`.
+Existing fingerprint scope, exclusions and endpoint limitations apply.
+The new lock and modal diagnostic modules passed 16 and 15 methods respectively.
+Full34's completed 397/12/4/0 checkpoint remains separate at its own source.
+Four incomplete prerequisites continue to prevent GO.
+
+The composed modal/lock input diagnostic repairs preserve their different caller
+contracts. Modal cleanup absorbs ordinary operation errors, continues independent
+neutral attempts and retains its failed-cleanup latch; direct radial/ClickGUI
+admission does not already revoke backend authority. Lock cleanup retains its
+first-error rethrow contract after independent UI actions. Its manager caller
+already revokes authority/adopts backend neutral before the hook and requeues
+ordinary failure; direct startup/shutdown calls have different surrounding owners.
+Both nested helpers isolate ordinary diagnostic/optional-note failures without
+replacing the original errors. Best-effort notes introduce no durable diagnostic
+channel or Python 3.11 dependency. BaseExceptions remain unsuppressed.
+
+Independent composition checks verify each method matches its accepted external
+candidate, the whole file equals precisely those two replacements, and existing
+tests/assertions remain unchanged. Integrated combined selection: 37 PASS; lock
+selection: 22 PASS; six independent lock controls and eight original lock probes
+PASS separately. These selections overlap. Modal external review separately
+passed 20 methods, paired four actual radial/safety scenarios and rejected three
+mutations. Baseline new suites remain modal 15 methods/20 failing outcomes and
+lock 16 methods/19 failing outcomes, each zero errors. Five lock mutations were
+rejected. Counts are not unique defect or aggregate-method totals.
+
+Preserved process-control counterevidence: on both baseline and candidate, actual
+manager logger `SystemExit` propagates after revocation/backend-neutral admission,
+without ordinary-failure requeue or diagnostic recording. The request is consumed,
+the persistent UI latch stays set and transient guard clears. Remaining actions
+are not promised after process-control interruption. Modal and lock behavior must
+not be collapsed into a universal prior-revocation or continuation claim.
+
+Evidence is in the modal and lock input diagnostic packets and independent
+reviews. New lock methods/controls are inert; six integrated neighbor methods use
+actual offscreen Qt windows with backend starts/audio load/play patched and
+capture/preload disabled. Python 3.10 grammar/capability checks are not a Python
+3.10 runtime result. Physical neutral acknowledgment, native presentation and
+hardware behavior remain unqualified. Historical evidence and external blockers
+remain; no raw logs are published.
+
+### Final-context failure storage through broken diagnostics
+
+The remaining two final-context error handlers could lose their stored failure
+records and the actual window adapter's warnings when ordinary logging raised.
+The context-entry/release-factory finally path already attempted doneCurrent;
+no additional skipped GL retirement is established. The repair guards only the
+two logger calls and uses the existing safe failure-record formatter. Existing
+logging-before-formatting order, finalized seal, no-retry behavior and finally
+leave expression are preserved. The explicit leave-factory exception propagation
+contract remains unchanged, including its exception masking precedence.
+
+Frozen source SHA-256 `c617f4fcbbb897a8219613676324b9309d58608d5765977c298a4455fe7f119e`;
+new test `2897884fe2efda990b35866ade6ef70da734ee9dd22508d8b9214d1f18a6b3b3`.
+New baseline 15 methods produce 18 assertion/subtest failures, zero errors.
+Independent external candidate: 81 focused methods and six inert controls PASS;
+eight runtime-only mutations rejected, including formatting before logging.
+The original unchanged seven-method probe retains three expected subtest failures
+in one characterization requiring ordinary logger propagation. Both original
+defect methods pass. This intentional ordinary-exception absorption is documented
+separately from aggregate results. Operation/logger/formatter BaseException
+identity and prefixes remain preserved; no universal retirement guarantee.
+
+Whole-file AST differs only in these two guards/formatter calls. Actual
+closeEvent/finish adapter controls verify warning delivery and superclass-finally
+behavior. Author integrated 81 methods, API freeze and static gates PASS;
+independent integrated review and aggregate qualification are pending. Full35
+above qualifies only the prior source. Evidence: window-final-context-diagnostic-
+20261018 local packet. No raw logs published.
+
+Independent integrated review accepted exact frozen source/test bytes: normal-
+import 81 focused methods, six inert controls and both original defect methods
+PASS. Complete historical probe retains exactly three expected subtest failures,
+zero errors. Other AST and prior assertions remain unchanged. Next aggregate
+remains pending for this stage.
+
+### Completed thirty-sixth integrated result
+
+`client-renewed20h-full36/results.json` was independently read and verified as
+**completed: 400 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `1f00bda67cee460a982a6daf3b11109c`. Exact source: local
+`62f67446396aa051ea778630d5ad734316a1b2d8`, public
+[a95017730bf0d73cf7912a7f3c456238d3337a88](https://github.com/lulunomaro/polar-rm-client/commit/a95017730bf0d73cf7912a7f3c456238d3337a88),
+tree `be6a652f1950d4ed1f0b74010d6a3901b905ea33` (parent-verified public mapping).
+Provenance records `dirty: false` at start. Declared source stability passed with
+**755 inputs** at both endpoints and SHA-256
+`6704916a36349669d570f1904aafcc1ee70aa3a170cea7377ce937df6dc24eb8`.
+Existing fingerprint scope, exclusions and endpoint limitations apply.
+The new final-context diagnostic module passed 15 methods. Full35's completed
+399/12/4/0 checkpoint remains separate at its own source. Four incomplete
+prerequisites continue to prevent GO.
+
+The final-context diagnostic repair is independently accepted in its integrated
+two-file scope. Two ordinary logger guards and two uses of the existing safe
+formatter preserve original context failures in stored/returned warning records.
+Ordinary diagnostic failure no longer interrupts that storage/warning path.
+Logging still precedes formatting, preserving the healthy logging context and
+operation/logger/formatter process-control order. Secondary diagnostic errors
+are not newly persisted. Finalization seals and finally-leave expression remain
+unchanged; this does not establish additional GL/native resource retirement.
+
+Independent integrated selection: 81 methods PASS; six inert controls and both
+original defect methods PASS separately. The new 15-method suite has 18 failing
+outcomes and zero errors on baseline. Seven supplied mutations and an independent
+formatting-before-logging mutation were rejected. Counts overlap. The unchanged
+historical seven-method probe retains **three intentional failing subtests, zero
+errors**, in its one old ordinary-logger-propagation characterization; the other
+six methods pass. That counterevidence is separate from the aggregate and is not
+relabeled green or hidden by changing the old assertion.
+
+Leave-factory exceptions still propagate and can prevent final result assignment;
+their existing exception-masking precedence remains. Caller warning/event errors
+also remain outside this owner. Actual closeEvent/finish AST controls retain
+superclass-finally behavior after warning success or failure. Existing assertions
+and all unrelated methods remain unchanged. Inert focused resources construct no
+QApplication/window or native GL context. Python 3.10 grammar is checked, while
+runtime evidence uses Python 3.12. Historical results and external prerequisites
+remain; no raw logs are published or universal diagnostic closure claimed.
+
+### Tick-stage diagnostic isolation
+
+A bounded adjacent-owner audit reproduced ordinary Python logger failures
+escaping TickStageRunner._record_error through the actual runtime adapter and
+skipping 13 later inert callbacks, including readiness and polar.link. Counters,
+original error text and timing were already recorded: this is continuation loss,
+not pre-bookkeeping loss. A standard closed in-memory stderr reproduces it.
+No device or spin implementation was executed and no historical timing cause is
+inferred. Only the primary logger.exception and fallback logger.warning calls
+are guarded against ordinary Exception. Field-log emission still follows a
+broken primary logger; fallback logging keeps its active field-log exception.
+Counters, throttle, timing and healthy messages/context remain unchanged.
+
+Source SHA-256 `c13b827a71d4139e29ddc3d78ce7118c81691e3ec9e6faea708bb759458ea5fe`;
+new test `8758a0c9d47e6fef71bd6177a0664b37a917fea9ae50ffe0e0f3e8ea66d81081`.
+New baseline 16 methods reproduce 12 assertion/subtest failures, zero errors.
+Independent candidate: 47 focused methods, eight original probes and seven extra
+inert controls PASS; seven runtime-only mutations rejected. A separate pure
+30-test selection passes with an explicit assertion of no facade/spin imports.
+The 47-test selection includes existing facade-importing window tick tests that
+replace domain guards with inert recorders and construct no window. These scopes
+are distinct and counts overlap. Whole-file AST restores exactly after removing
+the two guards. Failed primary rendering, clock/mapping failures and all
+process-control exceptions remain outside the ordinary logging guards.
+
+Author integrated 47 methods, API freeze and static quality gates PASS. Full36
+above qualifies the earlier source. Independent integrated validation and next
+aggregate are pending. Local packet: tick-diagnostic-isolation-20261018. No raw
+logs are published and no broad runtime/native acceptance is claimed.
+
+Independent integrated review accepted exact source/test bytes: normal-import
+47 focused, pure 30, seven controls and eight original probes PASS. Pure selection
+confirms no facade/spin imports; old tests, runtime adapter and AST outside the
+two guards remain unchanged. Next aggregate qualification is pending.
+
+### Completed thirty-seventh integrated result
+
+`client-renewed20h-full37/results.json` was independently read and verified as
+**completed: 401 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `3d01d8449b254a228998b8546f66f1e0`. Exact source: local
+`7c85c0426abb7ef689e9b07d3f594d8166b9e80a`, public
+[7b6057433127ebbaa1fd7105e3ccb3bc6ad61d7a](https://github.com/lulunomaro/polar-rm-client/commit/7b6057433127ebbaa1fd7105e3ccb3bc6ad61d7a),
+tree `b7e03c259dc5e64d4cade45b3305dc22bba8ebfd` (parent-verified public mapping).
+Provenance records `dirty: false` at start. Declared source stability passed with
+**756 inputs** at both endpoints and SHA-256
+`58a073c8308a41ae8e985f6f0a3d31350a0bd077ec3e3f86ab0915536c97428e`.
+Existing fingerprint scope, exclusions and endpoint limitations apply.
+The new tick diagnostic module passed 16 methods. Full36's completed
+400/12/4/0 checkpoint remains separate at its own source. Four incomplete
+prerequisites continue to prevent GO.
+
+The tick diagnostic continuation repair is independently accepted in its
+integrated two-file scope. Two ordinary-exception logger guards prevent primary
+or fallback logging failure from skipping later runtime stages. Primary logger
+failure still permits the independent field-log attempt. Existing count/error
+bookkeeping, throttle and finally-duration accounting already survived logger
+failure and remain unchanged. Actual runtime-adapter probes exercise continuation
+with inert callbacks, including the baseline's skipped 13 later callbacks.
+
+Independent integrated evidence: 47 focused methods PASS, seven added inert
+controls PASS and eight unchanged original probes PASS separately. The pure
+30-method selection also passes with a post-run assertion of no facade or spin
+module imports. The 47-method selection imports the facade but substitutes inert
+domain recorders, constructs no QApplication/window/native GL context, and runs
+no spin algorithm. These overlapping selections must not be summed. The new
+16-method baseline suite gives 12 failing outcomes and zero errors; seven
+runtime-only mutations are rejected. Existing tests and actual adapter are
+unchanged; module AST differs only by the two guards.
+
+Initial operation-exception rendering is explicitly outside this repair: a first
+`__str__` failure still leaves count/timing but prevents later text/statistics and
+throttle work. Clock/mapping failures and final-clock exception masking remain.
+BaseExceptions are unsuppressed and finally precedence is unchanged. Fixed clock
+values are fixtures, not timing measurements or a historical-latency explanation.
+Python 3.10 grammar checks are separate from Python 3.12 execution. Evidence is
+in the local tick diagnostic packet and independent review; external prerequisites,
+prior failures and native qualification limits remain. Raw logs are not published.
+
+### Emergency/focus-loss failure formatting
+
+The emergency owner constructed StopFailure records with unguarded str(error)
+before later independent cleanup. An ordinary formatting exception could cancel
+E-stop fallback locking, focus-loss neutral fallbacks or pending clear after a
+zero-publication failure. The actual AST-loaded focus adapter still reached Qt
+finally, but later dragging clear was skipped. The initial eight-method inert
+probe has four continuation failures and four controls passing, zero errors.
+No physical output or generic backend-revocation failure is inferred.
+
+One private formatter now captures the original type before str and substitutes
+an unprintable-message marker only on ordinary formatting exceptions, at the
+four existing conversion sites. Normal text, evaluation order, action order,
+status and rejected-reason handling remain unchanged. No new class/API/framework.
+Frozen source SHA-256 `9e7e1bb3ac2d5a624d86c6ed6ca6720a18d515771eb4ffde3a0f203f34823055`;
+new test `1489e61b8ba97d328c258dc9b1dba0af156f2b888d0c0a632037e5897964b0e2`.
+New 17-method baseline produces 24 assertion/subtest failures, zero errors.
+Independent candidate 25 focused methods, eight original probes and seven extra
+controls PASS; eight in-memory mutations rejected. Pure-import verification
+confirms no facade, manager-module or spin imports; actual manager methods are
+AST-loaded and use real in-memory OfficialSafety with inert callbacks.
+
+An early ordinary manager stop failure now reaches fallback LOCKED. A late failure
+retains estop_active, while existing fallback projects displayed control_state to
+LOCKED. A formatter SystemExit still propagates before fallback and can retain
+prior QUALIFICATION/token state, identically on baseline and candidate. No
+process-control cleanup guarantee is introduced. Pre-attempt method lookup
+failures and failed lock operations remain explicit boundaries.
+
+Author integrated 25 methods, API freeze and static gates PASS. Independent
+integrated validation and next aggregate are pending; full37 above applies only
+to its earlier source. Local packet: emergency-formatting-20261018. No raw logs
+published or native qualification inferred.
+
+Independent integrated review accepted exact source/test hashes: normal-import
+25 PASS with no facade/manager/spin imports, seven controls and eight original
+probes PASS. Other source/caller AST and prior assertions are unchanged. Early
+formatter BaseException and late estop_active/display distinctions remain.
+Aggregate qualification is pending for this source stage.
+
+### Completed thirty-eighth integrated result
+
+`client-renewed20h-full38/results.json` was independently read and verified as
+**completed: 402 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `b29c273fd6234389b65841253d557731`. Exact source: local
+`5ab04204c7061b515943bc19446e999726612f23`, public
+[e84258e5255b36c61616ec979ea02ea61ad9359a](https://github.com/lulunomaro/polar-rm-client/commit/e84258e5255b36c61616ec979ea02ea61ad9359a),
+tree `b7e2a230bf84957fd163edf1a4530b06802bc64a` (parent-verified public mapping).
+Provenance records `dirty: false` at start. Declared source stability passed with
+**757 inputs** at both endpoints and SHA-256
+`1ef349e909703402aa5885179add695a9d4c9ab79795a708fc79e8b4bdc53a05`.
+Existing fingerprint scope, exclusions and endpoint limitations apply.
+The new emergency formatting module passed 17 methods. Full37's completed
+401/12/4/0 checkpoint remains separate at its own source. Four incomplete
+prerequisites continue to prevent GO.
+
+The emergency/focus-loss formatting repair is independently accepted in its
+integrated two-file scope. One private formatter and four replacement expressions
+preserve the original operation type when ordinary exception rendering fails,
+so later independent fallback/cleanup attempts are reached and failed attempts
+remain reported incomplete. Type-before-render evaluation is preserved; broken
+formatting is not retried. Existing manager/safety/caller AST and prior assertions
+are unchanged. This is deterministic fault injection, not a reported field incident.
+
+Independent integrated evidence: 25 focused methods PASS, seven added inert
+controls PASS and eight unchanged original probes PASS separately. The new
+17-method baseline suite gives 24 failing outcomes, zero errors; original eight
+baseline probes give four failures, zero errors. Eight runtime-only mutations
+are rejected. Counts overlap. Actual manager lock/E-stop and focus-event methods
+are source-loaded AST with inert collaborators and real in-memory safety; the
+post-run assertion confirms no facade, manager implementation module or spin
+imports. This is not full-window or native-device execution.
+
+Ordinary early manager failure now reaches fallback LOCKED and token revocation,
+without claiming E-stop completion. A late E-stop failure retains `estop_active`
+while the existing fallback displays control_state LOCKED. Explicit unchanged
+counterevidence remains: early formatter `SystemExit` still propagates before
+fallback lock and retains prior QUALIFICATION/token on baseline and candidate.
+Pre-attempt input-method lookup failure can still skip later clear. BaseExceptions
+remain unsuppressed, and focus superclass-finally precedence is retained. No
+universal all-exception revocation or physical neutral delivery is claimed.
+
+Evidence is in the local emergency formatting packet and independent review.
+Python 3.10 grammar checks remain separate from Python 3.12 execution. Historical
+failures, native qualification limits and external prerequisites remain; raw logs
+are not published and no historical timing cause is inferred.
+
+### ClickGUI cache recovery after diagnostic failure
+
+The real draw_gui_cached_layer and ClickGuiLayerCache ASTs reproduced an ordinary
+logger exception skipping cache.clear and compatibility painting. On a failed
+cache-hit draw the entry remains owned. This establishes retained cache and
+skipped fallback, not displayed stale pixels. Builder painter restore/end already
+ran before diagnostic handling and remain unchanged. Original eight-method
+probe: three continuation failures, five controls pass, zero errors.
+
+The candidate guards only the existing logger.exception call. Log, clear and
+fallback order remains unchanged; saved renderer choice, next-frame rebuild,
+coordinates/DPR, painter cleanup and original exception context remain intact.
+BaseException, failed clear and failed fallback retain existing identity/prefix.
+Source SHA-256 `e6b4f42e0eebf8706bda338953f5f8b6a08514efd04ea4915c91b57715d5ff5c`;
+new test `be1856850bf1f9aca5d858e7512e04e6529da531803722be1860aa55d818854f`.
+New baseline 19 methods yield ten assertion/subtest failures, zero errors.
+Independent candidate 19 methods, eight original probes and seven extra inert
+controls PASS; seven runtime-only mutations rejected. Import checks confirm no
+native Qt/GL or facade/cache/manager/spin modules: actual methods/class are
+AST-loaded with inert painter/value objects. Whole-window AST is identical after
+unwrapping this single guard; actual cache source bytes are unchanged.
+
+Author integrated 19 methods, API freeze and static gates PASS. Independent
+integrated validation and next aggregate remain pending. Full38 above applies
+to the earlier source. No native raster/display/GPU qualification or historical
+ESC/fullscreen cause is claimed. Local packet: clickgui-cache-diagnostic-20261018.
+No raw logs published.
+The exposed caller is the legacy cached painter branch; this finding is not
+extended to the primary Jello rendering path.
+
+Independent integrated review accepted exact source/test bytes: repository-source
+19 methods with pure-import assertion, seven controls and eight original probes
+PASS. Cache owner bytes, unrelated window AST and prior assertions are unchanged.
+Aggregate qualification of this stage remains pending.
+
+### Completed thirty-ninth integrated result
+
+`client-renewed20h-full39/results.json` was independently read and verified as
+**completed: 403 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `0c2b55f9f3df4266a88776801ba0044b`. Exact source: local
+`71a183b2e2156c73e3df53cbb97f875d897fe883`, public
+[360059ce12c34668af9a7ee54a1bc45111d5065f](https://github.com/lulunomaro/polar-rm-client/commit/360059ce12c34668af9a7ee54a1bc45111d5065f),
+tree `0549d3010ef718648009339d8bbf7c0a6ad686d7` (parent-verified public mapping).
+Provenance records `dirty: false` at start. Declared source stability passed with
+**758 inputs** at both endpoints and SHA-256
+`e92a183df9d8e37cb386fa81b4aeefb807cebb8c53b7d9dc50ed09e6081e16aa`.
+Existing fingerprint scope, exclusions and endpoint limitations apply.
+The new cache diagnostic module passed 19 methods. Full38's completed
+402/12/4/0 checkpoint remains separate at its own source. Four incomplete
+prerequisites continue to prevent GO.
+
+The ClickGUI cache diagnostic repair is independently accepted in its integrated
+two-file scope. One ordinary logger guard lets the existing cache clear and
+compatibility fallback continue after diagnostic failure. Exact log context and
+log-before-clear-before-fallback order remain. The cache owner, local painter
+finally cleanup, saved renderer preference and next-frame recovery are unchanged.
+The affected callers are legacy cached panel modes, not the primary Jello painter.
+
+Independent integrated evidence: 19 methods PASS, seven extra inert controls PASS
+and eight unchanged original probes PASS separately. Original baseline probes
+retain three failures, zero errors, and five positive controls. The same new
+19-method suite produces ten failing outcomes and zero errors on baseline. These overlapping
+selections are not summed. Post-run assertions confirm no Qt/GL or facade/cache/
+manager/spin module imports. Actual window/cache AST is exercised with inert
+image/painter collaborators; the facade-importing real-raster neighbor was not
+run in this focused packet. Pre-existing tracked assertions remain unchanged.
+
+Proven effects are retained cache entries and skipped fallback on baseline.
+Displayed stale pixels, wrong-key selection and native GPU effects were not
+established; retained same-key images are not automatically semantically stale.
+Local painter cleanup already preceded logging, so no new resource-leak repair
+is claimed. BaseExceptions and clear/fallback errors still propagate according
+to their original policy. Evidence is in the local ClickGUI cache packet and
+independent review. Historical failures and external/native qualification gaps
+remain; raw logs are not published.
+
+### Close refusal survives diagnostic failure
+
+An ordinary logger exception after close-admission preparation failed could
+prevent the False return and the actual closeEvent adapter's event.ignore().
+Six original inert methods give two baseline failures and four controls passing,
+zero errors; standard closed stderr reproduces it. Actual manager lock AST and
+real in-memory safety show authority was already revoked, shutdown was not
+started, and the draft was retained. The inert event remains initially accepted
+on the failing baseline; native Qt closing or resource leakage is not established.
+
+Only the existing admission logger receives an ordinary Exception guard. Log,
+toast and False-return order remains unchanged; successful and pending-save
+paths remain unchanged. Frozen source SHA-256
+`bf493a5217b467c362a960b4d1572f4b3db013f7f41edc68fd02f4a8b3875439`;
+new test `d3d2ae33cccf9b6b0938bd5183fd78769cf5951b5c78d7fe8d620f9992cd744c`.
+New baseline 17 methods reproduce eight assertion/subtest failures, zero errors.
+Independent candidate 38 focused (17 new, 21 save-owner neighbors), original six
+probes and seven controls PASS; seven runtime-only mutants rejected. Four
+retained-boundary controls also pass on baseline. Whole-source bytes restore
+exactly after unwrapping the guard; actual caller/manager/persistence snapshots
+and old assertions remain unchanged. Pure-import boundaries pass.
+
+Formatting, toast and property errors and process-control exceptions retain their
+explicit propagation boundaries. Author integrated 38 methods, API freeze and
+static gates PASS; independent integrated and aggregate qualification pending.
+Full39 above applies to the earlier source. Local packet:
+close-admission-diagnostic-20261018. No raw logs published.
+
+A separate final tick-performance warning probe covers 25 inert cases: metrics
+and all earlier runtime/frame-request work complete before warning escape, with
+no later callback in that adapter. No lost internal continuation or bookkeeping
+was established, so no tick-performance patch is bundled or historical timing
+cause inferred.
+
+Independent integrated review accepted exact source/test bytes: 38 focused,
+seven controls, pure 17 and six original probes PASS through integrated source.
+The reviewer's first original-probe invocation retained its hardcoded frozen
+baseline path and reproduced the two baseline failures; that log is preserved,
+and the corrected integrated run is separate. Source outside the single guard,
+dependencies and prior assertions are unchanged. Aggregate remains pending.
+
+### Completed fortieth integrated result
+
+`client-renewed20h-full40/results.json` was independently read and verified as
+**completed: 404 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `bbfc4a256f5b48169f33fa4805264324`. Exact source: local
+`ea88c71c305d2081dd6c3e26a72afbbb96951a05`, public
+[faf97c19f92a18f4086ad5f4316e48598c11feb7](https://github.com/lulunomaro/polar-rm-client/commit/faf97c19f92a18f4086ad5f4316e48598c11feb7),
+tree `f3e388e37bc70b38a37a32c95bd186363c6235e5` (parent-verified public mapping).
+Provenance records `dirty: false` at start. Declared source stability passed with
+**759 inputs** at both endpoints and SHA-256
+`4b1724116089369b718d8cf24dfa7116eb87e7cef1e4d0f991fb2d34c63c7f15`.
+Existing fingerprint scope, exclusions and endpoint limitations apply.
+The new close-admission diagnostic module passed 17 methods. Full39's completed
+403/12/4/0 checkpoint remains separate at its own source. Four incomplete
+prerequisites continue to prevent GO.
+
+The close-admission diagnostic repair is independently accepted in its integrated
+two-file scope. One ordinary logger guard restores the existing warning, False
+return and actual closeEvent adapter's event.ignore path after failed preparation.
+Draft state is retained and shutdown does not start; later explicit successful
+admission can still begin shutdown once. Save-required authority revocation was
+already performed before preparation/logging on baseline and candidate. No-save
+behavior gains no locking policy. A late manager log failure still reports an
+incomplete stop despite local LOCKED state.
+
+Independent integrated evidence: 38 focused methods PASS, seven extra controls
+PASS, pure 17-method import-boundary check PASS and six original probes PASS in
+separate overlapping selections. The new 17-method baseline suite gives eight
+failing outcomes, zero errors; seven mutations are rejected. The first integrated
+original-probe invocation accidentally selected its hardcoded frozen baseline,
+producing its expected two failures. That log is retained. Corrected explicit
+integrated window/current-manager source selection changes no assertions and
+passes all six probes; the initial result is not relabeled a candidate failure.
+
+Actual window/manager/persistence AST and pure safety/emergency owners execute
+with inert collaborators. No Qt/GL, facade, manager implementation or spin imports
+occur in the pure check. The initially accepted close event is inert: native Qt
+exception dispatch, real window destruction and physical neutral delivery were
+not exercised. Formatting/toasts, property lookup, truthiness, event.ignore,
+shutdown admission and ready finalization remain outside the logger guard;
+BaseExceptions preserve existing identity/prefix. Some failures can still occur
+before revocation or leave the inert event unignored, so no blanket fail-closed
+claim is made. Existing assertions and owners remain unchanged.
+
+Evidence is in the local close-admission packet and independent review. The
+separate final-tick warning observation is not included. Python 3.10 grammar
+checks are distinct from Python 3.12 execution. Historical results and external
+prerequisites remain; raw logs are not published.
+
+### Final timing-warning callback return
+
+The separate final timing-warning characterization established ordinary warning
+exceptions escaping the final on_tick callback after metrics and all prior
+runtime/frame work already completed. The new bounded repair restores normal
+callback return only. It does not restore lost earlier work or establish a
+historical timing cause. Only the warning call receives an ordinary Exception
+guard; publication, copies, five-second reporting window, rate/state accounting
+and original active field-log error context remain unchanged.
+
+Source SHA-256 `2cc2baa24a4d0df7f38861f1cddbe9674a87f3f78856174d11b5fa903f85bee8`;
+new test `5ecf3b7ec4c2474cb4b63e5748dd6c931bf0149dc94a8f6f2dde014dfed97899`.
+New baseline 16 methods yield 11 assertion/subtest failures, zero errors.
+Independent candidate 46 focused/pure-import methods and seven extra controls
+PASS; seven runtime mutants rejected. Five retained-boundary controls also pass
+baseline. The unchanged original 25-case characterizer passes baseline and
+retains its expected-escape assertion failure on candidate; this is documented
+changed-return counterevidence, not relabeled green. Metrics/prior callbacks
+remain preserved in the original proof. Reentry does not replay a consumed report.
+
+Actual on_tick/publication AST and the real pure TickDiagnostics owner are used;
+no facade/native/spin implementation is imported. Complete source bytes/AST
+restore after removing the single guard; timing owner and old assertions remain
+unchanged. Field/logger BaseException, malformed report and metric-property
+failure boundaries retain their previous behavior. Author integrated 46 methods,
+API freeze and static gates PASS; independent integrated and next aggregate
+qualification are pending. Full40 applies to its earlier source. Local packet:
+final-tick-warning-20261018. No raw logs published.
+
+Independent integrated review accepted exact hashes: normal-import 46 focused,
+seven controls and pure 46 PASS with no native/facade/manager/spin imports. Old
+characterizer's expected-escape assertion remains failed because return is now
+normal. Source outside one guard, timing owner and prior assertions are unchanged.
+Aggregate qualification remains pending for this stage.
+
+### Completed forty-first integrated result
+
+`client-renewed20h-full41/results.json` was independently read and verified as
+**completed: 405 PASS, 12 SKIP, 4 INCOMPLETE, 0 FAIL; NO-GO** (`passed: false`),
+run ID `f33fe762d4cd4f849ce94a290258c489`. Exact source: local
+`0a5300752ef1be7921c9fdf3cdf86a0d4e1e8fe1`, public
+[8b91d04ff5743368203a4463f06404d62a16296a](https://github.com/lulunomaro/polar-rm-client/commit/8b91d04ff5743368203a4463f06404d62a16296a),
+tree `df1fc7a9d2a61fe268da8febcd6a5ad49d55dd2b` (parent-verified public mapping).
+Provenance records `dirty: false` at start. Declared source stability passed with
+**760 inputs** at both endpoints and SHA-256
+`8f2fba1954f9e5f10de0a5c67f938a63ae9fc363b61c4e9d24e39b6d04cf195d`.
+Existing fingerprint scope, exclusions and endpoint limitations apply.
+The new final-tick diagnostic module passed 16 methods. Full40's completed
+404/12/4/0 checkpoint remains separate at its own source. Four incomplete
+prerequisites continue to prevent GO.
+
+The final tick-warning guard is independently accepted in its integrated two-file
+scope. Ordinary fallback warning failure now permits normal callback return after
+field-log failure, without retry or recursive logging. Metrics and all eight
+preceding top-level callbacks already completed on baseline; no later internal
+stage, bookkeeping, timer schedule or authority is restored. Report consumption,
+five-second start-time cadence, timing resets and exclusion of diagnostic overhead
+remain unchanged. BaseException identity/prefix and clock/mapping/prior-callback
+failure boundaries remain.
+
+Independent integrated evidence: 46 focused methods PASS, seven extra controls
+PASS, and a separate pure 46-method import check PASS without Qt/GL, facade,
+manager or spin implementation imports. Counts overlap. Baseline new16 gives
+11 failing outcomes, zero errors; seven mutation variants are rejected. The
+unchanged old 25-case characterizer passes on baseline but stops at its first
+expected-escape assertion on candidate, which now returns normally. That retained
+counterevidence is not reported as 25 candidate passes. Actual on_tick/publication
+AST and pure timing owner use inert callbacks; native scheduling, GPU behavior
+and historical timing causation remain untested.
+
+### Bounded eleven-slice diagnostic inventory
+
+The final-eleven-slice mapping at this same local source/tree records accepted
+function-AST equality and accepted test-byte equality for neutral release,
+owner-action aggregation, lifecycle direct failures, modal cleanup, lock cleanup,
+final-context storage, runtime-stage diagnostics, emergency formatting, legacy
+ClickGUI cache fallback, close refusal and final timing-warning return. Sequential
+changes to shared files are compared by complete function AST rather than wrongly
+requiring historical whole-file identity. This mapping parses source/hashes only;
+it is neither another test run nor eleven independent field incidents.
+
+No additional justified high-impact source defect was identified within that
+named inventory. This does not certify universal Clean Code or fault containment.
+Explicit remaining contracts include process-control propagation, pre-attempt
+lookup, fallible formatting/toasts, leave-factory/finally masking, differing
+revocation prefixes and inert-versus-native ownership limits. Native Windows,
+GL/audio/video/serial/robot/portable evidence, authentic external references and
+disposable installation qualification remain required. Historical activation and
+strict DT7 timing causes remain unresolved. No new abstraction or global coupling
+claim follows from these bounded repairs. Prior failed/interrupted records and
+changed-characterization results remain intact; raw logs are not published.

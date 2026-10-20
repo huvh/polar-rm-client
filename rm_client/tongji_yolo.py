@@ -361,7 +361,7 @@ class LocalAlignedVision:
         self._detector: TongjiYoloV5 | None = None
         self._thread: threading.Thread | None = None
         self._lock = threading.Lock()
-        self._pending: tuple[int, int, int, Any] | None = None
+        self._pending: tuple[int, int, int, Any, int] | None = None
         self._latest: tuple[int, int, int, int, list[dict[str, Any]], float, float, dict[str, Any] | None] | None = None
         self._prediction = MultiArmorPrediction()
         self._target_selector = LocalTargetSelector()
@@ -373,13 +373,25 @@ class LocalAlignedVision:
         self.retry_after = 0.0
         self._stop_event = threading.Event()
         self._pending_event = threading.Event()
+        self._lifecycle_lock = threading.RLock()
+        self._close_lock = threading.Lock()
+        self._closing = False
+        self._epoch = 0
+        # Camera/backend input identity is independent of detector lifetime.
+        self._input_source_key: tuple[Any, ...] | None = None
+        self._input_generation = 0
+        self._history_input_generation = 0
 
-    def configure(self, model_path: Path, device: str) -> None:
-        if model_path == self.model_path and device == self.device:
-            return
-        self.stop()
-        self.model_path = model_path
-        self.device = device
+    def configure(self, model_path: Path, device: str, *, wait: bool = True) -> None:
+        with self._lifecycle_lock:
+            if model_path == self.model_path and device == self.device:
+                return
+            self.stop(wait=False)
+            self.model_path = model_path
+            self.device = device
+            thread = self._thread
+        if wait:
+            self._wait_stopped_worker(thread)
 
     def configure_prediction(self, armor_count: int, radius_m: float, horizon_s: float) -> None:
         self.armor_count = max(2, min(4, int(armor_count)))
@@ -390,48 +402,135 @@ class LocalAlignedVision:
         """Limit autoaim lock to a center ellipse in source pixels; ESP still lists all detections."""
         self._target_selector.set_fov_radius(radius_x, radius_y)
 
-    def start(self) -> None:
-        if self.running:
-            return
-        if self._thread is not None and self._thread.is_alive():
-            return
-        if time.perf_counter() < self.retry_after:
-            return
-        self._stop_event = threading.Event()
-        self._pending_event = threading.Event()
-        self.running = True
-        self._thread = threading.Thread(
-            target=self._run,
-            args=(self._stop_event, self._pending_event),
-            name="polar-tongji-local",
-            daemon=True,
-        )
-        try:
-            self._thread.start()
-        except Exception:
-            self.running = False
-            self._thread = None
-            raise
+    @property
+    def cleanup_pending(self) -> bool:
+        """An admitted worker still owns inference/native destruction."""
+        with self._lifecycle_lock:
+            return self._closing or (not self.running and self._thread is not None and self._thread.is_alive())
 
-    def stop(self) -> None:
-        self.running = False
-        self._stop_event.set()
-        self._pending_event.set()
-        thread = self._thread
-        if thread is not None and thread.is_alive() and thread is not threading.current_thread():
-            thread.join(timeout=1.2)
-        if thread is None or not thread.is_alive():
-            self._thread = None
-            self._detector = None
+    @property
+    def cleanup_error(self) -> str:
+        # OpenVINO has no explicit close contract here; its last reference is
+        # released by the inference worker, never by stop(wait=False).
+        return ""
+
+    def start(self) -> None:
+        with self._lifecycle_lock:
+            if self.running or self._closing:
+                return
+            if self._thread is not None and self._thread.is_alive():
+                return
+            if time.perf_counter() < self.retry_after:
+                return
+            self._epoch += 1
+            self._stop_event = threading.Event()
+            self._pending_event = threading.Event()
+            thread = threading.Thread(
+                target=self._run,
+                args=(self._stop_event, self._pending_event, self._epoch),
+                name="polar-tongji-local",
+                daemon=True,
+            )
+            self._thread = thread
+            self.running = True
+            try:
+                thread.start()
+            except Exception:
+                self.running = False
+                self._epoch += 1
+                self._stop_event.set()
+                self._pending_event.set()
+                # A wrapper may start the real thread and then raise. Retain
+                # that owner even if it has already finished; it is joinable.
+                if thread.ident is None:
+                    self._thread = None
+                raise
+
+    def stop(self, *, wait: bool = True) -> None:
+        """Revoke publication now; optional legacy bounded wait is not close.
+
+        The admitted inference worker remains the sole detector owner through
+        its finally block. The UI uses wait=False and never destroys it here.
+        """
+        with self._lifecycle_lock:
+            self.running = False
+            self._epoch += 1
+            self._stop_event.set()
+            self._pending_event.set()
+            thread = self._thread
             with self._lock:
                 self._pending = None
+                self._latest = None
+        if wait:
+            self._wait_stopped_worker(thread)
+
+    def _wait_stopped_worker(self, thread: threading.Thread | None) -> None:
+        if thread is not None and thread.is_alive() and thread is not threading.current_thread():
+            thread.join(timeout=1.2)
+        with self._lifecycle_lock:
+            if self._thread is thread and (thread is None or not thread.is_alive()):
+                self._thread = None
+
+    def close(self) -> None:
+        """Strict wait for inference ownership, only on a teardown worker."""
+        if self._thread is threading.current_thread():
+            self.stop(wait=False)
+            raise RuntimeError("Local vision cannot wait for its own worker")
+        with self._close_lock:
+            with self._lifecycle_lock:
+                self._closing = True
+                thread = self._thread
+            try:
+                self.stop()
+                if thread is threading.current_thread():
+                    raise RuntimeError("Local vision cannot wait for its own worker")
+                if thread is not None:
+                    thread.join()
+                with self._lifecycle_lock:
+                    if self._thread is thread:
+                        self._thread = None
+            finally:
+                with self._lifecycle_lock:
+                    self._closing = False
+
+    def _set_input_source(self, key: tuple[Any, ...] | None) -> None:
+        """Retire old input without stopping/reloading the detector owner."""
+        with self._lifecycle_lock:
+            if key == self._input_source_key:
+                return
+            self._input_source_key = key
+            self._input_generation += 1
+            with self._lock:
+                self._pending = None
+                self._latest = None
+
+    def _capture_input_token(self, kind: str | None = None) -> tuple[int, int] | None:
+        """Snapshot this owner's lifetime/input identity, including while stopped."""
+        with self._lifecycle_lock:
+            if kind is not None and (
+                self._input_source_key is None or self._input_source_key[0] != kind
+            ):
+                return None
+            return self._epoch, self._input_generation
+
+    def _submit_for_input(
+        self, token: tuple[int, int] | None, sequence: int, width: int, height: int, bgr: Any
+    ) -> None:
+        """Submit only to the same owner from which the token was captured."""
+        with self._lifecycle_lock:
+            if not self.running or token != (self._epoch, self._input_generation):
+                return
+        # A frame copy must not hold the short revocation/publication lock.
+        frame = bgr.copy()
+        with self._lifecycle_lock:
+            if not self.running or token != (self._epoch, self._input_generation):
+                return
+            with self._lock:
+                self._pending = (sequence, width, height, frame, self._input_generation)
+            self._pending_event.set()
 
     def submit(self, sequence: int, width: int, height: int, bgr: Any) -> None:
-        if not self.running:
-            return
-        with self._lock:
-            self._pending = (sequence, width, height, bgr.copy())
-        self._pending_event.set()
+        self._submit_for_input(self._capture_input_token(), sequence, width, height, bgr)
 
     def latest(self, timeout_ms: float = 350.0) -> tuple[int, int, int, int, list[dict[str, Any]], float, float, dict[str, Any] | None] | None:
         with self._lock:
@@ -440,10 +539,20 @@ class LocalAlignedVision:
             return None
         return result
 
-    def _run(self, stop_event: threading.Event, pending_event: threading.Event) -> None:
+    def _run(self, stop_event: threading.Event, pending_event: threading.Event, epoch: int | None = None) -> None:
+        with self._lifecycle_lock:
+            epoch = self._epoch if epoch is None else epoch
+            model_path, device = self.model_path, self.device
+        detector = None
         try:
-            self._detector = TongjiYoloV5(self.model_path, self.device)
-            self.active_device = self._detector.active_device
+            if stop_event.is_set():
+                return
+            detector = TongjiYoloV5(model_path, device)
+            with self._lifecycle_lock:
+                if not self.running or epoch != self._epoch or stop_event.is_set():
+                    return
+                self._detector = detector
+                self.active_device = detector.active_device
             while self.running and not stop_event.is_set():
                 # Waiting for a latest-frame notification avoids the previous
                 # 3 ms busy loop, which multiplied into 100+ hot threads when
@@ -453,14 +562,30 @@ class LocalAlignedVision:
                 pending_event.clear()
                 if stop_event.is_set():
                     break
-                with self._lock:
-                    pending = self._pending
-                    self._pending = None
-                if pending is None:
-                    continue
-                sequence, width, height, bgr = pending
+                with self._lifecycle_lock:
+                    if not self.running or epoch != self._epoch or stop_event.is_set():
+                        break
+                    with self._lock:
+                        pending = self._pending
+                        self._pending = None
+                    if pending is None or pending[4] != self._input_generation:
+                        continue
+                sequence, width, height, bgr, input_generation = pending
+                if self._history_input_generation != input_generation:
+                    # Only the inference worker mutates tracking history. The
+                    # selector reset preserves its FOV and monotonic track ID.
+                    self._target_selector.reset()
+                    self._loss_probe.reset()
+                    self._prediction.reset()
+                    self._held_payload = []
+                    self._history_input_generation = input_generation
                 started = time.perf_counter()
-                detections = self._detector.detect(bgr)
+                detections = detector.detect(bgr)
+                with self._lifecycle_lock:
+                    if not self.running or epoch != self._epoch or stop_event.is_set():
+                        break
+                    if input_generation != self._input_generation:
+                        continue
                 elapsed = max(0.0001, time.perf_counter() - started)
                 payload: list[dict[str, Any]] = []
                 loss_evidence: dict[str, Any] | None = None
@@ -541,10 +666,15 @@ class LocalAlignedVision:
                         ]
                     else:
                         self._held_payload = []
-                self.inference_fps = 1.0 / elapsed
-                self.latency_ms = elapsed * 1000.0
-                with self._lock:
-                    self._latest = (time.time_ns(), sequence, width, height, payload, self.inference_fps, self.latency_ms, loss_evidence)
+                with self._lifecycle_lock:
+                    if not self.running or epoch != self._epoch or stop_event.is_set():
+                        break
+                    if input_generation != self._input_generation:
+                        continue
+                    self.inference_fps = 1.0 / elapsed
+                    self.latency_ms = elapsed * 1000.0
+                    with self._lock:
+                        self._latest = (time.time_ns(), sequence, width, height, payload, self.inference_fps, self.latency_ms, loss_evidence)
         except Exception as error:
             self.last_error = str(error)
             self.active_device = "unavailable"
@@ -552,7 +682,9 @@ class LocalAlignedVision:
             # 60 Hz UI tick. Retry slowly so a repaired file is still picked up.
             self.retry_after = time.perf_counter() + 5.0
         finally:
-            self.running = False
-            self._detector = None
-            if self._thread is threading.current_thread():
-                self._thread = None
+            with self._lifecycle_lock:
+                self.running = False
+                self._detector = None
+            # Keep the thread handle until actual exit. The local reference
+            # owns any native destructor, outside every lifecycle/UI lock.
+            detector = None

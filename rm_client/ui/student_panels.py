@@ -8,18 +8,59 @@ from __future__ import annotations
 from dataclasses import dataclass
 from collections import OrderedDict
 from pathlib import Path
+import time
 from typing import Any
 
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QFont, QImage, QPainter, QPen, QTextLayout, QTextOption
 
-from ..student_ui import active_buffs, damage_rows, device_rows, number, presentation_data, settlement_rows, value_text
+from ..student_ui import (active_buffs, damage_rows, device_rows, number,
+                          presentation_data, settlement_rows, value_text,
+                          v2_settlement_rows, v2_status_rows)
 from .clickgui_gpu import ClickGuiDrawList
 from .animation import Easings
 from .jello_clickgui import JelloMainTimeline
 from .jello_locale import module_label, setting_label, option_label, chinese_enabled
 from .minecraft_presentation import MinecraftItemAtlas
 from .fonts import draw_ui_text, elide_ui_text, has_cjk, ui_font_key
+
+
+def _v2_live_rows(host: Any, *, settlement: bool, now: float) -> tuple[tuple[str, str], ...]:
+    """Read current MQTT evidence; no state writes, publishers or held witness."""
+    backend = getattr(host, "backend", None)
+    profile = getattr(backend, "referee", None)
+    profile_id = getattr(profile, "profile_id", "")
+    if profile_id != "rm2026-v2.0.0":
+        return ()
+    state = host.state
+    mqtt = getattr(backend, "mqtt", None)
+    client = getattr(mqtt, "client", None)
+    generation = getattr(mqtt, "receive_generation", None)
+    client_id = str(getattr(mqtt, "client_id", ""))
+    scenario = getattr(backend, "scenario_key", None)
+    read_snapshot = getattr(mqtt, "v2_wire_snapshot", None)
+    snapshot = read_snapshot() if callable(read_snapshot) else None
+    rows = v2_settlement_rows if settlement else v2_status_rows
+    current = (getattr(mqtt, "connected", False) is True and client is not None
+               and getattr(mqtt, "referee", None) is profile)
+    result = rows(state, snapshot, now=now, profile_id=profile_id,
+                  connected=current, receive_generation=generation, client_id=client_id)
+    # An owner replacement/receipt during the read invalidates this frame.
+    # No old snapshot is cached for a reconnect or a new profile/round.
+    current = (current and getattr(host, "backend", None) is backend
+               and host.state is state and getattr(backend, "referee", None) is profile
+               and getattr(backend, "mqtt", None) is mqtt
+               and getattr(backend, "scenario_key", None) == scenario
+               and getattr(mqtt, "referee", None) is profile
+               and getattr(mqtt, "client", None) is client
+               and getattr(mqtt, "connected", False) is True
+               and getattr(mqtt, "receive_generation", None) == generation
+               and str(getattr(mqtt, "client_id", "")) == client_id
+               and callable(read_snapshot) and read_snapshot() is snapshot)
+    if not current:
+        return rows(state, None, now=now, profile_id=profile_id, connected=False,
+                    receive_generation=generation, client_id=client_id)
+    return result
 
 
 @dataclass(frozen=True)
@@ -140,12 +181,13 @@ class StudentPanelRenderer:
         if state.panel in {"inventory", "damage"} and state.progress >= 0.999:
             panel.moveTopLeft(QPointF(round(panel.x()*dpr)/dpr, round(panel.y()*dpr)/dpr))
         module = host.registry.get("SkillConfiguration")
+        content_rows = self.content_rows(host)
         key = (state.panel, round(panel.width(), 2), round(panel.height(), 2), round(dpr, 2),
                state.page, state.category, state.selected, state.selected_slot, state.gate, state.quantity, state.dart_target, state.note,
                host.registry.enabled_revision, chinese_enabled(host.registry),
                tuple((s.name, str(s.value)) for s in module.settings) if module else (),
                str(host.minecraft_hud.assignments(host.registry.get("MinecraftCombatHUD"))),
-               str(self.content_rows(host)), str(presentation_data(host.state)))
+               str(content_rows), str(presentation_data(host.state)))
         if key != self._cache_key:
             image = QImage(max(1, round(panel.width() * dpr)), max(1, round(panel.height() * dpr)), QImage.Format.Format_ARGB32_Premultiplied)
             image.setDevicePixelRatio(dpr)
@@ -159,7 +201,7 @@ class StudentPanelRenderer:
             elif state.panel == "damage":
                 self.tab_panel(host, painter, local, scale, hits)
             else:
-                self.jello_panel(host, painter, local, scale, hits)
+                self.jello_panel(host, painter, local, scale, hits, rows=content_rows)
             painter.end()
             self._cache_key, self._cache_image, self._cache_hits = key, image, tuple(hits)
             self.rebuilds += 1
@@ -229,7 +271,11 @@ class StudentPanelRenderer:
         state = host.state
         data = presentation_data(state)
         if panel == "damage": return damage_rows(state)
-        if panel == "settlement": return host.student_ui.settlement or settlement_rows(state)
+        if panel == "settlement":
+            # Historical statistics stay frozen. Only current V2 outcome rows
+            # are rebuilt from actual wire evidence, including late partials.
+            live = _v2_live_rows(host, settlement=True, now=time.perf_counter())
+            return live + (host.student_ui.settlement or settlement_rows(state))
         if panel == "skills":
             static = (getattr(state, "robot_statics", {}) or {}).get(state.robot_id, {})
             sync = getattr(state, "performance_sync", {}) or {}
@@ -354,7 +400,8 @@ class StudentPanelRenderer:
         font.draw(p,r(8,143,264,11),"§7按住 ~ 查看 · 松开收起",s*.9,Qt.AlignHCenter)
         font.draw(p,r(8,154,264,10),"§7累计快照 / 未收到的字段显示 —",s*.9,Qt.AlignHCenter)
 
-    def jello_panel(self, host: Any, p: QPainter, rect: QRectF, s: float, hits: list[PanelHit]) -> None:
+    def jello_panel(self, host: Any, p: QPainter, rect: QRectF, s: float, hits: list[PanelHit],
+                    *, rows: tuple[tuple[str, str], ...] | None = None) -> None:
         panel = host.student_ui.panel
         p.setPen(Qt.PenStyle.NoPen); p.setBrush(QColor("#fefefe"))
         p.drawRoundedRect(rect,8*s,8*s)
@@ -363,13 +410,20 @@ class StudentPanelRenderer:
         self.text(host, p, QRectF(26*s, 5*s, 640*s, 60*s), title, 23, s, ink)
         self.button(host, p, QRectF(680*s, 18*s, 34*s, 30*s), "×", s, hits, "student_close")
         self.text(host, p, QRectF(26*s, 64*s, 688*s, 28*s), "裁判下行 / 未提供的字段显示 —" if panel != "skills" else "右侧为本地配置草稿，左侧为已同步状态", 11, s, "#8d959d")
-        rows = self.content_rows(host)
+        if rows is None:
+            rows = self.content_rows(host)
         if panel == "settlement":
+            # Twelve V2 tiles fit above the existing footer. Legacy ten-tile
+            # geometry and the frozen statistics are unchanged.
+            compact = len(rows) > 10
+            row_step, tile_height = (57, 49) if compact else (70, 60)
             for i,(label,value) in enumerate(rows):
-                row,col=divmod(i,2); tile=QRectF((26+col*354)*s,(104+row*70)*s,336*s,60*s)
+                row,col=divmod(i,2); tile=QRectF((26+col*354)*s,(104+row*row_step)*s,336*s,tile_height*s)
                 p.setBrush(QColor("#f2f5f8"));p.drawRoundedRect(tile,4*s,4*s)
-                self.text(host,p,tile.adjusted(12*s,3*s,-12*s,-30*s),label,10,s,"#888888")
-                self.text(host,p,tile.adjusted(12*s,25*s,-12*s,-2*s),value,18 if label!="能量机关" else 9,s,"#29a6ff")
+                self.text(host,p,tile.adjusted(12*s,3*s,-12*s,-(26 if compact else 30)*s),label,10,s,"#888888")
+                size = ((10 if label == "能量机关" or "当前" in label else 14)
+                        if compact else (18 if label != "能量机关" else 9))
+                self.text(host,p,tile.adjusted(12*s,(21 if compact else 25)*s,-12*s,-2*s),value,size,s,"#29a6ff")
         else:
             for i,(label,value) in enumerate(rows):
                 y=(108+i*49)*s
@@ -441,7 +495,8 @@ class StudentPanelRenderer:
         self.button(host,p,QRectF(153*s,205*s,30*s,12*s),"下一页",s,hits,"student_page",1,pixel=True)
 
     def draw_status(self, host: Any, p: QPainter, width: int, height: int) -> None:
-        rows=device_rows(host.state,host.registry)
+        rows=(device_rows(host.state,host.registry)
+              + _v2_live_rows(host, settlement=False, now=time.perf_counter()))
         buffs=active_buffs(host.state) if host.minecraft_hud_active() and host.registry.get("MinecraftBuffs").enabled else ()
         if not rows and not buffs:return
         # Lower-left reserved chat is separate. Status tiles use the map's own

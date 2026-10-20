@@ -91,31 +91,31 @@ def main() -> int:
     already = "POLAR-HOST-BRIDGE" in usb_probe
     owns_revert = False
 
-    if already:
-        print("[info] 桥接已存在于工作树，直接校验当前内容（不动 git）")
-    else:
-        if os.environ.get("POLAR_FIRMWARE_READ_ONLY") == "1":
-            print("[INCOMPLETE] Required prepared files are absent; read-only checks never install patches")
-            return 77
-        # 顺序很重要：**先拍快照**，再把要改的文件放回干净状态。
-        # 反过来做的话 checkout 丢掉的东西（prepare_hero_build 写的桥、别的自检装的补丁）
-        # 就再也 restore 不回来了。收尾只认这份快照，绝不用 git checkout -- .
-        # apply_host_bridge also bootstraps the drive-keys patch, which edits
-        # remote_control.c. Omitting it leaks a half-applied patch into the
-        # following gimbal test (and into a developer's firmware checkout).
-        SNAPSHOT = bf.stage(REPO, [USB_REL, RC_REL, MECA_REL, OMNI_REL, HEADER_REL])
-        git("checkout", "--", USB_REL, RC_REL, MECA_REL, OMNI_REL)
-        owns_revert = True
-        apply = subprocess.run(
-            [sys.executable, str(HERE / "apply_host_bridge.py"), str(REPO)],
-            capture_output=True, text=True, encoding="utf-8", errors="replace")
-        check("桥接可套用到固件副本", apply.returncode == 0,
-              (apply.stderr or apply.stdout)[-300:])
-        if apply.returncode != 0:
-            bf.restore(SNAPSHOT, REPO)
-            return 1
-
     try:
+        if already:
+            print("[info] 桥接已存在于工作树，直接校验当前内容（不动 git）")
+        else:
+            if os.environ.get("POLAR_FIRMWARE_READ_ONLY") == "1":
+                print("[INCOMPLETE] Required prepared files are absent; read-only checks never install patches")
+                return 77
+            # 顺序很重要：**先拍快照**，再把要改的文件放回干净状态。
+            # 反过来做的话 checkout 丢掉的东西（prepare_hero_build 写的桥、别的自检装的补丁）
+            # 就再也 restore 不回来了。收尾只认这份快照，绝不用 git checkout -- .
+            # apply_host_bridge also bootstraps the drive-keys patch, which edits
+            # remote_control.c. Omitting it leaks a half-applied patch into the
+            # following gimbal test (and into a developer's firmware checkout).
+            SNAPSHOT = bf.stage(REPO, [USB_REL, RC_REL, MECA_REL, OMNI_REL, HEADER_REL])
+            # Own cleanup before the first write, including interrupted checkout/apply.
+            owns_revert = True
+            git("checkout", "--", USB_REL, RC_REL, MECA_REL, OMNI_REL)
+            apply = subprocess.run(
+                [sys.executable, str(HERE / "apply_host_bridge.py"), str(REPO)],
+                capture_output=True, text=True, encoding="utf-8", errors="replace")
+            check("桥接可套用到固件副本", apply.returncode == 0,
+                  (apply.stderr or apply.stdout)[-300:])
+            if apply.returncode != 0:
+                return 1
+
         usb = (REPO / USB_REL).read_text(encoding="utf-8", errors="ignore")
         meca = (REPO / MECA_REL).read_text(encoding="utf-8", errors="ignore")
         omni = (REPO / OMNI_REL).read_text(encoding="utf-8", errors="ignore")

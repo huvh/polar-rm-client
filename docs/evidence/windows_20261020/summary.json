@@ -1,0 +1,162 @@
+{
+  "date": "2026-10-20",
+  "base_commit": "e43e908c737df374d31d974b2c1f435171d5fbbb",
+  "scope": "Windows UI/software integration, NOT hardware or complete release qualification",
+  "offline": {
+    "counts": {
+      "PASS": 426,
+      "SKIP": 12,
+      "INCOMPLETE": 4,
+      "FAIL": 0
+    },
+    "passed": false,
+    "source_stability": {
+      "schema_version": 1,
+      "status": "PASS",
+      "detail": "Declared verification source inputs have identical start/end fingerprints",
+      "scope": {
+        "directories": [
+          "rm_client",
+          "tests",
+          "tools",
+          "configs"
+        ],
+        "suffixes": [
+          ".bat",
+          ".c",
+          ".cfg",
+          ".cpp",
+          ".h",
+          ".hpp",
+          ".ini",
+          ".json",
+          ".ps1",
+          ".py",
+          ".spec",
+          ".toml",
+          ".yaml",
+          ".yml"
+        ],
+        "all_file_directories": [
+          "tests/fixtures"
+        ],
+        "root_files": [
+          "main.py",
+          "requirements*.txt"
+        ],
+        "exclusions": [
+          "hidden directories",
+          "__pycache__"
+        ],
+        "limits": "Start/end comparison only; includes all internal tests/fixtures files; excludes assets outside that fixture directory, external fixtures, installed packages and transient edits restored between captures."
+      },
+      "before": {
+        "status": "available",
+        "sha256": "1a20d6516bfa89b1a94f905f174c6d68c8302c3b346c809f13254c855d48c364",
+        "file_count": 791
+      },
+      "after": {
+        "status": "available",
+        "sha256": "1a20d6516bfa89b1a94f905f174c6d68c8302c3b346c809f13254c855d48c364",
+        "file_count": 791
+      }
+    },
+    "raw_report_sha256": "9f72be00daef526a842d51d4a2102d062e8a9b1ad2c58bb624264e4050023f12",
+    "incomplete": [
+      {
+        "id": "tools/dt7_link/test_dt7_link",
+        "status": "INCOMPLETE"
+      },
+      {
+        "id": "tools/dt7_link/test_dt7_ui_selftest",
+        "status": "INCOMPLETE"
+      },
+      {
+        "id": "tools/firmware/km_link/test_serial_parsers_portable",
+        "status": "INCOMPLETE"
+      },
+      {
+        "id": "tools/firmware/test_patch_logic",
+        "status": "INCOMPLETE"
+      }
+    ]
+  },
+  "native_opengl": {
+    "counts": {
+      "PASS": 4,
+      "SKIP": 0,
+      "INCOMPLETE": 0,
+      "FAIL": 0
+    },
+    "source_stability": {
+      "schema_version": 1,
+      "status": "PASS",
+      "detail": "Declared verification source inputs have identical start/end fingerprints",
+      "scope": {
+        "directories": [
+          "rm_client",
+          "tests",
+          "tools",
+          "configs"
+        ],
+        "suffixes": [
+          ".bat",
+          ".c",
+          ".cfg",
+          ".cpp",
+          ".h",
+          ".hpp",
+          ".ini",
+          ".json",
+          ".ps1",
+          ".py",
+          ".spec",
+          ".toml",
+          ".yaml",
+          ".yml"
+        ],
+        "all_file_directories": [
+          "tests/fixtures"
+        ],
+        "root_files": [
+          "main.py",
+          "requirements*.txt"
+        ],
+        "exclusions": [
+          "hidden directories",
+          "__pycache__"
+        ],
+        "limits": "Start/end comparison only; includes all internal tests/fixtures files; excludes assets outside that fixture directory, external fixtures, installed packages and transient edits restored between captures."
+      },
+      "before": {
+        "status": "available",
+        "sha256": "1a20d6516bfa89b1a94f905f174c6d68c8302c3b346c809f13254c855d48c364",
+        "file_count": 791
+      },
+      "after": {
+        "status": "available",
+        "sha256": "1a20d6516bfa89b1a94f905f174c6d68c8302c3b346c809f13254c855d48c364",
+        "file_count": 791
+      }
+    },
+    "raw_report_sha256": "34adca37277bc61c4a1d297a0e9170b3f9ea929e75e8adfa7c6f9140ee5f3ac9"
+  },
+  "native_jello": {
+    "tests_per_dpr": 14,
+    "dpr": [
+      1,
+      1.25,
+      1.5,
+      2
+    ],
+    "status": "PASS",
+    "scope": "Qt input/state tests; not a full visual matrix certification"
+  },
+  "compileall": "PASS",
+  "diff_check": "PASS",
+  "readiness": "NOT READY FOR REAL MATCH",
+  "release_published": false,
+  "outstanding_observations": [
+    "Earlier concurrent run observed audit-log shutdown timeout; root cause not closed by serial passes."
+  ]
+}

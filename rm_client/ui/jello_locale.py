@@ -526,6 +526,17 @@ DESCRIPTION_ZH = {
 }
 
 UI_ZH = {
+    "30 s supervised Air window: use Event commands during MATCH only, then explicitly Observe Economy. Status change is not a unique ACK; normal arming qualification pending.": "受监督空中支援窗口开放 30 秒：仅在比赛阶段使用赛事指令，随后手动观察经济状态。状态变化不是唯一回执，普通比赛授权仍待验收。",
+    "Create a V2 qualification session with a named operator first": "请先创建注明操作员的 V2 资格会话。",
+    "V2 preview: Hero requests are pending review; no command submitted": "V2 预览：英雄请求尚待审查，未提交任何指令。",
+    "V2 Air requires current connected OfficialEvent wire observations": "V2 空中支援需要当前已连接的官方赛事协议观测。",
+    "Air dialog context changed; reopen it for the current profile/session": "空中支援上下文已变化，请在当前配置和会话中重新打开。",
+    "Air dialog context changed; request discarded": "空中支援上下文已变化，请求已丢弃。",
+    "Air conditions changed again; reopen the dialog. No request was sent.": "空中支援条件再次变化，请重新打开对话框；未发送请求。",
+    "MOCK Air request recorded; no live enqueue or qualification evidence": "已记录模拟空中支援请求，未实际入队，也不作为资格证据。",
+    "Supervised Air requires a matching V2 session and named operator": "受监督空中支援需要匹配的 V2 会话及实名操作员。",
+    "V2 fixed-price Economy unavailable; opening supervised Air requests. Normal arming qualification pending.": "V2 固定价格经济操作不可用，改为打开受监督空中支援请求；普通比赛授权尚待验收。",
+    "V2 legacy offers, including captured/mock offers, are unavailable; use the Air menu": "V2 不提供旧版报价（含缓存或模拟报价），请使用空中支援菜单。",
     "POLAR-RM Custom Client": "POLAR-RM 自定义客户端",
     "Continue": "继续", "Settings": "设置", "Return to startup": "返回启动页", "Exit client": "退出客户端",
     "Cancel": "取消", "Exit client?": "退出客户端？",
@@ -844,6 +855,8 @@ def setting_label(value: str, chinese: bool) -> str:
 
 def option_label(value: Any, chinese: bool) -> str:
     text = str(value)
+    if text == "rm2026-v2.0.0":
+        return "RM2026 V2.0.0 · 遥测/监督空中请求预览" if chinese else "RM2026 V2.0.0 · telemetry/supervised Air preview"
     if not chinese:
         return text
     if text in MODULE_ZH:

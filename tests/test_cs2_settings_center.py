@@ -14,6 +14,7 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QSurfaceFormat, QKeyEvent
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QWidget, QInputDialog
+from rm_client.configuration.transactions import ConfigurationApplyError, ConfigurationRestorePoint
 from rm_client.control import KeyboardControlBridge
 from rm_client.model import RobotState, build_default_registry
 from rm_client.ui.cs2_settings_center import (
@@ -30,15 +31,84 @@ class Host(QWidget):
         super().__init__()
         self.resize(1280, 720)
         self.registry = build_default_registry(); self.state = RobotState()
+        self.config_loading = False
         self.control = KeyboardControlBridge()
         self.backend = Mock(mqtt=NS(mock_output=True))
         self.backend.trigger_estop.return_value = (True, "")
         self.frame_scheduler = Mock(); self.toast = Mock()
         self.auto_save_config = Mock(); self.after_setting_changed = Mock()
         self.invalidate_transient_overlay_scene = Mock(); self.invalidate_gui_cache = Mock()
+    def record_configuration_failure(self, error):
+        pass
+
+    def ensure_configuration_idle(self):
+        pass
+
+    def capture_configuration_restore_point(self):
+        return ConfigurationRestorePoint({}, dict(self.control.binds), True, "scenario")
+
+    def restore_configuration_runtime(self, previous):
+        pass  # This test host has no device or scene runtime to rebuild.
+
+    def fail_closed_configuration(self, previous, reason):
+        self.control.binds = dict(previous.control_binds)
+        self.backend.trigger_estop()
+        self.backend.lock_control(reason)
+
     def key_name(self, event):
         if event.key() == Qt.Key.Key_Shift: return "Shift"
         return event.text().upper()
+
+
+def ready_page(dialog, name):
+    """Exercise the production event-loop loader, never force a blocking fill."""
+    page = dialog.pages[name] if name in dialog.pages else dialog.crosshair
+    if not dialog.isVisible():
+        dialog.show()
+    dialog.tabs.setCurrentWidget(page)
+    from time import monotonic
+    deadline = monotonic() + 8
+    while not page.builder.ready and not page.builder.error and monotonic() < deadline:
+        QTest.qWait(10)
+    if not page.builder.ready:
+        raise AssertionError(page.builder.error or "settings page did not finish")
+    return page
+
+
+def partial_page(dialog, name):
+    """Wait for genuine partial rows, without completing or driving the queue."""
+    from time import monotonic
+    page = dialog.pages[name]
+    deadline = monotonic() + 1
+
+    def fail(phase):
+        builder = page.builder
+        raise AssertionError(
+            f"{phase}: panel_visible={dialog.panel.isVisible()}, "
+            f"page_visible={page.isVisible()}, progress={dialog.timeline.progress}, "
+            f"controls={len(page.controls)}, slices={builder.slices}, "
+            f"ready={builder.ready}, active={builder.active}, "
+            f"timer_remaining_ms={builder.timer.remainingTime()}, "
+            f"cancelled={builder.cancelled}, error={builder.error!r}"
+        )
+
+    def wait_until(predicate, phase):
+        while not predicate():
+            if page.builder.error or page.builder.cancelled or monotonic() >= deadline:
+                fail(phase)
+            QTest.qWait(1)
+
+    if not dialog.isVisible():
+        dialog.show()
+    wait_until(lambda: dialog.panel.isVisible() and not dialog.timeline.active(),
+               "Settings entrance did not finish")
+    dialog.tabs.setCurrentWidget(page)
+    wait_until(lambda: bool(page.controls), "Settings did not construct partial rows")
+    builder = page.builder
+    if (not page.isVisible() or not builder.active or not builder.slices
+            or builder.ready or builder.cancelled or builder.error):
+        fail("Settings did not retain a live partial build")
+    return page
 
 
 class SettingsTests(unittest.TestCase):
@@ -83,12 +153,32 @@ class SettingsTests(unittest.TestCase):
         apply_registry_draft(self.host, {}, module_binds={"TacticalMap": "F10"})
         self.assertEqual(self.host.registry.get("TacticalMap").keybind, "F10")
 
+    def test_callback_failure_restores_values_and_binds_without_saving_or_arming(self):
+        previous_binds = dict(self.host.control.binds)
+        sensitivity = self.host.registry.get("RobotLink").get_setting("Mouse Sensitivity")
+        previous_sensitivity = sensitivity.value
+        self.host.control.key_state["W"] = True
+        self.host.after_setting_changed.side_effect = OSError("runtime adapter unavailable")
+        with self.assertRaises(ConfigurationApplyError):
+            apply_registry_draft(self.host, {
+                ("RobotLink", "Bind W"): "S", ("RobotLink", "Bind S"): "W",
+                ("RobotLink", "Mouse Sensitivity"): 2.0,
+            })
+        self.assertEqual(self.host.control.binds, previous_binds)
+        self.assertEqual(sensitivity.value, previous_sensitivity)
+        self.assertFalse(any(self.host.control.key_state.values()))
+        self.assertFalse(self.host.config_loading)
+        self.host.backend.trigger_estop.assert_called_once()
+        self.host.backend.lock_control.assert_called_with("settings apply failed")
+        self.host.backend.arm_match.assert_not_called()
+        self.host.auto_save_config.assert_not_called()
+
     def test_settings_center_all_tabs_embedded_search_and_staged_mouse(self):
         dialog = build_settings_center(self.host); self.addCleanup(dialog.deleteLater)
         dialog.show(); APP.processEvents()
         self.assertEqual([dialog.tabs.tabText(i) for i in range(dialog.tabs.count())],
                          ["视频", "音频", "游戏", "键盘 / 鼠标", "准星", "界面 / HUD"])
-        page = dialog.pages["键盘 / 鼠标"]
+        page = ready_page(dialog, "键盘 / 鼠标")
         page.controls[("RobotLink", "Mouse Sensitivity")].spin.setValue(1.75)
         self.assertEqual(self.host.registry.get("RobotLink").get_setting("Mouse Sensitivity").value, 1)
         dialog.tabs.setCurrentWidget(page); dialog.apply_button.click()

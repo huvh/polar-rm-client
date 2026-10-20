@@ -150,9 +150,9 @@ class TopMatchBarController:
             return
         feed = self._ensure_feed()
         owner = self.owner
-        # This projection is specifically the audited RM2026 v1.3.1 contract.
-        # A preview/other-year codec must not silently reuse its field meanings.
-        if owner.backend.referee.profile_id != "rm2026-v1.3.1" or not owner.backend.mqtt.connected:
+        # These shared fields have been reviewed for both exact profiles.
+        # Student and unknown profiles must not inherit their meanings.
+        if owner.backend.referee.profile_id not in {"rm2026-v1.3.1", "rm2026-v2.0.0"} or not owner.backend.mqtt.connected:
             feed.reset()
             return
         expected_alliance = "Blue" if int(owner.state.robot_id) >= 100 else "Red"

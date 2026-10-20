@@ -11,9 +11,11 @@ import time
 from PySide6.QtCore import QPointF, QRectF, Qt, QTimer
 from PySide6.QtGui import QColor, QFontMetricsF, QPainter, QPainterPath, QPen, QPolygonF
 from PySide6.QtWidgets import QDialog, QHBoxLayout, QLabel, QLineEdit, QListWidget, QPushButton, QVBoxLayout, QWidget
-from ..model import CONTROL_SLOT_ORDER, CONTROL_RESERVED_KEYS
+from ..model import CONTROL_SLOT_ORDER, MODULE_RESERVED_KEYS
 from .fonts import draw_ui_text, cjk_ui_font, has_cjk, elide_ui_text
 from .jello_locale import module_label, category_label
+from .settings_application import validate_draft, apply_registry_draft
+from .emergency_shortcut import install_estop_shortcut
 from .jello_widgets import JelloDialog, apply_jello_widgets, draw_shadow, ease_out_back, jello_font, jello_regular_font
 
 
@@ -47,7 +49,7 @@ NAV_KEYS = tuple(Key(name,label,i*118,382,108,44,False) for i,(name,label) in en
     [("Insert","Ins"),("Home","Home"),("End","End"),("PageUp","PgUp"),("PageDown","PgDn"),
      ("Left","←"),("Up","↑"),("Down","↓"),("Right","→")]))
 ALL_KEYS = (*NATIVE_KEYS,*FUNCTION_KEYS,*NAV_KEYS)
-RESERVED = CONTROL_RESERVED_KEYS | {"escape"}
+RESERVED = MODULE_RESERVED_KEYS
 
 
 @dataclass(frozen=True)
@@ -84,7 +86,6 @@ class BindingSession:
         return [entry for entry in self.entries if self.values[entry.identity].lower()==key.lower()]
 
     def _validate(self, values):
-        from .cs2_settings_center import validate_draft
         driver = {identity:value for identity,value in values.items() if identity[0]=="RobotLink"}
         modules = {identity[1]:value for identity,value in values.items() if identity[0]=="module" and identity[1]!="ClickGui"}
         validate_draft(self.host,driver,modules)
@@ -120,7 +121,6 @@ class BindingSession:
                     widget = self.manager.controls.get(identity)
                 if widget is not None: widget.set_value(value)
             return
-        from .cs2_settings_center import apply_registry_draft
         driver = {k:v for k,v in self.values.items() if k[0]=="RobotLink" and v!=self.original[k]}
         modules = {k[1]:v for k,v in self.values.items() if k[0]=="module" and v!=self.original[k] and k[1]!="ClickGui"}
         if driver or modules: apply_registry_draft(self.host,driver,module_binds=modules)
@@ -129,42 +129,49 @@ class BindingSession:
 class BindingPicker(JelloDialog):
     def __init__(self, owner, key, target=None):
         super().__init__(owner,keyboard=True)
-        self.timeline.reverse_duration = .120
-        self.setObjectName("JelloBindingPicker")
-        self.resize(544,644); self.setMinimumSize(390,480)
-        screen = owner.screen().availableGeometry()
-        self.resize(min(544,screen.width()-30),min(644,screen.height()-40))
-        self.selected_entry = None
-        self.key = key
-        self.owner = owner
-        layout = self.panel.layout()
-        title = QLabel("选择要绑定的功能"); title.setFont(jello_font(36));title.setStyleSheet("font-size:30px;color:#666666;"); layout.addWidget(title)
-        self.search = QLineEdit(); self.search.setPlaceholderText("Search… / 搜索功能");self.search.setMinimumHeight(60); layout.addWidget(self.search)
-        self.list = QListWidget(); layout.addWidget(self.list,1)
-        self.reason_label = QLabel(); self.reason_label.setWordWrap(True); layout.addWidget(self.reason_label)
-        buttons = QHBoxLayout(); layout.addLayout(buttons)
-        back = QPushButton("返回"); add = QPushButton("Add / 添加")
-        add.setProperty("primary",True); buttons.addWidget(back); buttons.addStretch(); buttons.addWidget(add)
-        self.items = []
-        entries = sorted(owner.session.entries,key=lambda e:(e.identity!=target,e.category,e.title))
-        for entry in entries:
-            if entry.readonly: continue
-            from PySide6.QtWidgets import QListWidgetItem
-            item = QListWidgetItem(entry.title+"  ·  "+entry.category)
-            why = owner.session.reason(entry,key)
-            item.setData(Qt.ItemDataRole.UserRole,entry); item.setToolTip(why or f"绑定到 {key}")
-            if why:
-                item.setForeground(QColor("#aaaaaa"))
-            self.list.addItem(item); self.items.append(item)
-        self.search.textChanged.connect(self.filter)
-        self.list.currentItemChanged.connect(lambda current,old:self.reason_label.setText(current.toolTip() if current else ""))
-        self.list.itemDoubleClicked.connect(lambda _item:self.add_selected())
-        add.clicked.connect(self.add_selected); back.clicked.connect(self.reject)
-        apply_jello_widgets(self)
-        self.list.setFont(cjk_ui_font(jello_font()))
-        self.list.setStyleSheet("QListWidget {background:#fefefe;border:0;color:#555555;font-family:'Microsoft YaHei UI','Microsoft YaHei','DengXian';font-weight:400;font-size:18px;} QListWidget::item {padding:12px;} QListWidget::item:selected {background:#e8f4ff;color:#29a6ff;}")
-        self.reason_label.setStyleSheet("font-family:'Microsoft YaHei UI','Microsoft YaHei','DengXian';font-weight:400;")
-        if self.items:self.list.setCurrentRow(0)
+        try:
+            self.timeline.reverse_duration = .120
+            self.setObjectName("JelloBindingPicker")
+            self.resize(544,644); self.setMinimumSize(390,480)
+            screen = owner.screen().availableGeometry()
+            self.resize(min(544,screen.width()-30),min(644,screen.height()-40))
+            self.selected_entry = None
+            self.key = key
+            self.owner = owner
+            layout = self.panel.layout()
+            title = QLabel("选择要绑定的功能"); title.setFont(jello_font(36));title.setStyleSheet("font-size:30px;color:#666666;"); layout.addWidget(title)
+            self.search = QLineEdit(); self.search.setPlaceholderText("Search… / 搜索功能");self.search.setMinimumHeight(60); layout.addWidget(self.search)
+            self.list = QListWidget(); layout.addWidget(self.list,1)
+            self.reason_label = QLabel(); self.reason_label.setWordWrap(True); layout.addWidget(self.reason_label)
+            buttons = QHBoxLayout(); layout.addLayout(buttons)
+            back = QPushButton("返回"); add = QPushButton("Add / 添加")
+            add.setProperty("primary",True); buttons.addWidget(back); buttons.addStretch(); buttons.addWidget(add)
+            self.items = []
+            entries = sorted(owner.session.entries,key=lambda e:(e.identity!=target,e.category,e.title))
+            for entry in entries:
+                if entry.readonly: continue
+                from PySide6.QtWidgets import QListWidgetItem
+                item = QListWidgetItem(entry.title+"  ·  "+entry.category)
+                why = owner.session.reason(entry,key)
+                item.setData(Qt.ItemDataRole.UserRole,entry); item.setToolTip(why or f"绑定到 {key}")
+                if why:
+                    item.setForeground(QColor("#aaaaaa"))
+                self.list.addItem(item); self.items.append(item)
+            self.search.textChanged.connect(self.filter)
+            self.list.currentItemChanged.connect(lambda current,old:self.reason_label.setText(current.toolTip() if current else ""))
+            self.list.itemDoubleClicked.connect(lambda _item:self.add_selected())
+            add.clicked.connect(self.add_selected); back.clicked.connect(self.reject)
+            apply_jello_widgets(self)
+            self.list.setFont(cjk_ui_font(jello_font()))
+            self.list.setStyleSheet("QListWidget {background:#fefefe;border:0;color:#555555;font-family:'Microsoft YaHei UI','Microsoft YaHei','DengXian';font-weight:400;font-size:18px;} QListWidget::item {padding:12px;} QListWidget::item:selected {background:#e8f4ff;color:#29a6ff;}")
+            self.reason_label.setStyleSheet("font-family:'Microsoft YaHei UI','Microsoft YaHei','DengXian';font-weight:400;")
+            if self.items:self.list.setCurrentRow(0)
+        except Exception as error:
+            # A failed constructor still owns the Qt tree acquired by super.
+            try:
+                self.deleteLater()
+            finally:
+                raise error
 
     def filter(self, text):
         for item in self.items: item.setHidden(text.casefold() not in item.text().casefold())
@@ -228,7 +235,18 @@ class KeyboardCanvas(QWidget):
     def animate(self):
         self._last_frame = time.perf_counter(); self._motion_timer.start(); self.update()
 
+    def _retire_popover_hotspots(self):
+        # Painted popup targets belong to the selection/layout that made them.
+        # Keep the independent Done button live until the next frame.
+        self.hotspots = [hit for hit in self.hotspots if hit[1] == "done"]
+        self.update()
+
+    def resizeEvent(self, event):
+        self._retire_popover_hotspots()
+        super().resizeEvent(event)
+
     def select_key(self, key):
+        self._retire_popover_hotspots()
         self.selected = None if self.selected==key.name else key.name
         self.pop_started = time.perf_counter(); self.pop_scroll = 0; self.note = ""
         self.animate()
@@ -349,11 +367,13 @@ class KeyboardCanvas(QWidget):
     def mousePressEvent(self,event):
         point=self.logical_point(event.position())
         if event.button()!=Qt.MouseButton.LeftButton:
+            self._retire_popover_hotspots()
             self.selected=None;self.update();event.accept();return
         for rect,action,payload in reversed(self.hotspots):
             if not rect.contains(point):continue
             if action=="done":self.dialog.accept()
             elif action=="remove":
+                self._retire_popover_hotspots()
                 self.session.clear(payload)
                 self.removed_rows[payload.identity]=(payload,self.selected)
                 self.pending_removals[payload.identity]=time.perf_counter();self.animate()
@@ -362,14 +382,23 @@ class KeyboardCanvas(QWidget):
         if self.selected and self.pop_rect().contains(point):event.accept();return
         key=self.key_at(point)
         if key:self.select_key(key)
-        else:self.selected=None;self.update()
+        else:
+            self._retire_popover_hotspots()
+            self.selected=None;self.update()
         event.accept()
 
     def open_picker(self):
-        picker=BindingPicker(self.dialog,self.selected,self.target)
+        self._retire_popover_hotspots()
+        key = self.selected
+        if key is None:
+            return
+        picker=BindingPicker(self.dialog,key,self.target)
         try:
-            if picker.exec()==QDialog.DialogCode.Accepted and picker.selected_entry:
-                self.session.assign(picker.selected_entry,self.selected)
+            result = picker.exec()
+            # The nested event loop can repaint and republish the old rows.
+            self._retire_popover_hotspots()
+            if result==QDialog.DialogCode.Accepted and picker.selected_entry:
+                self.session.assign(picker.selected_entry,key)
                 self.row_motion[picker.selected_entry.identity]=time.perf_counter()
                 self.note="已更新草稿，完成后在设置页应用";self.animate()
         finally:picker.deleteLater()
@@ -377,12 +406,16 @@ class KeyboardCanvas(QWidget):
     def wheelEvent(self,event):
         if self.selected:
             maximum=max(0,len(self.session.bound(self.selected))*55-185)
-            self.pop_scroll=max(0,min(maximum,self.pop_scroll-event.angleDelta().y()/3))
+            scroll=max(0,min(maximum,self.pop_scroll-event.angleDelta().y()/3))
+            if scroll != self.pop_scroll:
+                self._retire_popover_hotspots()
+                self.pop_scroll = scroll
             self.update()
         event.accept()
 
     def keyPressEvent(self,event):
         if event.key()==Qt.Key.Key_Escape:
+            self._retire_popover_hotspots()
             if self.selected:self.selected=None;self.update()
             else:self.dialog.reject()
         elif not event.isAutoRepeat():
@@ -395,19 +428,25 @@ class KeyboardCanvas(QWidget):
 
 
 def build_keyboard_manager(host, manager=None, target=None, parent=None):
-    from .cs2_settings_center import install_estop_shortcut
     dialog=JelloDialog(parent or host,keyboard=True)
-    dialog.setObjectName("JelloKeyboardManager");dialog.setWindowTitle("Jello · Keybind Manager")
-    available=host.screen().availableGeometry()
-    dialog.resize(min(1280,available.width()-30,max(600,host.width()-20)),
-                  min(860,available.height()-40,max(430,host.height()-20)));dialog.setMinimumSize(600,430)
-    dialog.session=BindingSession(host,manager)
-    dialog.canvas=KeyboardCanvas(dialog,dialog.session,target)
-    dialog.focus_widget=dialog.canvas
-    dialog.panel.layout().setContentsMargins(0,0,0,0);dialog.panel.layout().addWidget(dialog.canvas)
-    dialog.estop_shortcut=install_estop_shortcut(dialog,host)
-    apply_jello_widgets(dialog)
-    return dialog
+    try:
+        dialog.setObjectName("JelloKeyboardManager");dialog.setWindowTitle("Jello · Keybind Manager")
+        available=host.screen().availableGeometry()
+        dialog.resize(min(1280,available.width()-30,max(600,host.width()-20)),
+                      min(860,available.height()-40,max(430,host.height()-20)));dialog.setMinimumSize(600,430)
+        dialog.session=BindingSession(host,manager)
+        dialog.canvas=KeyboardCanvas(dialog,dialog.session,target)
+        dialog.focus_widget=dialog.canvas
+        dialog.panel.layout().setContentsMargins(0,0,0,0);dialog.panel.layout().addWidget(dialog.canvas)
+        dialog.estop_shortcut=install_estop_shortcut(dialog,host)
+        apply_jello_widgets(dialog)
+        return dialog
+    except Exception as error:
+        # The caller cannot clean up a dialog that the factory never returned.
+        try:
+            dialog.deleteLater()
+        finally:
+            raise error
 
 
 def open_keyboard_manager(host, manager=None, target=None):

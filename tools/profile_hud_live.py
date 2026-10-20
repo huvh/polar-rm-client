@@ -28,6 +28,7 @@ def main() -> int:
     parser.add_argument("--seconds", type=float, default=8.0)
     parser.add_argument("--warmup", type=float, default=5.0)
     parser.add_argument("--capture", action="store_true")
+    parser.add_argument("--interactive", action="store_true", help="Keep the mock-only window open after measurements for native UI qualification")
     parser.add_argument("--cprofile", action="store_true")
     parser.add_argument("--webcam", action="store_true", help="Opt in to the configured webcam, never to real control")
     parser.add_argument("--local-vision", action="store_true", help="Opt in to existing local inference; requires --webcam")
@@ -57,8 +58,8 @@ def main() -> int:
     if not source.exists():
         source = ROOT / "configs" / "default.json"
     config = json.loads(source.read_text(encoding="utf-8-sig"))
-    modules = config["modules"]
-    for name in ("RobotLink", "MQTTLink", "UDPVideo", "SerialBridge", "TongjiVisionBridge", "AudioFeedback"):
+    modules = config.setdefault("modules", {})
+    for name in ("RobotLink", "ControllerAngles", "MQTTLink", "UDPVideo", "SerialBridge", "TongjiVisionBridge", "AudioFeedback"):
         if name in modules:
             if name == "RobotLink" and args.preview_controls:
                 continue
@@ -66,7 +67,7 @@ def main() -> int:
     if args.local_vision:
         modules["TongjiVisionBridge"]["enabled"] = True
     modules["Scenario"]["settings"].update({"Mode": "LabDebug", "Mock Writes": True, "Show Startup": False})
-    modules["RobotLink"]["settings"].update({"Mock Writes": True, "Allow Drive": False, "Direct DT7 Egress": False, "DT7 Real TX": False})
+    modules.setdefault("RobotLink", {"enabled": False, "settings": {}})["settings"].update({"Mock Writes": True, "Allow Drive": False, "Direct DT7 Egress": False, "DT7 Real TX": False})
     modules["CameraFeed"]["settings"]["Source"] = "Webcam"
     modules["ConfigManager"]["settings"]["Auto Save"] = False
     config_path.write_text(json.dumps(config, ensure_ascii=False), encoding="utf-8")
@@ -307,11 +308,20 @@ def main() -> int:
             window.set_escape_menu_visible(True)
             app.processEvents()
             window.grabFramebuffer().save(str(args.out / "escape.png"))
-        window.close()
-        app.quit()
+        if not args.interactive:
+            window.close()
+            close_deadline = time.perf_counter() + 10.0
+            def finish_close():
+                if window._window_close_finalized:
+                    app.quit()
+                elif time.perf_counter() >= close_deadline:
+                    print("Native probe shutdown did not finish within 10 seconds", file=sys.stderr, flush=True)
+                    app.exit(1)
+                else:
+                    QTimer.singleShot(20, finish_close)
+            finish_close()
     QTimer.singleShot(round(args.warmup * 1000), begin)
-    app.exec()
-    return 0
+    return int(app.exec())
 
 
 if __name__ == "__main__":

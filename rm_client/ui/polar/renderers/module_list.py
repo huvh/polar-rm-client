@@ -103,6 +103,60 @@ def _atlas_advance(renderer, font: QFont, text: str, dpr: float, fallback: float
     return shaper(text, raster_font)[1] / (sample * dpr)
 
 
+def _polar_link_caption(
+    polar_stats: dict[str, Any], link_alive: bool, motion_state: str,
+    authority: str, chinese: bool,
+) -> tuple[str, str]:
+    """Project the link caption and semantic tone, with safety warnings first.
+
+    Geometry, theme colors and tooltip formatting remain at the draw site.
+    In particular tooltip-only numeric errors must still occur after the caption
+    has been painted, not during this projection.
+    """
+    if link_alive:
+        # 兵种上屏：限幅与驾驶权限现在跟“实际连的那台车”走，
+        # 操作员必须能看到现在算的是哪台、限速多少，否则选错车无从发现。
+        # Role hud_code remains a diagnostic identifier in either language.
+        role_tag = str(polar_stats.get("role_hud_code") or "?")
+        role_id = int(polar_stats.get("role_id") or 0)
+        role_limit = float(polar_stats.get("role_max_linear_mps") or 0.0)
+        base = hud_template(
+            "ROBOT {port} · {segments} seg · {role}#{id} {limit}m/s",
+            chinese,
+            port=polar_stats.get('resolved_port') or polar_stats.get('port'),
+            segments=int(polar_stats.get('segments_received') or 0),
+            role=role_tag, id=role_id, limit=f"{role_limit:.2f}",
+        )
+        # 选错车是事故级信息（限速不同、给哨兵下驾驶指令会破坏自动巡线），
+        # 优先于其他一切状态上屏。
+        if str(polar_stats.get("role_mismatch") or ""):
+            link_text = (
+                f"{base} · " + hud_template(
+                    "ROLE MISMATCH UI#{selected}!=ROBOT#{reported}", chinese,
+                    selected=int(polar_stats.get('role_selected_id') or 0),
+                    reported=int(polar_stats.get('role_reported_id') or 0),
+                )
+            )
+            severity = "warning"
+        elif str(polar_stats.get("role_drive_block") or ""):
+            link_text = f"{base} · {hud_text('DRIVE BLOCKED', chinese)}"
+            severity = "warning"
+        # 车辆不响应是比仲裁态更紧急的信息，优先上屏。
+        elif motion_state in ("STUCK", "NO_FEEDBACK", "STALE_FEEDBACK", "NO_MOTION"):
+            link_text = f"{base} · {hud_text(motion_state, chinese)}"
+            severity = "warning"
+        else:
+            link_text = f"{base} · {hud_text(authority, chinese)}"
+            severity = "success" if motion_state == "OK" else "accent"
+    else:
+        # Error codes and port names remain exact diagnostic identifiers.
+        code = str(polar_stats.get("last_error_code") or "") or "NO_STREAM"
+        port = str(polar_stats.get("port") or "-")
+        link_text = f"{hud_text('LINK OFF', chinese)} · {code} · {port}"
+        severity = "warning"
+    return link_text, severity
+
+
 class ModuleListMixin:
     """D12 ModuleList 模块列表绘制族（布局/数据面/十样式变体/周边 HUD/GPU 面）。"""
 
@@ -1336,47 +1390,11 @@ class ModuleListMixin:
             link_alive = bool(polar_stats.get("link_alive"))
             motion = dict(polar_stats.get("motion") or {})
             motion_state = str(motion.get("state") or "IDLE")
-            if link_alive:
-                # 兵种上屏：限幅与驾驶权限现在跟“实际连的那台车”走，
-                # 操作员必须能看到现在算的是哪台、限速多少，否则选错车无从发现。
-                # Role hud_code remains a diagnostic identifier in either language.
-                role_tag = str(polar_stats.get("role_hud_code") or "?")
-                role_id = int(polar_stats.get("role_id") or 0)
-                role_limit = float(polar_stats.get("role_max_linear_mps") or 0.0)
-                base = hud_template(
-                    "ROBOT {port} · {segments} seg · {role}#{id} {limit}m/s",
-                    chinese_enabled(self.registry),
-                    port=polar_stats.get('resolved_port') or polar_stats.get('port'),
-                    segments=int(polar_stats.get('segments_received') or 0),
-                    role=role_tag, id=role_id, limit=f"{role_limit:.2f}",
-                )
-                # 选错车是事故级信息（限速不同、给哨兵下驾驶指令会破坏自动巡线），
-                # 优先于其他一切状态上屏。
-                if str(polar_stats.get("role_mismatch") or ""):
-                    link_text = (
-                        f"{base} · " + hud_template(
-                            "ROLE MISMATCH UI#{selected}!=ROBOT#{reported}", chinese_enabled(self.registry),
-                            selected=int(polar_stats.get('role_selected_id') or 0),
-                            reported=int(polar_stats.get('role_reported_id') or 0),
-                        )
-                    )
-                    link_color = self.hud_warning()
-                elif str(polar_stats.get("role_drive_block") or ""):
-                    link_text = f"{base} · {hud_text('DRIVE BLOCKED', chinese_enabled(self.registry))}"
-                    link_color = self.hud_warning()
-                # 车辆不响应是比仲裁态更紧急的信息，优先上屏。
-                elif motion_state in ("STUCK", "NO_FEEDBACK", "STALE_FEEDBACK", "NO_MOTION"):
-                    link_text = f"{base} · {hud_text(motion_state, chinese_enabled(self.registry))}"
-                    link_color = self.hud_warning()
-                else:
-                    link_text = f"{base} · {hud_text(authority, chinese_enabled(self.registry))}"
-                    link_color = self.hud_success() if motion_state == "OK" else self.hud_accent()
-            else:
-                # Error codes and port names remain exact diagnostic identifiers.
-                code = str(polar_stats.get("last_error_code") or "") or "NO_STREAM"
-                port = str(polar_stats.get("port") or "-")
-                link_text = f"{hud_text('LINK OFF', chinese_enabled(self.registry))} · {code} · {port}"
-                link_color = self.hud_warning()
+            link_text, severity = _polar_link_caption(
+                polar_stats, link_alive, motion_state, authority, chinese_enabled(self.registry),
+            )
+            link_color = (self.hud_warning() if severity == "warning" else
+                          self.hud_success() if severity == "success" else self.hud_accent())
             link_rect = QRectF(rect.left() + 12, rect.top() + chips_bottom + 22, rect.width() - 24, 16)
             self.draw_text(p, link_rect, link_text, self.font("poppins_medium", 7.6), link_color, Qt.AlignmentFlag.AlignVCenter)
             detail = (

@@ -1,0 +1,860 @@
+{
+  "source_commit": "1fb3650cfd251beb5a4f74efc3594f42771f608e",
+  "source_sha256": "bb4284785176574ad3e80c8c25cfc31dd6695107bf248cb60a825926d9569abb",
+  "cases": {
+    "uneven:1280:720:1.0": {
+      "sha256": "a57101ed79c1cbe4e33804f69ae1d5b73ff31c610d571cbe78dff11cbcd5b62b",
+      "command_count": 100,
+      "hotspot_actions_payloads": [
+        [
+          "economy_close",
+          null
+        ],
+        [
+          "economy_offer",
+          "ammo0"
+        ],
+        [
+          "economy_offer",
+          "ammo1"
+        ],
+        [
+          "economy_offer",
+          "ammo2"
+        ],
+        [
+          "economy_offer",
+          "ammo3"
+        ],
+        [
+          "economy_offer",
+          "ammo4"
+        ],
+        [
+          "economy_offer",
+          "ammo5"
+        ],
+        [
+          "economy_offer",
+          "recovery0"
+        ],
+        [
+          "economy_offer",
+          "recovery1"
+        ],
+        [
+          "economy_offer",
+          "recovery2"
+        ],
+        [
+          "economy_offer",
+          "revive0"
+        ],
+        [
+          "economy_offer",
+          "revive1"
+        ],
+        [
+          "economy_offer",
+          "support0"
+        ],
+        [
+          "economy_offer",
+          "support1"
+        ],
+        [
+          "student_reload_toggle",
+          null
+        ],
+        [
+          "economy_confirm",
+          "ammo0"
+        ]
+      ],
+      "offers_scroll": {
+        "position": 0.0,
+        "target": 0.0,
+        "velocity": 0.0,
+        "maximum": 205.52533333333338
+      },
+      "detail_scroll": {
+        "position": 0.0,
+        "target": 0.0,
+        "velocity": 0.0,
+        "maximum": 0.0
+      }
+    },
+    "uneven:1920:1080:1.0": {
+      "sha256": "336549cd5b14c8eb80bab611cc0925734b748e4beb3035542fc5358bcdb2dfc4",
+      "command_count": 100,
+      "hotspot_actions_payloads": [
+        [
+          "economy_close",
+          null
+        ],
+        [
+          "economy_offer",
+          "ammo0"
+        ],
+        [
+          "economy_offer",
+          "ammo1"
+        ],
+        [
+          "economy_offer",
+          "ammo2"
+        ],
+        [
+          "economy_offer",
+          "ammo3"
+        ],
+        [
+          "economy_offer",
+          "ammo4"
+        ],
+        [
+          "economy_offer",
+          "ammo5"
+        ],
+        [
+          "economy_offer",
+          "recovery0"
+        ],
+        [
+          "economy_offer",
+          "recovery1"
+        ],
+        [
+          "economy_offer",
+          "recovery2"
+        ],
+        [
+          "economy_offer",
+          "revive0"
+        ],
+        [
+          "economy_offer",
+          "revive1"
+        ],
+        [
+          "economy_offer",
+          "support0"
+        ],
+        [
+          "economy_offer",
+          "support1"
+        ],
+        [
+          "student_reload_toggle",
+          null
+        ],
+        [
+          "economy_confirm",
+          "ammo0"
+        ]
+      ],
+      "offers_scroll": {
+        "position": 0.0,
+        "target": 0.0,
+        "velocity": 0.0,
+        "maximum": 279.91999999999996
+      },
+      "detail_scroll": {
+        "position": 0.0,
+        "target": 0.0,
+        "velocity": 0.0,
+        "maximum": 0.0
+      }
+    },
+    "uneven:1280:720:0.35": {
+      "sha256": "80966f2f8d42bcbb30acb374d863f7f414b1ecde75d845858a7039147ab8714d",
+      "command_count": 41,
+      "hotspot_actions_payloads": [],
+      "offers_scroll": {
+        "position": 0.0,
+        "target": 0.0,
+        "velocity": 0.0,
+        "maximum": 205.52533333333338
+      },
+      "detail_scroll": {
+        "position": 0.0,
+        "target": 0.0,
+        "velocity": 0.0,
+        "maximum": 0.0
+      }
+    },
+    "empty:1280:720:1.0": {
+      "sha256": "bcdb36fde1c0cd86b7f761ba3793f2c05cc0089dce0c3414342b0dac2f58d0fb",
+      "command_count": 31,
+      "hotspot_actions_payloads": [
+        [
+          "economy_close",
+          null
+        ]
+      ],
+      "offers_scroll": {
+        "position": 0.0,
+        "target": 0.0,
+        "velocity": 0.0,
+        "maximum": 0.0
+      },
+      "detail_scroll": {
+        "position": 0.0,
+        "target": 0.0,
+        "velocity": 0.0,
+        "maximum": 0.0
+      }
+    },
+    "empty:1920:1080:1.0": {
+      "sha256": "3ecc167b09e5d4a5fec8a3551bfc65997aa01d5675efd16b9d045421820cbf08",
+      "command_count": 31,
+      "hotspot_actions_payloads": [
+        [
+          "economy_close",
+          null
+        ]
+      ],
+      "offers_scroll": {
+        "position": 0.0,
+        "target": 0.0,
+        "velocity": 0.0,
+        "maximum": 0.0
+      },
+      "detail_scroll": {
+        "position": 0.0,
+        "target": 0.0,
+        "velocity": 0.0,
+        "maximum": 0.0
+      }
+    },
+    "empty:1280:720:0.35": {
+      "sha256": "a819dd694dc35e36378785e4329211872aae6151f4b770480b727bf2429a4167",
+      "command_count": 25,
+      "hotspot_actions_payloads": [],
+      "offers_scroll": {
+        "position": 0.0,
+        "target": 0.0,
+        "velocity": 0.0,
+        "maximum": 0.0
+      },
+      "detail_scroll": {
+        "position": 0.0,
+        "target": 0.0,
+        "velocity": 0.0,
+        "maximum": 0.0
+      }
+    },
+    "unknown:1280:720:1.0": {
+      "sha256": "a57101ed79c1cbe4e33804f69ae1d5b73ff31c610d571cbe78dff11cbcd5b62b",
+      "command_count": 100,
+      "hotspot_actions_payloads": [
+        [
+          "economy_close",
+          null
+        ],
+        [
+          "economy_offer",
+          "ammo0"
+        ],
+        [
+          "economy_offer",
+          "ammo1"
+        ],
+        [
+          "economy_offer",
+          "ammo2"
+        ],
+        [
+          "economy_offer",
+          "ammo3"
+        ],
+        [
+          "economy_offer",
+          "ammo4"
+        ],
+        [
+          "economy_offer",
+          "ammo5"
+        ],
+        [
+          "economy_offer",
+          "recovery0"
+        ],
+        [
+          "economy_offer",
+          "recovery1"
+        ],
+        [
+          "economy_offer",
+          "recovery2"
+        ],
+        [
+          "economy_offer",
+          "revive0"
+        ],
+        [
+          "economy_offer",
+          "revive1"
+        ],
+        [
+          "economy_offer",
+          "support0"
+        ],
+        [
+          "economy_offer",
+          "support1"
+        ],
+        [
+          "student_reload_toggle",
+          null
+        ],
+        [
+          "economy_confirm",
+          "ammo0"
+        ]
+      ],
+      "offers_scroll": {
+        "position": 0.0,
+        "target": 0.0,
+        "velocity": 0.0,
+        "maximum": 205.52533333333338
+      },
+      "detail_scroll": {
+        "position": 0.0,
+        "target": 0.0,
+        "velocity": 0.0,
+        "maximum": 0.0
+      }
+    },
+    "unknown:1920:1080:1.0": {
+      "sha256": "336549cd5b14c8eb80bab611cc0925734b748e4beb3035542fc5358bcdb2dfc4",
+      "command_count": 100,
+      "hotspot_actions_payloads": [
+        [
+          "economy_close",
+          null
+        ],
+        [
+          "economy_offer",
+          "ammo0"
+        ],
+        [
+          "economy_offer",
+          "ammo1"
+        ],
+        [
+          "economy_offer",
+          "ammo2"
+        ],
+        [
+          "economy_offer",
+          "ammo3"
+        ],
+        [
+          "economy_offer",
+          "ammo4"
+        ],
+        [
+          "economy_offer",
+          "ammo5"
+        ],
+        [
+          "economy_offer",
+          "recovery0"
+        ],
+        [
+          "economy_offer",
+          "recovery1"
+        ],
+        [
+          "economy_offer",
+          "recovery2"
+        ],
+        [
+          "economy_offer",
+          "revive0"
+        ],
+        [
+          "economy_offer",
+          "revive1"
+        ],
+        [
+          "economy_offer",
+          "support0"
+        ],
+        [
+          "economy_offer",
+          "support1"
+        ],
+        [
+          "student_reload_toggle",
+          null
+        ],
+        [
+          "economy_confirm",
+          "ammo0"
+        ]
+      ],
+      "offers_scroll": {
+        "position": 0.0,
+        "target": 0.0,
+        "velocity": 0.0,
+        "maximum": 279.91999999999996
+      },
+      "detail_scroll": {
+        "position": 0.0,
+        "target": 0.0,
+        "velocity": 0.0,
+        "maximum": 0.0
+      }
+    },
+    "unknown:1280:720:0.35": {
+      "sha256": "80966f2f8d42bcbb30acb374d863f7f414b1ecde75d845858a7039147ab8714d",
+      "command_count": 41,
+      "hotspot_actions_payloads": [],
+      "offers_scroll": {
+        "position": 0.0,
+        "target": 0.0,
+        "velocity": 0.0,
+        "maximum": 205.52533333333338
+      },
+      "detail_scroll": {
+        "position": 0.0,
+        "target": 0.0,
+        "velocity": 0.0,
+        "maximum": 0.0
+      }
+    },
+    "supplier:1280:720:1.0": {
+      "sha256": "dd9a9610446b100ed4cbbff9e8417f8de70bdb015dc73247e8614ba3a0278af5",
+      "command_count": 31,
+      "hotspot_actions_payloads": [
+        [
+          "economy_close",
+          null
+        ]
+      ],
+      "offers_scroll": {
+        "position": 0.0,
+        "target": 0.0,
+        "velocity": 0.0,
+        "maximum": 513.8133333333333
+      },
+      "detail_scroll": {
+        "position": 0.0,
+        "target": 0.0,
+        "velocity": 0.0,
+        "maximum": 0.0
+      }
+    },
+    "supplier:1920:1080:1.0": {
+      "sha256": "8937a6c0a8997bd3ce458ae1cce4afbf202b65cc1fd13546329929c6ef227b91",
+      "command_count": 31,
+      "hotspot_actions_payloads": [
+        [
+          "economy_close",
+          null
+        ]
+      ],
+      "offers_scroll": {
+        "position": 0.0,
+        "target": 0.0,
+        "velocity": 0.0,
+        "maximum": 699.8000000000002
+      },
+      "detail_scroll": {
+        "position": 0.0,
+        "target": 0.0,
+        "velocity": 0.0,
+        "maximum": 0.0
+      }
+    },
+    "supplier:1280:720:0.35": {
+      "sha256": "6d86aadb07e97a470e2c3ff67ef4ba3a1c51e4ed79fd88c410cfc9386a0838b4",
+      "command_count": 25,
+      "hotspot_actions_payloads": [],
+      "offers_scroll": {
+        "position": 0.0,
+        "target": 0.0,
+        "velocity": 0.0,
+        "maximum": 513.8133333333333
+      },
+      "detail_scroll": {
+        "position": 0.0,
+        "target": 0.0,
+        "velocity": 0.0,
+        "maximum": 0.0
+      }
+    },
+    "interleaved:1280:720:1.0": {
+      "sha256": "2679c93f85d723749c525406a17cefb76c85f5dd83620767fea09c2510e0b4a7",
+      "command_count": 100,
+      "hotspot_actions_payloads": [
+        [
+          "economy_close",
+          null
+        ],
+        [
+          "economy_offer",
+          "ammo0"
+        ],
+        [
+          "economy_offer",
+          "ammo2"
+        ],
+        [
+          "economy_offer",
+          "ammo4"
+        ],
+        [
+          "economy_offer",
+          "ammo6"
+        ],
+        [
+          "economy_offer",
+          "ammo1"
+        ],
+        [
+          "economy_offer",
+          "ammo3"
+        ],
+        [
+          "economy_offer",
+          "recovery1"
+        ],
+        [
+          "economy_offer",
+          "recovery0"
+        ],
+        [
+          "economy_offer",
+          "recovery2"
+        ],
+        [
+          "economy_offer",
+          "revive0"
+        ],
+        [
+          "economy_offer",
+          "revive1"
+        ],
+        [
+          "economy_offer",
+          "support0"
+        ],
+        [
+          "economy_offer",
+          "support1"
+        ],
+        [
+          "student_reload_toggle",
+          null
+        ],
+        [
+          "economy_confirm",
+          "ammo0"
+        ]
+      ],
+      "offers_scroll": {
+        "position": 0.0,
+        "target": 0.0,
+        "velocity": 0.0,
+        "maximum": 205.52533333333338
+      },
+      "detail_scroll": {
+        "position": 0.0,
+        "target": 0.0,
+        "velocity": 0.0,
+        "maximum": 0.0
+      }
+    },
+    "interleaved:1920:1080:1.0": {
+      "sha256": "aadfb24664e47cd5df89994549011759b6b33052f171bdd22d4f1c67770ddeed",
+      "command_count": 100,
+      "hotspot_actions_payloads": [
+        [
+          "economy_close",
+          null
+        ],
+        [
+          "economy_offer",
+          "ammo0"
+        ],
+        [
+          "economy_offer",
+          "ammo2"
+        ],
+        [
+          "economy_offer",
+          "ammo4"
+        ],
+        [
+          "economy_offer",
+          "ammo6"
+        ],
+        [
+          "economy_offer",
+          "ammo1"
+        ],
+        [
+          "economy_offer",
+          "ammo3"
+        ],
+        [
+          "economy_offer",
+          "recovery1"
+        ],
+        [
+          "economy_offer",
+          "recovery0"
+        ],
+        [
+          "economy_offer",
+          "recovery2"
+        ],
+        [
+          "economy_offer",
+          "revive0"
+        ],
+        [
+          "economy_offer",
+          "revive1"
+        ],
+        [
+          "economy_offer",
+          "support0"
+        ],
+        [
+          "economy_offer",
+          "support1"
+        ],
+        [
+          "student_reload_toggle",
+          null
+        ],
+        [
+          "economy_confirm",
+          "ammo0"
+        ]
+      ],
+      "offers_scroll": {
+        "position": 0.0,
+        "target": 0.0,
+        "velocity": 0.0,
+        "maximum": 279.91999999999996
+      },
+      "detail_scroll": {
+        "position": 0.0,
+        "target": 0.0,
+        "velocity": 0.0,
+        "maximum": 0.0
+      }
+    },
+    "interleaved:1280:720:0.35": {
+      "sha256": "0dbbafc2f5d51bfa375aee2301a3a88eaca54a262d717ea5cb23fd25db7ec75f",
+      "command_count": 41,
+      "hotspot_actions_payloads": [],
+      "offers_scroll": {
+        "position": 0.0,
+        "target": 0.0,
+        "velocity": 0.0,
+        "maximum": 205.52533333333338
+      },
+      "detail_scroll": {
+        "position": 0.0,
+        "target": 0.0,
+        "velocity": 0.0,
+        "maximum": 0.0
+      }
+    },
+    "scrolled:1280:720:1.0": {
+      "sha256": "ec8e394ba5a43b59fe3b15c2692d41428f37c72e87323883d36d35edc9f0d923",
+      "command_count": 105,
+      "hotspot_actions_payloads": [
+        [
+          "economy_close",
+          null
+        ],
+        [
+          "economy_offer",
+          "ammo0"
+        ],
+        [
+          "economy_offer",
+          "ammo1"
+        ],
+        [
+          "economy_offer",
+          "ammo2"
+        ],
+        [
+          "economy_offer",
+          "ammo3"
+        ],
+        [
+          "economy_offer",
+          "ammo4"
+        ],
+        [
+          "economy_offer",
+          "ammo5"
+        ],
+        [
+          "economy_offer",
+          "ammo6"
+        ],
+        [
+          "economy_offer",
+          "recovery0"
+        ],
+        [
+          "economy_offer",
+          "recovery1"
+        ],
+        [
+          "economy_offer",
+          "recovery2"
+        ],
+        [
+          "economy_offer",
+          "revive0"
+        ],
+        [
+          "economy_offer",
+          "revive1"
+        ],
+        [
+          "economy_offer",
+          "support0"
+        ],
+        [
+          "economy_offer",
+          "support1"
+        ],
+        [
+          "student_reload_toggle",
+          null
+        ],
+        [
+          "economy_confirm",
+          "ammo0"
+        ]
+      ],
+      "offers_scroll": {
+        "position": 125.0,
+        "target": 125.0,
+        "velocity": 0.0,
+        "maximum": 205.52533333333338
+      },
+      "detail_scroll": {
+        "position": 0.0,
+        "target": 0.0,
+        "velocity": 0.0,
+        "maximum": 0.0
+      }
+    },
+    "scrolled:1920:1080:1.0": {
+      "sha256": "1d950f181b5a389c112803991cb77d567c496eafe4338687408f6a688aade5bb",
+      "command_count": 105,
+      "hotspot_actions_payloads": [
+        [
+          "economy_close",
+          null
+        ],
+        [
+          "economy_offer",
+          "ammo0"
+        ],
+        [
+          "economy_offer",
+          "ammo1"
+        ],
+        [
+          "economy_offer",
+          "ammo2"
+        ],
+        [
+          "economy_offer",
+          "ammo3"
+        ],
+        [
+          "economy_offer",
+          "ammo4"
+        ],
+        [
+          "economy_offer",
+          "ammo5"
+        ],
+        [
+          "economy_offer",
+          "ammo6"
+        ],
+        [
+          "economy_offer",
+          "recovery0"
+        ],
+        [
+          "economy_offer",
+          "recovery1"
+        ],
+        [
+          "economy_offer",
+          "recovery2"
+        ],
+        [
+          "economy_offer",
+          "revive0"
+        ],
+        [
+          "economy_offer",
+          "revive1"
+        ],
+        [
+          "economy_offer",
+          "support0"
+        ],
+        [
+          "economy_offer",
+          "support1"
+        ],
+        [
+          "student_reload_toggle",
+          null
+        ],
+        [
+          "economy_confirm",
+          "ammo0"
+        ]
+      ],
+      "offers_scroll": {
+        "position": 125.0,
+        "target": 125.0,
+        "velocity": 0.0,
+        "maximum": 279.91999999999996
+      },
+      "detail_scroll": {
+        "position": 0.0,
+        "target": 0.0,
+        "velocity": 0.0,
+        "maximum": 0.0
+      }
+    },
+    "scrolled:1280:720:0.35": {
+      "sha256": "0df05ca1b1ec75a3c3c8ffe56b4ff5e1c0e50a1572e35b6b6ef52a97bafda9eb",
+      "command_count": 53,
+      "hotspot_actions_payloads": [],
+      "offers_scroll": {
+        "position": 125.0,
+        "target": 125.0,
+        "velocity": 0.0,
+        "maximum": 205.52533333333338
+      },
+      "detail_scroll": {
+        "position": 0.0,
+        "target": 0.0,
+        "velocity": 0.0,
+        "maximum": 0.0
+      }
+    }
+  }
+}

@@ -118,12 +118,13 @@ def apply_window_settings(host,prefs):
     # Changing focus/size never resumes stale controls or re-arms a vehicle.
     host.backend.lock_control("video settings applied")
     host.control.release_all(host.state,host.registry)
-    if prefs.window_mode=="Borderless":
-        host.showFullScreen()  # Uses the real desktop resolution/refresh.
-    else:
+    host._control_mouse_point = None
+    host.invalidate_transient_overlay_scene()
+    from .window_shortcuts import set_fullscreen
+    set_fullscreen(host, prefs.window_mode == "Borderless")
+    if prefs.window_mode == "Windowed" and logical is not None:
         host.showNormal()
-        if logical is not None:
-            host.resize(*logical)
+        host.resize(*logical)
     host.invalidate_transient_overlay_scene()
     host.frame_scheduler.force()
 
@@ -147,92 +148,101 @@ def open_video_settings(host, embedded=False):
     if not embedded:
         host.backend.lock_control("video settings opened")
         host.control.release_all(host.state,host.registry)
-    prefs=current_preferences()
-    dialog=QDialog(host);dialog.setWindowTitle("POLAR · 视频设置")
-    if embedded:
-        dialog.setWindowFlags(Qt.WindowType.Widget)
-    dialog.resize(1000,720);dialog.setMinimumSize(740,580)
-    if embedded:dialog.setMinimumSize(0,0)
-    dialog.setObjectName("JelloVideoSettings")
-    root=QVBoxLayout(dialog)
-    title=QLabel("视频设置");title.setStyleSheet("font-size:30px;font-weight:600;padding:12px;")
-    root.addWidget(title)
-    title.setVisible(not embedded)
-    tabs=QTabWidget();root.addWidget(tabs)
-    from PySide6.QtWidgets import QWidget
-    basic=QWidget();advanced=QWidget();basic_form=QFormLayout(basic);advanced_form=QFormLayout(advanced)
-    basic_form.setSpacing(22);advanced_form.setSpacing(22)
-    from PySide6.QtWidgets import QScrollArea
-    for widget,label in ((basic,"视频"),(advanced,"高级视频")):
-        scroll=QScrollArea();scroll.setWidgetResizable(True);scroll.setWidget(widget)
-        tabs.addTab(scroll,label)
-    controls={}
-    def combo(form,key,label,rows,current):
-        widget=QComboBox()
-        for text,value in rows:
-            widget.addItem(text,value)
-        widget.setCurrentIndex(max(0,widget.findData(current)))
-        form.addRow(label,widget);controls[key]=widget
-        return widget
-    screen=host.screen()
-    actual_hz=screen.refreshRate() if screen else 0
-    geom=screen.geometry() if screen else None
-    basic_form.addRow("当前显示器",QLabel(f"{screen.name() if screen else '未知'}  ·  {actual_hz:.1f} Hz"))
-    mode=combo(basic_form,"window_mode","显示模式",[("窗口","Windowed"),("全屏（无边框）","Borderless")],prefs.window_mode)
-    resolution=combo(basic_form,"resolution","窗口渲染分辨率（物理像素）",[("保持当前","Current"),*((v,v) for v in ("1280×720","1600×900","1920×1080","2560×1440","3840×2160"))],prefs.resolution)
-    resolution.setEnabled(mode.currentData()=="Windowed")
-    mode.currentIndexChanged.connect(lambda _:resolution.setEnabled(mode.currentData()=="Windowed"))
-    combo(basic_form,"hud_hz","HUD刷新节奏",[("跟随现有HUD设置",0),*((f"{v} Hz",v) for v in (60,75,90,120,144,165,240))],prefs.hud_hz)
-    note=QLabel("无边框模式使用Windows当前显示模式；此页不会伪装修改显示器物理刷新率。\n窗口分辨率按DPR换算；裁判逻辑、KMC与图传不随HUD帧率限额降频。")
-    note.setWordWrap(True);basic_form.addRow(note)
-    combo(advanced_form,"fps_limit","最大渲染帧率",[("跟随HUD节奏",0),*((str(v)+" FPS",v) for v in (30,60,75,90,120,144,165,240))],prefs.fps_limit)
-    combo(advanced_form,"vsync","等待垂直同步（重启生效）",[("已启用",True),("已禁用",False)],prefs.vsync)
-    combo(advanced_form,"msaa","多重采样抗锯齿（重启生效）",[("无",0),("2× MSAA",2),("4× MSAA",4),("8× MSAA",8)],prefs.msaa)
-    combo(advanced_form,"video_detail","图传显示细节",[("保留当前优化","Legacy"),("720p预算","720p"),("1080p预算","1080p"),("原生分辨率","Native")],prefs.video_detail)
-    combo(advanced_form,"video_filter","图传纹理过滤",[("保留当前","Auto"),("线性过滤","Linear"),("最近邻","Nearest")],prefs.video_filter)
-    quality=QComboBox();quality.addItems(("自定义","低（图传720p / 无MSAA）","中（图传1080p / 2× MSAA）","高（原生图传 / 4× MSAA）"))
-    advanced_form.insertRow(0,"画质预设",quality)
-    def set_quality(index):
-        if not index:return
-        detail,aa=(("720p",0),("1080p",2),("Native",4))[index-1]
-        controls["video_detail"].setCurrentIndex(controls["video_detail"].findData(detail))
-        controls["msaa"].setCurrentIndex(controls["msaa"].findData(aa))
-        controls["video_filter"].setCurrentIndex(controls["video_filter"].findData("Linear"))
-    quality.currentIndexChanged.connect(set_quality)
-    advanced_form.addRow(QLabel("任何画质档都保留液态玻璃、原版MC像素层和清晰UI字体；\n仅调整图传采样与Qt呈现，未提供NVIDIA Reflex/FSR等虚假引擎选项。"))
-    status=QLabel("修改分辨率会锁定操控；重新操作车辆前须再次人工Arm。");status.setWordWrap(True);root.addWidget(status)
-    buttons=QHBoxLayout();root.addLayout(buttons)
-    crosshair=QPushButton("准星设置 / 分享码")
-    def open_crosshair():
-        from ..cs2_crosshair import open_crosshair_editor
-        open_crosshair_editor(host)
-    crosshair.clicked.connect(open_crosshair);buttons.addWidget(crosshair)
-    buttons.addStretch()
-    apply=QPushButton("应用更改");back=QPushButton("返回")
-    buttons.addWidget(apply);buttons.addWidget(back)
-    def apply_draft():
-        updated=validate_preferences({key:widget.currentData() for key,widget in controls.items()})
-        apply_window_settings(host,updated)
-        save_preferences(updated)
-        status.setText("已应用窗口/图传/帧率设置；VSync和MSAA需重启客户端后生效。液态玻璃未更改。")
-    def apply_changes():
+    prefs=replace(current_preferences(), window_mode="Borderless" if host.isFullScreen() else "Windowed")
+    dialog=QDialog(host)
+    try:
+        dialog.setWindowTitle("POLAR · 视频设置")
+        if embedded:
+            dialog.setWindowFlags(Qt.WindowType.Widget)
+        dialog.resize(1000,720);dialog.setMinimumSize(740,580)
+        if embedded:dialog.setMinimumSize(0,0)
+        dialog.setObjectName("JelloVideoSettings")
+        root=QVBoxLayout(dialog)
+        title=QLabel("视频设置");title.setStyleSheet("font-size:30px;font-weight:600;padding:12px;")
+        root.addWidget(title)
+        title.setVisible(not embedded)
+        tabs=QTabWidget();root.addWidget(tabs)
+        from PySide6.QtWidgets import QWidget
+        basic=QWidget();advanced=QWidget();basic_form=QFormLayout(basic);advanced_form=QFormLayout(advanced)
+        basic_form.setSpacing(22);advanced_form.setSpacing(22)
+        from .jello_scroll import JelloScrollArea as QScrollArea
+        for widget,label in ((basic,"视频"),(advanced,"高级视频")):
+            scroll=QScrollArea();scroll.setWidgetResizable(True);scroll.setWidget(widget)
+            tabs.addTab(scroll,label)
+        controls={}
+        def combo(form,key,label,rows,current):
+            widget=QComboBox()
+            for text,value in rows:
+                widget.addItem(text,value)
+            widget.setCurrentIndex(max(0,widget.findData(current)))
+            form.addRow(label,widget);controls[key]=widget
+            return widget
+        screen=host.screen()
+        actual_hz=screen.refreshRate() if screen else 0
+        geom=screen.geometry() if screen else None
+        basic_form.addRow("当前显示器",QLabel(f"{screen.name() if screen else '未知'}  ·  {actual_hz:.1f} Hz"))
+        mode=combo(basic_form,"window_mode","显示模式",[("窗口","Windowed"),("全屏（无边框）","Borderless")],prefs.window_mode)
+        resolution=combo(basic_form,"resolution","窗口渲染分辨率（物理像素）",[("保持当前","Current"),*((v,v) for v in ("1280×720","1600×900","1920×1080","2560×1440","3840×2160"))],prefs.resolution)
+        resolution.setEnabled(mode.currentData()=="Windowed")
+        mode.currentIndexChanged.connect(lambda _:resolution.setEnabled(mode.currentData()=="Windowed"))
+        combo(basic_form,"hud_hz","HUD刷新节奏",[("跟随现有HUD设置",0),*((f"{v} Hz",v) for v in (60,75,90,120,144,165,240))],prefs.hud_hz)
+        note=QLabel("无边框模式使用Windows当前显示模式；此页不会伪装修改显示器物理刷新率。\nWindows全屏保留Qt建议的1像素合成边线，以兼容OpenGL窗口和弹窗。\n窗口分辨率按DPR换算；裁判逻辑、KMC与图传不随HUD帧率限额降频。")
+        note.setWordWrap(True);basic_form.addRow(note)
+        combo(advanced_form,"fps_limit","最大渲染帧率",[("跟随HUD节奏",0),*((str(v)+" FPS",v) for v in (30,60,75,90,120,144,165,240))],prefs.fps_limit)
+        combo(advanced_form,"vsync","等待垂直同步（重启生效）",[("已启用",True),("已禁用",False)],prefs.vsync)
+        combo(advanced_form,"msaa","多重采样抗锯齿（重启生效）",[("无",0),("2× MSAA",2),("4× MSAA",4),("8× MSAA",8)],prefs.msaa)
+        combo(advanced_form,"video_detail","图传显示细节",[("保留当前优化","Legacy"),("720p预算","720p"),("1080p预算","1080p"),("原生分辨率","Native")],prefs.video_detail)
+        combo(advanced_form,"video_filter","图传纹理过滤",[("保留当前","Auto"),("线性过滤","Linear"),("最近邻","Nearest")],prefs.video_filter)
+        quality=QComboBox();quality.addItems(("自定义","低（图传720p / 无MSAA）","中（图传1080p / 2× MSAA）","高（原生图传 / 4× MSAA）"))
+        advanced_form.insertRow(0,"画质预设",quality)
+        def set_quality(index):
+            if not index:return
+            detail,aa=(("720p",0),("1080p",2),("Native",4))[index-1]
+            controls["video_detail"].setCurrentIndex(controls["video_detail"].findData(detail))
+            controls["msaa"].setCurrentIndex(controls["msaa"].findData(aa))
+            controls["video_filter"].setCurrentIndex(controls["video_filter"].findData("Linear"))
+        quality.currentIndexChanged.connect(set_quality)
+        advanced_form.addRow(QLabel("任何画质档都保留液态玻璃、原版MC像素层和清晰UI字体；\n仅调整图传采样与Qt呈现，未提供NVIDIA Reflex/FSR等虚假引擎选项。"))
+        status=QLabel("修改分辨率会锁定操控；重新操作车辆前须再次人工Arm。");status.setWordWrap(True);root.addWidget(status)
+        buttons=QHBoxLayout();root.addLayout(buttons)
+        crosshair=QPushButton("准星设置 / 分享码")
+        def open_crosshair():
+            from ..cs2_crosshair import open_crosshair_editor
+            open_crosshair_editor(host)
+        crosshair.clicked.connect(open_crosshair);buttons.addWidget(crosshair)
+        buttons.addStretch()
+        apply=QPushButton("应用更改");back=QPushButton("返回")
+        buttons.addWidget(apply);buttons.addWidget(back)
+        def apply_draft():
+            updated=validate_preferences({key:widget.currentData() for key,widget in controls.items()})
+            apply_window_settings(host,updated)
+            save_preferences(updated)
+            status.setText("已应用窗口/图传/帧率设置；VSync和MSAA需重启客户端后生效。液态玻璃未更改。")
+        def apply_changes():
+            try:
+                apply_draft()
+            except (OSError,ValueError) as exc:
+                QMessageBox.warning(dialog,"未应用",str(exc))
+        apply.clicked.connect(apply_changes);back.clicked.connect(dialog.accept)
+        def reset_draft():
+            defaults=asdict(VideoPreferences())
+            for key,widget in controls.items():
+                widget.setCurrentIndex(widget.findData(defaults[key]))
+            quality.setCurrentIndex(0)
+        dialog.apply_draft=apply_draft
+        dialog.reset_draft=reset_draft
+        dialog.controls=controls
+        for label in dialog.findChildren(QLabel):label.setWordWrap(True)
+        from .jello_widgets import apply_jello_widgets
+        apply_jello_widgets(dialog)
+        if embedded:
+            crosshair.hide();apply.hide();back.hide()
+            return dialog
+        dialog.exec()
+    except Exception as error:
+        # Embedded pages belong to the host until their caller attaches them.
+        # Retire only this acquired tree if construction never hands it off.
         try:
-            apply_draft()
-        except (OSError,ValueError) as exc:
-            QMessageBox.warning(dialog,"未应用",str(exc))
-    apply.clicked.connect(apply_changes);back.clicked.connect(dialog.accept)
-    def reset_draft():
-        defaults=asdict(VideoPreferences())
-        for key,widget in controls.items():
-            widget.setCurrentIndex(widget.findData(defaults[key]))
-        quality.setCurrentIndex(0)
-    dialog.apply_draft=apply_draft
-    dialog.reset_draft=reset_draft
-    dialog.controls=controls
-    for label in dialog.findChildren(QLabel):label.setWordWrap(True)
-    from .jello_widgets import apply_jello_widgets
-    apply_jello_widgets(dialog)
-    if embedded:
-        crosshair.hide();apply.hide();back.hide()
-        return dialog
-    dialog.exec()
+            dialog.deleteLater()
+        finally:
+            raise error

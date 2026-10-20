@@ -1,64 +1,10 @@
-"""阶段 2d 渲染器提取：战术地图 / 官方地图 / 状态坞（D10）→ TacticalMapMixin。
+"""Tactical-map painting and ordered window effects.
 
-（REFACTOR_BLUEPRINT §5 阶段 2 表 2d 行 / §2 D10 节方法清单 / §5.6 冻结面 / §6 缓存纪律）
-
-迁移范围（以 grep 重定位后的实际行号为准，蓝图原行号 9104–10863 已因多轮修复
-与并行编辑漂移；实际区段为 polar_app.py 7409–9160 的**连续块**，中间无外域方法）：
-共 55 个方法——
-- 右侧 HUD 模式分发/入口：``draw_right_hud_mode`` / ``queue_gpu_module_list`` /
-  ``draw_module_list_for_tactical_map`` / ``draw_match_header``
-- 战术地图入口/交互态：``draw_tactical_map_hud`` / ``tactical_map_rect`` /
-  ``tactical_map_morph_progress`` / ``tactical_map_hold_amount`` /
-  ``publish_map_click_from_screen`` / ``open_event_command_menu``
-- chrome/status 助手：``tactical_map_chrome`` / ``tactical_map_status_display`` /
-  ``effective_tactical_map_status_display`` / ``tactical_map_status_kind`` /
-  ``tactical_map_footer_height`` / ``liquid_status_footer_height``
-- 液态地图：``draw_liquid_tactical_map_hud`` / ``official_map_fit_rect`` /
-  ``draw_liquid_map_robots`` / ``draw_liquid_mini_status_overlay`` /
-  ``draw_liquid_mini_status_chip`` / ``liquid_entity_color`` / ``map_team_color`` /
-  ``map_control_color`` / ``draw_liquid_radar_pointer``
-- 状态坞：``draw_liquid_status_dock`` / ``draw_liquid_status_row`` /
-  ``draw_liquid_status_item`` / ``liquid_status_color`` / ``draw_liquid_status_bar`` /
-  ``draw_liquid_status_card``
-- 官方地图（含缺陷 D 修复区，零修改迁移）：``draw_official_map`` /
-  ``_map_fit_cuts_panel_corners`` / ``_rounded_map_layer`` / ``official_map_image`` /
-  ``official_map_display_image`` / ``map_point`` / ``draw_map_zones`` /
-  ``draw_map_robots`` / ``draw_map_markers``
-- 轨道坞/黑洞盘：``draw_map_status_orbit_dock`` / ``draw_blackhole_disc_row`` /
-  ``animated_status_ratio`` / ``draw_blackhole_status_disc`` /
-  ``draw_status_label_capsule``
-- 状态行数据：``compact_map_status_label`` / ``map_status_groups`` /
-  ``map_telemetry_status_rows`` / ``draw_match_status_lines`` /
-  ``draw_match_status_stack`` / ``draw_match_status_rings`` /
-  ``match_status_ring_rows`` / ``match_status_rows``
-- 遥测条：``draw_telemetry_strip`` / ``draw_compact_telemetry_strip``
-
-纪律与偏差决策（中文记录）：
-- 方法体**零修改**（含注释与空行），纯移动进本 Mixin；尤其 ``draw_official_map``
-  与其两个直接辅助 ``_map_fit_cuts_panel_corners`` / ``_rounded_map_layer`` 是刚
-  完成的缺陷 D 修复（含 clip_radius 语义注释），逐字保留；
-- ``_map_round_cache`` 是惰性创建字段（方法内 getattr 创建）——保持惰性创建不动，
-  **未触碰 PolarRMWindow.__init__**；
-- ``queue_gpu_module_list`` / ``draw_module_list_for_tactical_map`` 名字虽含 modlist
-  但按蓝图归属 D10（阶段 2c 已确认），本次一并迁入；二者内部经 self 调用的
-  ``module_list_layout`` / ``draw_module_list_fast_rows`` 由 ModuleListMixin 继承
-  提供（PolarRMWindow MRO 中 TacticalMapMixin 排在其后），调用面不变；
-- ``fit_aspect`` / ``format_time`` / ``short_ring_number`` / ``short_outpost_value``
-  已在阶段 1 迁至 ui/polar/text_metrics.py，本域方法均经 ``self.`` 调用 → 经
-  TextMetricsMixin 继承访问，本模块无需导入这些符号；
-- ``open_event_command_menu`` 方法体内使用 QInputDialog 模态对话框（零修改迁移
-  所必需）→ 从 PySide6.QtWidgets 显式导入；
-- 边界保守决策：``handle_tactical_map_hold_event`` 属 D15 输入/dispatch 域 → 不迁；
-  ``liquid_map_enabled`` / ``liquid_map_setting`` / ``liquid_map_bool`` 位于 HUD
-  风格助手族（蓝图 §2 归 D9"主题服务"）→ 留在 polar_app.py，本 Mixin 经 self
-  继续访问；``_client_asset_path``（D19 共享辅助）仍留在 polar_app.py 原位；
-  ``tactical_map_hold`` / ``tactical_map_state`` / ``map_display_cache`` 等
-  __init__ 状态 schema 字段全部原位不动（§5.6 冻结面 + §6 缓存纪律）。
-
-冻结面纪律：与阶段 2a/2b/2c 一致——api_freeze_test 对方法类成员比对
-``__qualname__``（基线值形如 "PolarRMWindow.<name>"），故在本模块底部把全部
-迁入方法的 ``__qualname__`` 钉回 ``PolarRMWindow.<name>``，使 ``window.<name>``
-签名与迁移前 bit 级一致。
+Qt-free geometry owns projection, container targets and rounded-image sampling;
+telemetry values own radar freshness and typed penalty/timeline observations.
+The existing MapIslandState owns reversible animation. This adapter retains registry observation, image/cache lifetime, hotspot publication
+and backend command calls; pure values never grant permission to send a mark.
+Historical window method names and signatures remain compatibility entrypoints.
 """
 
 from __future__ import annotations
@@ -77,18 +23,32 @@ from PySide6.QtGui import (
     QPen,
     QPolygonF,
 )
-# 零修改迁移所需：open_event_command_menu 的模态输入对话框。
-from PySide6.QtWidgets import QInputDialog
+# Event-command dialogs remain an ordered UI/backend interaction.
+from PySide6.QtWidgets import QInputDialog, QMessageBox
 
 # 相对导入层级：rm_client/ui/polar/renderers/ → .... = rm_client、... = rm_client.ui
 from ....match_modes import FieldLayout, MatchModeConfig
 from ....model import Module
+from ....referee_profiles import V2_PROFILE
+from ....qualification_observations import V2AirAttempt, same_v2_air_owners
+from ....backend.referee.rm2026_v2.economy_rules import request_decision
+from ....backend.referee.rm2026_v2.observations import WireSnapshot
+from ....student_ui import v2_status_rows
 from ....vision import VisionTarget
 from ...animation import Easings
 from ...paint import draw_bar, glow_rect, rounded_rect, text_width, with_alpha
 from ...theme import THEME, color
 from ...jello_locale import chinese_enabled
 from ...hud_locale import hud_text, hud_template, hud_buff_name
+from ...tactical_map_geometry import (
+    MapExtent, MapViewport, NormalizedMapPoint, RoundedMapSampling,
+    fit_cuts_panel_corners, normalized_field_coordinate,
+)
+from ...tactical_map_interaction import MapHitGeometry, map_hit_position
+from ...tactical_map_telemetry import (
+    RADAR_TTL_SECONDS, RadarLifetime, RadarMarker, own_active_buffs,
+    penalty_notices, radar_coordinate_metres, special_mechanisms,
+)
 
 __all__ = [
     "TacticalMapMixin",
@@ -100,13 +60,212 @@ __all__ = [
 # ---------------------------------------------------------------------------
 
 # RadarInfoToClient 断供后标记保留时长；期间线性淡出，超时整体隐藏。
-_RADAR_TTL_SEC = 6.0
+_RADAR_TTL_SEC = RADAR_TTL_SECONDS
+
+
+
+_V2_AIR_CHOICES = (
+    "0 · Cancel active support / 取消支援",
+    "1 · Free-time support / 免费支援",
+    "2 · Allow continuing paid support / 允许持续付费支援",
+    "3 · Release countermeasure and call / 解除反制并呼叫",
+)
+_V2_AIR_LIMITS = (
+    "V2 partial: reviewed telemetry + supervised Air requests. Normal arming qualification pending.\n"
+    "V2 部分功能：遥测与受监督 Air 请求；常规解锁资格尚待审查。\n"
+    "Other event commands, KMC/custom/map and Radar are unavailable in this profile."
+)
+
+
+def _v2_air_context(host: Any) -> tuple:
+    """Capture actual owners; equality of dataclass profile values is insufficient."""
+    backend = host.backend
+    mqtt = backend.mqtt
+    session = backend.qualification.session
+    owners = (backend, mqtt, backend.referee, mqtt.referee, mqtt.client, session)
+    snapshot = mqtt.v2_wire_snapshot()
+    scope = tuple(snapshot.get(message, field).value
+                  if snapshot is not None and snapshot.get(message, field) is not None else None
+                  for message, field in (("GameStatus", "current_round"),
+                                         ("RobotStaticStatus", "robot_id"),
+                                         ("RobotStaticStatus", "robot_type")))
+    values = (backend.referee.profile_id, mqtt.referee.profile_id,
+              mqtt.receive_generation, str(mqtt.client_id), bool(mqtt.mock_output),
+              bool(mqtt.connected), host.scenario_manager.current.key,
+              getattr(session, "session_id", ""), getattr(session, "operator", ""),
+              getattr(session, "referee_profile", ""), getattr(session, "robot_id", ""), scope)
+    scope_revision = snapshot.scope_revision if snapshot is not None else None
+    return owners, values, snapshot, getattr(host, "_economy_qualification_token", None), scope_revision
+
+
+def _same_v2_air_context(before: tuple, after: tuple, *, token: bool = True) -> bool:
+    return (same_v2_air_owners(before[0], after[0]) and before[1] == after[1]
+            and before[4] == after[4]
+            and (not token or before[3] == after[3]))
+
+
+def _v2_air_snapshot_current(context: tuple) -> bool:
+    owners, values, snapshot, _token, _scope_revision = context
+    return (values[0] == values[1] == V2_PROFILE and values[5]
+            and values[6] == "OfficialEvent" and type(snapshot) is WireSnapshot
+            and (snapshot.profile_id, snapshot.receive_generation, snapshot.client_id)
+                == (V2_PROFILE, values[2], values[3]))
+
+
+def _v2_air_premise(snapshot: WireSnapshot, command_id: int, estimate: int | None) -> tuple:
+    """Compare relevant values/price, not refreshed receipts or unrelated telemetry."""
+    keys = [("GameStatus", "current_stage"), ("GameStatus", "current_round"),
+            ("RobotStaticStatus", "robot_id"), ("RobotStaticStatus", "robot_type"),
+            ("AirSupportStatusSync", "airsupport_status")]
+    if command_id != 0:
+        keys += [("RobotStaticStatus", "connection_state"), ("RobotStaticStatus", "field_state"),
+                 ("PenaltyInfo", "penalty_type"), ("AirSupportStatusSync", "shooter_status")]
+    if command_id in (1, 2):
+        keys.append(("AirSupportStatusSync", "left_time"))
+    if command_id in (2, 3):
+        keys.append(("GlobalLogisticsStatus", "remaining_economy"))
+    if command_id == 3:
+        keys.append(("RobotStaticStatus", "level"))
+    return (estimate, tuple((message, field, snapshot.get(message, field).value
+                            if snapshot.get(message, field) is not None else None)
+                           for message, field in keys))
+
+
+def _v2_air_observed_text(host: Any, context: tuple, now: float) -> str:
+    _owners, values, snapshot, _token, _scope_revision = context
+    rows = v2_status_rows(host.state, snapshot, now=now, profile_id=values[0],
+                         connected=values[5], receive_generation=values[2], client_id=values[3])
+    return "Observed telemetry / 观测值（并非请求确认）:\n" + "\n".join(
+        f"{label}: {value}" for label, value in rows)
+
+
+def _open_v2_air_dialog(host: Any) -> None:
+    """One explicit command, at most one refreshed confirmation, no automatic retry."""
+    attempt_started = accepted_enqueue = submitted_mock = False
+    try:
+        admission = _v2_air_context(host)
+        if not _v2_air_snapshot_current(admission):
+            host._v2_air_qualification_attempt = None
+            host.toast("V2 Air requires current connected OfficialEvent wire observations")
+            return
+        now = time.perf_counter()
+        decisions = [request_decision("AirSupportCommand", index, admission[2], now=now)
+                     for index in range(4)]
+        status = "\n".join(f"{_V2_AIR_CHOICES[index]}: {reason}"
+                           for index, (_allowed, reason, _cost) in enumerate(decisions))
+        choice, accepted = QInputDialog.getItem(
+            host, "V2 Air · partial / 部分功能", _V2_AIR_LIMITS + "\n\n" +
+            _v2_air_observed_text(host, admission, now) + "\n\nRequest conditions / 请求条件:\n" + status,
+            _V2_AIR_CHOICES, 0, False)
+        if not accepted or choice not in _V2_AIR_CHOICES:
+            return
+        command_id = _V2_AIR_CHOICES.index(choice)
+        for confirmation in range(2):
+            current = _v2_air_context(host)
+            if not _same_v2_air_context(admission, current) or not _v2_air_snapshot_current(current):
+                host._v2_air_qualification_attempt = None
+                host.toast("Air dialog context changed; reopen it for the current profile/session")
+                return
+            now = time.perf_counter()
+            allowed, reason, estimate = request_decision("AirSupportCommand", command_id, current[2], now=now)
+            if not allowed:
+                host.toast(reason)
+                return
+            if current[3] is not None:
+                session = current[0][5]
+                if (session is None or not session.operator.strip() or session.referee_profile != V2_PROFILE
+                        or session.robot_id != str(current[1][-1][1])):
+                    host.toast("Supervised Air requires a matching V2 session and named operator")
+                    return
+            premise = _v2_air_premise(current[2], command_id, estimate)
+            if command_id == 2:
+                charge = ("Free time first, then continuing consumption at 1 coin/second. "
+                          "There is no fixed total or promised duration.\n"
+                          "免费时长优先，用尽后按 1 金币/秒持续消耗；无固定总价或预定持续时间。")
+            elif command_id == 3:
+                charge = (f"Estimated release fee only: {estimate} coins. Subsequent support mode and total are unconfirmed.\n"
+                          f"仅解除反制费用估价：{estimate} 金币；后续支援模式和总价未确认。")
+            else:
+                charge = "Cancel active support." if command_id == 0 else "Request the observed free support time only."
+            mode = "MOCK: no live request / 模拟请求" if current[1][4] else "Live request / 正式请求"
+            message = ("Conditions or cost changed; review again.\n" if confirmation else "")
+            message += (f"{choice}\n{mode}\n{charge}\n{reason}\n\n" +
+                        _v2_air_observed_text(host, current, now) +
+                        "\n\nSubmit this one request? No unique request/payment ACK will be available.")
+            answer = QMessageBox.question(host, "Confirm V2 Air request / 确认请求", message,
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
+            if answer != QMessageBox.StandardButton.Yes:
+                return
+            checked = _v2_air_context(host)
+            if not _same_v2_air_context(admission, checked) or not _v2_air_snapshot_current(checked):
+                host._v2_air_qualification_attempt = None
+                host.toast("Air dialog context changed; request discarded")
+                return
+            checked_at = time.perf_counter()
+            allowed, reason, estimate = request_decision("AirSupportCommand", command_id, checked[2], now=checked_at)
+            if not allowed:
+                host.toast(reason)
+                return
+            if premise != _v2_air_premise(checked[2], command_id, estimate):
+                if confirmation == 0:
+                    continue
+                host.toast("Air conditions changed again; reopen the dialog. No request was sent.")
+                return
+            break
+
+        # A dialog decision is never authority. The existing final MQTT/Safety
+        # guard rechecks the frozen command against current evidence and owners.
+        owners, values, snapshot, qualification_token, scope_revision = checked
+        backend, mqtt, profile, _mqtt_profile, _client, session = owners
+        host._v2_air_qualification_attempt = None
+        if qualification_token is not None:
+            host._economy_qualification_token = None
+        try:
+            attempt_started = True
+            if qualification_token is None:
+                ok, reason = backend.publish_air_support(command_id)
+            else:
+                ok = mqtt.publish_air_support_command(profile.codec.encode_air_support_command(command_id),
+                    qualification_token=qualification_token)
+                reason = ("mock" if values[4] else "ok") if ok else mqtt.last_error
+            accepted_enqueue = bool(ok)
+            submitted_mock = values[4] or reason == "mock"
+            returned_at = time.perf_counter()
+        finally:
+            if qualification_token is not None:
+                backend.lock_control("economy qualification command attempted")
+        after = _v2_air_context(host)
+        if (ok and qualification_token is not None and not values[4]
+                and _same_v2_air_context(checked, after, token=False)
+                and _v2_air_snapshot_current(after) and after[3] is None):
+            relevant = "shooter_status" if command_id == 3 else "airsupport_status"
+            old_status = snapshot.get("AirSupportStatusSync", relevant).value
+            host._v2_air_qualification_attempt = V2AirAttempt(
+                owners=owners, scope_revision=scope_revision,
+                session_id=session.session_id, operator=session.operator,
+                profile_id=V2_PROFILE, receive_generation=values[2], client_id=values[3],
+                robot_id=values[-1][1], current_round=values[-1][0], command_id=command_id,
+                old_status=old_status, returned_at=returned_at)
+        if not ok:
+            host.toast(reason or "Air request rejected")
+        elif values[4] or reason == "mock":
+            host.toast("MOCK Air request recorded; no live enqueue or qualification evidence")
+        else:
+            host.toast("请求已提交，待服务器处理；未取得逐请求确认")
+    except Exception as exc:
+        host._v2_air_qualification_attempt = None
+        if accepted_enqueue:
+            outcome = "MOCK Air request recorded" if submitted_mock else "请求已提交，待服务器处理；未取得逐请求确认"
+            host.toast(f"{outcome} · qualification observation unavailable: {exc}")
+        elif attempt_started:
+            host.toast(f"V2 Air attempt ended with an error: {exc}; no automatic retry")
+        else:
+            host.toast(f"V2 Air dialog failed: {exc}")
 
 
 def _radar_coord_to_m(value: float, span_m: float) -> float:
     """官方雷达坐标为厘米（RMUC 场地 2800x1500cm）；兼容米制输入。"""
-    v = float(value)
-    return v / 100.0 if v > max(0.1, span_m) + 0.5 else v
+    return radar_coordinate_metres(value, span_m)
 
 
 def draw_radar_overlay(
@@ -131,10 +290,8 @@ def draw_radar_overlay(
         return 0
     seen_at = float(getattr(host.state, "radar_detections_at", 0.0) or 0.0)
     now = time.perf_counter()
-    if seen_at <= 0.0:
-        return 0
-    age = now - seen_at
-    if age > _RADAR_TTL_SEC:
+    lifetime = RadarLifetime.visible_at(seen_at, now, _RADAR_TTL_SEC)
+    if lifetime is None:
         return 0
     detail = (0.0 if compact else 1.0) if detail_progress is None else max(0.0, min(1.0, detail_progress))
     # `RadarOverlay / Map`：经典面板与液态玻璃面板都走这一个门（本函数是
@@ -142,7 +299,7 @@ def draw_radar_overlay(
     # Both（默认）时永远为 True——画面与接线前逐像素相同。
     if not host.radar_overlay_map_visible(detail):
         return 0
-    fade = max(0.0, min(1.0, (_RADAR_TTL_SEC - age) / 2.0))
+    fade = lifetime.opacity
     base_opacity = p.opacity()
     warn_color = host.hud_warning()
     accent_color = host.hud_accent()
@@ -150,12 +307,9 @@ def draw_radar_overlay(
     drawn = 0
     for index, det in enumerate(detections):
         try:
-            x_m = _radar_coord_to_m(det.get("target_pos_x", 0.0), field.width_m)
-            y_m = _radar_coord_to_m(det.get("target_pos_y", 0.0), field.height_m)
-            highlighted = (
-                int(det.get("is_high_light", 0) or 0) != 0
-                and host.radar_high_light_enabled()
-            )
+            marker = RadarMarker.from_wire(det, field.width_m, field.height_m)
+            x_m, y_m = marker.x_m, marker.y_m
+            highlighted = marker.highlighted and host.radar_high_light_enabled()
         except (TypeError, ValueError):
             continue
         if x_m <= 0.0 and y_m <= 0.0:
@@ -206,28 +360,7 @@ def draw_penalty_strip(host: Any, p: QPainter, field_rect: QRectF, *, compact: b
     """
     penalties = getattr(host.state, "penalties", None) or []
     active = getattr(host.state, "active_penalty", None) or {}
-    entries: list[tuple[int, int, int]] = []  # (penalty_type, total_num, effect_sec)
-
-    def _push(item: dict) -> None:
-        try:
-            ptype = int(item.get("penalty_type", 0))
-        except (TypeError, ValueError):
-            return
-        if any(existing[0] == ptype for existing in entries):
-            return
-        try:
-            total = int(item.get("total_penalty_num", 0) or 0)
-            effect = int(item.get("penalty_effect_sec", 0) or 0)
-        except (TypeError, ValueError):
-            total, effect = 0, 0
-        entries.append((ptype, total, effect))
-
-    if active:
-        _push(active)
-    for item in reversed(penalties):
-        _push(item)
-        if len(entries) >= 3:
-            break
+    entries = penalty_notices(active, penalties)
     if not entries:
         return 0
 
@@ -235,7 +368,8 @@ def draw_penalty_strip(host: Any, p: QPainter, field_rect: QRectF, *, compact: b
     warn_color = host.hud_warning()
     font = host.font("poppins_medium", 6.8)
     y = field_rect.top() + (6.0 if compact else 30.0)
-    for ptype, total, effect in entries:
+    for notice in entries:
+        ptype, total, effect = notice.penalty_type, notice.total_count, notice.effect_seconds
         text = f"判罚 T{ptype}" + (f" ×{total}" if total > 1 else "") + (f" · {effect}s" if effect > 0 else "")
         strip_w = max(64.0, host.text_advance(font, text) + 18.0)
         capsule = QRectF(field_rect.left() + 6.0, y, min(strip_w, field_rect.width() - 12.0), 15.0)
@@ -496,32 +630,11 @@ class TacticalMapMixin:
                 own_id = int(getattr(self.state, "robot_id", 0) or 0)
             except (TypeError, ValueError):
                 own_id = 0
-            for row in getattr(self.state, "buff_rows", ()) or ():
-                if row.get("buff_type") is None:
-                    continue
-                try:
-                    if int(row.get("robot_id", 0) or 0) != own_id:
-                        continue
-                except (TypeError, ValueError):
-                    continue
-                if not row.get("active"):
-                    continue
-                name = str(row.get("name") or f"Buff {row.get('buff_type')}")
-                try:
-                    remaining = max(0, int(row.get("remaining", 0) or 0))
-                except (TypeError, ValueError):
-                    remaining = 0
-                rows.append(("buff", name, remaining))
+            entries = own_active_buffs(getattr(self.state, "buff_rows", ()) or (), own_id)
+            rows.extend(entry.as_row() for entry in entries)
         if self._bool_on("BuffTimeline", "Special Mechanism"):
-            for item in getattr(self.state, "special_mechanisms", ()) or ():
-                try:
-                    mechanism_id = int(item.get("mechanism_id", 0) or 0)
-                    seconds = max(0, int(item.get("time_sec", 0) or 0))
-                except (AttributeError, TypeError, ValueError):
-                    continue
-                if mechanism_id <= 0:
-                    continue
-                rows.append(("mechanism", f"MECH{mechanism_id}", seconds))
+            entries = special_mechanisms(getattr(self.state, "special_mechanisms", ()) or ())
+            rows.extend(entry.as_row() for entry in entries)
         return rows[: self.BUFF_TIMELINE_MAX_ITEMS]
 
     def buff_timeline_band(self, width: int, height: int) -> QRectF | None:
@@ -582,6 +695,7 @@ class TacticalMapMixin:
             x += chip_w + 4.0
 
     def draw_tactical_map_hud(self, p: QPainter, width: int, height: int) -> None:
+        self._tactical_map_hit_geometry = MapHitGeometry.empty()
         module = self.registry.get("TacticalMap")
         if module is not None and not module.enabled:
             return
@@ -683,30 +797,11 @@ class TacticalMapMixin:
         setting = module.get_setting("Map Size") if module else None
         mode = str(setting.value) if setting else "Wide"
         density = self.hud_density()
-        # CombatCompact 始终以缩略尺寸作为 morph 起点。不能在按键按下时
-        # 先切换 base size，否则会在连续动画开始前产生一次明显跳变。
-        if self.minecraft_hud_active():
-            # MC composition owns a dedicated upper-left safe area.  Do not
-            # mutate Map Size: leaving the preset restores the user's exact
-            # POLAR geometry on the next frame.
-            base_w = min(216.0, max(168.0, width * 0.19))
-            base_h = min(154.0, max(116.0, height * 0.19))
-        elif density == "CombatCompact":
-            base_w, base_h = 170.0, 118.0
-        elif mode == "Compact":
-            base_w, base_h = 220.0, 170.0
-        elif mode == "Full Tactical":
-            base_w, base_h = 360.0, 270.0
-        else:
-            base_w, base_h = 280.0, 212.0
-        expanded_w = min(520.0, width * 0.48)
-        expanded_h = min(380.0, height * 0.56)
-        target_w = expanded_w if self.tactical_map_hold else base_w
-        target_h = expanded_h if self.tactical_map_hold else base_h
-        target_w = min(target_w, max(190.0, width - 36.0))
-        target_h = min(target_h, max(150.0, height - 96.0))
+        # The collapsed target stays independent of Tab so reversal never jumps.
+        base = MapExtent.collapsed(width, height, mode, density, self.minecraft_hud_active())
+        target = base.target(width, height, self.tactical_map_hold)
         map_y = 48.0 if self.minecraft_hud_active() else 58.0
-        self.tactical_map_state.set_target(12.0, map_y, target_w, target_h, self.tactical_map_hold)
+        self.tactical_map_state.set_target(12.0, map_y, target.width, target.height, self.tactical_map_hold)
         state = self.tactical_map_state.container
         return QRectF(state.x, state.y, state.width, state.height)
 
@@ -757,14 +852,18 @@ class TacticalMapMixin:
             return False
         field = self.tactical_map_field_layout
         rect = self.tactical_map_field_rect
-        if field is None or rect.isNull() or not rect.contains(point):
+        if field is None:
             return False
-        nx = (point.x() - rect.left()) / max(1.0, rect.width())
-        ny = (rect.bottom() - point.y()) / max(1.0, rect.height())
+        position = map_hit_position(point, rect, getattr(self, "_tactical_map_hit_geometry", None))
+        if position is None:
+            return False
+        # Capture before settings, command publication or toast can fail. The
+        # eventual release and drag remain map-owned even after Tab reverses.
+        self.pointer_interaction.own_release()
+        self._control_mouse_point = None
         if self.tactical_map_field_mirrored:
-            nx, ny = 1.0 - nx, 1.0 - ny
-        map_x = max(0.0, min(1.0, nx)) * field.width_m
-        map_y = max(0.0, min(1.0, ny)) * field.height_m
+            position = position.mirrored()
+        map_x, map_y = position.field_metres(field.width_m, field.height_m)
         is_send_all, mark_type = self.map_click_command_values()
         ok, reason = self.backend.publish_map_click_cmd(
             is_send_all=is_send_all,
@@ -782,6 +881,10 @@ class TacticalMapMixin:
         Everything funnels through the backend publishers, so MATCH_ARMED
         capability checks, rate limits, and mock gating still apply.
         """
+
+        if self.backend.referee.profile_id == V2_PROFILE:
+            _open_v2_air_dialog(self)
+            return
 
         commands = (
             "Rune Activate (energy mechanism)",
@@ -913,6 +1016,7 @@ class TacticalMapMixin:
         config: MatchModeConfig,
         rect: QRectF,
     ) -> None:
+        self._tactical_map_hit_geometry = MapHitGeometry.empty()
         hold_amount = self.tactical_map_hold_amount()
         compact_density = self.hud_density() == "CombatCompact" or self.minecraft_hud_active()
         compact = compact_density
@@ -956,6 +1060,15 @@ class TacticalMapMixin:
         p.save()
         p.setClipRect(rect.adjusted(1.0, 1.0, -1.0, -1.0))
         field_rect = self.draw_official_map(p, map_rect, config)
+        self.tactical_map_field_rect = QRectF(field_rect)
+        self.tactical_map_field_layout = config.field
+        alliance_profile = self.registry.get("AllianceProfile")
+        self.tactical_map_field_mirrored = bool(
+            config.field.mirror_for_blue
+            and self.alliance_side() == "Blue"
+            and self.setting_bool(module, "Mirror Blue", True)
+            and self.setting_bool(alliance_profile, "Mirror Tactical Map", True)
+        )
         content_alpha = self.anim.value("hud.tactical_map.liquid.content", 1.0, self.anim_duration(0.20), Easings.ease_out_cubic, initial=0.0)
         p.save()
         p.setOpacity(p.opacity() * content_alpha)
@@ -1520,6 +1633,7 @@ class TacticalMapMixin:
         opacity_setting = self.registry.get("TacticalMap").get_setting("Opacity") if self.registry.get("TacticalMap") else None
         image_opacity = float(opacity_setting.value) if opacity_setting else 0.72
         rounded_rect(p, rect, 6, color("#050506", 0.72), color("#ffffff", 0.08))
+        masked = None
         if image is None or image.isNull():
             self.draw_text(p, rect, hud_text("official map asset missing", chinese_enabled(self.registry)), self.font("poppins_regular", 8.0), self.hud_danger(), Qt.AlignmentFlag.AlignCenter)
             fit = self.fit_aspect(rect, config.field.width_m / max(0.1, config.field.height_m))
@@ -1531,7 +1645,6 @@ class TacticalMapMixin:
             # 当前生效），不能依赖。drawImage 没有路径交集变体，因此用引擎无关的
             # 圆角预裁剪缓存：仅当 fit 方角真的侵入圆弧缺口（折叠动画等比穿越点、
             # 展开贴满态）时才预合成带透明角的位图，其余帧保持原直绘零开销。
-            masked = None
             if self._map_fit_cuts_panel_corners(rect, fit, 6.0):
                 masked = self._rounded_map_layer(p, image, fit, rect, 6.0)
             p.save()
@@ -1560,6 +1673,10 @@ class TacticalMapMixin:
             else:
                 p.fillRect(fit, color("#07111d", 0.16 if self.hud_clean() else 0.28))
         rounded_rect(p, fit, 4, color("#000000", 0.0), with_alpha(self.hud_accent(), 0.30 if self.hud_clean() else 0.22), 1.0)
+        self._tactical_map_hit_geometry = MapHitGeometry.from_paint(
+            fit, rect, p.combinedTransform(), p.clipPath() if p.hasClipping() else None,
+            rounded=masked is not None,
+        )
         return fit
 
     def _map_fit_cuts_panel_corners(self, rect: QRectF, fit: QRectF, radius: float) -> bool:
@@ -1570,8 +1687,7 @@ class TacticalMapMixin:
         """
         gaps_x = (fit.left() - rect.left(), rect.right() - fit.right())
         gaps_y = (fit.top() - rect.top(), rect.bottom() - fit.bottom())
-        margin = radius + 1.0
-        return any(gx < margin and gy < margin for gx in gaps_x for gy in gaps_y)
+        return fit_cuts_panel_corners(gaps_x, gaps_y, radius)
 
     def _rounded_map_layer(self, p: QPainter, image: QImage, fit: QRectF, rect: QRectF, radius: float) -> QImage | None:
         """把源图按圆角掩码预合成进带透明角的缓存位图（缺陷 D）。
@@ -1593,19 +1709,12 @@ class TacticalMapMixin:
                 scale *= float(device.devicePixelRatioF())
             except Exception:
                 pass
-        scale = max(0.5, min(scale, 4.0))
-        width = max(1, int(math.ceil(fit.width() * scale)))
-        height = max(1, int(math.ceil(fit.height() * scale)))
-        sx = width / max(0.001, fit.width())
-        sy = height / max(0.001, fit.height())
-        radius_px = radius * scale
-        # key 必须完整决定掩码形状：除尺寸/半径外还要含 fit 相对面板的偏移
-        # （同尺寸不同偏移 => rounded(fit)∩rounded(rect) 的角部掩码不同）。
-        offset_key = (
-            round((fit.left() - rect.left()) * sx, 2),
-            round((fit.top() - rect.top()) * sy, 2),
-        )
-        key = (image.cacheKey(), width, height, round(radius_px, 2), offset_key)
+        sampling = RoundedMapSampling.for_extent(fit.width(), fit.height(), scale, radius)
+        width, height = sampling.width, sampling.height
+        sx, sy = sampling.scale_x, sampling.scale_y
+        # Source identity and relative panel offset both affect mask reuse.
+        offset_key = sampling.panel_offset(fit.left() - rect.left(), fit.top() - rect.top())
+        key = sampling.cache_key(image.cacheKey(), offset_key)
         cached = cache.get(key)
         if cached is not None:
             return cached
@@ -1659,8 +1768,8 @@ class TacticalMapMixin:
         return cached
 
     def map_point(self, rect: QRectF, field: FieldLayout, x_m: float, y_m: float) -> QPointF:
-        nx = max(0.0, min(1.0, x_m / max(0.1, field.width_m)))
-        ny = max(0.0, min(1.0, y_m / max(0.1, field.height_m)))
+        nx = normalized_field_coordinate(x_m, field.width_m)
+        ny = normalized_field_coordinate(y_m, field.height_m)
         tactical = self.registry.get("TacticalMap")
         profile = self.registry.get("AllianceProfile")
         mirror = (
@@ -1669,10 +1778,11 @@ class TacticalMapMixin:
             and self.setting_bool(tactical, "Mirror Blue", True)
             and self.setting_bool(profile, "Mirror Tactical Map", True)
         )
+        point = NormalizedMapPoint(nx, ny)
         if mirror:
-            nx = 1.0 - nx
-            ny = 1.0 - ny
-        return QPointF(rect.left() + rect.width() * nx, rect.bottom() - rect.height() * ny)
+            point = point.mirrored()
+        viewport = MapViewport(rect.left(), rect.bottom(), rect.width(), rect.height())
+        return QPointF(*viewport.screen_point(point))
 
     def draw_map_zones(
         self,
@@ -2577,8 +2687,7 @@ class TacticalMapMixin:
 
 
 # ---------------------------------------------------------------------------
-# API 冻结面 qualname 固定（见模块 docstring「冻结面纪律」；阶段 2a 先例：
-# renderers/combat_target_hud.py 底部同一手法）。
+# Preserve the established window API identities for inherited map methods.
 # ---------------------------------------------------------------------------
 
 _QUALNAME_PINNED_MEMBERS = (
