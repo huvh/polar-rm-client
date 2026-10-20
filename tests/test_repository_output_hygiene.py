@@ -29,11 +29,11 @@ class RepositoryOutputHygieneTests(unittest.TestCase):
             result = subprocess.run(
                 [git, '-c', 'core.excludesFile=', '-C', str(root),
                  'check-ignore', '--no-index', '--stdin'],
-                input='\n'.join(candidates) + '\n', capture_output=True,
-                text=True, timeout=15, check=False,
+                input=('\n'.join(candidates) + '\n').encode('utf-8'), capture_output=True,
+                timeout=15, check=False,
             )
             self.assertIn(result.returncode, (0, 1), result.stderr)
-            self.assertEqual(result.stdout.splitlines(), candidates[:3])
+            self.assertEqual(result.stdout.decode('utf-8').splitlines(), candidates[:3])
 
 
 if __name__ == '__main__':

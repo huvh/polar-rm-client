@@ -242,6 +242,9 @@ class JelloDialog(QDialog):
         super().__init__(parent)
         self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        if parent is not None:
+            from .fullscreen_composition import FullscreenDialogGuard
+            self._fullscreen_guard = FullscreenDialogGuard(parent.window(), self)
         self.panel = JelloSurface(self)
         self.panel.setObjectName("JelloPanel")
         self.panel.setLayout(QVBoxLayout())

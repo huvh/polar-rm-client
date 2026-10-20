@@ -2,6 +2,7 @@
 from __future__ import annotations
 import ctypes
 import importlib.util
+import os
 from pathlib import Path
 import shutil
 import struct
@@ -108,8 +109,12 @@ int alive(void) {prm1_km_cmd_t out; return HostKmPeep(&out);}
         cls.source = PRELUDE + h + validator + feed + bridge
         src = Path(cls.tmp.name) / 'parser.c'
         src.write_text(cls.source)
-        cls.base = Path(cls.tmp.name) / 'parser.so'
-        subprocess.run(['cc', '-std=c99', '-Wall', '-Wextra', '-Werror', '-shared', '-fPIC',
+        cls.suffix = '.dll' if os.name == 'nt' else '.so'
+        cls.base = Path(cls.tmp.name) / ('parser' + cls.suffix)
+        compiler = [shutil.which('cc')] if shutil.which('cc') else [sys.executable, '-m', 'ziglang', 'cc']
+        cls.compiler = compiler
+        platform_flags = ['-Wl,--export-all-symbols'] if os.name == 'nt' else ['-fPIC']
+        subprocess.run([*compiler, '-std=c99', '-Wall', '-Wextra', '-Werror', '-shared', *platform_flags,
                         str(src), '-o', str(cls.base)], check=True)
 
     @classmethod
@@ -118,9 +123,12 @@ int alive(void) {prm1_km_cmd_t out; return HostKmPeep(&out);}
 
     def setUp(self):
         type(self).counter += 1
-        lib = Path(self.tmp.name) / f'parser{self.counter}.so'
+        lib = Path(self.tmp.name) / f'parser{self.counter}{self.suffix}'
         shutil.copyfile(self.base, lib)
         self.lib = ctypes.CDLL(str(lib))
+        if os.name == 'nt':
+            from _ctypes import FreeLibrary
+            self.addCleanup(FreeLibrary, self.lib._handle)
         self.lib.HostKmFeedBytes.argtypes = [ctypes.c_char_p, ctypes.c_uint16]
         self.lib.HostKmFeed.argtypes = [ctypes.c_char_p, ctypes.c_uint16]
         self.lib.bridge.argtypes = [ctypes.c_char_p, ctypes.c_uint]
@@ -137,7 +145,7 @@ int alive(void) {prm1_km_cmd_t out; return HostKmPeep(&out);}
     def test_sanitized_random_stream(self):
         import os
         src=Path(self.tmp.name)/'fuzz.c'
-        exe=Path(self.tmp.name)/'fuzz'
+        exe=Path(self.tmp.name)/('fuzz.exe' if os.name == 'nt' else 'fuzz')
         src.write_text(self.source + r"""
 int main(void) {
  uint8_t bytes[256]; unsigned i,j; uint32_t seed=123;
@@ -150,7 +158,13 @@ int main(void) {
  return alive();
 }
 """)
-        subprocess.run(['cc','-std=c99','-g','-fsanitize=address,undefined',
+        sanitizer = os.environ.get('POLAR_SANITIZER_CC')
+        compiler = [sanitizer] if sanitizer else self.compiler
+        if os.name == 'nt' and not sanitizer and compiler[-2:] == ['ziglang', 'cc']:
+            self.skipTest('INCOMPLETE: Windows Zig 0.13 has no ASan/UBSan runtime; '
+                          'set POLAR_SANITIZER_CC to a native sanitizer-capable clang. '
+                          'The other portable parser checks still execute; this is NOT a sanitizer PASS.')
+        subprocess.run([*compiler,'-std=c99','-g','-fsanitize=address,undefined',
                         '-fno-omit-frame-pointer',str(src),'-o',str(exe)],check=True)
         # LeakSanitizer cannot run under this executor's ptrace sandbox. Address
         # and UB checks remain enabled; parser uses no dynamic allocation.

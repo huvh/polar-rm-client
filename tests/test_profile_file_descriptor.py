@@ -79,9 +79,15 @@ class ProfileDescriptorTests(unittest.TestCase):
              patch.object(config_store.os, "close", side_effect=cleanup):
             with self.assertRaises(FileWriteError) as caught:
                 self.store.save("profile", {})
-        self.assertIs(caught.exception.cause, primary)
-        self.assertIs(caught.exception.cleanup_error, cleanup)
-        self.assertFalse(Path(self.opened[0][1]).exists())
+        error = caught.exception
+        if os.name == "nt":
+            self.assertIsInstance(error.cleanup_error, PermissionError)
+            self.assertTrue(Path(self.opened[0][1]).exists())
+            error = error.cause
+        else:
+            self.assertFalse(Path(self.opened[0][1]).exists())
+        self.assertIs(error.cause, primary)
+        self.assertIs(error.cleanup_error, cleanup)
         os.fstat(self.opened[0][0])  # The rejecting close leaves ownership to this fixture.
         self.assertEqual(self.path.read_bytes(), self.original)
 

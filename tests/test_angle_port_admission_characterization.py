@@ -1,6 +1,7 @@
 """Ordered angle-admission effects compared with the immutable pre-extraction method."""
 from dataclasses import asdict, replace
 import hashlib
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -123,6 +124,16 @@ class AnglePortAdmissionCharacterizationTests(unittest.TestCase):
                      serial={'running': True, 'port': 'RX'})
 
     def test_posix_aliases_are_observed_without_opening_ports(self):
+        if os.name == 'nt':
+            # Test the POSIX alias observation contract without requiring
+            # administrator/Developer Mode symlink privileges on Windows.
+            case = dict(angle={'Angle RX Port': '/fixture/device'},
+                        prior={'cc': {'mock_output': False, 'port': '/fixture/alias'}})
+            with patch('os.path.realpath', side_effect=lambda p: '/fixture/device' if p == '/fixture/alias' else p):
+                self.compare(**case)
+                trace, _, _ = run(BackendManager._sync_controller_angles, **case)
+            self.assertTrue(any(item[0] == 'disarm' and 'CC prior writer' in item[1] for item in trace))
+            return
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory) / 'device'
             alias = Path(directory) / 'alias'

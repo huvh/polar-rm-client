@@ -85,6 +85,7 @@ class Harness:
         self.mqtt = NS(last_error="old error", publish_air_support_command=self.publish_air,
                        publish_common_command=self.publish_common)
         self.backend = NS(lock_control=lambda reason: self.effect("control.lock", reason),
+                          referee=NS(profile_id="rm2026-v1.3.1"),
                           qualification=NS(session=NS(session_id="session") if case.session else None),
                           begin_qualification=self.qualify,
                           field_log=NS(emit=lambda *args, **kwargs: self.effect("audit", *args, **kwargs)))

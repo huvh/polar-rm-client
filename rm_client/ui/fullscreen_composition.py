@@ -107,3 +107,52 @@ def install_fullscreen_composition_guard(host):
         guard = _FullscreenCompositionGuard(host)
         host._fullscreen_composition_guard = guard
     return guard
+
+
+class FullscreenDialogGuard(QObject):
+    """Keep an owned modal from demoting its fullscreen OpenGL parent.
+
+    A Windows activation/style notification can report a normal window while
+    showing a native dialog. Repair only that unintended transition, not an
+    explicit F11/settings change, minimization, or a dialog that already closed.
+    The saved normal geometry belongs to the host and is never recaptured here.
+    """
+
+    def __init__(self, host, dialog):
+        super().__init__(dialog)
+        self.host = host
+        self.dialog = dialog
+        self.generation = None
+        self.timer = QTimer(self)
+        self.timer.setSingleShot(True)
+        self.timer.timeout.connect(self._restore)
+        dialog.installEventFilter(self)
+        host.installEventFilter(self)
+
+    def eventFilter(self, watched, event):
+        if watched is self.dialog:
+            if event.type() == QEvent.Type.Show:
+                self.generation = (getattr(self.host, "_fullscreen_request_generation", 0)
+                                   if self.host.isFullScreen() else None)
+                self.timer.start(0)
+            elif event.type() == QEvent.Type.Hide:
+                self.generation = None
+                self.timer.stop()
+        elif watched is self.host and event.type() == QEvent.Type.WindowStateChange:
+            if self.dialog.isVisible() and self.host.isFullScreen():
+                self.generation = getattr(self.host, "_fullscreen_request_generation", 0)
+            if self.generation is not None:
+                self.timer.start(0)
+        return False
+
+    def _restore(self):
+        if (self.generation is None or not self.dialog.isVisible()
+                or not self.host.isVisible() or self.host.isMinimized()
+                or bool(getattr(getattr(self.host, "_window_lifecycle", None), "closing", False))
+                or self.generation != getattr(self.host, "_fullscreen_request_generation", 0)):
+            return
+        if not self.host.isFullScreen():
+            self.host.showFullScreen()
+        guard = install_fullscreen_composition_guard(self.host)
+        if guard is not None:
+            guard.apply()

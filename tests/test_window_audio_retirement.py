@@ -50,7 +50,13 @@ class WindowAudioRetirementTests(unittest.TestCase):
             heartbeat = []
             timer = QTimer()
             timer.timeout.connect(lambda: heartbeat.append(1))
-            timer.start(1)
+            # This checks that queued GUI work can run WHILE the decode latch
+            # remains held, not a Windows 1ms scheduler guarantee. A zero timer
+            # is ready on the first event-loop turn even if this background
+            # test process was descheduled before its 100ms observation window.
+            # The pending-resource/finalization assertions below still reject
+            # synchronous shutdown or a decoder that retired behind our back.
+            timer.start(0)
             try:
                 self.assertTrue(entered.wait(1))
                 window._abort_startup()

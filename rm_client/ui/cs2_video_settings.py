@@ -165,7 +165,7 @@ def open_video_settings(host, embedded=False):
         from PySide6.QtWidgets import QWidget
         basic=QWidget();advanced=QWidget();basic_form=QFormLayout(basic);advanced_form=QFormLayout(advanced)
         basic_form.setSpacing(22);advanced_form.setSpacing(22)
-        from PySide6.QtWidgets import QScrollArea
+        from .jello_scroll import JelloScrollArea as QScrollArea
         for widget,label in ((basic,"视频"),(advanced,"高级视频")):
             scroll=QScrollArea();scroll.setWidgetResizable(True);scroll.setWidget(widget)
             tabs.addTab(scroll,label)

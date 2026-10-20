@@ -1550,7 +1550,10 @@ class JelloClickGuiRenderer:
                     ),
                 )
             host.add_hotspot(
-                dropdown.intersected(clip),
+                # Keep the original visual geometry, but include the row's
+                # vertical padding and a small arrow-side tolerance. Fractional
+                # DPI/GUI scales must not turn a visible arrow into background.
+                dropdown.adjusted(-4.0 * scale, -5.0 * scale, 5.0 * scale, 10.0 * scale).intersected(clip),
                 "jello_mode_dropdown",
                 (key, setting),
                 tooltip=localized_value,

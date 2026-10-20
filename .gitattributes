@@ -4,3 +4,7 @@ assets/minecraft_hud/UNIFONT_LICENSE.txt -text -whitespace
 
 # Generated execution logs stay available but are hidden in GitHub diffs by default.
 docs/evidence/**/*.log linguist-generated=true
+
+# Frozen behavioral oracles are byte-addressed evidence, not native text.
+# Preserve their committed bytes even when Windows core.autocrlf is enabled.
+tests/fixtures/** -text

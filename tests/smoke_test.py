@@ -2102,7 +2102,10 @@ def test_jello_clickgui_layout_and_old_group() -> None:
         popup_seals = [
             rect
             for rect in transition_dropdown.rects
-            if abs(rect.rect.width() - mode_hotspot.rect.width()) < 0.01
+            # Pointer tolerance is larger than the original visual control.
+            # Derive the 123px backplate from the drawn 18px arrow's scale,
+            # not from a hit target whose padding is deliberately invisible.
+            if abs(rect.rect.width() - 123.0 * rotating_arrows[0].rect.width() / 18.0) < 0.01
             and rect.rect.height() > 54.0
             and rect.clip is not None
             and rect.fill.red() >= 250
@@ -2110,6 +2113,7 @@ def test_jello_clickgui_layout_and_old_group() -> None:
             and rect.fill.blue() >= 250
             and rect.fill.alpha() >= 250
         ]
+        assert mode_hotspot.rect.contains(rotating_arrows[0].rect.center())
         assert popup_seals
         window.jello_state.update(0.30)
         window.hotspots.clear()

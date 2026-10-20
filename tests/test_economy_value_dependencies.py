@@ -87,7 +87,7 @@ assert not any(name.startswith(("rm_client.model", "rm_client.backend", "rm_clie
                 for node in ast.walk(ast.parse(path.read_text(encoding="utf-8-sig"))):
                     if (isinstance(node, ast.Assign) and any(isinstance(target, ast.Name) and target.id == name
                                                            for target in node.targets)):
-                        owners.append(str(path.relative_to(ROOT)))
+                        owners.append(path.relative_to(ROOT).as_posix())
             self.assertEqual(owners, ["rm_client/economy_values.py"])
             self.assertIs(getattr(economy, name), getattr(economy_values, name))
 

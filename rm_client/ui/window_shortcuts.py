@@ -7,6 +7,9 @@ from PySide6.QtWidgets import QApplication, QWidget
 
 def set_fullscreen(host, enabled: bool) -> None:
     """Keep Qt's normal geometry and maximized state across every entry route."""
+    # Dialog presentation may repair a native Windows demotion, but must never
+    # undo an explicit F11/video-settings request made while it is open.
+    host._fullscreen_request_generation = getattr(host, "_fullscreen_request_generation", 0) + 1
     if enabled == host.isFullScreen():
         return
     if enabled:

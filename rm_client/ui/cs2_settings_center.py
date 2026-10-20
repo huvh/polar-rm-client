@@ -25,6 +25,7 @@ from .jello_locale import module_label, option_label, setting_label
 from .jello_widgets import JelloDialog, JelloCheckBox as QCheckBox, JelloComboBox as QComboBox, apply_jello_widgets, jello_font, use_jello_font_book
 from .settings_preparation import SettingsBuildQueue
 from .preference_draft import PreferenceDraft
+from .jello_scroll import JelloScrollArea
 # Keep historical imports working while both dialogs use shared services.
 from .settings_application import (
     PAGES, settings_specs, preference_capabilities, validate_draft, apply_registry_draft,
@@ -110,7 +111,7 @@ class NumberControl(QWidget):
         update_slider(self.spin.value())
 
 
-class RegistrySettingsPage(QScrollArea):
+class RegistrySettingsPage(JelloScrollArea):
     def __init__(self, host, page, defaults, *, deferred=False):
         super().__init__()
         self.host, self.page, self.defaults = host, page, defaults
@@ -335,7 +336,7 @@ class RegistrySettingsPage(QScrollArea):
         for name, widget in self.module_bind_controls.items(): widget.set_value(self.defaults.get(name).keybind)
 
 
-class CrosshairSettingsPage(QScrollArea):
+class CrosshairSettingsPage(JelloScrollArea):
     """Defer editor creation/style/attachment into separate event-loop turns."""
     def __init__(self, host):
         super().__init__()

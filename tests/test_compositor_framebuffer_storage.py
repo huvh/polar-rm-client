@@ -8,7 +8,10 @@ from unittest.mock import Mock, patch
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from PySide6.QtCore import QSize
+from PySide6.QtGui import QGuiApplication
 from rm_client.ui import gpu_frame_compositor as gpu
+
+APP = QGuiApplication.instance() or QGuiApplication([])
 
 
 NAMES = (

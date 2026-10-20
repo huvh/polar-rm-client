@@ -87,6 +87,15 @@ class FailedWindowLaunchTests(unittest.TestCase):
                             result["delayed_starts"] = mqtt.call_count
                             cleanup_released.set()
                         settle_window_lifecycle(window, app)
+                        # Backend-idle and the queued Qt close are separate
+                        # boundaries. Await the ALREADY REQUESTED finalization;
+                        # do not call close() here and mask a lost auto-close.
+                        deadline = time.monotonic() + 5
+                        while not window._window_close_finalized:
+                            window._poll_backend_lifecycle()
+                            app.processEvents()
+                            assert time.monotonic() < deadline, "failed launch never finalized its owned window"
+                            time.sleep(.001)
                         result["starts_after_poll"] = mqtt.call_count
                         result["finalized"] = window._window_close_finalized
                     finally:
@@ -98,7 +107,7 @@ class FailedWindowLaunchTests(unittest.TestCase):
         result = subprocess.run(
             [sys.executable, "-c", textwrap.dedent(source)],
             cwd=ROOT, capture_output=True, text=True, timeout=15,
-            env={**os.environ, "PYTHONPATH": f"{ROOT}:{ROOT / 'tests'}"},
+            env={**os.environ, "PYTHONPATH": os.pathsep.join((str(ROOT), str(ROOT / 'tests')))},
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         line = next(line for line in result.stdout.splitlines() if line.startswith("LAUNCH_RESULT="))

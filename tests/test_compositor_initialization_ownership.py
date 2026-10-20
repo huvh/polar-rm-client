@@ -11,6 +11,9 @@ from unittest.mock import Mock, patch
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from rm_client.ui import gpu_frame_compositor as gpu
+from PySide6.QtGui import QGuiApplication
+
+APP = QGuiApplication.instance() or QGuiApplication([])
 
 
 class CompositorInitializationOwnershipTests(unittest.TestCase):

@@ -60,9 +60,17 @@ class TemporaryDescriptorTests(unittest.TestCase):
         with patch.object(files.os, "fdopen", side_effect=primary), \
                 patch.object(files.os, "close", side_effect=close_error), self.assertRaises(OSError) as caught:
             files.atomic_write_bytes(self.path, b"new")
-        self.assertIs(getattr(caught.exception, "cause", None), primary)
-        self.assertIs(getattr(caught.exception, "cleanup_error", None), close_error)
-        self.assertFalse(Path(self.opened[0][1]).exists())
+        error = caught.exception
+        if os.name == "nt":
+            # Unlike POSIX, Windows cannot unlink a temporary whose injected
+            # close failure deliberately kept its native descriptor open.
+            self.assertIsInstance(error.cleanup_error, PermissionError)
+            self.assertTrue(Path(self.opened[0][1]).exists())
+            error = error.cause
+        else:
+            self.assertFalse(Path(self.opened[0][1]).exists())
+        self.assertIs(getattr(error, "cause", None), primary)
+        self.assertIs(getattr(error, "cleanup_error", None), close_error)
         # This injected close rejected ownership release; the fixture owns cleanup.
         os.fstat(self.opened[0][0])
 

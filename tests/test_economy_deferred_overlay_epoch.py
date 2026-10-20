@@ -34,7 +34,8 @@ PHASE = phase_type()
 
 def fixture():
     callbacks=[]
-    host=NS(trace=[],callbacks=callbacks,gui_visible=False,home_visible=False,
+    host=NS(backend=NS(referee=NS(profile_id='rm2026-v1.3.1')),
+            trace=[],callbacks=callbacks,gui_visible=False,home_visible=False,
             economy_phase=PHASE.CLOSED,economy_visible=False,_economy_generation=0,
             _economy_closing_generation=None,_economy_restore_pending_generation=None,
             _economy_pending_overlay=None,_economy_scene_epoch=0,_economy_close_finalized=True,
@@ -47,7 +48,8 @@ def fixture():
         assert delay==0
         callbacks.append(callback)
     scope={'time':NS(perf_counter=lambda:10.),'QTimer':NS(singleShot=queue),'QRectF':lambda:None,
-           'EconomyScenePhase':PHASE,'OverlayKind':OverlayKind,'PRIMARY_GUI_MODE':'Jello Sigma'}
+           'EconomyScenePhase':PHASE,'OverlayKind':OverlayKind,'PRIMARY_GUI_MODE':'Jello Sigma',
+           'V2_PROFILE':'rm2026-v2.0.0'}
     for name in ['open_economy_workspace','close_economy_workspace','_finalize_economy_restore']:
         setattr(host,name,MethodType(method(ECONOMY_SOURCE,'EconomyMixin',name,scope),host))
     host.set_clickgui_visible=MethodType(method(CLICKGUI_SOURCE,'ClickGuiBuildersMixin','set_clickgui_visible',scope),host)

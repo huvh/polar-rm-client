@@ -25,6 +25,15 @@ class EarlyWindowConstructorOwnershipTests(unittest.TestCase):
         self.fixture = fixtures.EarlyWindowFactoryFailureTests()
         self.addCleanup(self.fixture.doCleanups)
         self.fixture.setUp()
+        # Pin observational build/discovery inputs. Windows communicate() uses
+        # its own reader threads; those are not transport owner admissions.
+        context = patch.object(polar_app.BackendManager, '_build_commit', return_value='TEST-CONSTRUCTOR')
+        context.start()
+        self.addCleanup(context.stop)
+        from rm_client import serial_ports
+        context = patch.object(serial_ports, 'port_snapshot', return_value=[])
+        context.start()
+        self.addCleanup(context.stop)
         self.refs = {}
         self.native_names = []
         self.destroyed = []
