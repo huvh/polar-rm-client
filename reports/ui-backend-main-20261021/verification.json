@@ -1,0 +1,2089 @@
+{
+  "schema_version": 1,
+  "scope": "Latest local UI integrated with backend PR21 on Windows; source and owned-target checks, not field or release qualification.",
+  "source": {
+    "ui_commit": "c67d822102fe76f2d67f3b0cbceeea5c07d4bb0f",
+    "backend_pr": "https://github.com/lulunomaro/polar-rm-client/pull/21",
+    "backend_pr_merge_commit": "edde262971dc4ae1fe24e3d8c2e5d1fe2c38a7da",
+    "integration_fixture_fix": "ca2289af9aeeac5af003bd0202917c8554048c54",
+    "main_fixture_fix": "cf798268627f616db306193de2f5c2837eec5576",
+    "main_before_evidence": "cf798268627f616db306193de2f5c2837eec5576",
+    "tested_integration_tree": "6f10b768c71853fcfc01db73cb03101aaa953bb6",
+    "main_tree_exactly_matches_tested_integration": true,
+    "note": "The final main merge has different commit ancestry but exactly the tested Git tree. This subsequent report-only commit does not change production, tests, native source or configuration. Private assets and user runtime data are not committed."
+  },
+  "environment": {
+    "interpreter": {
+      "implementation": "CPython",
+      "version": "3.12.14"
+    },
+    "os": {
+      "system": "Windows",
+      "release": "11",
+      "machine": "AMD64"
+    },
+    "dependencies": {
+      "PySide6": {
+        "status": "installed",
+        "version": "6.11.1"
+      },
+      "PySide6-Addons": {
+        "status": "installed",
+        "version": "6.11.1"
+      },
+      "PySide6-Essentials": {
+        "status": "installed",
+        "version": "6.11.1"
+      },
+      "shiboken6": {
+        "status": "installed",
+        "version": "6.11.1"
+      },
+      "opencv-python": {
+        "status": "installed",
+        "version": "5.0.0.93"
+      },
+      "numpy": {
+        "status": "installed",
+        "version": "2.4.6"
+      },
+      "paho-mqtt": {
+        "status": "installed",
+        "version": "2.1.0"
+      },
+      "pyserial": {
+        "status": "installed",
+        "version": "3.5"
+      },
+      "openvino": {
+        "status": "installed",
+        "version": "2026.2.1"
+      },
+      "openvino-telemetry": {
+        "status": "installed",
+        "version": "2025.2.0"
+      },
+      "PyInstaller": {
+        "status": "installed",
+        "version": "6.21.0"
+      },
+      "ziglang": {
+        "status": "installed",
+        "version": "0.13.0"
+      }
+    }
+  },
+  "full_command": "python -u tools/verify_all.py --profile offline --json tmp_quality/ui_backend_full_final.json --log-dir tmp_quality/ui_backend_full_final_logs",
+  "ffmpeg": {
+    "selection": "Existing user-selected local binary via POLAR_FFMPEG, not copied into Git.",
+    "version": "2026-01-29-git-c898ddb8fe-full_build-www.gyan.dev",
+    "sha256": "79bdd4c65adc74d4ca937b6a9d939349806d6c66c8a42c848b0e866bcbdf4eb7"
+  },
+  "first_full_run_preserved": {
+    "run_id": "90cc60e6d3dc4ccf96b32d0215e89ee0",
+    "started_at_utc": "2026-10-21T11:44:08Z",
+    "run_state": "completed",
+    "selected_count": 472,
+    "results_count": 473,
+    "counts": {
+      "PASS": 454,
+      "SKIP": 12,
+      "INCOMPLETE": 6,
+      "FAIL": 1
+    },
+    "passed": false,
+    "exit_code": 1,
+    "source_at_start": {
+      "status": "available",
+      "commit": "632e1d57dee0b8131bb50b74bc650d521c97a82b",
+      "tree": "88980546a2405d825a8c04957d667a15c300823f",
+      "dirty": false,
+      "dirty_scope": "tracked-and-untracked-nonignored",
+      "reason": null
+    },
+    "source_stability": {
+      "schema_version": 1,
+      "status": "PASS",
+      "detail": "Declared verification source inputs have identical start/end fingerprints",
+      "scope": {
+        "directories": [
+          "rm_client",
+          "tests",
+          "tools",
+          "configs"
+        ],
+        "suffixes": [
+          ".bat",
+          ".c",
+          ".cfg",
+          ".cpp",
+          ".h",
+          ".hpp",
+          ".ini",
+          ".json",
+          ".ps1",
+          ".py",
+          ".spec",
+          ".toml",
+          ".yaml",
+          ".yml"
+        ],
+        "all_file_directories": [
+          "tests/fixtures"
+        ],
+        "root_files": [
+          "main.py",
+          "requirements*.txt"
+        ],
+        "exclusions": [
+          "hidden directories",
+          "__pycache__"
+        ],
+        "limits": "Start/end comparison only; includes all internal tests/fixtures files; excludes assets outside that fixture directory, external fixtures, installed packages and transient edits restored between captures."
+      },
+      "before": {
+        "status": "available",
+        "sha256": "97c47191911b6b540ac424015a94106cee772d26b286c6b16b4484f3e6238256",
+        "file_count": 846
+      },
+      "after": {
+        "status": "available",
+        "sha256": "97c47191911b6b540ac424015a94106cee772d26b286c6b16b4484f3e6238256",
+        "file_count": 846
+      }
+    },
+    "nonpassing_results": [
+      {
+        "id": "tests/polar_link_test",
+        "status": "INCOMPLETE",
+        "detail": "[SKIP] 未找到队内 CRC8_CRC16.py 参考实现，跳过三方对拍"
+      },
+      {
+        "id": "tests/test_background_display_locale",
+        "status": "FAIL",
+        "detail": "ERROR: test_static_hud_and_startup_keys_invalidate_without_new_telemetry (__main__.BackgroundDisplayLocaleTests.test_static_hud_and_startup_keys_invalidate_without_new_telemetry)"
+      },
+      {
+        "id": "tests/test_legacy_video_bridge",
+        "status": "INCOMPLETE",
+        "detail": "1 unittest tests skipped"
+      },
+      {
+        "id": "tools/dt7_link/test_cc_link",
+        "status": "SKIP",
+        "detail": "SKIP: 找不到 <checkout>\\.firmware-not-selected\\components\\support\\CRC8_CRC16.c"
+      },
+      {
+        "id": "tools/dt7_link/test_dbus_frame_vs_firmware",
+        "status": "SKIP",
+        "detail": "SKIP: 找不到固件源码（<checkout>\\.firmware-not-selected\\application\\other\\remote_control.c）"
+      },
+      {
+        "id": "tools/dt7_link/test_dt7_link",
+        "status": "INCOMPLETE",
+        "detail": "[SKIP] 没有固件树 | [SKIP] 找不到 <external-official-client-fixture>/dump.cs"
+      },
+      {
+        "id": "tools/dt7_link/test_dt7_ui_selftest",
+        "status": "INCOMPLETE",
+        "detail": "[SKIP] 缺少固件 application C 源文件：交叉核对未运行"
+      },
+      {
+        "id": "tools/firmware/controller_angle/test_controller_angle",
+        "status": "SKIP",
+        "detail": "SKIP: set POLAR_REFEREE_REFERENCE to a read-only StandardRobot++ checkout"
+      },
+      {
+        "id": "tools/firmware/gimbal_host/test_gimbal_host",
+        "status": "SKIP",
+        "detail": "SKIP: 固件副本不存在（<checkout>\\.firmware-not-selected）"
+      },
+      {
+        "id": "tools/firmware/host_bridge/test_host_bridge",
+        "status": "SKIP",
+        "detail": "SKIP: 固件副本不存在（<checkout>\\.firmware-not-selected）"
+      },
+      {
+        "id": "tools/firmware/host_bridge/test_rc_key_ledger",
+        "status": "SKIP",
+        "detail": "SKIP: 固件副本不存在（<checkout>\\.firmware-not-selected）"
+      },
+      {
+        "id": "tools/firmware/host_bridge/test_usb_receiver_portable",
+        "status": "SKIP",
+        "detail": "SKIP: supply a disposable prepared StandardRobot++ fixture"
+      },
+      {
+        "id": "tools/firmware/km_link/test_km_link",
+        "status": "SKIP",
+        "detail": "SKIP: 固件树或头文件不齐（先跑 prepare_hero_build.py）"
+      },
+      {
+        "id": "tools/firmware/km_link/test_km_payload_layout",
+        "status": "SKIP",
+        "detail": "SKIP: 固件树里还没有 application/typedef/host_km_link.h（先跑 prepare_hero_build.py）"
+      },
+      {
+        "id": "tools/firmware/km_link/test_serial_parsers_portable",
+        "status": "INCOMPLETE",
+        "detail": "1 unittest tests skipped"
+      },
+      {
+        "id": "tools/firmware/motion_feedback/test_motion_feedback",
+        "status": "SKIP",
+        "detail": "SKIP: 固件副本不存在（<checkout>\\.firmware-not-selected）"
+      },
+      {
+        "id": "tools/firmware/referee_rx/test_referee_rx",
+        "status": "SKIP",
+        "detail": "SKIP: set POLAR_REFEREE_REFERENCE to the explicitly selected read-only firmware reference"
+      },
+      {
+        "id": "tools/firmware/test_patch_logic",
+        "status": "INCOMPLETE",
+        "detail": "[INCOMPLETE] Legacy baseline patch test requires installation; excluded from read-only target validation"
+      },
+      {
+        "id": "tools/firmware/test_patch_real_headers",
+        "status": "SKIP",
+        "detail": "SKIP: 固件副本不存在（<checkout>\\.firmware-not-selected）"
+      }
+    ]
+  },
+  "integration_repair": {
+    "path": "tests/test_background_display_locale.py",
+    "production_changes": false,
+    "reason": "AST-based WindowMethods fixture omitted the newly required escape_menu_visible state.",
+    "change": "Initialize the actual menu state and additionally assert that opening Esc invalidates the battle static-HUD key and closing restores the original identity without telemetry changes. Existing locale/geometry assertions remain intact.",
+    "focused_command": "python tools/verify_all.py --test test_background_display_locale --test test_endfield_backdrop --test test_cached_frame_contract --test test_cached_window_layers",
+    "focused_counts": {
+      "PASS": 4,
+      "SKIP": 0,
+      "INCOMPLETE": 0,
+      "FAIL": 0
+    }
+  },
+  "final_full_run": {
+    "run_id": "cc5c4dd7496f435bb52b0de0e796f40c",
+    "started_at_utc": "2026-10-21T11:59:56Z",
+    "run_state": "completed",
+    "selected_count": 472,
+    "results_count": 473,
+    "counts": {
+      "PASS": 455,
+      "SKIP": 12,
+      "INCOMPLETE": 6,
+      "FAIL": 0
+    },
+    "passed": false,
+    "exit_code": 1,
+    "source_at_start": {
+      "status": "available",
+      "commit": "ca2289af9aeeac5af003bd0202917c8554048c54",
+      "tree": "6f10b768c71853fcfc01db73cb03101aaa953bb6",
+      "dirty": false,
+      "dirty_scope": "tracked-and-untracked-nonignored",
+      "reason": null
+    },
+    "source_stability": {
+      "schema_version": 1,
+      "status": "PASS",
+      "detail": "Declared verification source inputs have identical start/end fingerprints",
+      "scope": {
+        "directories": [
+          "rm_client",
+          "tests",
+          "tools",
+          "configs"
+        ],
+        "suffixes": [
+          ".bat",
+          ".c",
+          ".cfg",
+          ".cpp",
+          ".h",
+          ".hpp",
+          ".ini",
+          ".json",
+          ".ps1",
+          ".py",
+          ".spec",
+          ".toml",
+          ".yaml",
+          ".yml"
+        ],
+        "all_file_directories": [
+          "tests/fixtures"
+        ],
+        "root_files": [
+          "main.py",
+          "requirements*.txt"
+        ],
+        "exclusions": [
+          "hidden directories",
+          "__pycache__"
+        ],
+        "limits": "Start/end comparison only; includes all internal tests/fixtures files; excludes assets outside that fixture directory, external fixtures, installed packages and transient edits restored between captures."
+      },
+      "before": {
+        "status": "available",
+        "sha256": "d578226d7fe51ec603cf6acc07c7744672bcfcb48400e231dcd04a0ee0017487",
+        "file_count": 846
+      },
+      "after": {
+        "status": "available",
+        "sha256": "d578226d7fe51ec603cf6acc07c7744672bcfcb48400e231dcd04a0ee0017487",
+        "file_count": 846
+      }
+    },
+    "nonpassing_results": [
+      {
+        "id": "tests/polar_link_test",
+        "status": "INCOMPLETE",
+        "detail": "[SKIP] 未找到队内 CRC8_CRC16.py 参考实现，跳过三方对拍"
+      },
+      {
+        "id": "tests/test_legacy_video_bridge",
+        "status": "INCOMPLETE",
+        "detail": "1 unittest tests skipped"
+      },
+      {
+        "id": "tools/dt7_link/test_cc_link",
+        "status": "SKIP",
+        "detail": "SKIP: 找不到 <checkout>\\.firmware-not-selected\\components\\support\\CRC8_CRC16.c"
+      },
+      {
+        "id": "tools/dt7_link/test_dbus_frame_vs_firmware",
+        "status": "SKIP",
+        "detail": "SKIP: 找不到固件源码（<checkout>\\.firmware-not-selected\\application\\other\\remote_control.c）"
+      },
+      {
+        "id": "tools/dt7_link/test_dt7_link",
+        "status": "INCOMPLETE",
+        "detail": "[SKIP] 没有固件树 | [SKIP] 找不到 <external-official-client-fixture>/dump.cs"
+      },
+      {
+        "id": "tools/dt7_link/test_dt7_ui_selftest",
+        "status": "INCOMPLETE",
+        "detail": "[SKIP] 缺少固件 application C 源文件：交叉核对未运行"
+      },
+      {
+        "id": "tools/firmware/controller_angle/test_controller_angle",
+        "status": "SKIP",
+        "detail": "SKIP: set POLAR_REFEREE_REFERENCE to a read-only StandardRobot++ checkout"
+      },
+      {
+        "id": "tools/firmware/gimbal_host/test_gimbal_host",
+        "status": "SKIP",
+        "detail": "SKIP: 固件副本不存在（<checkout>\\.firmware-not-selected）"
+      },
+      {
+        "id": "tools/firmware/host_bridge/test_host_bridge",
+        "status": "SKIP",
+        "detail": "SKIP: 固件副本不存在（<checkout>\\.firmware-not-selected）"
+      },
+      {
+        "id": "tools/firmware/host_bridge/test_rc_key_ledger",
+        "status": "SKIP",
+        "detail": "SKIP: 固件副本不存在（<checkout>\\.firmware-not-selected）"
+      },
+      {
+        "id": "tools/firmware/host_bridge/test_usb_receiver_portable",
+        "status": "SKIP",
+        "detail": "SKIP: supply a disposable prepared StandardRobot++ fixture"
+      },
+      {
+        "id": "tools/firmware/km_link/test_km_link",
+        "status": "SKIP",
+        "detail": "SKIP: 固件树或头文件不齐（先跑 prepare_hero_build.py）"
+      },
+      {
+        "id": "tools/firmware/km_link/test_km_payload_layout",
+        "status": "SKIP",
+        "detail": "SKIP: 固件树里还没有 application/typedef/host_km_link.h（先跑 prepare_hero_build.py）"
+      },
+      {
+        "id": "tools/firmware/km_link/test_serial_parsers_portable",
+        "status": "INCOMPLETE",
+        "detail": "1 unittest tests skipped"
+      },
+      {
+        "id": "tools/firmware/motion_feedback/test_motion_feedback",
+        "status": "SKIP",
+        "detail": "SKIP: 固件副本不存在（<checkout>\\.firmware-not-selected）"
+      },
+      {
+        "id": "tools/firmware/referee_rx/test_referee_rx",
+        "status": "SKIP",
+        "detail": "SKIP: set POLAR_REFEREE_REFERENCE to the explicitly selected read-only firmware reference"
+      },
+      {
+        "id": "tools/firmware/test_patch_logic",
+        "status": "INCOMPLETE",
+        "detail": "[INCOMPLETE] Legacy baseline patch test requires installation; excluded from read-only target validation"
+      },
+      {
+        "id": "tools/firmware/test_patch_real_headers",
+        "status": "SKIP",
+        "detail": "SKIP: 固件副本不存在（<checkout>\\.firmware-not-selected）"
+      }
+    ]
+  },
+  "native_inputs": {
+    "reference_commit": "cdbd4f573c8fa3b9c2048fa3d1b089e69196537b",
+    "adapter_normalized_sha256": "83a5af809b9ccdb1798e53d326e3dd50597c783e2cfd9d47459eab1a709f023b",
+    "binary_sha256": "99e7275fdb423a8027d8286f0da3a1444e5bd95b137796bca5a141e5e30fe68a",
+    "directory": "build_83a5af809b9ccdb1",
+    "scope_note": "Native adapter and private DLL are pinned separately; verify_all source_stability does not include the native/ directory or external resources.",
+    "pins_unchanged_after_checks": true,
+    "private_pack_redistributed": false
+  },
+  "owned_desktop": {
+    "command": "python tools/verify_endfield_desktop.py --pack <private-pack> --out tmp_quality/native_merged_10 --cycles 10",
+    "result": "PASS",
+    "cycles": 10,
+    "display_hz": 75.001,
+    "dpr": 1.0,
+    "fullscreen_preserved": true,
+    "actual_source_hit": true,
+    "texture_growth": 0,
+    "baseline": {
+      "frames": 877.0,
+      "last_ms": 11.252500000409782,
+      "textures": 56.0,
+      "meshes": 57.0,
+      "owners": 1.0
+    },
+    "final": {
+      "frames": 1748.0,
+      "last_ms": 10.857200002647005,
+      "textures": 56.0,
+      "meshes": 57.0,
+      "owners": 1.0
+    },
+    "native_error": "",
+    "retired": true,
+    "esc_backdrop": {
+      "empty_combat_layers_alpha_max": {
+        "overlay": 0,
+        "vision": 0,
+        "dynamic": 0,
+        "target": 0,
+        "hud_glass": 0,
+        "glass": 0
+      },
+      "world_edge_energy": 2.3942506313323975,
+      "gaussian_edge_energy_after_undoing_dim": 1.0414029359817505,
+      "kernel": "endfield_gaussian",
+      "radius_dp": 10.0,
+      "dim_alpha": 0.42
+    },
+    "fullscreen_hover": [
+      {
+        "button": 2,
+        "stationary": true,
+        "duplicate_moves": true,
+        "initial": {
+          "code": 2,
+          "changes": 1
+        },
+        "final": {
+          "code": 2,
+          "changes": 1
+        },
+        "samples": [
+          {
+            "code": 2,
+            "changes": 1
+          },
+          {
+            "code": 2,
+            "changes": 1
+          },
+          {
+            "code": 2,
+            "changes": 1
+          },
+          {
+            "code": 2,
+            "changes": 1
+          },
+          {
+            "code": 2,
+            "changes": 1
+          },
+          {
+            "code": 2,
+            "changes": 1
+          },
+          {
+            "code": 2,
+            "changes": 1
+          },
+          {
+            "code": 2,
+            "changes": 1
+          },
+          {
+            "code": 2,
+            "changes": 1
+          },
+          {
+            "code": 2,
+            "changes": 1
+          },
+          {
+            "code": 2,
+            "changes": 1
+          },
+          {
+            "code": 2,
+            "changes": 1
+          }
+        ]
+      },
+      {
+        "button": 6,
+        "stationary": true,
+        "duplicate_moves": true,
+        "initial": {
+          "code": 6,
+          "changes": 2
+        },
+        "final": {
+          "code": 6,
+          "changes": 2
+        },
+        "samples": [
+          {
+            "code": 6,
+            "changes": 2
+          },
+          {
+            "code": 6,
+            "changes": 2
+          },
+          {
+            "code": 6,
+            "changes": 2
+          },
+          {
+            "code": 6,
+            "changes": 2
+          },
+          {
+            "code": 6,
+            "changes": 2
+          },
+          {
+            "code": 6,
+            "changes": 2
+          },
+          {
+            "code": 6,
+            "changes": 2
+          },
+          {
+            "code": 6,
+            "changes": 2
+          },
+          {
+            "code": 6,
+            "changes": 2
+          },
+          {
+            "code": 6,
+            "changes": 2
+          },
+          {
+            "code": 6,
+            "changes": 2
+          },
+          {
+            "code": 6,
+            "changes": 2
+          }
+        ]
+      },
+      {
+        "button": 5,
+        "stationary": true,
+        "duplicate_moves": true,
+        "initial": {
+          "code": 5,
+          "changes": 3
+        },
+        "final": {
+          "code": 5,
+          "changes": 3
+        },
+        "samples": [
+          {
+            "code": 5,
+            "changes": 3
+          },
+          {
+            "code": 5,
+            "changes": 3
+          },
+          {
+            "code": 5,
+            "changes": 3
+          },
+          {
+            "code": 5,
+            "changes": 3
+          },
+          {
+            "code": 5,
+            "changes": 3
+          },
+          {
+            "code": 5,
+            "changes": 3
+          },
+          {
+            "code": 5,
+            "changes": 3
+          },
+          {
+            "code": 5,
+            "changes": 3
+          },
+          {
+            "code": 5,
+            "changes": 3
+          },
+          {
+            "code": 5,
+            "changes": 3
+          },
+          {
+            "code": 5,
+            "changes": 3
+          },
+          {
+            "code": 5,
+            "changes": 3
+          }
+        ]
+      }
+    ],
+    "synthetic_hud_fps": 46.787831891928604,
+    "synthetic_hud_frame_ms_p95": 38.82589998829644,
+    "performance_target_met": false,
+    "performance_note": "The short synthetic HUD swap-interval sample was about 47 FPS on a 75Hz display, not the requested 70-90 FPS. Other workloads were not controlled. Functional PASS is not a performance-target PASS; no camera, field, or stable throughput certification is claimed."
+  },
+  "native_hover": {
+    "command": "python tools/verify_endfield_hover.py --pack <private-pack> --out tmp_quality/native_hover_merged",
+    "result": "PASS",
+    "cases": [
+      {
+        "physical_size": [
+          1280,
+          720
+        ],
+        "chinese": false,
+        "buttons": [
+          {
+            "button": 2,
+            "stationary": true,
+            "duplicate_moves": true,
+            "initial": {
+              "code": 2,
+              "changes": 1
+            },
+            "final": {
+              "code": 2,
+              "changes": 1
+            },
+            "samples": [
+              {
+                "code": 2,
+                "changes": 1
+              },
+              {
+                "code": 2,
+                "changes": 1
+              },
+              {
+                "code": 2,
+                "changes": 1
+              },
+              {
+                "code": 2,
+                "changes": 1
+              },
+              {
+                "code": 2,
+                "changes": 1
+              },
+              {
+                "code": 2,
+                "changes": 1
+              },
+              {
+                "code": 2,
+                "changes": 1
+              },
+              {
+                "code": 2,
+                "changes": 1
+              },
+              {
+                "code": 2,
+                "changes": 1
+              },
+              {
+                "code": 2,
+                "changes": 1
+              },
+              {
+                "code": 2,
+                "changes": 1
+              },
+              {
+                "code": 2,
+                "changes": 1
+              }
+            ]
+          },
+          {
+            "button": 6,
+            "stationary": true,
+            "duplicate_moves": true,
+            "initial": {
+              "code": 6,
+              "changes": 2
+            },
+            "final": {
+              "code": 6,
+              "changes": 2
+            },
+            "samples": [
+              {
+                "code": 6,
+                "changes": 2
+              },
+              {
+                "code": 6,
+                "changes": 2
+              },
+              {
+                "code": 6,
+                "changes": 2
+              },
+              {
+                "code": 6,
+                "changes": 2
+              },
+              {
+                "code": 6,
+                "changes": 2
+              },
+              {
+                "code": 6,
+                "changes": 2
+              },
+              {
+                "code": 6,
+                "changes": 2
+              },
+              {
+                "code": 6,
+                "changes": 2
+              },
+              {
+                "code": 6,
+                "changes": 2
+              },
+              {
+                "code": 6,
+                "changes": 2
+              },
+              {
+                "code": 6,
+                "changes": 2
+              },
+              {
+                "code": 6,
+                "changes": 2
+              }
+            ]
+          },
+          {
+            "button": 5,
+            "stationary": true,
+            "duplicate_moves": true,
+            "initial": {
+              "code": 5,
+              "changes": 3
+            },
+            "final": {
+              "code": 5,
+              "changes": 3
+            },
+            "samples": [
+              {
+                "code": 5,
+                "changes": 3
+              },
+              {
+                "code": 5,
+                "changes": 3
+              },
+              {
+                "code": 5,
+                "changes": 3
+              },
+              {
+                "code": 5,
+                "changes": 3
+              },
+              {
+                "code": 5,
+                "changes": 3
+              },
+              {
+                "code": 5,
+                "changes": 3
+              },
+              {
+                "code": 5,
+                "changes": 3
+              },
+              {
+                "code": 5,
+                "changes": 3
+              },
+              {
+                "code": 5,
+                "changes": 3
+              },
+              {
+                "code": 5,
+                "changes": 3
+              },
+              {
+                "code": 5,
+                "changes": 3
+              },
+              {
+                "code": 5,
+                "changes": 3
+              }
+            ]
+          },
+          {
+            "button": 7,
+            "stationary": true,
+            "duplicate_moves": true,
+            "initial": {
+              "code": 7,
+              "changes": 6
+            },
+            "final": {
+              "code": 7,
+              "changes": 6
+            },
+            "samples": [
+              {
+                "code": 7,
+                "changes": 6
+              },
+              {
+                "code": 7,
+                "changes": 6
+              },
+              {
+                "code": 7,
+                "changes": 6
+              },
+              {
+                "code": 7,
+                "changes": 6
+              },
+              {
+                "code": 7,
+                "changes": 6
+              },
+              {
+                "code": 7,
+                "changes": 6
+              },
+              {
+                "code": 7,
+                "changes": 6
+              },
+              {
+                "code": 7,
+                "changes": 6
+              },
+              {
+                "code": 7,
+                "changes": 6
+              },
+              {
+                "code": 7,
+                "changes": 6
+              },
+              {
+                "code": 7,
+                "changes": 6
+              },
+              {
+                "code": 7,
+                "changes": 6
+              }
+            ]
+          },
+          {
+            "button": 10,
+            "stationary": true,
+            "duplicate_moves": true,
+            "initial": {
+              "code": 10,
+              "changes": 7
+            },
+            "final": {
+              "code": 10,
+              "changes": 7
+            },
+            "samples": [
+              {
+                "code": 10,
+                "changes": 7
+              },
+              {
+                "code": 10,
+                "changes": 7
+              },
+              {
+                "code": 10,
+                "changes": 7
+              },
+              {
+                "code": 10,
+                "changes": 7
+              },
+              {
+                "code": 10,
+                "changes": 7
+              },
+              {
+                "code": 10,
+                "changes": 7
+              },
+              {
+                "code": 10,
+                "changes": 7
+              },
+              {
+                "code": 10,
+                "changes": 7
+              },
+              {
+                "code": 10,
+                "changes": 7
+              },
+              {
+                "code": 10,
+                "changes": 7
+              },
+              {
+                "code": 10,
+                "changes": 7
+              },
+              {
+                "code": 10,
+                "changes": 7
+              }
+            ]
+          },
+          {
+            "button": 2,
+            "stationary": true,
+            "duplicate_moves": true,
+            "initial": {
+              "code": 2,
+              "changes": 9
+            },
+            "final": {
+              "code": 2,
+              "changes": 9
+            },
+            "samples": [
+              {
+                "code": 2,
+                "changes": 9
+              },
+              {
+                "code": 2,
+                "changes": 9
+              },
+              {
+                "code": 2,
+                "changes": 9
+              },
+              {
+                "code": 2,
+                "changes": 9
+              },
+              {
+                "code": 2,
+                "changes": 9
+              },
+              {
+                "code": 2,
+                "changes": 9
+              },
+              {
+                "code": 2,
+                "changes": 9
+              },
+              {
+                "code": 2,
+                "changes": 9
+              },
+              {
+                "code": 2,
+                "changes": 9
+              },
+              {
+                "code": 2,
+                "changes": 9
+              },
+              {
+                "code": 2,
+                "changes": 9
+              },
+              {
+                "code": 2,
+                "changes": 9
+              }
+            ]
+          },
+          {
+            "button": 2,
+            "stationary": true,
+            "duplicate_moves": true,
+            "initial": {
+              "code": 2,
+              "changes": 11
+            },
+            "final": {
+              "code": 2,
+              "changes": 11
+            },
+            "samples": [
+              {
+                "code": 2,
+                "changes": 11
+              },
+              {
+                "code": 2,
+                "changes": 11
+              },
+              {
+                "code": 2,
+                "changes": 11
+              },
+              {
+                "code": 2,
+                "changes": 11
+              },
+              {
+                "code": 2,
+                "changes": 11
+              },
+              {
+                "code": 2,
+                "changes": 11
+              },
+              {
+                "code": 2,
+                "changes": 11
+              },
+              {
+                "code": 2,
+                "changes": 11
+              },
+              {
+                "code": 2,
+                "changes": 11
+              },
+              {
+                "code": 2,
+                "changes": 11
+              },
+              {
+                "code": 2,
+                "changes": 11
+              },
+              {
+                "code": 2,
+                "changes": 11
+              }
+            ]
+          }
+        ],
+        "leave_stable": true,
+        "normal_leave_stable": true,
+        "paused": true,
+        "no_ghost_after_modal": true
+      },
+      {
+        "physical_size": [
+          1920,
+          1080
+        ],
+        "chinese": true,
+        "buttons": [
+          {
+            "button": 2,
+            "stationary": true,
+            "duplicate_moves": true,
+            "initial": {
+              "code": 2,
+              "changes": 13
+            },
+            "final": {
+              "code": 2,
+              "changes": 13
+            },
+            "samples": [
+              {
+                "code": 2,
+                "changes": 13
+              },
+              {
+                "code": 2,
+                "changes": 13
+              },
+              {
+                "code": 2,
+                "changes": 13
+              },
+              {
+                "code": 2,
+                "changes": 13
+              },
+              {
+                "code": 2,
+                "changes": 13
+              },
+              {
+                "code": 2,
+                "changes": 13
+              },
+              {
+                "code": 2,
+                "changes": 13
+              },
+              {
+                "code": 2,
+                "changes": 13
+              },
+              {
+                "code": 2,
+                "changes": 13
+              },
+              {
+                "code": 2,
+                "changes": 13
+              },
+              {
+                "code": 2,
+                "changes": 13
+              },
+              {
+                "code": 2,
+                "changes": 13
+              }
+            ]
+          },
+          {
+            "button": 6,
+            "stationary": true,
+            "duplicate_moves": true,
+            "initial": {
+              "code": 6,
+              "changes": 14
+            },
+            "final": {
+              "code": 6,
+              "changes": 14
+            },
+            "samples": [
+              {
+                "code": 6,
+                "changes": 14
+              },
+              {
+                "code": 6,
+                "changes": 14
+              },
+              {
+                "code": 6,
+                "changes": 14
+              },
+              {
+                "code": 6,
+                "changes": 14
+              },
+              {
+                "code": 6,
+                "changes": 14
+              },
+              {
+                "code": 6,
+                "changes": 14
+              },
+              {
+                "code": 6,
+                "changes": 14
+              },
+              {
+                "code": 6,
+                "changes": 14
+              },
+              {
+                "code": 6,
+                "changes": 14
+              },
+              {
+                "code": 6,
+                "changes": 14
+              },
+              {
+                "code": 6,
+                "changes": 14
+              },
+              {
+                "code": 6,
+                "changes": 14
+              }
+            ]
+          },
+          {
+            "button": 5,
+            "stationary": true,
+            "duplicate_moves": true,
+            "initial": {
+              "code": 5,
+              "changes": 15
+            },
+            "final": {
+              "code": 5,
+              "changes": 15
+            },
+            "samples": [
+              {
+                "code": 5,
+                "changes": 15
+              },
+              {
+                "code": 5,
+                "changes": 15
+              },
+              {
+                "code": 5,
+                "changes": 15
+              },
+              {
+                "code": 5,
+                "changes": 15
+              },
+              {
+                "code": 5,
+                "changes": 15
+              },
+              {
+                "code": 5,
+                "changes": 15
+              },
+              {
+                "code": 5,
+                "changes": 15
+              },
+              {
+                "code": 5,
+                "changes": 15
+              },
+              {
+                "code": 5,
+                "changes": 15
+              },
+              {
+                "code": 5,
+                "changes": 15
+              },
+              {
+                "code": 5,
+                "changes": 15
+              },
+              {
+                "code": 5,
+                "changes": 15
+              }
+            ]
+          },
+          {
+            "button": 7,
+            "stationary": true,
+            "duplicate_moves": true,
+            "initial": {
+              "code": 7,
+              "changes": 18
+            },
+            "final": {
+              "code": 7,
+              "changes": 18
+            },
+            "samples": [
+              {
+                "code": 7,
+                "changes": 18
+              },
+              {
+                "code": 7,
+                "changes": 18
+              },
+              {
+                "code": 7,
+                "changes": 18
+              },
+              {
+                "code": 7,
+                "changes": 18
+              },
+              {
+                "code": 7,
+                "changes": 18
+              },
+              {
+                "code": 7,
+                "changes": 18
+              },
+              {
+                "code": 7,
+                "changes": 18
+              },
+              {
+                "code": 7,
+                "changes": 18
+              },
+              {
+                "code": 7,
+                "changes": 18
+              },
+              {
+                "code": 7,
+                "changes": 18
+              },
+              {
+                "code": 7,
+                "changes": 18
+              },
+              {
+                "code": 7,
+                "changes": 18
+              }
+            ]
+          },
+          {
+            "button": 10,
+            "stationary": true,
+            "duplicate_moves": true,
+            "initial": {
+              "code": 10,
+              "changes": 19
+            },
+            "final": {
+              "code": 10,
+              "changes": 19
+            },
+            "samples": [
+              {
+                "code": 10,
+                "changes": 19
+              },
+              {
+                "code": 10,
+                "changes": 19
+              },
+              {
+                "code": 10,
+                "changes": 19
+              },
+              {
+                "code": 10,
+                "changes": 19
+              },
+              {
+                "code": 10,
+                "changes": 19
+              },
+              {
+                "code": 10,
+                "changes": 19
+              },
+              {
+                "code": 10,
+                "changes": 19
+              },
+              {
+                "code": 10,
+                "changes": 19
+              },
+              {
+                "code": 10,
+                "changes": 19
+              },
+              {
+                "code": 10,
+                "changes": 19
+              },
+              {
+                "code": 10,
+                "changes": 19
+              },
+              {
+                "code": 10,
+                "changes": 19
+              }
+            ]
+          },
+          {
+            "button": 2,
+            "stationary": true,
+            "duplicate_moves": true,
+            "initial": {
+              "code": 2,
+              "changes": 21
+            },
+            "final": {
+              "code": 2,
+              "changes": 21
+            },
+            "samples": [
+              {
+                "code": 2,
+                "changes": 21
+              },
+              {
+                "code": 2,
+                "changes": 21
+              },
+              {
+                "code": 2,
+                "changes": 21
+              },
+              {
+                "code": 2,
+                "changes": 21
+              },
+              {
+                "code": 2,
+                "changes": 21
+              },
+              {
+                "code": 2,
+                "changes": 21
+              },
+              {
+                "code": 2,
+                "changes": 21
+              },
+              {
+                "code": 2,
+                "changes": 21
+              },
+              {
+                "code": 2,
+                "changes": 21
+              },
+              {
+                "code": 2,
+                "changes": 21
+              },
+              {
+                "code": 2,
+                "changes": 21
+              },
+              {
+                "code": 2,
+                "changes": 21
+              }
+            ]
+          },
+          {
+            "button": 2,
+            "stationary": true,
+            "duplicate_moves": true,
+            "initial": {
+              "code": 2,
+              "changes": 23
+            },
+            "final": {
+              "code": 2,
+              "changes": 23
+            },
+            "samples": [
+              {
+                "code": 2,
+                "changes": 23
+              },
+              {
+                "code": 2,
+                "changes": 23
+              },
+              {
+                "code": 2,
+                "changes": 23
+              },
+              {
+                "code": 2,
+                "changes": 23
+              },
+              {
+                "code": 2,
+                "changes": 23
+              },
+              {
+                "code": 2,
+                "changes": 23
+              },
+              {
+                "code": 2,
+                "changes": 23
+              },
+              {
+                "code": 2,
+                "changes": 23
+              },
+              {
+                "code": 2,
+                "changes": 23
+              },
+              {
+                "code": 2,
+                "changes": 23
+              },
+              {
+                "code": 2,
+                "changes": 23
+              },
+              {
+                "code": 2,
+                "changes": 23
+              }
+            ]
+          }
+        ],
+        "leave_stable": true,
+        "normal_leave_stable": true,
+        "paused": true,
+        "no_ghost_after_modal": true
+      },
+      {
+        "physical_size": [
+          3840,
+          2160
+        ],
+        "chinese": true,
+        "buttons": [
+          {
+            "button": 2,
+            "stationary": true,
+            "duplicate_moves": true,
+            "initial": {
+              "code": 2,
+              "changes": 25
+            },
+            "final": {
+              "code": 2,
+              "changes": 25
+            },
+            "samples": [
+              {
+                "code": 2,
+                "changes": 25
+              },
+              {
+                "code": 2,
+                "changes": 25
+              },
+              {
+                "code": 2,
+                "changes": 25
+              },
+              {
+                "code": 2,
+                "changes": 25
+              },
+              {
+                "code": 2,
+                "changes": 25
+              },
+              {
+                "code": 2,
+                "changes": 25
+              },
+              {
+                "code": 2,
+                "changes": 25
+              },
+              {
+                "code": 2,
+                "changes": 25
+              },
+              {
+                "code": 2,
+                "changes": 25
+              },
+              {
+                "code": 2,
+                "changes": 25
+              },
+              {
+                "code": 2,
+                "changes": 25
+              },
+              {
+                "code": 2,
+                "changes": 25
+              }
+            ]
+          },
+          {
+            "button": 6,
+            "stationary": true,
+            "duplicate_moves": true,
+            "initial": {
+              "code": 6,
+              "changes": 26
+            },
+            "final": {
+              "code": 6,
+              "changes": 26
+            },
+            "samples": [
+              {
+                "code": 6,
+                "changes": 26
+              },
+              {
+                "code": 6,
+                "changes": 26
+              },
+              {
+                "code": 6,
+                "changes": 26
+              },
+              {
+                "code": 6,
+                "changes": 26
+              },
+              {
+                "code": 6,
+                "changes": 26
+              },
+              {
+                "code": 6,
+                "changes": 26
+              },
+              {
+                "code": 6,
+                "changes": 26
+              },
+              {
+                "code": 6,
+                "changes": 26
+              },
+              {
+                "code": 6,
+                "changes": 26
+              },
+              {
+                "code": 6,
+                "changes": 26
+              },
+              {
+                "code": 6,
+                "changes": 26
+              },
+              {
+                "code": 6,
+                "changes": 26
+              }
+            ]
+          },
+          {
+            "button": 5,
+            "stationary": true,
+            "duplicate_moves": true,
+            "initial": {
+              "code": 5,
+              "changes": 27
+            },
+            "final": {
+              "code": 5,
+              "changes": 27
+            },
+            "samples": [
+              {
+                "code": 5,
+                "changes": 27
+              },
+              {
+                "code": 5,
+                "changes": 27
+              },
+              {
+                "code": 5,
+                "changes": 27
+              },
+              {
+                "code": 5,
+                "changes": 27
+              },
+              {
+                "code": 5,
+                "changes": 27
+              },
+              {
+                "code": 5,
+                "changes": 27
+              },
+              {
+                "code": 5,
+                "changes": 27
+              },
+              {
+                "code": 5,
+                "changes": 27
+              },
+              {
+                "code": 5,
+                "changes": 27
+              },
+              {
+                "code": 5,
+                "changes": 27
+              },
+              {
+                "code": 5,
+                "changes": 27
+              },
+              {
+                "code": 5,
+                "changes": 27
+              }
+            ]
+          },
+          {
+            "button": 7,
+            "stationary": true,
+            "duplicate_moves": true,
+            "initial": {
+              "code": 7,
+              "changes": 30
+            },
+            "final": {
+              "code": 7,
+              "changes": 30
+            },
+            "samples": [
+              {
+                "code": 7,
+                "changes": 30
+              },
+              {
+                "code": 7,
+                "changes": 30
+              },
+              {
+                "code": 7,
+                "changes": 30
+              },
+              {
+                "code": 7,
+                "changes": 30
+              },
+              {
+                "code": 7,
+                "changes": 30
+              },
+              {
+                "code": 7,
+                "changes": 30
+              },
+              {
+                "code": 7,
+                "changes": 30
+              },
+              {
+                "code": 7,
+                "changes": 30
+              },
+              {
+                "code": 7,
+                "changes": 30
+              },
+              {
+                "code": 7,
+                "changes": 30
+              },
+              {
+                "code": 7,
+                "changes": 30
+              },
+              {
+                "code": 7,
+                "changes": 30
+              }
+            ]
+          },
+          {
+            "button": 10,
+            "stationary": true,
+            "duplicate_moves": true,
+            "initial": {
+              "code": 10,
+              "changes": 31
+            },
+            "final": {
+              "code": 10,
+              "changes": 31
+            },
+            "samples": [
+              {
+                "code": 10,
+                "changes": 31
+              },
+              {
+                "code": 10,
+                "changes": 31
+              },
+              {
+                "code": 10,
+                "changes": 31
+              },
+              {
+                "code": 10,
+                "changes": 31
+              },
+              {
+                "code": 10,
+                "changes": 31
+              },
+              {
+                "code": 10,
+                "changes": 31
+              },
+              {
+                "code": 10,
+                "changes": 31
+              },
+              {
+                "code": 10,
+                "changes": 31
+              },
+              {
+                "code": 10,
+                "changes": 31
+              },
+              {
+                "code": 10,
+                "changes": 31
+              },
+              {
+                "code": 10,
+                "changes": 31
+              },
+              {
+                "code": 10,
+                "changes": 31
+              }
+            ]
+          },
+          {
+            "button": 2,
+            "stationary": true,
+            "duplicate_moves": true,
+            "initial": {
+              "code": 2,
+              "changes": 33
+            },
+            "final": {
+              "code": 2,
+              "changes": 33
+            },
+            "samples": [
+              {
+                "code": 2,
+                "changes": 33
+              },
+              {
+                "code": 2,
+                "changes": 33
+              },
+              {
+                "code": 2,
+                "changes": 33
+              },
+              {
+                "code": 2,
+                "changes": 33
+              },
+              {
+                "code": 2,
+                "changes": 33
+              },
+              {
+                "code": 2,
+                "changes": 33
+              },
+              {
+                "code": 2,
+                "changes": 33
+              },
+              {
+                "code": 2,
+                "changes": 33
+              },
+              {
+                "code": 2,
+                "changes": 33
+              },
+              {
+                "code": 2,
+                "changes": 33
+              },
+              {
+                "code": 2,
+                "changes": 33
+              },
+              {
+                "code": 2,
+                "changes": 33
+              }
+            ]
+          },
+          {
+            "button": 2,
+            "stationary": true,
+            "duplicate_moves": true,
+            "initial": {
+              "code": 2,
+              "changes": 35
+            },
+            "final": {
+              "code": 2,
+              "changes": 35
+            },
+            "samples": [
+              {
+                "code": 2,
+                "changes": 35
+              },
+              {
+                "code": 2,
+                "changes": 35
+              },
+              {
+                "code": 2,
+                "changes": 35
+              },
+              {
+                "code": 2,
+                "changes": 35
+              },
+              {
+                "code": 2,
+                "changes": 35
+              },
+              {
+                "code": 2,
+                "changes": 35
+              },
+              {
+                "code": 2,
+                "changes": 35
+              },
+              {
+                "code": 2,
+                "changes": 35
+              },
+              {
+                "code": 2,
+                "changes": 35
+              },
+              {
+                "code": 2,
+                "changes": 35
+              },
+              {
+                "code": 2,
+                "changes": 35
+              },
+              {
+                "code": 2,
+                "changes": 35
+              }
+            ]
+          }
+        ],
+        "leave_stable": true,
+        "normal_leave_stable": true,
+        "paused": true,
+        "no_ghost_after_modal": true
+      }
+    ],
+    "stats": {
+      "frames": 3060.0,
+      "last_ms": 4.248199998983182,
+      "textures": 56.0,
+      "meshes": 57.0,
+      "owners": 1.0
+    },
+    "retired": true
+  },
+  "static_quality": {
+    "command": "python tools/quality_gate.py --json tmp_quality/ui_backend_static.json",
+    "gate": {
+      "baseline_revision": "d64f1528e2e1864ef369537c026b6d3f7127f590",
+      "status": "PASS",
+      "violations": []
+    },
+    "summary": {
+      "decisions": 14520,
+      "files": 240,
+      "functions": 3651,
+      "historical_ui_functions": 50,
+      "historical_ui_modules": 1,
+      "import_edges": 690,
+      "parsed_files": 240,
+      "statements": 39927
+    },
+    "runtime_cycles": 0
+  },
+  "compileall": {
+    "command": "python -m compileall -q rm_client tests tools main.py",
+    "exit_code": 0
+  },
+  "protected_configuration_and_pdf_unchanged": true,
+  "raw_logs_retained_locally": true,
+  "verdict": "NOT READY FOR REAL MATCH",
+  "all_selected_prerequisites_complete": false,
+  "hardware_qualified": false,
+  "release_built": false,
+  "limitations": [
+    "Offline aggregate exit remains 1 / NO-GO for the 12 skipped and six incomplete suites; missing firmware/CRC/official fixtures, Npcap and Windows sanitizer runtime were not fabricated.",
+    "The canonical desktop/visual/external suites are outside the offline profile; the explicit owned GL/D3D checks above do not complete all those suites.",
+    "Real robot, official client/engine/referee/radio end-to-end, stop latency and field signoff remain unverified.",
+    "Private game art/fonts/audio, generated native runtime and local official field preview packs remain outside public Git; unavailable packs use the existing fallback menu.",
+    "The 70-90 FPS HUD target has not been met or certified by this integration run."
+  ]
+}
