@@ -1,4 +1,7 @@
-"""CS-style client menu. No fake pause, device work or CPU backdrop copies.
+"""Windows uses the retained original-source Endfield menu.
+
+The CS-style painter below is retained for non-Windows and inert CI hosts.
+No fake pause, device work or CPU backdrop copies.
 
 Visual reference: CRC-verified local copies of Valve panorama/styles/mainmenu
 .vcss_c (pausemenu-navbar-container / pausemenu-navbar__btn-small), 2026-10-14.
@@ -15,6 +18,7 @@ from PySide6.QtGui import QColor, QFont, QPainter, QPen
 from ...jello_locale import chinese_enabled, ui_label
 from ...fonts import draw_ui_text, has_cjk
 from ...cs2_assets import local_cs2_assets
+from .endfield_menu_mixin import EndfieldMenuMixin
 
 
 def _menu_font(size, *, bold=False):
@@ -34,12 +38,15 @@ def _menu_text(painter, rect, text):
         painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, text)
 
 
-class EscapeMenuMixin:
+class EscapeMenuMixin(EndfieldMenuMixin):
     @property
     def escape_menu_visible(self) -> bool:
         return bool(getattr(self, "_escape_menu_visible", False))
 
     def set_escape_menu_visible(self, visible: bool) -> None:
+        if getattr(self, "_endfield_menu", None) is not None:
+            self.set_endfield_menu_visible(visible)
+            return
         if visible == self.escape_menu_visible or (visible and self.home_visible):
             return
         # Neutralize held input immediately; backend tick/telemetry/estop keep
@@ -102,6 +109,8 @@ class EscapeMenuMixin:
     def handle_escape_menu_key(self, event) -> bool:
         if not self.escape_menu_visible:
             return False
+        if getattr(self, "_endfield_menu", None) is not None:
+            return self.handle_endfield_key(event)
         pending = getattr(self, "_escape_menu_key_releases", set())
         pending.add(event.key())
         self._escape_menu_key_releases = pending
@@ -135,6 +144,8 @@ class EscapeMenuMixin:
     def handle_escape_menu_mouse(self, event, phase) -> bool:
         if not self.escape_menu_visible:
             return False
+        if getattr(self, "_endfield_menu", None) is not None:
+            return self.handle_endfield_pointer(event, phase)
         _, rows, _ = self.escape_menu_layout(self.width(), self.height())
         index = next((i for i, rect in enumerate(rows) if rect.contains(event.position())), None)
         if index is not None:
@@ -152,6 +163,9 @@ class EscapeMenuMixin:
 
     def draw_escape_menu(self, painter, width, height) -> None:
         if not self.escape_menu_visible:
+            return
+        if getattr(self, "_endfield_menu", None) is not None:
+            self.draw_endfield_loading(painter, width, height)
             return
         panel, rows, scale = self.escape_menu_layout(width, height)
         painter.save()

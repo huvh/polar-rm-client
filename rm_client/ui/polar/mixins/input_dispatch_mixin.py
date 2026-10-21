@@ -950,6 +950,10 @@ class InputDispatchMixin:
             event.accept()
             return
         if self.escape_menu_visible:
+            menu = getattr(self, "_endfield_menu", None)
+            if menu is not None:
+                point, dpr = event.position(), self.devicePixelRatioF()
+                menu.pointer(4, point.x() * dpr, point.y() * dpr, event.angleDelta().y() / 120.0)
             event.accept()
             return
         if self.student_ui.visible:

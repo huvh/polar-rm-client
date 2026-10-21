@@ -73,7 +73,7 @@ python -m venv .venv
 
 ## 快捷键
 
-- 主 HUD 按 `Esc` 打开 Jello 二级菜单：继续、返回启动页、退出客户端（二次确认）；再次 `Esc` 关闭。已有输入框/弹窗优先处理 Esc。菜单不暂停遥测或安全监控，菜单键鼠不会下发为控制输入。见 [Esc 菜单说明](docs/escape_menu.md)。
+- 主 HUD 按 `Esc` 打开菜单。Windows 配有经校验的本机 Endfield 资源包时使用原生 EndfieldHUD 场景、RM 2027 场地预览和模糊背景；设置继续使用 Jello，关于入口改为更新日志。无可用资源包时保留 Jello 二级菜单。已有输入框/弹窗优先处理 Esc，退出客户端需要二次确认；菜单不暂停遥测或安全监控，菜单键鼠不会下发为控制输入。原生菜单准备和资源边界见 [Endfield UI 接入说明](docs/ENDFIELD_SOURCE_PORT.md)，通用安全约定见 [Esc 菜单说明](docs/escape_menu.md)。
 
 - `Right Shift` 或 `F8`：打开/关闭配置界面（ClickGUI）。Jello 界面左键点击面板外空白处也可关闭；面板标题、留白、控件和拖动不会误关。
 - `F9`：已停用，不再轮换 ClickGUI。

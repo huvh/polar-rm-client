@@ -29,10 +29,14 @@ class OverlaySceneTests(unittest.TestCase):
 
     def test_glass_owner_selection_never_adds_hud_to_overlay(self):
         for economy, clickgui, radial, hero in product((False, True), repeat=4):
-            scene = OverlayScene(economy, clickgui, True, True)
+            scene = OverlayScene(economy, clickgui, True, False)
             owners = scene.glass_owners(radial_visible=radial, hero_visible=hero)
             self.assertEqual(owners, frozenset(owner for enabled, owner in ((economy, GlassOwner.ECONOMY), (clickgui, GlassOwner.CLICKGUI), (radial, GlassOwner.RADIAL), (hero, GlassOwner.HERO_DEPLOY)) if enabled))
             self.assertNotIn(GlassOwner.HUD, owners)
+
+    def test_escape_retires_every_overlay_lens_without_mutating_other_owners(self):
+        scene = OverlayScene(True, True, True, True)
+        self.assertEqual(scene.glass_owners(radial_visible=True, hero_visible=True), frozenset())
 
 
 class BackdropTests(unittest.TestCase):
@@ -51,7 +55,7 @@ class BackdropTests(unittest.TestCase):
 
     def test_escape_precedes_student_and_legacy(self):
         actual = self.treatment(OverlayScene(False, True, True, True))
-        self.assertEqual(actual, BackdropTreatment(True, 1., 20., 0., True, "jello_box20"))
+        self.assertEqual(actual, BackdropTreatment(True, 1., 10., .42, False, "endfield_gaussian"))
 
     def test_student_damage_is_unblurred_and_other_panels_follow_reveal(self):
         scene = OverlayScene(False, False, True, False)

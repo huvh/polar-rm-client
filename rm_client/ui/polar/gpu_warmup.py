@@ -23,10 +23,12 @@ class GpuWarmupQueue:
     pending: Iterator[WarmupJob] | None = None
     last_ms: float = 0.0
     max_ms: float = 0.0
+    completed: bool = False
 
     def replace(self, jobs: Iterator[WarmupJob]) -> None:
         """Replace queued work without consuming or running either iterator."""
         self.pending = jobs
+        self.completed = False
 
     def run_slice(
         self,
@@ -60,8 +62,10 @@ class GpuWarmupQueue:
                 break
         except StopIteration:
             self.pending = None
+            self.completed = True
         except Exception as exc:
             self.pending = None
+            self.completed = False
             report_error(exc)
         finally:
             release_context()

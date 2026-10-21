@@ -1,5 +1,11 @@
 # 第三方实现参考
 
+## EndfieldHUD 与可选本机 Endfield 资源
+
+- 可选 Windows Esc 菜单使用 [DDDuoDuo/EndfieldHUD](https://github.com/DDDuoDuo/EndfieldHUD) 的原生场景与渲染器；构建固定到 `cdbd4f573c8fa3b9c2048fa3d1b089e69196537b`。上游采用 MIT License，原始授权全文保留在 `licenses/EndfieldHUD-LICENSE.txt`。
+- 本仓库保存 POLAR-RM 适配层、离线准备工具和测试，不自动下载、安装或运行游戏。原始游戏图片、字体、语音及本机生成的运行包留在被忽略的 `user_data/endfield_pack`，不随本次源码提交公开分发。
+- 开源渲染器的 MIT 授权不授予终末地游戏素材的再分发权。游戏素材的版权、商标及其他权利仍归各权利人；资源不可用时回退既有菜单。接入范围与限制见 `docs/ENDFIELD_SOURCE_PORT.md`。
+
 ## AndroidLiquidGlass-kmp
 
 - 本项目的 GPU 液态玻璃镜片参考了本地 `AndroidLiquidGlass-kmp` 的镜片数学结构，包括圆角 SDF、窄边折射带、圆形折射曲线和边缘色差思路。

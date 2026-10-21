@@ -84,7 +84,7 @@ class WindowConstructionTests(unittest.TestCase):
             self.assertIs(window.mqtt, window.backend.mqtt)
             self.assertIs(window.udp, window.backend.udp)
             self.assertIs(window.serial, window.backend.serial)
-            self.assertIs(window.backend.referee_view_observer.__self__, window.top_match_bar)
+            self.assertIs(window.backend.referee_view_observer.__self__, window)
             self.assertIs(window.economy_bridge.sender.__self__, window)
             self.assertIsInstance(window._frame_telemetry, FrameTelemetry)
             self.assertEqual(window._frame_telemetry.fps_samples, [])

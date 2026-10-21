@@ -37,7 +37,20 @@ class OverlayScene:
     def modal_backdrop_active(self) -> bool:
         return self.economy_active or self.clickgui_active or self.student_active or self.escape_active
 
+    @property
+    def jello_blur_active(self) -> bool:
+        return self.clickgui_active and not self.economy_active
+
+    @property
+    def combat_motion_active(self) -> bool:
+        return not self.clickgui_active and not self.escape_active
+
+    def draws_clickgui(self, *, home_visible: bool) -> bool:
+        return not home_visible and not self.escape_active
+
     def glass_owners(self, *, radial_visible: bool, hero_visible: bool) -> frozenset[GlassOwner]:
+        if self.escape_active:
+            return frozenset()
         return frozenset(owner for active, owner in (
             (self.economy_active, GlassOwner.ECONOMY),
             (self.clickgui_active, GlassOwner.CLICKGUI),
@@ -74,7 +87,9 @@ class BackdropTreatment:
             active = clickgui_reveal > 0.0
             return cls(active, 1.0 if active else 0.0, jello_blur_radius, 0.0, True, "jello_box20")
         if scene.escape_active:
-            return cls(True, 1.0, 20.0, 0.0, True, "jello_box20")
+            # Esc owns a softened world, not a frosted duplicate of combat
+            # chrome. Its own Gaussian never alters the glass's sparse kernel.
+            return cls(True, 1.0, 10.0, .42, False, "endfield_gaussian")
         if scene.student_active:
             blur = 0.0 if student_panel == "damage" else 20.0 * min(1.0, student_progress * 4.0)
             return cls(True, 1.0, blur, 0.0, True, "jello_box20")

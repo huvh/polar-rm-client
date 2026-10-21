@@ -23,6 +23,7 @@ from PySide6.QtOpenGL import (
 from .render_diagnostics import RenderFault, RenderFaultDiagnostics
 from .framebuffer_storage import FramebufferStorage, framebuffer_slot
 from .glass_commands import GlassCommandBuffer, glass_draw_geometry
+from .painter_lifecycle import finish_painter
 
 _LOG = logging.getLogger(__name__)
 
@@ -284,7 +285,7 @@ class LayerPaintSession:
 
     def _end_painter(self) -> bool:
         painter, self._painter = self._painter, None
-        return painter is None or painter.end() is not False
+        return painter is None or finish_painter(painter)
 
     def end_painter(self) -> bool:
         try:
@@ -992,8 +993,8 @@ class GpuFrameCompositor:
             dim_alpha=round(max(0.0, min(1.0, float(dim_alpha))), 5),
             include_overlay=bool(include_overlay),
             blur_kernel=(
-                "jello_box20"
-                if str(blur_kernel) == "jello_box20"
+                str(blur_kernel)
+                if str(blur_kernel) in {"jello_box20", "endfield_gaussian"}
                 else "compact_gaussian"
             ),
         )
@@ -1022,6 +1023,7 @@ class GpuFrameCompositor:
         output_fbo: QOpenGLFramebufferObject,
         radius_px: float,
         include_overlay: bool,
+        dense_gaussian: bool = False,
     ) -> bool:
         assert self.background_fbo is not None
         assert self.control_fbo is not None
@@ -1058,6 +1060,8 @@ class GpuFrameCompositor:
             1.0 / max(1.0, float(self._size.height())),
         )
         functions.glUniform1f(self._uniform(self.blur_program, "blurRadiusPx"), float(radius_px))
+        functions.glUniform1i(self._uniform(self.blur_program, "gaussianRadiusPx"),
+                             max(1, min(32, round(radius_px))) if dense_gaussian else 0)
         functions.glUniform1i(
             self._uniform(self.blur_program, "includeOverlay"),
             1 if include_overlay else 0,
@@ -1241,6 +1245,7 @@ class GpuFrameCompositor:
                     output_fbo=self.treated_blur_fbo,
                     radius_px=max(0.0, treatment.blur_radius_px * self._device_pixel_ratio),
                     include_overlay=treatment.include_overlay,
+                    dense_gaussian=treatment.blur_kernel == "endfield_gaussian",
                 )
             self.last_blur_ms += (time.perf_counter() - started) * 1000.0
             return self._treated_blur_valid
@@ -1619,6 +1624,7 @@ class GpuFrameCompositor:
             uniform vec2 texel;
             uniform vec2 direction;
             uniform float blurRadiusPx;
+            uniform int gaussianRadiusPx;
             uniform int includeOverlay;
             uniform int sourceMode;
             out vec4 fragColor;
@@ -1639,6 +1645,26 @@ class GpuFrameCompositor:
                 return combined;
             }
             void main() {
+                // Esc only: normalized dense Gaussian. Pair neighbouring taps
+                // with linear filtering instead of stretching the glass's
+                // sparse kernel into visible copies of text/scene edges.
+                if (gaussianRadiusPx > 0) {
+                    float sigma = max(1.0, float(gaussianRadiusPx) / 2.5);
+                    vec3 sum = sourceAt(uv);
+                    float total = 1.0;
+                    for (int i = 1; i < 32; i += 2) {
+                        if (i > gaussianRadiusPx) break;
+                        float a = exp(-0.5 * pow(float(i) / sigma, 2.0));
+                        float b = i + 1 <= gaussianRadiusPx
+                            ? exp(-0.5 * pow(float(i + 1) / sigma, 2.0)) : 0.0;
+                        float weight = a + b;
+                        vec2 delta = texel * direction * (float(i) + b / weight);
+                        sum += weight * (sourceAt(uv + delta) + sourceAt(uv - delta));
+                        total += 2.0 * weight;
+                    }
+                    fragColor = vec4(sum / total, 1.0);
+                    return;
+                }
                 float sampleScale = max(0.0, blurRadiusPx) / 3.23076923;
                 vec2 stepUv = texel * direction * sampleScale;
                 vec3 color = sourceAt(uv) * 0.22702703;

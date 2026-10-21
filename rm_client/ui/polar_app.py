@@ -166,6 +166,7 @@ from .student_panels import StudentPanelRenderer
 from .minecraft_chat import MinecraftServerChatRenderer
 from .polar.mixins.student_frontend_mixin import StudentFrontendMixin
 from .polar.mixins.escape_menu_mixin import EscapeMenuMixin
+from .painter_lifecycle import finish_painter
 from .quick_action_wheel import ACTION_LABELS, DEFAULT_ACTIONS, SECTOR_INDEXES, QuickActionWheelState
 from .quick_action_wheel_gpu import QuickActionWheelCommand, QuickActionWheelGpuRenderer
 from .startup_gl import StartupGpuCompositor, TextureOrigin
@@ -520,6 +521,15 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         feedback = create_feedback_assets(self.paths)
         self.kill_fx = feedback.kill_fx
         self.ui_audio = feedback.ui_audio
+        from ..endfield_feedback import EndfieldFeedback
+        self._endfield_feedback = EndfieldFeedback(self.paths.user_data_root / "endfield_pack")
+        from .endfield_boot import EndfieldBootPresentation
+        self._endfield_boot = EndfieldBootPresentation(self.paths.user_data_root / "endfield_pack" / "boot")
+        self._endfield_menu = None
+        if sys.platform == "win32" and QApplication.platformName() == "windows":
+            from .endfield_native import EndfieldNativeMenu
+            self._endfield_menu = EndfieldNativeMenu(self.paths.user_data_root / "endfield_pack")
+        self.backend.referee_view_observer = self._observe_referee_views
         self.registry.add_toggle_listener(self.on_module_toggled)
         # P6: ModuleRegistry 在 toggle/set/direct assignment 三条 enabled
         # 写路径上统一推进代际，静态 key 不再每帧构造 N+1 元组。
@@ -823,6 +833,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
 
             from .window_shortcuts import WindowShortcuts
             WindowShortcuts(self)  # QObject parent owns the filter for this window.
+            self._endfield_feedback.boot.mark("configuration", time.perf_counter())
 
             # Start event delivery only after profile staging and all callback
             # dependencies exist. Native resource activation still waits for poll.
@@ -1035,6 +1046,8 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             )
             for stage_name, callback in stages:
                 self._run_tick_stage(stage_name, callback, now)
+            if getattr(self, "_endfield_feedback", None) is not None:
+                self._run_tick_stage("feedback.endfield", lambda: self._advance_endfield_feedback(now), now)
             match_chat = self.registry.get("MatchChat")
             if (
                 match_chat is not None
@@ -1060,6 +1073,34 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         )
         if self.frame_scheduler.should_request(now, high_rate, self.render_fps_target):
             self.update()
+
+    def _observe_referee_views(self, name, data, received_at) -> None:
+        # Both consumers see the same already-decoded sample. This adapter
+        # adds no subscription, alternate parser, or command publisher.
+        self.top_match_bar.observe_referee(name, data, received_at)
+        self._endfield_feedback.observe_referee(
+            name, data, received_at,
+            identity=(self.backend.referee.profile_id, self.state.robot_id),
+        )
+
+    def _advance_endfield_feedback(self, now: float) -> None:
+        self.advance_endfield_menu()
+        native = self._endfield_menu
+        if self.gpu_compositor.available and (native is None or native.ready):
+            self._endfield_feedback.boot.mark("graphics", now)
+        if self._gpu_warmup.completed:
+            self._endfield_feedback.boot.mark("atlases", now)
+        module = self.registry.get("PowerGuard")
+        audio = self.registry.get("AudioFeedback")
+        self._endfield_feedback.tick(
+            now=now, identity=(self.backend.referee.profile_id, self.state.robot_id),
+            connected=self.mqtt.connected and not self.backend.mqtt.mock_output,
+            enabled=bool(module and module.enabled and (audio is None or audio.enabled)),
+            threshold=self.get_setting_number(module, "Energy Warn", 20),
+            launcher=self.home_visible,
+            audio_enabled=bool(audio and audio.enabled and self.setting_bool(audio, "Enabled", True)),
+            volume=self.get_setting_number(audio, "UI Volume", 45),
+        )
 
     def _publish_tick_performance(self, now: float) -> None:
         report = self._tick_diagnostics.finish_tick(now, time.perf_counter())
@@ -1731,12 +1772,10 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                 student_visible=self.student_ui.visible,
                 escape_visible=self.escape_menu_visible,
             )
-            economy_active = scene.economy_active
-            clickgui_active = scene.clickgui_active
             modal_backdrop_active = scene.modal_backdrop_active
             jello_blur_radius = (
                 self.gui_timeline.blur_radius()
-                if not economy_active and clickgui_active and self.active_clickgui_mode() == PRIMARY_GUI_MODE
+                if scene.jello_blur_active and self.active_clickgui_mode() == PRIMARY_GUI_MODE
                 else None
             )
             treatment = BackdropTreatment.resolve(
@@ -1753,7 +1792,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                 height,
                 ratio,
                 startup_scene=startup_scene,
-                economy_active=economy_active,
+                economy_active=scene.economy_active,
             )
             if self.gpu_compositor.frame_rejected:
                 return False
@@ -1782,10 +1821,10 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                     self.match_mode_manager.current.key, chinese_enabled(self.registry),
                 )
             else:
-                static_mode = (StaticLayerMode.ECONOMY if economy_active else
+                static_mode = (StaticLayerMode.ECONOMY if scene.economy_active else
                                StaticLayerMode.HUD_REBUILD if rebuild_hud_static else StaticLayerMode.REUSE)
                 launcher_key = None
-            economy_gpu = economy_active and self.clickgui_gpu.available
+            economy_gpu = scene.economy_active and self.clickgui_gpu.available
             gui_alpha = self.gui_timeline.progress
             prepare_clickgui = False
             if not startup_scene and not economy_gpu:
@@ -1828,13 +1867,13 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                 self.begin_gpu_island_icon_collection()
                 self.begin_gpu_quick_action_wheel_collection()
                 painter = session.begin_painter()
-                if not home_visible and not clickgui_active:
+                if not home_visible and scene.combat_motion_active:
                     self.paint_hud_motion_overlay(
                         painter, width, height, include_vision=not native_vision_owner,
                         include_target_hud=(self.menu_overlay_active() and not motion.priority_active),
                         include_chat=not motion.chat_open, include_radial=not motion.radial_visible,
                     )
-                if not home_visible:
+                if scene.draws_clickgui(home_visible=home_visible):
                     self.paint_clickgui_overlay(
                         painter, width, height, gpu_commands=prepared.commands,
                         gpu_frame=prepared.frame, gpu_atlas_prepared=prepared.atlas_prepared,
@@ -1883,6 +1922,8 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                 target_framebuffer=self.defaultFramebufferObject(),
             )
             presented = FinalFrameCompositor(self.gpu_compositor).present(functions, composition)
+            if (native := getattr(self, "_endfield_menu", None)) is not None:
+                native.backdrop_frame_ready(presented)
             if presented and restore_attempt and restore_generation is not None:
                 self._finalize_economy_restore(restore_generation)
             committed = presented
@@ -2081,6 +2122,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             self._economy_scene_epoch,
             bool(self.gui_visible or self.gui_timeline.progress > 0.01),
             bool(self.student_ui.visible),
+            self.escape_menu_visible,
             self.student_ui.panel if self.student_ui.visible else None,
             int(self.state.deploy_mode),
             int(self.state.deploy_status_revision),
@@ -2320,6 +2362,8 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             and not self.home_visible
         )
         painted = self.paint_overlay(None, force_economy_compat=True)
+        if (native := getattr(self, "_endfield_menu", None)) is not None:
+            native.backdrop_frame_ready(painted)
         if painted and restore:
             self.invalidate_transient_overlay_scene()
             self._finalize_economy_restore(generation)
@@ -2349,15 +2393,8 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, not self.high_res_optimize(width, height))
 
         if self.home_visible:
-            if not startup_background_ready:
-                self.draw_startup_background(p, width, height)
-            if self.wallpaper_picker_visible:
-                self.draw_wallpaper_picker(p, width, height)
-            else:
-                self.draw_startup_page_transition(p, width, height)
-            if self.hover_tooltip:
-                self.draw_tooltip(p, self.hover_point, self.hover_tooltip)
-            return bool(p.end()) if owns_painter else True
+            self.draw_startup_overlay_content(p, width, height, startup_background_ready)
+            return finish_painter(p) if owns_painter else True
 
         if not hud_background_ready:
             p.setCompositionMode(QPainter.CompositionMode.CompositionMode_Clear)
@@ -2370,7 +2407,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         tongji_result = self.vision_result_for_display(raw_tongji_result)
         if not hud_background_ready:
             self.draw_video(p, width, height)
-        if not self.economy_stage_active():
+        if not self.economy_stage_active() and not self.escape_menu_visible:
             armor_target = self.tongji_target(width, height, tongji_result) if tongji_result is not None else None
             if armor_target is None:
                 # 选择真实桥接后绝不拿 mock 框伪装成检测结果；断链状态只保留 HUD 提示。
@@ -2395,11 +2432,11 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             )
         # EliminationFX is always drawn from paint_hud_motion_overlay so the
         # GPU static-layer cache cannot freeze kill-icon timelines.
-        if self.hover_tooltip and not self.gui_visible:
+        if self.hover_tooltip and not self.gui_visible and not self.escape_menu_visible:
             self.draw_tooltip(p, self.hover_point, self.hover_tooltip)
 
         if not include_interactive:
-            return bool(p.end()) if owns_painter else True
+            return finish_painter(p) if owns_painter else True
 
         self.paint_clickgui_overlay(
             p,
@@ -2409,7 +2446,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         )
         self.draw_student_frontend(p, width, height)
         self.draw_escape_menu(p, width, height)
-        return bool(p.end()) if owns_painter else True
+        return finish_painter(p) if owns_painter else True
 
     def menu_overlay_active(self) -> bool:
         """True while ClickGUI or Economy workspace is open (or animating)."""
@@ -2613,11 +2650,12 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         def draw(session) -> bool:
             self.begin_gpu_quick_action_wheel_collection()
             painter = session.begin_painter()
-            if self.match_chat.input_open:
-                self.draw_match_chat(painter, width, height, now=started_at)
-            if self.quick_action_wheel.visible:
-                self.draw_quick_action_wheel(painter, width, height)
-            self.draw_student_frontend(painter, width, height)
+            if not self.escape_menu_visible:
+                if self.match_chat.input_open:
+                    self.draw_match_chat(painter, width, height, now=started_at)
+                if self.quick_action_wheel.visible:
+                    self.draw_quick_action_wheel(painter, width, height)
+                self.draw_student_frontend(painter, width, height)
             self.draw_escape_menu(painter, width, height)
             if not session.end_painter():
                 return False
@@ -3283,6 +3321,13 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             OwnerAction("pending configuration", self.cancel_pending_configuration_for_close),
             OwnerAction("kill audio playback", self.kill_fx.sounds.close),
         )
+        feedback = getattr(self, "_endfield_feedback", None)
+        if feedback is not None:
+            prepare = (*prepare, OwnerAction("Endfield voice playback", feedback.voice.stop))
+        native = getattr(self, "_endfield_menu", None)
+        if native is not None:
+            prepare = (*prepare, OwnerAction("Endfield source visual", native.close))
+            tasks = (*tasks, TeardownTask("Endfield source renderer", native.wait_closed))
         self._window_lifecycle.request_close(prepare=prepare, tasks=tasks)
         # The main timer remains alive even if a test/tool had paused it. No
         # normal runtime stages execute through the closing branch above.

@@ -224,7 +224,9 @@ class RasterWindowFrame:
 class ActualCachedWindowTests(unittest.TestCase):
     def test_real_layouts_commands_interactions_and_raster_layers_match_frozen_entry(self):
         scenarios = ("hud", "clickgui", "clickgui_compat", "economy", "economy_compat",
-                     "startup", "startup_transition", "radial", "chat", "student", "escape")
+                     "startup", "startup_transition", "radial", "chat", "student")
+        # Esc is intentionally exclusive now; test_endfield_backdrop checks
+        # its actual empty combat layers and full HUD restoration separately.
         for size, ratio in (((800, 600), 1.), ((1280, 720), 1.5)):
             for scenario in scenarios:
                 with self.subTest(scenario=scenario, size=size, ratio=ratio):

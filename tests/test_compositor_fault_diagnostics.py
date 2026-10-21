@@ -179,7 +179,7 @@ class CompositorFaultTests(unittest.TestCase):
         self.gl.glActiveTexture.assert_called_with(gpu._GL_TEXTURE0)
 
     def test_treated_backdrop_fault_is_distinct_for_both_blur_kernels(self):
-        for kernel in ("compact_gaussian", "jello_box20"):
+        for kernel in ("compact_gaussian", "jello_box20", "endfield_gaussian"):
             with self.subTest(kernel=kernel):
                 self.c.set_backdrop_treatment(active=True, progress=1, blur_radius_px=4,
                     dim_alpha=.2, include_overlay=True, blur_kernel=kernel)

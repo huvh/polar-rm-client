@@ -24,7 +24,7 @@ from cached_frame_trace_support import RecordedFrame
 SCENARIOS = (
     "hud", "startup", "startup_transition", "economy", "economy_fade",
     "economy_compat", "clickgui", "clickgui_fade", "clickgui_compat",
-    "radial", "chat", "student", "escape", "restore", "stale_restore",
+    "radial", "chat", "student", "restore", "stale_restore",
     "defer_static",
 )
 
@@ -47,6 +47,22 @@ class CachedFrameCharacterizationTests(unittest.TestCase):
             with self.subTest(scenario=scenario):
                 outputs = self.compare(scenario, repeat=3)
                 self.assertTrue(all(result["accepted"] is True for _, result in outputs))
+
+    def test_escape_intentionally_removes_only_the_two_crisp_foreground_draws(self):
+        outputs = []
+        for original in (True, False):
+            runner = RecordedFrame("escape", original=original)
+            try:
+                outputs.append(runner.run())
+            finally:
+                runner.close()
+        old_events, old_result = outputs[0]
+        new_events, new_result = outputs[1]
+        retired = {"hud.motion", "clickgui.paint"}
+        self.assertEqual({e[0] for e in old_events} & retired, retired)
+        self.assertFalse({e[0] for e in new_events} & retired)
+        self.assertEqual(tuple(e for e in old_events if e[0] not in retired), new_events)
+        self.assertEqual(old_result, new_result)
 
     def test_faulted_frames_retain_partial_order_cleanup_and_pending_generation(self):
         for scenario, stage in (

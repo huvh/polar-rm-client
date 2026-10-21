@@ -48,6 +48,23 @@ __all__ = [
 class StartupSceneMixin:
     """D4 启动场景渲染：startup 页面/转场、liquid 控件族、壁纸选择器、场景元数据。"""
 
+    def draw_startup_overlay_content(self, painter, width, height, background_ready):
+        if not background_ready:
+            self.draw_startup_background(painter, width, height)
+        if self.wallpaper_picker_visible:
+            self.draw_wallpaper_picker(painter, width, height)
+        else:
+            self.draw_startup_page_transition(painter, width, height)
+        boot = getattr(self, "_endfield_boot", None)
+        if boot is not None:
+            native = getattr(self, "_endfield_menu", None)
+            loading = boot.draw(painter, width, height, self._endfield_feedback.boot, time.perf_counter(),
+                                chinese=chinese_enabled(self.registry), error=native.error if native else "")
+            if loading is not None:
+                self.hotspots[:] = [spot for spot in self.hotspots if not spot.rect.intersects(loading)]
+        if self.hover_tooltip:
+            self.draw_tooltip(painter, self.hover_point, self.hover_tooltip)
+
     def paint_gpu_startup(self) -> bool:
         """GPU-only launcher path. No QPainter touches the window framebuffer."""
         if not self.home_visible or self.wallpaper_picker_visible or not self.clickgui_gpu.available or not self.startup_gpu.available:
