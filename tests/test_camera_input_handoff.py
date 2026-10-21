@@ -123,7 +123,7 @@ def inert_backend():
     b._active_video_source = b._normal_video_source = 'udp hevc'
     b._hero_native_override = False; b._native_restart_thread = None
     b._native_restart_generation = 0; b.state = None
-    b.udp = NS(running=True, stop_pending=False, stop_status=VideoStopStatus(),
+    b.udp = NS(running=True, ingress_mode='shark-framed', stop_pending=False, stop_status=VideoStopStatus(),
         request_stop=lambda: None, request_decode_enabled=lambda value: None,
         start=lambda: None, clear_stale_decoded_frame=lambda *args: None)
     b.native_decoder = NS(stop_pending=False, stop_status=VideoStopStatus(), request_stop=lambda: None)

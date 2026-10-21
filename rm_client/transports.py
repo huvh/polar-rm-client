@@ -190,6 +190,23 @@ class FrameAssembler:
             self._remove_frame(frame_id, dropped=True)
 
 
+class AnnexBDatagramStream(FrameAssembler):
+    """Unframed H.264 byte stream from the observed official 2019 VT02 path.
+
+    UDP boundaries are NOT video frames or NAL boundaries. There is no sequence
+    header to detect loss/reordering, and no Shark header to strip. The decoder's
+    incremental Annex-B parser/recovery gate owns stream synchronization.
+    """
+
+    raw_stream = True
+
+    def push_packet(self, packet: bytes) -> bytes | None:
+        if not packet or len(packet) > 65507:
+            self.invalid_count += 1
+            return None
+        return bytes(packet)
+
+
 @dataclass
 class _UDPVideoSession:
     assembler: FrameAssembler = field(default_factory=FrameAssembler)
@@ -198,6 +215,8 @@ class _UDPVideoSession:
     thread: threading.Thread | None = None
     close_lock: threading.Lock = field(default_factory=threading.Lock)
     close_error: str = ""
+    bound_address: tuple[str, int] | None = None
+    sender_address: tuple[str, int] | None = None
 
 
 @dataclass
@@ -215,6 +234,13 @@ class UDPVideoReceiver:
     _receiver_lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
     _session: _UDPVideoSession | None = field(default=None, init=False, repr=False)
     _stop_worker: threading.Thread | None = field(default=None, init=False, repr=False)
+    _bound_address: tuple[str, int] | None = field(default=None, init=False, repr=False)
+    _sender_address: tuple[str, int] | None = field(default=None, init=False, repr=False)
+    _accepted_fragment_at: float = field(default=0.0, init=False, repr=False)
+    _accepted_packets: int = field(default=0, init=False, repr=False)
+    _foreign_packets: int = field(default=0, init=False, repr=False)
+    _stream_blocks_received: int = field(default=0, init=False, repr=False)
+    _stream_bytes_received: int = field(default=0, init=False, repr=False)
 
     def start(self) -> None:
         with self._receiver_lock:
@@ -223,14 +249,20 @@ class UDPVideoReceiver:
                 return
             # Socket, frame-ID epoch and stop signal are never reused by a
             # replacement receive worker, even if an old callback is delayed.
-            session = _UDPVideoSession()
+            session = _UDPVideoSession(assembler=self._create_assembler())
             self._session = session
             self._assembler = session.assembler
+            self.packets_received = self.frames_received = 0
+            self._bound_address = self._sender_address = None
+            self._accepted_fragment_at = 0.0
+            self._accepted_packets = 0
+            self._foreign_packets = 0
+            self._stream_blocks_received = self._stream_bytes_received = 0
             self.running = True
             self.last_error = ""
             try:
                 session.thread = threading.Thread(
-                    target=self._run, args=(session, self.host, self.port, self.on_frame),
+                    target=self._run, args=(session, *self._bind_address(), self.on_frame),
                     name="udp-video", daemon=True,
                 )
                 self._thread = session.thread
@@ -246,8 +278,40 @@ class UDPVideoReceiver:
                     self._session = self._thread = None
                 raise
 
+    def _create_assembler(self) -> FrameAssembler:
+        return FrameAssembler()
+
+    def _bind_address(self) -> tuple[str, int]:
+        return self.host, self.port
+
     def _stop_in_progress_locked(self) -> bool:
         return self._stop_worker is not None and self._stop_worker.is_alive()
+
+    def ingress_stats(self) -> dict[str, object]:
+        """Separate listener/packet evidence from decoded-video readiness.
+
+        Sender identity is an observed UDP endpoint, not authentication or
+        evidence that an official receiver is attached. One endpoint owns each
+        receive session; explicit stop/start is required to admit a replacement.
+        """
+        with self._receiver_lock:
+            session = self._session
+            return {
+                "listening": bool(session is not None and session.bound_address is not None
+                                  and not session.stopped.is_set()),
+                "bound_address": (session.bound_address if session is not None
+                                  and not session.stopped.is_set() else None),
+                "sender_address": self._sender_address,
+                "accepted_fragment_at": self._accepted_fragment_at,
+                "foreign_packets": self._foreign_packets,
+                "accepted_packets": self._accepted_packets,
+                "stream_blocks_received": self._stream_blocks_received,
+                "stream_bytes_received": self._stream_bytes_received,
+                "sender_authenticated": False,
+                "sender_policy": ("first-nonempty-endpoint-until-restart"
+                                  if getattr(self._assembler, "raw_stream", False)
+                                  else "first-valid-endpoint-until-restart"),
+            }
 
     def request_stop(self) -> None:
         """Invalidate the receive epoch and close only its captured owner off-thread."""
@@ -378,18 +442,48 @@ class UDPVideoReceiver:
                 self._socket = sock
             sock.bind((host, port))
             sock.settimeout(0.2)
+            # The configured port may be zero in an isolated diagnostic. Keep
+            # the actual listening endpoint distinct from the requested one.
+            address_getter = getattr(sock, "getsockname", None)
+            bound_address = address_getter() if callable(address_getter) else (host, port)
+            with self._receiver_lock:
+                if self._session is not session or session.stopped.is_set():
+                    return
+                session.bound_address = (str(bound_address[0]), int(bound_address[1]))
+                self._bound_address = session.bound_address
             while not session.stopped.is_set():
                 try:
-                    packet, _addr = sock.recvfrom(65535)
+                    packet, address = sock.recvfrom(65535)
                 except socket.timeout:
                     continue
                 with self._receiver_lock:
                     if self._session is not session or session.stopped.is_set():
                         break
                     self.packets_received += 1
+                    sender = (str(address[0]), int(address[1]))
+                    if session.sender_address is not None and sender != session.sender_address:
+                        # Frame IDs are only meaningful within one sender.
+                        # Combining two hosts' same-ID fragments can manufacture
+                        # a frame neither host sent. Never auto-take over after
+                        # a timeout: reconnect must create a new explicit epoch.
+                        self._foreign_packets += 1
+                        continue
+                    invalid_before = session.assembler.invalid_count
+                    stale_before = session.assembler.stale_packet_count
                     frame = session.assembler.push_packet(packet)
+                    if (session.assembler.invalid_count == invalid_before
+                            and session.assembler.stale_packet_count == stale_before):
+                        if session.sender_address is None:
+                            session.sender_address = sender
+                            self._sender_address = sender
+                        self._accepted_fragment_at = time.perf_counter()
+                        self._accepted_packets += 1
                     if frame is not None:
-                        self.frames_received += 1
+                        if getattr(session.assembler, "raw_stream", False):
+                            self._stream_blocks_received += 1
+                            self._stream_bytes_received += len(frame)
+                        else:
+                            self.frames_received += 1
                 if frame is not None and on_frame is not None and not session.stopped.is_set():
                     on_frame(frame)
         except OSError as exc:

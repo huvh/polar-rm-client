@@ -176,24 +176,9 @@ def _packed(fields: dict[int, list[Any]], field: int) -> list[int]:
 
 
 def _packed_ints(fields: dict[int, list[Any]], field: int) -> list[int]:
-    out: list[int] = []
-    for value in fields.get(field, ()):
-        if isinstance(value, int):
-            out.append(value)
-        else:
-            index = 0
-            while index < len(value):
-                item = _read_varint(bytes(value), index)
-                if item is None:
-                    break
-                number, index = item
-                if number >= 1 << 63:
-                    number -= 1 << 64
-                number &= 0xFFFFFFFF
-                if number >= 1 << 31:
-                    number -= 1 << 32
-                out.append(number)
-    return out
+    # Protobuf permits both packed and unpacked occurrences of repeated int32.
+    # Apply identical low-32-bit sign extension in arrival order to both forms.
+    return [_i({field: [value]}, field) for value in _packed(fields, field)]
 
 
 def _sub(fields: dict[int, list[Any]], field: int) -> list[dict[int, list[Any]]]:

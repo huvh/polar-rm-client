@@ -316,6 +316,8 @@ class Harness:
         self.state: RobotState | None = None
         self.control: KeyboardControlBridge | None = None
         self._saved_serial = sys.modules.get("serial")
+        self._referee_client = None
+        self._next_referee_receipt = 0.0
 
     def __enter__(self) -> "Harness":
         fake = types.ModuleType("serial")
@@ -349,8 +351,35 @@ class Harness:
         else:
             sys.modules.pop("serial", None)
 
+    def connect_inert_referee(self) -> None:
+        """Model a live parallel referee session, without sockets or hardware.
+
+        Sustained-drive diagnostics must not accidentally test the independent
+        two-second disconnected-MQTT input clear. Exercise normal CONNACK and
+        SUBACK admission, then feed phase receipts at the documented 5 Hz.
+        """
+        subscriptions = []
+        def subscribe(topics):
+            subscriptions.extend(topics)
+            return 0, 1
+        client = types.SimpleNamespace(
+            subscribe=subscribe,
+            publish=lambda *a, **kw: types.SimpleNamespace(rc=0),
+            disconnect=lambda: None,
+            loop_stop=lambda: None,
+        )
+        self._referee_client = self.manager.mqtt.client = client
+        self.manager.mqtt._on_connect(client, None, {}, 0)
+        self.manager.mqtt._on_subscribe(
+            client, None, 1, [self.manager.mqtt.referee.max_qos] * len(subscriptions))
+
     # -- 驱动一帧（模拟 UI tick） ------------------------------------
     def frame(self) -> None:
+        now = time.perf_counter()
+        if self._referee_client is not None and now >= self._next_referee_receipt:
+            self._next_referee_receipt = now + 0.2
+            self.manager.mqtt._on_message(self._referee_client, None,
+                types.SimpleNamespace(topic="GameStatus", payload=b"\x28\x04", retain=False))
         self.manager.tick()
         self.manager.apply_updates(self.state)
         self.manager.tick_polar_link(self.state, self.registry, self.control)
@@ -446,8 +475,11 @@ def test_patched_robot() -> None:
 def test_unpatched_robot() -> None:
     print("\n--- 机器人未补底盘消费者（当前 master 真实行为）---")
     with Harness(consumes_chassis=False) as h:
+        h.connect_inert_referee()
         h.frames(10)
         check("链路正常连上", h.state.polar_link_active is True)
+        check("持续驾驶夹具已有独立裁判订阅确认",
+              h.manager.mqtt.connected and h.manager.mqtt.stats()["subscriptions_ready"])
         h.enable_drive()
         h.frames(2)
         press("W", h)
@@ -468,6 +500,7 @@ def test_unpatched_robot() -> None:
 
         # 持续按杆超过 STUCK 阈值后，必须升级成指向固件的具体诊断
         h.frames(24, interval=0.05)
+        check("持续诊断期间裁判阶段仍由新收报文维持", h.manager.safety.is_fighting())
         check("持续不响应升级为 STUCK", h.state.polar_motion_state == "STUCK", h.state.polar_motion_state)
         check(
             "STUCK 原因指向固件底盘消费者",

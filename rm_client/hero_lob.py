@@ -54,11 +54,15 @@ class HeroLobPlanner:
 
         try:
             x, y, z, w = (float(value) for value in quaternion)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             return math.inf
         values = (x, y, z, w)
         if not all(math.isfinite(value) for value in values):
             return math.inf
+        norm = math.hypot(x, y, z, w)
+        if not math.isfinite(norm) or norm <= 0:
+            return math.inf
+        x, y, z, w = (value / norm for value in values)
         sinr_cosp = 2.0 * (w * x + y * z)
         cosr_cosp = 1.0 - 2.0 * (x * x + y * y)
         return math.degrees(math.atan2(sinr_cosp, cosr_cosp))
@@ -176,26 +180,30 @@ class HeroLobPlanner:
         now: float | None = None,
     ) -> LobReadiness:
         now = time.perf_counter() if now is None else float(now)
-        telemetry_at = float(getattr(state, "native_telemetry_at", 0.0) or 0.0)
-        age = max(0.0, now - telemetry_at) if telemetry_at > 0.0 else math.inf
+        try:
+            telemetry_at = float(getattr(state, "native_telemetry_at", 0.0))
+        except (TypeError, ValueError, OverflowError):
+            telemetry_at = math.nan
+        age = (now - telemetry_at if math.isfinite(now) and math.isfinite(telemetry_at)
+               and 0 < telemetry_at <= now else math.inf)
         reasons: list[str] = []
         if str(getattr(state, "robot_profile", "")) != "Hero":
             reasons.append("Hero profile required")
         if not hero_range_profile:
             reasons.append("Hero Range preset required")
         if require_fresh_telemetry:
-            if not bool(getattr(state, "native_gimbal_online", False)):
+            if getattr(state, "native_gimbal_online", False) is not True:
                 reasons.append("gimbal offline")
             if age > max(0.05, float(max_telemetry_age_s)):
                 reasons.append("telemetry stale")
-        if not bool(getattr(state, "hero_lob_yaw_calibrated", False)):
+        if getattr(state, "hero_lob_yaw_calibrated", False) is not True:
             reasons.append("yaw not calibrated")
-        if not bool(getattr(state, "hero_lob_pitch_calibrated", False)):
+        if getattr(state, "hero_lob_pitch_calibrated", False) is not True:
             reasons.append("pitch not calibrated")
-        if not bool(getattr(state, "hero_lob_relocalization_valid", False)):
+        if getattr(state, "hero_lob_relocalization_valid", False) is not True:
             reasons.append("relocalization invalid")
         roll = cls.quaternion_roll_deg(
-            getattr(state, "native_quaternion", (0.0, 0.0, 0.0, 1.0))
+            getattr(state, "native_quaternion", None)
         )
         if not math.isfinite(roll) or abs(roll) > max(0.1, float(max_roll_deg)):
             reasons.append("roll/yaw coupling guard")
@@ -203,9 +211,14 @@ class HeroLobPlanner:
             reasons.append("match stage required")
         if int(getattr(state, "remaining_ammo", 0)) <= 0 and int(getattr(state, "native_bullet_count", 0)) <= 0:
             reasons.append("no projectile")
-        heat = max(0.0, float(getattr(state, "current_heat", 0.0)))
-        heat_max = max(1.0, float(getattr(state, "max_heat", 1.0)))
-        if heat / heat_max >= max(0.05, min(1.0, float(max_heat_ratio))):
+        try:
+            heat = float(getattr(state, "current_heat", None))
+            heat_max = float(getattr(state, "max_heat", None))
+        except (TypeError, ValueError, OverflowError):
+            heat = heat_max = math.nan
+        if (not math.isfinite(heat) or not math.isfinite(heat_max)
+                or heat < 0 or heat_max <= 0
+                or heat / heat_max >= max(0.05, min(1.0, float(max_heat_ratio)))):
             reasons.append("heat guard")
         return LobReadiness(not reasons, tuple(reasons), age)
 

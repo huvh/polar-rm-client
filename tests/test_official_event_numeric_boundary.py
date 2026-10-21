@@ -8,11 +8,11 @@ from pathlib import Path
 import sys
 from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT), str(ROOT / "tests")]
 import test_official_feed_event_identity as fixture
+from test_mqtt_subscription_admission import Client as InertMqttClient
 from rm_client.backend.referee.wire import encode_uint, encode_string, encode_bytes
 
 
@@ -29,9 +29,13 @@ class OfficialEventNumericBoundaryTests(unittest.TestCase):
         self.fixture.setUp()
         self.addCleanup(self.fixture.doCleanups)
         self.w = self.fixture.w
-        identity = patch.object(self.w.mqtt, "client", object())
-        identity.start()
-        self.addCleanup(identity.stop)
+        # Window setup retires transport ingress. Establish a replacement
+        # admitted session before testing actual receive/decode boundaries.
+        client = self.w.mqtt.client = InertMqttClient()
+        self.w.mqtt._on_connect(client, None, {}, 0)
+        self.w.mqtt._on_subscribe(client, None, client.result[1],
+            [self.w.mqtt.referee.max_qos] * len(client.subscriptions[-1]))
+        self.assertTrue(self.w.mqtt.stats()["subscriptions_ready"])
 
     def batch(self, messages):
         self.fixture.reset()

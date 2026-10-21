@@ -246,7 +246,7 @@
       {"name": "Auto Limit", "kind": "bool", "value": false, "min_value": null, "max_value": null, "step": 1.0, "options": [], "unit": "", "description": ""}
     ]},
     {"name": "CameraFeed", "category": "Vision", "keybind": "None", "enabled": true, "description": "使用电脑摄像头作为当前机器人图传。", "bind_capture_hint": "右键模块或使用绑定行", "settings": [
-      {"name": "Source", "kind": "mode", "value": "Webcam", "min_value": null, "max_value": null, "step": 1.0, "options": ["Webcam", "Shark UDP", "UDP HEVC", "Native 0x0310", "Synthetic"], "unit": "", "description": ""},
+      {"name": "Source", "kind": "mode", "value": "Webcam", "min_value": null, "max_value": null, "step": 1.0, "options": ["Webcam", "Shark UDP", "UDP HEVC", "Legacy VT02 UDP", "Legacy Official Bridge", "Native 0x0310", "Synthetic"], "unit": "", "description": ""},
       {"name": "Camera ID", "kind": "number", "value": 0, "min_value": 0, "max_value": 5, "step": 1, "options": [], "unit": "", "description": ""},
       {"name": "Capture Width", "kind": "number", "value": 960, "min_value": 320, "max_value": 1920, "step": 16, "options": [], "unit": "px", "description": ""},
       {"name": "Capture Height", "kind": "number", "value": 540, "min_value": 240, "max_value": 1080, "step": 16, "options": [], "unit": "px", "description": ""},
@@ -416,7 +416,7 @@
     {"name": "UDPVideo", "category": "System", "keybind": "None", "enabled": false, "description": "SharkDataSever UDP HEVC 分片重组接口。", "bind_capture_hint": "右键模块或使用绑定行", "settings": [
       {"name": "Host", "kind": "mode", "value": "127.0.0.1", "min_value": null, "max_value": null, "step": 1.0, "options": ["127.0.0.1", "0.0.0.0", "192.168.12.2"], "unit": "", "description": ""},
       {"name": "Port", "kind": "number", "value": 3334, "min_value": 1000, "max_value": 9999, "step": 1, "options": [], "unit": "", "description": ""},
-      {"name": "Reassemble", "kind": "bool", "value": true, "min_value": null, "max_value": null, "step": 1.0, "options": [], "unit": "", "description": ""}
+      {"name": "Reassemble", "kind": "bool", "value": true, "min_value": null, "max_value": null, "step": 1.0, "options": [], "unit": "", "description": "已弃用兼容项：入口契约由 CameraFeed Source 决定，此开关不改变分片或原始流模式。"}
     ]},
     {"name": "SerialBridge", "category": "System", "keybind": "None", "enabled": false, "description": "RS232/串口桥接 stub，用于后续接入真实机器人。", "bind_capture_hint": "右键模块或使用绑定行", "settings": [
       {"name": "Port", "kind": "mode", "value": "Stub", "min_value": null, "max_value": null, "step": 1.0, "options": ["Stub", "COM1", "COM3", "COM5"], "unit": "", "description": ""},

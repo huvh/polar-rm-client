@@ -369,6 +369,8 @@ print('polar spec OK: %d segments, %d roles, %d warnings'
     Copy-Item -LiteralPath $VendingWallpaperPath -Destination (Join-Path $wallpaperRoot "vending-machine.mp4") -Force
     Copy-Item -LiteralPath (Join-Path $sourceRoot "configs\default.json") -Destination (Join-Path $portable "defaults\default.json") -Force
     Copy-Item -LiteralPath (Join-Path $sourceRoot "configs\dt7_profile.json") -Destination (Join-Path $portable "defaults\dt7_profile.json") -Force
+    # Optional template only: never seed or select it as an existing user profile.
+    Copy-Item -LiteralPath (Join-Path $sourceRoot "configs\official_213_v2_safe.json") -Destination (Join-Path $portable "defaults\official_213_v2_safe.json") -Force
     Get-ChildItem -LiteralPath (Join-Path $sourceRoot "licenses") -Force |
         Copy-Item -Destination (Join-Path $portable "licenses") -Recurse -Force
     & $python (Join-Path $sourceRoot "tools\collect_release_licenses.py") --out (Join-Path $portable "licenses\python")
@@ -449,6 +451,7 @@ print(json.dumps({'default_profile': get_profile().profile_id, 'protocol_version
         "_internal/configs/cc_key_usage.json" = (Get-FileHash (Join-Path $portable "_internal\configs\cc_key_usage.json") -Algorithm SHA256).Hash
         "defaults/default.json" = (Get-FileHash (Join-Path $portable "defaults\default.json") -Algorithm SHA256).Hash
         "defaults/dt7_profile.json" = (Get-FileHash (Join-Path $portable "defaults\dt7_profile.json") -Algorithm SHA256).Hash
+        "defaults/official_213_v2_safe.json" = (Get-FileHash (Join-Path $portable "defaults\official_213_v2_safe.json") -Algorithm SHA256).Hash
         "resources/assets/wallpapers/builtin/texas.mp4" = $expectedTexas
         "resources/assets/wallpapers/builtin/vending-machine.mp4" = $expectedVending
         "licenses/FFMPEG-GPLv3.txt" = (Get-FileHash (Join-Path $portable "licenses\FFMPEG-GPLv3.txt") -Algorithm SHA256).Hash

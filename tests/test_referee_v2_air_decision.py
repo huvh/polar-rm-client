@@ -209,12 +209,12 @@ class V2AirDecisionTests(unittest.TestCase):
         for state in (None, object(), {}, snapshot(profile='rm2026-v1.3.1'), snapshot(profile='unknown')):
             self.assertFalse(rules.request_decision('AirSupportCommand', 1, state, now=NOW)[0])
 
-    def test_sentry_valid_but_unimplemented_commands_have_specific_rejections(self):
+    def test_sentry_requires_own_team_mode_and_target_quote(self):
         for command in (1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
             result = rules.request_decision('SentryCtrlCommand', command, snapshot(), now=NOW)
             self.assertFalse(result[0])
             self.assertIsNone(result[2])
-            self.assertIn('quantity' if command == 1 else 'pending', result[1])
+            self.assertIn('target can_pay' if command == 6 else 'sentry_control', result[1])
         for command in (0, 2, 13):
             self.assertIn('unsupported', rules.request_decision('SentryCtrlCommand', command,
                                                                snapshot(), now=NOW)[1])

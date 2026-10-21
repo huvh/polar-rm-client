@@ -1,15 +1,14 @@
-"""Pure V2.0.0 foundation: 11 uplink encoders, 24 qualified downlink schemas.
+"""Reviewed V2.0.0 wire codec: 11 uplink and 25 downlink schemas.
 
-The declared 25th downlink, RadarInfoToClient, is explicitly unavailable until
-its incomplete official wrapper is resolved. This module does not register or
-activate a profile, apply state, authorize actions, or operate a transport.
+Decoding is not action authorization, peer execution, or device qualification.
+Radar's nested wrapper is recovered from the official 213 descriptor.
 """
 from __future__ import annotations
 
 from typing import Any
 
 from .contract import (
-    FIELDS, PROTOCOL_VERSION,
+    ALIASES, FIELDS, PROTOCOL_VERSION,
     SOURCE_PDF, SOURCE_SHA256, TOPICS, UNAVAILABLE_MESSAGES,
 )
 from ..rm2026 import codec as _v1
@@ -21,8 +20,7 @@ DOWNLINK_MESSAGES = frozenset(name for name, spec in TOPICS.items() if spec[0] =
 ALL_MESSAGES = UPLINK_MESSAGES | DOWNLINK_MESSAGES
 DECODABLE_MESSAGES = DOWNLINK_MESSAGES - UNAVAILABLE_MESSAGES
 
-# Only flat, verified scalar contracts are enabled. The ambiguous nested Radar
-# wrapper is absent from FIELDS, rather than decoded as an empty success.
+# Scalar readers are shared by bounded recursive descriptor-driven decoding.
 _SCALAR_READERS = {
     "uint32": _u, "uint64": _u, "int32": _i, "float": _f,
     "bool": _bool, "bytes": _b, "string": _s,
@@ -57,17 +55,23 @@ def decode_message(name: str, payload: bytes) -> dict[str, Any]:
         return {}
     if name == "CustomByteBlock" and len(_b(fields, 1)) > 300:
         return {}
+    return _decode_fields(name, fields)
+
+
+def _decode_fields(name: str, fields: dict) -> dict[str, Any]:
     data = {}
     for number, (field_name, kind, repeated) in FIELDS[name].items():
-        if repeated:
+        key = ALIASES.get((name, field_name), field_name)
+        if kind in FIELDS:
+            nested = [_decode_fields(kind, decode_fields(value))
+                      for value in fields.get(number, ()) if isinstance(value, bytes)]
+            data[key] = nested if repeated else (nested[-1] if nested else {})
+        elif repeated:
             values = _packed(fields, number)
-            # Both packed and unpacked int32 forms need 32-bit sign extension.
-            data[field_name] = [
-                _i({number: [value]}, number) if kind == "int32" else value
-                for value in values
-            ]
+            data[key] = [_i({number: [value]}, number) if kind == "int32" else value
+                         for value in values]
         else:
-            data[field_name] = _SCALAR_READERS[kind](fields, number)
+            data[key] = _SCALAR_READERS[kind](fields, number)
     data["__present__"] = frozenset(fields)
     return data
 

@@ -63,7 +63,7 @@ class RefereeV2CodecTests(unittest.TestCase):
         self.assertEqual(contract.TOPICS, expected)
         self.assertEqual(len(codec.UPLINK_MESSAGES), 11)
         self.assertEqual(len(codec.DOWNLINK_MESSAGES), 25)
-        self.assertEqual(len(codec.DECODABLE_MESSAGES), 24)
+        self.assertEqual(len(codec.DECODABLE_MESSAGES), 25)
         self.assertEqual(codec.UPLINK_MESSAGES & codec.DOWNLINK_MESSAGES, frozenset())
         self.assertEqual(codec.ALL_MESSAGES, frozenset(expected))
         self.assertEqual(contract.MAX_QOS, 1)
@@ -77,8 +77,9 @@ class RefereeV2CodecTests(unittest.TestCase):
                 field["cardinality"] == "repeated") for field in row["fields"]}
             for row in FIXTURE["topics"] if row["disposition"] in {"encoded", "decoded"}
         }
-        self.assertEqual(contract.FIELDS, expected)
-        self.assertEqual(contract.ALIASES, {})
+        self.assertEqual({key: value for key, value in contract.FIELDS.items()
+                          if key not in {"RadarInfoToClient", "RadarSingleRobotInfo"}}, expected)
+        self.assertEqual(contract.ALIASES, {("RadarInfoToClient", "robot_info"): "robots"})
         self.assertTrue(all(kind in {"uint32", "uint64", "int32", "float", "bool", "bytes", "string"}
                             for fields in expected.values() for _, kind, _ in fields.values()))
 
@@ -144,15 +145,23 @@ class RefereeV2CodecTests(unittest.TestCase):
         status = codec.decode_message("AirSupportStatusSync", b"\x28\x02")
         self.assertEqual((status["shooter_status"], status["__present__"]), (2, frozenset({5})))
 
-    def test_radar_is_declared_unavailable_and_never_empty_success(self):
-        self.assertEqual(contract.UNAVAILABLE_MESSAGES, frozenset({"RadarInfoToClient"}))
-        self.assertNotIn("RadarInfoToClient", contract.FIELDS)
-        self.assertNotIn("RadarInfoToClient", codec.DECODABLE_MESSAGES)
-        self.assertEqual(codec.topic_message_name("RadarInfoToClient"), "RadarInfoToClient")
-        for raw in (b"", b"\x0a\x02\x08\x01", b"\x08\x01", b"\x0a\x00"):
-            with self.subTest(raw=raw):
-                self.assertEqual(codec.decode_message("RadarInfoToClient", raw), {})
-        self.assertEqual(v1.decode_message("RadarInfoToClient", b"\x0a\x02\x08\x01")["robots"][0]["target_pos_x"], 1)
+    def test_radar_descriptor_wrapper_and_explicit_zero_presence(self):
+        self.assertEqual(contract.UNAVAILABLE_MESSAGES, frozenset())
+        self.assertEqual(contract.FIELDS["RadarInfoToClient"],
+                         {1: ("robot_info", "RadarSingleRobotInfo", True)})
+        # Synthetic bytes from official213's recovered descriptor, not a capture.
+        data = codec.decode_message("RadarInfoToClient", bytes.fromhex(
+            "0a07086410c80118020a06080010001800"))
+        self.assertEqual(data["robots"], [
+            {"target_pos_x": 100, "target_pos_y": 200, "is_high_light": 2,
+             "__present__": frozenset({1, 2, 3})},
+            {"target_pos_x": 0, "target_pos_y": 0, "is_high_light": 0,
+             "__present__": frozenset({1, 2, 3})}])
+        self.assertEqual(data["__present__"], frozenset({1}))
+        for raw in (b"", b"\x08\x01", b"\x0a\x02\x08", b"\x0a\x02\x0a\x00"):
+            self.assertEqual(codec.decode_message("RadarInfoToClient", raw), {})
+        self.assertEqual(codec.decode_message("RadarInfoToClient", b"\x0a\x00")
+                         ["robots"][0]["__present__"], frozenset())
 
     def test_repeated_signed_int32_accepts_packed_unpacked_and_mixed(self):
         for name, number, field in (("GlobalUnitStatus", 12, "robot_bullets"),

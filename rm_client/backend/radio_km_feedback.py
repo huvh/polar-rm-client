@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from typing import Any
 
 from ..control import describe_km_policy
@@ -53,7 +54,7 @@ def evaluate_radio_km_feedback(readback: RadioKmReadback, *, requested: bool,
     policy = policy if policy is not None else decode_radio_km_policy(readback.policy)
     received = _read_counter(readback.received)
     key = _read_counter(readback.key)
-    if key is None or not (readback.key_at > 0 and 0 <= now - readback.key_at <= 0.75):
+    if key is None or key > 0xFFFF or not (readback.key_at > 0 and 0 <= now - readback.key_at <= 0.75):
         key = -1
     growing = received is not None and previous_received is not None and received > previous_received
     state, note = _link_observation(requested=requested, authorized=authorized,
@@ -66,8 +67,11 @@ def evaluate_radio_km_feedback(readback: RadioKmReadback, *, requested: bool,
 
 def _read_counter(value: Any) -> int | None:
     try:
-        return int(float(value)) if value is not None else None
-    except (TypeError, ValueError):
+        number = float(value) if value is not None else float("nan")
+        # Firmware uint32 counters are transported as float32; max rounds to 2**32.
+        # Preserve established finite fractional truncation, not NaN/Inf authority.
+        return int(number) if math.isfinite(number) and 0 <= number <= 2**32 else None
+    except (TypeError, ValueError, OverflowError):
         return None
 
 

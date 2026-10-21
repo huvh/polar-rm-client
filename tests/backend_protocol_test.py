@@ -238,7 +238,7 @@ def test_safety_modes() -> None:
 
     safety = OfficialSafety("OfficialEvent")
     safety.from_scenario(official)
-    safety.update_stage("4")
+    safety.update_stage("4", now=20.0)
     safety.arm_match({"core_kmc"})
     ok, _ = safety.can_publish("KeyboardMouseControl", now=20.0, intent="core_kmc")
     check("armed core KMC allowed", ok is True)
@@ -309,7 +309,9 @@ def test_decoded_video_timestamp_and_source_selection() -> None:
 
         request_stop = stop
 
-    now = time.perf_counter()
+    # Both ordered decode timestamps must already be in the past; future
+    # timestamps are not evidence of a fresh decoded image.
+    now = time.perf_counter() - 0.01
     mjpeg = object()
     h265 = object()
     backend = RmVideoBackend()
@@ -498,6 +500,7 @@ def test_serial_backend() -> None:
 def test_manager_updates_state() -> None:
     print("[manager] apply_updates -> RobotState")
     state = RobotState()
+    mock_rune_progress = state.energy_rune_progress
     manager = BackendManager(state=state, client_id="3", scenario_key="LabDebug")
     # 直接喂解码队列（不依赖真实 MQTT）
     from collections import deque
@@ -518,7 +521,7 @@ def test_manager_updates_state() -> None:
         "robot_id": 103, "x": 12.0, "y": 7.0, "yaw": 90.0,
     }, time.perf_counter()))
     manager.mqtt._decoded.append(("RuneStatusSync", "RuneStatusSync", {
-        "rune_status": 3, "activated_arms": 4, "average_rings": 2.5,
+        "rune_status": 2, "activated_arms": 4, "average_rings": 2.5,  # Mean rings applies while activating.
     }, time.perf_counter()))
     manager.mqtt._decoded.append(("PenaltyInfo", "PenaltyInfo", {
         "penalty_type": 1, "penalty_effect_sec": 30, "total_penalty_num": 1,
@@ -536,8 +539,9 @@ def test_manager_updates_state() -> None:
     )
     check("state module_status", state.robot_module_status.get("power_manager") == 1)
     check("state positions", state.robot_positions[0]["robot_id"] == 103)
-    check("state rune phase", state.energy_rune_phase == "ACTIVE")
-    check("state rune progress", state.energy_rune_progress == 250)
+    check("state rune phase", state.energy_rune_phase == "ACTIVATING")
+    check("state rune average remains rings", state.rune_status["average_rings"] == 2.5)
+    check("official rings do not alter mock progress", state.energy_rune_progress == mock_rune_progress)
     check("state active_penalty", state.active_penalty["penalty_type"] == 1)
 
     # RobotStaticStatus can arrive after GlobalUnitStatus.  The retained
@@ -776,6 +780,7 @@ def test_mqtt_publish_rc() -> None:
     backend = RmMqttBackend(host="127.0.0.1", port=3333, client_id="3",
                             mock_output=False, safety=s)
     backend.connected = True
+    backend._subscriptions_ready = True  # Current accepted-session publication fixture.
 
     class _InfoErr:
         rc = 4  # MQTT_ERR_NO_CONN

@@ -63,7 +63,7 @@ def get_profile_definition(profile_id: str = DEFAULT_PROFILE) -> RefereeProfileD
         if str(profile_id).lower() in {"rm2026-v2", "rm2026-v2.0", "rm2026-v2.0.0"}:
             raise UnsupportedRefereeProfile(
                 "Unsupported V2 alias; select exactly rm2026-v2.0.0 for the "
-                "partial telemetry and supervised Air profile. No automatic fallback."
+                "reviewed V2 profile with per-action safety gates. No automatic fallback."
             ) from exc
         raise UnsupportedRefereeProfile(
             f"Unsupported referee profile {profile_id!r}; no automatic fallback"

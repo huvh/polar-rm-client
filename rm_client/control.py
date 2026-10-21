@@ -169,7 +169,7 @@ def describe_km_policy(pol) -> tuple:
     """
     try:
         value = int(pol) if pol is not None else -1
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         value = -1
     table = {0: ("none", False, "两路键鼠都被屏蔽（连驾驶员键位也屏蔽）"),
              1: ("rc", False, "图传键鼠不参与：要用 0x0311 就跑 --km rc_vt / vt / vt_rc"),

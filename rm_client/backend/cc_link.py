@@ -69,9 +69,17 @@ CMD_ID_SIZE = 2
 KEYMOUSE_PAYLOAD_SIZE = 8
 MAX_DATA_LENGTH = 128 - HEADER_SIZE - CRC16_SIZE - CMD_ID_SIZE   # protocol.h:8
 
-# --- "通用键值"：文档只写"使用通用键值"，没给表；这里按 USB HID Usage Table
-#     (Usage Page 0x07) 填，并**必须在现场用 0x0306 一个键一个键验一遍**再用。
-#     选手端还有一句"仅响应选手端开放的按键"，所以能生效的键是白名单。 ---
+# Official client 12.0.0.213 consumes these bytes as Win32 virtual keys.
+# CCSPortThread.SendToClient RVA0x280cc0 passes them directly to Keybd_event;
+# ctor RVA0x281340 whitelists W=0x57, A/S/D=0x41/0x53/0x44, Shift=0x10.
+VIRTUAL_KEY: dict[str, int] = {
+    "NONE": 0, **{chr(code): code for code in range(ord("A"), ord("Z") + 1)},
+    "TAB": 0x09, "ESC": 0x1B, "SHIFT": 0x10, "CTRL": 0x11,
+    "1": 0x31, "2": 0x32, "3": 0x33, "F12": 0x7B, "GRAVE": 0xC0,
+}
+
+# Historical project-private HID values, retained ONLY for explicit legacy use.
+# Do not alias this to VK: existing custom consumers may intentionally use HID.
 HID_USAGE: dict[str, int] = {
     "NONE": 0x00,
     "A": 0x04, "B": 0x05, "C": 0x06, "D": 0x07, "E": 0x08, "F": 0x09, "G": 0x0A,
@@ -82,14 +90,14 @@ HID_USAGE: dict[str, int] = {
     "SPACE": 0x2C, "ENTER": 0x28, "TAB": 0x2B, "ESC": 0x29,
 }
 
-#: 现场可改的键值表（**不用改代码**）：文档只写"使用通用键值"没附表，
-#: 真值要靠 `cc_probe.py --sweep` 逐键试出来，改 configs/cc_key_usage.json 即可。
+#: Optional raw numeric overrides. No automatic reinterpretation of private maps.
+#: Use _key_encoding="usb_hid_legacy" to explicitly retain historical HID defaults.
 KEY_USAGE_FILE = Path(__file__).resolve().parents[2] / "configs" / "cc_key_usage.json"
 
 
 def load_key_usage(path: str | None = None) -> dict[str, int]:
-    """读键值表；文件不存在或坏值就退回内置 HID 默认，**绝不因为配置坏而发不出键**。"""
-    table = dict(HID_USAGE)
+    """Load verified VK defaults, or explicit legacy HID; preserve raw overrides."""
+    table = dict(VIRTUAL_KEY)
     fp = Path(path) if path else KEY_USAGE_FILE
     try:
         raw = json.loads(fp.read_text(encoding="utf-8-sig"))
@@ -99,6 +107,11 @@ def load_key_usage(path: str | None = None) -> dict[str, int]:
         return table
     if not isinstance(raw, dict):
         return table
+    encoding = raw.get("_key_encoding", "win32_vk")
+    if encoding == "usb_hid_legacy":
+        table = dict(HID_USAGE)
+    elif encoding != "win32_vk":
+        raise ValueError(f"Unknown CC key encoding: {encoding!r}")
     for k, v in raw.items():
         key = str(k).upper()
         if key.startswith("_") or isinstance(v, bool) or not isinstance(v, int) or not 0 <= v <= 0xFF:
@@ -330,8 +343,8 @@ class CustomControllerLink:
         """
         now = self.time_fn() if now is None else float(now)
         data = bytes(data)
-        if len(data) > 30:
-            return False, f"0x0302 载荷最多 30 字节，实际 {len(data)}"
+        if len(data) != 30:
+            return False, f"0x0302 载荷必须恰好 30 字节，实际 {len(data)}"
         return self._send(CC_CMD_ROBOT_INTERACT, data, now)
 
     def release_all(self, now: float | None = None) -> tuple[bool, str]:
@@ -522,8 +535,8 @@ class AsyncCustomControllerLink:
 
     def send_robot_interact(self, data, now=None):
         data = bytes(data)
-        if len(data) > 30:
-            return False, f"0x0302 载荷最多 30 字节，实际 {len(data)}"
+        if len(data) != 30:
+            return False, f"0x0302 载荷必须恰好 30 字节，实际 {len(data)}"
         return self._queue(CC_CMD_ROBOT_INTERACT, data)
 
     def _request_release(self):

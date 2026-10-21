@@ -1099,6 +1099,10 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
     def readiness_video_source(self) -> str:
         source = self.setting_mode(self.registry.get("CameraFeed"), "Source", "")
         normalized = source.strip().lower()
+        if normalized == "legacy official bridge":
+            return "legacy_official_bridge"
+        if normalized == "legacy vt02 udp":
+            return "legacy_vt02_udp"
         if normalized in {"native", "native 0x0310", "0x0310"}:
             return "native_0310"
         if normalized in {"shark udp", "udp hevc", "hevc", "h265"}:

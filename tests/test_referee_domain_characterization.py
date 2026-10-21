@@ -250,11 +250,33 @@ class RefereeDomainCharacterizationTests(unittest.TestCase):
             "b432c021b5fb337838ec61ef15f9b27236dca43823a88040b21470c1c115c957")
         expected["Rm2026StateAdapter"] = (
             "bcb3bcc629ca2414a91bedb052b72af4cecd26b42a58fb8490009c065043b704")
+        # Receipt freshness removes the single stage-authority write from
+        # delayed HUD projection. Retain the historical fixture and accept
+        # only this complete AST; test_stage_freshness covers the new boundary.
+        self.assertEqual(expected["Rm2026StateAdapter"],
+            "bcb3bcc629ca2414a91bedb052b72af4cecd26b42a58fb8490009c065043b704")
+        expected["Rm2026StateAdapter"] = (
+            "024701d823664c90197b5c05ec98f771cabb6d41bd0279fecff6b275acddfe76")
         # Explicit opt-in V2 runtime branches; historical fixture remains pinned.
         self.assertEqual(expected['EconomyCommandBridge'], '7b35cb977c1e24746a7fcebf75acf311030ef1f6e27fbedc24205956bde0b733')
         expected['EconomyCommandBridge'] = 'dd830c44d074c70fbc536343b3df08ccefdb28019cf2bdef5ac484c1b7e6b46a'
+        # 2026-10-21 explicit correction: retain the state owner and match/robot
+        # context before accepting telemetry or mutating mock state. A changed
+        # context terminates local tracking, never claims server cancellation.
+        # V2 legacy-offer refusal now points to its independent confirmation UI.
+        # New test_backend_feature_consumers proves these deltas against the
+        # pinned old source; preserve every historical fixture assertion.
+        self.assertEqual(expected['EconomyCommandBridge'], 'dd830c44d074c70fbc536343b3df08ccefdb28019cf2bdef5ac484c1b7e6b46a')
+        expected['EconomyCommandBridge'] = 'c98145e8bf23cad305fa2bfe6cc40971fa8e6684da534827ef922f4917541190'
         self.assertEqual(expected['RefereeProfile'], '5871581885bd8b42c3d5f2aac64ea03f67c6f5e7c58665e4da7cddff426428ae')
         expected['RefereeProfile'] = 'a5f768e2953025d487c973df1b8c156a6b62edd5fc0d77223e6ba11d3ecc24f4'
+        # Official213/V2 review: all structural uplink topics dispatch through
+        # per-request guards; presence/units no longer conflate zero or rings.
+        # New domain/admission/projection tests cover each semantic change.
+        self.assertEqual(expected['RefereeProfile'], 'a5f768e2953025d487c973df1b8c156a6b62edd5fc0d77223e6ba11d3ecc24f4')
+        expected['RefereeProfile'] = '2c13d71c17a4ed255eda55ce2b89caebe9520eaecbfda5dc99acaef82e50d2c1'
+        self.assertEqual(expected['Rm2026StateAdapter'], '024701d823664c90197b5c05ec98f771cabb6d41bd0279fecff6b275acddfe76')
+        expected['Rm2026StateAdapter'] = 'b0d76f91cbf986b6bad7f6e464fd4a93afdecdfc39de0b32d2f5abdc8c2b92a8'
         self.assertEqual(ast_contracts(), expected)
 
     def test_profiles_transport_policy_validation_and_factory_identity(self):
@@ -269,7 +291,7 @@ class RefereeDomainCharacterizationTests(unittest.TestCase):
             old = expected["rejected"][repr(alias)]
             self.assertIn("recognized but NOT supported", old["message"])
             old["message"] = ("Unsupported V2 alias; select exactly rm2026-v2.0.0 for the "
-                              "partial telemetry and supervised Air profile. No automatic fallback.")
+                              "reviewed V2 profile with per-action safety gates. No automatic fallback.")
         self.assertEqual(canonical(actual), canonical(expected))
 
     def test_every_offer_field_and_failure(self):

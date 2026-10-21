@@ -17,6 +17,7 @@ class V2WireObservations(unittest.TestCase):
         backend.referee = replace(backend.referee, profile_id='test-unregistered-v2',
                                   protocol_version='2.0.0', codec=codec)
         backend.client = object()
+        backend.connected = backend._subscriptions_ready = True
         return backend
 
     def receive(self, backend, topic, fields, at=100.0):
@@ -72,6 +73,7 @@ class V2WireObservations(unittest.TestCase):
             if not v1:
                 backend.referee = replace(backend.referee, protocol_version='1.3.1')
             backend.client = object()
+            backend.connected = backend._subscriptions_ready = True
             self.receive(backend, 'AirSupportStatusSync', [(1, 0)])
             self.assertIsNone(backend.v2_wire_snapshot())
             self.assertEqual(len(backend.drain_decoded()), 1)
@@ -82,6 +84,7 @@ class V2WireObservations(unittest.TestCase):
                 raise AssertionError('legacy receipt must not convert ClientId')
         backend = RmMqttBackend()
         backend.client = object()
+        backend.connected = backend._subscriptions_ready = True
         backend.client_id = UnusedClientId()
         backend._on_message(backend.client, None, SimpleNamespace(topic='AirSupportStatusSync', payload=b'\x08\x00'))
         self.assertEqual(len(backend.drain_decoded()), 1)

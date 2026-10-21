@@ -67,6 +67,8 @@ from ...paint import draw_bar, rounded_rect, text_width, with_alpha
 # 注意：text_metrics 与本模块同属 ui/polar 子包（阶段 1 迁入），故为单级 ..
 from ..text_metrics import painter_device_scale
 from ...theme import color
+from ...rune_display import rune_display
+from ...hud_locale import hud_text
 from ...jello_locale import chinese_enabled
 from ...hud_locale import hud_template, HudDisplayText
 from ...vision_wire_gpu import VisionWireBatch, armor_corner_segments
@@ -772,12 +774,13 @@ class EspWireframeMixin:
             inner = QPointF(center.x() + math.cos(rad) * (radius - sweep), center.y() + math.sin(rad) * (radius - sweep))
             p.drawLine(inner, outer)
         p.setPen(QPen(self.hud_warning() if self.state.energy_rune_rotation == "CCW" else self.hud_accent(), 2.4))
-        progress = self.state.energy_rune_progress / 100.0 if target.kind == "energy" else target.confidence
-        marker_angle = progress * math.tau - math.pi / 2.0
-        marker = QPointF(center.x() + math.cos(marker_angle) * radius, center.y() + math.sin(marker_angle) * radius)
-        p.drawEllipse(marker, 4.0, 4.0)
+        progress = rune_display(self.state).progress if target.kind == "energy" else target.confidence
+        if progress is not None:
+            marker_angle = progress * math.tau - math.pi / 2.0
+            marker = QPointF(center.x() + math.cos(marker_angle) * radius, center.y() + math.sin(marker_angle) * radius)
+            p.drawEllipse(marker, 4.0, 4.0)
         show_progress = self.setting_bool(module, "Show Progress", True)
-        if show_progress and target.kind == "energy":
+        if show_progress and target.kind == "energy" and progress is not None:
             bar = QRectF(rect.left(), rect.bottom() + 8, rect.width(), 5)
             draw_bar(p, bar, progress, self.hud_accent(), color("#ffffff", 0.18), 2.5)
         self.draw_pill(p, QPointF(rect.left(), rect.top() - 27), self.target_overlay_label(target), main)
@@ -785,7 +788,7 @@ class EspWireframeMixin:
 
     def target_overlay_label(self, target: VisionTarget) -> str:
         if target.kind == "energy":
-            return f"{target.label}  {target.confidence:.0%}  {self.state.energy_target_distance_m:.1f}m  {self.state.energy_rune_progress}%"
+            return f"{target.label}  {target.confidence:.0%}  {self.state.energy_target_distance_m:.1f}m  {hud_text(rune_display(self.state).value, chinese_enabled(self.registry))}"
         return f"{target.label}  {target.confidence:.0%}  {self.state.target_distance_m:.1f}m"
 
     def armor_esp_points(self, points: tuple[tuple[float, float], ...], result: VisionResult, width: int, height: int) -> list[QPointF]:
@@ -1626,7 +1629,9 @@ def _heli_gimbal_lock_draw(host, p: QPainter, rect: QRectF, target: VisionTarget
     confidence = max(0.0, min(1.0, float(target.confidence)))
     sweep_deg = (now * (60.0 + 240.0 * confidence)) % 360.0
     if target.kind == "energy":
-        sweep_deg = (sweep_deg + float(getattr(host.state, "energy_rune_progress", 0)) * 3.6) % 360.0
+        progress = rune_display(host.state).progress
+        if progress is not None:
+            sweep_deg = (sweep_deg + progress * 360.0) % 360.0
     sweep_radius = radius * 1.45
     scan = QConicalGradient(center, -sweep_deg)
     scan_head = QColor(main)

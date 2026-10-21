@@ -20,12 +20,15 @@ from .referee.wire import decode_fields, _u
 from .referee.rm2026_v2 import codec as v2_codec
 from .referee.rm2026_v2.economy_rules import request_decision
 from .referee.rm2026_v2.observations import WireSnapshot, observe
-from .safety import OfficialSafety
+from .referee.rm2026_v2.uplink_validation import validate_uplink, is_sentry_map
+from .safety import OfficialSafety, ControlState, CONTROL_TOPICS
 from .mqtt_cleanup import MqttClientResources
 
 
 class RmMqttBackend(OfficialMqttBridge):
     """SharkClient 风格 MQTT 后端，兼容本地 OfficialMqttBridge 全部接口。"""
+
+    SUBACK_TIMEOUT_S = 5.0  # Local admission policy, not a vendor protocol limit.
 
     def __init__(
         self,
@@ -51,6 +54,8 @@ class RmMqttBackend(OfficialMqttBridge):
         self._decoded_lock = threading.Lock()
         self._v2_wire_snapshot: WireSnapshot | None = None
         self._v2_wire_context: tuple[Any, Any, str] | None = None
+        self._economy_state_owner: Any = None
+        self._economy_qualification_owner: Any = None
         self._started = False
         self._on_connect_hook: Callable[[], None] | None = None
         self.event_hook: Callable[[str, dict[str, Any]], None] | None = None
@@ -59,6 +64,14 @@ class RmMqttBackend(OfficialMqttBridge):
         self.invalid_messages = 0
         self.ignored_topics = 0
         self.queue_overflows = 0
+        self.retained_messages_ignored = 0
+        # CONNACK proves the broker connection, not acceptance of downlinks.
+        # Keep SUBACK evidence attached to its exact client/request epoch.
+        self._subscription_request: tuple[Any, int, int, int] | None = None
+        self._subscriptions_ready = False
+        self._subscription_error = ""
+        self._subscription_started_at = 0.0
+        self._receive_blocked = False
         self._reconnect_required = False
         self._next_reconnect_at = 0.0
         self._reconnect_backoff_s = 0.5
@@ -74,6 +87,12 @@ class RmMqttBackend(OfficialMqttBridge):
         self._cleanup_error = ""
         self._pending_input_clear: str | None = None
         self._owner_thread = threading.get_ident()
+
+    @property
+    def subscriptions_ready(self) -> bool:
+        """Current session has a complete successful downlink SUBACK."""
+        with self._lifecycle_lock:
+            return bool(self.client is not None and self.connected and self._subscriptions_ready)
 
     # ------------------------------------------------------------------
     # 生命周期
@@ -121,6 +140,7 @@ class RmMqttBackend(OfficialMqttBridge):
             self.client.on_disconnect = self._on_disconnect
             self.client.on_connect_fail = self._on_connect_fail
             self.client.on_message = self._on_message
+            self.client.on_subscribe = self._on_subscribe
             self.client.reconnect_delay_set(min_delay=1, max_delay=30)
             self.client.connect_async(self.host, self.port, keepalive=30)
             self._started = True
@@ -177,6 +197,9 @@ class RmMqttBackend(OfficialMqttBridge):
         self._reconnect_required = False
         self._zero_after_reconnect = False
         self.connected = False
+        self._subscription_request = None
+        self._subscriptions_ready = False
+        self._receive_blocked = True
         # Transfer ownership before fallible epoch/safety notification work.
         # A preparation error must never detach a client without scheduling
         # its cleanup or retaining it for an explicit retry.
@@ -269,8 +292,23 @@ class RmMqttBackend(OfficialMqttBridge):
         clean_session=True. A fresh Client discards that motion queue instead.
         Deliberate stop/profile failures never schedule an automatic restart.
         """
+        # Serialize expiry with receipt evidence; never call UI observers
+        # while holding lifecycle/decoded locks or from the Paho callback.
+        with self._lifecycle_lock:
+            with self._decoded_lock:
+                if self.safety.expire_stage(now=time.perf_counter(), notify=False):
+                    self._pending_input_clear = self.safety.last_reason
         # Observer delivery cannot wait for reconnect backoff to expire.
         self._flush_input_clear()
+        with self._lifecycle_lock:
+            request = self._subscription_request
+            expired = request if (request is not None
+                and time.perf_counter() - self._subscription_started_at >= self.SUBACK_TIMEOUT_S) else None
+        if expired is not None:
+            self._subscription_failed(expired[0], expired[1],
+                f"MQTT SUBACK timeout after {self.SUBACK_TIMEOUT_S:g} seconds",
+                expected_request=expired)
+            return
         with self._lifecycle_lock:
             if not self._reconnect_required or time.perf_counter() < self._next_reconnect_at:
                 return
@@ -288,6 +326,34 @@ class RmMqttBackend(OfficialMqttBridge):
             self._v2_wire_context = None
         with self._received_lock:
             self._received_messages.clear()
+
+    def bind_economy_context(self, state: Any, qualification: Any) -> None:
+        """Bind live owners, never a cached/default competition-mode string."""
+        with self._lifecycle_lock:
+            if (state is self._economy_state_owner
+                    and qualification is self._economy_qualification_owner):
+                return
+            self._economy_state_owner = state
+            self._economy_qualification_owner = qualification
+            self.clear_received_epoch()
+
+    def _economy_scope_locked(self) -> tuple:
+        state, qualification = self._economy_state_owner, self._economy_qualification_owner
+        session = getattr(qualification, "session", None)
+        state_mode = getattr(state, "match_mode", None)
+        session_mode = getattr(session, "match_mode", None)
+        if state is None or session is None or state_mode != "RMUC7v7" or session_mode != "RMUC7v7":
+            raise InvalidRefereePayload("V2 economic rules require explicit current RMUC7v7 state and qualification session")
+        if (getattr(session, "referee_profile", None) != self.referee.profile_id
+                or str(getattr(session, "robot_id", "")) != str(self.client_id)):
+            raise InvalidRefereePayload("economic qualification session profile/robot does not match MQTT")
+        return state, qualification, session, state_mode, session_mode
+
+    def _check_economy_scope_locked(self, expected: tuple) -> None:
+        current = self._economy_scope_locked()
+        if (any(a is not b for a, b in zip(current[:3], expected[:3]))
+                or current[3:] != expected[3:]):
+            raise InvalidRefereePayload("economic context/session changed after confirmation")
 
     def v2_wire_snapshot(self) -> WireSnapshot | None:
         """Return immutable receipt evidence, never projected state/permission.
@@ -374,6 +440,9 @@ class RmMqttBackend(OfficialMqttBridge):
             if client is not self.client:
                 return
             self.connected = ok
+            self._receive_blocked = not ok
+            self._subscription_request = None
+            self._subscriptions_ready = False
             if ok:
                 self.connected_at = time.time()
                 self.disconnected_at = 0.0
@@ -387,10 +456,25 @@ class RmMqttBackend(OfficialMqttBridge):
         self._emit_event("mqtt_connect", host=self.host, port=self.port)
         downlinks = (v2_codec.DECODABLE_MESSAGES if profile.codec is v2_codec
                      else profile.codec.DOWNLINK_MESSAGES)
-        client.subscribe([(name, profile.max_qos) for name in sorted(downlinks)])
         with self._lifecycle_lock:
             if client is not self.client or generation != self._lifecycle_generation:
                 return
+        try:
+            result = client.subscribe([(name, profile.max_qos) for name in sorted(downlinks)])
+            if (not isinstance(result, tuple) or len(result) != 2
+                    or result[0] != 0 or type(result[1]) is not int
+                    or not 1 <= result[1] <= 65535):
+                raise RuntimeError(f"subscribe request not queued (result={result!r})")
+        except Exception as exc:
+            self._subscription_failed(client, generation,
+                f"MQTT subscription failed: {type(exc).__name__}: {exc}")
+            return
+        with self._lifecycle_lock:
+            if client is not self.client or generation != self._lifecycle_generation:
+                return
+            self._subscription_request = (client, generation, result[1], len(downlinks))
+            self._subscription_started_at = time.perf_counter()
+            self._subscription_error = ""
             zero = self._zero_after_reconnect and not self.referee.read_only
             if zero:
                 self._zero_after_reconnect = False
@@ -403,6 +487,44 @@ class RmMqttBackend(OfficialMqttBridge):
             except Exception:
                 pass
 
+    def _subscription_failed(self, client: Any, generation: int, reason: str, *,
+                             expected_request: tuple | None = None) -> None:
+        with self._lifecycle_lock:
+            if (client is not self.client or generation != self._lifecycle_generation
+                    or (expected_request is not None and self._subscription_request is not expected_request)):
+                return
+            self.connected = False
+            self._receive_blocked = True
+            self._subscription_request = None
+            self._subscriptions_ready = False
+            self._subscription_error = self.last_error = reason
+        # Reuse the existing asynchronous reconnect and owner-only input-clear
+        # path. A Paho callback must never synchronously stop its own loop.
+        self._schedule_reconnect(reason, client=client)
+
+    def _on_subscribe(self, client, _userdata, mid, reason_codes, _properties=None) -> None:
+        """Accept only a complete successful SUBACK for our current request."""
+        with self._lifecycle_lock:
+            request = self._subscription_request
+            if (request is None or client is not self.client or request[0] is not client
+                    or request[1] != self._lifecycle_generation or request[2] != mid):
+                return
+            generation, count = request[1], request[3]
+            try:
+                grants = tuple(getattr(code, "value", code) for code in reason_codes)
+                accepted = (len(grants) == count and all(
+                    type(code) is int and 0 <= code <= self.referee.max_qos for code in grants))
+            except (TypeError, ValueError):
+                grants, accepted = (), False
+            if accepted:
+                self._subscription_request = None
+                self._subscriptions_ready = True
+                self._subscription_error = ""
+                return
+        self._subscription_failed(client, generation,
+            f"MQTT SUBACK rejected or incomplete: expected {count} grants, got {grants!r}",
+            expected_request=request)
+
     def _on_connect_fail(self, client, _userdata) -> None:
         self._schedule_reconnect("connect failed", client=client)
 
@@ -411,6 +533,9 @@ class RmMqttBackend(OfficialMqttBridge):
             if client is not None and client is not self.client:
                 return
             self.connected = False
+            self._subscription_request = None
+            self._subscriptions_ready = False
+            self._receive_blocked = True
             self.disconnected_at = time.perf_counter()
             self.clear_received_epoch()
             self._lock_safety_locked(reason)
@@ -430,7 +555,7 @@ class RmMqttBackend(OfficialMqttBridge):
         self._schedule_reconnect(f"MQTT disconnected: {_reason_code}", client=_client)
 
     def _on_message(self, client, userdata, msg) -> None:
-        if client is not self.client:
+        if client is not self.client or self._receive_blocked:
             return
         received_at = time.perf_counter()
         generation = self.receive_generation
@@ -443,10 +568,23 @@ class RmMqttBackend(OfficialMqttBridge):
         self.last_message_at = time.time()
         topic = str(msg.topic)
         self._emit_event("referee_rx", topic=topic, payload=payload)
+        if getattr(msg, "retain", False):
+            # A broker can replay a retained snapshot from a previous match or
+            # receiver session. It carries no trustworthy production timestamp:
+            # receipt now cannot establish current phase, HUD events or V2
+            # action evidence. Keep traffic diagnostics, but no live queues.
+            self.retained_messages_ignored += 1
+            self._emit_event("referee_retained_ignored", topic=topic, profile=profile.profile_id)
+            return
         # Official topics are exact instruction names, not arbitrary prefixes
         # or a topic echoed from our own uplink.
         name = topic
         if name not in profile.codec.DOWNLINK_MESSAGES:
+            self.ignored_topics += 1
+            return
+        if not self._subscriptions_ready:
+            # Traffic may arrive before SUBACK. It must not later become stage
+            # authority through the UI adapter or immutable economic receipts.
             self.ignored_topics += 1
             return
         try:
@@ -459,7 +597,9 @@ class RmMqttBackend(OfficialMqttBridge):
             self._emit_event("referee_decode_error", topic=topic, profile=profile.profile_id)
             return
         with self._decoded_lock:
-            if generation != self.receive_generation or profile is not self.referee or client is not self.client:
+            if (generation != self.receive_generation or profile is not self.referee
+                    or client is not self.client or self._receive_blocked
+                    or not self._subscriptions_ready):
                 return
             if is_v2:
                 if client_id != str(self.client_id):
@@ -474,8 +614,10 @@ class RmMqttBackend(OfficialMqttBridge):
                 self._v2_wire_snapshot = snapshot
                 self._v2_wire_context = (profile, client, client_id)
             super()._on_message(client, userdata, msg, received_at=received_at)
-            if name == "GameStatus" and 5 in data.get("__present__", ()):
-                self.safety.update_stage(data["current_stage"])
+            if (name == "GameStatus" and self._subscriptions_ready
+                    and 5 in data.get("__present__", ())):
+                if self.safety.observe_stage_receipt(data["current_stage"], received_at=received_at):
+                    self._pending_input_clear = self.safety.last_reason
             if len(self._decoded) == self._decoded.maxlen:
                 self.queue_overflows += 1
             self._decoded.append((topic, name, data, received_at))
@@ -494,22 +636,37 @@ class RmMqttBackend(OfficialMqttBridge):
     # ------------------------------------------------------------------
     def publish_topic(self, topic: str, payload: bytes, *, qos: int = 1,
                       now: float | None = None, intent: str = "control",
-                      qualification_token: str | None = None) -> tuple[bool, str]:
-        if self._uses_v2_request_guard(self.referee, topic):
+                      qualification_token: str | None = None,
+                      expected_economy_snapshot: WireSnapshot | None = None) -> tuple[bool, str]:
+        try:
+            if self.referee.codec is v2_codec:
+                payload = bytes(payload)  # Freeze V2 before classification/admission.
+            if (self.referee.codec is v2_codec and topic == "MapClickCmd"
+                    and is_sentry_map(payload) and intent != "economy"):
+                raise InvalidRefereePayload("sentry map destination requires explicit economic confirmation intent")
+        except (ValueError, TypeError, OverflowError) as exc:
+            self.last_error = str(exc)
+            return False, self.last_error
+        if self._uses_v2_request_guard(self.referee, topic, payload):
             return self._publish_v2_request(topic, payload, qos=qos,
-                                            qualification_token=qualification_token)
+                qualification_token=qualification_token,
+                expected_economy_snapshot=expected_economy_snapshot)
         with self._lifecycle_lock:
             client, generation = self.client, self._lifecycle_generation
             authority_generation = self.safety.control_generation
+            uplink_context = (self.referee, self.safety, str(self.client_id), intent,
+                              qualification_token) if self.referee.codec is v2_codec else None
         valid, reason = self.referee.validate_publish(topic, qos)
         if not valid:
             self.last_error = reason
             return False, reason
         try:
-            validate_message(topic, bytes(payload), self.referee.codec.FIELDS)
+            validate_message(topic, payload, self.referee.codec.FIELDS)
+            if self.referee.codec is v2_codec:
+                validate_uplink(topic, payload)
             if topic == "CustomControl" and len(self.referee.codec._b(self.referee.codec.decode_fields(payload), 1)) > 30:
                 raise InvalidRefereePayload("CustomControl payload exceeds 30 bytes")
-        except (InvalidRefereePayload, TypeError) as exc:
+        except (ValueError, TypeError, OverflowError) as exc:
             self.last_error = f"invalid {topic}: {exc}"
             return False, self.last_error
         # 急停在任何模式（含 mock）都立即生效
@@ -540,7 +697,8 @@ class RmMqttBackend(OfficialMqttBridge):
             return False, self.last_error
         try:
             info = self._publish_current(client, generation, topic, payload, qos,
-                                         authority_generation=authority_generation)
+                                         authority_generation=authority_generation,
+                                         uplink_context=uplink_context)
             rc = getattr(info, "rc", 0)
             mqtt = getattr(self, "_mqtt", None)
             success = rc == 0 or (mqtt is not None and rc == mqtt.MQTT_ERR_SUCCESS)
@@ -558,13 +716,15 @@ class RmMqttBackend(OfficialMqttBridge):
             return False, str(exc)
 
     @staticmethod
-    def _uses_v2_request_guard(profile: Any, topic: str) -> bool:
+    def _uses_v2_request_guard(profile: Any, topic: str, payload: bytes | None = None) -> bool:
         return (profile.codec is v2_codec
                 and profile.protocol_version == v2_codec.PROTOCOL_VERSION
-                and topic in ("AirSupportCommand", "SentryCtrlCommand"))
+                and (topic in ("AirSupportCommand", "SentryCtrlCommand", "CommonCommand")
+                     or (topic == "MapClickCmd" and payload is not None and is_sentry_map(payload))))
 
     def _publish_v2_request(self, topic: str, payload: bytes, *, qos: int,
-                            qualification_token: str | None) -> tuple[bool, str]:
+                            qualification_token: str | None,
+                            expected_economy_snapshot: WireSnapshot | None = None) -> tuple[bool, str]:
         """One immutable payload and one policy for every V2 economy entry."""
         try:
             with self._lifecycle_lock:
@@ -572,18 +732,25 @@ class RmMqttBackend(OfficialMqttBridge):
                 client, generation = self.client, self._lifecycle_generation
                 authority_generation = safety.control_generation
                 mock_output = self.mock_output
+                scope = self._economy_scope_locked()
                 with self._decoded_lock:
                     snapshot = self._v2_wire_snapshot_locked()
+                    if (topic != "AirSupportCommand" or expected_economy_snapshot is not None):
+                        if expected_economy_snapshot is None or expected_economy_snapshot is not snapshot:
+                            raise InvalidRefereePayload("the exact current economic snapshot must be confirmed")
             payload = bytes(payload)
-            if not self._uses_v2_request_guard(profile, topic):
+            if not self._uses_v2_request_guard(profile, topic, payload):
                 raise RuntimeError("V2 request profile changed; command discarded")
             valid, reason = profile.validate_publish(topic, qos)
             if not valid:
                 raise InvalidRefereePayload(reason)
-            validate_message(topic, payload, profile.codec.FIELDS)
-            command_id = _u(decode_fields(payload), 1)
             current = time.perf_counter()
-            allowed, reason, _estimate = request_decision(topic, command_id, snapshot, now=current)
+            validate_uplink(topic, payload, snapshot=snapshot, now=current,
+                            client_id=str(self.client_id), require_identity=True)
+            fields = decode_fields(payload)
+            command_id = 0 if topic == "MapClickCmd" else _u(fields, 1)
+            param = _u(fields, 2) if topic == "CommonCommand" else 0
+            allowed, reason, _estimate = request_decision(topic, command_id, snapshot, now=current, param=param)
             if not allowed:
                 raise ValueError(reason)
             allowed, reason = safety.can_publish(topic, now=current, intent="economy",
@@ -594,7 +761,7 @@ class RmMqttBackend(OfficialMqttBridge):
             info = self._publish_current(
                 client, generation, topic, payload, qos,
                 authority_generation=authority_generation,
-                v2_context=(profile, safety, snapshot, qualification_token, mock_output),
+                v2_context=(profile, safety, snapshot, qualification_token, mock_output, scope),
             )
             if mock_output:
                 reason = "mock"
@@ -622,7 +789,8 @@ class RmMqttBackend(OfficialMqttBridge):
 
     def publish_named(self, name: str, payload: bytes, *, qos: int = 1,
                       now: float | None = None, intent: str = "control",
-                      qualification_token: str | None = None) -> tuple[bool, str]:
+                      qualification_token: str | None = None,
+                      expected_economy_snapshot: WireSnapshot | None = None) -> tuple[bool, str]:
         return self.publish_topic(
             name,
             payload,
@@ -630,6 +798,7 @@ class RmMqttBackend(OfficialMqttBridge):
             now=now,
             intent=intent,
             qualification_token=qualification_token,
+            expected_economy_snapshot=expected_economy_snapshot,
         )
 
     # 兼容经济链路（透传 now，保持旧语义）
@@ -639,6 +808,7 @@ class RmMqttBackend(OfficialMqttBridge):
         *,
         now: float | None = None,
         qualification_token: str | None = None,
+        expected_economy_snapshot: WireSnapshot | None = None,
     ) -> bool:
         ok, _ = self.publish_topic(
             "CommonCommand",
@@ -647,6 +817,7 @@ class RmMqttBackend(OfficialMqttBridge):
             now=now,
             intent="economy",
             qualification_token=qualification_token,
+            expected_economy_snapshot=expected_economy_snapshot,
         )
         return ok
 
@@ -656,6 +827,7 @@ class RmMqttBackend(OfficialMqttBridge):
         *,
         now: float | None = None,
         qualification_token: str | None = None,
+        expected_economy_snapshot: WireSnapshot | None = None,
     ) -> bool:
         ok, _ = self.publish_topic(
             "AirSupportCommand",
@@ -664,6 +836,7 @@ class RmMqttBackend(OfficialMqttBridge):
             now=now,
             intent="economy",
             qualification_token=qualification_token,
+            expected_economy_snapshot=expected_economy_snapshot,
         )
         return ok
 
@@ -684,7 +857,8 @@ class RmMqttBackend(OfficialMqttBridge):
     def _publish_current(self, client: Any, generation: int, topic: str,
                          payload: bytes, qos: int, *,
                          authority_generation: int | None = None,
-                         v2_context: tuple | None = None) -> Any:
+                         v2_context: tuple | None = None,
+                         uplink_context: tuple | None = None) -> Any:
         # Admission may precede a stop/restart. Never redirect an old command
         # into a replacement session, even if its new connection is already up.
         # Paho publish enqueues on nonblocking sockets; no observers run here.
@@ -692,6 +866,8 @@ class RmMqttBackend(OfficialMqttBridge):
             if (client is None or client is not self.client or not self.connected
                     or generation != self._lifecycle_generation):
                 raise RuntimeError("MQTT session changed; command discarded")
+            if authority_generation is not None and not self._subscriptions_ready:
+                raise RuntimeError("MQTT downlink subscriptions pending SUBACK; command discarded")
             # A command can pause after admission while the same session is
             # locked, E-stopped, or re-armed. Never carry that old command into
             # new authority. The dedicated fixed-zero path deliberately omits
@@ -700,27 +876,34 @@ class RmMqttBackend(OfficialMqttBridge):
                     self.safety.estop_active
                     or authority_generation != self.safety.control_generation):
                 raise RuntimeError("MQTT control authority changed; command discarded")
-            if self._uses_v2_request_guard(self.referee, topic) or v2_context is not None:
+            if self._uses_v2_request_guard(self.referee, topic, payload) or v2_context is not None:
                 if v2_context is None or authority_generation is None:
                     raise RuntimeError("V2 request context required; command discarded")
-                profile, safety, snapshot, token, mock_output = v2_context
+                profile, safety, snapshot, token, mock_output, scope = v2_context
                 with self._decoded_lock:
+                    if (self.safety.estop_active
+                            or authority_generation != self.safety.control_generation):
+                        raise RuntimeError("MQTT control authority changed; command discarded")
                     if (profile is not self.referee or safety is not self.safety
                             or mock_output != self.mock_output or snapshot is None
-                            or not self._uses_v2_request_guard(profile, topic)
+                            or not self._uses_v2_request_guard(profile, topic, payload)
                             or snapshot is not self._v2_wire_snapshot_locked()):
                         raise RuntimeError("V2 request evidence changed; command discarded")
                     if type(payload) is not bytes:
                         raise InvalidRefereePayload("V2 final payload must be frozen bytes")
-                    validate_message(topic, payload, profile.codec.FIELDS)
-                    command_id = _u(decode_fields(payload), 1)
+                    self._check_economy_scope_locked(scope)
                     current = time.perf_counter()
+                    validate_uplink(topic, payload, snapshot=snapshot, now=current,
+                                    client_id=str(self.client_id), require_identity=True)
+                    fields = decode_fields(payload)
+                    command_id = 0 if topic == "MapClickCmd" else _u(fields, 1)
+                    param = _u(fields, 2) if topic == "CommonCommand" else 0
                     allowed, reason = safety.can_publish_v2_economy_current(
                         topic, now=current, qualification_token=token)
                     if not allowed:
                         raise RuntimeError(reason)
                     allowed, reason, _estimate = request_decision(
-                        topic, command_id, snapshot, now=current)
+                        topic, command_id, snapshot, now=current, param=param)
                     if not allowed:
                         raise RuntimeError(reason)
                     if mock_output:
@@ -731,7 +914,40 @@ class RmMqttBackend(OfficialMqttBridge):
                     if rc == 0 or (mqtt is not None and rc == mqtt.MQTT_ERR_SUCCESS):
                         safety.mark_published(topic, now=current)
                     return info
-            return client.publish(topic, payload, qos=qos)
+            with self._decoded_lock:
+                # Receipt-side expiry can revoke authority while we wait for
+                # decoded. Recheck inside that same lock before the wire write.
+                if authority_generation is not None and (
+                        self.safety.estop_active
+                        or authority_generation != self.safety.control_generation):
+                    raise RuntimeError("MQTT control authority changed; command discarded")
+                # A command may wait after initial admission while stage
+                # evidence expires or a non-fighting phase arrives. Check the
+                # actual wire clock, never the caller's optional test clock.
+                # The fixed-zero path has no authority_generation and remains
+                # available independently of phase; supervised qualification
+                # keeps its existing stage exemption.
+                if (authority_generation is not None and topic in CONTROL_TOPICS
+                        and self.safety.enforce_official_limits
+                        and self.safety.control_state == ControlState.MATCH_ARMED
+                        and not self.safety.is_fighting(now=time.perf_counter())):
+                    raise RuntimeError("referee stage not fresh/fighting; command discarded")
+                if authority_generation is not None and self.referee.codec is v2_codec:
+                    if uplink_context is None:
+                        raise RuntimeError("V2 uplink context required; command discarded")
+                    profile, safety, client_id, intent, token = uplink_context
+                    if (profile is not self.referee or safety is not self.safety
+                            or client_id != str(self.client_id)):
+                        raise RuntimeError("V2 uplink context changed; command discarded")
+                    validate_uplink(topic, payload, snapshot=self._v2_wire_snapshot_locked(),
+                                    now=time.perf_counter(), client_id=client_id, require_identity=True)
+                    allowed, reason = safety.can_publish_current(
+                        topic, now=time.perf_counter(), intent=intent, qualification_token=token)
+                    if not allowed:
+                        raise RuntimeError(reason)
+                elif uplink_context is not None:
+                    raise RuntimeError("V2 uplink profile changed; command discarded")
+                return client.publish(topic, payload, qos=qos)
 
     def publish_estop_zero(self, *, _expected_session: tuple[Any, int] | None = None) -> tuple[bool, str]:
         """仅发布固定全零 KMC，绕过普通限频以避免按键释放被 75Hz 门控吞掉。"""
@@ -789,6 +1005,10 @@ class RmMqttBackend(OfficialMqttBridge):
             "invalid_messages": self.invalid_messages,
             "ignored_topics": self.ignored_topics,
             "queue_overflows": self.queue_overflows,
+            "retained_messages_ignored": self.retained_messages_ignored,
+            "subscriptions_ready": self.subscriptions_ready,
+            "subscription_pending": self._subscription_request is not None,
+            "subscription_error": self._subscription_error,
             "host": self.host,
             "port": self.port,
             "client_id": self.client_id,

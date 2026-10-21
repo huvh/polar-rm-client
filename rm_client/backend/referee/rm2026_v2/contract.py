@@ -1,12 +1,12 @@
-"""Unregistered RM2026 V2.0.0 wire contract, official sections 2.1 and 2.2.
+"""Reviewed RM2026 V2.0.0 wire contract, official sections 2.1 and 2.2.
 
 Field tuples are (name, protobuf type, repeated). Topic tuples are
 (direction, documented rate, section). Rates describe the source, not a new
 transport limiter: map marks retain role-specific intervals from section 1.3.1;
 AirSupportCommand has no numeric frequency in the table.
 
-RadarInfoToClient is declared but unavailable: its published wrapper example
-is incomplete. No guessed wrapper or empty schema is accepted here.
+RadarInfoToClient wrapper is independently recovered from official 12.0.0.213
+CustomClientProReflection descriptor (SHA256 db398c02c9c6636852ab02693df3c51a77b9b219f836e9b1b3deb88b34091b50).
 """
 
 SOURCE_PDF = "RoboMaster 2026 机甲大师高校系列赛通信协议 V2.0.0（20260626）.pdf"
@@ -298,8 +298,16 @@ FIELDS = {
     },
 }
 
-ALIASES = {}
-UNAVAILABLE_MESSAGES = frozenset({"RadarInfoToClient"})
+# Official descriptor calls the repeated wrapper field robot_info. Preserve
+# the existing year-neutral consumer alias without changing its wire number.
+FIELDS["RadarInfoToClient"] = {1: ("robot_info", "RadarSingleRobotInfo", True)}
+FIELDS["RadarSingleRobotInfo"] = {
+    1: ("target_pos_x", "uint32", False),
+    2: ("target_pos_y", "uint32", False),
+    3: ("is_high_light", "uint32", False),
+}
+ALIASES = {("RadarInfoToClient", "robot_info"): "robots"}
+UNAVAILABLE_MESSAGES = frozenset()
 
 # Section 2.2.33: 0 is invalid; 2 is not listed in V2. These are values of
 # protobuf field 1, not additional field numbers.

@@ -36,11 +36,11 @@ CORE_TESTS = (
     "estop_robot_test",
     "firmware_loss_zero_test",
     "loss_recovery_test",
-    "hero_deploy_status_test",
     "latency_soak_test",
     "field_signoff",
 )
 DYNAMIC_TESTS = frozenset(CORE_TESTS + (
+    "hero_deploy_status_test",
     "dt7_link_test",
     "dt7_robot_safety_test",
     "economy_live_test",
@@ -48,6 +48,7 @@ DYNAMIC_TESTS = frozenset(CORE_TESTS + (
     "prm1_spin_bench_test",
 ))
 OPTIONAL_TESTS = (
+    "hero_deploy_status_test",
     "dt7_link_test",
     "dt7_robot_safety_test",
     "economy_live_test",
@@ -64,6 +65,19 @@ PRM1_TESTS = frozenset(
         "prm1_spin_bench_test",
     }
 )
+
+
+def core_profile_support(profile_id: str) -> tuple[bool, str]:
+    """Require actual selected-profile control support, not a global version."""
+    try:
+        profile = get_profile(profile_id)
+    except ValueError:
+        return False, "unsupported referee profile"
+    for topic in ("KeyboardMouseControl", "CustomControl"):
+        allowed, reason = profile.validate_publish(topic, 1)
+        if not allowed:
+            return False, reason
+    return True, f"{profile.profile_id}: reviewed KMC/CustomControl contract"
 
 
 class TestStatus(str, Enum):
@@ -507,11 +521,9 @@ class QualificationManager:
     def core_ready(self) -> tuple[bool, str]:
         if self.session is None:
             return False, "no qualification session"
-        try:
-            if get_profile(self.store.referee_profile).read_only:
-                return False, "Student preview profile is read-only, never match-qualified"
-        except ValueError:
-            return False, "unsupported referee profile"
+        supported, support_reason = core_profile_support(self.store.referee_profile)
+        if not supported:
+            return False, support_reason
         if self.session.build_commit != self.store.build_commit:
             return False, "build mismatch"
         if (self.session.protocol_version != self.store.protocol_version
@@ -612,7 +624,8 @@ class QualificationManager:
             Capability.CORE_KMC.value: core,
             Capability.DT7_CONTROL.value: core and self.test_passed("dt7_link_test")
             and self.test_passed("dt7_robot_safety_test"),
-            Capability.HERO.value: core and self.test_passed("hero_deploy_status_test"),
+            Capability.HERO.value: core and self.session.robot_id in {"1", "101"}
+            and self.test_passed("hero_deploy_status_test"),
             Capability.ECONOMY.value: core and self.test_passed("economy_live_test"),
             # PRM1 can never inherit core authorization. It needs a reviewed
             # schema/bench record tied to this exact firmware hash.

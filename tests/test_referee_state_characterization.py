@@ -490,6 +490,62 @@ class RefereeStateCharacterizationTests(unittest.TestCase):
                     self.assertEqual(events.count(anchor), 1)
                     self.assertFalse(any(event[0] == "state.air_support_can_free" for event in events))
                     events.insert(events.index(anchor) + 1, ["state.air_support_can_free", eligible])
+                # Receipt freshness intentionally removes exactly one old host
+                # effect: model projection must never grant/refresh authority.
+                # Preserve the historical fixture and all unrelated ordering.
+                contract_v2["events"] = [event for event in contract_v2["events"]
+                                         if event[0] != "safety.stage"]
+                contract_v2["safety"] = {"current_stage": "0", "stage_seen": False}
+                if case.get("fail") == "safety.stage":
+                    # This removed callback can no longer interrupt HUD writes.
+                    contract_v2["errors"] = []
+                    contract_v2["host"]["_last_logged_stage"] = "PREPARE"
+                    contract_v2["events"].extend([
+                        ["host._last_logged_stage", "PREPARE"],
+                        ["log.match_stage", {"raw_stage": 1, "stage": "PREPARE", "round": 2}],
+                        ["state.stage_countdown_sec", 123],
+                        ["state.stage_elapsed_sec", 45],
+                    ])
+                # Explicit 2026-10-21 protocol corrections. Keep the original
+                # fixture and permit only these named, independently tested
+                # presence/unit deltas (test_referee_v2_complete_projection).
+                events = contract_v2["events"]
+                state = contract_v2["state"]
+                if name in {"GameStatus_full_wire", "GameStatus_explicit_zeros_wire",
+                            "GameStatus_only_current_round"}:
+                    anchor = next(i for i, event in enumerate(events) if event[0] == "state.current_round")
+                    events[anchor+1:anchor+1] = [["state.total_damage_ally", None], ["state.total_damage_enemy", None]]
+                if name in {"GlobalUnitStatus_full_wire", "GlobalUnitStatus_explicit_zeros_wire"}:
+                    values = (23, 24) if name.endswith("full_wire") else (0, 0)
+                    events.extend([["state.total_damage_ally", values[0]], ["state.total_damage_enemy", values[1]]])
+                if name == "RobotStaticStatus_full_wire":
+                    anchor = events.index(["state.max_buffer_energy", 23])
+                    events.insert(anchor+1, ["state.max_chassis_energy", 24])
+                if name == "RobotStaticStatus_only_max_chassis_energy":
+                    events.append(["state.max_chassis_energy", 24])
+                if name in {"RobotStaticStatus_explicit_zeros_wire",
+                            "static_zero_limits_do_not_overwrite_existing_limits"}:
+                    zeros = [["state.max_health", 0], ["state.current_health", 0],
+                             ["state.max_heat", 0.0], ["state.heat_cooldown_rate", 0.0]]
+                    if name == "RobotStaticStatus_explicit_zeros_wire":
+                        zeros.extend([["state.power_limit", 0], ["state.max_buffer_energy", 0],
+                                      ["state.max_chassis_energy", 0]])
+                    anchor = next(i for i, event in enumerate(events) if event[0].endswith(".update"))
+                    events[anchor+1:anchor+1] = zeros
+                    for key, value in zeros:
+                        if key[6:] in state: state[key[6:]] = value
+                    events.extend([["state.economy_status_revision", 8], ["state.economy_command_status", ""]])
+                    state.update(economy_status_revision=8, economy_command_status="")
+                if name.startswith("RuneStatusSync_") or name.startswith("rune_"):
+                    contract_v2["events"] = [event for event in events if event[0] != "state.energy_rune_progress"]
+                    state["energy_rune_progress"] = case.get("state", {}).get("energy_rune_progress", STATE_SEED["energy_rune_progress"])
+                    if name == "RuneStatusSync_only_rune_status":
+                        state["rune_status"].pop("average_rings", None)
+                    if name in {"rune_bad_progress_keeps_raw_and_phase_writes",
+                                "rune_direct_nonfinite_progress_aborts_after_raw_write"}:
+                        # Direct compatibility mappings remain raw data; no
+                        # percentage conversion remains to raise an exception.
+                        contract_v2["errors"] = []
                 self.assertEqual(canonical(observe(case)), canonical(contract_v2))
 
     def test_every_current_downlink_has_wire_and_presence_cases(self):
@@ -521,14 +577,19 @@ class RefereeStateCharacterizationTests(unittest.TestCase):
             if "fail" in case:
                 with self.subTest(case=name):
                     observed = observe(case)
-                    self.assertTrue(observed["errors"])
-                    self.assertIn(case["fail"], [event[0] for event in observed["events"]])
+                    if case["fail"] == "safety.stage":
+                        self.assertEqual(observed["errors"], [])
+                        self.assertNotIn("safety.stage", [event[0] for event in observed["events"]])
+                        self.assertEqual(observed["safety"], {"current_stage": "0", "stage_seen": False})
+                    else:
+                        self.assertTrue(observed["errors"])
+                        self.assertIn(case["fail"], [event[0] for event in observed["events"]])
 
     def test_aborts_capture_prior_effects_instead_of_only_exception_type(self):
         observed = observe(cases()["stage_bad_countdown_keeps_preceding_stage_effects"])
         self.assertEqual(observed["errors"], [[0, "ValueError"]])
         self.assertEqual(observed["state"]["current_stage"], "PREPARE")
-        self.assertEqual(observed["safety"]["current_stage"], "1")
+        self.assertEqual(observed["safety"]["current_stage"], "0")
         self.assertIn("log.match_stage", [event[0] for event in observed["events"]])
         observed = observe(cases()["injury_clock_failure_keeps_revision_before_delta_publication"])
         self.assertEqual(observed["errors"], [[1, "RuntimeError"]])

@@ -8,7 +8,7 @@ import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from rm_client.backend.cc_link import AsyncCustomControllerLink, decode_cc_frame, HID_USAGE
+from rm_client.backend.cc_link import AsyncCustomControllerLink, decode_cc_frame, VIRTUAL_KEY
 
 
 def until(predicate, timeout=2):
@@ -51,7 +51,7 @@ class CCWorkerTests(unittest.TestCase):
         self.assertIsNotNone(link._pending)
         unblock.set()
         until(lambda: len(frames) == 2)
-        self.assertEqual(decode_cc_frame(frames[1])['data'][0], HID_USAGE['D'])
+        self.assertEqual(decode_cc_frame(frames[1])['data'][0], VIRTUAL_KEY['D'])
         link.release_all()
         until(lambda: link.wire_neutral)
         self.assertEqual(len(frames), 3)
@@ -125,7 +125,7 @@ class CCWorkerTests(unittest.TestCase):
         self.assertTrue(link.rearm(time.perf_counter()))
         link.send_keymouse(pressed=['D'])
         until(lambda: len(frames) == 3)
-        self.assertEqual(decode_cc_frame(frames[2])['data'][0], HID_USAGE['D'])
+        self.assertEqual(decode_cc_frame(frames[2])['data'][0], VIRTUAL_KEY['D'])
 
     def test_enumeration_and_open_are_worker_owned_and_close_invalidates_motion(self):
         for stage in ('resolve', 'open'):
