@@ -30,7 +30,8 @@ from PySide6.QtWidgets import QInputDialog, QMessageBox
 from ....match_modes import FieldLayout, MatchModeConfig
 from ....model import Module
 from ....referee_profiles import V2_PROFILE
-from ....qualification_observations import V2AirAttempt, same_v2_air_owners
+from ....qualification_observations import V2AirAttempt
+from .v2_request_context import _v2_air_context, _same_v2_air_context, _v2_air_snapshot_current
 from ....backend.referee.rm2026_v2.economy_rules import request_decision
 from ....backend.referee.rm2026_v2.observations import WireSnapshot
 from ....student_ui import v2_status_rows
@@ -64,6 +65,59 @@ _RADAR_TTL_SEC = RADAR_TTL_SECONDS
 
 
 
+_EVENT_COMMANDS = (
+    ('Rune Activate (energy mechanism)', 'RuneActivateCommand', 'publish_rune_activate'),
+    ('Dart Command', 'DartCommand', 'publish_dart_command'),
+    ('Sentry Control', 'SentryCtrlCommand', 'publish_sentry_command'),
+    ('Assembly Command', 'AssemblyCommand', 'publish_assembly_command'),
+    ('Performance Selection (from RobotProfile)', 'RobotPerformanceSelectionCommand', 'publish_performance_from_registry'),
+    ('Air Support', 'AirSupportCommand', 'publish_air_support'),
+    ('Sentry map intervention (fee confirmation)', 'MapClickCmd', 'publish_map_click_cmd'),
+)
+
+
+def _event_command_options(host: Any) -> tuple:
+    profile = host.backend.referee
+    options = []
+    for entry in _EVENT_COMMANDS:
+        if entry[1] in {'AirSupportCommand', 'MapClickCmd'} and profile.profile_id != V2_PROFILE:
+            continue
+        if not callable(getattr(host.backend, entry[2], None)):
+            continue
+        allowed, _reason = profile.validate_publish(entry[1], 1)
+        if not allowed:
+            continue
+        if entry[1] == 'RobotPerformanceSelectionCommand':
+            ids = {1,3,4,5,6,101,103,104,105,106} if profile.profile_id == V2_PROFILE else {1,3,4,5,7,101,103,104,105,107}
+            if getattr(host.state, 'robot_id', None) not in ids:
+                continue
+        options.append(entry)
+    return tuple(options)
+
+
+def _event_context(host: Any) -> tuple:
+    backend = host.backend
+    mqtt = getattr(backend, 'mqtt', None)
+    owners = (backend, backend.referee, mqtt, getattr(mqtt, 'client', None), host.state)
+    values = (backend.referee.profile_id, getattr(mqtt, 'receive_generation', None),
+        getattr(mqtt, 'client_id', None), getattr(mqtt, 'mock_output', None),
+        host.state.robot_id, host.state.robot_profile, getattr(host.state, 'current_round', None),
+        getattr(getattr(getattr(host, 'scenario_manager', None), 'current', None), 'key', None))
+    return owners, values
+
+
+def _same_event_context(before: tuple, after: tuple) -> bool:
+    return all(a is b for a,b in zip(before[0], after[0])) and before[1] == after[1]
+
+
+def _event_choice(host: Any, title: str, prompt: str, choices: tuple) -> Any:
+    chinese = chinese_enabled(host.registry)
+    labels = tuple(hud_text(label, chinese) for _value, label in choices)
+    selected, accepted = QInputDialog.getItem(host, hud_text(title, chinese),
+        hud_text(prompt, chinese), labels, 0, False)
+    return choices[labels.index(selected)][0] if accepted and selected in labels else None
+
+
 _V2_AIR_CHOICES = (
     "0 · Cancel active support / 取消支援",
     "1 · Free-time support / 免费支援",
@@ -71,45 +125,10 @@ _V2_AIR_CHOICES = (
     "3 · Release countermeasure and call / 解除反制并呼叫",
 )
 _V2_AIR_LIMITS = (
-    "V2 partial: reviewed telemetry + supervised Air requests. Normal arming qualification pending.\n"
-    "V2 部分功能：遥测与受监督 Air 请求；常规解锁资格尚待审查。\n"
-    "Other event commands, KMC/custom/map and Radar are unavailable in this profile."
+    "Supervised Air: one explicitly confirmed request; telemetry is not a unique ACK.\n"
+    "受监督 Air：每次明确确认一条请求；遥测变化不是唯一请求确认。\n"
+    "Other reviewed V2 capabilities retain their independent safety gates."
 )
-
-
-def _v2_air_context(host: Any) -> tuple:
-    """Capture actual owners; equality of dataclass profile values is insufficient."""
-    backend = host.backend
-    mqtt = backend.mqtt
-    session = backend.qualification.session
-    owners = (backend, mqtt, backend.referee, mqtt.referee, mqtt.client, session)
-    snapshot = mqtt.v2_wire_snapshot()
-    scope = tuple(snapshot.get(message, field).value
-                  if snapshot is not None and snapshot.get(message, field) is not None else None
-                  for message, field in (("GameStatus", "current_round"),
-                                         ("RobotStaticStatus", "robot_id"),
-                                         ("RobotStaticStatus", "robot_type")))
-    values = (backend.referee.profile_id, mqtt.referee.profile_id,
-              mqtt.receive_generation, str(mqtt.client_id), bool(mqtt.mock_output),
-              bool(mqtt.connected), host.scenario_manager.current.key,
-              getattr(session, "session_id", ""), getattr(session, "operator", ""),
-              getattr(session, "referee_profile", ""), getattr(session, "robot_id", ""), scope)
-    scope_revision = snapshot.scope_revision if snapshot is not None else None
-    return owners, values, snapshot, getattr(host, "_economy_qualification_token", None), scope_revision
-
-
-def _same_v2_air_context(before: tuple, after: tuple, *, token: bool = True) -> bool:
-    return (same_v2_air_owners(before[0], after[0]) and before[1] == after[1]
-            and before[4] == after[4]
-            and (not token or before[3] == after[3]))
-
-
-def _v2_air_snapshot_current(context: tuple) -> bool:
-    owners, values, snapshot, _token, _scope_revision = context
-    return (values[0] == values[1] == V2_PROFILE and values[5]
-            and values[6] == "OfficialEvent" and type(snapshot) is WireSnapshot
-            and (snapshot.profile_id, snapshot.receive_generation, snapshot.client_id)
-                == (V2_PROFILE, values[2], values[3]))
 
 
 def _v2_air_premise(snapshot: WireSnapshot, command_id: int, estimate: int | None) -> tuple:
@@ -154,7 +173,7 @@ def _open_v2_air_dialog(host: Any) -> None:
         status = "\n".join(f"{_V2_AIR_CHOICES[index]}: {reason}"
                            for index, (_allowed, reason, _cost) in enumerate(decisions))
         choice, accepted = QInputDialog.getItem(
-            host, "V2 Air · partial / 部分功能", _V2_AIR_LIMITS + "\n\n" +
+            host, "V2 Air · supervised / 受监督请求", _V2_AIR_LIMITS + "\n\n" +
             _v2_air_observed_text(host, admission, now) + "\n\nRequest conditions / 请求条件:\n" + status,
             _V2_AIR_CHOICES, 0, False)
         if not accepted or choice not in _V2_AIR_CHOICES:
@@ -223,10 +242,10 @@ def _open_v2_air_dialog(host: Any) -> None:
         try:
             attempt_started = True
             if qualification_token is None:
-                ok, reason = backend.publish_air_support(command_id)
+                ok, reason = backend.publish_air_support(command_id, expected_economy_snapshot=checked[2])
             else:
                 ok = mqtt.publish_air_support_command(profile.codec.encode_air_support_command(command_id),
-                    qualification_token=qualification_token)
+                    qualification_token=qualification_token, expected_economy_snapshot=checked[2])
                 reason = ("mock" if values[4] else "ok") if ok else mqtt.last_error
             accepted_enqueue = bool(ok)
             submitted_mock = values[4] or reason == "mock"
@@ -263,8 +282,65 @@ def _open_v2_air_dialog(host: Any) -> None:
             host.toast(f"V2 Air dialog failed: {exc}")
 
 
+def _open_v2_sentry_control_dialog(host: Any) -> None:
+    """One supervised preparation-stage mode request; not a qualification PASS."""
+    from ....backend.referee.rm2026_v2.uplink_validation import fresh_integer
+    attempted = False
+    submitted = False
+    try:
+        admission = _v2_air_context(host)
+        def selected():
+            return host.backend.performance_values(host.registry, referee_profile=V2_PROFILE)
+        def admitted(context):
+            if not _v2_air_snapshot_current(context):
+                return False
+            session = context[0][5]
+            now = time.perf_counter()
+            robot = fresh_integer(context[2], 'RobotStaticStatus', 'robot_id', now)
+            return (robot in {6,106} and str(robot) == context[1][3]
+                and fresh_integer(context[2], 'GameStatus', 'current_stage', now) == 1
+                and session is not None and bool(session.operator.strip())
+                and session.referee_profile == V2_PROFILE and session.robot_id == str(robot))
+        values = selected()
+        if (not admitted(admission) or values.get('shooter') != 0 or values.get('chassis') != 0
+                or type(values.get('sentry_control')) is not int or values['sentry_control'] not in {0,1}):
+            host.toast("Sentry mode requires fresh PREPARE, Aerial identity and a matching named V2 session")
+            return
+        mode = 'Automatic / 自动' if values['sentry_control'] == 0 else 'Semi-automatic / 半自动'
+        answer = QMessageBox.question(host, 'V2 Sentry mode / 哨兵模式',
+            'Aerial operator changes the same-team Sentry mode in PREPARE only.\n'
+            '仅空中云台手在准备期请求设置本方哨兵模式。\n' + mode +
+            '\nOne 15-second supervised request, no automatic retry or unique ACK.\n'
+            '一次受监督请求，窗口15秒；不自动重发，不代表服务端执行确认。',
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        checked = _v2_air_context(host)
+        if not _same_v2_air_context(admission, checked) or not admitted(checked) or selected() != values:
+            host.toast("Sentry mode context changed; request discarded")
+            return
+        attempted = True
+        token = host.backend.begin_qualification({'core_kmc'}, ttl_s=15.)
+        host._economy_qualification_token = None
+        host._v2_air_qualification_attempt = None
+        # begin_qualification clears inputs through observers. Recheck after
+        # those callbacks, not just before the token-producing side effect.
+        checked = _v2_air_context(host)
+        if not _same_v2_air_context(admission, checked, token=False) or not admitted(checked) or selected() != values:
+            host.toast("Sentry mode context changed; request discarded")
+            return
+        ok, reason = host.backend.publish_robot_performance(0, 0, values['sentry_control'], qualification_token=token.value)
+        submitted = bool(ok)
+        host.toast('哨兵模式请求已提交，不代表执行确认' if ok else reason)
+    except Exception as exc:
+        host.toast(f"Sentry mode {'request submitted; observer failed' if submitted else 'attempt failed'}: {exc}; no automatic retry")
+    finally:
+        if attempted:
+            host.backend.lock_control()
+
+
 def _radar_coord_to_m(value: float, span_m: float) -> float:
-    """官方雷达坐标为厘米（RMUC 场地 2800x1500cm）；兼容米制输入。"""
+    """官方雷达坐标固定为厘米（RMUC 场地 2800x1500cm）。"""
     return radar_coordinate_metres(value, span_m)
 
 
@@ -279,7 +355,7 @@ def draw_radar_overlay(
 ) -> int:
     """把雷达检测（RadarInfoToClient → state.radar_detections）叠加到小地图。
 
-    - 菱形标记与机器人圆点区分；``is_high_light``（雷达照射/双倍易伤）用
+    - 菱形标记与机器人圆点区分；``is_high_light``（特殊标识；2为定位离线）用
       警告色脉冲环强调；
     - 坐标按厘米→米归一后经 ``host.map_point`` 复用蓝方镜像逻辑；
     - ``state.radar_detections_at`` 驱动 TTL：断供 6s 内线性淡出，之后隐藏；
@@ -307,10 +383,12 @@ def draw_radar_overlay(
     drawn = 0
     for index, det in enumerate(detections):
         try:
-            marker = RadarMarker.from_wire(det, field.width_m, field.height_m)
+            source = ("official" if getattr(host.state, "official_state_active", False) is True
+                      else getattr(host.state, "radar_coordinate_source", "official"))
+            marker = RadarMarker.from_wire(det, field.width_m, field.height_m, source=source)
             x_m, y_m = marker.x_m, marker.y_m
             highlighted = marker.highlighted and host.radar_high_light_enabled()
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             continue
         if x_m <= 0.0 and y_m <= 0.0:
             continue
@@ -338,7 +416,7 @@ def draw_radar_overlay(
             QRectF(point.x() - 10, point.y() - 10, 20, 20),
             "radar_blip",
             index,
-            tooltip=f"雷达标记 {'· 双倍易伤' if highlighted else '侦测'} ({x_m:.1f}, {y_m:.1f})m",
+            tooltip=f"雷达标记 {'· 特殊标识 · 定位离线' if marker.position_offline else '· 特殊标识' if highlighted else '侦测'} ({x_m:.1f}, {y_m:.1f})m",
         )
         drawn += 1
     if drawn:
@@ -579,7 +657,7 @@ class TacticalMapMixin:
         return True
 
     def radar_high_light_enabled(self) -> bool:
-        """`RadarOverlay / High Light`：要不要把“雷达照射 / 双倍易伤”标出来。
+        """`RadarOverlay / High Light`：要不要把“特殊标识 / 定位离线”标出来。
 
         这个开关以前没人读：只要报文里 `is_high_light` 置位，标记就一定
         换成告警色并画脉冲环，完全关不掉。
@@ -865,6 +943,9 @@ class TacticalMapMixin:
             position = position.mirrored()
         map_x, map_y = position.field_metres(field.width_m, field.height_m)
         is_send_all, mark_type = self.map_click_command_values()
+        if self.backend.referee.profile_id == V2_PROFILE and (is_send_all == 2 or mark_type == 4):
+            self.toast("V2 custom marks are disputed; Sentry map intervention needs its separate confirmation dialog")
+            return True
         ok, reason = self.backend.publish_map_click_cmd(
             is_send_all=is_send_all,
             mode=1,
@@ -876,73 +957,78 @@ class TacticalMapMixin:
         return True
 
     def open_event_command_menu(self) -> None:
-        """Dialog launcher for referee event commands without a dedicated HUD.
-
-        Everything funnels through the backend publishers, so MATCH_ARMED
-        capability checks, rate limits, and mock gating still apply.
-        """
-
-        if self.backend.referee.profile_id == V2_PROFILE:
-            _open_v2_air_dialog(self)
-            return
-
-        commands = (
-            "Rune Activate (energy mechanism)",
-            "Dart Command",
-            "Sentry Control",
-            "Assembly Command",
-            "Performance Selection (from RobotProfile)",
-        )
-        chinese = chinese_enabled(self.registry)
-        display_commands = tuple(hud_text(value, chinese) for value in commands)
-        choice, ok = QInputDialog.getItem(
-            self, hud_text("Event commands", chinese), hud_text("Referee event command:", chinese), display_commands, 0, False
-        )
-        if not ok or choice not in display_commands:
-            return
-        # Only the displayed choice is localized; dispatch uses the original key.
-        choice = commands[display_commands.index(choice)]
+        """Reviewed forms only; publishers retain final identity/safety authority."""
         try:
-            if choice.startswith("Rune"):
-                value, accepted = QInputDialog.getItem(
-                    self, hud_text("RuneActivateCommand", chinese), hud_text("Activate value:", chinese), [hud_text("1 = activate", chinese), hud_text("0 = cancel", chinese)], 0, False
-                )
-                if accepted:
-                    activate = 1 if value.startswith("1") else 0
-                    ok_pub, reason = self.backend.publish_rune_activate(activate)
-                    self.toast(f"Rune {'sent' if ok_pub else reason}")
-            elif choice.startswith("Dart"):
-                target, accepted = QInputDialog.getInt(self, hud_text("DartCommand", chinese), hud_text("Target robot ID:", chinese), 1, 1, 209)
-                if accepted:
-                    open_gate, accepted2 = QInputDialog.getItem(
-                        self, hud_text("DartCommand", chinese), hud_text("Open gate:", chinese), [hud_text("False", chinese), hud_text("True", chinese)], 0, False
-                    )
-                    if accepted2:
-                        ok_pub, reason = self.backend.publish_dart_command(
-                            target, open_gate == hud_text("True", chinese), False
-                        )
-                        self.toast(f"Dart {'sent' if ok_pub else reason}")
-            elif choice.startswith("Sentry"):
-                command_id, accepted = QInputDialog.getInt(
-                    self, hud_text("SentryCtrlCommand", chinese), hud_text("Command ID (consult the selected referee protocol):", chinese), 1, 0, 2
-                )
-                if accepted:
-                    ok_pub, reason = self.backend.publish_sentry_command(command_id)
-                    self.toast(f"Sentry {'sent' if ok_pub else reason}")
-            elif choice.startswith("Assembly"):
-                operation, accepted = QInputDialog.getInt(
-                    self, hud_text("AssemblyCommand", chinese), hud_text("Operation (1=exchange ore,2=submit,3=stash):", chinese), 1, 1, 3
-                )
-                if accepted:
-                    difficulty, accepted2 = QInputDialog.getInt(
-                        self, hud_text("AssemblyCommand", chinese), hud_text("Difficulty (1-3):", chinese), 1, 1, 3
-                    )
-                    if accepted2:
-                        ok_pub, reason = self.backend.publish_assembly_command(operation, difficulty)
-                        self.toast(f"Assembly {'sent' if ok_pub else reason}")
-            elif choice.startswith("Performance"):
-                ok_pub, reason = self.backend.publish_performance_from_registry(self.registry)
-                self.toast(f"Performance selection {'sent' if ok_pub else reason}")
+            context = _event_context(self)
+            commands = _event_command_options(self)
+            if not commands:
+                self.toast("No reviewed event commands are available")
+                return
+            if len(commands) == 1 and commands[0][1] == 'AirSupportCommand':
+                _open_v2_air_dialog(self)
+                return
+            entry = _event_choice(self, 'Event commands', 'Referee event command:',
+                                  tuple((entry, entry[0]) for entry in commands))
+            if entry is None:
+                return
+            topic = entry[1]
+            if not _same_event_context(context, _event_context(self)):
+                self.toast("Event command context changed; reopen the dialog")
+                return
+            if topic == 'AirSupportCommand':
+                _open_v2_air_dialog(self)
+                return
+            if topic in {'SentryCtrlCommand', 'MapClickCmd'} and self.backend.referee.profile_id == V2_PROFILE:
+                from .v2_economy_dialog import _open_v2_economy_dialog
+                _open_v2_economy_dialog(self, topic)
+                return
+            chinese = chinese_enabled(self.registry)
+            args = ()
+            if topic == 'RuneActivateCommand':
+                value = _event_choice(self, topic, 'Infantry only: activate energy mechanism', ((1, '1 = activate'),))
+                if value is None:
+                    return
+                args = (value,)
+            elif topic == 'DartCommand':
+                target = _event_choice(self, topic, 'Aerial operator: same-team dart target', (
+                    (1, '1 = Outpost'), (2, '2 = Base fixed'), (3, '3 = Base random fixed'),
+                    (4, '4 = Base random moving'), (5, '5 = Base terminal moving')))
+                if target is None:
+                    return
+                open_gate = _event_choice(self, topic, 'Opening request (never closes the gate):',
+                    ((False, 'No opening request'), (True, 'Request opening')))
+                if open_gate is None:
+                    return
+                args = (target, open_gate, False)  # Never add a launch-confirmation outlet.
+            elif topic == 'AssemblyCommand':
+                operation = _event_choice(self, topic, 'Engineer only: assembly operation',
+                    ((0, '0 = Start exchange'), (1, '1 = Confirm assembly'), (2, '2 = Cancel')))
+                if operation is None:
+                    return
+                difficulty, accepted = QInputDialog.getInt(self, hud_text(topic, chinese),
+                    hud_text('Difficulty (1-4):', chinese), 1, 1, 4)
+                if not accepted or type(difficulty) is not int or difficulty not in range(1,5):
+                    return
+                args = (operation, difficulty)
+            elif topic == 'SentryCtrlCommand':
+                value = _event_choice(self, topic, 'Command ID (consult the selected referee protocol):',
+                    ((1, '1 = Supply-point ammunition'), (2, '2 = Supply-station physical ammunition'),
+                     (3, '3 = Remote ammunition'), (4, '4 = Remote healing'), (5, '5 = Confirm respawn'),
+                     (6, '6 = Confirm paid respawn'), (7, '7 = Attack stance'),
+                     (8, '8 = Defense stance'), (9, '9 = Movement stance')))
+                if value is None:
+                    return
+                args = (value,)
+            elif topic == 'RobotPerformanceSelectionCommand':
+                if self.backend.referee.profile_id == V2_PROFILE and self.state.robot_id in {6,106}:
+                    _open_v2_sentry_control_dialog(self)
+                    return
+                args = (self.registry,)
+            if not _same_event_context(context, _event_context(self)):
+                self.toast("Event command context changed; request discarded")
+                return
+            ok, reason = getattr(self.backend, entry[2])(*args)
+            self.toast(f"{topic}: {'request submitted (not an execution ACK)' if ok else reason}")
         except Exception as exc:
             self.toast(f"Event command failed: {exc}")
 

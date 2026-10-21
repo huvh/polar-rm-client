@@ -1,4 +1,4 @@
-"""Unregistered RMUC7v7 V2 rule estimates and documented command membership.
+"""RMUC7v7 V2 rule estimates and documented command membership.
 
 Pure arithmetic and peer-state request prerequisites, not an offer, server
 quote, current Safety authorization or permission to publish. Callers must establish explicit V2/RMUC identity and authoritative,
@@ -60,6 +60,10 @@ def is_documented_command(topic: str, command_id: int) -> bool:
         return command_id in SENTRY_COMMAND_IDS
     if topic == "AirSupportCommand":
         return command_id in AIR_SUPPORT_COMMAND_IDS
+    if topic == "CommonCommand":
+        return command_id in range(1, 7)
+    if topic == "MapClickCmd":
+        return command_id == 0
     return False
 
 
@@ -82,11 +86,135 @@ def _fresh_integer(snapshot, message: str, field: str, now: float) -> int:
     return observation.value
 
 
-def request_decision(topic: str, command_id: int, snapshot, *, now: float
+def _fresh_bool(snapshot, message: str, field: str, now: float) -> bool:
+    observation = snapshot.get(message, field)
+    if observation is None:
+        raise ValueError(f"missing {message}.{field}")
+    receipt = observation.received_at
+    if (type(receipt) not in (int, float) or not math.isfinite(receipt)
+            or receipt < 0 or not 0 <= now - receipt <= _ACTION_MAX_AGE_S
+            or type(observation.value) is not bool):
+        raise ValueError(f"invalid or stale {message}.{field} boolean")
+    return observation.value
+
+
+def _business_decision(topic, command_id, snapshot, *, now, param):
+    """RMUC estimates for explicit requests, not proof of target eligibility.
+
+    Caller must bind actual RMUC7v7 state/session at initial and final enqueue.
+    This pure snapshot intentionally does not claim a mode exists on the wire.
+    """
+    value = lambda message, field: _fresh_integer(snapshot, message, field, now)
+    flag = lambda message, field: _fresh_bool(snapshot, message, field, now)
+    value("GameStatus", "current_round")
+    if value("GameStatus", "current_stage") != 4:
+        raise ValueError("V2 economic requests require MATCH")
+    robot = value("RobotStaticStatus", "robot_id")
+    value("RobotStaticStatus", "robot_type")
+    if robot not in {*range(1, 10), *range(101, 110)} or snapshot.client_id != str(robot):
+        raise ValueError("observed robot ID must match configured ClientId")
+    if (value("RobotStaticStatus", "connection_state") != 1
+            or value("RobotStaticStatus", "field_state") != 0):
+        raise ValueError("requester must be observed connected/on-field")
+    penalty = snapshot.get("PenaltyInfo", "penalty_type")
+    if penalty is not None and penalty.value == 3:
+        raise ValueError("current red-card observation blocks economic request")
+    role = robot % 100
+    reason = "Request only; server decides eligibility and completion; not a payment ACK"
+    if topic in {"SentryCtrlCommand", "MapClickCmd"}:
+        if param != 0:
+            raise ValueError("Sentry/Map request has no quantity parameter")
+        if topic == "SentryCtrlCommand" and role != 6:
+            raise ValueError("Sentry requester must be aerial6/106, target same-team7/107")
+        if topic == "SentryCtrlCommand" and command_id == 6:
+            raise ValueError("Sentry6 target can_pay/respawn quote and included intervention fee unavailable")
+        mode = value("RobotPerformanceSelectionSync", "sentry_control")
+        if mode not in {0, 1}:
+            raise ValueError("unknown same-team Sentry control mode")
+        fee = 50 if mode == 0 else 0
+        cost = fee
+        if topic == "SentryCtrlCommand":
+            if command_id == 1:
+                cost += 50
+                reason += "; fixed50 local17mm rounds; zone/team quota server-checked"
+            elif command_id == 3:
+                cost += 150
+                reason += "; fixed100 remote17mm rounds; target remote eligibility unknown; six-second service"
+            elif command_id == 4:
+                cost += estimate_remote_heal_cost(value("GameStatus", "stage_countdown_sec"))
+                reason += "; target HP/remote eligibility unknown; six-second service"
+            elif command_id == 5:
+                reason += "; target pending/free-respawn eligibility unknown"
+            else:
+                posture = value("SentryStatusSync", "posture_id")
+                if posture not in {1, 2, 3}:
+                    raise ValueError("unknown target Sentry posture")
+                flag("SentryStatusSync", "is_weakened")
+                flag("SentryStatusSync", "is_powered")
+                reason += "; target stance cooldown/enhanced remaining time server-checked"
+        else:
+            reason += "; same-team Sentry map intervention"
+        reason += f"; intervention fee {fee} coins"
+    elif topic == "CommonCommand":
+        infantry = role in {3, 4, 5}
+        hero = role == 1
+        if command_id in {3, 4}:
+            if role not in {1, 2, 3, 4, 5}:
+                raise ValueError("Common revival requires own ground Hero/Infantry/Engineer")
+            if param != 0 or value("RobotStaticStatus", "alive_state") != 2:
+                raise ValueError("revival requires param0 and observed dead state")
+            if not flag("RobotRespawnStatus", "is_pending_respawn"):
+                raise ValueError("no observed pending respawn")
+            if not flag("RobotRespawnStatus", "can_free_respawn" if command_id == 3 else "can_pay_for_respawn"):
+                raise ValueError("observed respawn permission denied")
+            cost = 0 if command_id == 3 else value("RobotRespawnStatus", "gold_cost_for_respawn")
+            if cost < 0:
+                raise ValueError("invalid current respawn quote")
+        else:
+            if not (hero or infantry) or value("RobotStaticStatus", "alive_state") != 1:
+                raise ValueError("Common supply/heal requires alive Hero/Infantry")
+            if command_id == 1:
+                if not infantry or not 10 <= param <= 1000 or param % 10:
+                    raise ValueError("local17mm requires Infantry and positive ten-round units <=1000")
+                cost = param
+                reason += "; supply zone/cumulative team quota server-checked"
+            elif command_id == 2:
+                if not hero or not 1 <= param <= 100:
+                    raise ValueError("local42mm requires Hero and quantity1..100")
+                cost = 10 * param
+                reason += "; supply zone/cumulative team quota server-checked"
+            else:
+                if param != 0:
+                    raise ValueError("remote command parameter must be0, not a quantity multiplier")
+                if not flag("RobotDynamicStatus", "is_out_of_combat"):
+                    raise ValueError("remote request requires observed out-of-combat")
+                if command_id == 5:
+                    if not flag("RobotDynamicStatus", "can_remote_ammo"):
+                        raise ValueError("remote ammo permission denied")
+                    cost = 150
+                    reason += "; fixed10x42mm" if hero else "; fixed100x17mm"
+                else:
+                    if not flag("RobotDynamicStatus", "can_remote_heal"):
+                        raise ValueError("remote heal permission denied")
+                    hp = value("RobotDynamicStatus", "current_health")
+                    maximum = value("RobotStaticStatus", "max_health")
+                    if not 0 < hp < maximum:
+                        raise ValueError("remote heal requires positive nonfull observed HP")
+                    cost = estimate_remote_heal_cost(value("GameStatus", "stage_countdown_sec"))
+                reason += "; six-second service, not a five-second transaction ACK"
+    else:
+        raise ValueError("unsupported V2 economic route")
+    coins = value("GlobalLogisticsStatus", "remaining_economy")
+    if coins < cost:
+        return False, "insufficient observed coins for current estimate", cost
+    return True, reason, cost
+
+
+def request_decision(topic: str, command_id: int, snapshot, *, now: float, param: int = 0
                      ) -> tuple[bool, str, int | None]:
     """Pure peer-state request prerequisites; Safety is checked separately.
 
-    Only Air0..3 have positive decisions in this first slice. Values come from
+    Values come from
     the current owner's immutable wire snapshot, not RobotState or UI defaults.
     Returns requestable, prospective reason and fixed estimate (None for Air2's
     ongoing charge). Neither a positive result nor a held snapshot is authority,
@@ -94,17 +222,15 @@ def request_decision(topic: str, command_id: int, snapshot, *, now: float
     """
     if not is_documented_command(topic, command_id):
         return False, "unsupported V2 command", None
-    if topic == "SentryCtrlCommand":
-        if command_id == 1:
-            return False, "Sentry1 quantity contract is unresolved", None
-        if command_id in {7, 8, 9, 10, 11, 12}:
-            return False, "Sentry stance target/cost and server-decision policy pending", None
-        return False, "Sentry purchase target/quote policy pending", None
     if type(snapshot) is not WireSnapshot or snapshot.profile_id != _V2_PROFILE_ID:
         return False, "current V2 wire observations required", None
     try:
         if type(now) not in (int, float) or not math.isfinite(now) or now < 0:
             return False, "invalid action observation clock", None
+        if type(param) is not int:
+            return False, "command parameter must be an integer", None
+        if topic != "AirSupportCommand":
+            return _business_decision(topic, command_id, snapshot, now=now, param=param)
         value = lambda message, field: _fresh_integer(snapshot, message, field, now)
         value("GameStatus", "current_round")  # Explicit stored scope, not a vendor sequence.
         if value("GameStatus", "current_stage") != 4:

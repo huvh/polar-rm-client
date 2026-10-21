@@ -525,8 +525,8 @@ class IdentityAndDisplayTests(unittest.TestCase):
 
     def test_held_observation_survives_tongji_adapter(self):
         tree = ast.parse((ROOT / "rm_client/vision.py").read_text())
-        nodes = [n for n in tree.body if isinstance(n, (ast.ClassDef, ast.FunctionDef)) and n.name in {"ArmorObservation", "_observation_from_tongji"}]
-        scope = {"dataclass": dataclass}
+        nodes = [n for n in tree.body if isinstance(n, (ast.ClassDef, ast.FunctionDef)) and n.name in {"ArmorObservation", "_observation_from_tongji", "_finite_number", "_result_flag"}]
+        scope = {"dataclass": dataclass, "math": math}
         module = ast.Module(body=[ast.ImportFrom(module="__future__", names=[ast.alias(name="annotations")], level=0), *nodes], type_ignores=[])
         exec(compile(ast.fix_missing_locations(module), "vision-adapter", "exec"), scope)
         self.assertTrue(scope["_observation_from_tongji"]({"held": True}).held)

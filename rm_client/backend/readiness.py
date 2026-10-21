@@ -11,9 +11,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from functools import lru_cache
 import time
+import math
 from typing import Any, Mapping
 
-from .protocol import PROTOCOL_VERSION
+from .qualification import core_profile_support
+from .referee.registry import get_profile
 from .video_backend import resolve_ffmpeg_executable
 from ..runtime_paths import RuntimePaths
 
@@ -141,6 +143,7 @@ def audit_backend(
     source_declared = selected_video_source in {"udp", "native_0310"}
     udp_decoded = bool(
         udp.get("connected", False)
+        and udp.get("ingress_mode", "shark-framed") == "shark-framed"
         and udp.get("decoded_connected", False)
         and int(udp.get("decoded_frames", 0) or 0) > 0
     )
@@ -153,25 +156,43 @@ def audit_backend(
         (selected_video_source == "udp" and udp_decoded)
         or (selected_video_source == "native_0310" and native_decoded)
     )
-    official_feed_at = float(getattr(state, "official_feed_at", 0.0) or 0.0)
+    official_feed_at = getattr(state, "official_feed_at", None)
+    now = time.perf_counter()
+    # Check bounds before float arithmetic so huge integers cannot overflow.
     official_fresh = bool(
         getattr(state, "official_events_online", False)
-        and official_feed_at > 0.0
-        and time.perf_counter() - official_feed_at <= 2.0
+        and type(official_feed_at) in (int, float)
+        and (type(official_feed_at) is int or math.isfinite(official_feed_at))
+        and 0 < official_feed_at <= now
+        and now - official_feed_at <= 2.0
     )
+    profile_id = getattr(getattr(manager, "referee", None), "profile_id", None)
+    if profile_id is None:
+        profile_id = getattr(state, "referee_profile", "")
+    profile_supported, profile_detail = core_profile_support(profile_id)
+    try:
+        active_profile = get_profile(profile_id)
+        profile_detail = f"{active_profile.profile_id}; protocol={active_profile.protocol_version}; {profile_detail}"
+    except ValueError:
+        pass
+    control_transport_ready = bool(mqtt.get("connected", False)
+        and mqtt.get("subscriptions_ready", False)
+        and not mqtt.get("mock_output", True) and profile_supported)
     gates = (
         ReadinessGate("official_scenario", scenario == "OfficialEvent", f"scenario={scenario or 'unknown'}"),
-        ReadinessGate("mqtt_link", bool(mqtt.get("connected", False)), "referee MQTT downlink connected", True),
+        ReadinessGate("mqtt_link", bool(mqtt.get("connected", False)
+                      and mqtt.get("subscriptions_ready", False)),
+                      "referee MQTT downlinks accepted by current-session SUBACK", True),
         ReadinessGate(
             "mqtt_real_publish",
-            bool(mqtt.get("connected", False)) and not bool(mqtt.get("mock_output", True)),
+            control_transport_ready,
             "official uplink is connected and no longer in mock-output mode",
             True,
         ),
         ReadinessGate(
-            "protocol_v1_3_1",
-            PROTOCOL_VERSION == "1.3.1",
-            f"protocol={PROTOCOL_VERSION}; MapClickInfo downlink / MapClickCmd uplink",
+            "referee_protocol",
+            profile_supported,
+            profile_detail,
         ),
         ReadinessGate(
             "ffmpeg_decoder",
@@ -192,7 +213,7 @@ def audit_backend(
         ),
         ReadinessGate(
             "control_transport",
-            bool(mqtt.get("connected", False)) and not bool(mqtt.get("mock_output", True)),
+            control_transport_ready,
             "KeyboardMouseControl/CustomControl use official MQTT video-link uplink; 0x0311 is blocked on 115200 serial",
             True,
         ),
@@ -278,6 +299,7 @@ def audit_backend(
             and float(getattr(state, "deploy_status_at", 0.0) or 0.0) > 0.0,
             "Hero enter/exit command and DeployModeStatusSync/video-cut lifecycle validated on field hardware",
             True,
+            required=str(getattr(state, "robot_id", "")) in {"1", "101"},
         ),
         ReadinessGate("loss_recovery_test", bool(evidence.get("loss_recovery_test", False)), "MQTT/video/decoder loss and reconnect drill", True),
         ReadinessGate(

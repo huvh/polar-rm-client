@@ -1,7 +1,6 @@
-"""Unregistered V2 projection; common V1 authority and host effects are reused.
+"""V2 projection with explicit presence and independent mock values.
 
-The settlement witness is local stale-result prevention, not a protocol ACK or
-atomic-snapshot claim. V2 is still unavailable through the profile registry.
+Settlement and wire receipts are observations, not request/payment ACKs.
 """
 from __future__ import annotations
 

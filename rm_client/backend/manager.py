@@ -211,6 +211,7 @@ class BackendManager:
                 protocol_version=self.referee.protocol_version,
             )
         )
+        self.mqtt.bind_economy_context(self.state, self.qualification)
         self.config = SCENARIOS.get(scenario_key, SCENARIOS["LabDebug"])
         self._apply_config(self.config)
 
@@ -503,7 +504,7 @@ class BackendManager:
         if not request.start:
             return
         self.mqtt.start()
-        if self._active_video_source in {"shark udp", "udp", "udp hevc", "hevc", "h265"}:
+        if self._active_video_source in {"shark udp", "udp", "udp hevc", "hevc", "h265", "legacy vt02 udp", "legacy official bridge"}:
             self.udp.start()
         if request.synchronous_start:
             self.serial.start()
@@ -1187,6 +1188,8 @@ class BackendManager:
         state.deploy_mode = 0
         state.deploy_status_revision += 1
         state.deploy_status_at = 0.0
+        state.total_damage_ally = None
+        state.total_damage_enemy = None
         state.clear_match_settlement()
         state.current_stage = "NOT_STARTED"
         for key in ("respawn_status", "student_legacy_roster", "student_legacy_fields"):
@@ -1201,8 +1204,6 @@ class BackendManager:
         if self._backend_transition_blocks_work():
             return
         self.mqtt.poll_connection()
-        if self.state is not None:
-            self.safety.update_stage(self.state.current_stage)
         self.serial.tick()
         if not self.mqtt.connected and self.mqtt.disconnected_at > 0.0:
             if time.perf_counter() - self.mqtt.disconnected_at > 2.0 and not self._mqtt_disconnect_lock_applied:
@@ -1447,24 +1448,32 @@ class BackendManager:
         # Even a broken control/UI adapter cannot skip physical neutral.
         dt7_ok, cc_ok = self._request_device_neutral(reason)
         control = getattr(self, "_dt7_control_ref", None)
+        failures: list[Exception] = []
+
+        def attempt(action: Callable[[], Any]) -> None:
+            try:
+                action()
+            except Exception as error:
+                failures.append(error)
+
         if control is not None:
-            control.dt7_qualification_token = None
-            control.dt7_forced_keys = None
-            control.dt7_send_paused = False
-            control.dt7_enabled = False
-            control.cc_enabled = False
-            control.reset_inputs()
-            # tick_polar_link reads this cached snapshot independently of
-            # key_state. Clearing keys alone can replay the last held W as
-            # soon as the new connection supplies fresh telemetry.
-            control.last_command = None
-            control.last_payload = b""
-            control.clear_pending()
-        if control is not None:
+            for name, value in (("dt7_qualification_token", None), ("dt7_forced_keys", None),
+                                ("dt7_send_paused", False), ("dt7_enabled", False), ("cc_enabled", False)):
+                attempt(lambda: setattr(control, name, value))
+            attempt(lambda: control.reset_inputs())
+            # These independent caches must still be cleared if reset_inputs
+            # fails. Otherwise a later recovery can replay the old held W.
+            attempt(lambda: setattr(control, "last_command", None))
+            attempt(lambda: setattr(control, "last_payload", b""))
+            attempt(lambda: control.clear_pending())
             if dt7_ok is not None:
-                control.dt7_release_pending = not dt7_ok
+                attempt(lambda: setattr(control, "dt7_release_pending", not dt7_ok))
             if cc_ok is not None:
-                control.cc_release_pending = not cc_ok
+                attempt(lambda: setattr(control, "cc_release_pending", not cc_ok))
+        if failures:
+            # Keep the original failure and pending retry. The UI hook remains
+            # success-only: it must not observe an incompletely cleared owner.
+            raise failures[0]
         hook = self.input_clear_hook
         if hook is not None:
             hook(str(reason))
@@ -1533,7 +1542,9 @@ class BackendManager:
             # A periodic UI refresh must expose the retained error, not spawn
             # an unbounded series of retries or claim the failed target ready.
             raise VideoSourceAdmissionError(self._video_source_failures)
-        udp_selected = normalized == "udp hevc"
+        udp_selected = normalized in {"udp hevc", "legacy vt02 udp", "legacy official bridge"}
+        ingress_mode = {"legacy vt02 udp": "legacy-vt02-h264", "legacy official bridge": "legacy-official-bridge"}.get(normalized, "shark-framed")
+        ingress_change = udp_selected and self.udp.ingress_mode != ingress_mode
         if (not _retry and normalized == self._active_video_source
                 and (not udp_selected or self.udp.running)):
             return
@@ -1547,7 +1558,7 @@ class BackendManager:
         self._video_source_request = request
         self._active_video_source = ""
         admission = VideoSourceAdmission()
-        if not udp_selected or (_retry and self.udp.stop_pending):
+        if not udp_selected or ingress_change or (_retry and self.udp.stop_pending):
             # This operation disables HEVC and attempts both native owners,
             # including a retained stopped session after a failed admission.
             admission.attempt("UDP/HEVC", self.udp.request_stop)
@@ -1558,6 +1569,13 @@ class BackendManager:
             self._native_0310_blocked_until_sps = True
             admission.attempt("Native recovery reset", self._native_recovery.reset)
             admission.attempt("Native stop", self.native_decoder.request_stop)
+        if not admission.failures and udp_selected and ingress_change:
+            if not self.udp.cleanup_complete:
+                # Target is recorded, but not active until the captured socket
+                # and decoder have both retired. A later refresh observes that
+                # completion; it never spawns a competing UDP owner.
+                return
+            admission.attempt("UDP ingress selection", lambda: self.udp.configure_ingress(ingress_mode))
         if not admission.failures and udp_selected:
             admission.attempt("HEVC enable", lambda: self.udp.request_decode_enabled(True))
             if not admission.failures and start and not self.udp.running:
@@ -1734,6 +1752,8 @@ class BackendManager:
             "udp hevc",
             "hevc",
             "h265",
+            "legacy vt02 udp",
+            "legacy official bridge",
         }
         candidates: list[tuple[Any, float, str]] = []
         if want_native and self.native_decoder.available:
@@ -1741,9 +1761,13 @@ class BackendManager:
             if frame is not None:
                 candidates.append((frame, frame_at, "native-0x0310"))
         if want_udp:
+            expected_ingress = {"legacy vt02 udp": "legacy-vt02-h264", "legacy official bridge": "legacy-official-bridge"}.get(mode, "shark-framed")
+            if mode != "auto" and self.udp.ingress_mode != expected_ingress:
+                return max(candidates, key=lambda item: item[1]) if candidates else (None, 0.0, "none")
             frame, frame_at = self.udp.latest_video_frame(timeout_s)
             if frame is not None:
-                candidates.append((frame, frame_at, "udp"))
+                candidates.append((frame, frame_at, {"legacy-vt02-h264": "legacy-vt02-udp",
+                    "legacy-official-bridge": "legacy-official-bridge"}.get(self.udp.ingress_mode, "udp")))
         if not candidates:
             return None, 0.0, "none"
         return max(candidates, key=lambda item: item[1])
@@ -2001,6 +2025,7 @@ class BackendManager:
         *,
         intent: str = "control",
         qualification_token: str | None = None,
+        expected_economy_snapshot: Any = None,
     ) -> tuple[bool, str]:
         return self.mqtt.publish_named(
             name,
@@ -2008,6 +2033,7 @@ class BackendManager:
             qos=1,
             intent=intent,
             qualification_token=qualification_token,
+            expected_economy_snapshot=expected_economy_snapshot,
         )
 
     def publish_keyboard_mouse(self, mouse_x=0, mouse_y=0, mouse_z=0, *,
@@ -2346,13 +2372,15 @@ class BackendManager:
         if self.mqtt.mock_output or not self.safety.allow_mqtt_publish:
             self.safety.lock_control("arm requires a real MQTT output scenario (mock evidence is not signable)")
             return False, self.safety.last_reason
-        if not self.mqtt.connected:
-            self.safety.lock_control("arm requires a live MQTT referee connection")
+        if not self.mqtt.connected or not getattr(self.mqtt, "subscriptions_ready", False):
+            self.safety.lock_control("arm requires a live MQTT connection with current SUBACK")
             return False, self.safety.last_reason
         runtime_robot = str(getattr(self.state, "robot_id", self.mqtt.client_id))
         if runtime_robot != self.mqtt.client_id or (robot_id is not None and str(robot_id) != self.mqtt.client_id):
             self.safety.lock_control("arm robot identity differs from MQTT ClientId")
             return False, self.safety.last_reason
+        arm_owner = (self.mqtt.client, self.mqtt.client_id, self.mqtt.receive_generation,
+                     self.referee.profile_id)
         ready, reason = self.qualification.verified_core_ready()
         if not ready:
             self.safety.lock_control(reason)
@@ -2384,6 +2412,11 @@ class BackendManager:
             if not dt7_ready:
                 self.safety.lock_control(dt7_reason)
                 return False, self.safety.last_reason
+        if (not getattr(self.mqtt, "subscriptions_ready", False)
+                or arm_owner != (self.mqtt.client, self.mqtt.client_id,
+                                 self.mqtt.receive_generation, self.referee.profile_id)):
+            self.safety.lock_control("MQTT session changed during qualification verification")
+            return False, self.safety.last_reason
         try:
             self.safety.arm_match(capabilities)
         except ValueError as exc:
@@ -2396,63 +2429,146 @@ class BackendManager:
                 self.safety.lock_control("CC neutral remains unconfirmed; retry neutral before re-arm")
                 return False, self.safety.last_reason
             self._cc_failure_seen = None
+        if (not getattr(self.mqtt, "subscriptions_ready", False)
+                or arm_owner != (self.mqtt.client, self.mqtt.client_id,
+                                 self.mqtt.receive_generation, self.referee.profile_id)
+                or self.safety.control_state.value != "MATCH_ARMED"):
+            self.safety.lock_control("control authority changed during arm notification")
+            return False, self.safety.last_reason
         self.field_log.emit("control_arm", capabilities=sorted(capabilities))
         return True, "MATCH_ARMED"
 
     def _canonical_readiness_video_source(self) -> str:
         source = str(self._active_video_source).strip().lower()
+        if source == "legacy official bridge":
+            return "legacy_official_bridge"
+        if source == "legacy vt02 udp":
+            return "legacy_vt02_udp"  # Not the official-2026 qualification source.
         if source in {"native", "native 0x0310", "0x0310"}:
             return "native_0310"
         if source in {"shark udp", "udp", "udp hevc", "hevc", "h265"}:
             return "udp"
         return ""
 
+    def _v2_action_admission(self, name: str, **values: Any) -> tuple[bool, str]:
+        """Reject wrong role/value types before codecs can coerce them.
+
+        Final wire identity, receipt, owner, stage and authority remain MQTT's
+        responsibility. This early gate never grants permission by itself.
+        """
+        if self.referee.profile_id != "rm2026-v2.0.0":
+            return True, "legacy profile"
+        from .referee.rm2026_v2.uplink_validation import ROLE_IDS
+        robot = getattr(self.state, "robot_id", None)
+        if type(robot) is not int or str(robot) != self.mqtt.client_id:
+            return False, "V2 requester identity differs from configured ClientId"
+        if name in ROLE_IDS and robot not in ROLE_IDS[name]:
+            return False, f"{name}: requester role is not supported"
+        for field, value in values.items():
+            if field in {"open_gate", "launch_confirm"}:
+                if type(value) is not bool:
+                    return False, f"{name}.{field} must be bool"
+            elif type(value) is not int:
+                return False, f"{name}.{field} must be integer"
+        if name == "AssemblyCommand" and (values['operation'] not in {0,1,2} or values['difficulty'] not in {1,2,3,4}):
+            return False, "V2 Assembly requires operation0/1/2 and difficulty1..4"
+        if name == "HeroDeployModeEventCommand" and values['mode'] not in {0,1}:
+            return False, "V2 Hero deploy mode must be0/1"
+        if name == "RuneActivateCommand" and values['activate'] != 1:
+            return False, "V2 Rune only defines activate1"
+        if name == "DartCommand" and values['target_id'] not in range(1,6):
+            return False, "V2 Dart target must be1..5"
+        if name == "RobotPerformanceSelectionCommand":
+            own = (values['shooter'], values['chassis'])
+            control = values['sentry_control']
+            if control not in {0,1}:
+                return False, "V2 Sentry control must be0/1"
+            role = robot % 100
+            if role == 6:
+                if any(own):
+                    return False, "V2 aerial selection is same-team Sentry mode only"
+            else:
+                allowed = {0,3,4} if role == 1 else {0,1,2}
+                if control != 0 or any(item not in allowed for item in own):
+                    return False, "V2 performance system does not match requester role"
+        if name in {"CommonCommand", "SentryCtrlCommand", "AirSupportCommand"}:
+            from .referee.rm2026_v2.economy_rules import is_documented_command
+            command = values['cmd_type'] if name == "CommonCommand" else values['command_id']
+            if not is_documented_command(name, command):
+                return False, f"{name}: unsupported V2 command"
+        return True, "ok"
+
     def publish_map_click_cmd(self, *, is_send_all=0, robot_id=b"", mode=1,
                               enemy_id=0, ascii_code=0, mark_type=1,
-                              map_x=0.0, map_y=0.0) -> tuple[bool, str]:
+                              map_x=0.0, map_y=0.0, intent="control",
+                              qualification_token=None, expected_economy_snapshot=None) -> tuple[bool, str]:
         return self._publish("MapClickCmd", self.referee.codec.encode_map_click_cmd(
-            is_send_all, robot_id, mode, enemy_id, ascii_code, mark_type, map_x, map_y))
+            is_send_all, robot_id, mode, enemy_id, ascii_code, mark_type, map_x, map_y),
+            intent=intent, qualification_token=qualification_token,
+            expected_economy_snapshot=expected_economy_snapshot)
 
-    # 旧内部调用兼容，但不再发布已废弃/方向错误的 topic。
     publish_map_click_notify = publish_map_click_cmd
 
     def publish_assembly_command(self, operation: int, difficulty: int) -> tuple[bool, str]:
+        allowed, reason = self._v2_action_admission("AssemblyCommand", operation=operation, difficulty=difficulty)
+        if not allowed:
+            return False, reason
         return self._publish("AssemblyCommand", self.referee.codec.encode_assembly_command(operation, difficulty))
 
     def publish_robot_performance(self, shooter: int, chassis: int,
-                                  sentry_control: int = 0) -> tuple[bool, str]:
+                                  sentry_control: int = 0, *, qualification_token=None) -> tuple[bool, str]:
+        allowed, reason = self._v2_action_admission("RobotPerformanceSelectionCommand", shooter=shooter, chassis=chassis, sentry_control=sentry_control)
+        if not allowed:
+            return False, reason
         return self._publish("RobotPerformanceSelectionCommand",
-                             self.referee.codec.encode_robot_performance_selection_command(shooter, chassis, sentry_control))
+            self.referee.codec.encode_robot_performance_selection_command(shooter, chassis, sentry_control),
+            intent="core_kmc", qualification_token=qualification_token)
 
     def publish_hero_deploy(self, mode: int) -> tuple[bool, str]:
-        return self._publish(
-            "HeroDeployModeEventCommand",
-            self.referee.codec.encode_hero_deploy_mode_event_command(mode),
-            intent="hero",
-        )
+        allowed, reason = self._v2_action_admission("HeroDeployModeEventCommand", mode=mode)
+        if not allowed:
+            return False, reason
+        return self._publish("HeroDeployModeEventCommand",
+            self.referee.codec.encode_hero_deploy_mode_event_command(mode), intent="hero")
 
     def publish_rune_activate(self, activate: int) -> tuple[bool, str]:
+        allowed, reason = self._v2_action_admission("RuneActivateCommand", activate=activate)
+        if not allowed:
+            return False, reason
         return self._publish("RuneActivateCommand", self.referee.codec.encode_rune_activate_command(activate))
 
     def publish_dart_command(self, target_id: int, open_gate: bool, launch_confirm: bool) -> tuple[bool, str]:
+        allowed, reason = self._v2_action_admission("DartCommand", target_id=target_id, open_gate=open_gate, launch_confirm=launch_confirm)
+        if not allowed:
+            return False, reason
         return self._publish("DartCommand", self.referee.codec.encode_dart_command(target_id, open_gate, launch_confirm))
 
-    def publish_sentry_command(self, command_id: int) -> tuple[bool, str]:
-        return self._publish("SentryCtrlCommand", self.referee.codec.encode_sentry_ctrl_command(command_id))
+    def publish_sentry_command(self, command_id: int, *, qualification_token=None, expected_economy_snapshot=None) -> tuple[bool, str]:
+        allowed, reason = self._v2_action_admission("SentryCtrlCommand", command_id=command_id)
+        if not allowed:
+            return False, reason
+        return self._publish("SentryCtrlCommand", self.referee.codec.encode_sentry_ctrl_command(command_id),
+            intent="economy", qualification_token=qualification_token, expected_economy_snapshot=expected_economy_snapshot)
 
-    def publish_common_command(self, cmd_type: int, param: int) -> tuple[bool, str]:
-        return self._publish(
-            "CommonCommand", self.referee.codec.encode_common_command(cmd_type, param), intent="economy"
-        )
+    def publish_common_command(self, cmd_type: int, param: int, *, qualification_token=None, expected_economy_snapshot=None) -> tuple[bool, str]:
+        allowed, reason = self._v2_action_admission("CommonCommand", cmd_type=cmd_type, param=param)
+        if not allowed:
+            return False, reason
+        return self._publish("CommonCommand", self.referee.codec.encode_common_command(cmd_type, param),
+            intent="economy", qualification_token=qualification_token, expected_economy_snapshot=expected_economy_snapshot)
 
-    def publish_air_support(self, command_id: int) -> tuple[bool, str]:
-        return self._publish("AirSupportCommand", self.referee.codec.encode_air_support_command(command_id))
+    def publish_air_support(self, command_id: int, *, qualification_token=None, expected_economy_snapshot=None) -> tuple[bool, str]:
+        allowed, reason = self._v2_action_admission("AirSupportCommand", command_id=command_id)
+        if not allowed:
+            return False, reason
+        return self._publish("AirSupportCommand", self.referee.codec.encode_air_support_command(command_id),
+            intent="economy", qualification_token=qualification_token, expected_economy_snapshot=expected_economy_snapshot)
 
     # ------------------------------------------------------------------
     # 工具：从本地 RobotProfile 设置推导官方性能体系取值并发布
     # ------------------------------------------------------------------
     @staticmethod
-    def performance_values(registry: Any) -> dict[str, int]:
+    def performance_values(registry: Any, *, referee_profile: str = DEFAULT_PROFILE) -> dict[str, int]:
         profile = registry.get("RobotProfile")
         if profile is None:
             return {"shooter": 0, "chassis": 0, "sentry_control": 0}
@@ -2473,17 +2589,19 @@ class BackendManager:
                 "chassis": CHASSIS_POWER if chassis == "Power" else CHASSIS_HEALTH,
                 "sentry_control": 0,
             }
-        if role == "Sentinel":
+        if ((referee_profile == "rm2026-v2.0.0" and role == "Aerial")
+                or (referee_profile != "rm2026-v2.0.0" and role == "Sentinel")):
             return {
                 "shooter": 0, "chassis": 0,
                 "sentry_control": SENTRY_SEMI_AUTO if sentry == "SemiAuto" else SENTRY_AUTOMATIC,
             }
         return {"shooter": 0, "chassis": 0, "sentry_control": 0}
 
-    def publish_performance_from_registry(self, registry: Any) -> tuple[bool, str]:
-        values = self.performance_values(registry)
+    def publish_performance_from_registry(self, registry: Any, *, qualification_token=None) -> tuple[bool, str]:
+        values = self.performance_values(registry, referee_profile=self.referee.profile_id)
         return self.publish_robot_performance(
-            values["shooter"], values["chassis"], values["sentry_control"])
+            values["shooter"], values["chassis"], values["sentry_control"],
+            qualification_token=qualification_token)
 
     # ------------------------------------------------------------------
     def stats(self) -> dict[str, Any]:

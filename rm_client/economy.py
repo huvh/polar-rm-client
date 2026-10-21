@@ -81,9 +81,17 @@ class EconomyCommandBridge:
 
     def __init__(self) -> None:
         self.sequence = 0
+        self._pending_context: tuple | None = None
         self.last_request: EconomyRequest | None = None
         self.history: list[EconomyTransaction] = []
         self.sender: Callable[[EconomyRequest], bool] | None = None
+
+    @staticmethod
+    def _context(state: Any) -> tuple:
+        # Retain the actual owner: equal dataclass values are not identity.
+        return (state,) + tuple(getattr(state, name, None) for name in (
+            "referee_profile", "match_mode", "robot_profile", "robot_id",
+            "alliance_color", "current_round", "mock_simulation_enabled", "economy_mock_mode"))
 
     @property
     def latest(self) -> EconomyTransaction | None:
@@ -107,7 +115,7 @@ class EconomyCommandBridge:
         from .backend.referee.registry import DEFAULT_PROFILE, V2_PROFILE, get_profile
         profile = get_profile(getattr(state, "referee_profile", DEFAULT_PROFILE))
         if profile.profile_id == V2_PROFILE:
-            raise ValueError("V2 partial profile: legacy economy offers are unavailable; use the supervised Air dialog")
+            raise ValueError("V2 legacy economy offers are unavailable; use the explicit V2 economic confirmation workspace")
         codec = profile.codec
         payload = (
             codec.encode_air_support_command(offer.command_type)
@@ -144,6 +152,7 @@ class EconomyCommandBridge:
             baseline_respawn_pending=bool(getattr(state, "respawn_pending", False)),
             baseline_support_active=bool(getattr(state, "air_support_active", False)),
         )
+        self._pending_context = self._context(state)
         self.last_request = request
         self.history.append(transaction)
         self.history = self.history[-32:]
@@ -160,6 +169,13 @@ class EconomyCommandBridge:
         if transaction is None or transaction.status != "pending":
             return transaction
         now = time.perf_counter() if now is None else float(now)
+        context = self._context(state)
+        if (self._pending_context is None or context[0] is not self._pending_context[0]
+                or context[1:] != self._pending_context[1:]):
+            transaction.status = "rejected"
+            transaction.message = "机器人/比赛上下文已改变；停止旧请求跟踪，不代表服务器撤销"
+            transaction.completed_at = now
+            return transaction
         from .referee_profiles import V2_PROFILE
         if getattr(state, "referee_profile", "") == V2_PROFILE:
             transaction.status = "rejected"

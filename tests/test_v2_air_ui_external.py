@@ -3,7 +3,7 @@
 Run separately with V2_SOURCE_ROOT set to the read-only source checkout when
 this file lives in the candidate overlay. Never imports the window facade,
 manager implementation, spin, native media, serial devices or network clients.
-The two exact manager publish methods and affected narrow mixin methods are
+The exact manager publish/admission methods and affected narrow mixin methods are
 AST-loaded; the entire tactical-map renderer is actually imported. This is
 inert Qt/transport evidence, not hardware or native-rendering qualification.
 """
@@ -117,7 +117,8 @@ def method_slice(relative, class_name, methods, *, extra=None):
     cls = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == class_name)
     nodes = [node for node in cls.body if isinstance(node, ast.FunctionDef) and node.name in methods]
     assert {node.name for node in nodes} == set(methods)
-    ns = {"Any": object, "V2_PROFILE": V2_PROFILE, "time": dialog.time}
+    ns = {"Any": object, "V2_PROFILE": V2_PROFILE, "time": dialog.time,
+          "__package__": ".".join(Path(relative).parts[:-1])}
     if extra:
         ns.update(extra)
     module = ast.Module(body=[ast.ImportFrom(module="__future__", names=[ast.alias(name="annotations")], level=0), *nodes], type_ignores=[])
@@ -125,7 +126,8 @@ def method_slice(relative, class_name, methods, *, extra=None):
     return {name: ns[name] for name in methods}
 
 
-_MANAGER_METHODS = method_slice("rm_client/backend/manager.py", "BackendManager", {"_publish", "publish_air_support"})
+_MANAGER_METHODS = method_slice("rm_client/backend/manager.py", "BackendManager",
+    {"_publish", "_v2_action_admission", "publish_air_support"})
 
 
 class InertClient:
@@ -133,6 +135,9 @@ class InertClient:
         self.sent = []
         self.rc = 0
         self.at_publish = None
+
+    def subscribe(self, topics):
+        return 0, 77
 
     def publish(self, topic, payload, qos):
         self.sent.append((topic, bytes(payload), qos))
@@ -143,6 +148,7 @@ class InertClient:
 
 class ManagerPort:
     _publish = _MANAGER_METHODS["_publish"]
+    _v2_action_admission = _MANAGER_METHODS["_v2_action_admission"]
     publish_air_support = _MANAGER_METHODS["publish_air_support"]
 
     def __init__(self, mqtt, session):
@@ -167,14 +173,17 @@ class Host(QWidget):
     def __init__(self, mqtt):
         super().__init__()
         session = SimpleNamespace(session_id="session-1", operator="Named Operator", robot_id="6",
-                                  referee_profile=V2_PROFILE)
+                                  referee_profile=V2_PROFILE, match_mode="RMUC7v7")
         self.backend = ManagerPort(mqtt, session)
         self.mqtt = mqtt
         self.registry = SimpleNamespace(get=lambda _name: None)
         self.scenario_manager = SimpleNamespace(current=SimpleNamespace(key="OfficialEvent"))
-        self.state = SimpleNamespace(referee_profile=V2_PROFILE, robot_id=6, current_round=1,
+        self.match_mode_manager = SimpleNamespace(current=SimpleNamespace(key="RMUC7v7"))
+        self.state = SimpleNamespace(referee_profile=V2_PROFILE, match_mode="RMUC7v7", robot_id=6, robot_profile="Aerial", current_round=1,
             current_stage="MATCH", air_support_active=False, air_support_free_time_sec=30,
             air_support_cost_coins=0, air_support_is_being_targeted=0, air_support_shooter_status=1)
+        self.backend.state = self.state
+        mqtt.bind_economy_context(self.state, self.backend.qualification)
         self.messages = []
         self._economy_qualification_token = None
         self._v2_air_qualification_attempt = None
@@ -197,7 +206,8 @@ class V2AirDialogTests(unittest.TestCase):
         mqtt = RmMqttBackend(client_id="6", mock_output=mock, safety=safety, referee_profile=V2_PROFILE)
         self.assertIs(mqtt.referee, get_profile(V2_PROFILE))
         mqtt.client = InertClient()
-        mqtt.connected = True
+        mqtt._on_connect(mqtt.client, None, {}, 0)
+        mqtt._on_subscribe(mqtt.client, None, 77, [0] * len(mqtt.referee.codec.DOWNLINK_MESSAGES))
         host = Host(mqtt)
         self.addCleanup(host.close)
         self.seed(host, command)
@@ -230,6 +240,7 @@ class V2AirDialogTests(unittest.TestCase):
         remaining = list(steps)
         errors = []
         seen = set()
+        seen_widgets = []  # Keep Qt wrappers alive; object IDs must not be reused between modals.
         timer = QTimer()
         timer.setInterval(5)
 
@@ -238,6 +249,7 @@ class V2AirDialogTests(unittest.TestCase):
             if widget is None or id(widget) in seen:
                 return
             seen.add(id(widget))
+            seen_widgets.append(widget)
             try:
                 if not remaining:
                     raise AssertionError("unexpected additional modal dialog")
@@ -342,9 +354,10 @@ class V2AirDialogTests(unittest.TestCase):
 
     def test_ordinary_armed_path_calls_actual_manager_methods(self):
         host = self.host(supervised=False)
+        snapshot = host.mqtt.v2_wire_snapshot()
         with patch.object(host.backend, "publish_air_support", wraps=host.backend.publish_air_support) as publish:
             self.confirm(host)
-        publish.assert_called_once_with(1)
+        publish.assert_called_once_with(1, expected_economy_snapshot=snapshot)
         self.assertEqual(len(host.mqtt.client.sent), 1)
         self.assertIsNone(host._v2_air_qualification_attempt)
         self.assertEqual(host.backend.locks, [])
@@ -481,16 +494,17 @@ class V2AirDialogTests(unittest.TestCase):
                                {"open_economy_workspace", "submit_economy_offer", "send_economy_request",
                                 "start_economy_qualification_test"})
         host = self.host()
-        with patch.object(host, "open_event_command_menu") as air:
+        with patch("rm_client.ui.polar.renderers.v2_economy_dialog._open_v2_economy_dialog") as common:
             methods["open_economy_workspace"](host)
-        air.assert_called_once_with()
+        common.assert_called_once_with(host, "CommonCommand")
         methods["submit_economy_offer"](host, object())
         self.assertFalse(methods["send_economy_request"](host, SimpleNamespace(mock=True)))
         self.assertEqual(host.mqtt.client.sent, [])
         host._v2_air_qualification_attempt = object()
         methods["start_economy_qualification_test"](host)
         self.assertIsNone(host._v2_air_qualification_attempt)
-        self.assertIn("MATCH only", host.messages[-1])
+        self.assertIn("during MATCH", host.messages[-1])
+        self.assertIn("not a unique request/payment ACK", host.messages[-1])
 
     def test_actual_observer_consumes_one_pass_and_retires_mismatched_attempt(self):
         relative = "rm_client/ui/polar/mixins/config_actions_mixin.py"

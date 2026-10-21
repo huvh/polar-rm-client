@@ -183,6 +183,9 @@ class Rm2026StateAdapter:
         if name == "GameStatus":
             previous_round = state.current_round
             state.current_round = int(data.get("current_round", previous_round))
+            if state.current_round != previous_round:
+                state.total_damage_ally = None
+                state.total_damage_enemy = None
             state.total_rounds = int(data.get("total_rounds", state.total_rounds))
             state.red_score = int(data.get("red_score", state.red_score))
             state.blue_score = int(data.get("blue_score", state.blue_score))
@@ -190,7 +193,7 @@ class Rm2026StateAdapter:
             self._apply_settlement(state, data, previous_round, stage)
             if stage is not None:
                 state.current_stage = _STAGE_STR.get(stage, str(stage))
-                self.host.safety.update_stage(stage)
+                # Safety authority belongs to transport receipt, never HUD replay.
             if stage is not None and state.current_stage != self.host._last_logged_stage:
                 self.host._last_logged_stage = state.current_stage
                 self.host.field_log.emit(
@@ -220,6 +223,9 @@ class Rm2026StateAdapter:
                 state.official_robot_bullets = bullets
                 state.backend_stats["robot_bullets"] = list(bullets)
                 self._sync_local_projectile_allowance(state)
+            for key in ("total_damage_ally", "total_damage_enemy"):
+                if key in data:
+                    setattr(state, key, int(data[key]))
         elif name == "GlobalLogisticsStatus":
             state.remaining_economy = int(data.get("remaining_economy", state.remaining_economy))
             state.total_economy_obtained = int(data.get("total_economy_obtained", state.total_economy_obtained))
@@ -232,21 +238,23 @@ class Rm2026StateAdapter:
             state.robot_statics.setdefault(state.robot_id, {}).update(self._clean(data))
             if 8 in present and data["level"]:
                 state.level = int(data["level"])
-            if 9 in present and data["max_health"]:
+            if 9 in present:
                 state.max_health = int(data["max_health"])
                 state.current_health = min(state.current_health, state.max_health)
-            if 10 in present and data["max_heat"]:
+            if 10 in present:
                 state.max_heat = float(data["max_heat"])
-            if 11 in present and data["heat_cooldown_rate"]:
+            if 11 in present:
                 state.heat_cooldown_rate = float(data["heat_cooldown_rate"])
-            if 12 in present and data["max_power"]:
+            if 12 in present:
                 state.power_limit = int(data["max_power"])
             # 缓冲能量上限属于 RobotStaticStatus（协议字段 13），不在动态报文里。
             # 上一版把它误写进 RobotDynamicStatus 分支，那里根本没这个键，
             # data.get 永远回退到现值 —— 看着接上了，实际一行都不生效。
             # 不写它，effective_capacitor_percent 只能按默认上限 100 算比例。
-            if 13 in present and data["max_buffer_energy"]:
+            if 13 in present:
                 state.max_buffer_energy = int(data["max_buffer_energy"])
+            if 14 in present:
+                state.max_chassis_energy = int(data["max_chassis_energy"])
             if 6 in present:
                 state.performance_sync["shooter"] = int(data["performance_system_shooter"])
             if 7 in present:
@@ -317,11 +325,14 @@ class Rm2026StateAdapter:
                     active_source=self.host._active_video_source,
                 )
         elif name == "RuneStatusSync":
+            if ("rune_status" in data and "average_rings" not in data
+                    and data["rune_status"] != state.rune_status.get("rune_status")):
+                state.rune_status.pop("average_rings", None)
             state.rune_status.update(self._clean(data))
             if "rune_status" in data:
                 state.energy_rune_phase = _RUNE_PHASE.get(int(data["rune_status"]), "INACTIVE")
-            if "average_rings" in data:
-                state.energy_rune_progress = int(float(data["average_rings"]) * 100)
+            # average_rings is a ring score, only applicable while activating
+            # the large rune. It is not a percent; mock progress is independent.
         elif name == "SentryStatusSync":
             state.sentry_status.update(self._clean(data))
         elif name == "DartSelectTargetStatusSync":

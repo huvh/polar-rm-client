@@ -9,15 +9,30 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
+import math
 
 
 RADAR_TTL_SECONDS = 6.0
 
 
-def radar_coordinate_metres(value: float, span_m: float) -> float:
-    """Official radar coordinates use centimetres; retain metre-sized inputs."""
+def radar_coordinate_metres(value: float, span_m: float, *, source: str = "official") -> float:
+    """Official coordinates are always cm, including small/zero values.
+
+    span_m remains for caller compatibility, never as a unit-guessing threshold.
+    Private producers must explicitly select their metre-based contract.
+    """
+    if type(value) is bool:
+        raise ValueError("boolean radar coordinate")
     coordinate = float(value)
-    return coordinate / 100.0 if coordinate > max(0.1, span_m) + 0.5 else coordinate
+    if not math.isfinite(coordinate):
+        raise ValueError("nonfinite radar coordinate")
+    if source == "official":
+        if coordinate < 0:
+            raise ValueError("official radar coordinates are unsigned")
+        return coordinate / 100.0
+    if source in {"private-metres", "mock-metres"}:
+        return coordinate
+    raise ValueError("unknown radar coordinate source")
 
 
 @dataclass(frozen=True)
@@ -44,13 +59,16 @@ class RadarMarker:
     x_m: float
     y_m: float
     highlighted: bool
+    position_offline: bool = False
 
     @classmethod
-    def from_wire(cls, detection: Mapping[str, Any], width_m: float, height_m: float) -> RadarMarker:
-        x_m = radar_coordinate_metres(detection.get('target_pos_x', 0.0), width_m)
-        y_m = radar_coordinate_metres(detection.get('target_pos_y', 0.0), height_m)
-        highlighted = int(detection.get('is_high_light', 0) or 0) != 0
-        return cls(x_m, y_m, highlighted)
+    def from_wire(cls, detection: Mapping[str, Any], width_m: float, height_m: float, *, source: str = "official") -> RadarMarker:
+        x_m = radar_coordinate_metres(detection.get('target_pos_x', 0.0), width_m, source=source)
+        y_m = radar_coordinate_metres(detection.get('target_pos_y', 0.0), height_m, source=source)
+        highlight = int(detection.get('is_high_light', 0) or 0)
+        if highlight not in {0, 1, 2}:
+            raise ValueError('unknown radar highlight enum')
+        return cls(x_m, y_m, highlight != 0, highlight == 2)
 
 
 @dataclass(frozen=True)

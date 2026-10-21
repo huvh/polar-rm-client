@@ -1,6 +1,6 @@
 """Valid local H.264 reaches the actual normal HUD, without devices or sockets.
 
-Both existing UDP source labels share the same backend. This is an offscreen
+Both framed source labels and the explicit legacy raw source share one owned backend. This is an offscreen
 client handoff contract, not old-receiver compatibility or native GPU evidence.
 """
 from pathlib import Path
@@ -36,9 +36,11 @@ class UdpH264HudHandoffTests(unittest.TestCase):
         # receiver starts: the fixture also audits and rejects network access.
         assembled = FrameAssembler().push_packet(struct.pack('>HHI', 1, 0, len(stream)) + stream)
         self.assertEqual(assembled, stream)
-        for mode in ('Shark UDP', 'UDP HEVC'):
+        for mode in ('Shark UDP', 'UDP HEVC', 'Legacy VT02 UDP', 'Legacy Official Bridge'):
             with self.subTest(source=mode):
                 self.fixture.source.value = mode
+                window.backend.set_active_video_source(mode, start=False)
+                self.assertTrue(window.backend.udp.wait_closed() if window.backend.udp.stop_pending else True)
                 window.backend.set_active_video_source(mode, start=False)
                 self.assertTrue(window.backend.udp.decode_h265)
                 window.backend.udp._on_assembled_frame(assembled)
@@ -50,7 +52,7 @@ class UdpH264HudHandoffTests(unittest.TestCase):
                         break
                     time.sleep(.01)
                 self.assertIsNotNone(bgr, window.backend.udp.h265_decoder.last_error)
-                self.assertEqual(source, 'udp')
+                self.assertEqual(source, {'Legacy VT02 UDP': 'legacy-vt02-udp', 'Legacy Official Bridge': 'legacy-official-bridge'}.get(mode, 'udp'))
                 self.assertEqual(bgr.shape, (120, 160, 3))
                 self.assertGreater(frame_at, 0.)
                 window.consume_capture_frame()

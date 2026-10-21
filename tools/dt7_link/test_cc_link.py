@@ -255,26 +255,26 @@ def test_key_table_file(tmp: str) -> None:
     print("\n--- 外置键值表 ---")
     check("仓库里带了一张可改的键值表", cc.KEY_USAGE_FILE.exists(), str(cc.KEY_USAGE_FILE))
     base = cc.load_key_usage()
-    check("默认表 = 内置 HID 值", base.get("W") == cc.HID_USAGE["W"], str(base.get("W")))
+    check("默认表 = 官方 Win32 VK 值", base.get("W") == cc.VIRTUAL_KEY["W"], str(base.get("W")))
     fp = os.path.join(tmp, "cc_key_usage.json")
     with open(fp, "w", encoding="utf-8") as fh:
         json.dump({"w": 119, "_comment": "现场试出来的值"}, fh)
     one = cc.load_key_usage(fp)
     check("表里的新值生效（键名大小写无关）", one.get("W") == 0x77, str(one.get("W")))
-    check("表里没写的键保留默认", one.get("A") == cc.HID_USAGE["A"], str(one.get("A")))
+    check("表里没写的键保留默认", one.get("A") == cc.VIRTUAL_KEY["A"], str(one.get("A")))
     k1, k2, dropped = cc.keys_to_two_usages(["W"], table=one)
     check("发出去的键值用表里的数", (k1, dropped) == (0x77, []), f"{k1} {dropped}")
     with open(fp, "w", encoding="utf-8") as fh:
         fh.write("{ 这不是 json")
-    check("表坏了退回内置默认", cc.load_key_usage(fp).get("W") == cc.HID_USAGE["W"])
+    check("表坏了退回内置默认", cc.load_key_usage(fp).get("W") == cc.VIRTUAL_KEY["W"])
     with open(fp, "w", encoding="utf-8") as fh:
         json.dump({"W": 99999, "S": -1, "E": "x"}, fh)
     weird = cc.load_key_usage(fp)
     check("越界/非整数表项被丢掉（不会写进帧）",
-          weird.get("W") == cc.HID_USAGE["W"] and weird.get("S") == cc.HID_USAGE["S"]
-          and weird.get("E") == cc.HID_USAGE["E"], str(weird.get("W")))
+          weird.get("W") == cc.VIRTUAL_KEY["W"] and weird.get("S") == cc.VIRTUAL_KEY["S"]
+          and weird.get("E") == cc.VIRTUAL_KEY["E"], str(weird.get("W")))
     check("表文件不存在也照样能用",
-          cc.load_key_usage(os.path.join(tmp, "nope.json")).get("W") == cc.HID_USAGE["W"])
+          cc.load_key_usage(os.path.join(tmp, "nope.json")).get("W") == cc.VIRTUAL_KEY["W"])
 
 def main() -> int:
     firmware = Path(sys.argv[1]) if len(sys.argv) > 1 and not sys.argv[1].startswith("-") \
@@ -283,7 +283,7 @@ def main() -> int:
         print(f"SKIP: 找不到 {firmware / CRC_C}")
         return 77
 
-    payload = encode_keymouse_0306(key1=cc.HID_USAGE["W"], key2=cc.HID_USAGE["SHIFT"],
+    payload = encode_keymouse_0306(key1=cc.VIRTUAL_KEY["W"], key2=cc.VIRTUAL_KEY["SHIFT"],
                                    x=1000, y=600, left=True)
     frame = encode_cc_frame(CC_CMD_KEYMOUSE, payload, seq=7)
 
@@ -324,7 +324,7 @@ def main() -> int:
 
     # --- 4) 0x0306 载荷布局：表 1-43 逐字段 ---
     check("键值1 在低字节、键值2 在高字节",
-          frame[7] == cc.HID_USAGE["W"] and frame[8] == cc.HID_USAGE["SHIFT"],
+          frame[7] == cc.VIRTUAL_KEY["W"] and frame[8] == cc.VIRTUAL_KEY["SHIFT"],
           f"{frame[7]:#02x} {frame[8]:#02x}")
     check("X=1000 落 bit0-11", (frame[9] | (frame[10] << 8)) & 0x0FFF == 1000)
     xy = frame[9] | (frame[10] << 8)
@@ -347,7 +347,7 @@ def main() -> int:
     k1, k2, dropped = keys_to_two_usages(["W", "A", "SHIFT"])
     check("三键组合报出被挤掉的键", dropped == ["SHIFT"], f"{k1:#x} {k2:#x} {dropped}")
     k1, k2, dropped = keys_to_two_usages(["W"])
-    check("单键时第二键值为 0（0=无按键按下）", (k1, k2, dropped) == (cc.HID_USAGE["W"], 0, []))
+    check("单键时第二键值为 0（0=无按键按下）", (k1, k2, dropped) == (cc.VIRTUAL_KEY["W"], 0, []))
     k1, k2, dropped = keys_to_two_usages([])
     check("空集合 = 松手", (k1, k2) == (0, 0))
     _, _, dropped = keys_to_two_usages(["W", "不存在的键"])

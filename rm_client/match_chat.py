@@ -140,6 +140,7 @@ class ChatEventAdapter:
 
     def __init__(self, chat: MatchChatController) -> None:
         self.chat = chat
+        self._context: tuple | None = None
         self._last_match_remaining: int | None = None
         self._match_warnings_sent: set[int] = set()
         self._last_base_status = ""
@@ -195,8 +196,21 @@ class ChatEventAdapter:
 
     def poll(self, state: Any, now: float | None = None) -> None:
         timestamp = time.perf_counter() if now is None else float(now)
+        context = (state, getattr(state, "referee_profile", None), getattr(state, "current_round", None))
+        if self._context is None or self._context[0] is not state or self._context[1:] != context[1:]:
+            self._last_match_remaining = self._last_dart_remaining = None
+            self._match_warnings_sent.clear()
+            self._dart_warnings_sent.clear()
+            self._last_base_status = self._last_outpost_status = ""
+            self._last_support_active = False
+            self._context = context
         remaining = int(getattr(state, "stage_countdown_sec", -1))
-        if remaining >= 0:
+        in_match = (not getattr(state, "official_state_active", False)
+                    or str(getattr(state, "current_stage", "")).upper() in {"MATCH", "4"})
+        if not in_match:
+            self._last_match_remaining = None
+            self._match_warnings_sent.clear()
+        if remaining >= 0 and in_match:
             previous = self._last_match_remaining
             if previous is not None and remaining > previous + 5:
                 self._match_warnings_sent.clear()

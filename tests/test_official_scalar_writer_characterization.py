@@ -14,6 +14,7 @@ from unittest.mock import patch
 
 sys.path[:0] = [str(Path(__file__).resolve().parents[1]), str(Path(__file__).resolve().parent)]
 import test_window_economy_commands as fixtures
+from test_mqtt_subscription_admission import Client as InertMqttClient
 from test_official_feed_projection_authority import ProjectionHarness, integer, packed, floating, varint
 from rm_client.combat_events import OfficialMatchFeed, _STATE_UPDATE_FIELDS
 from rm_client.referee_profiles import DEFAULT_PROFILE, STUDENT_PREVIEW_PROFILE
@@ -25,6 +26,13 @@ class OfficialScalarWriterCharacterization(unittest.TestCase):
         self.addCleanup(self.fixture.doCleanups)
         self.fixture.setUp()
         self.w = self.fixture.window
+        # The inert window's lifecycle retired its old receive session. Use
+        # normal replacement-session admission, never bypass revocation flags.
+        client = self.w.mqtt.client = InertMqttClient()
+        self.w.mqtt._on_connect(client, None, {}, 0)
+        self.w.mqtt._on_subscribe(client, None, client.result[1],
+            [self.w.mqtt.referee.max_qos] * len(client.subscriptions[-1]))
+        self.assertTrue(self.w.mqtt.stats()["subscriptions_ready"])
         self.w.state.official_state_active = True
         self.w.state.mock_simulation_enabled = False
         self.w.state.robot_id = 3

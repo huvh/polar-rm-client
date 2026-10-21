@@ -14,6 +14,7 @@ class MqttCallbackReceiptTime(unittest.TestCase):
     def make_backend(self):
         backend = RmMqttBackend()
         backend.client = object()  # Callback identity only; never connect/start.
+        backend.connected = backend._subscriptions_ready = True
         return backend
 
     def test_hook_and_decode_delays_remain_part_of_both_queue_ages(self):

@@ -136,7 +136,7 @@ class StageResetCharacterizationTests(unittest.TestCase):
 
 
 class StageEvidenceOwnerTests(unittest.TestCase):
-    def test_owner_changes_only_stage_pair_and_is_idempotent(self):
+    def test_owner_changes_only_stage_evidence_and_is_idempotent(self):
         for authority in ("locked", "qualification", "armed", "estop"):
             with self.subTest(authority=authority):
                 safety = OfficialSafety()
@@ -154,7 +154,7 @@ class StageEvidenceOwnerTests(unittest.TestCase):
                     name: value.copy() if isinstance(value, dict) else value
                     for name, value in vars(safety).items()
                 }
-                expected.update(current_stage="0", _stage_seen=False)
+                expected.update(current_stage="0", _stage_seen=False, _stage_evidence=None)
                 safety.clear_stage_evidence()
                 self.assertEqual(vars(safety), expected)
                 safety.clear_stage_evidence()

@@ -423,7 +423,7 @@ def default_modules(choices: CatalogChoices) -> list[Module]:
             "Vision",
             "None",
             [
-                mode_setting("Source", "Webcam", ["Webcam", "Shark UDP", "UDP HEVC", "Native 0x0310", "Synthetic"]),
+                mode_setting("Source", "Webcam", ["Webcam", "Shark UDP", "UDP HEVC", "Legacy VT02 UDP", "Legacy Official Bridge", "Native 0x0310", "Synthetic"]),
                 number_setting("Camera ID", 0, 0, 5, 1),
                 number_setting("Capture Width", 960, 320, 1920, 16, "px"),
                 number_setting("Capture Height", 540, 240, 1080, 16, "px"),
@@ -801,7 +801,7 @@ def default_modules(choices: CatalogChoices) -> list[Module]:
             [
                 mode_setting("Host", "127.0.0.1", ["127.0.0.1", "0.0.0.0", "192.168.12.2"]),
                 number_setting("Port", 3334, 1000, 9999, 1),
-                bool_setting("Reassemble", True),
+                bool_setting("Reassemble", True, "已弃用兼容项：入口契约由 CameraFeed Source 决定，此开关不改变分片或原始流模式。"),
             ],
             description="SharkDataSever UDP HEVC 分片重组接口。",
         ),

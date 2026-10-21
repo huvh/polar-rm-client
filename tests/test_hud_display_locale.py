@@ -16,6 +16,7 @@ from PySide6.QtGui import QColor, QFont, QFontMetricsF, QImage, QPainter, QPaint
 from PySide6.QtWidgets import QApplication
 from rm_client.model import RobotState, build_default_registry
 from rm_client.match_modes import MATCH_MODES
+from rm_client.backend.referee.registry import get_profile
 from rm_client.vision import VisionTarget
 from rm_client.ui.hud_locale import HUD_ZH, hud_text, hud_template, HudDisplayText
 from rm_client.ui.jello_locale import chinese_enabled
@@ -333,11 +334,11 @@ class HudLocaleTests(unittest.TestCase):
         for selection in range(5):
             calls=[]
             for language in ('English','简体中文'):
-                h=Host(language); output=[]; captions=[]; responses=iter((selection,0))
+                h=Host(language); output=[]; captions=[]; responses=iter((selection,0,0))
                 def item(owner,title,label,options,*args):
                     captions.extend((title,label,*options));return options[next(responses)],True
                 def integer(owner,title,label,*args): captions.extend((title,label));return 2,True
-                h.backend=NS(referee=NS(profile_id='rm2026-v1.3.1'),**{name:(lambda *args,_name=name,**kwargs:output.append((_name,args,kwargs)) or (True,'OK')) for name in ('publish_rune_activate','publish_dart_command','publish_sentry_command','publish_assembly_command','publish_performance_from_registry')})
+                h.backend=NS(referee=get_profile('rm2026-v1.3.1'),**{name:(lambda *args,_name=name,**kwargs:output.append((_name,args,kwargs)) or (True,'OK')) for name in ('publish_rune_activate','publish_dart_command','publish_sentry_command','publish_assembly_command','publish_performance_from_registry')})
                 with patch.object(tm.QInputDialog,'getItem',side_effect=item),patch.object(tm.QInputDialog,'getInt',side_effect=integer):h.open_event_command_menu()
                 normalized=[(name, ('registry',) if name=='publish_performance_from_registry' else args,kwargs) for name,args,kwargs in output]
                 calls.append(normalized)
@@ -346,12 +347,14 @@ class HudLocaleTests(unittest.TestCase):
             self.assertEqual(*calls)
         for cancellation in (0,1,2):
             h=Host('简体中文');calls=[];count=[0]
-            h.backend=NS(referee=NS(profile_id='rm2026-v1.3.1'),publish_dart_command=lambda *args:calls.append(args))
+            h.backend=NS(referee=get_profile('rm2026-v1.3.1'),publish_dart_command=lambda *args:calls.append(args))
             def item(owner,title,label,options,*args):
-                i=count[0];count[0]+=1;return options[1 if i==0 else 0],i!=cancellation
+                i=count[0];count[0]+=1;return options[0],i!=cancellation
             def integer(*args):i=count[0];count[0]+=1;return 1,i!=cancellation
             with patch.object(tm.QInputDialog,'getItem',side_effect=item),patch.object(tm.QInputDialog,'getInt',side_effect=integer):h.open_event_command_menu()
             self.assertEqual(calls,[])
+            self.assertEqual(count[0], cancellation + 1)
+            self.assertEqual(h.toasts, [])
     def test_minecraft_layout_cache_glyph_route_and_drop(self):
         renderer=MinecraftCombatHudRenderer(ROOT/'assets/minecraft_hud')
         self.assertTrue(renderer.available)

@@ -333,9 +333,10 @@ class TransportSafetyTests(unittest.TestCase):
         safety.configure(mock_writes=False, allow_mqtt_publish=True, enforce_official_limits=True)
         safety.configure_referee_limits(get_profile().uplink_hz)
         safety.arm_match(["core_kmc"])
-        safety.update_stage(4)
+        safety.update_stage(4, now=1.0)
         safety.mark_published("MapClickCmd", now=1.0)
         self.assertFalse(safety.can_publish("MapClickCmd", now=1.2)[0])
+        safety.update_stage(4, now=3.9)  # Keep stage live while testing the 3 s rate limit.
         self.assertFalse(safety.can_publish("MapClickCmd", now=3.999)[0])
         self.assertTrue(safety.can_publish("MapClickCmd", now=4.0)[0])
 
@@ -354,6 +355,7 @@ class TransportSafetyTests(unittest.TestCase):
             "detect_frame_codec": isolated("rm_client/backend/video_backend.py", "detect_frame_codec")})
         queued = []
         backend = SimpleNamespace(_lock=threading.Lock(), _assembler=SimpleNamespace(sequence_discontinuities=0),
+            ingress_mode="shark-framed",
             _udp_sequence_discontinuities=0, h265_recovery=AnnexBRecoveryGate("h265"), codec="unknown",
             _frame_times=[], _bytes_this_second=0, _last_stats_at=time.perf_counter(), dropped_frames=0,
             decode_h265=True, external_on_frame=None,
@@ -554,14 +556,14 @@ class TransportSafetyTests(unittest.TestCase):
         with self.assertRaisesRegex(UnsupportedRefereeProfile, "Unsupported V2 alias"):
             get_profile("rm2026-v2")
 
-    def test_cc_shipped_key_table_matches_documented_hid_values(self):
-        from rm_client.backend.cc_link import HID_USAGE, load_key_usage, keys_to_two_usages
+    def test_cc_shipped_key_table_matches_official_vk_values(self):
+        from rm_client.backend.cc_link import VIRTUAL_KEY, load_key_usage, keys_to_two_usages
         raw = json.loads((ROOT / "configs/cc_key_usage.json").read_text())
         for name, value in raw.items():
             if not name.startswith("_"):
-                self.assertEqual(value, HID_USAGE[name.upper()], name)
-        self.assertEqual(keys_to_two_usages(["V"], load_key_usage())[0], 25)
-        self.assertEqual(keys_to_two_usages(["S"], load_key_usage())[0], 22)
+                self.assertEqual(value, VIRTUAL_KEY[name.upper()], name)
+        self.assertEqual(keys_to_two_usages(["V"], load_key_usage())[0], 0x56)
+        self.assertEqual(keys_to_two_usages(["S"], load_key_usage())[0], 0x53)
 
 
 if __name__ == "__main__":

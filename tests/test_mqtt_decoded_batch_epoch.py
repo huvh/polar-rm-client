@@ -28,6 +28,7 @@ class DecodedBatchEpochTests(unittest.TestCase):
         b.mqtt = RmMqttBackend()
         b.mqtt.client = object()  # Callback identity only; no transport owner.
         b.mqtt.connected = True
+        b.mqtt._subscriptions_ready = True
         b.safety = b.mqtt.safety
         b.referee = b.mqtt.referee
         b.referee_adapter = b.referee.create_state_adapter(b)
@@ -69,6 +70,14 @@ class DecodedBatchEpochTests(unittest.TestCase):
     def disconnect(self):
         mqtt = self.backend.mqtt
         mqtt._on_disconnect(mqtt.client, None, _reason_code='inert proof')
+
+    def reconnect(self):
+        # A post-disconnect batch needs a new admitted connection, not a late
+        # callback from the retired socket. No real transport is acquired.
+        mqtt = self.backend.mqtt
+        mqtt.client = NS(subscribe=lambda topics: (0, 1))
+        mqtt._on_connect(mqtt.client, None, {}, 0)
+        mqtt._on_subscribe(mqtt.client, None, 1, [0] * len(mqtt.referee.codec.DOWNLINK_MESSAGES))
 
     def assert_first_only(self):
         self.assertEqual((self.state.remaining_ammo, self.state.current_heat), (12, 42.))
@@ -177,6 +186,7 @@ class DecodedBatchEpochTests(unittest.TestCase):
         self.pair()
         def observer(*args):
             self.disconnect()
+            self.reconnect()
             self.heat(7., 102.)
             raise failure
         self.backend.referee_view_observer = observer
@@ -195,6 +205,7 @@ class DecodedBatchEpochTests(unittest.TestCase):
         def observer(*args):
             self.backend.referee_view_observer = None
             self.disconnect()
+            self.reconnect()
             self.heat(7., 102.)
         self.backend.referee_view_observer = observer
         self.assertEqual(self.apply(), 1)
@@ -217,6 +228,7 @@ class DecodedBatchEpochTests(unittest.TestCase):
         def observer(*args):
             self.backend.referee_view_observer = None
             self.disconnect()
+            self.reconnect()
             self.heat(7., 102.)
             nested.append(self.apply())
             if fail:
@@ -249,6 +261,7 @@ class DecodedBatchEpochTests(unittest.TestCase):
         drain = self.backend.mqtt.drain_decoded
         def crossed_drain():
             self.disconnect()
+            self.reconnect()
             self.heat(7., 102.)
             return drain()
         self.backend.mqtt.drain_decoded = crossed_drain

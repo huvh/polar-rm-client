@@ -47,8 +47,6 @@ class RefereeProfile:
             return False, f"{self.profile_id}: READ ONLY; no control/economy uplink"
         if str(topic) not in self.codec.UPLINK_MESSAGES:
             return False, f"{self.profile_id}: not an official uplink topic: {topic}"
-        if self.profile_id == V2_PROFILE and topic != "AirSupportCommand":
-            return False, "V2 partial profile: only supervised Air requests are supported; this uplink is pending review"
         if isinstance(qos, bool) or qos not in range(self.max_qos + 1):
             return False, f"{self.profile_id}: QoS must be 0..{self.max_qos}"
         return True, "ok"
@@ -113,8 +111,12 @@ _STUDENT = _assemble_profile(
 )
 _V2 = _assemble_profile(
     get_profile_definition(V2_PROFILE), v2_codec,
-    # A conservative local Air cap; it is not a vendor-specified frequency.
-    MappingProxyType({"AirSupportCommand": 10.0}),
+    # Air's 10 Hz is a conservative local cap, not a vendor numeric guarantee.
+    MappingProxyType({
+        name: (75.0 if name in {"KeyboardMouseControl", "CustomControl"}
+               else 1.0 / 3.0 if name == "MapClickCmd" else 10.0)
+        for name in v2_codec.UPLINK_MESSAGES
+    }),
 )
 _PROFILES = MappingProxyType({
     _RM2026.profile_id: _RM2026, _STUDENT.profile_id: _STUDENT,

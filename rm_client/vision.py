@@ -22,6 +22,18 @@ PACKET_FRAME = 1
 PACKET_RESULT = 2
 
 
+def _finite_number(value: Any) -> float:
+    number = float(value)
+    if not math.isfinite(number):
+        raise ValueError("vision numeric fields must be finite")
+    return number
+
+
+def _result_flag(value: Any) -> bool:
+    # Text such as "false" is never positive calibration/control evidence.
+    return value if type(value) is bool else type(value) is int and value == 1
+
+
 @dataclass
 class VisionTarget:
     x: float
@@ -60,35 +72,35 @@ class ArmorObservation:
             for point in raw_points[:4]:
                 if isinstance(point, (list, tuple)) and len(point) >= 2:
                     try:
-                        points.append((float(point[0]), float(point[1])))
-                    except (TypeError, ValueError):
-                        continue
+                        points.append((_finite_number(point[0]), _finite_number(point[1])))
+                    except (TypeError, ValueError, OverflowError) as exc:
+                        raise ValueError("invalid armor coordinates") from exc
         raw_back = payload.get("back_points", [])
         back_points: list[tuple[float, float]] = []
         if isinstance(raw_back, list):
             for point in raw_back[:4]:
                 if isinstance(point, (list, tuple)) and len(point) >= 2:
                     try:
-                        back_points.append((float(point[0]), float(point[1])))
-                    except (TypeError, ValueError):
-                        continue
+                        back_points.append((_finite_number(point[0]), _finite_number(point[1])))
+                    except (TypeError, ValueError, OverflowError) as exc:
+                        raise ValueError("invalid armor coordinates") from exc
         return cls(
             armor_id=int(payload.get("id", -1)),
             label=str(payload.get("label", "armor")),
             color=str(payload.get("color", "unknown")),
-            confidence=max(0.0, min(1.0, float(payload.get("confidence", 0.0)))),
+            confidence=max(0.0, min(1.0, _finite_number(payload.get("confidence", 0.0)))),
             points=tuple(points),
-            distance_m=max(0.0, float(payload.get("distance_m", 0.0))),
-            predicted=bool(payload.get("predicted", False)),
-            aim=bool(payload.get("aim", False)),
-            depth_m=max(0.0, float(payload.get("depth_m", 0.0))),
+            distance_m=max(0.0, _finite_number(payload.get("distance_m", 0.0))),
+            predicted=_result_flag(payload.get("predicted", False)),
+            aim=_result_flag(payload.get("aim", False)),
+            depth_m=max(0.0, _finite_number(payload.get("depth_m", 0.0))),
             back_points=tuple(back_points),
-            yaw_rad=float(payload.get("yaw_rad", 0.0)),
+            yaw_rad=_finite_number(payload.get("yaw_rad", 0.0)),
             plate_id=int(payload.get("plate_id", payload.get("id", -1))),
-            light_strength=max(0.0, min(1.0, float(payload.get("light_strength", 0.0)))),
+            light_strength=max(0.0, min(1.0, _finite_number(payload.get("light_strength", 0.0)))),
             light_state=str(payload.get("light_state", "unknown")),
             target_id=int(payload.get("target_id", payload.get("id", -1))),
-            held=bool(payload.get("held", False)),
+            held=_result_flag(payload.get("held", False)),
         )
 
 
@@ -113,14 +125,14 @@ class VisionLossEvidence:
             return cls(
                 target_id=int(payload.get("target_id", -1)),
                 label=str(payload.get("label", "armor")),
-                light_strength=max(0.0, min(1.0, float(payload.get("light_strength", 0.0)))),
-                baseline_strength=max(0.0, min(1.0, float(payload.get("baseline_strength", 0.0)))),
-                probe_dark=bool(payload.get("probe_dark", False)),
-                moving_fast=bool(payload.get("moving_fast", False)),
-                near_edge=bool(payload.get("near_edge", False)),
+                light_strength=max(0.0, min(1.0, _finite_number(payload.get("light_strength", 0.0)))),
+                baseline_strength=max(0.0, min(1.0, _finite_number(payload.get("baseline_strength", 0.0)))),
+                probe_dark=_result_flag(payload.get("probe_dark", False)),
+                moving_fast=_result_flag(payload.get("moving_fast", False)),
+                near_edge=_result_flag(payload.get("near_edge", False)),
                 sequence=int(payload.get("sequence", -1)),
             )
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             return None
 
 
@@ -154,21 +166,26 @@ class VisionResult:
         predicted = armor_list("predicted_armors")
         raw_aim = payload.get("aim_armor")
         aim = ArmorObservation.from_payload(raw_aim) if isinstance(raw_aim, dict) else next((item for item in predicted if item.aim), None)
+        timestamp = int(payload.get("timestamp_ns", timestamp_ns))
+        width = int(payload.get("source_width", 1))
+        height = int(payload.get("source_height", 1))
+        if not 0 <= timestamp < 2**64 or not 1 <= width <= 16384 or not 1 <= height <= 16384:
+            raise ValueError("invalid vision dimensions or timestamp")
         return cls(
             sequence=sequence,
-            timestamp_ns=int(payload.get("timestamp_ns", timestamp_ns)),
-            source_width=max(1, int(payload.get("source_width", 1))),
-            source_height=max(1, int(payload.get("source_height", 1))),
+            timestamp_ns=timestamp,
+            source_width=width,
+            source_height=height,
             detections=detected,
             predicted_armors=predicted,
             aim_armor=aim,
             tracking_state=str(payload.get("tracking_state", "lost")),
-            calibrated=bool(payload.get("calibrated", False)),
+            calibrated=_result_flag(payload.get("calibrated", False)),
             inference_device=str(payload.get("inference_device", "unknown")),
-            inference_fps=max(0.0, float(payload.get("inference_fps", 0.0))),
-            latency_ms=max(0.0, float(payload.get("latency_ms", 0.0))),
-            aim_yaw_deg=float(payload.get("aim_yaw_deg", 0.0)),
-            aim_pitch_deg=float(payload.get("aim_pitch_deg", 0.0)),
+            inference_fps=max(0.0, _finite_number(payload.get("inference_fps", 0.0))),
+            latency_ms=max(0.0, _finite_number(payload.get("latency_ms", 0.0))),
+            aim_yaw_deg=_finite_number(payload.get("aim_yaw_deg", 0.0)),
+            aim_pitch_deg=_finite_number(payload.get("aim_pitch_deg", 0.0)),
             loss_evidence=VisionLossEvidence.from_payload(payload.get("loss_evidence")),
         )
 
@@ -772,7 +789,7 @@ class TongjiVisionBridge:
         result = self.last_result
         if result is None:
             return None
-        if (time.time_ns() - result.timestamp_ns) / 1_000_000.0 > max_age_ms:
+        if not 0 <= (time.time_ns() - result.timestamp_ns) / 1_000_000.0 <= max_age_ms:
             return None
         return result
 
@@ -859,7 +876,11 @@ class TongjiVisionBridge:
                 continue
             if not isinstance(data, dict):
                 continue
-            result = VisionResult.from_payload(sequence, timestamp_ns, data)
+            try:
+                result = VisionResult.from_payload(sequence, timestamp_ns, data)
+            except (TypeError, ValueError, OverflowError):
+                self.last_error = "同济桥接结果字段无效"
+                continue
             with self._lifecycle_lock:
                 if not self.running or epoch != self._epoch:
                     return

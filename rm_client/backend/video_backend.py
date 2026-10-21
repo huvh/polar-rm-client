@@ -21,7 +21,7 @@ from pathlib import Path
 from queue import Empty, Full, Queue
 from typing import Any, Callable
 
-from ..transports import UDPVideoReceiver
+from ..transports import AnnexBDatagramStream, FrameAssembler, UDPVideoReceiver
 from ..runtime_paths import RuntimePaths
 from .resource_close import close_resource
 from .video_source import VideoSourceAdmission, VideoStopStatus
@@ -266,6 +266,7 @@ class RmVideoBackend(UDPVideoReceiver):
 
     def __init__(self, host: str = "127.0.0.1", port: int = 3334) -> None:
         super().__init__(host=host, port=port)
+        self.ingress_mode = "shark-framed"
         self.codec: str = "unknown"
         self.fps: float = 0.0
         self.bitrate: float = 0.0  # bytes/s
@@ -306,12 +307,33 @@ class RmVideoBackend(UDPVideoReceiver):
         self.h265_decoder_restarts = 0
         self.event_hook: Callable[..., None] | None = None
 
+    def configure_ingress(self, mode: str) -> None:
+        """Select an explicit input contract only after the previous owner closes."""
+        if mode not in {"shark-framed", "legacy-vt02-h264", "legacy-official-bridge"}:
+            raise ValueError(f"Unsupported video ingress: {mode}")
+        if mode == self.ingress_mode:
+            return
+        if self.running or not self.cleanup_complete:
+            raise RuntimeError("Previous video owner must close before changing ingress")
+        self.ingress_mode = mode
+
+    def _create_assembler(self) -> FrameAssembler:
+        return (AnnexBDatagramStream() if self.ingress_mode in {"legacy-vt02-h264", "legacy-official-bridge"}
+                else FrameAssembler())
+
+    def _bind_address(self) -> tuple[str, int]:
+        # This is the exact observed official 2019 VT02 receive endpoint, not
+        # the 2026 custom-client forwarding port and not a guessed USB API.
+        if self.ingress_mode == "legacy-official-bridge":
+            return "127.0.0.1", 18080
+        return ("0.0.0.0", 8080) if self.ingress_mode == "legacy-vt02-h264" else super()._bind_address()
+
     def _emit_event(self, event: str, **payload: Any) -> None:
         hook = self.event_hook
         if hook is None:
             return
         try:
-            hook(event, source="udp_hevc", **payload)
+            hook(event, source=({"legacy-vt02-h264": "legacy_vt02_udp", "legacy-official-bridge": "legacy_official_bridge"}.get(self.ingress_mode, "udp_hevc")), **payload)
         except Exception:
             # Diagnostics must never delay or terminate the UDP worker.
             pass
@@ -353,7 +375,9 @@ class RmVideoBackend(UDPVideoReceiver):
 
     def _on_assembled_frame(self, frame: bytes, generation: int | None = None) -> None:
         now = time.perf_counter()
-        codec = detect_frame_codec(frame)
+        # Raw legacy datagrams may split even a NAL start code. Never run the
+        # framed-stream heuristic on them or discard continuation bytes.
+        codec = "h264" if self.ingress_mode in {"legacy-vt02-h264", "legacy-official-bridge"} else detect_frame_codec(frame)
         validated_mjpeg = None
         validation_epoch = None
         if codec == "mjpeg":
@@ -567,28 +591,43 @@ class RmVideoBackend(UDPVideoReceiver):
         except Exception:
             return None
 
-    def latest_video_frame(self, timeout_s: float = 0.5) -> tuple[Any, float]:
-        """Return the freshest decoded UDP frame and its monotonic timestamp."""
-
-        deadline_age = max(0.0, float(timeout_s))
-        now = time.perf_counter()
-        h265_frame: Any = None
-        h265_at = 0.0
-        if (self.decode_h265 and self.h265_decoder is not None and self.h265_decoder.available
-                and self.codec in {"unknown", getattr(self.h265_decoder, "codec", "h265")}):
-            h265_frame, h265_at = self.h265_decoder.latest_with_timestamp(deadline_age)
-
+    def _annexb_observation_owner(self) -> tuple[Any, tuple[int, int, Any]]:
+        """Capture ownership before querying a decoder outside the backend lock."""
         with self._lock:
-            mjpeg_frame = self.latest_bgr
-            mjpeg_at = float(self.latest_bgr_at)
-        if mjpeg_frame is None or mjpeg_at <= 0.0 or now - mjpeg_at > deadline_age:
-            mjpeg_frame, mjpeg_at = None, 0.0
+            decoder = self.h265_decoder
+            epoch = (self._video_generation, self._h265_generation,
+                     getattr(decoder, "lifecycle_generation", None))
+            return decoder, epoch
 
-        if h265_frame is not None and h265_at >= mjpeg_at:
-            return h265_frame, h265_at
-        if mjpeg_frame is not None:
-            return mjpeg_frame, mjpeg_at
-        return None, 0.0
+    def _annexb_observation_current(self, decoder: Any, epoch: tuple[int, int, Any]) -> bool:
+        """Called under _lock: stop, disable, codec change and restart revoke reads."""
+        return bool(
+            decoder is not None and decoder is self.h265_decoder
+            and epoch == (self._video_generation, self._h265_generation,
+                          getattr(decoder, "lifecycle_generation", None))
+            and self.decode_h265 and decoder.available
+            and self.codec in {"unknown", getattr(decoder, "codec", "h265")}
+        )
+
+    def latest_video_frame(self, timeout_s: float = 0.5) -> tuple[Any, float]:
+        """Return a fresh frame only if its decoder still owns this observation."""
+        deadline_age = max(0.0, float(timeout_s))
+        decoder, epoch = self._annexb_observation_owner()
+        h265_frame, h265_at = (decoder.latest_with_timestamp(deadline_age)
+                              if decoder is not None else (None, 0.0))
+        with self._lock:
+            now = time.perf_counter()
+            if (not self._annexb_observation_current(decoder, epoch)
+                    or h265_at <= 0.0 or not 0.0 <= now - h265_at <= deadline_age):
+                h265_frame, h265_at = None, 0.0
+            mjpeg_frame, mjpeg_at = self.latest_bgr, float(self.latest_bgr_at)
+            if mjpeg_frame is None or mjpeg_at <= 0.0 or not 0.0 <= now - mjpeg_at <= deadline_age:
+                mjpeg_frame, mjpeg_at = None, 0.0
+            if h265_frame is not None and h265_at >= mjpeg_at:
+                return h265_frame, h265_at
+            if mjpeg_frame is not None:
+                return mjpeg_frame, mjpeg_at
+            return None, 0.0
 
     def clear_stale_decoded_frame(self, timeout_s: float = 0.5) -> bool:
         """Release stale decoded images so callers cannot render a frozen feed."""
@@ -609,16 +648,16 @@ class RmVideoBackend(UDPVideoReceiver):
     def decoded_frame_fresh(self, timeout_s: float = 2.0) -> bool:
         """Cheap HUD connectivity probe without building the full stats tree."""
 
-        decoder = self.h265_decoder
-        h265_at = (decoder.latest_timestamp() if decoder and self.decode_h265
-                   and decoder.available
-                   and self.codec in {"unknown", getattr(decoder, "codec", "h265")} else 0.0)
+        decoder, epoch = self._annexb_observation_owner()
+        h265_at = decoder.latest_timestamp() if decoder is not None else 0.0
         with self._lock:
+            if not self._annexb_observation_current(decoder, epoch):
+                h265_at = 0.0
             decoded_at = max(float(self.latest_bgr_at), float(h265_at))
-        return bool(
-            decoded_at > 0.0
-            and time.perf_counter() - decoded_at <= max(0.0, float(timeout_s))
-        )
+            return bool(
+                decoded_at > 0.0
+                and time.perf_counter() - decoded_at <= max(0.0, float(timeout_s))
+            )
 
     def _request_h265_restart(self, *, generation: int | None = None) -> None:
         # This lock only protects scheduling, never process teardown or joins.
@@ -686,6 +725,7 @@ class RmVideoBackend(UDPVideoReceiver):
             self.decode_h265 = False
             self.latest_bgr = None
             self.latest_bgr_at = 0.0
+            self.last_frame_at = 0.0
         admission = VideoSourceAdmission()
         admission.attempt("HEVC recovery reset", self.h265_recovery.reset)
         admission.attempt("UDP stop", super().request_stop)
@@ -712,6 +752,9 @@ class RmVideoBackend(UDPVideoReceiver):
         with self._lock:
             self._video_generation += 1
             self._h265_generation += 1
+            self.latest_bgr = None
+            self.latest_bgr_at = 0.0
+            self.last_frame_at = 0.0
         # Stop packet production before detaching decoder pipes. No restart
         # lock is held while waiting; stop invalidates the decoder generation.
         super().stop()
@@ -755,25 +798,31 @@ class RmVideoBackend(UDPVideoReceiver):
                 self.h265_decoder.request_stop()
 
     def stats(self) -> dict[str, Any]:
-        decoder = self.h265_decoder
-        h265_at = (decoder.latest_timestamp() if decoder and self.decode_h265
-                   and decoder.available
-                   and self.codec in {"unknown", getattr(decoder, "codec", "h265")} else 0.0)
-        h265_frames = self.h265_decoder.frames_decoded if self.h265_decoder else 0
+        decoder, epoch = self._annexb_observation_owner()
+        h265_at = decoder.latest_timestamp() if decoder is not None else 0.0
+        h265_frames = decoder.frames_decoded if decoder is not None else 0
+        decoded_size = decoder.frame_size() if decoder is not None and h265_at > 0.0 else (0, 0)
         with self._lock:
+            if not self._annexb_observation_current(decoder, epoch):
+                h265_at, decoded_size = 0.0, (0, 0)
+            ingress = self.ingress_stats()
+            bind_host, bind_port = self._bind_address()
             decoded_at = max(float(self.latest_bgr_at), float(h265_at))
             decoded_connected = bool(
                 decoded_at > 0.0 and time.perf_counter() - decoded_at <= 2.0
             )
             connected = (
-                self.frames_received > 0
+                (self.frames_received > 0 or int(ingress["stream_blocks_received"]) > 0)
                 and self.last_frame_at > 0
                 and time.perf_counter() - self.last_frame_at <= 2.0
             )
             return {
+                "ingress": ingress,
+                "ingress_mode": self.ingress_mode,
+                "hardware_verified": False,
                 "connected": connected,
-                "host": self.host,
-                "port": self.port,
+                "host": bind_host,
+                "port": bind_port,
                 "packets_received": self.packets_received,
                 "frames_received": self.frames_received,
                 "dropped_frames": self.dropped_frames + self._assembler.dropped_count,
@@ -781,11 +830,15 @@ class RmVideoBackend(UDPVideoReceiver):
                 "stale_fragments": self._assembler.stale_packet_count,
                 "sequence_discontinuities": self._assembler.sequence_discontinuities,
                 "codec": self.codec,
-                "fps": round(self.fps, 1),
+                "fps": round(self.fps, 1) if self.ingress_mode == "shark-framed" else 0.0,
+                "raw_blocks_per_second": (round(self.fps, 1)
+                                          if self.ingress_mode in {"legacy-vt02-h264", "legacy-official-bridge"} else 0.0),
                 "bitrate": round(self.bitrate, 1),
                 "decoder_backend": self.decoder_backend,
-                "output_width": self.output_width,
-                "output_height": self.output_height,
+                "output_width": (decoded_size[0] if self.codec in {"h264", "h265"}
+                                 else self.output_width) if decoded_connected else 0,
+                "output_height": (decoded_size[1] if self.codec in {"h264", "h265"}
+                                  else self.output_height) if decoded_connected else 0,
                 "decoded_connected": decoded_connected,
                 "decoded_frames": self.mjpeg_decoded_frames + h265_frames,
                 "continuous_decoded_seconds": (

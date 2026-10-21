@@ -1,7 +1,7 @@
 {
-  "_comment": "DT7 直连出口（C 路）的运行参数。这一帧是从小客户端二进制里逐条反汇编复原的，不是猜出来的。",
-  "_evidence": "帧结构由厂商类型定义逐字对上：CommonHeader_V1{hdr_flag,length,protocol_version,crc8}（dump.cs:136044-136050）+ Data_Body_Prefix{sequence_number,cmd_id}（:136054-136058）+ Input_Device_Status_RC 12 字节（:136075-136085）+ 尾 crc16 小端。发送现场 GameAssembly.dll SerialPortThread.OnSendInputStatus RVA 0x27B2A0-0x27BAE0：0x18027B486 置 0x5A、0x18027B522 写前缀 00 00 00 20、CRC 族 CRCCheck 0x77/0x1862（表本体在 global-metadata.dat 0x438A30/0x442C10，与标准反射表逐字节一致）。波特率 961200 出自 decomp/SerialPortThread.cs:92-95。",
-  "_caveat": "命令号的语义已由厂商常量名结案：CONTROL_PC_ROBOT 就是 PC 控机器人这条通道。仍未上机证明的只有一件事：这台 DT7 的现行固件认不认我们写的这 22 字节。第一次上车请架空驱动轮，并用 dt7_wireless_selftest.py 判 PASS。",
+  "_comment": "DT7直连出口的运行参数。帧结构有官方二进制证据，但项目保留安全策略差异，不代表所有字节或设备行为均与官方一致。",
+  "_evidence": "官方学生端12.0.0.213：SerialPortThread.OnSendInputStatus RVA0x292af0封装22字节0x5A/cmd0x2000；RobotInput.Update RVA0x31b960在0x31bc35/37写reserved=0。波特率961200来自SerialPortThread.OnCheckDeviceNodes。详见docs/reviews/device_transport_alignment_20261021.md。",
+  "_caveat": "官方213 reserved=0，项目未显式配置时仍取dt7_link.DEFAULT_PROFILE的reserved_value=1024作为DBUS第五通道中位安全策略，这是非官方字节默认，不可盲改真发。改动会改变资格摘要，需重新验证。驱动/硬件兼容、固件接收与端到端回读、超时归零、急停、重连不恢复旧输入及现场资格均尚需实证，不能由离线测试或单次自检替代。",
   "cmd_wire": 8192,
   "cmd_set": 0,
   "cmd_id_keyboard": null,

@@ -46,6 +46,7 @@ class FakeClient:
 
     def subscribe(self, topics):
         self.subscriptions.append(topics)
+        return (0, 1)
 
     def publish(self, topic, payload, **kwargs):
         self.publications.append((topic, bytes(payload)))
@@ -79,6 +80,7 @@ class MqttLifecycleTests(unittest.TestCase):
         self.backend.start()
         self.old = self.backend.client
         self.backend.connected = True
+        self.backend._subscriptions_ready = True
         self.addCleanup(self.cleanup)
 
     def cleanup(self):
@@ -311,6 +313,7 @@ class MqttLifecycleTests(unittest.TestCase):
     def test_admitted_command_is_dropped_on_same_session_authority_change(self):
         # Constant timestamps prove that epoch safety does not rely on clock
         # precision. Returning to the same armed state must not revive input.
+        self.backend._subscriptions_ready = True  # This test starts after SUBACK.
         for transition in ('estop', 'lock', 'rearm', 'qualification'):
             with self.subTest(transition=transition), patch(
                     'rm_client.backend.safety.time.perf_counter', return_value=100.0):
