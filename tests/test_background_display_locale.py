@@ -84,6 +84,7 @@ class BackgroundDisplayLocaleTests(unittest.TestCase):
         window.economy_visible = False; window.economy_island = NS(progress=0)
         window._economy_scene_epoch = 1; window.gui_visible = True
         window.gui_timeline = NS(progress=1); window.student_ui = NS(visible=False)
+        window.escape_menu_visible = False
         for home in (False, True):
             window.home_visible = home
             keys=[]
@@ -94,6 +95,13 @@ class BackgroundDisplayLocaleTests(unittest.TestCase):
                 keys.append(key)
             self.assertEqual(keys[0],keys[2]);self.assertNotEqual(keys[0],keys[1])
             self.assertEqual(window.state.stage_countdown_sec,60)
+            if not home:
+                # Opening Esc hides combat chrome without new telemetry; its
+                # close must recover the original static HUD cache identity.
+                window.escape_menu_visible = True
+                self.assertNotEqual(keys[2], window.gpu_static_ui_key(1280,720,1))
+                window.escape_menu_visible = False
+                self.assertEqual(keys[2], window.gpu_static_ui_key(1280,720,1))
             # The deferral guard relies on the original kind/width/height/DPR
             # prefix. Locale must not shift DPR outside its geometry slice.
             self.assertEqual(keys[0][:4], ("startup-ui" if home else "battle-ui", 1280, 720, 1))
