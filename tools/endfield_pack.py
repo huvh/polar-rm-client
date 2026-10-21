@@ -32,6 +32,12 @@ def digest(path: Path) -> str:
         return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
+def adapter_canonical_digest() -> str:
+    """Git may check out this same C++ source with LF or CRLF on Windows."""
+    raw = (ROOT / "native/endfield_bridge.cpp").read_bytes()
+    return hashlib.sha256(raw.replace(b"\r\n", b"\n")).hexdigest()
+
+
 def confined(root: Path, relative: str) -> Path:
     if (not isinstance(relative, str) or not relative or len(relative) > 512
             or any(c in relative for c in "\\:\0")
@@ -99,7 +105,8 @@ def validate(pack: Path) -> dict:
     record = read_json(confined(pack, MANIFEST))
     if record.get("schema") != 1 or record.get("reference_commit") != pins["reference_commit"]:
         raise ValueError("Pack schema/source revision differs; rebuild using this checkout")
-    if record.get("adapter_sha256") != digest(ROOT / "native/endfield_bridge.cpp"):
+    if (record.get("adapter_sha256") != digest(ROOT / "native/endfield_bridge.cpp")
+            and record.get("adapter_canonical_sha256") != adapter_canonical_digest()):
         raise ValueError("Pack adapter differs from this client source; rebuild the pack")
     files = record.get("files")
     if not isinstance(files, dict) or not files or len(files) > 2048:

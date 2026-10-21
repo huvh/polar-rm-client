@@ -8,3 +8,7 @@ docs/evidence/**/*.log linguist-generated=true
 # Frozen behavioral oracles are byte-addressed evidence, not native text.
 # Preserve their committed bytes even when Windows core.autocrlf is enabled.
 tests/fixtures/** -text
+
+# Verified native menu packs are byte-addressed, including JSON/shader/licenses.
+# Git newline conversion must not corrupt a transferred pack's file hashes.
+assets/endfield_pack/** -text

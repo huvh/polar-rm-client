@@ -5,6 +5,10 @@
 本流程保持已有原生菜单、动画、液态玻璃背景和真实 RM 场地，不替换菜单、不关闭功能。
 准备工具不在客户端启动/绘制线程运行，也不会访问机器人、启动游戏或修改游戏文件。
 
+已有完整包时不必重复构建：见[跨电脑完整迁移](endfield_delivery_video_reconnect_20261022.md)。
+客户端支持只读 `assets/endfield_pack`；便携包支持 `resources/assets/endfield_pack`。
+空的本地用户目录不会遮蔽它们，但公开分发第三方素材仍需要单独授权。
+
 ## 1. 固定输入，而不是作者电脑路径
 
 机器可读的唯一输入清单是 [`tools/endfield_pack_sources.json`](../tools/endfield_pack_sources.json)。

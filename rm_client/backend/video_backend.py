@@ -264,6 +264,8 @@ class AnnexBRecoveryGate:
 class RmVideoBackend(UDPVideoReceiver):
     """SharkClient 风格 UDP 图传后端（含 codec 检测/MJPEG 解码/统计）。"""
 
+    CONNECTION_STALE_S = 2.0
+
     def __init__(self, host: str = "127.0.0.1", port: int = 3334) -> None:
         super().__init__(host=host, port=port)
         self.ingress_mode = "shark-framed"
@@ -305,6 +307,10 @@ class RmVideoBackend(UDPVideoReceiver):
         self._h265_next_restart_at = 0.0
         self._h265_restart_backoff_s = 0.5
         self.h265_decoder_restarts = 0
+        self.connection_restarts = 0
+        self._connection_recovering = False
+        self._connection_retry_at = 0.0
+        self._connection_backoff_s = 0.5
         self.event_hook: Callable[..., None] | None = None
 
     def configure_ingress(self, mode: str) -> None:
@@ -345,6 +351,7 @@ class RmVideoBackend(UDPVideoReceiver):
         # already alive.
         if self.running or not self.cleanup_complete:
             return
+        self._connection_recovering = False
         self.ffmpeg_executable = resolve_ffmpeg_executable()
         self.ffmpeg_available = self.ffmpeg_executable is not None
         self._started_at = time.perf_counter()
@@ -372,6 +379,48 @@ class RmVideoBackend(UDPVideoReceiver):
             self._assembler.clear()
             self._udp_sequence_discontinuities = 0
         super().start()
+
+    def poll_connection(self) -> None:
+        """Owner-thread maintenance for a selected, started UDP source only.
+
+        A restarted bridge normally has a new ephemeral sender port. Never
+        splice it into the old assembler: retire the entire receive/decode
+        epoch first, then admit a fresh socket with bounded retry backoff.
+        No socket close, process wait or thread join runs on this caller.
+        Failed native cleanup stays retained for the existing explicit retry UI.
+        """
+        now = time.perf_counter()
+        status = self.stop_status
+        if status.errors:
+            return
+        if self._connection_recovering:
+            if status.pending or not self.cleanup_complete or now < self._connection_retry_at:
+                return
+            self.request_decode_enabled(True)
+            self.start()
+            if self.running:
+                self.connection_restarts += 1
+                self._emit_event("connection_restart", count=self.connection_restarts)
+            return
+        if status.pending:
+            return
+        ingress = self.ingress_stats()
+        last_packet = float(ingress["accepted_fragment_at"])
+        if self.running:
+            if last_packet <= 0.0 or now - last_packet <= self.CONNECTION_STALE_S:
+                if last_packet > 0.0:
+                    self._connection_backoff_s = 0.5
+                return
+            reason = "accepted video traffic timed out; retire sender epoch"
+        else:
+            if now < self._connection_retry_at:
+                return
+            reason = "receive worker exited; retry selected source"
+        self.request_stop()
+        self._connection_recovering = True
+        self._connection_retry_at = now + self._connection_backoff_s
+        self._connection_backoff_s = min(5.0, self._connection_backoff_s * 2.0)
+        self._emit_event("connection_lost", reason=reason)
 
     def _on_assembled_frame(self, frame: bytes, generation: int | None = None) -> None:
         now = time.perf_counter()
@@ -719,6 +768,7 @@ class RmVideoBackend(UDPVideoReceiver):
 
     def request_stop(self) -> None:
         """Revoke all packet/decode state before independent close admissions."""
+        self._connection_recovering = False
         with self._lock:
             self._video_generation += 1
             self._h265_generation += 1
@@ -749,6 +799,7 @@ class RmVideoBackend(UDPVideoReceiver):
         return VideoStopStatus(bool(udp.pending or decoder.pending or inflight), inflight, errors)
 
     def stop(self) -> None:
+        self._connection_recovering = False
         with self._lock:
             self._video_generation += 1
             self._h265_generation += 1
@@ -821,6 +872,8 @@ class RmVideoBackend(UDPVideoReceiver):
                 "ingress_mode": self.ingress_mode,
                 "hardware_verified": False,
                 "connected": connected,
+                "connection_restarts": self.connection_restarts,
+                "connection_recovering": self._connection_recovering,
                 "host": bind_host,
                 "port": bind_port,
                 "packets_received": self.packets_received,

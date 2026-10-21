@@ -20,7 +20,7 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from tools.endfield_pack import MANIFEST, digest, snapshot, sources, validate
+from tools.endfield_pack import MANIFEST, adapter_canonical_digest, confined, digest, read_json, snapshot, sources, validate
 from tools.import_endfield_source_runtime import import_package
 
 
@@ -86,6 +86,7 @@ def build(package: Path, reference: Path, models: Path, output: Path) -> dict:
         shutil.copyfile(ROOT / "tools/endfield_pack_sources.json", notices / "SOURCES.json")
         record = {"schema": 1, "reference_commit": pins["reference_commit"],
                   "adapter_sha256": digest(ROOT / "native/endfield_bridge.cpp"),
+                  "adapter_canonical_sha256": adapter_canonical_digest(),
                   "optional_assets": "boot and audio not included or needed for Esc",
                   "redistribution": "Local preparation only. Game resources are excluded from upstream MIT.",
                   "files": snapshot(stage)}
@@ -96,6 +97,38 @@ def build(package: Path, reference: Path, models: Path, output: Path) -> dict:
         raise
 
 
+def export(pack: Path, output: Path) -> dict:
+    """Explicit local transfer/export, not a grant of redistribution rights.
+
+    Copies only declared, integrity-checked files, never a user's whole tree.
+    Keeps renderer provenance but removes the compiler's machine-local path.
+    Source identity records both actual build bytes and Git's LF-normalized C++.
+    """
+    validate(pack)
+    if pack.resolve() in output.resolve().parents:
+        raise ValueError("Export destination must be outside the source pack")
+    if output.exists() or output.is_symlink() or output.is_junction():
+        raise ValueError("Output already exists; choose a NEW --out")
+    record = read_json(pack / MANIFEST)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    stage = output.parent / (".endfield-export-" + uuid.uuid4().hex)
+    stage.mkdir()
+    for relative in record["files"]:
+        target = confined(stage, relative)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(confined(pack, relative), target)
+    current = read_json(stage / "native_renderer/CURRENT.json")
+    manifest = stage / "native_renderer" / current["directory"] / "BUILD_MANIFEST.json"
+    build_record = read_json(manifest)
+    build_record["compiler"] = "\n".join(line for line in build_record.get("compiler", "").splitlines()
+                                         if not line.startswith("InstalledDir:"))
+    manifest.write_text(json.dumps(build_record, indent=2) + "\n", encoding="utf-8")
+    record["adapter_canonical_sha256"] = adapter_canonical_digest()
+    record["files"] = snapshot(stage)
+    (stage / MANIFEST).write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+    return publish(stage, output)
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -104,10 +137,17 @@ def main(argv=None) -> int:
         create.add_argument("--" + name, type=Path, required=True)
     check = commands.add_parser("check", help="Verify an installed pack without executing a DLL")
     check.add_argument("--pack", type=Path, required=True)
+    transfer = commands.add_parser("export", help="Export a complete verified local pack; does not grant asset redistribution rights")
+    transfer.add_argument("--pack", type=Path, required=True)
+    transfer.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
-        report = (build(args.package, args.reference, args.models, args.out)
-                  if args.command == "build" else validate(args.pack))
+        if args.command == "build":
+            report = build(args.package, args.reference, args.models, args.out)
+        elif args.command == "export":
+            report = export(args.pack, args.out)
+        else:
+            report = validate(args.pack)
     except (OSError, ValueError, KeyError, subprocess.SubprocessError) as error:
         print(json.dumps({"status": "PACK_INCOMPLETE", "detail": str(error),
                           "help": "docs/ENDFIELD_PACK_SETUP.md"}, ensure_ascii=False))

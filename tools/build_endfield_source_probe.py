@@ -137,7 +137,8 @@ def main() -> None:
                 "reference_repository": "https://github.com/DDDuoDuo/EndfieldHUD", "reference_commit": PIN,
                 "binary_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
                 "adapter_sha256": hashlib.sha256(adapter.read_bytes()).hexdigest(),
-                "compiler": compiler_version.strip(),
+                "compiler": "\n".join(line for line in compiler_version.strip().splitlines()
+                                      if not line.startswith("InstalledDir:")),
                 "derived_translation_units": derived,
                 "upstream_sources": {name: hashlib.sha256((source_root / name).read_bytes()).hexdigest() for name in upstream}}
     (out / "BUILD_MANIFEST.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
