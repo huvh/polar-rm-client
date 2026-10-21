@@ -30,12 +30,13 @@ class Sink:
     def __init__(self,armed=True):
         self.safety=OfficialSafety()
         self.safety.configure(mock_writes=False,allow_mqtt_publish=True,enforce_official_limits=True)
-        self.safety.update_stage(4)
+        self.safety.update_stage(4, now=1.)
         if armed:self.safety.arm_match(['core_kmc'])
         self.now=1.
         self.attempts=[];self.frames=[]
     def publish_keyboard_mouse(self,*motion,**buttons):
         self.now+=1.
+        self.safety.update_stage(4, now=self.now)  # Inert current referee receipt.
         self.attempts.append((motion,buttons))
         ok,reason=self.safety.can_publish('KeyboardMouseControl',now=self.now)
         if ok:

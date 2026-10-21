@@ -28,6 +28,9 @@ REJECT_HINTS = ("intel", "contee", "bluetooth", "raspblu", "irda", "standard uar
 # 官方驱动 INF：USB\\VID_FFF0&PID_0008 -> usbser.sys，描述 "DJI USB Virtual COM"。
 # 一条事实两处用：A 路要避开它，DT7 出口只认它。
 DJI_RC_USB_IDS: tuple[tuple[int, int], ...] = ((0xFFF0, 0x0008),)
+# Official DeviceInfo.dll: old video COM MI04; RC150 video COM MI02.
+# These identities are not robot CDC targets. Discovery never initializes them.
+DJI_VIDEO_USB_INTERFACES = {(0x2CA3, 0x001F): 0x04, (0x2CA3, 0x1020): 0x02}
 
 AUTO_PORT = "Auto"
 STUB_PORT = "Stub"
@@ -56,6 +59,9 @@ def _scan_serial_ports() -> list[dict[str, object]]:
                 "vid": int(getattr(item, "vid", 0) or 0),
                 "pid": int(getattr(item, "pid", 0) or 0),
                 "serial_number": str(getattr(item, "serial_number", "") or ""),
+                "hwid": str(getattr(item, "hwid", "") or ""),
+                "interface": str(getattr(item, "interface", "") or ""),
+                "manufacturer": str(getattr(item, "manufacturer", "") or ""),
             }
         )
     ports.sort(key=lambda entry: _com_number(str(entry["device"])))
@@ -150,7 +156,7 @@ def score_port(entry: dict[str, object]) -> int:
     # 遥控器那条 DJI VCOM **绝不能**被 A 路的 Auto 选中：中文 Windows 上 C 板的描述是
     # 「USB 串行设备」（不含英文关键字，只有 30 分），而 DT7 有 60 分 —— 不判负就会
     # 把 0x5A 帧写进遥控器、并且让闭环自检读不到 km_key，整场调试被带偏。
-    if (vid and pid and (vid, pid) in DJI_RC_USB_IDS) or "dji" in description:
+    if (vid, pid) in DJI_VIDEO_USB_INTERFACES or (vid and pid and (vid, pid) in DJI_RC_USB_IDS) or "dji" in description:
         return -200
     if not (vid and pid):
         return -50  # 非 USB（主板传统串口、蓝牙 RFCOMM 等）：不参与 Auto
@@ -195,6 +201,24 @@ def resolve_port(port: str) -> str:
     return str(ranked[0]["device"])
 
 
+def official_device_role(entry: dict[str, object]) -> str:
+    """Passive diagnostic only: identity match is not initialization/qualification."""
+    vid, pid = int(entry.get("vid", 0) or 0), int(entry.get("pid", 0) or 0)
+    if (vid, pid) in DJI_RC_USB_IDS:
+        return "DT7 candidate; connection unverified"
+    if (vid, pid) in DJI_VIDEO_USB_INTERFACES:
+        hints = " ".join(str(entry.get(k, "")) for k in ("hwid", "interface"))
+        interfaces = {int(value, 16) for value in re.findall(r"MI[_=]([0-9A-F]{2})(?![0-9A-F])", hints.upper())}
+        wanted = DJI_VIDEO_USB_INTERFACES[(vid, pid)]
+        if interfaces == {wanted}:
+            return f"official video MI_{wanted:02X} candidate; uninitialized"
+        return f"official video device; MI_{wanted:02X} interface unconfirmed"
+    text = " ".join(str(entry.get(k, "")) for k in ("description", "manufacturer", "hwid")).lower()
+    if (vid, pid) in FTDI_USB_IDS or "ftdi" in text:
+        return "FTDI/CC candidate; purpose unverified"
+    return ""
+
+
 def describe_ports(limit: int = 6) -> list[str]:
     """给 HUD/预检用的人类可读清单。"""
 
@@ -203,7 +227,8 @@ def describe_ports(limit: int = 6) -> list[str]:
         vid = int(entry.get("vid", 0) or 0)
         pid = int(entry.get("pid", 0) or 0)
         tag = f"USB {vid:04X}:{pid:04X}" if vid and pid else "非 USB"
-        lines.append(f"{entry['device']} [{tag}] {entry['description']}"[:120])
+        role = official_device_role(entry)
+        lines.append(f"{entry['device']} [{tag}] {entry['description']}"[:120] + (f"; {role}" if role else ""))
     return lines
 
 

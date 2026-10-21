@@ -60,6 +60,7 @@ from ...paint import draw_bar, glow_rect, rounded_rect
 from ...theme import THEME, color
 from ...jello_locale import chinese_enabled
 from ...hud_locale import hud_text
+from ...rune_display import rune_display
 from ...vision_motion import TargetHudPresenceFrame
 
 __all__ = [
@@ -548,17 +549,18 @@ class CombatTargetHudMixin:
         else:
             rounded_rect(p, rect, 6, self.hud_surface(0.52), self.hud_panel_outline(0.11))
         name = self.target_short_name(target)
-        value = f"{hp_ratio * 100:.0f}%"
+        value = rune_display(self.state).value if target.kind == "energy" else f"{hp_ratio * 100:.0f}%"
         self.draw_glass_text(p, QRectF(rect.left() + 8, rect.top() + 4, rect.width() - 55, 14), hud_text(name, chinese_enabled(self.registry)), self.font("poppins_medium", 8.4), THEME.text)
         self.draw_glass_text(p, QRectF(rect.right() - 46, rect.top() + 4, 38, 14), hud_text(value, chinese_enabled(self.registry)), self.font("poppins_medium", 8.2), self.hud_accent(), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        bar = QRectF(rect.left() + 8, rect.top() + 23, rect.width() - 16, 4.2)
-        rounded_rect(p, bar, 2.1, color("#ffffff", 0.12))
-        lag = QRectF(bar)
-        lag.setWidth(max(bar.height(), bar.width() * max(0.0, min(1.0, lag_ratio))))
-        rounded_rect(p, lag, 2.1, color("#ffffff", 0.20))
-        filled = QRectF(bar)
-        filled.setWidth(max(bar.height(), bar.width() * max(0.0, min(1.0, main_ratio))))
-        draw_bar(p, bar, main_ratio, self.hud_accent(), color("#ffffff", 0.0), 2.1)
+        if target.kind != "energy" or rune_display(self.state).progress is not None:
+            bar = QRectF(rect.left() + 8, rect.top() + 23, rect.width() - 16, 4.2)
+            rounded_rect(p, bar, 2.1, color("#ffffff", 0.12))
+            lag = QRectF(bar)
+            lag.setWidth(max(bar.height(), bar.width() * max(0.0, min(1.0, lag_ratio))))
+            rounded_rect(p, lag, 2.1, color("#ffffff", 0.20))
+            filled = QRectF(bar)
+            filled.setWidth(max(bar.height(), bar.width() * max(0.0, min(1.0, main_ratio))))
+            draw_bar(p, bar, main_ratio, self.hud_accent(), color("#ffffff", 0.0), 2.1)
         info = self.target_compact_info(target)
         self.draw_glass_text(p, QRectF(rect.left() + 8, rect.bottom() - 13, rect.width() - 16, 10), hud_text(info, chinese_enabled(self.registry)), self.font("poppins_regular", 6.8), THEME.muted)
         p.restore()
@@ -570,18 +572,19 @@ class CombatTargetHudMixin:
         p.save()
         p.setOpacity(active)
         self.draw_text(p, QRectF(rect.left(), rect.top(), rect.width(), 11), hud_text(self.target_short_name(target), chinese_enabled(self.registry)), self.font("poppins_medium", 7.4), THEME.text)
-        draw_bar(p, QRectF(rect.left(), rect.bottom() - 7, rect.width(), 4.0), main_ratio, self.hud_accent(), color("#ffffff", 0.13), 2.0)
-        self.draw_text(p, QRectF(rect.right() - 42, rect.top(), 42, 11), hud_text(f"{hp_ratio * 100:.0f}%", chinese_enabled(self.registry)), self.font("poppins_medium", 7.4), self.hud_accent(), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        if target.kind != "energy" or rune_display(self.state).progress is not None:
+            draw_bar(p, QRectF(rect.left(), rect.bottom() - 7, rect.width(), 4.0), main_ratio, self.hud_accent(), color("#ffffff", 0.13), 2.0)
+        self.draw_text(p, QRectF(rect.right() - 42, rect.top(), 42, 11), hud_text(rune_display(self.state).value if target.kind == "energy" else f"{hp_ratio * 100:.0f}%", chinese_enabled(self.registry)), self.font("poppins_medium", 7.4), self.hud_accent(), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         p.restore()
 
     def target_ratio(self, target: VisionTarget) -> float:
         if target.kind == "energy":
-            return max(0.0, min(1.0, self.state.energy_rune_progress / 100.0))
+            return rune_display(self.state).progress or 0.0
         return max(0.0, min(1.0, self.state.target_health / max(1, self.state.target_max_health)))
 
     def target_short_name(self, target: VisionTarget) -> str:
         if target.kind == "energy":
-            return f"RUNE {self.state.energy_rune_phase}"
+            return f"RUNE {rune_display(self.state).phase}"
         return f"ID {self.state.target_id}"
 
     def target_compact_info(self, target: VisionTarget) -> str:
@@ -597,10 +600,11 @@ class CombatTargetHudMixin:
         rounded_rect(p, rect, 8, self.hud_surface(0.76), self.hud_panel_outline(0.10))
         self.draw_text(p, rect.adjusted(13, 9, -13, -54), hud_text(title, chinese_enabled(self.registry)), self.font("poppins_bold", 10), THEME.text)
         if target.kind == "energy":
-            ratio = self.state.energy_rune_progress / 100.0
-            draw_bar(p, QRectF(rect.left() + 13, rect.top() + 43, rect.width() - 26, 7), ratio, self.hud_accent(), color("#ffffff", 0.14))
-            info = f"{self.state.energy_rune_phase} | {self.state.energy_target_distance_m:.1f}m | {self.state.energy_rune_rotation} | LOCK {str(self.state.energy_target_locked).upper()}"
-            value = f"{self.state.energy_rune_progress}%"
+            display = rune_display(self.state)
+            if display.progress is not None:
+                draw_bar(p, QRectF(rect.left() + 13, rect.top() + 43, rect.width() - 26, 7), display.progress, self.hud_accent(), color("#ffffff", 0.14))
+            info = f"{display.phase} | {self.state.energy_target_distance_m:.1f}m | {self.state.energy_rune_rotation} | LOCK {str(self.state.energy_target_locked).upper()}"
+            value = display.value
         else:
             hp_ratio = self.state.target_health / max(1, self.state.target_max_health)
             draw_bar(p, QRectF(rect.left() + 13, rect.top() + 43, rect.width() - 26, 7), hp_ratio, self.hud_accent(), color("#ffffff", 0.14))

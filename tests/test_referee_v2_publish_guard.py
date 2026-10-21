@@ -40,7 +40,10 @@ class V2PublishGuardTests(unittest.TestCase):
         backend.referee = replace(backend.referee, profile_id='rm2026-v2.0.0',
                                   protocol_version=codec.PROTOCOL_VERSION, codec=codec)
         backend.client = InertClient()
-        backend.connected = True
+        backend.connected = backend._subscriptions_ready = True
+        backend.bind_economy_context(SimpleNamespace(match_mode='RMUC7v7'),
+            SimpleNamespace(session=SimpleNamespace(match_mode='RMUC7v7',
+                referee_profile='rm2026-v2.0.0', robot_id='6')))
         backend.safety.configure(mock_writes=mock, allow_mqtt_publish=True, enforce_official_limits=True)
         backend.safety.arm_match({'core_kmc', 'economy'})
         for topic, values in [
@@ -133,16 +136,17 @@ class V2PublishGuardTests(unittest.TestCase):
         tree = ast.parse(path.read_text())
         owner = next(node for node in tree.body if isinstance(node, ast.ClassDef)
                      and node.name == 'BackendManager')
-        names = {'_publish', 'publish_air_support', 'publish_sentry_command'}
+        names = {'_publish', '_v2_action_admission', 'publish_air_support', 'publish_sentry_command'}
         owner.body = [node for node in owner.body if isinstance(node, ast.FunctionDef)
                       and node.name in names]
-        namespace = {}
+        namespace = {"Any": object, "__package__": "rm_client.backend"}
         exec(compile(ast.Module(body=[owner], type_ignores=[]), str(path), 'exec'), namespace)
         for economy in (False, True):
             backend = self.backend()
             backend.safety.arm_match({'core_kmc', *(['economy'] if economy else [])})
             manager = namespace['BackendManager']()
             manager.mqtt, manager.referee = backend, backend.referee
+            manager.state = SimpleNamespace(robot_id=6)
             self.assertEqual(manager.publish_air_support(1)[0], economy)
             self.assertFalse(manager.publish_sentry_command(1)[0])
             self.assertEqual(len(backend.client.sent), int(economy))
@@ -300,7 +304,7 @@ class V2PublishGuardTests(unittest.TestCase):
 
     def test_final_decodes_actual_payload_not_a_cached_command(self):
         backend = self.backend(coins=0)
-        context = (backend.referee, backend.safety, backend.v2_wire_snapshot(), None, False)
+        context = (backend.referee, backend.safety, backend.v2_wire_snapshot(), None, False, backend._economy_scope_locked())
         for payload in (encode_uint(1, 3), bytearray(encode_uint(1, 1))):
             with self.assertRaises((RuntimeError, ValueError)):
                 backend._publish_current(backend.client, backend._lifecycle_generation,
@@ -308,7 +312,7 @@ class V2PublishGuardTests(unittest.TestCase):
                     v2_context=context)
         self.assertEqual(backend.client.sent, [])
 
-    def test_unimplemented_sentry_and_unknown_air_never_enqueue(self):
+    def test_unconfirmed_sentry_and_unknown_air_never_enqueue(self):
         for topic, commands in [('SentryCtrlCommand', range(14)), ('AirSupportCommand', (4, 99))]:
             for command in commands:
                 backend = self.backend()

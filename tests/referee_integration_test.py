@@ -97,7 +97,8 @@ def test_official_field_contract() -> None:
 
 
 def deliver(manager: BackendManager, topic: str, payload: bytes, client=None) -> None:
-    manager.mqtt._on_message(client, None, SimpleNamespace(topic=topic, payload=payload))
+    manager.mqtt._on_message(manager.mqtt.client if client is None else client, None,
+                             SimpleNamespace(topic=topic, payload=payload))
     manager.apply_updates(manager.state)
 
 
@@ -105,6 +106,11 @@ def test_partial_state_and_epochs() -> None:
     state = RobotState()
     manager = BackendManager(state=state, scenario_key="OfficialEvent")
     try:
+        manager.mqtt.client = SimpleNamespace(subscribe=lambda topics: (0, 1),
+            disconnect=lambda: None, loop_stop=lambda: None)
+        manager.mqtt._on_connect(manager.mqtt.client, None, {}, 0)
+        manager.mqtt._on_subscribe(manager.mqtt.client, None, 1,
+            [0] * len(manager.referee.codec.DOWNLINK_MESSAGES))
         deliver(manager, "GameStatus", field(5, "uint32", 4))
         deliver(manager, "GameStatus", field(6, "int32", 200))
         check(state.current_stage == "MATCH" and manager.safety.is_fighting(), "partial countdown preserves phase")
@@ -167,6 +173,13 @@ def test_student_preview() -> None:
         manager.mqtt._decoded.append(("GameStatus", "GameStatus", {"current_stage": 4}, time.perf_counter()))
         manager.set_referee_profile(STUDENT_PREVIEW_PROFILE)
         check(state.referee_profile == STUDENT_PREVIEW_PROFILE and not manager.mqtt.drain_decoded(), "profile switch resets state/queue epoch")
+        # Profile changes retire the previous socket. Admit a new inert
+        # connection before testing current-profile messages.
+        manager.mqtt.client = SimpleNamespace(subscribe=lambda topics: (0, 1),
+            disconnect=lambda: None, loop_stop=lambda: None)
+        manager.mqtt._on_connect(manager.mqtt.client, None, {}, 0)
+        manager.mqtt._on_subscribe(manager.mqtt.client, None, 1,
+            [0] * len(manager.referee.codec.DOWNLINK_MESSAGES))
         deliver(manager, "GameStatus", field(5, "uint32", 4))
         deliver(manager, "RobotDynamicStatus", field(1, "uint32", 432) + field(2, "float", 12.5))
         check(state.current_stage == "MATCH" and state.current_health == 432 and state.current_heat == 12.5, "old Student stable scalar preview")
@@ -185,7 +198,8 @@ def test_student_preview() -> None:
             store = QualificationEvidenceStore(Path(tmp), build_commit="test", referee_profile=STUDENT_PREVIEW_PROFILE, protocol_version="1.1.0")
             qual = QualificationManager(store)
             session = qual.new_session(robot_id="3", firmware_hash="a" * 64, match_mode="RMUC7v7", video_source="udp", operator="test")
-            check(session.referee_profile == STUDENT_PREVIEW_PROFILE and "read-only" in qual.core_ready()[1], "old preview evidence can never become match-qualified")
+            ready, reason = qual.core_ready()
+            check(session.referee_profile == STUDENT_PREVIEW_PROFILE and not ready and "READ ONLY" in reason, "old preview evidence can never become match-qualified")
             store.referee_profile = DEFAULT_PROFILE
             store.protocol_version = "1.3.1"
             check("protocol mismatch" == qual.core_ready()[1], "evidence cannot cross a protocol profile")
@@ -423,6 +437,11 @@ def test_arm_identity_binding() -> None:
     try:
         # No session/evidence is minted, and no socket is opened. Exercise the
         # identity gate before the independent evidence verification gate.
+        manager.mqtt.client = SimpleNamespace(subscribe=lambda topics: (0, 1),
+            disconnect=lambda: None, loop_stop=lambda: None)
+        manager.mqtt._on_connect(manager.mqtt.client, None, {}, 0)
+        manager.mqtt._on_subscribe(manager.mqtt.client, None, 1,
+            [0] * len(manager.referee.codec.DOWNLINK_MESSAGES))
         manager.mqtt.connected = True
         manager.mqtt.mock_output = False
         manager.state.robot_id = 4

@@ -71,6 +71,14 @@ python -m venv .venv
 
 协议与场景对齐说明见 `README_协议对齐与场景.md`。
 
+官方学生端 **12.0.0.213** 应显式选择 `MQTTLink -> Referee Profile -> rm2026-v2.0.0`，
+选择 OfficialEvent 不会迁移旧 V1 配置。新用户可通过 `ConfigManager -> Import Config` 导入
+`configs/official_213_v2_safe.json`（便携版 `defaults/official_213_v2_safe.json`）。它只是
+**LabDebug / mock / Synthetic** 安全暂存，不授权控制。离线版本诊断与实际 broker/身份、
+只观察联调、资格及人工 Arm 步骤见 [213/V2 配置指南](README_协议对齐与场景.md#官方-1200213显式选择-v2不迁移旧配置)。
+未知客户端版本保持未验证；engine137 已审阅不意味着端到端配对或硬件合格。
+
+
 ## 快捷键
 
 - 主 HUD 按 `Esc` 打开菜单。Windows 配有经校验的本机 Endfield 资源包时使用原生 EndfieldHUD 场景、RM 2027 场地预览和模糊背景；设置继续使用 Jello，关于入口改为更新日志。无可用资源包时保留 Jello 二级菜单。已有输入框/弹窗优先处理 Esc，退出客户端需要二次确认；菜单不暂停遥测或安全监控，菜单键鼠不会下发为控制输入。原生菜单准备和资源边界见 [Endfield UI 接入说明](docs/ENDFIELD_SOURCE_PORT.md)，通用安全约定见 [Esc 菜单说明](docs/escape_menu.md)。
@@ -196,6 +204,17 @@ python -m venv .venv
 只有现场资格测试器生成的当前构建/机器人/固件证据、24 小时有效期内的动态
 测试、双人签字和本次进程人工 Arm 全部通过后，才进入 `MATCH_ARMED`。
 PRM1 自瞄/小陀螺仍是独立 `LOCKED MOCK` 能力；客户端不提供自动发射输出。
+
+## 旧图传接收入口
+
+`CameraFeed → Source → Legacy VT02 UDP` 使用官方 2019 VT02 客户端观察到的
+原始 H.264 UDP 8080 接收契约，不再把旧视频字节误送入 Shark 8 字节分片重组器。
+这是实际网络接收入口，但接收器初始化、官方显示进程端口移交与物理链路仍需验证；
+不能与占用 8080 的官方显示程序并开，也不自动配置驱动/串口/无线频道。
+如需保留官方客户端运行，新增 `Legacy Official Bridge` 回环来源与显式 Npcap
+只读旁路工具，避免争用官方 8080。它是本项目工程桥接而非 DJI 输出 API，尚未
+通过真实 Windows/RNDIS/接收器验收。使用前提、可执行命令与证据边界见
+[旧图传接入说明](docs/legacy_video_ingress.md)。
 
 ## 接入点
 

@@ -32,6 +32,10 @@ PC→DT7 那一帧长什么样（从大疆 12.x 选手端二进制里逐条反�
   ``..cctor`` 里 ``0x1802FAB75`` / ``0x1802FAB86``），**不是**裁判系统那族 0xFF/0xFFFF。
   载荷 12 字节 ``<hhhBBHH``：mouse_x/y/z int16、左键、右键、keyboard_value u16、reserved u16
   —— **没有中键**（厂商日志字面量 ``Input_Device_RC Sent x,y,z,LB,RB,KeyValue`` 也只有这些）。
+  官方学生端12.0.0.213的 RobotInput.Update RVA0x31b960 在0x31bc35/37写reserved=0。
+  本项目仍保留reserved_value=1024作为DBUS第五通道中位安全策略，非官方默认字节。
+  显式改为0仅可用于对拍；改变profile_digest，必须重新验证现场资格，不能盲改真发。
+
 
   ``0x2000`` 的语义也结案了：厂商自己给它起了名字 ——
   ``public class Proto_Prefix { public const int CONTROL_PC_ROBOT = 8192; }``
@@ -120,7 +124,7 @@ DEFAULT_PROFILE = {
     # 一帧攒出几千像素是完全可能的，而云台增量 = mouse / SENSITIVITY，会一帧甩到限位。
     # 截断是安全侧，越界值同时记在 clipped_fields 里，不静默。
     "mouse_limit": 200,
-    "reserved_value": 1024,          # DBUS channel 5 neutral; part of qualified wire identity
+    "reserved_value": 1024,  # Private DBUS neutral; official client213 writes 0.          # DBUS channel 5 neutral; part of qualified wire identity
     "open_retry_s": 0.5,
 }
 

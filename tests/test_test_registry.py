@@ -267,7 +267,9 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(result.status, "PASS")
 
     def test_timeout_is_incomplete_and_keeps_diagnostics(self):
-        result, stdout, _ = self.run_fixture("import time\nprint('starting fixture', flush=True)\ntime.sleep(60)", .2)
+        # Allow traced Python startup to reach the marker before deliberately
+        # timing out the 60-second sleep. The overall cleanup bound stays 3s.
+        result, stdout, _ = self.run_fixture("import time\nprint('starting fixture', flush=True)\ntime.sleep(60)", 1.0)
         self.assertEqual(result.status, "INCOMPLETE")
         self.assertIn("timeout", result.detail)
         self.assertIn("starting fixture", stdout)

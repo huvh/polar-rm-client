@@ -48,6 +48,7 @@ class Client:
         return NS(rc=0)
     def subscribe(self, topics):
         self.subscriptions.append(topics)
+        return (0, 1)
 
 
 class RuntimeProfileTests(unittest.TestCase):
@@ -58,7 +59,9 @@ class RuntimeProfileTests(unittest.TestCase):
 
     def backend(self, profile=V2_PROFILE, mock=False):
         backend = RmMqttBackend(referee_profile=profile, client_id='6', mock_output=mock)
-        backend.client = Client(); backend.connected = True
+        backend.client = Client(); backend.connected = backend._subscriptions_ready = True
+        backend.bind_economy_context(NS(match_mode='RMUC7v7'), NS(session=NS(
+            match_mode='RMUC7v7', referee_profile=profile, robot_id='6')))
         backend.safety.configure(mock_writes=mock, allow_mqtt_publish=True, enforce_official_limits=True)
         return backend
 
@@ -88,31 +91,29 @@ class RuntimeProfileTests(unittest.TestCase):
         for name in ('rm2026-v2', 'rm2026-v2.0', 'RM2026-V2.0.0', '2.0.0', 'rm2027-v2.0.0'):
             with self.subTest(name=name), self.assertRaises(UnsupportedRefereeProfile): get_profile(name)
 
-    def test_catalog_is_complete_but_runtime_air_only(self):
+    def test_catalog_is_complete_with_per_action_admission(self):
         profile = get_profile(V2_PROFILE)
         self.assertEqual(len(codec.UPLINK_MESSAGES), 11)
-        self.assertEqual((len(codec.DOWNLINK_MESSAGES),len(codec.DECODABLE_MESSAGES)), (25,24))
+        self.assertEqual((len(codec.DOWNLINK_MESSAGES),len(codec.DECODABLE_MESSAGES)), (25,25))
         for topic in codec.UPLINK_MESSAGES:
-            self.assertEqual(profile.validate_publish(topic,1)[0], topic=='AirSupportCommand')
+            self.assertTrue(profile.validate_publish(topic,1)[0])
         for qos in (True,-1,2): self.assertFalse(profile.validate_publish('AirSupportCommand',qos)[0])
         self.assertEqual(profile.available_actions(RobotState()), [])
         for topic in get_profile().codec.UPLINK_MESSAGES: self.assertTrue(get_profile().validate_publish(topic,1)[0])
 
-    def test_all_ordinary_paths_deny_other_ten_even_mock_and_forged_intent(self):
-        for mock in (False,True):
-            for entry in ('topic','named','binary','match'):
-                for topic in codec.UPLINK_MESSAGES-{'AirSupportCommand'}:
-                    with self.subTest(mock=mock,entry=entry,topic=topic):
-                        backend=self.backend(mock=mock)
-                        backend.safety.arm_match({'core_kmc','economy','hero'})
-                        backend.safety.update_stage(4)
-                        if entry=='topic': result=backend.publish_topic(topic,b'',intent='estop_zero')[0]
-                        elif entry=='named': result=backend.publish_named(topic,b'',intent='core_kmc')[0]
-                        elif entry=='binary': result=backend.publish_binary(topic,b'')
-                        else: result=backend.publish_match_command(topic,b'')
-                        self.assertFalse(result)
-                        self.assertEqual(backend.client.sent,[])
-                        self.assertEqual(list(backend.publish_records),[])
+    def test_all_real_paths_obey_lock_even_with_forged_intent(self):
+        for entry in ('topic','named','binary','match'):
+            for topic in codec.UPLINK_MESSAGES:
+                with self.subTest(entry=entry,topic=topic):
+                    backend=self.backend(mock=False)
+                    backend.safety.update_stage(4)
+                    if entry=='topic': result=backend.publish_topic(topic,b'',intent='estop_zero')[0]
+                    elif entry=='named': result=backend.publish_named(topic,b'',intent='core_kmc')[0]
+                    elif entry=='binary': result=backend.publish_binary(topic,b'')
+                    else: result=backend.publish_match_command(topic,b'')
+                    self.assertFalse(result)
+                    self.assertEqual(backend.client.sent,[])
+                    self.assertEqual(list(backend.publish_records),[])
 
     def test_dedicated_fixed_zero_stays_available_under_lock_and_estop(self):
         for estop in (False,True):
@@ -155,7 +156,7 @@ class RuntimeProfileTests(unittest.TestCase):
             self.assertEqual(actual,set(expected))
             self.assertEqual(backend.client.sent,[])
 
-    def test_radar_creates_neither_queue_nor_raw_freshness(self):
+    def test_malformed_radar_creates_neither_queue_nor_raw_freshness(self):
         backend=self.backend()
         self.receive(backend,'RadarInfoToClient',[(1,1)])
         self.assertEqual(backend.drain_decoded(),[])

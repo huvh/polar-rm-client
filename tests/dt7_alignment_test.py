@@ -10,6 +10,7 @@ import struct
 import sys
 import tempfile
 import time
+from types import SimpleNamespace
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -96,7 +97,7 @@ def test_policy():
     check(not link.send(pressed_bits=1)[0] and not out, "flags cannot bypass startup LOCKED")
     policy.arm_match({"core_kmc", "dt7_control"})
     check(not link.send(pressed_bits=1)[0], "DT7 requires authoritative stage even outside official limit mode")
-    policy.update_stage("4")
+    policy.update_stage("4", now=100.)
     policy.arm_match({"core_kmc"})
     check(not link.send(pressed_bits=1)[0], "MQTT qualification cannot authorize DT7")
     policy.arm_match({"core_kmc", "dt7_control"})
@@ -121,6 +122,7 @@ def test_policy():
     token = policy.begin_qualification({"core_kmc"}, now=300)
     check(not link.send(pressed_bits=PROBE_BITS, qualification_token=token.value, now=300)[0], "KMC token has no DT7 scope")
     policy.arm_match({"core_kmc", "dt7_control"})
+    policy.update_stage("4")  # Return to the real clock before the evidence-fault check.
     link.authorization_guard = lambda _: (_ for _ in ()).throw(OSError("corrupt evidence"))
     check(not link.send(pressed_bits=1)[0] and policy.control_state == ControlState.LOCKED, "evidence exception fails closed")
 
@@ -200,7 +202,14 @@ def test_integration(root):
     report = manager.apply_readiness(state, registry=registry)
     check("dt7_control" in report["blockers"] and "dt7_runtime_route" in report["blockers"], "readiness consumes both DT7 authorization and live route")
     dt7_fixture(manager.qualification, prof)
-    manager.mqtt.connected = True  # only a boolean test endpoint; no socket/publish
+    # Inert accepted subscription session, never a socket or real MQTT publish.
+    # A connected boolean alone cannot authorize arm after the SUBACK gate.
+    manager.mqtt.client = SimpleNamespace(subscribe=lambda topics: (0, 1),
+        disconnect=lambda: None, loop_stop=lambda: None)
+    manager.mqtt._on_connect(manager.mqtt.client, None, {}, 0)
+    manager.mqtt._on_subscribe(manager.mqtt.client, None, 1,
+        [0] * len(manager.referee.codec.DOWNLINK_MESSAGES))
+    manager.safety.update_stage("4")
     check(manager.arm_match_control(firmware_hash=FW, video_source="udp")[0], "manager arms only authenticated DT7 fixtures")
     manager.tick_polar_link(state, registry, control)
     control.set_key("W", True, state, registry)

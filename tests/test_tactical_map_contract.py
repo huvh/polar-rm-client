@@ -5,6 +5,8 @@ real device/network access, aggregate verifier lock or native GPU claims.
 """
 from __future__ import annotations
 
+import ast
+import math
 from contextlib import ExitStack
 from copy import deepcopy
 import hashlib
@@ -40,9 +42,53 @@ from window_lifecycle_helpers import close_window_safely, settle_window_lifecycl
 APP = QApplication.instance() or QApplication([])
 
 
+# Two explicitly approved semantic deltas to the frozen reference: official
+# centimetres (including small values), and documented highlight/offline copy.
+# Do not edit its fixture bytes, silently regenerate raster output, or weaken
+# the exact command/pixel/failure-prefix comparisons for any other behavior.
+def _expected_radar_metres(value, span, host):
+    source = ('official' if getattr(host.state,'official_state_active',False) is True
+              else getattr(host.state,'radar_coordinate_source','official'))
+    if type(value) is bool:
+        raise ValueError('boolean radar coordinate')
+    result=float(value)
+    if not math.isfinite(result):
+        raise ValueError('nonfinite radar coordinate')
+    if source == 'official':
+        if result < 0:raise ValueError('official radar coordinates are unsigned')
+        return result/100.
+    if source in {'private-metres','mock-metres'}:return result
+    raise ValueError('unknown radar coordinate source')
+
+
+def _expected_radar_function():
+    tree=ast.parse(REFERENCE.read_text())
+    node=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='draw_radar_overlay')
+    source=ast.get_source_segment(REFERENCE.read_text(),node)
+    source=source.replace('_radar_coord_to_m(det.get("target_pos_x", 0.0), field.width_m)',
+                          '_expected_radar_metres(det.get("target_pos_x", 0.0), field.width_m, host)')
+    source=source.replace('_radar_coord_to_m(det.get("target_pos_y", 0.0), field.height_m)',
+                          '_expected_radar_metres(det.get("target_pos_y", 0.0), field.height_m, host)')
+    source=source.replace('            highlighted = (', '''            code = int(det.get("is_high_light", 0) or 0)
+            if code not in {0,1,2}:
+                raise ValueError('unknown radar highlight enum')
+            highlighted = (''')
+    source=source.replace('except (TypeError, ValueError):','except (TypeError, ValueError, OverflowError):')
+    source=source.replace("{'· 双倍易伤' if highlighted else '侦测'}",
+        "{'· 特殊标识 · 定位离线' if code == 2 else '· 特殊标识' if highlighted else '侦测'}")
+    namespace=dict(vars(FROZEN),_expected_radar_metres=_expected_radar_metres)
+    exec(compile(source,'<audited-radar-delta>','exec'),namespace)
+    return namespace['draw_radar_overlay']
+
+
+_EXPECTED_RADAR_DRAW = _expected_radar_function()
+
+
 class TacticalMapContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        cls.radar_delta = patch.object(FROZEN, 'draw_radar_overlay', _EXPECTED_RADAR_DRAW)
+        cls.radar_delta.start()
         cls.directory = tempfile.TemporaryDirectory(prefix='map-contract-')
         cls.environment = patch.dict(os.environ, {'POLAR_USER_DATA_ROOT': cls.directory.name})
         cls.environment.start()
@@ -59,6 +105,7 @@ class TacticalMapContractTests(unittest.TestCase):
         close_window_safely(cls.window, APP)
         cls.window.deleteLater()
         APP.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        cls.radar_delta.stop()
         cls.environment.stop()
         cls.directory.cleanup()
 
@@ -75,6 +122,36 @@ class TacticalMapContractTests(unittest.TestCase):
 
     def test_reference_is_the_exact_fixed_source(self):
         self.assertEqual(hashlib.sha256(REFERENCE.read_bytes()).hexdigest(), REFERENCE_SHA256)
+
+    def test_frozen_bad_unit_helper_is_preserved_as_counterexample(self):
+        self.assertEqual(FROZEN._radar_coord_to_m(20,28),20)
+        self.assertEqual(current._radar_coord_to_m(20,28),.2)
+        self.assertEqual(hashlib.sha256(REFERENCE.read_bytes()).hexdigest(),REFERENCE_SHA256)
+
+    def test_radar_direct_source_coordinates_tooltips_and_diamond(self):
+        for official,source,expected in ((True,'official',.2),(True,'private-metres',.2),
+                                          (False,'private-metres',20),(False,'mock-metres',20)):
+            for code in (1,2):
+                with scene(self.window,current):
+                    state=self.window.state
+                    state.official_state_active=official
+                    state.radar_coordinate_source=source
+                    state.radar_detections=[dict(target_pos_x=20,target_pos_y=20,is_high_light=code)]
+                    state.radar_detections_at=100.
+                    image=QImage(350,220,QImage.Format.Format_ARGB32_Premultiplied);image.fill(0)
+                    painter=RasterTrace(image)
+                    try:
+                        with patch.object(self.window,'map_point',return_value=QPointF(20,30)) as point:
+                            count=current.draw_radar_overlay(self.window,painter,QRectF(10,10,280,150),self.window.match_mode_manager.current.field)
+                            self.assertEqual(count,1)
+                            self.assertEqual(point.call_args.args[-2:],(expected,expected))
+                        tooltip=self.window.hotspots[0].tooltip
+                        self.assertIn('特殊标识',tooltip)
+                        self.assertEqual('定位离线' in tooltip,code==2)
+                        self.assertNotIn('双倍易伤',tooltip)
+                        polygon=next(args[0] for name,args,kwargs in painter.calls if name=='drawPolygon')
+                        self.assertEqual(polygon,('polygon',(('point',20.,25.6),('point',24.4,30.),('point',20.,34.4),('point',15.6,30.))))
+                    finally:painter.finish()
 
     def test_real_window_complete_scene_raster_commands_and_hits_match(self):
         cases = []

@@ -116,7 +116,7 @@ class V2ProjectionTests(unittest.TestCase):
                 self.settle()
                 self.deliver(current_stage=stage, game_result=0, end_reason=7)
                 self.assertEqual(self.values(), (None, None, None))
-                self.assertEqual(self.host.safety.current_stage, str(stage))
+                self.assertEqual(self.host.safety.current_stage, '0', "Projection is not receipt authority")
 
     def test_stage_exit_and_reentry_need_new_observations(self):
         self.settle()
@@ -308,15 +308,13 @@ class V2ProjectionTests(unittest.TestCase):
         self.assertIs(host.student_ui.settlement, snapshot)
         self.assertEqual((self.state.current_round, self.state.alliance_color), (1, 'Blue'))
 
-    def test_callbacks_observe_projection_before_their_effects(self):
-        seen = []
-        original = self.host.safety.update_stage
-        def update(stage):
-            seen.append((self.state.current_stage, self.values()))
-            original(stage)
-        self.host.safety.update_stage = update
+    def test_log_observes_projection_without_calling_receipt_safety(self):
+        seen, safety_calls = [], []
+        self.host.safety.update_stage = safety_calls.append
+        self.host.field_log.emit = lambda *a, **kw: seen.append((self.state.current_stage, self.values()))
         self.settle(0, 7)
         self.assertEqual(seen, [('SETTLEMENT', (0, 7, 1))])
+        self.assertEqual(safety_calls, [])
 
     def test_actual_base_safety_and_log_resets_are_not_undone(self):
         for port in ('safety', 'log'):
@@ -331,7 +329,9 @@ class V2ProjectionTests(unittest.TestCase):
                 else:
                     self.host.field_log.emit = lambda *a, **kw: self.state.clear_match_settlement()
                 self.settle()
-                self.assertEqual(self.values(), (None, None, None))
+                # The former safety callback is no longer a projection port;
+                # log-driven resets still must not be undone by the adapter.
+                self.assertEqual(self.values(), (1, 2, 1) if port == 'safety' else (None, None, None))
 
     def test_callback_failure_retains_primary_identity_and_existing_common_prefix(self):
         for error in (RuntimeError('log'), KeyboardInterrupt(), SystemExit(7)):
@@ -345,7 +345,7 @@ class V2ProjectionTests(unittest.TestCase):
                     self.settle()
                 self.assertIs(caught.exception, error)
                 self.assertEqual(self.state.current_stage, 'SETTLEMENT')
-                self.assertEqual(self.host.safety.current_stage, '5')
+                self.assertEqual(self.host.safety.current_stage, '0')
                 self.assertEqual(self.values(), (None, None, None))
 
     def test_profile_is_explicitly_registered_without_alias_fallback(self):

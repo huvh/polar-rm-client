@@ -53,6 +53,9 @@ class RobotState:
     # Local freshness witness: a stage-5 receipt belongs to this round.
     # This is not a vendor-defined sequence number or an authority flag.
     settlement_round: int | None = field(default=None, init=False)
+    # Official presence only, never seeded from desktop demonstration data.
+    total_damage_ally: int | None = field(default=None, init=False)
+    total_damage_enemy: int | None = field(default=None, init=False)
     red_score: int = 0
     blue_score: int = 0
     ally_victory_points: int = 200
@@ -344,6 +347,12 @@ class RobotState:
         退回顺序：有可信的 max_buffer_energy 就用 current/max 算比例；
         否则退回 `capacitor_percent`（桌面 mock 场景仍然可看）。
         """
+        # A local, explicitly observed zero is a capability value, not a
+        # missing value. Never replace it with the unrelated desktop mock bar.
+        own_static = self.robot_statics.get(self.robot_id, {})
+        if ("max_buffer_energy" in own_static and type(own_static["max_buffer_energy"]) is int
+                and own_static["max_buffer_energy"] == 0):
+            return 0
         try:
             maximum = int(self.max_buffer_energy or 0)
             current = int(self.current_buffer_energy or 0)

@@ -109,7 +109,7 @@ class ControllerFrameBoundaryTests(unittest.TestCase):
             path = Path(tmp) / "keys.json"
             for raw in ([], [1], "wrong", True, 7, {"W": True}):
                 path.write_text(json.dumps(raw), encoding="utf-8")
-                self.assertEqual(cc.load_key_usage(str(path)), cc.HID_USAGE)
+                self.assertEqual(cc.load_key_usage(str(path)), cc.VIRTUAL_KEY)
 
     def test_cc_two_key_overflow_reports_actual_dropped_names(self):
         table = {"W": 1, "FORWARD": 1, "A": 2, "SHIFT": 3}

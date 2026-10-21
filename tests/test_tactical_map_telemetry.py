@@ -32,14 +32,28 @@ assert own_active_buffs((), 3) == ()
         result = subprocess.run([sys.executable, '-c', script], cwd=ROOT, text=True, capture_output=True)
         self.assertEqual(result.returncode, 0, result.stderr)
 
-    def test_radar_metres_centimetres_and_thresholds_keep_units(self):
-        cases = ((0, 28, 0), (-100, 28, -100), (28.5, 28, 28.5), (28.5001, 28, .285001),
-                 (1400, 28, 14), (750, 15, 7.5), (.6, 0, .6), (.7, 0, .007))
-        for raw, span, expected in cases:
-            with self.subTest(raw=raw, span=span):
+    def test_official_radar_centimetres_never_depend_on_span(self):
+        # Intentional correction, not a regenerated baseline: 20cm is .2m,
+        # including when it is numerically smaller than the field width.
+        for raw, expected in ((0,0), (1,.01), (20,.2), (28.5,.285), (1400,14), (2800,28)):
+            for span in (0, 15, 28, 100):
                 self.assertAlmostEqual(radar_coordinate_metres(raw, span), expected)
         with self.assertRaises(TypeError): radar_coordinate_metres(None, 28)
-        with self.assertRaises(ValueError): radar_coordinate_metres('bad', 28)
+        for value in ('bad', -1, True, float('nan'), float('inf')):
+            with self.assertRaises(ValueError): radar_coordinate_metres(value, 28)
+
+    def test_private_and_mock_metres_require_explicit_source(self):
+        for source in ('private-metres','mock-metres'):
+            for raw in (0,20,1400,-1):
+                self.assertEqual(radar_coordinate_metres(raw,28,source=source),raw)
+        with self.assertRaises(ValueError):radar_coordinate_metres(20,28,source='guessed')
+
+    def test_highlight_two_means_position_offline_not_damage_buff(self):
+        for code, special, offline in ((0,False,False),(1,True,False),(2,True,True)):
+            marker=RadarMarker.from_wire({'target_pos_x':20,'is_high_light':code},28,15)
+            self.assertEqual((marker.x_m,marker.highlighted,marker.position_offline),(.2,special,offline))
+        for code in (-1,3,99):
+            with self.assertRaises(ValueError):RadarMarker.from_wire({'is_high_light':code},28,15)
 
     def test_radar_age_admission_and_fade_preserve_inclusive_expiry(self):
         for age, expected in ((-1., 1.), (0., 1.), (4., 1.), (4.5, .75), (5., .5), (5.999, .0005), (6., 0.)):

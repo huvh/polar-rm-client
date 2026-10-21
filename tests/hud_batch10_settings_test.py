@@ -92,7 +92,7 @@ def test_buffer_max_lands_via_static_status() -> None:
     check("字段不在 present 位图里时保持原值（不得被清 0）",
           state2.max_buffer_energy == 260, str(state2.max_buffer_energy))
 
-    # 上限为 0 的脏数据不得污染已有值
+    # 明确收到的 0 是能力观测，不是缺席；不得继续显示旧正上限。
     state3 = RobotState()
     state3.max_buffer_energy = 260
     manager._apply_one(state3, "RobotStaticStatus", {
@@ -100,8 +100,8 @@ def test_buffer_max_lands_via_static_status() -> None:
         "robot_id": 3,
         "max_buffer_energy": 0,
     })
-    check("上限 0 视为无效，不覆盖已有值",
-          state3.max_buffer_energy == 260, str(state3.max_buffer_energy))
+    check("显式上限 0 覆盖旧值，缺席才保留",
+          state3.max_buffer_energy == 0, str(state3.max_buffer_energy))
 
     # 动态报文里不该有 max_buffer_energy；确认它不会误改（回归上一版的错）
     state4 = RobotState()

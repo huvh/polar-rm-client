@@ -12,6 +12,24 @@ import re
 from .jello_locale import CATEGORY_ZH, MODULE_ZH
 
 HUD_ZH = {
+    "Sentry map intervention (fee confirmation)": "哨兵地图干预（费用确认）",
+    "1 = Supply-point ammunition": "1 = 补血点补弹", "2 = Supply-station physical ammunition": "2 = 补给站实体补弹",
+    "3 = Remote ammunition": "3 = 远程补弹", "4 = Remote healing": "4 = 远程回血",
+    "5 = Confirm respawn": "5 = 确认复活", "6 = Confirm paid respawn": "6 = 确认金币复活",
+    "7 = Attack stance": "7 = 进攻姿态", "8 = Defense stance": "8 = 防御姿态", "9 = Movement stance": "9 = 移动姿态",
+
+    "Infantry only: activate energy mechanism": "仅步兵：激活能量机关",
+    "Aerial operator: same-team dart target": "空中云台手：本方飞镖目标",
+    "1 = Outpost": "1 = 前哨站", "2 = Base fixed": "2 = 基地固定目标",
+    "3 = Base random fixed": "3 = 基地随机固定目标", "4 = Base random moving": "4 = 基地随机移动目标",
+    "5 = Base terminal moving": "5 = 基地末端移动目标",
+    "Opening request (never closes the gate):": "开闸请求（不会关闭闸门）：",
+    "No opening request": "不请求开闸", "Request opening": "请求开闸",
+    "Engineer only: assembly operation": "仅工程：装配操作",
+    "0 = Start exchange": "0 = 开始兑换", "1 = Confirm assembly": "1 = 确认装配",
+    "2 = Cancel": "2 = 取消", "Difficulty (1-4):": "难度（1-4）：", "Air Support": "空中支援",
+
+    "rings": "环", "UNKNOWN": "未知",
     "Rune Activate (energy mechanism)": "激活能量机关", "Dart Command": "飞镖指令",
     "Sentry Control": "哨兵控制", "Assembly Command": "工程指令",
     "Performance Selection (from RobotProfile)": "性能选择（机器人预设）",

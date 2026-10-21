@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "profile": "official_213_v2_safe",
+  "gui_mode": "JelloSigma",
+  "selected_category": "System",
+  "selected_module": "MQTTLink",
+  "_purpose": "Explicit client 12.0.0.213 / V2 schema staging preset. LabDebug + loopback + synthetic video, no live control authorization. Import manually; never replaces default or migrates an existing profile.",
+  "modules": {
+    "Scenario": {"settings": {"Mode": "LabDebug", "Show Startup": true, "Mock Writes": true, "Official Limits": true}},
+    "ConfigManager": {"settings": {"Auto Save": false, "Load On Start": false}},
+    "MQTTLink": {"enabled": false, "settings": {"Referee Profile": "rm2026-v2.0.0", "Host": "127.0.0.1", "Port": 3333, "Auto Connect": false}},
+    "UDPVideo": {"enabled": false, "settings": {"Host": "127.0.0.1", "Port": 3334}},
+    "CameraFeed": {"settings": {"Source": "Synthetic"}},
+    "TongjiVisionBridge": {"enabled": false, "settings": {"Vision Source": "Mock", "Listen": false, "Desktop Safe": true}},
+    "SerialBridge": {"enabled": false, "settings": {"Port": "Stub", "Mock Writes": true}},
+    "ControllerAngles": {"enabled": false, "settings": {"Angle RX Port": "Stub", "Angle TX Port": "Stub", "Forward Angles": false, "Angle Mock Writes": true}},
+    "RobotLink": {"enabled": false, "settings": {
+      "Port": "Stub", "Link Mode": "serial", "Bridge Host": "", "Allow Drive": false,
+      "Mock Writes": true, "Allow Spin Key": false, "Radio KM Egress": false,
+      "Direct DT7 Egress": false, "DT7 Real TX": false, "DT7 Allow Fire Keys": false,
+      "Custom Controller Egress": false, "CC Mock Writes": true,
+      "Client Chassis Drive": false, "Client Gimbal Control": false, "Vision NUC Occupied": true
+    }},
+    "ArmorAutoAim": {"enabled": false, "settings": {"Mock Output": true}},
+    "EnergyAutoAim": {"enabled": false, "settings": {"Mock Output": true}},
+    "SpinMode": {"enabled": false, "settings": {"Mock Output": true}},
+    "AutoSpinOnHit": {"enabled": false},
+    "HeroLob": {"enabled": false, "settings": {"Mock Output": true}},
+    "FireControlStub": {"enabled": false, "settings": {"Safety Lock": true, "Mode": "Disabled"}},
+    "EconomyPanel": {"settings": {"Mock Requests": true}},
+    "ProjectileShop": {"settings": {"Mock Request": true}}
+  }
+}

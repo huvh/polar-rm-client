@@ -28,14 +28,17 @@ class PolicyAdapterTests(unittest.TestCase):
                     backend._apply_radio_km_feedback(control, bridge, gates, requested=True)
                 self.assertFalse(control.radio_km_enabled)
 
-    def test_nonfinite_readback_keeps_baseline_error_without_retaining_authority(self):
+    def test_nonfinite_readback_is_unknown_without_retaining_authority(self):
         backend = BackendManager.__new__(BackendManager)
         bridge = SimpleNamespace(debug_packages={'km_rx': float('inf')},
                                  debug_key_at=1, debug_key_sequence=0)
         control = SimpleNamespace(radio_km_enabled=True)
-        with self.assertRaises(OverflowError):
-            backend._apply_radio_km_feedback(control, bridge,
-                ControlGates(True, True, True, True), requested=True)
+        backend._apply_radio_km_feedback(control, bridge,
+            ControlGates(True, True, True, True), requested=True)
+        self.assertEqual(control.radio_km_robot_rx, -1)
+        self.assertEqual(control.radio_km_robot_key, -1)
+        self.assertFalse(control.radio_km_robot_rx_growing)
+        self.assertEqual(control.radio_km_link_state, "blocked")
         self.assertFalse(control.radio_km_enabled)
         self.assertEqual(control.radio_km_policy, '?')
         self.assertIn('没报档位', control.radio_km_policy_hint)

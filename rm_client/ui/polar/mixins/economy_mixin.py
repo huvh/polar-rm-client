@@ -174,7 +174,7 @@ class EconomyMixin:
         """Send a confirmed economy request without mutating local match state."""
         if self.backend.referee.profile_id == V2_PROFILE:
             self._v2_air_qualification_attempt = None
-            self.mqtt.last_error = "V2 legacy economy requests unavailable; use the explicit Air menu"
+            self.mqtt.last_error = "V2 legacy economy requests unavailable; use the explicit V2 economic confirmation workspace"
             return False
         if request.mock:
             return True
@@ -280,8 +280,8 @@ class EconomyMixin:
 
     def open_economy_workspace(self, category: str | None = None) -> None:
         if self.backend.referee.profile_id == V2_PROFILE:
-            self.toast("V2 fixed-price Economy unavailable; opening supervised Air requests. Normal arming qualification pending.")
-            self.open_event_command_menu()
+            from ..renderers.v2_economy_dialog import _open_v2_economy_dialog
+            _open_v2_economy_dialog(self, "CommonCommand")
             return
         self.close_student_panel(immediate=True)
         if self.hero_deploy_video_cut_active():
@@ -393,7 +393,7 @@ class EconomyMixin:
     def submit_economy_offer(self, offer: EconomyOffer) -> None:
         if self.backend.referee.profile_id == V2_PROFILE:
             self._v2_air_qualification_attempt = None
-            self.toast("V2 legacy offers, including captured/mock offers, are unavailable; use the Air menu")
+            self.toast("V2 legacy offers are unavailable; use the explicit V2 economic confirmation workspace")
             return
         unavailable = unavailable_offer_reason(offer)
         if unavailable is not None:
@@ -1094,7 +1094,7 @@ class EconomyMixin:
             session_id=self.backend.qualification.session.session_id,
         )
         if self.backend.referee.profile_id == V2_PROFILE:
-            self.toast("30 s supervised Air window: use Event commands during MATCH only, then explicitly Observe Economy. Status change is not a unique ACK; normal arming qualification pending.")
+            self.toast("30 s supervised V2 economy window: confirm one request during MATCH in the V2 workspace. Air observation is not a unique request/payment ACK; other capabilities keep independent safety gates.")
         else:
             self.toast("Economy test window active for 30 s; send one supervised request")
 

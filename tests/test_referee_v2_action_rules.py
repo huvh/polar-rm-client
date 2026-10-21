@@ -56,11 +56,16 @@ class V2ActionRulesTests(unittest.TestCase):
         for value in range(-1,6):
             self.assertEqual(rules.is_documented_command('AirSupportCommand',value),value in {0,1,2,3})
 
+    def test_common_and_paid_map_documented_membership_is_not_admission(self):
+        for value in range(-1, 9):
+            self.assertEqual(rules.is_documented_command('CommonCommand', value), value in range(1, 7))
+            self.assertEqual(rules.is_documented_command('MapClickCmd', value), value == 0)
+
     def test_command_types_and_unknown_topics_fail_closed(self):
-        for topic in ('Unknown','CommonCommand','sentryctrlcommand','',None,[],1):
+        for topic in ('Unknown','sentryctrlcommand','',None,[],1):
             self.assertFalse(rules.is_documented_command(topic,1))
         for value in (True,False,1.0,'1',None,[],{},float('nan')):
-            for topic in ('SentryCtrlCommand','AirSupportCommand'):
+            for topic in ('SentryCtrlCommand','AirSupportCommand','CommonCommand','MapClickCmd'):
                 self.assertFalse(rules.is_documented_command(topic,value))
 
     def test_rate_contract_does_not_invent_air_limit(self):

@@ -66,7 +66,7 @@ class OfficialSafety:
     state.  Qualification uses an unguessable short-lived in-memory token.
     """
 
-    def __init__(self, scenario_key: str = "LabDebug") -> None:
+    def __init__(self, scenario_key: str = "LabDebug", *, stage_timeout_s: float = 1.0) -> None:
         self.scenario_key = scenario_key
         self.mock_writes = True
         self.allow_mqtt_publish = False
@@ -77,6 +77,8 @@ class OfficialSafety:
         self.estop_at = 0.0
         self.current_stage = "0"
         self._stage_seen = False
+        self._stage_evidence: tuple[str, float] | None = None
+        self.configure_stage_timeout(stage_timeout_s)
         self._publish_at: dict[str, float] = {}
         self._publish_limit_hz = 10.0
         self._topic_limit_hz = {"KeyboardMouseControl": 75.0, "CustomControl": 75.0,
@@ -155,21 +157,86 @@ class OfficialSafety:
         self._publish_at.clear()
         self.lock_control("scenario changed")
 
+    @staticmethod
+    def _valid_stage_clock(value: Any) -> bool:
+        try:
+            return type(value) in (int, float) and math.isfinite(value) and value >= 0
+        except OverflowError:
+            return False
+
+    def configure_stage_timeout(self, timeout_s: float) -> None:
+        """Local receipt deadline, not a referee protocol guarantee (default 1 s)."""
+        if not self._valid_stage_clock(timeout_s) or timeout_s <= 0:
+            raise ValueError("stage timeout must be finite and positive")
+        self.stage_timeout_s = float(timeout_s)
+
     def clear_stage_evidence(self) -> None:
-        """Forget the referee phase without changing control state or notifying observers."""
+        """Forget receipt evidence without changing control or notifying observers."""
+        self._stage_evidence = None
         self.current_stage = "0"
         self._stage_seen = False
 
-    def update_stage(self, current_stage: Any) -> None:
-        stage = str(current_stage).strip()
-        if stage.isdigit() and len(stage) <= 2:
-            self.current_stage = str(int(stage))
-            self._stage_seen = True
-        elif stage == "MATCH" and self._stage_seen:
-            self.current_stage = "4"
+    def update_stage(self, current_stage: Any, *, now: float | None = None) -> None:
+        """Record a numeric referee phase at its transport receipt time.
 
-    def is_fighting(self) -> bool:
-        return self._stage_seen and self.current_stage in FIGHTING_STAGES
+        UI labels and delayed model application are never receipt evidence.
+        Production calls this only from the current MQTT callback, under its
+        decoded lock. Publish the phase and clock together as an immutable pair.
+        """
+        stage = str(current_stage).strip()
+        if not stage.isdigit() or len(stage) > 2:
+            return
+        current = time.perf_counter() if now is None else now
+        if not self._valid_stage_clock(current):
+            self.clear_stage_evidence()
+            return
+        previous = self._stage_evidence
+        if previous is not None and current < previous[1]:
+            return  # A delayed older callback cannot overwrite a newer phase.
+        self.current_stage = str(int(stage))
+        self._stage_seen = True
+        self._stage_evidence = (self.current_stage, float(current))
+
+    def observe_stage_receipt(self, current_stage: Any, *, received_at: float) -> bool:
+        """MQTT receipt owner: reject reordered evidence before testing its gap."""
+        if not self._valid_stage_clock(received_at):
+            revoked = self.expire_stage(now=float("nan"), notify=False)
+            self.clear_stage_evidence()
+            return revoked
+        previous = self._stage_evidence
+        if previous is not None and received_at < previous[1]:
+            return False
+        revoked = self.expire_stage(now=received_at, notify=False)
+        self.update_stage(current_stage, now=received_at)
+        return revoked
+
+    def stage_is_fresh(self, *, now: float | None = None) -> bool:
+        evidence = self._stage_evidence
+        current = time.perf_counter() if now is None else now
+        return bool(evidence is not None and self._valid_stage_clock(current)
+                    and 0 <= current - evidence[1] < self.stage_timeout_s)
+
+    def is_fighting(self, *, now: float | None = None) -> bool:
+        evidence = self._stage_evidence
+        current = time.perf_counter() if now is None else now
+        return bool(evidence is not None and evidence[0] in FIGHTING_STAGES
+                    and self._stage_seen and self.current_stage == evidence[0]
+                    and self._valid_stage_clock(current)
+                    and 0 <= current - evidence[1] < self.stage_timeout_s)
+
+    def expire_stage(self, *, now: float, notify: bool = True) -> bool:
+        """Revoke armed authority once on a receipt gap; return whether revoked.
+
+        MQTT serializes this with receipt updates and defers observer delivery
+        to its owner. Explicit supervised qualification and E-stop stay intact.
+        """
+        if self._stage_evidence is None or self.stage_is_fresh(now=now):
+            return False
+        self.clear_stage_evidence()
+        if self.control_state != ControlState.MATCH_ARMED:
+            return False
+        self.lock_control("referee stage expired; fresh phase and explicit re-arm required", notify=notify)
+        return True
 
     def lock_control(self, reason: str = "operator lock", *, notify: bool = True) -> None:
         self.control_state = ControlState.LOCKED
@@ -284,7 +351,7 @@ class OfficialSafety:
             # non-fighting stages; requiring stage 4 here would make the whole
             # qualification flow unreachable before a match.  Rate limits still
             # apply, which is exactly what the heartbeat test measures.
-            if not lab_dt7_drive and not authorized_qualification and not self.is_fighting():
+            if not lab_dt7_drive and not authorized_qualification and not self.is_fighting(now=current):
                 return self._deny("not in an authoritative fighting stage")
             previous = self._publish_at.get(name, -1.0)
             limit_hz = self._topic_limit_hz.get(name, self._publish_limit_hz)
@@ -295,16 +362,53 @@ class OfficialSafety:
                 return self._deny(f"{name} exceeds {limit_hz:g} Hz")
         return True, "ok"
 
+    def can_publish_current(
+        self, topic: str, *, now: float, intent: str = "control",
+        qualification_token: str | None = None,
+    ) -> tuple[bool, str]:
+        """Read-only final policy check; never callbacks, mutation or token use."""
+        if not self._valid_stage_clock(now):
+            return False, "invalid publication clock"
+        name = str(topic).strip().rstrip("/").rsplit("/", 1)[-1]
+        if self.estop_active or self.control_state == ControlState.ESTOP:
+            return False, "E-stop active"
+        if not self.allow_mqtt_publish and name != "DT7KeyboardMouseControl":
+            return False, "current scenario does not allow real MQTT publishing"
+        lab_dt7 = self.allow_dt7_drive and name == "DT7KeyboardMouseControl"
+        qualified = False
+        if name in CONTROL_TOPICS and not lab_dt7:
+            if self.control_state == ControlState.QUALIFICATION:
+                token = self._qualification
+                if (token is None or now > token.expires_at or not qualification_token
+                        or not secrets.compare_digest(qualification_token, token.value)
+                        or intent not in token.intents):
+                    return False, "qualification token invalid or expired"
+                qualified = True
+            elif self.control_state == ControlState.MATCH_ARMED:
+                capability = self._capability_for(name, intent)
+                if capability not in self._authorized_capabilities:
+                    return False, f"capability {capability} remains LOCKED MOCK"
+            else:
+                return False, "match control is LOCKED"
+        if (self.enforce_official_limits or name == "DT7KeyboardMouseControl") and name in CONTROL_TOPICS:
+            if not lab_dt7 and not qualified and not self.is_fighting(now=now):
+                return False, "not in an authoritative fighting stage"
+            previous = self._publish_at.get(name, -1.0)
+            limit_hz = self._topic_limit_hz.get(name, self._publish_limit_hz)
+            if name != "DT7KeyboardMouseControl" and previous >= 0.0 and now - previous < 1.0 / limit_hz:
+                return False, f"{name} exceeds {limit_hz:g} Hz"
+        return True, "ok"
+
     def can_publish_v2_economy_current(
         self, topic: str, *, now: float, qualification_token: str | None = None,
     ) -> tuple[bool, str]:
         """Read-only final V2 request check; never revoke or notify under locks.
 
-        This is deliberately limited to the two reviewed economy topics. The
+        This is deliberately limited to reviewed economy routes. The
         regular can_publish call still owns initial denial/expiry effects.
         V2 live business requests require MATCH even with qualification.
         """
-        if topic not in {"AirSupportCommand", "SentryCtrlCommand"}:
+        if topic not in {"AirSupportCommand", "SentryCtrlCommand", "CommonCommand", "MapClickCmd"}:
             return False, "unsupported V2 economy topic"
         try:
             if type(now) not in (int, float) or not math.isfinite(now) or now < 0:
@@ -326,7 +430,7 @@ class OfficialSafety:
                 return False, "capability economy remains LOCKED MOCK"
         else:
             return False, "match control is not armed or qualified"
-        if not self.is_fighting():
+        if not self.is_fighting(now=now):
             return False, "V2 live economy requests require MATCH"
         if self.enforce_official_limits:
             previous = self._publish_at.get(topic, -1.0)
@@ -390,5 +494,7 @@ class OfficialSafety:
             "estop_active": self.estop_active,
             "fighting": self.is_fighting(),
             "stage": self.current_stage,
+            "stage_fresh": self.stage_is_fresh(),
+            "stage_timeout_s": self.stage_timeout_s,
             "last_reason": self.last_reason,
         }

@@ -175,6 +175,9 @@ class BackendInputOwnerTests(unittest.TestCase):
     def test_two_arm_attempts_cannot_bypass_owner_clear_failure(self):
         self.manager.mqtt.mock_output = False
         self.manager.mqtt.connected = True
+        self.manager.mqtt.client = SimpleNamespace(disconnect=lambda: None, loop_stop=lambda: 0, _thread=None)
+        self.manager.mqtt._subscription_request = (self.manager.mqtt.client, self.manager.mqtt._lifecycle_generation, 17, 1)
+        self.manager.mqtt._on_subscribe(self.manager.mqtt.client, None, 17, [1], None)
         self.manager.safety.allow_mqtt_publish = True
         self.manager.qualification.session = SimpleNamespace(robot_id='3', match_mode='RMUL')
         with patch.object(self.manager.qualification, 'verified_core_ready', return_value=(True, 'ok')), \
@@ -206,6 +209,48 @@ class BackendInputOwnerTests(unittest.TestCase):
             self.assertEqual(int.from_bytes(decode_dt7_frame(writes[-1])['payload'][8:10], 'little'), 0)
             self.assertEqual(self.manager.safety.control_state.value, 'LOCKED')
         self.manager.poll_lifecycle()
+
+    def test_reset_failure_still_clears_caches_pending_and_release_flags(self):
+        failure = TypeError('primary reset failure')
+        self.manager._admit_input_clear('clear failed owner')
+        with patch.object(self.manager, '_request_device_neutral', return_value=(False, True)) as neutral, \
+                patch.object(self.control, 'reset_inputs', side_effect=failure), \
+                patch.object(self.control, 'clear_pending', wraps=self.control.clear_pending) as clear:
+            with self.assertRaises(TypeError) as caught:
+                self.manager.poll_lifecycle()
+            self.assertIs(caught.exception, failure)
+            neutral.assert_called_once_with('clear failed owner')
+            clear.assert_called_once_with()
+        self.assertIsNone(self.control.last_command)
+        self.assertEqual(self.control.last_payload, b'')
+        self.assertTrue(self.control.dt7_release_pending)
+        self.assertFalse(self.control.cc_release_pending)
+        self.assertTrue(self.control.key_state['W'])  # Failed reset remains honest.
+        self.assertEqual(self.observed, [])  # No success-only UI notification.
+        self.assertTrue(self.manager._input_clear_incomplete())
+        self.assertEqual(self.manager.safety.control_state.value, 'LOCKED')
+        self.manager.poll_lifecycle()
+        self.assertFalse(self.control.key_state['W'])
+        self.assertFalse(self.manager._input_clear_incomplete())
+        self.assertEqual(self.observed, [(self.owner, 'clear failed owner')])
+
+    def test_reset_and_pending_clear_failures_preserve_first_exception(self):
+        failure = TypeError('primary reset failure')
+        self.manager._admit_input_clear('two local failures')
+        with patch.object(self.control, 'reset_inputs', side_effect=failure), \
+                patch.object(self.control, 'clear_pending', side_effect=ValueError('secondary pending failure')) as clear:
+            with self.assertRaises(TypeError) as caught:
+                self.manager.poll_lifecycle()
+            self.assertIs(caught.exception, failure)
+            clear.assert_called_once_with()
+        self.assertIsNone(self.control.last_command)
+        self.assertEqual(self.control.last_payload, b'')
+        self.assertEqual(self.manager._input_clear_error, 'TypeError: primary reset failure')
+        self.assertTrue(self.manager._input_clear_incomplete())
+        self.assertEqual(self.observed, [])
+        self.manager.poll_lifecycle()
+        self.assertFalse(self.manager._input_clear_incomplete())
+        self.assertEqual(self.observed, [(self.owner, 'two local failures')])
 
     def test_ui_observer_failure_is_retryable_and_revokes_new_authority(self):
         self.manager.input_clear_hook = lambda reason: (_ for _ in ()).throw(ValueError('UI clear failed'))

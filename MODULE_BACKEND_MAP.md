@@ -190,3 +190,17 @@ AST 结构度量仍保留这些函数和复杂度，设置孤儿审计的口径�
 DT7 的入口和检查工具见 `tools/dt7_link/README.md`。保留 `tools/dt7_hid_probe.py` 等侦察工具不意味着当前客户端没有 DT7 实现，也不证明任意型号/固件的 USB 协议兼容。
 
 历史手工段中“全仓没有 DT7/HID 实现”“停发不会留下车辆旧状态”等断言不再作为当前结论。设备超时、独立输入源及无线/固件行为必须通过选定版本和实际链路验证；本轮未提供这样的硬件验收。
+
+### 2026-10-20 图传入口补充
+
+`CameraFeed.Source` 明确选择三种不同输入契约，均由 `BackendManager.udp`
+的同一 socket/解码器所有者编排，切换前退休旧会话：
+
+- `Shark UDP` / `UDP HEVC`：8 字节分片重组，使用 UDPVideo 的 Host/Port。
+- `Legacy VT02 UDP`：旧版渲染路径的原始 H.264，独占 `0.0.0.0:8080`。
+- `Legacy Official Bridge`：原始 H.264 回环 `127.0.0.1:18080`；显式外部
+  Npcap 工具保留官方客户端的接收器控制与 8080 所有权，不由 UI 自动启动。
+
+代码：`rm_client/backend/video_backend.py`、`rm_client/transports.py`、
+`tools/legacy_video_bridge.py`。旧入口没有现代官方 UDP 比赛资格，物理验收仍未完成。
+完整使用和证据见 [旧图传接入说明](docs/legacy_video_ingress.md)。

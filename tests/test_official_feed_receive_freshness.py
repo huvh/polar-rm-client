@@ -25,6 +25,9 @@ class ReceiveHarness:
         self.state = RobotState(official_state_active=True, mock_simulation_enabled=False)
         self.mqtt = RmMqttBackend()
         self.mqtt.client = object()  # Current callback identity, never a network client.
+        self.mqtt.connected = True
+        self.mqtt._subscription_request = (self.mqtt.client, self.mqtt._lifecycle_generation, 17, 1)
+        self.mqtt._on_subscribe(self.mqtt.client, None, 17, [1], None)
         self.official_feed = OfficialMatchFeed()
         self._official_state_updates = {}
         self.accepted = []
