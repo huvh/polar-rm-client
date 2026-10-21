@@ -1,0 +1,37 @@
+{
+  "schema": 1,
+  "reference_repository": "https://github.com/DDDuoDuo/EndfieldHUD.git",
+  "reference_commit": "cdbd4f573c8fa3b9c2048fa3d1b089e69196537b",
+  "resource_url": "https://github.com/DDDuoDuo/EndfieldHUD/releases/download/v1.2.0/EndfieldHUD-1.2.0-build18-windows-x64-portable.zip",
+  "package_sha256": "b16f77c5dfa1c7e7cfe2ed96697347b880932a25507f6c8cb823ffec2a9a9341",
+  "models_source": "https://bbs.robomaster.com/article/1970956?source=11",
+  "models": {
+    "RMUC7v7": {
+      "filename": "RMUC2027_V1.0.0.stp",
+      "url": "https://hz-rm-bbs-web-prod.oss-cn-hangzhou.aliyuncs.com/080ae7230f6c469c9bec9d2c892797b61791994813953/RMUC2027_V1.0.0.stp",
+      "sha256": "a5ad3ede3b7674fc98f2e73b71717216383cb2b4b5dcdbe900c2038918bea8e0",
+      "bytes": 653443279,
+      "up": "z"
+    },
+    "RMUL3v3": {
+      "filename": "RMUL2027_3V3_V1.0.0.stp",
+      "url": "https://hz-rm-bbs-web-prod.oss-cn-hangzhou.aliyuncs.com/12d6225c83984f00a0cc27628ecea74b1791994867597/RMUL2027_3V3_V1.0.0.stp",
+      "sha256": "7d47c1b6a6a0253a732e46cb122bb84410b11d5134bcb5658104299db4a48ca4",
+      "bytes": 1989786,
+      "up": "-y"
+    },
+    "RMUL1v1": {
+      "filename": "RMUL2027_1V1_V1.0.0.stp",
+      "url": "https://hz-rm-bbs-web-prod.oss-cn-hangzhou.aliyuncs.com/cc52e8820e32454e8d34bcddc0b8ddfa1791994866414/RMUL2027_1V1_V1.0.0.stp",
+      "sha256": "954936e74885493836d73ba215e1c42efc3b6d40279478f5e5d626109e2cf6d1",
+      "bytes": 1111060,
+      "up": "-y"
+    }
+  },
+  "tool_versions": {
+    "ziglang": "0.14.1",
+    "cadquery-ocp": "8.0.1.1.0",
+    "vtk": "9.6.2",
+    "numpy": "2.5.4"
+  }
+}

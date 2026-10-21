@@ -18,6 +18,17 @@ _LIBRARIES: dict[str, object] = {}  # Never unload code while a worker retires.
 
 
 def library_path(pack: Path) -> Path:
+    try:
+        return _library_path(pack)
+    except FileNotFoundError as error:
+        raise FileNotFoundError(
+            "Endfield 菜单资源未完整准备。请按 docs/ENDFIELD_PACK_SETUP.md 构建完整资源包，"
+            "再运行 python tools/prepare_endfield_pack.py check --pack <user_data/endfield_pack>。"
+            "不要新建空 BUILD_MANIFEST.json。缺少：" + str(error.filename)
+        ) from error
+
+
+def _library_path(pack: Path) -> Path:
     root = pack / "native_renderer"
     active = root / "CURRENT.json"
     if active.is_file():

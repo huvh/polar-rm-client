@@ -67,6 +67,12 @@ asset redistribution rights. No public release was created in this task.
 
 ## Rebuild / prepare
 
+**For a fresh source checkout, use the complete, pinned Windows procedure in
+[ENDFIELD_PACK_SETUP.md](ENDFIELD_PACK_SETUP.md).** It provides real download
+URLs, exact tool versions, all three official model hashes, one transactional
+prepare command, integrity checks and actual D3D verification. The following
+commands are individual development primitives, not a complete installation.
+
 Explicit offline preparation; none of these tools is a runtime installer:
 
 ```powershell

@@ -30,6 +30,9 @@ python -m venv .venv
 用于发布/编译验证，不是现场运行依赖。这些清单都不是模型、素材或 FFmpeg 的下载器。
 
 开发前先读 [贡献与验证约定](CONTRIBUTING.md) 和 [当前架构与所有权](docs/architecture.md)。
+Windows 源码版的原生 Esc 菜单另需完整准备 `endfield_pack`；它不是 pip 依赖，也不在
+旧 v0.1.0 Release 内。固定下载地址、工具版本、DLL 构建、三个官方模型生成和校验命令见
+[完整原生 Esc 资源准备指南](docs/ENDFIELD_PACK_SETUP.md)。**不要创建空清单代替资源包。**
 正式入口是 `main.py`：它先处理运行目录、preflight、回放和队内链路自检，再进入
 `rm_client.ui.polar_app.main`，实际 Qt 装配位于 `rm_client/ui/polar/app_entry.py`。
 `rm_client/app.py` 是惰性兼容入口，直接运行也进入 Qt；历史 Tk 实现保留在
@@ -81,7 +84,7 @@ python -m venv .venv
 
 ## 快捷键
 
-- 主 HUD 按 `Esc` 打开菜单。Windows 配有经校验的本机 Endfield 资源包时使用原生 EndfieldHUD 场景、RM 2027 场地预览和模糊背景；设置继续使用 Jello，关于入口改为更新日志。无可用资源包时保留 Jello 二级菜单。已有输入框/弹窗优先处理 Esc，退出客户端需要二次确认；菜单不暂停遥测或安全监控，菜单键鼠不会下发为控制输入。原生菜单准备和资源边界见 [Endfield UI 接入说明](docs/ENDFIELD_SOURCE_PORT.md)，通用安全约定见 [Esc 菜单说明](docs/escape_menu.md)。
+- 主 HUD 按 `Esc` 打开菜单。Windows 配有经校验的本机 Endfield 资源包时使用原生 EndfieldHUD 场景、RM 2027 场地预览和模糊背景；设置继续使用 Jello，关于入口改为更新日志。Windows 缺少资源包时会显示准备诊断，请按完整准备指南补齐资源，不以更换菜单绕过。已有输入框/弹窗优先处理 Esc，退出客户端需要二次确认；菜单不暂停遥测或安全监控，菜单键鼠不会下发为控制输入。原生菜单准备和资源边界见 [Endfield UI 接入说明](docs/ENDFIELD_SOURCE_PORT.md)，通用安全约定见 [Esc 菜单说明](docs/escape_menu.md)。
 
 - `Right Shift` 或 `F8`：打开/关闭配置界面（ClickGUI）。Jello 界面左键点击面板外空白处也可关闭；面板标题、留白、控件和拖动不会误关。
 - `F9`：已停用，不再轮换 ClickGUI。

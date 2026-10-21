@@ -1,0 +1,6 @@
+# Offline preparation only. Do NOT install into the client runtime/field PC.
+# Windows x64 / Python 3.12, measured tool versions used by the original port.
+ziglang==0.14.1
+cadquery-ocp==8.0.1.1.0
+vtk==9.6.2
+numpy==2.5.4

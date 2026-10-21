@@ -1,8 +1,9 @@
-"""Build the original EndfieldHUD camera/curve oracle, not a redraw.
+"""Build original EndfieldHUD probes or the retained POLAR native menu DLL.
 
 Requires a user-supplied checkout at the pinned revision and ziglang (or an
 explicit C++20 compiler). No game files, dependencies or executables are
-downloaded by this tool. Runtime UI integration is a separate unfinished step.
+downloaded by this tool. For the complete runtime pack (including all three
+fields), use prepare_endfield_pack.py and docs/ENDFIELD_PACK_SETUP.md.
 """
 from __future__ import annotations
 

@@ -1,0 +1,5516 @@
+{
+  "schema": 1,
+  "recorded_at_utc": "2026-10-21T17:59:06.222505+00:00",
+  "issue": "https://github.com/lulunomaro/polar-rm-client/issues/22",
+  "scope": "Complete source-user preparation workflow and Windows original menu loading. No release, performance target, clean-machine or match qualification.",
+  "source": {
+    "base_commit": "b29445ccc57cc0dc9e62dbf35e993bdb129c7763",
+    "branch": "fix/issue22-endfield-pack",
+    "uncommitted": true,
+    "main_updated": false,
+    "changed_file_sha256": {
+      "README.md": "051e473c31c916326bbd9e86fad09e456f9aadc45ba73407ac8f247df744cd31",
+      "THIRD_PARTY_NOTICES.md": "80cf46e4e6c79b20803fde3bf0ae72561b4af7733498f22c96d995e5b2d25280",
+      "docs/ENDFIELD_PACK_SETUP.md": "983902c1fe1118148cf5586d298eff74320509907cca4859aa6ca6e19fb02b48",
+      "docs/ENDFIELD_SOURCE_PORT.md": "d90796d96ceee41970486962b54965dfd504494d003c85022ba1c64631b36b6c",
+      "requirements-endfield-tools.txt": "158284e2162c58745204e61d91e9423fd2d0f15f5a36309ea73416dfc65fe1c0",
+      "rm_client/ui/endfield_native.py": "4b0609b30b415692464c3686f725da24e4bbfc76840d4ddf4440e824ad7ed5dc",
+      "tests/test_endfield_pack_setup.py": "5b4020d1beea7ca06b413338d615cbdbbbe605c9bf57a7955538844861b3dceb",
+      "tools/build_endfield_source_probe.py": "4bcd30d0607f399c0c2df7dc0e6b968a26851b65b28b0f1e571dec8c56d32ec0",
+      "tools/endfield_pack.py": "022485718b9574efd362eff509fd4bb9e1a59eba3aeaafb53db79103dae4004f",
+      "tools/endfield_pack_sources.json": "63eedcd6a2b4e95833b7c0c2cbd00f51a1e9072c853135d5cd00a42d0375a1de",
+      "tools/endfield_runtime_files.json": "72b92f90c07d828205462a74df8d031720cfcde06d55eb62eee729b585c83892",
+      "tools/prepare_endfield_pack.py": "9b6d58a2b03ccc4e7b10f733240ac847e3baf4e8eb04f1fc8160a2f10a27365c",
+      "tools/verify_endfield_pack_runtime.py": "e435485c49e985fe9137f7c3fe3fd39dd608dc5a5ed0b1805ef05a678f67268c"
+    }
+  },
+  "provenance": {
+    "schema_version": 1,
+    "captured_at_utc": "2026-10-21T17:44:36.411582+00:00",
+    "interpreter": {
+      "implementation": "CPython",
+      "version": "3.12.14"
+    },
+    "os": {
+      "system": "Windows",
+      "release": "11",
+      "machine": "AMD64"
+    },
+    "dependencies": {
+      "PySide6": {
+        "status": "installed",
+        "version": "6.11.1"
+      },
+      "PySide6-Addons": {
+        "status": "installed",
+        "version": "6.11.1"
+      },
+      "PySide6-Essentials": {
+        "status": "installed",
+        "version": "6.11.1"
+      },
+      "shiboken6": {
+        "status": "installed",
+        "version": "6.11.1"
+      },
+      "opencv-python": {
+        "status": "installed",
+        "version": "5.0.0.93"
+      },
+      "numpy": {
+        "status": "installed",
+        "version": "2.4.6"
+      },
+      "paho-mqtt": {
+        "status": "installed",
+        "version": "2.1.0"
+      },
+      "pyserial": {
+        "status": "installed",
+        "version": "3.5"
+      },
+      "openvino": {
+        "status": "installed",
+        "version": "2026.2.1"
+      },
+      "openvino-telemetry": {
+        "status": "installed",
+        "version": "2025.2.0"
+      },
+      "PyInstaller": {
+        "status": "installed",
+        "version": "6.21.0"
+      },
+      "ziglang": {
+        "status": "installed",
+        "version": "0.13.0"
+      }
+    },
+    "source_at_start": {
+      "status": "available",
+      "commit": "b29445ccc57cc0dc9e62dbf35e993bdb129c7763",
+      "tree": "b00ee7bf68095fad5971d0520a79192ad8255ed9",
+      "dirty": true,
+      "dirty_scope": "tracked-and-untracked-nonignored",
+      "reason": null
+    }
+  },
+  "source_stability": {
+    "schema_version": 1,
+    "status": "PASS",
+    "detail": "Declared verification source inputs have identical start/end fingerprints",
+    "scope": {
+      "directories": [
+        "rm_client",
+        "tests",
+        "tools",
+        "configs"
+      ],
+      "suffixes": [
+        ".bat",
+        ".c",
+        ".cfg",
+        ".cpp",
+        ".h",
+        ".hpp",
+        ".ini",
+        ".json",
+        ".ps1",
+        ".py",
+        ".spec",
+        ".toml",
+        ".yaml",
+        ".yml"
+      ],
+      "all_file_directories": [
+        "tests/fixtures"
+      ],
+      "root_files": [
+        "main.py",
+        "requirements*.txt"
+      ],
+      "exclusions": [
+        "hidden directories",
+        "__pycache__"
+      ],
+      "limits": "Start/end comparison only; includes all internal tests/fixtures files; excludes assets outside that fixture directory, external fixtures, installed packages and transient edits restored between captures."
+    },
+    "before": {
+      "status": "available",
+      "sha256": "1bafab588f4604b873433b50f5ea0b93dac5e3a31bdcf735b0a79a0790bae0d1",
+      "file_count": 853
+    },
+    "after": {
+      "status": "available",
+      "sha256": "1bafab588f4604b873433b50f5ea0b93dac5e3a31bdcf735b0a79a0790bae0d1",
+      "file_count": 853
+    }
+  },
+  "cold_preparation": {
+    "status": "PASS",
+    "destination_initially_absent": true,
+    "author_prepared_pack_copied": false,
+    "cached_raw_pinned_inputs_reused": true,
+    "new_tool_venv_install_tested": false,
+    "tool_versions": {
+      "ziglang": "0.14.1",
+      "cadquery-ocp": "8.0.1.1.0",
+      "vtk": "9.6.2",
+      "numpy": "2.5.4"
+    },
+    "reference_commit": "cdbd4f573c8fa3b9c2048fa3d1b089e69196537b",
+    "adapter_sha256": "273da033008e6864e9bdad10c843f7192e30b405e4183fb0887c7a0bf9267daf",
+    "compiler": "clang version 19.1.7 (https://github.com/ziglang/zig-bootstrap de1b01a8c1dddf75a560123ac1c2ab182b4830da)",
+    "binary_sha256": "2dcd9e2e930a69a4ae6a1ac31acc21509bb6b829718d3de2ad677d7116c90bf3",
+    "prepared_manifest_sha256": "376b784bc7c6a7f6c6c286a0733239a8eb047a6b6b9670ed75ce4a8fb1151f17",
+    "files_excluding_manifest": 54,
+    "pack_size_bytes": 61428432,
+    "all_source_resources_hash_locked": 37,
+    "models": {
+      "RMUC7v7": {
+        "schema": 1,
+        "mode": "RMUC7v7",
+        "season": 2027,
+        "source_file": "RMUC2027_V1.0.0.stp",
+        "source_sha256": "a5ad3ede3b7674fc98f2e73b71717216383cb2b4b5dcdbe900c2038918bea8e0",
+        "preview_sha256": "c9cbf04bfeea7dc42de90879c0306815e443b223ff7e382bead6c00b19187888",
+        "preview": "RMUC7v7.png",
+        "vertices": 3145548,
+        "triangles": 2879979,
+        "bounds_mm": [
+          [
+            -13999.98828125,
+            -6377.2216796875,
+            -1941.3436279296875
+          ],
+          [
+            14000.0029296875,
+            9625.9091796875,
+            1857.33935546875
+          ]
+        ],
+        "size": 2048,
+        "camera_up_axis": "z",
+        "detected_vertical_axis": 2,
+        "gpu_mesh": "RMUC7v7.efmesh",
+        "gpu_mesh_sha256": "30b307cb07d11bc5387de7cd8569949bfe5f6c0a99dbfcb4ca98b80645b67fa2",
+        "gpu_triangles": 118677,
+        "gpu_surface_triangles": 78677,
+        "presentation": "original STEP overview: PNG reference and retained GPU triangle mesh; offline LOD, no live CAD",
+        "build_seconds": 205.66
+      },
+      "RMUL3v3": {
+        "schema": 1,
+        "mode": "RMUL3v3",
+        "season": 2027,
+        "source_file": "RMUL2027_3V3_V1.0.0.stp",
+        "source_sha256": "7d47c1b6a6a0253a732e46cb122bb84410b11d5134bcb5658104299db4a48ca4",
+        "preview_sha256": "4dcf2cab017f2f8ce56629f3058db4a71b7efffe4640cafb066f5864dca1d661",
+        "preview": "RMUL3v3.png",
+        "vertices": 6083,
+        "triangles": 3811,
+        "bounds_mm": [
+          [
+            -6300.0,
+            -420.0,
+            -4300.0
+          ],
+          [
+            6300.0,
+            100.0,
+            4300.0
+          ]
+        ],
+        "size": 2048,
+        "camera_up_axis": "-y",
+        "detected_vertical_axis": 1,
+        "gpu_mesh": "RMUL3v3.efmesh",
+        "gpu_mesh_sha256": "75c2b2af6edb32bf38ad5867fc5f1546388b21f3bd7fa0575932e24cafdfb247",
+        "gpu_triangles": 8971,
+        "gpu_surface_triangles": 3811,
+        "presentation": "original STEP overview: PNG reference and retained GPU triangle mesh; offline LOD, no live CAD",
+        "build_seconds": 1.76
+      },
+      "RMUL1v1": {
+        "schema": 1,
+        "mode": "RMUL1v1",
+        "season": 2027,
+        "source_file": "RMUL2027_1V1_V1.0.0.stp",
+        "source_sha256": "954936e74885493836d73ba215e1c42efc3b6d40279478f5e5d626109e2cf6d1",
+        "preview_sha256": "447fc19a30b15f074ab78d3277c2a92008e4891cba821e67d7703ab3870d213b",
+        "preview": "RMUL1v1.png",
+        "vertices": 3404,
+        "triangles": 2124,
+        "bounds_mm": [
+          [
+            -2800.0,
+            -1.0,
+            -2800.0
+          ],
+          [
+            2800.0,
+            420.0,
+            2800.0
+          ]
+        ],
+        "size": 2048,
+        "camera_up_axis": "-y",
+        "detected_vertical_axis": 1,
+        "gpu_mesh": "RMUL1v1.efmesh",
+        "gpu_mesh_sha256": "0bb4bca290a37ff1ddde9c90fbb70a1d8170175a340663fba537b9a6f8bfd8f7",
+        "gpu_triangles": 4860,
+        "gpu_surface_triangles": 2124,
+        "presentation": "original STEP overview: PNG reference and retained GPU triangle mesh; offline LOD, no live CAD",
+        "build_seconds": 1.36
+      }
+    },
+    "optional_boot_included": false,
+    "optional_audio_included": false
+  },
+  "integrity_check": {
+    "status": "PACK_VALID",
+    "files": 54,
+    "maps": {
+      "RMUC7v7": 118677,
+      "RMUL3v3": 8971,
+      "RMUL1v1": 4860
+    },
+    "binary_sha256": "2dcd9e2e930a69a4ae6a1ac31acc21509bb6b829718d3de2ad677d7116c90bf3",
+    "optional_boot": false,
+    "optional_audio": false,
+    "native_render_verified": false,
+    "limits": "Integrity/source check only; run verify_endfield_pack_runtime.py for owned D3D rendering. No hardware/match qualification."
+  },
+  "native_runtime": {
+    "status": "PASS",
+    "owner_retired": true,
+    "boot_audio_absent": true,
+    "cases": [
+      {
+        "mode": "RMUC7v7",
+        "width": 1280,
+        "height": 720,
+        "chinese": false,
+        "image": "RMUC7v7_1280x720.png",
+        "stats": {
+          "frames": 86.0,
+          "last_ms": 0.4495000030146912,
+          "textures": 56.0,
+          "meshes": 57.0,
+          "owners": 1.0
+        },
+        "image_sha256": "e9d2965bc8b9bb35a0e34357c15d846a1b4f5aa32efddc5780e80a4806b75c47"
+      },
+      {
+        "mode": "RMUC7v7",
+        "width": 2560,
+        "height": 1440,
+        "chinese": true,
+        "image": "RMUC7v7_2560x1440.png",
+        "stats": {
+          "frames": 187.0,
+          "last_ms": 0.5593999958364293,
+          "textures": 56.0,
+          "meshes": 57.0,
+          "owners": 1.0
+        },
+        "image_sha256": "6cf72eb36eaf4af5ffe82bcaa7058a041af3d6f0000c643f939fec3c5a63dd28"
+      },
+      {
+        "mode": "RMUL3v3",
+        "width": 1280,
+        "height": 720,
+        "chinese": false,
+        "image": "RMUL3v3_1280x720.png",
+        "stats": {
+          "frames": 273.0,
+          "last_ms": 0.5355000030249357,
+          "textures": 56.0,
+          "meshes": 57.0,
+          "owners": 1.0
+        },
+        "image_sha256": "b015a6e90bb4690060c5b25eb3ffe96fe9cf23cdf37aa27aec6c9076c58e80b6"
+      },
+      {
+        "mode": "RMUL3v3",
+        "width": 2560,
+        "height": 1440,
+        "chinese": true,
+        "image": "RMUL3v3_2560x1440.png",
+        "stats": {
+          "frames": 374.0,
+          "last_ms": 0.5055999936303124,
+          "textures": 56.0,
+          "meshes": 57.0,
+          "owners": 1.0
+        },
+        "image_sha256": "bc98e23bffae77648a0698dba4b7bfc35cc165c2f98637c52021b6b909f590e5"
+      },
+      {
+        "mode": "RMUL1v1",
+        "width": 1280,
+        "height": 720,
+        "chinese": false,
+        "image": "RMUL1v1_1280x720.png",
+        "stats": {
+          "frames": 462.0,
+          "last_ms": 0.4913999873679131,
+          "textures": 56.0,
+          "meshes": 57.0,
+          "owners": 1.0
+        },
+        "image_sha256": "d2156ad7ab0c6e4ff077cfcc12fce222d521ac596ca365970bd71c6df2b36c94"
+      },
+      {
+        "mode": "RMUL1v1",
+        "width": 2560,
+        "height": 1440,
+        "chinese": true,
+        "image": "RMUL1v1_2560x1440.png",
+        "stats": {
+          "frames": 562.0,
+          "last_ms": 0.5694999999832362,
+          "textures": 56.0,
+          "meshes": 57.0,
+          "owners": 1.0
+        },
+        "image_sha256": "d9ee2b2139f08e7ee1ac87ba29c1c645ae5b170277809dd44a574b36f910ad56"
+      }
+    ],
+    "screenshots_retained_in_git": false
+  },
+  "desktop_integration": {
+    "scope": "owned Windows GPU + inert transports; NOT real match validation",
+    "cycles": 3,
+    "initial": {
+      "frames": 105.0,
+      "last_ms": 15.60800000152085,
+      "textures": 56.0,
+      "meshes": 57.0,
+      "owners": 1.0
+    },
+    "display_hz": 75.001,
+    "dpr": 1.0,
+    "esc_backdrop": {
+      "empty_combat_layers_alpha_max": {
+        "overlay": 0,
+        "vision": 0,
+        "dynamic": 0,
+        "target": 0,
+        "hud_glass": 0,
+        "glass": 0
+      },
+      "world_edge_energy": 2.394094944000244,
+      "gaussian_edge_energy_after_undoing_dim": 1.041319489479065,
+      "kernel": "endfield_gaussian",
+      "radius_dp": 10.0,
+      "dim_alpha": 0.42
+    },
+    "fullscreen_hover": [
+      {
+        "button": 2,
+        "stationary": true,
+        "duplicate_moves": true,
+        "initial": {
+          "code": 2,
+          "changes": 3
+        },
+        "final": {
+          "code": 2,
+          "changes": 3
+        },
+        "samples": [
+          {
+            "code": 2,
+            "changes": 3
+          },
+          {
+            "code": 2,
+            "changes": 3
+          },
+          {
+            "code": 2,
+            "changes": 3
+          },
+          {
+            "code": 2,
+            "changes": 3
+          },
+          {
+            "code": 2,
+            "changes": 3
+          },
+          {
+            "code": 2,
+            "changes": 3
+          },
+          {
+            "code": 2,
+            "changes": 3
+          },
+          {
+            "code": 2,
+            "changes": 3
+          },
+          {
+            "code": 2,
+            "changes": 3
+          },
+          {
+            "code": 2,
+            "changes": 3
+          },
+          {
+            "code": 2,
+            "changes": 3
+          },
+          {
+            "code": 2,
+            "changes": 3
+          }
+        ]
+      },
+      {
+        "button": 6,
+        "stationary": true,
+        "duplicate_moves": true,
+        "initial": {
+          "code": 6,
+          "changes": 4
+        },
+        "final": {
+          "code": 6,
+          "changes": 4
+        },
+        "samples": [
+          {
+            "code": 6,
+            "changes": 4
+          },
+          {
+            "code": 6,
+            "changes": 4
+          },
+          {
+            "code": 6,
+            "changes": 4
+          },
+          {
+            "code": 6,
+            "changes": 4
+          },
+          {
+            "code": 6,
+            "changes": 4
+          },
+          {
+            "code": 6,
+            "changes": 4
+          },
+          {
+            "code": 6,
+            "changes": 4
+          },
+          {
+            "code": 6,
+            "changes": 4
+          },
+          {
+            "code": 6,
+            "changes": 4
+          },
+          {
+            "code": 6,
+            "changes": 4
+          },
+          {
+            "code": 6,
+            "changes": 4
+          },
+          {
+            "code": 6,
+            "changes": 4
+          }
+        ]
+      },
+      {
+        "button": 5,
+        "stationary": true,
+        "duplicate_moves": true,
+        "initial": {
+          "code": 5,
+          "changes": 5
+        },
+        "final": {
+          "code": 5,
+          "changes": 5
+        },
+        "samples": [
+          {
+            "code": 5,
+            "changes": 5
+          },
+          {
+            "code": 5,
+            "changes": 5
+          },
+          {
+            "code": 5,
+            "changes": 5
+          },
+          {
+            "code": 5,
+            "changes": 5
+          },
+          {
+            "code": 5,
+            "changes": 5
+          },
+          {
+            "code": 5,
+            "changes": 5
+          },
+          {
+            "code": 5,
+            "changes": 5
+          },
+          {
+            "code": 5,
+            "changes": 5
+          },
+          {
+            "code": 5,
+            "changes": 5
+          },
+          {
+            "code": 5,
+            "changes": 5
+          },
+          {
+            "code": 5,
+            "changes": 5
+          },
+          {
+            "code": 5,
+            "changes": 5
+          }
+        ]
+      }
+    ],
+    "baseline": {
+      "frames": 899.0,
+      "last_ms": 11.815899997600354,
+      "textures": 56.0,
+      "meshes": 57.0,
+      "owners": 1.0
+    },
+    "final": {
+      "frames": 1162.0,
+      "last_ms": 11.916199990082532,
+      "textures": 56.0,
+      "meshes": 57.0,
+      "owners": 1.0
+    },
+    "fullscreen_preserved": true,
+    "actual_source_hit": true,
+    "texture_growth": 0,
+    "synthetic_hud_frame_ms_p95": 49.88370000501163,
+    "synthetic_hud_fps": 44.82143508211212,
+    "result": "PASS",
+    "native_error": "",
+    "retired": true
+  },
+  "targeted": {
+    "counts": {
+      "PASS": 6,
+      "SKIP": 0,
+      "INCOMPLETE": 0,
+      "FAIL": 0
+    },
+    "returncode": 0,
+    "results": [
+      {
+        "id": "tests/test_endfield_boot",
+        "path": "tests/test_endfield_boot.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "2 unittest tests passed",
+        "tests_run": 2,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 0.219,
+        "expected_failures": 0
+      },
+      {
+        "id": "tests/test_endfield_menu",
+        "path": "tests/test_endfield_menu.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "8 unittest tests passed",
+        "tests_run": 8,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 0.531,
+        "expected_failures": 0
+      },
+      {
+        "id": "tests/test_endfield_native",
+        "path": "tests/test_endfield_native.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "6 unittest tests passed",
+        "tests_run": 6,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 0.203,
+        "expected_failures": 0
+      },
+      {
+        "id": "tests/test_endfield_pack_setup",
+        "path": "tests/test_endfield_pack_setup.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "13 unittest tests passed",
+        "tests_run": 13,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 0.469,
+        "expected_failures": 0
+      },
+      {
+        "id": "tests/test_endfield_presentation",
+        "path": "tests/test_endfield_presentation.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "8 unittest tests passed",
+        "tests_run": 8,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 0.187,
+        "expected_failures": 0
+      },
+      {
+        "id": "tests/test_endfield_runtime_import",
+        "path": "tests/test_endfield_runtime_import.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "5 unittest tests passed",
+        "tests_run": 5,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 0.141,
+        "expected_failures": 0
+      }
+    ]
+  },
+  "full_offline": {
+    "counts": {
+      "PASS": 456,
+      "SKIP": 12,
+      "INCOMPLETE": 6,
+      "FAIL": 0
+    },
+    "returncode": 1,
+    "passed": false,
+    "results": [
+      {
+        "id": "tests/api_freeze_test",
+        "path": "tests/api_freeze_test.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": null,
+        "checks_passed": 1,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/autoaim_settings_test",
+        "path": "tests/autoaim_settings_test.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": null,
+        "checks_passed": 31,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/backend_protocol_test",
+        "path": "tests/backend_protocol_test.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": null,
+        "checks_passed": 199,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/dt7_alignment_test",
+        "path": "tests/dt7_alignment_test.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": null,
+        "checks_passed": 112,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/field_candidate_test",
+        "path": "tests/field_candidate_test.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": null,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/gimbal_host_request_test",
+        "path": "tests/gimbal_host_request_test.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": null,
+        "checks_passed": 74,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/gpu_compositor_test",
+        "path": "tests/gpu_compositor_test.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": null,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/hud_batch10_settings_test",
+        "path": "tests/hud_batch10_settings_test.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": null,
+        "checks_passed": 29,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/hud_batch13_settings_test",
+        "path": "tests/hud_batch13_settings_test.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": null,
+        "checks_passed": 18,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/hud_batch14_settings_test",
+        "path": "tests/hud_batch14_settings_test.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": null,
+        "checks_passed": 24,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/hud_batch16_killfx_test",
+        "path": "tests/hud_batch16_killfx_test.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": null,
+        "checks_passed": 16,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/hud_batch17_crosshair_test",
+        "path": "tests/hud_batch17_crosshair_test.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": null,
+        "checks_passed": 28,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/hud_batch18_powerguard_test",
+        "path": "tests/hud_batch18_powerguard_test.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": null,
+        "checks_passed": 39,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/hud_batch19_bufftimeline_test",
+        "path": "tests/hud_batch19_bufftimeline_test.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": null,
+        "checks_passed": 41,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/hud_batch20_robotoverlay_color_test",
+        "path": "tests/hud_batch20_robotoverlay_color_test.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": null,
+        "checks_passed": 15,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/hud_batch21_radaroverlay_map_test",
+        "path": "tests/hud_batch21_radaroverlay_map_test.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": null,
+        "checks_passed": 18,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/hud_batch8_settings_test",
+        "path": "tests/hud_batch8_settings_test.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": null,
+        "checks_passed": 20,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/hud_batch9_settings_test",
+        "path": "tests/hud_batch9_settings_test.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": null,
+        "checks_passed": 27,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/hud_overlay_settings_test",
+        "path": "tests/hud_overlay_settings_test.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": null,
+        "checks_passed": 30,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/hud_status_settings_test",
+        "path": "tests/hud_status_settings_test.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": null,
+        "checks_passed": 56,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/hud_telemetry_settings_test",
+        "path": "tests/hud_telemetry_settings_test.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": null,
+        "checks_passed": 26,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/polar_bridge_test",
+        "path": "tests/polar_bridge_test.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": null,
+        "checks_passed": 186,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/polar_integration_test",
+        "path": "tests/polar_integration_test.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": null,
+        "checks_passed": 53,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/polar_link_test",
+        "path": "tests/polar_link_test.py",
+        "category": "offline",
+        "status": "INCOMPLETE",
+        "tests_run": null,
+        "checks_passed": 79,
+        "skipped": 1,
+        "returncode": 0,
+        "reason": "Team CRC reference fixture missing."
+      },
+      {
+        "id": "tests/polar_selftest_test",
+        "path": "tests/polar_selftest_test.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": null,
+        "checks_passed": 43,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/polar_spec_test",
+        "path": "tests/polar_spec_test.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": null,
+        "checks_passed": 43,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/polar_startup_test",
+        "path": "tests/polar_startup_test.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": null,
+        "checks_passed": 75,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/referee_integration_test",
+        "path": "tests/referee_integration_test.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": null,
+        "checks_passed": 263,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/robot_roles_test",
+        "path": "tests/robot_roles_test.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": null,
+        "checks_passed": 39,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/settings_doc_consistency_test",
+        "path": "tests/settings_doc_consistency_test.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": null,
+        "checks_passed": 7,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/smoke_test",
+        "path": "tests/smoke_test.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": null,
+        "checks_passed": 71,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/startup_black_hole_test",
+        "path": "tests/startup_black_hole_test.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 7,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/student_frontend_test",
+        "path": "tests/student_frontend_test.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": null,
+        "checks_passed": 90,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_activation_audio_isolation",
+        "path": "tests/test_activation_audio_isolation.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 4,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_admission_ownership_independent_review",
+        "path": "tests/test_admission_ownership_independent_review.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 5,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_angle_port_admission_characterization",
+        "path": "tests/test_angle_port_admission_characterization.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 5,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_angle_writer_handoff",
+        "path": "tests/test_angle_writer_handoff.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 7,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_animation_pacing_regressions",
+        "path": "tests/test_animation_pacing_regressions.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 15,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_api_freeze_platform_regressions",
+        "path": "tests/test_api_freeze_platform_regressions.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 8,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_app_entry_contract",
+        "path": "tests/test_app_entry_contract.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 13,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_async_configuration",
+        "path": "tests/test_async_configuration.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 8,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_audio_configuration_transactions",
+        "path": "tests/test_audio_configuration_transactions.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 9,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_audio_pool_lifetime",
+        "path": "tests/test_audio_pool_lifetime.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 5,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_audio_replay_regressions",
+        "path": "tests/test_audio_replay_regressions.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 17,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_audio_signal_listeners",
+        "path": "tests/test_audio_signal_listeners.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 5,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_audio_write_admission",
+        "path": "tests/test_audio_write_admission.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 11,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_backend_alignment_admission",
+        "path": "tests/test_backend_alignment_admission.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 12,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_backend_angle_lifecycle",
+        "path": "tests/test_backend_angle_lifecycle.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 3,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_backend_async_lifecycle",
+        "path": "tests/test_backend_async_lifecycle.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 22,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_backend_composite_shutdown_retry",
+        "path": "tests/test_backend_composite_shutdown_retry.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 1,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_backend_estop_nonblocking",
+        "path": "tests/test_backend_estop_nonblocking.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 5,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_backend_feature_consumers",
+        "path": "tests/test_backend_feature_consumers.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 23,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_backend_input_owner",
+        "path": "tests/test_backend_input_owner.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 13,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_backend_lifecycle_callback_failures",
+        "path": "tests/test_backend_lifecycle_callback_failures.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 3,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_backend_lifecycle_controller",
+        "path": "tests/test_backend_lifecycle_controller.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 9,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_backend_lifecycle_input_failure",
+        "path": "tests/test_backend_lifecycle_input_failure.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 5,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_backend_policy_boundaries",
+        "path": "tests/test_backend_policy_boundaries.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 7,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_backend_policy_characterization",
+        "path": "tests/test_backend_policy_characterization.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 3,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_backend_shutdown_retry",
+        "path": "tests/test_backend_shutdown_retry.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 5,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_backend_video_source_nonblocking",
+        "path": "tests/test_backend_video_source_nonblocking.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 14,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_background_display_locale",
+        "path": "tests/test_background_display_locale.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 2,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_binding_restore_quality",
+        "path": "tests/test_binding_restore_quality.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 15,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_build_interpreter",
+        "path": "tests/test_build_interpreter.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 5,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_build_preflight_environment",
+        "path": "tests/test_build_preflight_environment.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 3,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_build_safety_regressions",
+        "path": "tests/test_build_safety_regressions.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 22,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_build_telemetry_environment",
+        "path": "tests/test_build_telemetry_environment.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 2,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_buy_grid_category_characterization",
+        "path": "tests/test_buy_grid_category_characterization.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 1,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_cached_frame_contract",
+        "path": "tests/test_cached_frame_contract.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 5,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_cached_window_layers",
+        "path": "tests/test_cached_window_layers.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 3,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_calibration_config_validation",
+        "path": "tests/test_calibration_config_validation.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 15,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_calibration_export_errors",
+        "path": "tests/test_calibration_export_errors.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 21,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_camera_activation",
+        "path": "tests/test_camera_activation.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 16,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_camera_activation_contract",
+        "path": "tests/test_camera_activation_contract.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 13,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_camera_input_handoff",
+        "path": "tests/test_camera_input_handoff.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 26,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_camera_stop_admission",
+        "path": "tests/test_camera_stop_admission.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 14,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_camera_stop_review",
+        "path": "tests/test_camera_stop_review.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 5,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_camera_window_heartbeat",
+        "path": "tests/test_camera_window_heartbeat.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 2,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_car_bridge_admission_safety",
+        "path": "tests/test_car_bridge_admission_safety.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 14,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_car_bridge_evidence",
+        "path": "tests/test_car_bridge_evidence.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 4,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_cc_worker_dispatch",
+        "path": "tests/test_cc_worker_dispatch.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 8,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_cleanup_worker_admission",
+        "path": "tests/test_cleanup_worker_admission.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 3,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_clickgui_background_dismiss",
+        "path": "tests/test_clickgui_background_dismiss.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 14,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_clickgui_cache_diagnostic_isolation",
+        "path": "tests/test_clickgui_cache_diagnostic_isolation.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 19,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_clickgui_close_capture",
+        "path": "tests/test_clickgui_close_capture.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 17,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_clickgui_frame_contract",
+        "path": "tests/test_clickgui_frame_contract.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 20,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_clickgui_presenter",
+        "path": "tests/test_clickgui_presenter.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 10,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_clickgui_renderer_faults",
+        "path": "tests/test_clickgui_renderer_faults.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 6,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_clickgui_shortcut_repeat",
+        "path": "tests/test_clickgui_shortcut_repeat.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 4,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_close_admission_diagnostic_isolation",
+        "path": "tests/test_close_admission_diagnostic_isolation.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 17,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_compositor_fault_diagnostics",
+        "path": "tests/test_compositor_fault_diagnostics.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 28,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_compositor_framebuffer_storage",
+        "path": "tests/test_compositor_framebuffer_storage.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 10,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_compositor_initialization_ownership",
+        "path": "tests/test_compositor_initialization_ownership.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 9,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_compositor_plan",
+        "path": "tests/test_compositor_plan.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 19,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_compositor_shader_ownership",
+        "path": "tests/test_compositor_shader_ownership.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 5,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_config_json_nesting",
+        "path": "tests/test_config_json_nesting.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 9,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_configuration_boundaries",
+        "path": "tests/test_configuration_boundaries.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 18,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_configuration_commands",
+        "path": "tests/test_configuration_commands.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 26,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_configuration_quiescence",
+        "path": "tests/test_configuration_quiescence.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 7,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_configuration_rollback_resolution",
+        "path": "tests/test_configuration_rollback_resolution.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 3,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_configuration_transactions",
+        "path": "tests/test_configuration_transactions.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 10,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_constructor_admission_matrix",
+        "path": "tests/test_constructor_admission_matrix.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 5,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_control_release_all_failures",
+        "path": "tests/test_control_release_all_failures.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 5,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_control_release_logging_failures",
+        "path": "tests/test_control_release_logging_failures.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 18,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_controller_angle_admission",
+        "path": "tests/test_controller_angle_admission.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 3,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_controller_angle_exception_admission",
+        "path": "tests/test_controller_angle_exception_admission.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 3,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_controller_angle_installer_guards",
+        "path": "tests/test_controller_angle_installer_guards.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 12,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_controller_angle_integration",
+        "path": "tests/test_controller_angle_integration.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 14,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_controller_angle_receipt_boundary",
+        "path": "tests/test_controller_angle_receipt_boundary.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 12,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_controller_angle_safety_review",
+        "path": "tests/test_controller_angle_safety_review.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 24,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_controller_frame_regressions",
+        "path": "tests/test_controller_frame_regressions.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 15,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_coordinator_late_admission",
+        "path": "tests/test_coordinator_late_admission.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 4,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_crosshair_profile_boundaries",
+        "path": "tests/test_crosshair_profile_boundaries.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 3,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_crosshair_profile_contract",
+        "path": "tests/test_crosshair_profile_contract.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 10,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_cs2_buy_matrix",
+        "path": "tests/test_cs2_buy_matrix.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 7,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_cs2_crosshair_import",
+        "path": "tests/test_cs2_crosshair_import.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 23,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_cs2_match_strip_style",
+        "path": "tests/test_cs2_match_strip_style.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 18,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_cs2_personal_pack",
+        "path": "tests/test_cs2_personal_pack.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 15,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_cs2_settings_center",
+        "path": "tests/test_cs2_settings_center.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 13,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_cs2_source_assets",
+        "path": "tests/test_cs2_source_assets.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 6,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_cs_crosshair_target_bounds",
+        "path": "tests/test_cs_crosshair_target_bounds.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 11,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_cs_crosshair_visibility",
+        "path": "tests/test_cs_crosshair_visibility.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 11,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_custom_byte_block_characterization",
+        "path": "tests/test_custom_byte_block_characterization.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 5,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_decode_publication_epoch",
+        "path": "tests/test_decode_publication_epoch.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 5,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_decoder_lifecycle_quality",
+        "path": "tests/test_decoder_lifecycle_quality.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 14,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_decoder_owner_prefix",
+        "path": "tests/test_decoder_owner_prefix.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 5,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_default_catalog_characterization",
+        "path": "tests/test_default_catalog_characterization.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 8,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_deferred_preview_close",
+        "path": "tests/test_deferred_preview_close.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 11,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_device_egress_characterization",
+        "path": "tests/test_device_egress_characterization.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 6,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_device_egress_safety",
+        "path": "tests/test_device_egress_safety.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 3,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_device_egress_settings",
+        "path": "tests/test_device_egress_settings.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 9,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_device_manager_nonblocking",
+        "path": "tests/test_device_manager_nonblocking.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 7,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_drag_button_ownership",
+        "path": "tests/test_drag_button_ownership.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 4,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_drag_editing",
+        "path": "tests/test_drag_editing.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 6,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_drag_movement_characterization",
+        "path": "tests/test_drag_movement_characterization.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 4,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_drag_release_commit",
+        "path": "tests/test_drag_release_commit.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 7,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_dt7_angle_ownership",
+        "path": "tests/test_dt7_angle_ownership.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 6,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_dt7_recovery_policy",
+        "path": "tests/test_dt7_recovery_policy.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 25,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_dt7_reference_validation",
+        "path": "tests/test_dt7_reference_validation.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 5,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_dt7_worker_dispatch",
+        "path": "tests/test_dt7_worker_dispatch.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 15,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_early_window_factory_failures",
+        "path": "tests/test_early_window_factory_failures.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 3,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_economy_confirmation",
+        "path": "tests/test_economy_confirmation.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 8,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_economy_content",
+        "path": "tests/test_economy_content.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 8,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_economy_deferred_overlay_epoch",
+        "path": "tests/test_economy_deferred_overlay_epoch.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 9,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_economy_display_locale",
+        "path": "tests/test_economy_display_locale.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 10,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_economy_hold_cancellation",
+        "path": "tests/test_economy_hold_cancellation.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 2,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_economy_hold_duration_alignment",
+        "path": "tests/test_economy_hold_duration_alignment.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 1,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_economy_hold_input_ownership",
+        "path": "tests/test_economy_hold_input_ownership.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 5,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_economy_interaction",
+        "path": "tests/test_economy_interaction.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 8,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_economy_interaction_characterization",
+        "path": "tests/test_economy_interaction_characterization.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 7,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_economy_keyboard_release",
+        "path": "tests/test_economy_keyboard_release.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 6,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_economy_layout",
+        "path": "tests/test_economy_layout.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 10,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_economy_presentation",
+        "path": "tests/test_economy_presentation.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 8,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_economy_scene_failures",
+        "path": "tests/test_economy_scene_failures.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 3,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_economy_selection",
+        "path": "tests/test_economy_selection.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 5,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_economy_value_dependencies",
+        "path": "tests/test_economy_value_dependencies.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 5,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_emergency_action_failures",
+        "path": "tests/test_emergency_action_failures.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 7,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_emergency_failure_formatting",
+        "path": "tests/test_emergency_failure_formatting.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 17,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_emergency_shortcut_lifetime",
+        "path": "tests/test_emergency_shortcut_lifetime.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 7,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_enabled_overlay_binding_contract",
+        "path": "tests/test_enabled_overlay_binding_contract.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 2,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_endfield_backdrop",
+        "path": "tests/test_endfield_backdrop.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 3,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_endfield_boot",
+        "path": "tests/test_endfield_boot.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 2,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_endfield_changelog",
+        "path": "tests/test_endfield_changelog.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 3,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_endfield_menu",
+        "path": "tests/test_endfield_menu.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 8,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_endfield_native",
+        "path": "tests/test_endfield_native.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 6,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_endfield_pack_setup",
+        "path": "tests/test_endfield_pack_setup.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 13,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_endfield_presentation",
+        "path": "tests/test_endfield_presentation.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 8,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_endfield_runtime_import",
+        "path": "tests/test_endfield_runtime_import.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 5,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_escape_menu",
+        "path": "tests/test_escape_menu.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 13,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_escape_menu_capture_epochs",
+        "path": "tests/test_escape_menu_capture_epochs.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 7,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_event_command_alignment",
+        "path": "tests/test_event_command_alignment.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 12,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_feedback_partial_constructor_failures",
+        "path": "tests/test_feedback_partial_constructor_failures.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 2,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_field_log_admission",
+        "path": "tests/test_field_log_admission.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 5,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_field_log_lifecycle_quality",
+        "path": "tests/test_field_log_lifecycle_quality.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 18,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_field_log_ordinary_admission",
+        "path": "tests/test_field_log_ordinary_admission.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 12,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_final_tick_diagnostic_isolation",
+        "path": "tests/test_final_tick_diagnostic_isolation.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 16,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_focus_loss_failures",
+        "path": "tests/test_focus_loss_failures.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 8,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_frame_assembler_pressure_isolation",
+        "path": "tests/test_frame_assembler_pressure_isolation.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 5,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_frame_telemetry",
+        "path": "tests/test_frame_telemetry.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 5,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_frame_telemetry_contract",
+        "path": "tests/test_frame_telemetry_contract.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 6,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_framebuffer_generation",
+        "path": "tests/test_framebuffer_generation.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 27,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_fullscreen_composition",
+        "path": "tests/test_fullscreen_composition.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 15,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_fullscreen_input_extended",
+        "path": "tests/test_fullscreen_input_extended.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 14,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_glass_command_lifetime",
+        "path": "tests/test_glass_command_lifetime.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 12,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_gpu_command_collection_lifetime",
+        "path": "tests/test_gpu_command_collection_lifetime.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 4,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_gpu_command_frame_rejection",
+        "path": "tests/test_gpu_command_frame_rejection.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 8,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_gpu_warmup_budget",
+        "path": "tests/test_gpu_warmup_budget.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 10,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_gpu_warmup_contract",
+        "path": "tests/test_gpu_warmup_contract.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 10,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_gpu_warmup_owner",
+        "path": "tests/test_gpu_warmup_owner.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 10,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_gui_audio_activation",
+        "path": "tests/test_gui_audio_activation.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 6,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_hero_display_locale",
+        "path": "tests/test_hero_display_locale.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 9,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_hidden_gui_wheel",
+        "path": "tests/test_hidden_gui_wheel.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 3,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_hit_testing",
+        "path": "tests/test_hit_testing.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 6,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_host_bridge_fixture_cleanup",
+        "path": "tests/test_host_bridge_fixture_cleanup.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 10,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_hud_display_locale",
+        "path": "tests/test_hud_display_locale.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 14,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_input_cleanup_failure_isolation",
+        "path": "tests/test_input_cleanup_failure_isolation.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 4,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_input_cleanup_reentrancy",
+        "path": "tests/test_input_cleanup_reentrancy.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 2,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_input_fixture_audio_isolation",
+        "path": "tests/test_input_fixture_audio_isolation.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 2,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_inventory_text_crosshair_scale",
+        "path": "tests/test_inventory_text_crosshair_scale.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 8,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_jello_animation_endpoints",
+        "path": "tests/test_jello_animation_endpoints.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 9,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_jello_atlas_pages",
+        "path": "tests/test_jello_atlas_pages.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 10,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_jello_description_wrapping",
+        "path": "tests/test_jello_description_wrapping.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 8,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_jello_fullscreen_scrolling",
+        "path": "tests/test_jello_fullscreen_scrolling.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 14,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_jello_settings_keyboard",
+        "path": "tests/test_jello_settings_keyboard.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 16,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_keyboard_popover_epochs",
+        "path": "tests/test_keyboard_popover_epochs.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 11,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_keyboard_routing_characterization",
+        "path": "tests/test_keyboard_routing_characterization.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 18,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_kill_asset_filtering",
+        "path": "tests/test_kill_asset_filtering.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 6,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_kill_audio_executor_admission",
+        "path": "tests/test_kill_audio_executor_admission.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 2,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_kill_audio_regressions",
+        "path": "tests/test_kill_audio_regressions.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 27,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_kill_audio_submission_fallback",
+        "path": "tests/test_kill_audio_submission_fallback.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 9,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_kill_hit_revision_owner",
+        "path": "tests/test_kill_hit_revision_owner.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 17,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_kill_selector_regressions",
+        "path": "tests/test_kill_selector_regressions.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 3,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_lazy_settings_state",
+        "path": "tests/test_lazy_settings_state.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 21,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_legacy_video_bridge",
+        "path": "tests/test_legacy_video_bridge.py",
+        "category": "offline",
+        "status": "INCOMPLETE",
+        "tests_run": 17,
+        "checks_passed": 0,
+        "skipped": 1,
+        "returncode": 0,
+        "reason": "Native libpcap/BPF compilation unavailable."
+      },
+      {
+        "id": "tests/test_legacy_vt02_ingress",
+        "path": "tests/test_legacy_vt02_ingress.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 9,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_lifecycle_constructor_rejection",
+        "path": "tests/test_lifecycle_constructor_rejection.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 3,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_lifecycle_coordinator",
+        "path": "tests/test_lifecycle_coordinator.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 16,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_live_drag_edit_contract",
+        "path": "tests/test_live_drag_edit_contract.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 4,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_local_vision_input_epoch",
+        "path": "tests/test_local_vision_input_epoch.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 14,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_lock_input_diagnostic_failures",
+        "path": "tests/test_lock_input_diagnostic_failures.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 16,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_match_strip_locale",
+        "path": "tests/test_match_strip_locale.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 9,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_minecraft_cjk_readability",
+        "path": "tests/test_minecraft_cjk_readability.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 11,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_minecraft_lossless_upload_crop",
+        "path": "tests/test_minecraft_lossless_upload_crop.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 1,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_mjpeg_frame_delivery",
+        "path": "tests/test_mjpeg_frame_delivery.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 8,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_modal_input_diagnostic_failures",
+        "path": "tests/test_modal_input_diagnostic_failures.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 15,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_modal_input_epoch",
+        "path": "tests/test_modal_input_epoch.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 5,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_module_catalog_boundaries",
+        "path": "tests/test_module_catalog_boundaries.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 6,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_module_drag_state",
+        "path": "tests/test_module_drag_state.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 4,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_module_list_cjk_layout",
+        "path": "tests/test_module_list_cjk_layout.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 13,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_mouse_button_admission",
+        "path": "tests/test_mouse_button_admission.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 8,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_mqtt_callback_receipt_time",
+        "path": "tests/test_mqtt_callback_receipt_time.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 6,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_mqtt_cleanup_ownership",
+        "path": "tests/test_mqtt_cleanup_ownership.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 8,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_mqtt_decoded_batch_epoch",
+        "path": "tests/test_mqtt_decoded_batch_epoch.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 19,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_mqtt_endpoint_admission",
+        "path": "tests/test_mqtt_endpoint_admission.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 22,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_mqtt_lifecycle_nonblocking",
+        "path": "tests/test_mqtt_lifecycle_nonblocking.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 21,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_mqtt_retained_evidence",
+        "path": "tests/test_mqtt_retained_evidence.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 3,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_mqtt_subscription_admission",
+        "path": "tests/test_mqtt_subscription_admission.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 13,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_native_stream_policy",
+        "path": "tests/test_native_stream_policy.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 7,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_native_telemetry_epoch",
+        "path": "tests/test_native_telemetry_epoch.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 16,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_native_video_activation",
+        "path": "tests/test_native_video_activation.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 5,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_nested_settings_factory_ownership",
+        "path": "tests/test_nested_settings_factory_ownership.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 5,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_normal_video_timeline",
+        "path": "tests/test_normal_video_timeline.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 18,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_normal_video_timeline_contract",
+        "path": "tests/test_normal_video_timeline_contract.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 31,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_official_device_transport_contract",
+        "path": "tests/test_official_device_transport_contract.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 14,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_official_event_numeric_boundary",
+        "path": "tests/test_official_event_numeric_boundary.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 6,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_official_feed_callback_epoch",
+        "path": "tests/test_official_feed_callback_epoch.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 6,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_official_feed_event_identity",
+        "path": "tests/test_official_feed_event_identity.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 5,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_official_feed_projection_authority",
+        "path": "tests/test_official_feed_projection_authority.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 10,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_official_feed_receive_epoch",
+        "path": "tests/test_official_feed_receive_epoch.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 4,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_official_feed_receive_freshness",
+        "path": "tests/test_official_feed_receive_freshness.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 9,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_official_profile_preset",
+        "path": "tests/test_official_profile_preset.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 14,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_official_scalar_writer_characterization",
+        "path": "tests/test_official_scalar_writer_characterization.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 10,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_overlay_layer_boundary",
+        "path": "tests/test_overlay_layer_boundary.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 12,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_paho_loop_admission",
+        "path": "tests/test_paho_loop_admission.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 4,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_painter_lifecycle",
+        "path": "tests/test_painter_lifecycle.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 3,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_pending_configuration",
+        "path": "tests/test_pending_configuration.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 4,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_pointer_interaction",
+        "path": "tests/test_pointer_interaction.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 9,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_pointer_routing_characterization",
+        "path": "tests/test_pointer_routing_characterization.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 2,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_polar_arbiter_epoch",
+        "path": "tests/test_polar_arbiter_epoch.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 11,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_polar_async_connect",
+        "path": "tests/test_polar_async_connect.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 5,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_polar_connection_acquisition",
+        "path": "tests/test_polar_connection_acquisition.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 9,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_polar_control_policy",
+        "path": "tests/test_polar_control_policy.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 13,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_polar_health",
+        "path": "tests/test_polar_health.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 4,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_polar_health_characterization",
+        "path": "tests/test_polar_health_characterization.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 2,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_polar_motion_epoch",
+        "path": "tests/test_polar_motion_epoch.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 9,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_polar_motion_idle_budget",
+        "path": "tests/test_polar_motion_idle_budget.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 9,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_polar_package_exports",
+        "path": "tests/test_polar_package_exports.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 2,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_polar_policy_baseline_source",
+        "path": "tests/test_polar_policy_baseline_source.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 7,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_polar_role_epoch",
+        "path": "tests/test_polar_role_epoch.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 14,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_polar_thread_admission",
+        "path": "tests/test_polar_thread_admission.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 10,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_port_admission_policy",
+        "path": "tests/test_port_admission_policy.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 5,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_port_discovery_admission",
+        "path": "tests/test_port_discovery_admission.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 9,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_preference_binding_conflicts",
+        "path": "tests/test_preference_binding_conflicts.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 7,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_preference_draft",
+        "path": "tests/test_preference_draft.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 7,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_preference_file_descriptor",
+        "path": "tests/test_preference_file_descriptor.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 4,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_profile_close_admission",
+        "path": "tests/test_profile_close_admission.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 13,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_profile_close_pending",
+        "path": "tests/test_profile_close_pending.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 5,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_profile_file_descriptor",
+        "path": "tests/test_profile_file_descriptor.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 7,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_profile_file_transactions",
+        "path": "tests/test_profile_file_transactions.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 10,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_profile_save_contract",
+        "path": "tests/test_profile_save_contract.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 30,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_profile_save_identity",
+        "path": "tests/test_profile_save_identity.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 19,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_profile_save_state",
+        "path": "tests/test_profile_save_state.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 21,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_projectile_counter_baselines",
+        "path": "tests/test_projectile_counter_baselines.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 10,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_qt_launch_abort",
+        "path": "tests/test_qt_launch_abort.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 7,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_qualification_observations",
+        "path": "tests/test_qualification_observations.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 10,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_quality_gates",
+        "path": "tests/test_quality_gates.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 59,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_quality_ratchet_baseline",
+        "path": "tests/test_quality_ratchet_baseline.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 1,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_quick_action_configuration",
+        "path": "tests/test_quick_action_configuration.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 10,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_radial_focus_loss",
+        "path": "tests/test_radial_focus_loss.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 11,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_referee_domain_boundaries",
+        "path": "tests/test_referee_domain_boundaries.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 10,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_referee_domain_characterization",
+        "path": "tests/test_referee_domain_characterization.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 8,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_referee_frontend_projection_contract",
+        "path": "tests/test_referee_frontend_projection_contract.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 12,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_referee_health_source_selection",
+        "path": "tests/test_referee_health_source_selection.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 8,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_referee_observer_ownership",
+        "path": "tests/test_referee_observer_ownership.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 4,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_referee_projection_policy",
+        "path": "tests/test_referee_projection_policy.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 10,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_referee_state_characterization",
+        "path": "tests/test_referee_state_characterization.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 7,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_referee_v2_action_rules",
+        "path": "tests/test_referee_v2_action_rules.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 13,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_referee_v2_air_decision",
+        "path": "tests/test_referee_v2_air_decision.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 25,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_referee_v2_air_projection",
+        "path": "tests/test_referee_v2_air_projection.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 21,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_referee_v2_codec",
+        "path": "tests/test_referee_v2_codec.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 24,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_referee_v2_complete_projection",
+        "path": "tests/test_referee_v2_complete_projection.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 5,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_referee_v2_economy_admission",
+        "path": "tests/test_referee_v2_economy_admission.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 10,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_referee_v2_keyboard_mouse_domain",
+        "path": "tests/test_referee_v2_keyboard_mouse_domain.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 26,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_referee_v2_live_display",
+        "path": "tests/test_referee_v2_live_display.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 10,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_referee_v2_observations",
+        "path": "tests/test_referee_v2_observations.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 18,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_referee_v2_projection",
+        "path": "tests/test_referee_v2_projection.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 32,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_referee_v2_publish_guard",
+        "path": "tests/test_referee_v2_publish_guard.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 26,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_referee_v2_runtime_profile",
+        "path": "tests/test_referee_v2_runtime_profile.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 17,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_referee_v2_scope_revision",
+        "path": "tests/test_referee_v2_scope_revision.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 7,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_referee_v2_uplink_admission",
+        "path": "tests/test_referee_v2_uplink_admission.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 8,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_referee_v2_uplink_domains",
+        "path": "tests/test_referee_v2_uplink_domains.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 8,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_registry_draft_contract",
+        "path": "tests/test_registry_draft_contract.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 8,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_release_archive_publication",
+        "path": "tests/test_release_archive_publication.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 6,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_render_owner_boundaries",
+        "path": "tests/test_render_owner_boundaries.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 8,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_render_performance_regressions",
+        "path": "tests/test_render_performance_regressions.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 15,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_repository_output_hygiene",
+        "path": "tests/test_repository_output_hygiene.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 1,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_resource_close_ownership",
+        "path": "tests/test_resource_close_ownership.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 12,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_rm_indicator_caption_contract",
+        "path": "tests/test_rm_indicator_caption_contract.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 5,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_rune_display_alignment",
+        "path": "tests/test_rune_display_alignment.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 6,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_runtime_source_classification",
+        "path": "tests/test_runtime_source_classification.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 18,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_safety_final_admission",
+        "path": "tests/test_safety_final_admission.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 4,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_safety_observer_diagnostics",
+        "path": "tests/test_safety_observer_diagnostics.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 6,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_safety_stage_owner",
+        "path": "tests/test_safety_stage_owner.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 13,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_scenario_configuration_guard",
+        "path": "tests/test_scenario_configuration_guard.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 4,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_scroll_routing",
+        "path": "tests/test_scroll_routing.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 6,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_serial_codec_regressions",
+        "path": "tests/test_serial_codec_regressions.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 11,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_serial_lifecycle_regressions",
+        "path": "tests/test_serial_lifecycle_regressions.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 19,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_serial_reader_admission",
+        "path": "tests/test_serial_reader_admission.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 5,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_serial_rescan_nonblocking",
+        "path": "tests/test_serial_rescan_nonblocking.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 11,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_serial_starter_admission",
+        "path": "tests/test_serial_starter_admission.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 5,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_setting_effects",
+        "path": "tests/test_setting_effects.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 6,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_settings_action_evidence",
+        "path": "tests/test_settings_action_evidence.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 6,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_settings_audit_quality",
+        "path": "tests/test_settings_audit_quality.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 7,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_settings_cold_start",
+        "path": "tests/test_settings_cold_start.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 14,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_settings_configuration_quiescence",
+        "path": "tests/test_settings_configuration_quiescence.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 4,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_settings_dialog_service_wiring",
+        "path": "tests/test_settings_dialog_service_wiring.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 6,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_settings_factory_failure_cleanup",
+        "path": "tests/test_settings_factory_failure_cleanup.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 3,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_settings_service_boundaries",
+        "path": "tests/test_settings_service_boundaries.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 6,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_slider_press_contract",
+        "path": "tests/test_slider_press_contract.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 3,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_smoke_audio_isolation",
+        "path": "tests/test_smoke_audio_isolation.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 11,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_specialized_gl_initialization",
+        "path": "tests/test_specialized_gl_initialization.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 8,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_specialized_gl_owners",
+        "path": "tests/test_specialized_gl_owners.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 15,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_specialized_texture_units",
+        "path": "tests/test_specialized_texture_units.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 5,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_stage_freshness",
+        "path": "tests/test_stage_freshness.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 11,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_startup_activation",
+        "path": "tests/test_startup_activation.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 7,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_startup_activation_adapter",
+        "path": "tests/test_startup_activation_adapter.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 3,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_startup_confirmation_repeat",
+        "path": "tests/test_startup_confirmation_repeat.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 8,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_startup_display_locale",
+        "path": "tests/test_startup_display_locale.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 10,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_startup_navigation",
+        "path": "tests/test_startup_navigation.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 9,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_startup_navigation_contract",
+        "path": "tests/test_startup_navigation_contract.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 6,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_startup_settings_fullscreen",
+        "path": "tests/test_startup_settings_fullscreen.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 19,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_startup_texture_ownership",
+        "path": "tests/test_startup_texture_ownership.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 5,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_state_overlay_contract",
+        "path": "tests/test_state_overlay_contract.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 11,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_status_display_locale",
+        "path": "tests/test_status_display_locale.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 13,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_tactical_map_contract",
+        "path": "tests/test_tactical_map_contract.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 16,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_tactical_map_geometry",
+        "path": "tests/test_tactical_map_geometry.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 8,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_tactical_map_hold_retirement",
+        "path": "tests/test_tactical_map_hold_retirement.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 3,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_tactical_map_input_ownership",
+        "path": "tests/test_tactical_map_input_ownership.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 13,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_tactical_map_interaction",
+        "path": "tests/test_tactical_map_interaction.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 5,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_tactical_map_telemetry",
+        "path": "tests/test_tactical_map_telemetry.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 12,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_test_registry",
+        "path": "tests/test_test_registry.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 44,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_text_editing_policy",
+        "path": "tests/test_text_editing_policy.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 7,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_thumbnail_admission_audit",
+        "path": "tests/test_thumbnail_admission_audit.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 6,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_tick_controller",
+        "path": "tests/test_tick_controller.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 14,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_tick_diagnostic_isolation",
+        "path": "tests/test_tick_diagnostic_isolation.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 16,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_tongji_postprocess_performance",
+        "path": "tests/test_tongji_postprocess_performance.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 9,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_tool_output_hygiene",
+        "path": "tests/test_tool_output_hygiene.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 6,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_transport_safety_regressions",
+        "path": "tests/test_transport_safety_regressions.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 36,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_transport_start_admission_matrix",
+        "path": "tests/test_transport_start_admission_matrix.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 2,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_udp_codec_evidence",
+        "path": "tests/test_udp_codec_evidence.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 11,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_udp_constructor_admission_audit",
+        "path": "tests/test_udp_constructor_admission_audit.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 1,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_udp_h264_dispatch",
+        "path": "tests/test_udp_h264_dispatch.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 12,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_udp_h264_hud_handoff",
+        "path": "tests/test_udp_h264_hud_handoff.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 1,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_udp_ingress_evidence",
+        "path": "tests/test_udp_ingress_evidence.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 6,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_udp_receiver_admission",
+        "path": "tests/test_udp_receiver_admission.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 3,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_udp_stop_nonblocking",
+        "path": "tests/test_udp_stop_nonblocking.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 3,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_ui_cjk_font_readability",
+        "path": "tests/test_ui_cjk_font_readability.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 17,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_ui_localization",
+        "path": "tests/test_ui_localization.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 15,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_ui_state_regressions",
+        "path": "tests/test_ui_state_regressions.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 30,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_ui_worker_shutdown",
+        "path": "tests/test_ui_worker_shutdown.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 21,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_v2_air_ui_external",
+        "path": "tests/test_v2_air_ui_external.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 18,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_v2_economy_rules",
+        "path": "tests/test_v2_economy_rules.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 13,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_v2_economy_ui_alignment",
+        "path": "tests/test_v2_economy_ui_alignment.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 11,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_v2_manager_admission",
+        "path": "tests/test_v2_manager_admission.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 7,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_v2_performance_ui_alignment",
+        "path": "tests/test_v2_performance_ui_alignment.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 4,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_verification_dependency_lock",
+        "path": "tests/test_verification_dependency_lock.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 4,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_verification_fixture_inputs",
+        "path": "tests/test_verification_fixture_inputs.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 4,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_verification_provenance",
+        "path": "tests/test_verification_provenance.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 16,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_verification_qt_exceptions",
+        "path": "tests/test_verification_qt_exceptions.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 6,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_verification_sources",
+        "path": "tests/test_verification_sources.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 10,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_verification_thread_exceptions",
+        "path": "tests/test_verification_thread_exceptions.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 7,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_video_close_ownership",
+        "path": "tests/test_video_close_ownership.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 8,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_video_recovery",
+        "path": "tests/test_video_recovery.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 6,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_video_recovery_admission",
+        "path": "tests/test_video_recovery_admission.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 4,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_video_source_retry_admission",
+        "path": "tests/test_video_source_retry_admission.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 2,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_video_source_snapshot",
+        "path": "tests/test_video_source_snapshot.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 5,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_video_source_snapshot_evidence",
+        "path": "tests/test_video_source_snapshot_evidence.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 3,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_video_stop_nonblocking",
+        "path": "tests/test_video_stop_nonblocking.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 7,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_vision_activation_contract",
+        "path": "tests/test_vision_activation_contract.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 16,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_vision_refresh_heartbeat",
+        "path": "tests/test_vision_refresh_heartbeat.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 1,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_vision_selection",
+        "path": "tests/test_vision_selection.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 13,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_vision_stop_admission",
+        "path": "tests/test_vision_stop_admission.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 21,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_vision_stop_review",
+        "path": "tests/test_vision_stop_review.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 4,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_wallpaper_admission_audit",
+        "path": "tests/test_wallpaper_admission_audit.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 5,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_wheel_routing_characterization",
+        "path": "tests/test_wheel_routing_characterization.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 3,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_window_activation_failure",
+        "path": "tests/test_window_activation_failure.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 5,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_window_api_contract",
+        "path": "tests/test_window_api_contract.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 41,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_window_assembly",
+        "path": "tests/test_window_assembly.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 12,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_window_async_lifecycle",
+        "path": "tests/test_window_async_lifecycle.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 21,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_window_audio_retirement",
+        "path": "tests/test_window_audio_retirement.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 1,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_window_configuration_quiescence",
+        "path": "tests/test_window_configuration_quiescence.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 1,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_window_construction",
+        "path": "tests/test_window_construction.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 6,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_window_constructor_delayed_cleanup",
+        "path": "tests/test_window_constructor_delayed_cleanup.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 1,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_window_constructor_failure",
+        "path": "tests/test_window_constructor_failure.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 4,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_window_early_constructor_ownership",
+        "path": "tests/test_window_early_constructor_ownership.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 3,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_window_economy_commands",
+        "path": "tests/test_window_economy_commands.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 8,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_window_failed_launch",
+        "path": "tests/test_window_failed_launch.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 4,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_window_final_context_diagnostics",
+        "path": "tests/test_window_final_context_diagnostics.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 15,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_window_finalization_contract",
+        "path": "tests/test_window_finalization_contract.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 9,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_window_finalization_owner",
+        "path": "tests/test_window_finalization_owner.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 4,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_window_focus_loss",
+        "path": "tests/test_window_focus_loss.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 2,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_window_lifecycle_controller",
+        "path": "tests/test_window_lifecycle_controller.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 17,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_window_lifecycle_diagnostic_failures",
+        "path": "tests/test_window_lifecycle_diagnostic_failures.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 18,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_window_normal_frame",
+        "path": "tests/test_window_normal_frame.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 3,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_window_owner_diagnostic_failures",
+        "path": "tests/test_window_owner_diagnostic_failures.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 18,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_window_presentation_prefix_failure",
+        "path": "tests/test_window_presentation_prefix_failure.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 1,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_window_startup_lock_failure",
+        "path": "tests/test_window_startup_lock_failure.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 2,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_window_text_editing",
+        "path": "tests/test_window_text_editing.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 3,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_window_tick_contract",
+        "path": "tests/test_window_tick_contract.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 17,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_window_video_recovery",
+        "path": "tests/test_window_video_recovery.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 9,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_window_vision_runtime",
+        "path": "tests/test_window_vision_runtime.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 14,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_window_wheel_adapters",
+        "path": "tests/test_window_wheel_adapters.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 4,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_writer_close_ownership",
+        "path": "tests/test_writer_close_ownership.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 7,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_writer_concurrent_admission",
+        "path": "tests/test_writer_concurrent_admission.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 1,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_writer_constructor_admission",
+        "path": "tests/test_writer_constructor_admission.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 16,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_writer_retention_cancellation",
+        "path": "tests/test_writer_retention_cancellation.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 1,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_writer_retry_reentrancy",
+        "path": "tests/test_writer_retry_reentrancy.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 1,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/test_writer_thread_owner",
+        "path": "tests/test_writer_thread_owner.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 5,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/top_match_bar_integration_test",
+        "path": "tests/top_match_bar_integration_test.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 23,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/top_match_bar_minecraft_fusion_test",
+        "path": "tests/top_match_bar_minecraft_fusion_test.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 20,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/top_match_bar_motion_test",
+        "path": "tests/top_match_bar_motion_test.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 6,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/top_match_bar_qt_test",
+        "path": "tests/top_match_bar_qt_test.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 21,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/top_match_bar_rm_integration_test",
+        "path": "tests/top_match_bar_rm_integration_test.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 29,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tests/top_match_bar_test",
+        "path": "tests/top_match_bar_test.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": 31,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tools/dt7_link/test_cc_link",
+        "path": "tools/dt7_link/test_cc_link.py",
+        "category": "firmware",
+        "status": "SKIP",
+        "tests_run": null,
+        "checks_passed": 0,
+        "skipped": 1,
+        "returncode": 77,
+        "reason": "Explicit prepared firmware/reference fixture unavailable or not selected."
+      },
+      {
+        "id": "tools/dt7_link/test_dbus_frame_vs_firmware",
+        "path": "tools/dt7_link/test_dbus_frame_vs_firmware.py",
+        "category": "firmware",
+        "status": "SKIP",
+        "tests_run": null,
+        "checks_passed": 0,
+        "skipped": 1,
+        "returncode": 77,
+        "reason": "Explicit prepared firmware/reference fixture unavailable or not selected."
+      },
+      {
+        "id": "tools/dt7_link/test_dt7_link",
+        "path": "tools/dt7_link/test_dt7_link.py",
+        "category": "firmware",
+        "status": "INCOMPLETE",
+        "tests_run": null,
+        "checks_passed": 116,
+        "skipped": 2,
+        "returncode": 0,
+        "reason": "Selected firmware and historic official client dump fixtures unavailable."
+      },
+      {
+        "id": "tools/dt7_link/test_dt7_release_flush",
+        "path": "tools/dt7_link/test_dt7_release_flush.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": null,
+        "checks_passed": 32,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tools/dt7_link/test_dt7_review_fixes",
+        "path": "tools/dt7_link/test_dt7_review_fixes.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": null,
+        "checks_passed": 25,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tools/dt7_link/test_dt7_sweep",
+        "path": "tools/dt7_link/test_dt7_sweep.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": null,
+        "checks_passed": 14,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tools/dt7_link/test_dt7_ui_selftest",
+        "path": "tools/dt7_link/test_dt7_ui_selftest.py",
+        "category": "firmware",
+        "status": "INCOMPLETE",
+        "tests_run": null,
+        "checks_passed": 35,
+        "skipped": 1,
+        "returncode": 0,
+        "reason": "Historic official client dump fixture unavailable."
+      },
+      {
+        "id": "tools/dt7_link/test_end_to_end_c_link",
+        "path": "tools/dt7_link/test_end_to_end_c_link.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": null,
+        "checks_passed": 27,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tools/dt7_link/test_frame_diff",
+        "path": "tools/dt7_link/test_frame_diff.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": null,
+        "checks_passed": 23,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tools/dt7_link/test_radio_km_client",
+        "path": "tools/dt7_link/test_radio_km_client.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": null,
+        "checks_passed": 57,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tools/dt7_link/test_vcp_listen",
+        "path": "tools/dt7_link/test_vcp_listen.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": null,
+        "checks_passed": 17,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tools/dt7_link/test_wireless_selftest",
+        "path": "tools/dt7_link/test_wireless_selftest.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": null,
+        "checks_passed": 24,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tools/firmware/controller_angle/test_controller_angle",
+        "path": "tools/firmware/controller_angle/test_controller_angle.py",
+        "category": "firmware",
+        "status": "SKIP",
+        "tests_run": null,
+        "checks_passed": 0,
+        "skipped": 1,
+        "returncode": 77,
+        "reason": "Explicit prepared firmware/reference fixture unavailable or not selected."
+      },
+      {
+        "id": "tools/firmware/gimbal_host/test_gimbal_host",
+        "path": "tools/firmware/gimbal_host/test_gimbal_host.py",
+        "category": "firmware",
+        "status": "SKIP",
+        "tests_run": null,
+        "checks_passed": 0,
+        "skipped": 1,
+        "returncode": 77,
+        "reason": "Explicit prepared firmware/reference fixture unavailable or not selected."
+      },
+      {
+        "id": "tools/firmware/host_bridge/test_host_bridge",
+        "path": "tools/firmware/host_bridge/test_host_bridge.py",
+        "category": "firmware",
+        "status": "SKIP",
+        "tests_run": null,
+        "checks_passed": 0,
+        "skipped": 1,
+        "returncode": 77,
+        "reason": "Explicit prepared firmware/reference fixture unavailable or not selected."
+      },
+      {
+        "id": "tools/firmware/host_bridge/test_rc_key_ledger",
+        "path": "tools/firmware/host_bridge/test_rc_key_ledger.py",
+        "category": "firmware",
+        "status": "SKIP",
+        "tests_run": null,
+        "checks_passed": 0,
+        "skipped": 1,
+        "returncode": 77,
+        "reason": "Explicit prepared firmware/reference fixture unavailable or not selected."
+      },
+      {
+        "id": "tools/firmware/host_bridge/test_usb_receiver_portable",
+        "path": "tools/firmware/host_bridge/test_usb_receiver_portable.py",
+        "category": "firmware",
+        "status": "SKIP",
+        "tests_run": null,
+        "checks_passed": 0,
+        "skipped": 1,
+        "returncode": 77,
+        "reason": "Explicit prepared firmware/reference fixture unavailable or not selected."
+      },
+      {
+        "id": "tools/firmware/km_link/test_km_link",
+        "path": "tools/firmware/km_link/test_km_link.py",
+        "category": "firmware",
+        "status": "SKIP",
+        "tests_run": null,
+        "checks_passed": 0,
+        "skipped": 1,
+        "returncode": 77,
+        "reason": "Explicit prepared firmware/reference fixture unavailable or not selected."
+      },
+      {
+        "id": "tools/firmware/km_link/test_km_payload_layout",
+        "path": "tools/firmware/km_link/test_km_payload_layout.py",
+        "category": "firmware",
+        "status": "SKIP",
+        "tests_run": null,
+        "checks_passed": 0,
+        "skipped": 1,
+        "returncode": 77,
+        "reason": "Explicit prepared firmware/reference fixture unavailable or not selected."
+      },
+      {
+        "id": "tools/firmware/km_link/test_serial_parsers_portable",
+        "path": "tools/firmware/km_link/test_serial_parsers_portable.py",
+        "category": "offline",
+        "status": "INCOMPLETE",
+        "tests_run": 13,
+        "checks_passed": 0,
+        "skipped": 1,
+        "returncode": 0,
+        "reason": "Windows Zig 0.13 firmware verifier lacks ASan/UBSan runtime; separate from the pinned 0.14.1 menu compiler."
+      },
+      {
+        "id": "tools/firmware/motion_feedback/test_motion_feedback",
+        "path": "tools/firmware/motion_feedback/test_motion_feedback.py",
+        "category": "firmware",
+        "status": "SKIP",
+        "tests_run": null,
+        "checks_passed": 0,
+        "skipped": 1,
+        "returncode": 77,
+        "reason": "Explicit prepared firmware/reference fixture unavailable or not selected."
+      },
+      {
+        "id": "tools/firmware/referee_rx/test_referee_rx",
+        "path": "tools/firmware/referee_rx/test_referee_rx.py",
+        "category": "firmware",
+        "status": "SKIP",
+        "tests_run": null,
+        "checks_passed": 0,
+        "skipped": 1,
+        "returncode": 77,
+        "reason": "Explicit prepared firmware/reference fixture unavailable or not selected."
+      },
+      {
+        "id": "tools/firmware/test_patch_logic",
+        "path": "tools/firmware/test_patch_logic.py",
+        "category": "firmware",
+        "status": "INCOMPLETE",
+        "tests_run": null,
+        "checks_passed": 0,
+        "skipped": 1,
+        "returncode": 77,
+        "reason": "Historic patch test requires installation; excluded from read-only validation."
+      },
+      {
+        "id": "tools/firmware/test_patch_real_headers",
+        "path": "tools/firmware/test_patch_real_headers.py",
+        "category": "firmware",
+        "status": "SKIP",
+        "tests_run": null,
+        "checks_passed": 0,
+        "skipped": 1,
+        "returncode": 77,
+        "reason": "Explicit prepared firmware/reference fixture unavailable or not selected."
+      },
+      {
+        "id": "tools/firmware/test_prepare_hero_options",
+        "path": "tools/firmware/test_prepare_hero_options.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": null,
+        "checks_passed": 56,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tools/test_car_bridge_loopback",
+        "path": "tools/test_car_bridge_loopback.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": null,
+        "checks_passed": 13,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tools/test_car_bridge_transport",
+        "path": "tools/test_car_bridge_transport.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": null,
+        "checks_passed": 15,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tools/test_mqtt_link_settings",
+        "path": "tools/test_mqtt_link_settings.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": null,
+        "checks_passed": 16,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tools/test_port_picking",
+        "path": "tools/test_port_picking.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": null,
+        "checks_passed": 30,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tools/test_settings_are_read",
+        "path": "tools/test_settings_are_read.py",
+        "category": "offline",
+        "status": "PASS",
+        "tests_run": null,
+        "checks_passed": 11,
+        "skipped": 0,
+        "returncode": 0
+      },
+      {
+        "id": "tools/audit_settings",
+        "path": "tools/audit_settings.py",
+        "category": "audit",
+        "status": "PASS",
+        "tests_run": null,
+        "checks_passed": 1,
+        "skipped": 0,
+        "returncode": 0
+      }
+    ],
+    "scope": "Selected checks only. Mock/offline success is not hardware or field qualification."
+  },
+  "checks": {
+    "compile_changed_python_files": {
+      "status": "PASS",
+      "files": 6
+    },
+    "git_diff_check": "PASS",
+    "primary_user_config_unchanged": true,
+    "primary_user_config_sha256": "67efb7a5cc0eae8d3e25868a6dd8ee219c73cc2fe85c85176da6d21d59f13475",
+    "original_menu_geometry_materials_animation_native_adapter_git_changed": false
+  },
+  "commands": [
+    "ToolPython tools/prepare_endfield_pack.py build --package <pinned raw upstream ZIP> --reference <pinned clean source checkout> --models <official STEP directory> --out tmp_issue22/fresh/user_data/endfield_pack",
+    "AppPython tools/prepare_endfield_pack.py check --pack tmp_issue22/fresh/user_data/endfield_pack",
+    "AppPython tools/verify_endfield_pack_runtime.py --pack tmp_issue22/fresh/user_data/endfield_pack --out tmp_issue22/native_final",
+    "AppPython tools/verify_endfield_desktop.py --pack tmp_issue22/fresh/user_data/endfield_pack --out tmp_issue22/desktop_cold --cycles 3",
+    "PYTHONUTF8=1 AppPython tools/verify_all.py --profile offline --json tmp_issue22/full.json --log-dir tmp_issue22/full",
+    "git diff --check"
+  ],
+  "limits": [
+    "Cold destination and compilation, not a clean Windows installation or a fresh pip download/venv test.",
+    "No public game-asset package was uploaded; the issue is addressed through complete pinned source preparation.",
+    "Prepared geometry hashes may differ across environment/newline/parallel CAD details; actual artifact/source hashes are recorded, not claimed bit-reproducible.",
+    "Offscreen D3D and actual desktop GL checks are distinct from a reference-game pixel parity certification.",
+    "Desktop measured synthetic HUD FPS and P95 are observations only; the 70-90 FPS performance target is NOT certified.",
+    "12 skipped / 6 incomplete regression entries remain NO-GO for whole-project qualification.",
+    "No robot, official referee/receiver, firmware or match qualification performed; existing control authorization unchanged."
+  ]
+}
