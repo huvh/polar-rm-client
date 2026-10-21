@@ -499,7 +499,7 @@ OPTION_ZH.update({
     "Stub": "占位接口", "Synthetic": "合成画面", "T Gold": "T 金色", "TacticalMapHud": "战术地图面板",
     "Tank": "坦克", "TargetHud": "目标面板", "TexasMP4": "德克萨斯视频", "Tongji": "同济",
     "Tongji YOLOv5": "同济 YOLOv5", "Top": "顶部", "Total Battlefield": "战地综合",
-    "Triangle": "三角形", "UDP HEVC": "UDP HEVC", "Legacy VT02 UDP": "旧 VT02 UDP（8080）", "Legacy Official Bridge": "官方旧图传旁路桥接", "Unavailable": "不可用", "Up": "上",
+    "Triangle": "三角形", "UDP HEVC": "UDP HEVC", "Legacy VT02 UDP": "旧图传", "New Video Link": "新图传（暂未实现）", "Legacy Official Bridge": "官方旧图传旁路桥接", "Unavailable": "不可用", "Up": "上",
     "VendingMachine4K": "自动售货机少女 4K", "VideoParallax": "视频视差", "Vision Only": "仅视觉",
     "Warning": "警告", "Webcam": "电脑摄像头", "Wedge": "楔形", "White Outline": "白色轮廓",
     "Wireframe3D": "三维线框", "3D Glass": "三维玻璃", "3D Wire": "三维线框",

@@ -12,6 +12,7 @@ from dataclasses import dataclass, replace
 from typing import Iterable
 
 from .crosshair_profile import FIELDS as CROSSHAIR_FIELDS
+from .video_sources import VIDEO_SOURCE_CHOICES
 from .module_settings import (
     CONTROL_BIND_OPTIONS, CONTROL_SLOT_ORDER, HUD_MODES, LEGACY_GUI_MODES,
     MODULE_LIST_STYLES, TACTICAL_MAP_STATUS_DISPLAYS, Module, ModuleRegistry,
@@ -423,14 +424,14 @@ def default_modules(choices: CatalogChoices) -> list[Module]:
             "Vision",
             "None",
             [
-                mode_setting("Source", "Webcam", ["Webcam", "Shark UDP", "UDP HEVC", "Legacy VT02 UDP", "Legacy Official Bridge", "Native 0x0310", "Synthetic"]),
+                mode_setting("Source", "Webcam", list(VIDEO_SOURCE_CHOICES)),
                 number_setting("Camera ID", 0, 0, 5, 1),
                 number_setting("Capture Width", 960, 320, 1920, 16, "px"),
                 number_setting("Capture Height", 540, 240, 1080, 16, "px"),
                 bool_setting("Mirror", False),
             ],
             enabled=True,
-            description="使用电脑摄像头作为当前机器人图传。",
+            description="选择电脑摄像头、旧图传或其他视频源。新图传仅提供暂未实现的占位选项。",
         ),
         Module(
             "TongjiVisionBridge",

@@ -21,6 +21,7 @@ from dataclasses import replace
 from typing import Any, Callable
 
 from ..model import RobotState
+from ..video_sources import video_source_notice
 from ..lifecycle import LifecycleCompletion, LifecycleSnapshot, TeardownTask
 from .lifecycle import ScenarioRequest, ShutdownCompletion, emit_lifecycle_event
 from .lifecycle_controller import BackendLifecycleController
@@ -1744,6 +1745,8 @@ class BackendManager:
         if self._video_source_failures:
             return None, 0.0, ""
         mode = str(source_mode or "Auto").strip().lower()
+        if video_source_notice(mode):
+            return None, 0.0, "not-implemented"
         want_native = mode in {"auto", "native", "native 0x0310", "0x0310"}
         want_udp = mode in {
             "auto",
@@ -2616,6 +2619,13 @@ class BackendManager:
                 native_info["decoded_frame_at"] = native_at
         return {
             "scenario": self.scenario_key,
+            "video_source": {
+                "selected": self._normal_video_source,
+                "active": self._active_video_source,
+                "state": ("not_implemented" if video_source_notice(self._normal_video_source)
+                          else "selected"),
+                "message": video_source_notice(self._normal_video_source),
+            },
             "lifecycle": {
                 "phase": lifecycle.phase.value,
                 "generation": lifecycle.generation,

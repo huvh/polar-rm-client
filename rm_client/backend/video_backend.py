@@ -138,8 +138,10 @@ class AnnexBRecoveryGate:
     # three independent 64 KiB HEVC headers indefinitely.
     PARAMETER_LIMIT = 64 * 1024
 
-    def __init__(self, codec: str) -> None:
+    def __init__(self, codec: str, *, allow_h264_non_idr: bool = False) -> None:
         self.codec = "h265" if str(codec).lower() in {"h265", "hevc"} else "h264"
+        # 实测 VT02 持续输出非 IDR P 帧并重复 SPS/PPS；只在明确的旧图传入口启用。
+        self.allow_h264_non_idr = bool(allow_h264_non_idr and self.codec == "h264")
         self.parameters: dict[int, bytes] = {}
         self.blocked = True
         self._tail = b""
@@ -213,7 +215,14 @@ class AnnexBRecoveryGate:
                 continue
 
             is_key = nal_type in ({19, 20, 21} if self.codec == "h265" else {5})
-            if is_key and self.required.issubset(self.parameters):
+            legacy_picture = False
+            if self.allow_h264_non_idr and nal_type == 1:
+                if len(data) < prefix_len + 2:
+                    self._tail = data
+                    return None
+                # first_mb_in_slice=0 的 Exp-Golomb 编码以 1 开头；不从中间切片接入。
+                legacy_picture = bool(data[prefix_len + 1] & 0x80)
+            if (is_key or legacy_picture) and self.required.issubset(self.parameters):
                 self.blocked = False
                 self._tail = b""
                 prefix = b"".join(self.parameters[key] for key in sorted(self.required))
@@ -315,7 +324,13 @@ class RmVideoBackend(UDPVideoReceiver):
             return
         if self.running or not self.cleanup_complete:
             raise RuntimeError("Previous video owner must close before changing ingress")
+        # 契约切换时重建已关闭的解码槽，避免旧图传的非 IDR 策略泄漏到其他视频源。
+        decoder = ContinuousMjpegDecoder("h265")
+        recovery = AnnexBRecoveryGate("h265")
         self.ingress_mode = mode
+        self._h265_generation += 1
+        self.h265_decoder = decoder
+        self.h265_recovery = recovery
 
     def _create_assembler(self) -> FrameAssembler:
         return (AnnexBDatagramStream() if self.ingress_mode in {"legacy-vt02-h264", "legacy-official-bridge"}
@@ -519,8 +534,9 @@ class RmVideoBackend(UDPVideoReceiver):
                     or (recovery is not None and recovery.is_alive())):
                 return None
         try:
-            replacement = ContinuousMjpegDecoder(codec)
-            recovery_gate = AnnexBRecoveryGate(codec)
+            legacy = self.ingress_mode in {"legacy-vt02-h264", "legacy-official-bridge"}
+            replacement = ContinuousMjpegDecoder(codec, allow_h264_non_idr=legacy)
+            recovery_gate = AnnexBRecoveryGate(codec, allow_h264_non_idr=legacy)
         except Exception as exc:
             self.last_error = f"Codec admission failed: {type(exc).__name__}: {exc}"
             return None
@@ -905,8 +921,10 @@ class ContinuousMjpegDecoder:
     FIRST_FRAME_TIMEOUT_S = 3.0
     STALE_TIMEOUT_S = 2.0
 
-    def __init__(self, codec: str = "h265", quality: int = 3) -> None:
+    def __init__(self, codec: str = "h265", quality: int = 3,
+                 *, allow_h264_non_idr: bool = False) -> None:
         self.codec = codec  # "h264" | "h265"
+        self.allow_h264_non_idr = bool(allow_h264_non_idr and codec == "h264")
         self.quality = int(quality)
         self.available = False
         self.last_error = ""
@@ -1009,9 +1027,13 @@ class ContinuousMjpegDecoder:
                 [
                     ffmpeg, "-v", "error",
                     "-probesize", "32", "-analyzeduration", "0",
+                    # 720p60 实机需避免解码/再编码两端帧线程各缓存多帧。
+                    *(["-flags2", "+showall", "-flags", "low_delay", "-threads", "1"]
+                      if self.allow_h264_non_idr else []),
                     "-f", demuxer, "-i", "pipe:0",
                     "-flush_packets", "1",
                     "-c:v", "mjpeg", "-q:v", str(self.quality),
+                    *(["-threads", "1", "-vsync", "0"] if self.allow_h264_non_idr else []),
                     "-f", "image2pipe", "pipe:1",
                 ],
                 stdin=subprocess.PIPE,

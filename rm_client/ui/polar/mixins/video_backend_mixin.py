@@ -33,6 +33,7 @@ from ....backend import BackendManager
 from ....combat_events import CombatEvent
 from ....hero_lob import HeroLobPlanner
 from ....model import Module
+from ....video_sources import video_source_notice
 from ....vision import (
     CapturedFrame,
     VisionResult,
@@ -838,10 +839,12 @@ class VideoBackendMixin:
         painter.fillRect(canvas, QColor("#02070b"))
         painter.setPen(QColor("#b9d7e5"))
         painter.setFont(self.font("poppins_bold", 10.0))
+        source = self.setting_mode(self.registry.get("CameraFeed"), "Source", "Webcam")
+        notice = video_source_notice(source, chinese=chinese_enabled(self.registry))
         painter.drawText(
             canvas,
             Qt.AlignmentFlag.AlignCenter,
-            hero_text("VIDEO SIGNAL LOST · WAITING FOR FRESH DECODED FRAME", chinese_enabled(self.registry)),
+            notice or hero_text("VIDEO SIGNAL LOST · WAITING FOR FRESH DECODED FRAME", chinese_enabled(self.registry)),
         )
 
     def video_source_recovery_notice(self) -> VideoRecoveryNotice | None:
