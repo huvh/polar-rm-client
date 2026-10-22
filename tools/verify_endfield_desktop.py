@@ -64,7 +64,7 @@ def check_backdrop(window, out):
             "dim_alpha": treatment.dim_alpha}
 
 
-def run(pack: Path, out: Path, cycles: int) -> None:
+def run(pack: Path | None, out: Path, cycles: int) -> None:
     if sys.platform != "win32":
         raise RuntimeError("A real Windows desktop is required")
     os.environ.update(QT_QPA_PLATFORM="windows", POLAR_AUTOSTART="0", CI="true",
@@ -102,10 +102,17 @@ def run(pack: Path, out: Path, cycles: int) -> None:
     with tempfile.TemporaryDirectory() as profile, patch.dict(os.environ, POLAR_USER_DATA_ROOT=profile), \
          patch.object(RmMqttBackend, "start"), patch.object(RmSerialBackend, "start"), patch.object(RmVideoBackend, "start"):
         window = PolarRMWindow()
-        menu = EndfieldNativeMenu(pack)
-        window._endfield_menu = menu
+        if pack is not None:
+            menu = EndfieldNativeMenu(pack)
+            window._endfield_menu = menu
+        else:
+            menu = window._endfield_menu
+            assert menu is not None, "Production Windows menu was not assembled"
         original_cursor = QCursor.pos()
         report = {"scope": "owned Windows GPU + inert transports; NOT real match validation", "cycles": cycles}
+        report["pack_selection"] = ("production-default" if pack is None else "explicit-test-pack")
+        report["private_pack_present"] = (window.paths.user_data_root / "endfield_pack").exists()
+        report["uses_shipped_pack"] = menu.pack == window.paths.asset("endfield_pack")
         try:
             window.resize(1280, 720)
             window.show()
@@ -226,10 +233,10 @@ def run(pack: Path, out: Path, cycles: int) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--pack", type=Path, required=True)
+    parser.add_argument("--pack", type=Path, help="Explicit test pack; omit to verify production path selection")
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--cycles", type=int, default=100)
     args = parser.parse_args()
     if not 1 <= args.cycles <= 100:
         parser.error("cycles must be 1–100")
-    run(args.pack.resolve(), args.out.resolve(), args.cycles)
+    run(args.pack.resolve() if args.pack is not None else None, args.out.resolve(), args.cycles)

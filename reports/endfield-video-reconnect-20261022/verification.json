@@ -1,0 +1,675 @@
+{
+  "schema": 1,
+  "recorded_at_utc": "2026-10-21T19:24:13.249601+00:00",
+  "source": {
+    "base_commit": "cbf60e66602ffa06667b7d95c4358c624e5779f4",
+    "branch": "fix/endfield-delivery-video-reconnect",
+    "tested_uncommitted_patch": true,
+    "changed_file_sha256": {
+      ".gitattributes": "bcb9f393c24d83ef0b9f3b2715194eb19840e9b3284d54a0affbb180fe59d838",
+      "README.md": "9df25b40900ee5990b7bd8a14777eea265d4af95cb084daed60fe19c2dc9b4df",
+      "docs/ENDFIELD_PACK_SETUP.md": "93e537ed6461ca38078547760ec83da95900f8397dfd0c990ad59abc99eece39",
+      "docs/endfield_delivery_video_reconnect_20261022.md": "4c9113dfbf2ad9e13302efbb19c167d5cf381ac3f0ed1d749fc77132a9c02943",
+      "rm_client/backend/manager.py": "219441c2075b1938f4a486cace3d586857266e18a83180bb7cea4e8524d677e5",
+      "rm_client/backend/video_backend.py": "9f424c1543dcf6cbf212c63388effe9172a6bed42364b44a8599d936bd22e914",
+      "rm_client/runtime_paths.py": "557b22c0ede5041bec83bd9a56cbfdf1ab81c4d9d637f24a3c375e19635f15ce",
+      "rm_client/ui/polar_app.py": "d1d49d74297a3591ebb1f5f9b8959b14b7a1d08e21639d4386d6dc521c471581",
+      "tests/test_custom_byte_block_characterization.py": "ee4ce2c6c670ee5de8ba58a65d33960d8f6c0093bdbd71724ce95c1e00befd7c",
+      "tests/test_endfield_delivery.py": "489e67d30c936e451f683bdd0e6e64709683013cb394e7c150b1be223648a003",
+      "tests/test_video_reconnect.py": "9af9790c2126543499b33bdca51b5b00c2c6e55e5f7107c12da8f1469f0aa4e6",
+      "tools/build_endfield_source_probe.py": "8407ac411f1668ae0cabcf2c781d408eb8a5b5b32e1391e5a7a3406cbf40ff80",
+      "tools/endfield_pack.py": "134c6028bc763de9e8bbfaa6b35f265a1fe5dd8bc15f1cd06649d8c0117775e5",
+      "tools/prepare_endfield_pack.py": "be2f19df7fb773c78da4ed17d52d9f86827d2a342e443b7c72d1383f0897dcc6",
+      "tools/verify_endfield_desktop.py": "0326c85ddfdf700529cb9d094e2ebe0246cd49c645a40344a6b4abeb5fed8153",
+      "tools/verify_video_reconnect.py": "ebd909472efe83eb8379a4412f81fe366c949adb2e85c6d2e76bfc116b4a9c95"
+    }
+  },
+  "environment": {
+    "python": "3.12.14",
+    "os": "Windows-11-10.0.26200-SP0",
+    "dependencies": {
+      "PySide6": "6.11.1",
+      "numpy": "2.4.6",
+      "opencv-python": "5.0.0.93"
+    }
+  },
+  "full_offline": {
+    "run_state": "completed",
+    "counts": {
+      "PASS": 458,
+      "SKIP": 12,
+      "INCOMPLETE": 6,
+      "FAIL": 0
+    },
+    "returncode": 1,
+    "verdict": "NO-GO due to SKIP/INCOMPLETE",
+    "source_stability": {
+      "schema_version": 1,
+      "status": "PASS",
+      "detail": "Declared verification source inputs have identical start/end fingerprints",
+      "scope": {
+        "directories": [
+          "rm_client",
+          "tests",
+          "tools",
+          "configs"
+        ],
+        "suffixes": [
+          ".bat",
+          ".c",
+          ".cfg",
+          ".cpp",
+          ".h",
+          ".hpp",
+          ".ini",
+          ".json",
+          ".ps1",
+          ".py",
+          ".spec",
+          ".toml",
+          ".yaml",
+          ".yml"
+        ],
+        "all_file_directories": [
+          "tests/fixtures"
+        ],
+        "root_files": [
+          "main.py",
+          "requirements*.txt"
+        ],
+        "exclusions": [
+          "hidden directories",
+          "__pycache__"
+        ],
+        "limits": "Start/end comparison only; includes all internal tests/fixtures files; excludes assets outside that fixture directory, external fixtures, installed packages and transient edits restored between captures."
+      },
+      "before": {
+        "status": "available",
+        "sha256": "ab1bc069acac3da3b9f4725363f62f59faf3ef674d266898499ff8ddfe029c75",
+        "file_count": 856
+      },
+      "after": {
+        "status": "available",
+        "sha256": "ab1bc069acac3da3b9f4725363f62f59faf3ef674d266898499ff8ddfe029c75",
+        "file_count": 856
+      }
+    },
+    "nonpass": [
+      {
+        "id": "tests/polar_link_test",
+        "status": "INCOMPLETE",
+        "reason": "External team CRC reference absent"
+      },
+      {
+        "id": "tests/test_legacy_video_bridge",
+        "status": "INCOMPLETE",
+        "reason": "Native libpcap/BPF build unavailable in this Windows environment"
+      },
+      {
+        "id": "tools/dt7_link/test_cc_link",
+        "status": "SKIP",
+        "reason": "Explicit external firmware/reference fixture not supplied; see runner prerequisite"
+      },
+      {
+        "id": "tools/dt7_link/test_dbus_frame_vs_firmware",
+        "status": "SKIP",
+        "reason": "Explicit external firmware/reference fixture not supplied; see runner prerequisite"
+      },
+      {
+        "id": "tools/dt7_link/test_dt7_link",
+        "status": "INCOMPLETE",
+        "reason": "Explicit external firmware/reference fixture not supplied; see runner prerequisite"
+      },
+      {
+        "id": "tools/dt7_link/test_dt7_ui_selftest",
+        "status": "INCOMPLETE",
+        "reason": "Explicit external firmware/reference fixture not supplied; see runner prerequisite"
+      },
+      {
+        "id": "tools/firmware/controller_angle/test_controller_angle",
+        "status": "SKIP",
+        "reason": "Explicit external firmware/reference fixture not supplied; see runner prerequisite"
+      },
+      {
+        "id": "tools/firmware/gimbal_host/test_gimbal_host",
+        "status": "SKIP",
+        "reason": "Explicit external firmware/reference fixture not supplied; see runner prerequisite"
+      },
+      {
+        "id": "tools/firmware/host_bridge/test_host_bridge",
+        "status": "SKIP",
+        "reason": "Explicit external firmware/reference fixture not supplied; see runner prerequisite"
+      },
+      {
+        "id": "tools/firmware/host_bridge/test_rc_key_ledger",
+        "status": "SKIP",
+        "reason": "Explicit external firmware/reference fixture not supplied; see runner prerequisite"
+      },
+      {
+        "id": "tools/firmware/host_bridge/test_usb_receiver_portable",
+        "status": "SKIP",
+        "reason": "Explicit external firmware/reference fixture not supplied; see runner prerequisite"
+      },
+      {
+        "id": "tools/firmware/km_link/test_km_link",
+        "status": "SKIP",
+        "reason": "Explicit external firmware/reference fixture not supplied; see runner prerequisite"
+      },
+      {
+        "id": "tools/firmware/km_link/test_km_payload_layout",
+        "status": "SKIP",
+        "reason": "Explicit external firmware/reference fixture not supplied; see runner prerequisite"
+      },
+      {
+        "id": "tools/firmware/km_link/test_serial_parsers_portable",
+        "status": "INCOMPLETE",
+        "reason": "Required Windows sanitizer/compiler capability unavailable"
+      },
+      {
+        "id": "tools/firmware/motion_feedback/test_motion_feedback",
+        "status": "SKIP",
+        "reason": "Explicit external firmware/reference fixture not supplied; see runner prerequisite"
+      },
+      {
+        "id": "tools/firmware/referee_rx/test_referee_rx",
+        "status": "SKIP",
+        "reason": "Explicit external firmware/reference fixture not supplied; see runner prerequisite"
+      },
+      {
+        "id": "tools/firmware/test_patch_logic",
+        "status": "INCOMPLETE",
+        "reason": "Legacy test requires installation; excluded from read-only firmware verification"
+      },
+      {
+        "id": "tools/firmware/test_patch_real_headers",
+        "status": "SKIP",
+        "reason": "Explicit external firmware/reference fixture not supplied; see runner prerequisite"
+      }
+    ],
+    "new_regression_suites": [
+      {
+        "id": "tests/test_custom_byte_block_characterization",
+        "path": "tests/test_custom_byte_block_characterization.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "5 unittest tests passed",
+        "tests_run": 5,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 0.266,
+        "expected_failures": 0
+      },
+      {
+        "id": "tests/test_endfield_delivery",
+        "path": "tests/test_endfield_delivery.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "7 unittest tests passed",
+        "tests_run": 7,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 0.375,
+        "expected_failures": 0
+      },
+      {
+        "id": "tests/test_video_reconnect",
+        "path": "tests/test_video_reconnect.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "6 unittest tests passed",
+        "tests_run": 6,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 0.391,
+        "expected_failures": 0
+      }
+    ]
+  },
+  "earlier_rejected_run": {
+    "counts": {
+      "PASS": 457,
+      "SKIP": 12,
+      "INCOMPLETE": 6,
+      "FAIL": 2
+    },
+    "accepted_as_latest_verification": false,
+    "reason": "First run detected characterization regression and source changes during execution. Fixed separately, then reran complete stable-source suite. Original frozen oracle not rewritten."
+  },
+  "menu_native": {
+    "scope": "actual owned D3D rendering; no game/device/robot I/O",
+    "cases": [
+      {
+        "mode": "RMUC7v7",
+        "width": 1280,
+        "height": 720,
+        "chinese": false,
+        "image": "RMUC7v7_1280x720.png",
+        "stats": {
+          "frames": 87.0,
+          "last_ms": 0.45399999362416565,
+          "textures": 56.0,
+          "meshes": 57.0,
+          "owners": 1.0
+        }
+      },
+      {
+        "mode": "RMUC7v7",
+        "width": 2560,
+        "height": 1440,
+        "chinese": true,
+        "image": "RMUC7v7_2560x1440.png",
+        "stats": {
+          "frames": 189.0,
+          "last_ms": 0.519599998369813,
+          "textures": 56.0,
+          "meshes": 57.0,
+          "owners": 1.0
+        }
+      },
+      {
+        "mode": "RMUL3v3",
+        "width": 1280,
+        "height": 720,
+        "chinese": false,
+        "image": "RMUL3v3_1280x720.png",
+        "stats": {
+          "frames": 277.0,
+          "last_ms": 0.48349999997299165,
+          "textures": 56.0,
+          "meshes": 57.0,
+          "owners": 1.0
+        }
+      },
+      {
+        "mode": "RMUL3v3",
+        "width": 2560,
+        "height": 1440,
+        "chinese": true,
+        "image": "RMUL3v3_2560x1440.png",
+        "stats": {
+          "frames": 377.0,
+          "last_ms": 0.4827000084333122,
+          "textures": 56.0,
+          "meshes": 57.0,
+          "owners": 1.0
+        }
+      },
+      {
+        "mode": "RMUL1v1",
+        "width": 1280,
+        "height": 720,
+        "chinese": false,
+        "image": "RMUL1v1_1280x720.png",
+        "stats": {
+          "frames": 463.0,
+          "last_ms": 0.4586999857565388,
+          "textures": 56.0,
+          "meshes": 57.0,
+          "owners": 1.0
+        }
+      },
+      {
+        "mode": "RMUL1v1",
+        "width": 2560,
+        "height": 1440,
+        "chinese": true,
+        "image": "RMUL1v1_2560x1440.png",
+        "stats": {
+          "frames": 563.0,
+          "last_ms": 0.45649999810848385,
+          "textures": 56.0,
+          "meshes": 57.0,
+          "owners": 1.0
+        }
+      }
+    ],
+    "pack": {
+      "status": "PACK_VALID",
+      "files": 54,
+      "maps": {
+        "RMUC7v7": 118677,
+        "RMUL3v3": 8971,
+        "RMUL1v1": 4860
+      },
+      "binary_sha256": "2dcd9e2e930a69a4ae6a1ac31acc21509bb6b829718d3de2ad677d7116c90bf3",
+      "optional_boot": false,
+      "optional_audio": false,
+      "native_render_verified": false,
+      "limits": "Integrity/source check only; run verify_endfield_pack_runtime.py for owned D3D rendering. No hardware/match qualification."
+    },
+    "boot_audio_absent": true,
+    "owner_retired": true,
+    "status": "PASS",
+    "limits": "Not exact pixel parity, full app regression, throughput, packaging or match qualification."
+  },
+  "menu_windows_production_path": {
+    "scope": "owned Windows GPU + inert transports; NOT real match validation",
+    "cycles": 3,
+    "pack_selection": "production-default",
+    "private_pack_present": false,
+    "uses_shipped_pack": true,
+    "initial": {
+      "frames": 106.0,
+      "last_ms": 11.147299999720417,
+      "textures": 56.0,
+      "meshes": 57.0,
+      "owners": 1.0
+    },
+    "display_hz": 75.001,
+    "dpr": 1.0,
+    "esc_backdrop": {
+      "empty_combat_layers_alpha_max": {
+        "overlay": 0,
+        "vision": 0,
+        "dynamic": 0,
+        "target": 0,
+        "hud_glass": 0,
+        "glass": 0
+      },
+      "world_edge_energy": 2.394044876098633,
+      "gaussian_edge_energy_after_undoing_dim": 1.0418899059295654,
+      "kernel": "endfield_gaussian",
+      "radius_dp": 10.0,
+      "dim_alpha": 0.42
+    },
+    "fullscreen_hover": [
+      {
+        "button": 2,
+        "stationary": true,
+        "duplicate_moves": true,
+        "initial": {
+          "code": 2,
+          "changes": 1
+        },
+        "final": {
+          "code": 2,
+          "changes": 1
+        },
+        "samples": [
+          {
+            "code": 2,
+            "changes": 1
+          },
+          {
+            "code": 2,
+            "changes": 1
+          },
+          {
+            "code": 2,
+            "changes": 1
+          },
+          {
+            "code": 2,
+            "changes": 1
+          },
+          {
+            "code": 2,
+            "changes": 1
+          },
+          {
+            "code": 2,
+            "changes": 1
+          },
+          {
+            "code": 2,
+            "changes": 1
+          },
+          {
+            "code": 2,
+            "changes": 1
+          },
+          {
+            "code": 2,
+            "changes": 1
+          },
+          {
+            "code": 2,
+            "changes": 1
+          },
+          {
+            "code": 2,
+            "changes": 1
+          },
+          {
+            "code": 2,
+            "changes": 1
+          }
+        ]
+      },
+      {
+        "button": 6,
+        "stationary": true,
+        "duplicate_moves": true,
+        "initial": {
+          "code": 6,
+          "changes": 2
+        },
+        "final": {
+          "code": 6,
+          "changes": 2
+        },
+        "samples": [
+          {
+            "code": 6,
+            "changes": 2
+          },
+          {
+            "code": 6,
+            "changes": 2
+          },
+          {
+            "code": 6,
+            "changes": 2
+          },
+          {
+            "code": 6,
+            "changes": 2
+          },
+          {
+            "code": 6,
+            "changes": 2
+          },
+          {
+            "code": 6,
+            "changes": 2
+          },
+          {
+            "code": 6,
+            "changes": 2
+          },
+          {
+            "code": 6,
+            "changes": 2
+          },
+          {
+            "code": 6,
+            "changes": 2
+          },
+          {
+            "code": 6,
+            "changes": 2
+          },
+          {
+            "code": 6,
+            "changes": 2
+          },
+          {
+            "code": 6,
+            "changes": 2
+          }
+        ]
+      },
+      {
+        "button": 5,
+        "stationary": true,
+        "duplicate_moves": true,
+        "initial": {
+          "code": 5,
+          "changes": 3
+        },
+        "final": {
+          "code": 5,
+          "changes": 3
+        },
+        "samples": [
+          {
+            "code": 5,
+            "changes": 3
+          },
+          {
+            "code": 5,
+            "changes": 3
+          },
+          {
+            "code": 5,
+            "changes": 3
+          },
+          {
+            "code": 5,
+            "changes": 3
+          },
+          {
+            "code": 5,
+            "changes": 3
+          },
+          {
+            "code": 5,
+            "changes": 3
+          },
+          {
+            "code": 5,
+            "changes": 3
+          },
+          {
+            "code": 5,
+            "changes": 3
+          },
+          {
+            "code": 5,
+            "changes": 3
+          },
+          {
+            "code": 5,
+            "changes": 3
+          },
+          {
+            "code": 5,
+            "changes": 3
+          },
+          {
+            "code": 5,
+            "changes": 3
+          }
+        ]
+      }
+    ],
+    "baseline": {
+      "frames": 905.0,
+      "last_ms": 7.990300000528805,
+      "textures": 56.0,
+      "meshes": 57.0,
+      "owners": 1.0
+    },
+    "final": {
+      "frames": 1173.0,
+      "last_ms": 11.968200007686391,
+      "textures": 56.0,
+      "meshes": 57.0,
+      "owners": 1.0
+    },
+    "fullscreen_preserved": true,
+    "actual_source_hit": true,
+    "texture_growth": 0,
+    "synthetic_hud_frame_ms_p95": 37.24819999479223,
+    "synthetic_hud_fps": 44.580701242235186,
+    "result": "PASS",
+    "native_error": "",
+    "retired": true
+  },
+  "archive_transfer": {
+    "status": "PACK_VALID",
+    "files": 54,
+    "maps": {
+      "RMUC7v7": 118677,
+      "RMUL3v3": 8971,
+      "RMUL1v1": 4860
+    },
+    "binary_sha256": "2dcd9e2e930a69a4ae6a1ac31acc21509bb6b829718d3de2ad677d7116c90bf3",
+    "optional_boot": false,
+    "optional_audio": false,
+    "native_render_verified": false,
+    "limits": "Actual ZIP relocation/integrity and LF checkout source identity; not a second physical PC test.",
+    "lf_checkout_raw_sha256": "83a5af809b9ccdb1798e53d326e3dd50597c783e2cfd9d47459eab1a709f023b",
+    "canonical_adapter_sha256": "83a5af809b9ccdb1798e53d326e3dd50597c783e2cfd9d47459eab1a709f023b",
+    "zip_entries": 55,
+    "fresh_private_profile": true
+  },
+  "real_ffmpeg_udp_reconnect": {
+    "scope": "real FFmpeg and loopback UDP only; NOT physical receiver/match qualification",
+    "ffmpeg_sha256": "79bdd4c65adc74d4ca937b6a9d939349806d6c66c8a42c848b0e866bcbdf4eb7",
+    "cases": [
+      {
+        "codec": "h264",
+        "fixture_sha256": "60c903a9e311b588d2fa453560c5af4884a6767e3a62c9fef8e91123dfa2ec59",
+        "first_frame_s": 1.058997800006182,
+        "resume_frame_s": 0.08199740000418387,
+        "new_sender_selected": true,
+        "decoder_stdin_still_open": true,
+        "connection_restarts": 1,
+        "status": "PASS",
+        "cleanup_complete": true
+      },
+      {
+        "codec": "h265",
+        "fixture_sha256": "897b64caacc2389dc6bd902374ea43780c9f9b300018625d7c44e27866a1e941",
+        "first_frame_s": 0.07712839999294374,
+        "resume_frame_s": 0.07712310001079459,
+        "new_sender_selected": true,
+        "decoder_stdin_still_open": true,
+        "connection_restarts": 1,
+        "status": "PASS",
+        "cleanup_complete": true
+      }
+    ],
+    "status": "PASS"
+  },
+  "local_menu_archive": {
+    "name": "POLAR-RM-Endfield-Menu-Windows-x64-20261022.zip",
+    "bytes": 22962506,
+    "sha256": "8dafeff562a90200ad90cdc90dc312a3fbb4e4db16c1ca669b667d697e2f30d8",
+    "publicly_uploaded": false,
+    "public_redistribution_authorization": "awaiting explicit confirmation",
+    "contains_user_configuration": false,
+    "optional_boot_or_audio": false
+  },
+  "checks": {
+    "compile_changed_python": {
+      "status": "PASS",
+      "files": 12
+    },
+    "git_diff_check": "PASS",
+    "primary_user_config_sha256": "67efb7a5cc0eae8d3e25868a6dd8ee219c73cc2fe85c85176da6d21d59f13475",
+    "primary_user_config_unchanged": true,
+    "native_adapter_geometry_material_animation_changed": false
+  },
+  "commands": [
+    "$AppPy tools/prepare_endfield_pack.py export --pack $CompletePack --out $NewAssetTree",
+    "$AppPy tools/verify_endfield_pack_runtime.py --pack $NewAssetTree --out tmp_native_check",
+    "$AppPy tools/verify_endfield_desktop.py --out tmp_reconnect/desktop_final --cycles 3",
+    "$AppPy tools/verify_video_reconnect.py --ffmpeg $Ffmpeg --out tmp_reconnect/ffmpeg",
+    "$AppPy tools/verify_all.py --profile offline --json tmp_reconnect/full_final.json --log-dir tmp_reconnect/full_final"
+  ],
+  "limits": [
+    "No second physical PC or new portable EXE build was validated.",
+    "Original third-party game materials are not granted a redistribution license by code, export tooling or this report.",
+    "Real FFmpeg/UDP loopback is not physical receiver/referee/firmware acceptance; Native idle logic uses inert decoder tests.",
+    "Desktop throughput observations do not certify the 70-90 FPS performance target.",
+    "Existing fail-closed control, Hero source exclusivity and manual Arm requirements remain unchanged; no robot command was sent."
+  ]
+}

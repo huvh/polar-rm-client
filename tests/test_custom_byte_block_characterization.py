@@ -263,6 +263,12 @@ class RecordingClock:
         self.trace = trace
         self.now = 100.0
 
+    def monotonic(self):
+        # New receive-idle bookkeeping has its own monotonic observation;
+        # retain the existing ordered decoder/retry oracle byte-for-byte.
+        # Idle resets themselves are covered in test_video_reconnect.py.
+        return self.now
+
     def perf_counter(self):
         result = self.now
         self.now += 0.002

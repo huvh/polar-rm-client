@@ -105,6 +105,22 @@ class RuntimePaths:
     def asset(self, *parts: str) -> Path:
         return self.resource_root.joinpath("assets", *parts)
 
+    @property
+    def endfield_menu_pack(self) -> Path:
+        """Use an explicitly prepared local pack, otherwise shipped read-only data.
+
+        Only inspect manifests during window assembly, never scan/copy a tree
+        in paint/tick. A malformed local manifest stays diagnosable; an empty
+        user_data directory must not hide the complete source/portable pack.
+        Optional boot/audio continue to belong to user_data, independently.
+        """
+        local = self.user_data_root / "endfield_pack"
+        if any((local / "native_renderer" / name).is_file()
+               for name in ("CURRENT.json", "BUILD_MANIFEST.json")):
+            return local
+        shipped = self.asset("endfield_pack")
+        return shipped if (shipped / "ENDFIELD_PACK_MANIFEST.json").is_file() else local
+
     def ensure_writable_dirs(self) -> None:
         for path in (
             self.user_data_root,

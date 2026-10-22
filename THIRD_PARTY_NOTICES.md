@@ -1,10 +1,11 @@
 # 第三方实现参考
 
-## EndfieldHUD 与可选本机 Endfield 资源
+## EndfieldHUD 与随源 Esc 运行包
 
 - 可选 Windows Esc 菜单使用 [DDDuoDuo/EndfieldHUD](https://github.com/DDDuoDuo/EndfieldHUD) 的原生场景与渲染器；构建固定到 `cdbd4f573c8fa3b9c2048fa3d1b089e69196537b`。上游采用 MIT License，原始授权全文保留在 `licenses/EndfieldHUD-LICENSE.txt`。
-- 本仓库保存 POLAR-RM 适配层、离线准备工具和测试，不自动下载、安装或运行游戏。原始游戏图片、字体、语音及本机生成的运行包留在被忽略的 `user_data/endfield_pack`，不随本次源码提交公开分发。
-- 开源渲染器的 MIT 授权不授予终末地游戏素材的再分发权。游戏素材的版权、商标及其他权利仍归各权利人；资源不可用时回退既有菜单。接入范围与限制见 `docs/ENDFIELD_SOURCE_PORT.md`。
+- 按仓库维护者于 2026-10-22 明确要求，完整菜单运行包的 55 个文件位于 `assets/endfield_pack` 并纳入 Git：包括所需原始图片/字体/场景数据、经校验的 Windows x64 原生适配 DLL、三个 RM 2027 场地预览与网格，以及原始许可/来源/哈希清单。不自动下载、安装或运行游戏，不打包用户配置、日志、整个游戏或上游 exe。
+- 个人覆盖包、启动画面和可选语音仍保留在被忽略的 `user_data/endfield_pack`。普通菜单不依赖这些可选文件。字体的 OFL、上游 MIT/CREDITS 和官方模型来源随包保存；分发边界见 `licenses/Endfield-Menu-PACK-NOTICE.md`。
+- 开源渲染器的 MIT 授权不授予终末地游戏素材的再分发权。游戏素材的版权、商标及其他权利仍归各权利人；Windows 资源缺失时保留准备诊断；完整的本地准备流程见 `docs/ENDFIELD_PACK_SETUP.md`，不以空清单或更换菜单代替资源。接入范围与限制见 `docs/ENDFIELD_SOURCE_PORT.md`。
 
 ## AndroidLiquidGlass-kmp
 

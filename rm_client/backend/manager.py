@@ -160,6 +160,7 @@ class BackendManager:
         # recovery state only.
         self._native_0310_bytes_since_reset = 0
         self._native_0310_last_sequence: int | None = None
+        self._native_0310_last_accepted_at = 0.0
         self._native_0310_dropped_chunks = 0
         self._native_0310_out_of_order_chunks = 0
         self._native_0310_recovery_dropped_chunks = 0
@@ -1265,6 +1266,10 @@ class BackendManager:
         self._poll_native_decoder_restart()
         if self._video_source_failures:
             return
+        request = getattr(self, "_video_source_request", None)
+        if (request is not None and request.start and self._active_video_source in {
+                "udp hevc", "legacy vt02 udp", "legacy official bridge"}):
+            self.udp.poll_connection()
         if self.udp.decode_h265 and self.udp.running and self.udp.h265_decoder is not None:
             health = self.udp.h265_decoder.health()
             if health.get("first_frame_timeout") or health.get("stale"):
@@ -1829,6 +1834,7 @@ class BackendManager:
             # retain a partial recovery epoch in the background.
             # Selecting Native later waits for fresh SPS/PPS/IDR.
             self._native_0310_last_sequence = None
+            self._native_0310_last_accepted_at = 0.0
             self._native_0310_blocked_until_sps = True
             self._native_recovery.reset()
             return
@@ -1837,10 +1843,13 @@ class BackendManager:
         # SPS；这与 rm-native-viewer 的正式链路恢复策略一致，
         # 也避免在 UI tick 内同步 stop/restart ffmpeg。重复/迟到
         # 分块直接丢弃，防止同一 payload 破坏 NAL 边界。
+        now = time.monotonic()
+        last_accepted_at = getattr(self, "_native_0310_last_accepted_at", 0.0)
+        idle_reset = bool(last_accepted_at > 0.0 and now - last_accepted_at > 2.0)
         decision = assess_native_video_sequence(
             sequence=video_chunk.sequence,
             modulus=video_chunk.sequence_modulus,
-            reset=video_chunk.reset,
+            reset=video_chunk.reset or idle_reset,
             previous_sequence=self._native_0310_last_sequence,
         )
         sequence = decision.sequence
@@ -1861,6 +1870,7 @@ class BackendManager:
         wrote = False
         payload_to_write = b""
         if decision.accept_payload:
+            self._native_0310_last_accepted_at = now
             self._native_0310_bytes_since_reset += len(video_chunk.payload)
             self._native_0310_last_sequence = sequence
             if (

@@ -1,0 +1,32 @@
+{
+  "schema": 1,
+  "mode": "RMUL3v3",
+  "season": 2027,
+  "source_file": "RMUL2027_3V3_V1.0.0.stp",
+  "source_sha256": "7d47c1b6a6a0253a732e46cb122bb84410b11d5134bcb5658104299db4a48ca4",
+  "preview_sha256": "4dcf2cab017f2f8ce56629f3058db4a71b7efffe4640cafb066f5864dca1d661",
+  "preview": "RMUL3v3.png",
+  "vertices": 6083,
+  "triangles": 3811,
+  "bounds_mm": [
+    [
+      -6300.0,
+      -420.0,
+      -4300.0
+    ],
+    [
+      6300.0,
+      100.0,
+      4300.0
+    ]
+  ],
+  "size": 2048,
+  "camera_up_axis": "-y",
+  "detected_vertical_axis": 1,
+  "gpu_mesh": "RMUL3v3.efmesh",
+  "gpu_mesh_sha256": "75c2b2af6edb32bf38ad5867fc5f1546388b21f3bd7fa0575932e24cafdfb247",
+  "gpu_triangles": 8971,
+  "gpu_surface_triangles": 3811,
+  "presentation": "original STEP overview: PNG reference and retained GPU triangle mesh; offline LOD, no live CAD",
+  "build_seconds": 1.76
+}
