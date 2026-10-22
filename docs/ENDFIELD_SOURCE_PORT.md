@@ -61,13 +61,17 @@ Actual original EFOS audio, not TTS:
   module/audio preferences, debounce, hysteresis, identity reset and cooldown.
   Mock/default state is not a warning measurement.
 
-The original game installation is untouched. Extracted art/audio/fonts remain
-private under ignored user_data/endfield_pack. Upstream MIT does NOT grant game
-asset redistribution rights. No public release was created in this task.
+The original game installation is untouched. Required menu resources and the
+verified native renderer/three field previews are now versioned under
+assets/endfield_pack at the maintainer's explicit request. Optional boot/audio
+and personal overrides remain under ignored user_data/endfield_pack. Upstream
+MIT does NOT grant game asset redistribution rights; see THIRD_PARTY_NOTICES.md.
+This source asset update is not a new portable executable release.
 
 ## Rebuild / prepare
 
-**For a fresh source checkout, use the complete, pinned Windows procedure in
+**A fresh complete main checkout already includes the menu pack. For rebuilding,
+use the complete, pinned Windows procedure in
 [ENDFIELD_PACK_SETUP.md](ENDFIELD_PACK_SETUP.md).** It provides real download
 URLs, exact tool versions, all three official model hashes, one transactional
 prepare command, integrity checks and actual D3D verification. The following

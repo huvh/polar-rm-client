@@ -1,0 +1,32 @@
+{
+  "schema": 1,
+  "mode": "RMUC7v7",
+  "season": 2027,
+  "source_file": "RMUC2027_V1.0.0.stp",
+  "source_sha256": "a5ad3ede3b7674fc98f2e73b71717216383cb2b4b5dcdbe900c2038918bea8e0",
+  "preview_sha256": "c9cbf04bfeea7dc42de90879c0306815e443b223ff7e382bead6c00b19187888",
+  "preview": "RMUC7v7.png",
+  "vertices": 3145548,
+  "triangles": 2879979,
+  "bounds_mm": [
+    [
+      -13999.98828125,
+      -6377.2216796875,
+      -1941.3436279296875
+    ],
+    [
+      14000.0029296875,
+      9625.9091796875,
+      1857.33935546875
+    ]
+  ],
+  "size": 2048,
+  "camera_up_axis": "z",
+  "detected_vertical_axis": 2,
+  "gpu_mesh": "RMUC7v7.efmesh",
+  "gpu_mesh_sha256": "30b307cb07d11bc5387de7cd8569949bfe5f6c0a99dbfcb4ca98b80645b67fa2",
+  "gpu_triangles": 118677,
+  "gpu_surface_triangles": 78677,
+  "presentation": "original STEP overview: PNG reference and retained GPU triangle mesh; offline LOD, no live CAD",
+  "build_seconds": 205.66
+}

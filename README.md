@@ -30,9 +30,10 @@ python -m venv .venv
 用于发布/编译验证，不是现场运行依赖。这些清单都不是模型、素材或 FFmpeg 的下载器。
 
 开发前先读 [贡献与验证约定](CONTRIBUTING.md) 和 [当前架构与所有权](docs/architecture.md)。
-Windows 源码版的原生 Esc 菜单另需完整准备 `endfield_pack`；它不是 pip 依赖，也不在
-旧 v0.1.0 Release 内。固定下载地址、工具版本、DLL 构建、三个官方模型生成和校验命令见
-[完整原生 Esc 资源准备指南](docs/ENDFIELD_PACK_SETUP.md)。**不要创建空清单代替资源包。**
+Windows x64 原生 Esc 菜单的完整运行包已随源保存在 `assets/endfield_pack`；拉取完整 main
+并重启即可使用，不需要另装游戏、下载素材或编译 DLL。旧 v0.1.0 Release 不含此包。
+固定输入、离线重建和校验命令见[完整原生 Esc 资源准备指南](docs/ENDFIELD_PACK_SETUP.md)。
+**不要创建空清单代替资源包。**
 已有完整运行包时，可直接按[跨电脑迁移说明](docs/endfield_delivery_video_reconnect_20261022.md)
 导出到只读 `assets/endfield_pack`（便携版为 `resources/assets/endfield_pack`），无需在每台电脑重新编译。
 正式入口是 `main.py`：它先处理运行目录、preflight、回放和队内链路自检，再进入

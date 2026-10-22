@@ -11,4 +11,4 @@ tests/fixtures/** -text
 
 # Verified native menu packs are byte-addressed, including JSON/shader/licenses.
 # Git newline conversion must not corrupt a transferred pack's file hashes.
-assets/endfield_pack/** -text
+assets/endfield_pack/** -text -whitespace

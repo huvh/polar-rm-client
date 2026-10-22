@@ -1,6 +1,9 @@
 # Windows 源码版：完整准备原生 Endfield Esc 资源包
 
 对应 [issue #22](https://github.com/lulunomaro/polar-rm-client/issues/22)。
+当前 main 已随附完整 `assets/endfield_pack`，正常拉取并重启即可使用；以下构建步骤
+用于离线重建/维护，不是每台 Windows 电脑的首次启动要求。旧 Release 需要更新，
+本地已有损坏的显式覆盖清单时仍保留诊断，请先备份检查该覆盖包。
 **只创建 `BUILD_MANIFEST.json`、只下载上游 portable ZIP、或只编译一个 DLL 都不够。**
 本流程保持已有原生菜单、动画、液态玻璃背景和真实 RM 场地，不替换菜单、不关闭功能。
 准备工具不在客户端启动/绘制线程运行，也不会访问机器人、启动游戏或修改游戏文件。
