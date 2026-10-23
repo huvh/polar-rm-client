@@ -90,7 +90,7 @@ class EndfieldMenuMixin:
 
     def draw_endfield_loading(self, painter, width, height) -> None:
         menu = self._endfield_menu
-        # The source scene is a retained native child, not a per-frame Qt
+        # The source scene is a retained native owned visual, not a per-frame Qt
         # screenshot. Existing GPU compositor continues to own the backdrop.
         if not getattr(self, "_gpu_frame_recording", False):
             # Emergency painter path has no GPU blur. Keep it uncluttered and

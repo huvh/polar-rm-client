@@ -4,6 +4,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from pathlib import Path
 import sys
 from types import SimpleNamespace as NS
+import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
@@ -14,6 +15,32 @@ from test_cached_window_layers import RasterWindowFrame
 
 
 class EscBackdropTests(unittest.TestCase):
+    def test_desktop_check_rejects_flat_white_black_or_transparent_false_positive(self):
+        from PySide6.QtGui import QColor, QImage
+        from tools.verify_endfield_desktop import check_backdrop
+        raw = QImage(32, 32, QImage.Format.Format_RGBA8888)
+        for y in range(32):
+            for x in range(32):
+                value = 255 if (x+y) % 2 else 0
+                raw.setPixelColor(x, y, QColor(value, value, value))
+        empty = QImage(32, 32, QImage.Format.Format_RGBA8888)
+        empty.fill(QColor(0, 0, 0, 0))
+        treatment = NS(active=True, blur_kernel="endfield_gaussian", include_overlay=False,
+                       blur_radius_px=10., dim_alpha=.42)
+        compositor = NS(_backdrop_treatment=treatment, background_fbo=NS(toImage=lambda: raw))
+        for name in ("overlay", "vision", "dynamic", "target", "hud_glass", "glass"):
+            setattr(compositor, name+"_fbo", NS(toImage=lambda: empty))
+        shown = QImage(32, 32, QImage.Format.Format_RGBA8888)
+        window = NS(gpu_compositor=compositor, grabFramebuffer=lambda: shown,
+                    makeCurrent=Mock(), doneCurrent=Mock())
+        with tempfile.TemporaryDirectory() as directory:
+            for value in (QColor(255, 255, 255), QColor(0, 0, 0), QColor(0, 0, 0, 0)):
+                shown.fill(value)
+                with self.subTest(color=value.getRgb()), self.assertRaises(AssertionError):
+                    check_backdrop(window, Path(directory))
+            shown.fill(QColor(74, 74, 74))  # Correct dimmed average of the fine checker.
+            self.assertEqual(check_backdrop(window, Path(directory))["maximum_rgb"], 74)
+
     def test_escape_uses_gaussian_dimmed_world_without_combat_overlay(self):
         scene = OverlayScene(False, False, False, True)
         treatment = BackdropTreatment.resolve(scene, economy_progress=0., clickgui_progress=0.,

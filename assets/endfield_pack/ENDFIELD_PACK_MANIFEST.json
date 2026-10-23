@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "reference_commit": "cdbd4f573c8fa3b9c2048fa3d1b089e69196537b",
-  "adapter_sha256": "273da033008e6864e9bdad10c843f7192e30b405e4183fb0887c7a0bf9267daf",
+  "adapter_sha256": "64c6ee104cda1daec9285bf60b6e307353bf4a900a6259da5be2ba21d75ca75c",
   "optional_assets": "boot and audio not included or needed for Esc",
   "redistribution": "Included in Git at repository maintainer request on 2026-10-22; third-party rights unchanged. See THIRD_PARTY_NOTICES.md.",
   "files": {
@@ -17,10 +17,10 @@
     "maps/RMUL3v3.efmesh": "75c2b2af6edb32bf38ad5867fc5f1546388b21f3bd7fa0575932e24cafdfb247",
     "maps/RMUL3v3.json": "0bd2cbf9e583b37aa52e370f393a771dede7fa0eb75e0f3e9983ed22b10c68b6",
     "maps/RMUL3v3.png": "4dcf2cab017f2f8ce56629f3058db4a71b7efffe4640cafb066f5864dca1d661",
-    "native_renderer/build_273da033008e6864/BUILD_MANIFEST.json": "958a70fa4091057dfc80e8e8dfbb074c1afc4e0ac76943361b9331c57b681c75",
-    "native_renderer/build_273da033008e6864/EndfieldHUD-MIT-LICENSE.txt": "f8ad1cefdf9375f999fd2688c9d1f9cd6c27f6adf31380c8342af2778491d638",
-    "native_renderer/build_273da033008e6864/polar_endfield.dll": "2dcd9e2e930a69a4ae6a1ac31acc21509bb6b829718d3de2ad677d7116c90bf3",
-    "native_renderer/CURRENT.json": "c3b9e5ecfb506c4dc996a72e7d8d2f58e46079e5bfa00d7f3b36dc85179ac828",
+    "native_renderer/build_64c6ee104cda1dae/BUILD_MANIFEST.json": "bd01451bc5d2e2f508c03a640a1d9d4177040111e1ac4ddd2708c47bdef6b440",
+    "native_renderer/build_64c6ee104cda1dae/EndfieldHUD-MIT-LICENSE.txt": "f8ad1cefdf9375f999fd2688c9d1f9cd6c27f6adf31380c8342af2778491d638",
+    "native_renderer/build_64c6ee104cda1dae/polar_endfield.dll": "7705d94a84c7e5347d95ececb62b61d708e3227768356ffd435360e15f642378",
+    "native_renderer/CURRENT.json": "e1e11ae76ec3ee28e433c778c71d27339640a2cf993c4d7986b7288fc5ab2844",
     "native_source_runtime/fonts/manifest.json": "6f1db043b53a2e85e1e26b240aa11e2a78401bc673394cf416beb01752cbf04a",
     "native_source_runtime/fonts/NotoSansKR-OFL.txt": "1c05c68c34f9708415aada51f17e1b0092d2cea709bf4a94cd38114f9e73d7d9",
     "native_source_runtime/fonts/NotoSansKR.ttf": "194018e6b2b293a7964f037b25c0249ce1418bc9ab3c971060a03aa57861e252",
@@ -60,5 +60,5 @@
     "native_source_runtime/resources/shell/watch-blur.json": "87767f77fe5845150e0dc675771cc6adc792075cbbd8fb6d41f405e6db931464",
     "native_source_runtime/SOURCE_RUNTIME_MANIFEST.json": "7361a97dd8e9596b042960337f33e166d6c47cef63308fbd637e6fe1a07be110"
   },
-  "adapter_canonical_sha256": "83a5af809b9ccdb1798e53d326e3dd50597c783e2cfd9d47459eab1a709f023b"
+  "adapter_canonical_sha256": "d6d2a416d7754fb14e3370837dc6a9a4ee56674ff8aa01c3fd0cdbf05f1ecca3"
 }

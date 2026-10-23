@@ -1,0 +1,728 @@
+{
+  "schema": 1,
+  "recorded_at_utc": "2026-10-23T07:09:19.756035+00:00",
+  "base_commit": "4f9116e8b44c8ba6b4672a25d888fba96a8af767",
+  "scope": "Endfield Esc backdrop composition/lifecycle fix. No shader/material/model/control-protocol changes; no new portable EXE release or remote merge.",
+  "source_identity": {
+    "method": "base commit plus exact reviewed changed/new file hashes; evidence file excludes itself",
+    "files_sha256": {
+      "assets/endfield_pack/ENDFIELD_PACK_MANIFEST.json": "e40cea9b03871eae91cedd24df31896ca23b53f434da9d6994ee74c685e1d214",
+      "assets/endfield_pack/native_renderer/CURRENT.json": "e1e11ae76ec3ee28e433c778c71d27339640a2cf993c4d7986b7288fc5ab2844",
+      "assets/endfield_pack/native_renderer/build_64c6ee104cda1dae/BUILD_MANIFEST.json": "bd01451bc5d2e2f508c03a640a1d9d4177040111e1ac4ddd2708c47bdef6b440",
+      "assets/endfield_pack/native_renderer/build_64c6ee104cda1dae/EndfieldHUD-MIT-LICENSE.txt": "f8ad1cefdf9375f999fd2688c9d1f9cd6c27f6adf31380c8342af2778491d638",
+      "assets/endfield_pack/native_renderer/build_64c6ee104cda1dae/polar_endfield.dll": "7705d94a84c7e5347d95ececb62b61d708e3227768356ffd435360e15f642378",
+      "docs/ENDFIELD_PACK_SETUP.md": "ea5f07ef89c85d92472ca418a869f77c9d91d4ec0a06258ee2e005d9f1932c51",
+      "docs/esc_white_background_20261023.md": "0eb9fb69125f1e6a47242cd722256cbf8d26af9cf26214bf9d18df2c41217878",
+      "native/endfield_bridge.cpp": "64c6ee104cda1daec9285bf60b6e307353bf4a900a6259da5be2ba21d75ca75c",
+      "rm_client/runtime_paths.py": "70af12213fcadc94821a09f2684e117e86e6a96ac84034172f420f7f25af32b2",
+      "rm_client/ui/endfield_native.py": "45c69b8bbc3288562a6f480eaef7f596f169253668317595e96ffbc036c06e63",
+      "rm_client/ui/polar/mixins/endfield_menu_mixin.py": "33e9654cc816d71d205c3ee6bdfd27a1a9b61e2b8d2ba55ccdbb358c19166860",
+      "rm_client/ui/polar_app.py": "8a34063f0c1cab62c46fa04b341e4a537440d6ce1902fc62f309bdc95ccf815e",
+      "tests/test_endfield_backdrop.py": "206b83019d4dc1570f0b073c616b3dfac0a50bf81fce072f5c7d9a17d0bfecff",
+      "tests/test_endfield_bundled_pack.py": "f63a18cb5b43b6d8cc49254f0dfe6373b83a67963bd89b8277cabd0a19ac3587",
+      "tests/test_endfield_native.py": "4fdf8b43a84f7540b46b12d690de6a904848d85138abc4c653f5de3b5b64c16b",
+      "tools/verify_endfield_desktop.py": "bfc8117b69a1585ce106a8c878ec28b890775026f3700166337d127ccaea3149"
+    }
+  },
+  "environment": {
+    "python": "3.12.14",
+    "os": "Windows-11-10.0.26200-SP0",
+    "dependencies": {
+      "PySide6": "6.11.1",
+      "numpy": "2.4.6",
+      "opencv-python": "5.0.0.93"
+    },
+    "graphics_probe": {
+      "probe": "owned offscreen GL context on Windows platform, not performance evidence",
+      "os": "Windows-11-10.0.26200-SP0",
+      "gl": {
+        "vendor": "NVIDIA Corporation",
+        "renderer": "NVIDIA GeForce RTX 5070 Ti Laptop GPU/PCIe/SSE2",
+        "version": "3.3.0 NVIDIA 596.21"
+      }
+    }
+  },
+  "clip_diagnostic": {
+    "old": {
+      "version": "old",
+      "parent_style": "0x96cf0000",
+      "native_is_child": true,
+      "parent_clip_type": 1,
+      "parent_clip_box": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "fixed": {
+      "version": "fixed",
+      "parent_style": "0x96cf0000",
+      "native_is_child": false,
+      "parent_clip_type": 2,
+      "parent_clip_box": [
+        0,
+        0,
+        1280,
+        720
+      ]
+    },
+    "method": "GetDC/GetClipBox/ReleaseDC on this client HWND only, after menu entrance; separate processes for old and fixed DLL",
+    "limits": "Confirms parent child-clipping defect, not a screenshot or reproduction on the reporting user hardware."
+  },
+  "pack": {
+    "status": "PACK_VALID",
+    "files": 54,
+    "maps": {
+      "RMUC7v7": 118677,
+      "RMUL3v3": 8971,
+      "RMUL1v1": 4860
+    },
+    "binary_sha256": "7705d94a84c7e5347d95ececb62b61d708e3227768356ffd435360e15f642378",
+    "optional_boot": false,
+    "optional_audio": false,
+    "native_render_verified": false,
+    "limits": "Integrity/source check only; run verify_endfield_pack_runtime.py for owned D3D rendering. No hardware/match qualification.",
+    "fresh_index_files": 55
+  },
+  "unchanged_pinned_scene_shader_font_map_notice_files": 50,
+  "build": {
+    "adapter_sha256": "64c6ee104cda1daec9285bf60b6e307353bf4a900a6259da5be2ba21d75ca75c",
+    "binary_sha256": "7705d94a84c7e5347d95ececb62b61d708e3227768356ffd435360e15f642378",
+    "reference_commit": "cdbd4f573c8fa3b9c2048fa3d1b089e69196537b",
+    "compiler": "Zig 0.14.1 / Clang 19.1.7",
+    "command": "python tools/build_endfield_source_probe.py --reference <PINNED_SOURCE> --native-library --out tmp_esc_white/native_build --install-root assets/endfield_pack/native_renderer"
+  },
+  "targeted": {
+    "counts": {
+      "PASS": 6,
+      "SKIP": 0,
+      "INCOMPLETE": 0,
+      "FAIL": 0
+    },
+    "unittest_cases": 37,
+    "command": "python tools/verify_all.py --test tests/test_endfield_native.py --test tests/test_endfield_bundled_pack.py --test tests/test_endfield_backdrop.py --test tests/test_endfield_delivery.py --test tests/test_endfield_presentation.py --test tests/test_endfield_menu.py --json tmp_esc_white/targeted.json --log-dir tmp_esc_white/targeted_logs",
+    "returncode": 0,
+    "source_stability": {
+      "schema_version": 1,
+      "status": "PASS",
+      "detail": "Declared verification source inputs have identical start/end fingerprints",
+      "scope": {
+        "directories": [
+          "rm_client",
+          "tests",
+          "tools",
+          "configs"
+        ],
+        "suffixes": [
+          ".bat",
+          ".c",
+          ".cfg",
+          ".cpp",
+          ".h",
+          ".hpp",
+          ".ini",
+          ".json",
+          ".ps1",
+          ".py",
+          ".spec",
+          ".toml",
+          ".yaml",
+          ".yml"
+        ],
+        "all_file_directories": [
+          "tests/fixtures"
+        ],
+        "root_files": [
+          "main.py",
+          "requirements*.txt"
+        ],
+        "exclusions": [
+          "hidden directories",
+          "__pycache__"
+        ],
+        "limits": "Start/end comparison only; includes all internal tests/fixtures files; excludes assets outside that fixture directory, external fixtures, installed packages and transient edits restored between captures."
+      },
+      "before": {
+        "status": "available",
+        "sha256": "61edb3b4dee40957c0c4a278e90cd3d95b3c20e4962fd5d25248270535e42202",
+        "file_count": 857
+      },
+      "after": {
+        "status": "available",
+        "sha256": "61edb3b4dee40957c0c4a278e90cd3d95b3c20e4962fd5d25248270535e42202",
+        "file_count": 857
+      }
+    }
+  },
+  "full_offline": {
+    "run_state": "completed",
+    "counts": {
+      "PASS": 459,
+      "SKIP": 12,
+      "INCOMPLETE": 6,
+      "FAIL": 0
+    },
+    "source_stability": {
+      "schema_version": 1,
+      "status": "PASS",
+      "detail": "Declared verification source inputs have identical start/end fingerprints",
+      "scope": {
+        "directories": [
+          "rm_client",
+          "tests",
+          "tools",
+          "configs"
+        ],
+        "suffixes": [
+          ".bat",
+          ".c",
+          ".cfg",
+          ".cpp",
+          ".h",
+          ".hpp",
+          ".ini",
+          ".json",
+          ".ps1",
+          ".py",
+          ".spec",
+          ".toml",
+          ".yaml",
+          ".yml"
+        ],
+        "all_file_directories": [
+          "tests/fixtures"
+        ],
+        "root_files": [
+          "main.py",
+          "requirements*.txt"
+        ],
+        "exclusions": [
+          "hidden directories",
+          "__pycache__"
+        ],
+        "limits": "Start/end comparison only; includes all internal tests/fixtures files; excludes assets outside that fixture directory, external fixtures, installed packages and transient edits restored between captures."
+      },
+      "before": {
+        "status": "available",
+        "sha256": "61edb3b4dee40957c0c4a278e90cd3d95b3c20e4962fd5d25248270535e42202",
+        "file_count": 857
+      },
+      "after": {
+        "status": "available",
+        "sha256": "61edb3b4dee40957c0c4a278e90cd3d95b3c20e4962fd5d25248270535e42202",
+        "file_count": 857
+      }
+    },
+    "nonpass": [
+      {
+        "id": "tests/polar_link_test",
+        "status": "INCOMPLETE",
+        "detail": "[SKIP] 未找到队内 CRC8_CRC16.py 参考实现，跳过三方对拍"
+      },
+      {
+        "id": "tests/test_legacy_video_bridge",
+        "status": "INCOMPLETE",
+        "detail": "1 unittest tests skipped"
+      },
+      {
+        "id": "tools/dt7_link/test_cc_link",
+        "status": "SKIP",
+        "detail": "SKIP: 找不到 <CHECKOUT>\\.firmware-not-selected\\components\\support\\CRC8_CRC16.c"
+      },
+      {
+        "id": "tools/dt7_link/test_dbus_frame_vs_firmware",
+        "status": "SKIP",
+        "detail": "SKIP: 找不到固件源码（<CHECKOUT>\\.firmware-not-selected\\application\\other\\remote_control.c）"
+      },
+      {
+        "id": "tools/dt7_link/test_dt7_link",
+        "status": "INCOMPLETE",
+        "detail": "[SKIP] 没有固件树 | [SKIP] 找不到 <LOCAL_REFERENCE>"
+      },
+      {
+        "id": "tools/dt7_link/test_dt7_ui_selftest",
+        "status": "INCOMPLETE",
+        "detail": "[SKIP] 缺少固件 application C 源文件：交叉核对未运行"
+      },
+      {
+        "id": "tools/firmware/controller_angle/test_controller_angle",
+        "status": "SKIP",
+        "detail": "SKIP: set POLAR_REFEREE_REFERENCE to a read-only StandardRobot++ checkout"
+      },
+      {
+        "id": "tools/firmware/gimbal_host/test_gimbal_host",
+        "status": "SKIP",
+        "detail": "SKIP: 固件副本不存在（<CHECKOUT>\\.firmware-not-selected）"
+      },
+      {
+        "id": "tools/firmware/host_bridge/test_host_bridge",
+        "status": "SKIP",
+        "detail": "SKIP: 固件副本不存在（<CHECKOUT>\\.firmware-not-selected）"
+      },
+      {
+        "id": "tools/firmware/host_bridge/test_rc_key_ledger",
+        "status": "SKIP",
+        "detail": "SKIP: 固件副本不存在（<CHECKOUT>\\.firmware-not-selected）"
+      },
+      {
+        "id": "tools/firmware/host_bridge/test_usb_receiver_portable",
+        "status": "SKIP",
+        "detail": "SKIP: supply a disposable prepared StandardRobot++ fixture"
+      },
+      {
+        "id": "tools/firmware/km_link/test_km_link",
+        "status": "SKIP",
+        "detail": "SKIP: 固件树或头文件不齐（先跑 prepare_hero_build.py）"
+      },
+      {
+        "id": "tools/firmware/km_link/test_km_payload_layout",
+        "status": "SKIP",
+        "detail": "SKIP: 固件树里还没有 application/typedef/host_km_link.h（先跑 prepare_hero_build.py）"
+      },
+      {
+        "id": "tools/firmware/km_link/test_serial_parsers_portable",
+        "status": "INCOMPLETE",
+        "detail": "1 unittest tests skipped"
+      },
+      {
+        "id": "tools/firmware/motion_feedback/test_motion_feedback",
+        "status": "SKIP",
+        "detail": "SKIP: 固件副本不存在（<CHECKOUT>\\.firmware-not-selected）"
+      },
+      {
+        "id": "tools/firmware/referee_rx/test_referee_rx",
+        "status": "SKIP",
+        "detail": "SKIP: set POLAR_REFEREE_REFERENCE to the explicitly selected read-only firmware reference"
+      },
+      {
+        "id": "tools/firmware/test_patch_logic",
+        "status": "INCOMPLETE",
+        "detail": "[INCOMPLETE] Legacy baseline patch test requires installation; excluded from read-only target validation"
+      },
+      {
+        "id": "tools/firmware/test_patch_real_headers",
+        "status": "SKIP",
+        "detail": "SKIP: 固件副本不存在（<CHECKOUT>\\.firmware-not-selected）"
+      }
+    ],
+    "command": "python tools/verify_all.py --profile offline --json tmp_esc_white/full_offline.json --log-dir tmp_esc_white/full_offline_logs",
+    "returncode": 1,
+    "verdict": "NO-GO due to incomplete coverage; not an overall PASS"
+  },
+  "desktop": [
+    {
+      "cycles": 100,
+      "dpr": 1.0,
+      "display_hz": 75.001,
+      "pack_selection": "production-default",
+      "private_pack_present": false,
+      "uses_shipped_pack": true,
+      "renderer_uses_shipped_pack": true,
+      "esc_backdrop": {
+        "empty_combat_layers_alpha_max": {
+          "overlay": 0,
+          "vision": 0,
+          "dynamic": 0,
+          "target": 0,
+          "hud_glass": 0,
+          "glass": 0
+        },
+        "world_edge_energy": 2.395895004272461,
+        "gaussian_edge_energy_after_undoing_dim": 1.0319241285324097,
+        "kernel": "endfield_gaussian",
+        "radius_dp": 10.0,
+        "dim_alpha": 0.42,
+        "maximum_rgb": 63,
+        "undimmed_mean_error": 0.15414047241210938
+      },
+      "native_surface": {
+        "owned_popup": true,
+        "clips_parent": false,
+        "topmost": false,
+        "aligned_physical_size": [
+          1280,
+          720
+        ],
+        "visible": true
+      },
+      "moved_surface": {
+        "owned_popup": true,
+        "clips_parent": false,
+        "topmost": false,
+        "aligned_physical_size": [
+          1280,
+          720
+        ],
+        "visible": true
+      },
+      "minimized_surface": {
+        "owned_popup": true,
+        "clips_parent": false,
+        "topmost": false,
+        "aligned_physical_size": [
+          2560,
+          1440
+        ],
+        "visible": false
+      },
+      "restored_surface": {
+        "owned_popup": true,
+        "clips_parent": false,
+        "topmost": false,
+        "aligned_physical_size": [
+          2560,
+          1440
+        ],
+        "visible": true
+      },
+      "fullscreen_surface": {
+        "owned_popup": true,
+        "clips_parent": false,
+        "topmost": false,
+        "aligned_physical_size": [
+          2560,
+          1440
+        ],
+        "visible": true
+      },
+      "baseline": {
+        "frames": 1002.0,
+        "last_ms": 15.337500008172356,
+        "textures": 56.0,
+        "meshes": 57.0,
+        "owners": 1.0
+      },
+      "final": {
+        "frames": 9801.0,
+        "last_ms": 10.330799996154383,
+        "textures": 56.0,
+        "meshes": 57.0,
+        "owners": 1.0
+      },
+      "fullscreen_preserved": true,
+      "actual_source_hit": true,
+      "texture_growth": 0,
+      "synthetic_hud_frame_ms_p95": 28.598300006706268,
+      "synthetic_hud_fps": 50.69309887644805,
+      "result": "PASS",
+      "retired": true
+    },
+    {
+      "cycles": 3,
+      "dpr": 1.5,
+      "display_hz": 75.001,
+      "pack_selection": "production-default",
+      "private_pack_present": false,
+      "uses_shipped_pack": true,
+      "renderer_uses_shipped_pack": true,
+      "esc_backdrop": {
+        "empty_combat_layers_alpha_max": {
+          "overlay": 0,
+          "vision": 0,
+          "dynamic": 0,
+          "target": 0,
+          "hud_glass": 0,
+          "glass": 0
+        },
+        "world_edge_energy": 1.630593180656433,
+        "gaussian_edge_energy_after_undoing_dim": 0.32762619853019714,
+        "kernel": "endfield_gaussian",
+        "radius_dp": 10.0,
+        "dim_alpha": 0.42,
+        "maximum_rgb": 63,
+        "undimmed_mean_error": 0.5818367004394531
+      },
+      "native_surface": {
+        "owned_popup": true,
+        "clips_parent": false,
+        "topmost": false,
+        "aligned_physical_size": [
+          1920,
+          1080
+        ],
+        "visible": true
+      },
+      "moved_surface": {
+        "owned_popup": true,
+        "clips_parent": false,
+        "topmost": false,
+        "aligned_physical_size": [
+          1920,
+          1080
+        ],
+        "visible": true
+      },
+      "minimized_surface": {
+        "owned_popup": true,
+        "clips_parent": false,
+        "topmost": false,
+        "aligned_physical_size": [
+          3840,
+          1581
+        ],
+        "visible": false
+      },
+      "restored_surface": {
+        "owned_popup": true,
+        "clips_parent": false,
+        "topmost": false,
+        "aligned_physical_size": [
+          3840,
+          1581
+        ],
+        "visible": true
+      },
+      "fullscreen_surface": {
+        "owned_popup": true,
+        "clips_parent": false,
+        "topmost": false,
+        "aligned_physical_size": [
+          2560,
+          1440
+        ],
+        "visible": true
+      },
+      "baseline": {
+        "frames": 1004.0,
+        "last_ms": 11.846399997011758,
+        "textures": 56.0,
+        "meshes": 57.0,
+        "owners": 1.0
+      },
+      "final": {
+        "frames": 1267.0,
+        "last_ms": 12.174599993159063,
+        "textures": 56.0,
+        "meshes": 57.0,
+        "owners": 1.0
+      },
+      "fullscreen_preserved": true,
+      "actual_source_hit": true,
+      "texture_growth": 0,
+      "synthetic_hud_frame_ms_p95": 71.86789999832399,
+      "synthetic_hud_fps": 33.82934862124691,
+      "result": "PASS",
+      "retired": true
+    },
+    {
+      "cycles": 3,
+      "dpr": 2.0,
+      "display_hz": 75.001,
+      "pack_selection": "production-default",
+      "private_pack_present": false,
+      "uses_shipped_pack": true,
+      "renderer_uses_shipped_pack": true,
+      "esc_backdrop": {
+        "empty_combat_layers_alpha_max": {
+          "overlay": 0,
+          "vision": 0,
+          "dynamic": 0,
+          "target": 0,
+          "hud_glass": 0,
+          "glass": 0
+        },
+        "world_edge_energy": 1.234065294265747,
+        "gaussian_edge_energy_after_undoing_dim": 0.23061440885066986,
+        "kernel": "endfield_gaussian",
+        "radius_dp": 10.0,
+        "dim_alpha": 0.42,
+        "maximum_rgb": 55,
+        "undimmed_mean_error": 1.7982349395751953
+      },
+      "native_surface": {
+        "owned_popup": true,
+        "clips_parent": false,
+        "topmost": false,
+        "aligned_physical_size": [
+          2560,
+          1440
+        ],
+        "visible": true
+      },
+      "moved_surface": {
+        "owned_popup": true,
+        "clips_parent": false,
+        "topmost": false,
+        "aligned_physical_size": [
+          2560,
+          1440
+        ],
+        "visible": true
+      },
+      "minimized_surface": {
+        "owned_popup": true,
+        "clips_parent": false,
+        "topmost": false,
+        "aligned_physical_size": [
+          5115,
+          1563
+        ],
+        "visible": false
+      },
+      "restored_surface": {
+        "owned_popup": true,
+        "clips_parent": false,
+        "topmost": false,
+        "aligned_physical_size": [
+          5115,
+          1860
+        ],
+        "visible": true
+      },
+      "fullscreen_surface": {
+        "owned_popup": true,
+        "clips_parent": false,
+        "topmost": false,
+        "aligned_physical_size": [
+          2559,
+          1599
+        ],
+        "visible": true
+      },
+      "baseline": {
+        "frames": 1087.0,
+        "last_ms": 10.084800000186078,
+        "textures": 56.0,
+        "meshes": 57.0,
+        "owners": 1.0
+      },
+      "final": {
+        "frames": 1358.0,
+        "last_ms": 12.027100005070679,
+        "textures": 56.0,
+        "meshes": 57.0,
+        "owners": 1.0
+      },
+      "fullscreen_preserved": true,
+      "actual_source_hit": true,
+      "texture_growth": 0,
+      "synthetic_hud_frame_ms_p95": 81.44280000124127,
+      "synthetic_hud_fps": 27.801877390366805,
+      "result": "PASS",
+      "retired": true
+    }
+  ],
+  "desktop_command": "QT_SCALE_FACTOR=1 / 1.5 / 2; python tools/verify_endfield_desktop.py --cycles 100 (DPR 1) or 3 (DPR 1.5/2) --out <NEW_DIR>",
+  "native_map_rendering": {
+    "scope": "actual owned D3D rendering; no game/device/robot I/O",
+    "cases": [
+      {
+        "mode": "RMUC7v7",
+        "width": 1280,
+        "height": 720,
+        "chinese": false,
+        "image": "RMUC7v7_1280x720.png",
+        "stats": {
+          "frames": 88.0,
+          "last_ms": 0.49780000699684024,
+          "textures": 56.0,
+          "meshes": 57.0,
+          "owners": 1.0
+        }
+      },
+      {
+        "mode": "RMUC7v7",
+        "width": 2560,
+        "height": 1440,
+        "chinese": true,
+        "image": "RMUC7v7_2560x1440.png",
+        "stats": {
+          "frames": 196.0,
+          "last_ms": 0.8522999996785074,
+          "textures": 56.0,
+          "meshes": 57.0,
+          "owners": 1.0
+        }
+      },
+      {
+        "mode": "RMUL3v3",
+        "width": 1280,
+        "height": 720,
+        "chinese": false,
+        "image": "RMUL3v3_1280x720.png",
+        "stats": {
+          "frames": 284.0,
+          "last_ms": 0.5506000015884638,
+          "textures": 56.0,
+          "meshes": 57.0,
+          "owners": 1.0
+        }
+      },
+      {
+        "mode": "RMUL3v3",
+        "width": 2560,
+        "height": 1440,
+        "chinese": true,
+        "image": "RMUL3v3_2560x1440.png",
+        "stats": {
+          "frames": 398.0,
+          "last_ms": 0.7206000009318814,
+          "textures": 56.0,
+          "meshes": 57.0,
+          "owners": 1.0
+        }
+      },
+      {
+        "mode": "RMUL1v1",
+        "width": 1280,
+        "height": 720,
+        "chinese": false,
+        "image": "RMUL1v1_1280x720.png",
+        "stats": {
+          "frames": 489.0,
+          "last_ms": 1.1935999937122688,
+          "textures": 56.0,
+          "meshes": 57.0,
+          "owners": 1.0
+        }
+      },
+      {
+        "mode": "RMUL1v1",
+        "width": 2560,
+        "height": 1440,
+        "chinese": true,
+        "image": "RMUL1v1_2560x1440.png",
+        "stats": {
+          "frames": 597.0,
+          "last_ms": 0.7143999973777682,
+          "textures": 56.0,
+          "meshes": 57.0,
+          "owners": 1.0
+        }
+      }
+    ],
+    "pack": {
+      "status": "PACK_VALID",
+      "files": 54,
+      "maps": {
+        "RMUC7v7": 118677,
+        "RMUL3v3": 8971,
+        "RMUL1v1": 4860
+      },
+      "binary_sha256": "7705d94a84c7e5347d95ececb62b61d708e3227768356ffd435360e15f642378",
+      "optional_boot": false,
+      "optional_audio": false,
+      "native_render_verified": false,
+      "limits": "Integrity/source check only; run verify_endfield_pack_runtime.py for owned D3D rendering. No hardware/match qualification."
+    },
+    "boot_audio_absent": true,
+    "owner_retired": true,
+    "status": "PASS",
+    "limits": "Not exact pixel parity, full app regression, throughput, packaging or match qualification."
+  },
+  "other_checks": {
+    "compileall_returncode": 0,
+    "git_diff_check_returncode": 0,
+    "fresh_index_pack_byte_exact": true,
+    "protected_primary_user_config_unchanged": true
+  },
+  "limits": [
+    "Reporting other PC/GPU has not been retested; vendor/driver details are still missing.",
+    "Checks read owned GL/D3D targets and HWND state, not final desktop composited screenshots.",
+    "Desktop tests used inert transports and a temporary profile. No robot/real-referee/video-link qualification.",
+    "Synthetic frame timings were collected with offline tests running and do not certify 70-90 FPS or P95 targets.",
+    "No fresh portable EXE/release built. This fix is saved locally, not implicitly merged or pushed.",
+    "READY verdict is not produced by these software checks."
+  ]
+}
