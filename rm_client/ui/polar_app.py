@@ -528,7 +528,8 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         self._endfield_menu = None
         if sys.platform == "win32" and QApplication.platformName() == "windows":
             from .endfield_native import EndfieldNativeMenu
-            self._endfield_menu = EndfieldNativeMenu(self.paths.endfield_menu_pack)
+            self._endfield_menu = EndfieldNativeMenu(
+                self.paths.endfield_menu_pack, renderer_pack=self.paths.endfield_renderer_pack)
         self.backend.referee_view_observer = self._observe_referee_views
         self.registry.add_toggle_listener(self.on_module_toggled)
         # P6: ModuleRegistry 在 toggle/set/direct assignment 三条 enabled

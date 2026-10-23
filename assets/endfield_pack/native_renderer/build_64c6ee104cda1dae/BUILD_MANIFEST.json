@@ -2,8 +2,8 @@
   "scope": "retained source renderer with RM content adapter",
   "reference_repository": "https://github.com/DDDuoDuo/EndfieldHUD",
   "reference_commit": "cdbd4f573c8fa3b9c2048fa3d1b089e69196537b",
-  "binary_sha256": "2dcd9e2e930a69a4ae6a1ac31acc21509bb6b829718d3de2ad677d7116c90bf3",
-  "adapter_sha256": "273da033008e6864e9bdad10c843f7192e30b405e4183fb0887c7a0bf9267daf",
+  "binary_sha256": "7705d94a84c7e5347d95ececb62b61d708e3227768356ffd435360e15f642378",
+  "adapter_sha256": "64c6ee104cda1daec9285bf60b6e307353bf4a900a6259da5be2ba21d75ca75c",
   "compiler": "clang version 19.1.7 (https://github.com/ziglang/zig-bootstrap de1b01a8c1dddf75a560123ac1c2ab182b4830da)\nTarget: x86_64-unknown-windows-gnu\nThread model: posix",
   "derived_translation_units": {
     "physical_viewport_source_scene.cpp": {

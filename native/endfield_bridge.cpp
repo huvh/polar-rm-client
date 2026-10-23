@@ -1,5 +1,5 @@
 // Retained source UI adapter. The original renderer/session remain unchanged.
-// This host owns one render thread and a nonactivating child visual. It never
+// This host owns one render thread and a nonactivating owned visual. It never
 // publishes robot commands, captures the desktop, installs fonts or runs a game.
 #include "core/watch_runtime_input.hpp"
 #include "core/source_desktop_chrome.hpp"
@@ -44,6 +44,7 @@ struct Shared {
     std::atomic<int> hoverCode{};std::atomic<std::uint64_t> hoverChanges{};
     std::mutex mutex;std::deque<Event> events;std::string error,context,capture;
     std::atomic<int> captureState{};
+    std::atomic<std::uintptr_t> surface{}; // Owned-HWND diagnostics only.
     int probeCode{},probeReady{};std::array<double,4> probeRect{};
     void push(Event e){std::lock_guard lock(mutex);if(e.kind==1&&!events.empty()&&events.back().kind==1)events.back()=e;else if(events.size()<64)events.push_back(e);else events.clear();}
 };
@@ -122,9 +123,15 @@ public:
         try { width=shared->width;height=shared->height;
         WNDCLASSW c{};c.lpfnWndProc=windowProc;c.hInstance=GetModuleHandleW(nullptr);c.lpszClassName=L"PolarEndfieldSourceVisual";
         if(!RegisterClassW(&c)&&GetLastError()!=ERROR_CLASS_ALREADY_EXISTS)throw std::runtime_error("Cannot register source visual");
-        window=CreateWindowExW(WS_EX_NOREDIRECTIONBITMAP|WS_EX_NOACTIVATE|WS_EX_NOPARENTNOTIFY,
-            c.lpszClassName,L"POLAR original source UI",shared->offscreen?WS_POPUP:WS_CHILD,0,0,width,height,shared->parent,nullptr,c.hInstance,this);
+        // A full-client WS_CHILD clips Qt's redirected OpenGL backing surface
+        // (WS_CLIPCHILDREN). Its transparent DComp pixels can then expose the
+        // window's white erase surface instead of the accepted Gaussian frame.
+        // An owned popup stays above this client without cutting a hole in it;
+        // it is NOT topmost and never activates or captures another window.
+        window=CreateWindowExW(WS_EX_NOREDIRECTIONBITMAP|WS_EX_NOACTIVATE|WS_EX_TOOLWINDOW,
+            c.lpszClassName,L"POLAR original source UI",WS_POPUP,0,0,width,height,shared->parent,nullptr,c.hInstance,this);
         if(!window)throw std::runtime_error("Cannot create source visual");
+        shared->surface=reinterpret_cast<std::uintptr_t>(window);
         renderer.initialize(window,width,height,{gpu::Driver::hardware,shared->root/"resources/shell/hud.hlsl",
             shared->offscreen?gpu::RenderTarget::offscreenForTests:gpu::RenderTarget::composition});
         options.assetRoot=input.assetRoot();options.pixelsPerPoint=2;
@@ -133,9 +140,23 @@ public:
         // capture, alternate glass shader or framebuffer readback is installed.
         renderer.setCamera(gpu::layerViewportProjection(width,height));
         shared->status=1;
-        }catch(...){renderer.reset();if(window){DestroyWindow(window);window=nullptr;}throw;}
+        }catch(...){renderer.reset();shared->surface=0;if(window){DestroyWindow(window);window=nullptr;}throw;}
     }
-    ~Host(){session.reset();content.reset();labels.reset();chrome.reset();renderer.reset();if(window)DestroyWindow(window);}
+    ~Host(){session.reset();content.reset();labels.reset();chrome.reset();renderer.reset();shared->surface=0;if(window)DestroyWindow(window);}
+    bool placeSurface(){
+        if(shared->offscreen)return true;
+        if(!IsWindow(shared->parent)||!IsWindowVisible(shared->parent)||IsIconic(shared->parent)){
+            if(IsWindowVisible(window))ShowWindow(window,SW_HIDE);return false;
+        }
+        POINT origin{};RECT bounds{};
+        if(!ClientToScreen(shared->parent,&origin)||!GetWindowRect(window,&bounds))return false;
+        // Native physical-pixel coordinates follow the owner's client area,
+        // including fullscreen, monitor/DPI changes and movement while open.
+        if(bounds.left!=origin.x||bounds.top!=origin.y||bounds.right-bounds.left!=width||bounds.bottom-bounds.top!=height)
+            if(!SetWindowPos(window,nullptr,origin.x,origin.y,width,height,SWP_NOACTIVATE|SWP_NOZORDER|SWP_NOOWNERZORDER))
+                throw std::runtime_error("Cannot align source visual with client");
+        return true;
+    }
     void rebuild(bool zh){
         chinese=zh;top=input.nativeTop();bottom=input.nativeBottom();chromeSource=input.chrome();localize(top,chinese);localize(bottom,chinese);
         std::map<std::string,std::string,std::less<>> title{{"ENDFIELDHUD","POLAR-RM"},{"ENDFIELD HUD","POLAR-RM"}};
@@ -218,14 +239,15 @@ public:
     void step(double now){
         context();
         const auto w=shared->width.load(),h=shared->height.load();
-        if(w!=width||h!=height){width=w;height=h;SetWindowPos(window,HWND_TOP,0,0,w,h,SWP_NOACTIVATE);renderer.resize(w,h);renderer.setCamera(gpu::layerViewportProjection(w,h));}
+        if(w!=width||h!=height){width=w;height=h;renderer.resize(w,h);renderer.setCamera(gpu::layerViewportProjection(w,h));}
+        const bool ownerVisible=placeSurface();
         bool want;std::uint64_t epoch;
         {std::lock_guard lock(shared->mutex);want=shared->wanted;epoch=shared->requestEpoch;}
         // Reversals wait for the authored finite clip to reach its endpoint;
         // never jump from an intermediate entrance to a fully-open exit pose.
         const bool transitioning=session->phase()==core::VisibilityPhase::opening||session->phase()==core::VisibilityPhase::closing;
         if(want!=lastWanted&&!transitioning){lastWanted=want;selected=0;shared->action=0;
-            if(want){loadMap();opened=now;session->open(now,0);session->setInputEnabled(true,now);if(!shared->offscreen)ShowWindow(window,SW_SHOWNOACTIVATE);shown=true;}
+            if(want){loadMap();opened=now;session->open(now,0);session->setInputEnabled(true,now);shown=true;}
             else{closed=now;session->close(now);session->setInputEnabled(false,now);}}
         if(want&&mapMode!=mode)loadMap();
         session->setEnvironment({{double(width),double(height)},shown,true,true,shared->paused,
@@ -236,6 +258,7 @@ public:
         observeHover();
         if(!frame||!frame->sourceFrame){if(shown){ShowWindow(window,SW_HIDE);renderer.releaseFrameTargets();shown=false;pointer.reset();}shared->phase=0;if(!want)shared->closedEpoch=epoch;return;}
         shared->phase=want?1:2;
+        if(!ownerVisible)return;
         if(content->update(session->actions()))layers.uploadResources(renderer);
         for(auto& item:available){const auto action=session->actions().find(std::string(item.buttonID));item.enabled=action!=session->actions().end()||input.profile()&&input.profile()->rootID==item.buttonID;
             item.expandFileShelfCaption=false;}
@@ -267,6 +290,9 @@ public:
         gpu::SourceFrameParameters params;params.camera=frame->gpuCamera;params.width=width;params.height=height;params.timeSeconds=frame->shaderTime;
         presentation.update(*frame->sourceFrame,params);materials.flush(renderer.sourceGraphics());
         renderer.draw(!shared->offscreen);
+        // Never expose an unpresented swapchain, even for the first entrance
+        // frame or after a minimize/restore. Qt's backdrop swap is gated above.
+        if(!shared->offscreen&&!IsWindowVisible(window))ShowWindow(window,SW_SHOWNOACTIVATE);
         std::string capture;{std::lock_guard lock(shared->mutex);capture.swap(shared->capture);}
         if(!capture.empty()){
             try{const auto path=fs::u8path(capture);if(fs::exists(path))throw std::runtime_error("Capture output exists");
@@ -283,6 +309,9 @@ LRESULT CALLBACK windowProc(HWND w,UINT m,WPARAM a,LPARAM b){
     auto* host=reinterpret_cast<Host*>(GetWindowLongPtrW(w,GWLP_USERDATA));
     if(m==WM_NCCREATE){host=static_cast<Host*>(reinterpret_cast<CREATESTRUCTW*>(b)->lpCreateParams);SetWindowLongPtrW(w,GWLP_USERDATA,reinterpret_cast<LONG_PTR>(host));}
     if(m==WM_MOUSEACTIVATE)return MA_NOACTIVATE;
+    // No GDI erase/paint is allowed to replace a transparent DComp surface.
+    if(m==WM_ERASEBKGND)return 1;
+    if(m==WM_PAINT){PAINTSTRUCT paint;BeginPaint(w,&paint);EndPaint(w,&paint);return 0;}
     if(host){const double x=GET_X_LPARAM(b),y=GET_Y_LPARAM(b);
         if(m==WM_MOUSEMOVE){
             if(!host->trackingMouse){TRACKMOUSEEVENT tracking{sizeof(TRACKMOUSEEVENT),TME_LEAVE,w,0};host->trackingMouse=TrackMouseEvent(&tracking)!=0;}
@@ -297,10 +326,12 @@ LRESULT CALLBACK windowProc(HWND w,UINT m,WPARAM a,LPARAM b){
 }
 void run(std::shared_ptr<Shared> s){
     ++live;const HRESULT com=CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED);
+    const auto dpi=s->parent?SetThreadDpiAwarenessContext(GetWindowDpiAwarenessContext(s->parent)):nullptr;
     try{{Host host(s);while(!s->stop){MSG msg;while(PeekMessageW(&msg,nullptr,0,0,PM_REMOVE)){TranslateMessage(&msg);DispatchMessageW(&msg);}
         const double begin=clockNow();host.step(begin);s->lastMS=(clockNow()-begin)*1000;
         MsgWaitForMultipleObjectsEx(0,nullptr,s->phase?1:25,QS_ALLINPUT,MWMO_INPUTAVAILABLE);}}}
     catch(const std::exception& e){{std::lock_guard lock(s->mutex);s->error=e.what();}s->status=-1;s->phase=0;}
+    if(dpi)SetThreadDpiAwarenessContext(dpi);
     if(SUCCEEDED(com))CoUninitialize();if(s->status!=-1)s->status=2;--live;
 }
 }
@@ -310,6 +341,7 @@ API std::uint64_t pe_create(std::uintptr_t parent,const char* root,unsigned widt
         auto s=std::make_shared<Shared>();s->parent=reinterpret_cast<HWND>(parent);s->root=fs::u8path(root);s->width=width;s->height=height;s->offscreen=offscreen!=0;
         const auto id=sequence++;{std::lock_guard lock(registryMutex);registry[id]=s;}std::thread(run,s).detach();return id;}catch(...){return 0;}}
 API int pe_status(std::uint64_t id){auto s=get(id);return s?s->status.load():2;}
+API std::uintptr_t pe_surface(std::uint64_t id){auto s=get(id);return s?s->surface.load():0;}
 API int pe_phase(std::uint64_t id){auto s=get(id);if(!s)return 0;const int phase=s->phase.load();return phase?phase:s->requestEpoch!=s->closedEpoch?3:0;}
 API int pe_action(std::uint64_t id){auto s=get(id);return s?s->action.exchange(0):0;}
 API void pe_visible(std::uint64_t id,int visible){if(auto s=get(id)){std::lock_guard lock(s->mutex);s->wanted=visible!=0;++s->requestEpoch;}}

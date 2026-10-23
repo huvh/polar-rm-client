@@ -29,6 +29,18 @@ class EndfieldBundledPackTests(unittest.TestCase):
             self.assertTrue(library_path(paths.endfield_menu_pack).is_file())
             self.assertFalse((Path(directory) / 'endfield_pack').exists())
 
+    def test_private_pack_does_not_shadow_shipped_native_bugfix(self):
+        with tempfile.TemporaryDirectory() as directory:
+            local = Path(directory) / 'endfield_pack'
+            renderer = local / 'native_renderer'
+            renderer.mkdir(parents=True)
+            (renderer / 'CURRENT.json').write_text('{"directory":"old-build"}')
+            paths = RuntimePaths.discover(module_file=ROOT / 'rm_client/runtime_paths.py',
+                frozen=False, environ={'POLAR_USER_DATA_ROOT': directory})
+            self.assertEqual(paths.endfield_menu_pack, local)
+            self.assertEqual(paths.endfield_renderer_pack, ROOT / 'assets/endfield_pack')
+            self.assertEqual((renderer / 'CURRENT.json').read_text(), '{"directory":"old-build"}')
+
 
 if __name__ == '__main__':
     unittest.main()
