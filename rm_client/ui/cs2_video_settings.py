@@ -144,7 +144,7 @@ def open_video_settings(host, embedded=False):
     from PySide6.QtCore import Qt
     from PySide6.QtWidgets import (QComboBox,QDialog,QFormLayout,QHBoxLayout,QLabel,
                                   QPushButton,QTabWidget,QVBoxLayout,QMessageBox)
-    from .jello_widgets import JelloComboBox as QComboBox
+    from .endfield_settings_theme import EndfieldComboBox as QComboBox, EndfieldRowsLayout, EndfieldSectionHeader, EndfieldLoadBars, settings_scale
     if not embedded:
         host.backend.lock_control("video settings opened")
         host.control.release_all(host.state,host.registry)
@@ -162,13 +162,25 @@ def open_video_settings(host, embedded=False):
         root.addWidget(title)
         title.setVisible(not embedded)
         tabs=QTabWidget();root.addWidget(tabs)
-        from PySide6.QtWidgets import QWidget
-        basic=QWidget();advanced=QWidget();basic_form=QFormLayout(basic);advanced_form=QFormLayout(advanced)
-        basic_form.setSpacing(22);advanced_form.setSpacing(22)
+        from PySide6.QtWidgets import QWidget, QSizePolicy
+        basic=QWidget();advanced=QWidget();basic_form=EndfieldRowsLayout(basic,settings_scale(host.width(),host.height()));advanced_form=EndfieldRowsLayout(advanced,settings_scale(host.width(),host.height()))
+
         from .jello_scroll import JelloScrollArea as QScrollArea
         for widget,label in ((basic,"视频"),(advanced,"高级视频")):
             scroll=QScrollArea();scroll.setWidgetResizable(True);scroll.setWidget(widget)
             tabs.addTab(scroll,label)
+        if embedded:
+            # QScrollArea retains and resizes its widget even after a raw
+            # reparent. Explicitly release both before composing one source list.
+            for index in (0,1):
+                tabs.widget(index).takeWidget()
+            tabs.removeTab(1);tabs.removeTab(0);root.removeWidget(tabs);tabs.hide()
+            content=QWidget();column=QVBoxLayout(content);column.setContentsMargins(0,0,0,0)
+            basic.setSizePolicy(QSizePolicy.Policy.Expanding,QSizePolicy.Policy.Maximum)
+            advanced.setSizePolicy(QSizePolicy.Policy.Expanding,QSizePolicy.Policy.Maximum)
+            column.addWidget(basic);column.addWidget(advanced);column.setAlignment(Qt.AlignmentFlag.AlignTop)
+            root.addWidget(EndfieldLoadBars());root.addWidget(EndfieldSectionHeader("性能与画面"))
+            area=QScrollArea();area.setWidgetResizable(True);area.setWidget(content);root.addWidget(area,1)
         controls={}
         def combo(form,key,label,rows,current):
             widget=QComboBox()
@@ -187,7 +199,7 @@ def open_video_settings(host, embedded=False):
         mode.currentIndexChanged.connect(lambda _:resolution.setEnabled(mode.currentData()=="Windowed"))
         combo(basic_form,"hud_hz","HUD刷新节奏",[("跟随现有HUD设置",0),*((f"{v} Hz",v) for v in (60,75,90,120,144,165,240))],prefs.hud_hz)
         note=QLabel("无边框模式使用Windows当前显示模式；此页不会伪装修改显示器物理刷新率。\nWindows全屏保留Qt建议的1像素合成边线，以兼容OpenGL窗口和弹窗。\n窗口分辨率按DPR换算；裁判逻辑、KMC与图传不随HUD帧率限额降频。")
-        note.setWordWrap(True);basic_form.addRow(note)
+        note.setWordWrap(True);mode.setToolTip(note.text());note.hide()
         combo(advanced_form,"fps_limit","最大渲染帧率",[("跟随HUD节奏",0),*((str(v)+" FPS",v) for v in (30,60,75,90,120,144,165,240))],prefs.fps_limit)
         combo(advanced_form,"vsync","等待垂直同步（重启生效）",[("已启用",True),("已禁用",False)],prefs.vsync)
         combo(advanced_form,"msaa","多重采样抗锯齿（重启生效）",[("无",0),("2× MSAA",2),("4× MSAA",4),("8× MSAA",8)],prefs.msaa)
@@ -202,7 +214,7 @@ def open_video_settings(host, embedded=False):
             controls["msaa"].setCurrentIndex(controls["msaa"].findData(aa))
             controls["video_filter"].setCurrentIndex(controls["video_filter"].findData("Linear"))
         quality.currentIndexChanged.connect(set_quality)
-        advanced_form.addRow(QLabel("任何画质档都保留液态玻璃、原版MC像素层和清晰UI字体；\n仅调整图传采样与Qt呈现，未提供NVIDIA Reflex/FSR等虚假引擎选项。"))
+        quality.setToolTip("任何画质档均保留液态玻璃、MC像素层和清晰UI字体；仅调整图传采样与Qt呈现，不提供未实现的Reflex/FSR等引擎选项。")
         status=QLabel("修改分辨率会锁定操控；重新操作车辆前须再次人工Arm。");status.setWordWrap(True);root.addWidget(status)
         buttons=QHBoxLayout();root.addLayout(buttons)
         crosshair=QPushButton("准星设置 / 分享码")
@@ -233,10 +245,11 @@ def open_video_settings(host, embedded=False):
         dialog.reset_draft=reset_draft
         dialog.controls=controls
         for label in dialog.findChildren(QLabel):label.setWordWrap(True)
-        from .jello_widgets import apply_jello_widgets
-        apply_jello_widgets(dialog)
+        from .endfield_settings_theme import apply_endfield_widgets
+        if not embedded:
+            apply_endfield_widgets(dialog)
         if embedded:
-            crosshair.hide();apply.hide();back.hide()
+            crosshair.hide();apply.hide();back.hide();status.hide()
             return dialog
         dialog.exec()
     except Exception as error:

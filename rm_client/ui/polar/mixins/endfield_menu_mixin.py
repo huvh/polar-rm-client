@@ -30,6 +30,9 @@ class EndfieldMenuMixin:
                            mode=self.match_mode_manager.current.key,
                            paused=QApplication.activeModalWidget() is not None)
         if action:
+            if action in (2,4,5,6,7):
+                from ...endfield_settings_theme import capture_settings_backdrop
+                capture_settings_backdrop(self)
             self.set_escape_menu_visible(False)
             self._endfield_pending_action = action if action != 1 else None
         if self.escape_menu_visible and not menu.requested and (menu.phase == 0 or menu.error):
@@ -40,7 +43,10 @@ class EndfieldMenuMixin:
             pending = getattr(self, "_endfield_pending_action", None)
             self._endfield_pending_action = None
             if pending is not None:
-                self.dispatch_endfield_action(pending)
+                try:
+                    self.dispatch_endfield_action(pending)
+                finally:
+                    self._endfield_settings_backdrop = None
 
     def set_endfield_menu_visible(self, visible: bool) -> None:
         menu = self._endfield_menu
@@ -54,6 +60,7 @@ class EndfieldMenuMixin:
         self.drag = None
         self._escape_menu_pressed = None
         self._endfield_pending_action = None
+        if visible:self._endfield_settings_backdrop = None
         menu.request(visible, wait_for_backdrop=visible)
         # Conceal is asynchronous: never leak keys to the robot under the
         # final 333ms of source exit animation.

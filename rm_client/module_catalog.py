@@ -1116,7 +1116,7 @@ def default_modules(choices: CatalogChoices) -> list[Module]:
                     "显示所有旧 ClickGUI",
                 ),
             ],
-            description="Jello Sigma 5.1.0 主 ClickGUI 一比一复刻；旧界面收纳在 Old ClickGUIs 中。",
+            description="终末地 × Jello 本地实验界面；保留 Jello 布局、动画与操作，旧界面收纳在 Old ClickGUIs 中。",
         ),
         Module(
             "GimbalPower",

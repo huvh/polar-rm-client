@@ -486,6 +486,7 @@ class JelloClickGuiRenderer:
         "shadow_top.png",
         "shadow_bottom.png",
     )
+    draw_list_type = ClickGuiDrawList
 
     def __init__(self, asset_root: Path) -> None:
         self.asset_root = Path(asset_root)
@@ -680,7 +681,7 @@ class JelloClickGuiRenderer:
         scale_setting = click_gui.get_setting("Scale") if click_gui else None
         requested_scale = float(scale_setting.value) if scale_setting else 1.0
         layout = self.layout(width, height, requested_scale)
-        commands = ClickGuiDrawList(
+        commands = self.draw_list_type(
             default_text_shadow=False,
             default_text_raster_scale=self.raster_scale_for(layout.scale),
             # Sigma's Helvetica Neue Light must stay Light.  The shared GPU

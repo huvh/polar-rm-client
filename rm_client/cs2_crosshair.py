@@ -270,8 +270,8 @@ def _create_editor(host, *, embedded=False):
     )
     from .ui.cs2_assets import local_cs2_assets
     if embedded:
-        from .ui.jello_widgets import JelloCheckBox as QCheckBox
-        from .ui.jello_widgets import JelloComboBox as QComboBox
+        from .ui.endfield_settings_theme import EndfieldCheckBox as QCheckBox
+        from .ui.endfield_settings_theme import EndfieldComboBox as QComboBox
     from .ui.jello_locale import chinese_enabled, setting_label
     chinese = chinese_enabled(host.registry)
     label = lambda value: setting_label(value, chinese)

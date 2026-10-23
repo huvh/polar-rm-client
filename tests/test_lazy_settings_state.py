@@ -26,7 +26,7 @@ class Base(unittest.TestCase):
     def dialog(self):
         d=settings.build_settings_center(self.host);self.dialogs.append(d);return d
     def wait_ready(self,d,name): return ready_page(d,name)
-    def reset_button(self,d): return next(b for b in d.findChildren(QPushButton) if b.text()=='恢复当前页默认值')
+    def reset_button(self,d): return d.reset_button
 
 
 class LifecycleAudit(Base):
@@ -142,11 +142,11 @@ class LifecycleAudit(Base):
 
     def test_crosshair_styling_failure_releases_temporary_editor(self):
         d=self.dialog();d.show();QTest.qWait(480)
-        original=settings.apply_jello_widgets
+        original=settings.apply_endfield_widgets
         def fail_editor(w,*a,**kw):
             if w.objectName()=='cs2_crosshair_editor':raise RuntimeError('injected style failure')
             return original(w,*a,**kw)
-        with patch.object(settings,'apply_jello_widgets',side_effect=fail_editor):
+        with patch.object(settings,'apply_endfield_widgets',side_effect=fail_editor):
             d.tabs.setCurrentWidget(d.crosshair);QTest.qWait(200)
         p=d.crosshair;editor=p.editor
         self.assertIn('injected style failure',p.builder.error)

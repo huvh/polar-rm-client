@@ -30,6 +30,7 @@ from ..gui_cache import ClickGuiLayerCache
 from ..hero_deploy import HeroDeployInterfaceState, HeroDeployRenderer
 from ..island_icon_gpu import IslandIconGpuRenderer
 from ..jello_clickgui import JelloClickGuiRenderer
+from ..endfield_clickgui import EndfieldClickGuiRenderer
 from ..liquid_glass import LiquidGlassRenderer
 from ..minecraft_chat import MinecraftServerChatRenderer
 from ..minecraft_hud import MinecraftCombatHudRenderer
@@ -114,7 +115,7 @@ def create_presentation_services(paths: RuntimePaths) -> PresentationServices:
     motion = GuiMotionController(animation)
     return PresentationServices(
         fonts, animation, motion, ClickGuiLayerCache(), ClickGuiGpuRenderer(),
-        JelloClickGuiRenderer(paths.asset("jello")),
+        EndfieldClickGuiRenderer(paths.asset("jello")),
         MinecraftCombatHudRenderer(paths.asset("minecraft_hud")),
         StudentUiState(), StudentPanelRenderer(paths.asset("minecraft_hud")),
         MinecraftServerChatRenderer(paths.asset("minecraft_hud")),

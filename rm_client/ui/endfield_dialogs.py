@@ -5,7 +5,7 @@ from PySide6.QtWidgets import (
 )
 
 from .emergency_shortcut import install_estop_shortcut
-from .jello_widgets import JelloDialog, apply_jello_widgets
+from .endfield_settings_theme import EndfieldDialog, apply_endfield_widgets
 from .jello_locale import chinese_enabled
 from .jello_scroll import JelloScrollArea
 
@@ -13,7 +13,7 @@ from .jello_scroll import JelloScrollArea
 def _dialog(host, title, text, *, confirm=False, scroll=False, back_label=None):
     host.backend.lock_control("menu dialog opened")
     host._neutralize_modal_inputs()
-    dialog = JelloDialog(host)
+    dialog = EndfieldDialog(host)
     try:
         if scroll:
             dialog.resize(min(680, max(360, host.width()-80)), min(560, max(240, host.height()-80)))
@@ -49,7 +49,7 @@ def _dialog(host, title, text, *, confirm=False, scroll=False, back_label=None):
             accept.clicked.connect(dialog.accept)
             row.addWidget(accept)
         dialog.panel.layout().addLayout(row)
-        apply_jello_widgets(dialog)
+        apply_endfield_widgets(dialog)
         dialog.estop_shortcut = install_estop_shortcut(dialog, host)
         return dialog.exec() == QDialog.DialogCode.Accepted
     finally:

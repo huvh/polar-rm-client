@@ -3,7 +3,7 @@ from pathlib import Path
 import sys
 import unittest
 from types import SimpleNamespace as NS
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from PySide6.QtCore import QPointF, Qt
@@ -70,6 +70,20 @@ class EndfieldMenuTests(unittest.TestCase):
         self.host.advance_endfield_menu()
         self.assertTrue(self.host.escape_menu_visible)
         self.host.open_student_panel.assert_not_called()
+
+    def test_settings_backdrop_handoff_precedes_invalidating_the_esc_scene(self):
+        self.host.set_escape_menu_visible(True)
+        self.menu.action = 2
+        order=[]
+        self.host.invalidate_transient_overlay_scene.side_effect=lambda:order.append('invalidate')
+        with patch('rm_client.ui.endfield_settings_theme.capture_settings_backdrop',
+                   side_effect=lambda _:order.append('capture')):
+            self.host.advance_endfield_menu()
+        self.assertEqual(order[:2],['capture','invalidate'])
+        self.assertEqual(self.host._endfield_pending_action,2)
+        self.host._endfield_settings_backdrop=object()
+        self.host.set_escape_menu_visible(True)
+        self.assertIsNone(self.host._endfield_settings_backdrop)
 
     def test_pending_visibility_is_modal_and_failure_can_escape(self):
         self.host.set_escape_menu_visible(True)

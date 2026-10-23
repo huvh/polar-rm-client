@@ -16,7 +16,8 @@ from .fonts import draw_ui_text, cjk_ui_font, has_cjk, elide_ui_text
 from .jello_locale import module_label, category_label
 from .settings_application import validate_draft, apply_registry_draft
 from .emergency_shortcut import install_estop_shortcut
-from .jello_widgets import JelloDialog, apply_jello_widgets, draw_shadow, ease_out_back, jello_font, jello_regular_font
+from .jello_widgets import ease_out_back
+from .endfield_settings_theme import EndfieldDialog, apply_endfield_widgets, endfield_font
 
 
 @dataclass(frozen=True)
@@ -126,7 +127,7 @@ class BindingSession:
         if driver or modules: apply_registry_draft(self.host,driver,module_binds=modules)
 
 
-class BindingPicker(JelloDialog):
+class BindingPicker(EndfieldDialog):
     def __init__(self, owner, key, target=None):
         super().__init__(owner,keyboard=True)
         try:
@@ -139,7 +140,7 @@ class BindingPicker(JelloDialog):
             self.key = key
             self.owner = owner
             layout = self.panel.layout()
-            title = QLabel("选择要绑定的功能"); title.setFont(jello_font(36));title.setStyleSheet("font-size:30px;color:#666666;"); layout.addWidget(title)
+            title = QLabel("选择要绑定的功能"); title.setFont(endfield_font(36));title.setStyleSheet("font-size:30px;color:#eeeeee;"); layout.addWidget(title)
             self.search = QLineEdit(); self.search.setPlaceholderText("Search… / 搜索功能");self.search.setMinimumHeight(60); layout.addWidget(self.search)
             self.list = QListWidget(); layout.addWidget(self.list,1)
             self.reason_label = QLabel(); self.reason_label.setWordWrap(True); layout.addWidget(self.reason_label)
@@ -161,9 +162,9 @@ class BindingPicker(JelloDialog):
             self.list.currentItemChanged.connect(lambda current,old:self.reason_label.setText(current.toolTip() if current else ""))
             self.list.itemDoubleClicked.connect(lambda _item:self.add_selected())
             add.clicked.connect(self.add_selected); back.clicked.connect(self.reject)
-            apply_jello_widgets(self)
-            self.list.setFont(cjk_ui_font(jello_font()))
-            self.list.setStyleSheet("QListWidget {background:#fefefe;border:0;color:#555555;font-family:'Microsoft YaHei UI','Microsoft YaHei','DengXian';font-weight:400;font-size:18px;} QListWidget::item {padding:12px;} QListWidget::item:selected {background:#e8f4ff;color:#29a6ff;}")
+            apply_endfield_widgets(self)
+            self.list.setFont(cjk_ui_font(endfield_font()))
+            self.list.setStyleSheet("QListWidget {background:#303234;border:0;color:#eeeeee;font-family:'Microsoft YaHei UI','Microsoft YaHei','DengXian';font-weight:400;font-size:18px;} QListWidget::item {padding:12px;} QListWidget::item:selected {background:#fff100;color:#212121;}")
             self.reason_label.setStyleSheet("font-family:'Microsoft YaHei UI','Microsoft YaHei','DengXian';font-weight:400;")
             if self.items:self.list.setCurrentRow(0)
         except Exception as error:
@@ -259,8 +260,8 @@ class KeyboardCanvas(QWidget):
         if y+330>740: y=anchor.bottom()-400
         return QRectF(max(24,min(926,anchor.center().x()-125)),max(8,y),250,330)
 
-    def _text(self, painter, rect, text, pixels, color="#666666", medium=False, align=Qt.AlignLeft|Qt.AlignVCenter, regular=False):
-        font = jello_regular_font(pixels) if regular else jello_font(pixels,medium)
+    def _text(self, painter, rect, text, pixels, color="#eeeeee", medium=False, align=Qt.AlignLeft|Qt.AlignVCenter, regular=False):
+        font = endfield_font(pixels, bold=medium or regular)
         if has_cjk(text): font = cjk_ui_font(font)
         text=elide_ui_text(font,text,rect.width(),painter.device())
         painter.setPen(QColor(color))
@@ -272,19 +273,19 @@ class KeyboardCanvas(QWidget):
         x,y,scale = self.mapping(); p.translate(x,y); p.scale(scale,scale)
         p.setPen(Qt.PenStyle.NoPen)
         self.hotspots = []
-        self._text(p,QRectF(70,22,1020,55),"Keybind Manager",40,"#666666",True)
+        self._text(p,QRectF(70,22,1020,55),"键位绑定 / KEY BINDINGS",40,"#eeeeee",True)
         title = next((e.title for e in self.session.entries if e.identity==self.target),"所有快捷键")
         self._text(p,QRectF(70,90,1060,40),f"{title} · 点击键帽，查看绑定并添加功能",20)
-        self._text(p,QRectF(70,134,1060,27),"RM 功能键扩展 · F12 急停 / Esc 返回 / RightShift 与 Tab 保留",14,"#999999")
+        self._text(p,QRectF(70,134,1060,27),"RM 功能键扩展 · F12 急停 / Esc 返回 / RightShift 与 Tab 保留",14,"#afb1b0")
         board = QRectF(50,230,1100,402)
-        draw_shadow(p,board,20,.35); p.setBrush(QColor("#fefefe")); p.drawRoundedRect(board,14,14)
+        p.setBrush(QColor("#303234")); p.drawRoundedRect(board,14,14)
         for key in ALL_KEYS:
             rect = self.key_rect(key); hover = self.hover_values.get(key.name,0)
             bound = bool(self.session.bound(key.name))
-            p.setBrush(QColor.fromRgbF((208+14*hover)/255,(208+14*hover)/255,(208+14*hover)/255))
+            p.setBrush(QColor.fromRgbF((70+14*hover)/255,(70+14*hover)/255,(70+14*hover)/255))
             p.drawRoundedRect(rect.translated(0,5),8,8)
-            p.setBrush(QColor("#f0f0f0")); p.drawRoundedRect(rect.translated(0,3*hover),8,8)
-            tint = "#666666" if bound else "#999999"
+            p.setBrush(QColor("#626465")); p.drawRoundedRect(rect.translated(0,3*hover),8,8)
+            tint = "#eeeeee" if bound else "#afb1b0"
             text_rect = rect.translated(0,3*hover)
             if key.label in ("Back","Return"):
                 p.setPen(QPen(QColor(tint),2)); cx,cy=text_rect.center().x(),text_rect.center().y()
@@ -298,13 +299,13 @@ class KeyboardCanvas(QWidget):
                 for dy in (-6,0,6):p.drawLine(center+QPointF(-7,dy),center+QPointF(7,dy))
                 p.setPen(Qt.PenStyle.NoPen)
             elif key.label!="Space":
-                self._text(p,text_rect,key.label,20 if key.native else 16,QColor(1,1,1,153 if bound else 102),False,Qt.AlignCenter,regular=bound)
+                self._text(p,text_rect,key.label,20 if key.native else 16,QColor(238,238,238,153 if bound else 102),False,Qt.AlignCenter,regular=bound)
             if key.name.lower() in RESERVED:
                 p.setBrush(QColor("#f19999") if key.name=="F12" else QColor("#cccccc"))
                 p.drawEllipse(QPointF(rect.right()-9,rect.bottom()-9),2.5,2.5)
-        self._text(p,QRectF(70,698,900,36),self.note or "灰色为未绑定 · 冲突不会覆盖 · 设置页中修改的是待应用草稿",16,"#888888")
-        done = QRectF(1010,696,120,38); p.setBrush(QColor("#29a6ff")); p.drawRoundedRect(done,5,5)
-        self._text(p,done,"完成",20,"#fefefe",False,Qt.AlignCenter); self.hotspots.append((done,"done",None))
+        self._text(p,QRectF(70,698,900,36),self.note or "灰色为未绑定 · 冲突不会覆盖 · 设置页中修改的是待应用草稿",16,"#c5c7c5")
+        done = QRectF(1010,696,120,38); p.setBrush(QColor("#fff100")); p.drawRoundedRect(done,5,5)
+        self._text(p,done,"完成",20,"#212121",False,Qt.AlignCenter); self.hotspots.append((done,"done",None))
         if self.selected: self.draw_popover(p)
         p.end()
 
@@ -316,15 +317,15 @@ class KeyboardCanvas(QWidget):
         p.save();p.translate(0,50*(1-eased)*(1 if below else -1))
         p.translate(rect.center()); p.scale(factor,factor); p.translate(-rect.center())
         p.setOpacity(2*progress-progress*progress)
-        draw_shadow(p,rect,35,progress*.35); p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QColor("#f4f4f4")); p.drawRoundedRect(rect,10,10)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor("#444648")); p.drawRoundedRect(rect,10,10)
         edge = rect.top() if below else rect.bottom()
         pointer_x=max(rect.left()+24,min(rect.right()-24,anchor.center().x()))
         p.drawPolygon(QPolygonF([QPointF(pointer_x-23.5,edge),QPointF(pointer_x+23.5,edge),
                                 QPointF(pointer_x,edge+(-18 if below else 18))]))
         p.setOpacity(1)
-        self._text(p,QRectF(rect.x()+25,rect.y()+16,200,44),self.selected+" Key",25,QColor(1,1,1,round(204*progress)))
-        p.fillRect(QRectF(rect.x()+25,rect.y()+68,200,1),QColor("#e8e8e8"))
+        self._text(p,QRectF(rect.x()+25,rect.y()+16,200,44),self.selected+" Key",25,QColor(238,238,238,round(204*progress)))
+        p.fillRect(QRectF(rect.x()+25,rect.y()+68,200,1),QColor("#646668"))
         entries=self.session.bound(self.selected) + [e for e,key in self.removed_rows.values() if key==self.selected]
         order={e.identity:i for i,e in enumerate(self.session.entries)}
         entries.sort(key=lambda e:order[e.identity])
@@ -340,11 +341,11 @@ class KeyboardCanvas(QWidget):
                 t=min(1,(now-self.pending_removals[entry.identity])/.180);factor_row=1-(2*t-t*t)
             row=QRectF(rect.x(),row_y,250,55*factor_row)
             p.save();p.setClipRect(row,Qt.ClipOperation.IntersectClip)
-            self._text(p,QRectF(row.x()+25,row.y(),170,32),entry.title,20,QColor(1,1,1,round(153*progress)),regular=True)
-            self._text(p,QRectF(row.x()+25,row.y()+29,170,22),entry.category,12,QColor(1,1,1,round(153*progress)))
+            self._text(p,QRectF(row.x()+25,row.y(),170,32),entry.title,20,QColor(238,238,238,round(153*progress)),regular=True)
+            self._text(p,QRectF(row.x()+25,row.y()+29,170,22),entry.category,12,QColor(238,238,238,round(153*progress)))
             delete=QRectF(row.right()-47,row.center().y()-13,24,26)
             if not entry.readonly:
-                self._text(p,delete,"×",22,"#999999",False,Qt.AlignCenter)
+                self._text(p,delete,"×",22,"#afb1b0",False,Qt.AlignCenter)
                 if progress>=1 and factor_row>.9:
                     hit=delete.intersected(viewport)
                     if not hit.isEmpty():self.hotspots.append((hit,"remove",entry))
@@ -353,7 +354,7 @@ class KeyboardCanvas(QWidget):
         p.restore()
         add=QRectF(rect.x()+145,rect.bottom()-60,85,40)
         readonly=self.selected.lower() in RESERVED and self.selected.lower()!="tab"
-        self._text(p,add,"保留" if readonly else "Add",25,"#aaaaaa" if readonly else "#29a6ff",False,Qt.AlignCenter)
+        self._text(p,add,"保留" if readonly else "Add",25,"#aaaaaa" if readonly else "#fff100",False,Qt.AlignCenter)
         if not readonly and progress>=1:self.hotspots.append((add,"add",None))
         p.restore()
 
@@ -428,9 +429,9 @@ class KeyboardCanvas(QWidget):
 
 
 def build_keyboard_manager(host, manager=None, target=None, parent=None):
-    dialog=JelloDialog(parent or host,keyboard=True)
+    dialog=EndfieldDialog(parent or host,keyboard=True)
     try:
-        dialog.setObjectName("JelloKeyboardManager");dialog.setWindowTitle("Jello · Keybind Manager")
+        dialog.setObjectName("JelloKeyboardManager");dialog.setWindowTitle("POLAR · 终末地键位设置")
         available=host.screen().availableGeometry()
         dialog.resize(min(1280,available.width()-30,max(600,host.width()-20)),
                       min(860,available.height()-40,max(430,host.height()-20)));dialog.setMinimumSize(600,430)
@@ -439,7 +440,7 @@ def build_keyboard_manager(host, manager=None, target=None, parent=None):
         dialog.focus_widget=dialog.canvas
         dialog.panel.layout().setContentsMargins(0,0,0,0);dialog.panel.layout().addWidget(dialog.canvas)
         dialog.estop_shortcut=install_estop_shortcut(dialog,host)
-        apply_jello_widgets(dialog)
+        apply_endfield_widgets(dialog)
         return dialog
     except Exception as error:
         # The caller cannot clean up a dialog that the factory never returned.
