@@ -1620,7 +1620,8 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         # Keep the iterator intact; a successful frame resumes it after close.
         # Esc uses Qt text, not these atlases. Do not let a cold font upload
         # compete with menu input or native settings construction/animation.
-        if self.escape_menu_visible or QApplication.activeModalWidget() is not None:
+        if (self.escape_menu_visible or QApplication.activeModalWidget() is not None
+                or getattr(self, "_settings_session", None) is not None):
             return
         context = self.context()
         if context is None or not context.isValid():
@@ -3326,6 +3327,9 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             OwnerAction("pending configuration", self.cancel_pending_configuration_for_close),
             OwnerAction("kill audio playback", self.kill_fx.sounds.close),
         )
+        settings = getattr(self, "_settings_session", None)
+        if settings is not None:
+            prepare = (OwnerAction("settings dialog", settings.close_for_shutdown), *prepare)
         feedback = getattr(self, "_endfield_feedback", None)
         if feedback is not None:
             prepare = (*prepare, OwnerAction("Endfield voice playback", feedback.voice.stop))

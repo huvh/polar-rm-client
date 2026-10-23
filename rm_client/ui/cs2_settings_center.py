@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 
-from PySide6.QtCore import Qt, QEvent, QObject
+from PySide6.QtCore import Qt, QEvent, QObject, QEventLoop
 from PySide6.QtGui import QFont, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFormLayout, QGroupBox,
@@ -379,11 +379,56 @@ class CrosshairSettingsPage(JelloScrollArea):
             self.editor.display_scale.setValue(default_scale)
 
 
+class SettingsDialog(JelloDialog):
+    """Client-modal input without disabling the host's native close button.
+
+    Keep the existing synchronous caller/finally contract, but do not use
+    QDialog.exec(): its system modality disables the owner's title-bar X.
+    This local loop owns no devices; an admitted host shutdown ends it before
+    retiring the host, even while the search field owns focus or IME input.
+    """
+    def exec(self):
+        host = self.parentWidget()
+        if bool(getattr(getattr(host, "_window_lifecycle", None), "closing", False)):
+            return QDialog.DialogCode.Rejected
+        loop = QEventLoop(self)
+        self.finished.connect(loop.quit)
+        host._settings_session = self
+        try:
+            self.setWindowModality(Qt.WindowModality.NonModal)
+            self.show()
+            # A synchronous Show callback can already admit host shutdown.
+            # quit() before exec() does not latch a future QEventLoop exit.
+            if self.isVisible():
+                loop.exec()
+            return self.result()
+        finally:
+            self.finished.disconnect(loop.quit)
+            if getattr(host, "_settings_session", None) is self:
+                host._settings_session = None
+            loop.deleteLater()
+
+    def close_for_shutdown(self):
+        # Only called AFTER the host's close/save admission. Ordinary Return /
+        # Esc still uses Jello's authored exit; app exit must not wait on that
+        # animation or leave a settings window keeping the process alive.
+        self._transition_timer.stop()
+        errors = []
+        for builder in self.findChildren(SettingsBuildQueue):
+            try:
+                builder.cancel()
+            except Exception as error:
+                errors.append(error)
+        QDialog.done(self, QDialog.DialogCode.Rejected)
+        if errors:
+            raise errors[0]
+
+
 def build_settings_center(host):
     """Non-modal construction for visual/regression tests; open owns input lock."""
     from .cs2_video_settings import open_video_settings
     use_jello_font_book(getattr(host, "fonts", None))
-    dialog = JelloDialog(host)
+    dialog = SettingsDialog(host)
     try:
         dialog.setWindowTitle("POLAR · Jello 设置")
         dialog.setObjectName("JelloSettingsCenter")
@@ -470,6 +515,13 @@ def build_settings_center(host):
 
 
 def open_settings_center(host):
+    existing = getattr(host, "_settings_session", None)
+    if existing is not None:
+        existing.raise_()
+        existing.activateWindow()
+        return
+    if bool(getattr(getattr(host, "_window_lifecycle", None), "closing", False)):
+        return
     host.backend.lock_control("settings opened")
     host.control.release_all(host.state, host.registry)
     host._control_mouse_point = None

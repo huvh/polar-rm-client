@@ -663,6 +663,7 @@ class InputDispatchMixin:
         """A retiring runtime cannot accept edits or new control samples."""
         return bool(
             self._modal_input_blocked()
+            or getattr(self, "_settings_session", None) is not None
             or getattr(getattr(self, "backend", None), "lifecycle_pending", False)
             or getattr(self, "configuration_change_pending", False)
             or getattr(getattr(self, "_window_lifecycle", None), "closing", False)
