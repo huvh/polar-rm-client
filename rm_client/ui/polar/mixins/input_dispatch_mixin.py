@@ -21,6 +21,7 @@ from PySide6.QtGui import QCursor, QKeyEvent, QKeySequence, QMouseEvent, QWheelE
 # 相对导入层级：rm_client/ui/polar/mixins/ → ... = rm_client.ui、.... = rm_client
 from ...animation import Easings
 from ...tactical_map_interaction import map_hit_position
+from ...cs2_scoreboard import scoreboard_owns_pointer
 from ...cs2_buy_menu import grid_enabled, grid_layout
 from ...cs2_feedback import notify_buy_hover
 from ...jello_locale import LANGUAGE_CHINESE, LANGUAGE_ENGLISH, LANGUAGE_SETTING
@@ -743,6 +744,12 @@ class InputDispatchMixin:
             return
         button = self.qt_button(event)
         point = event.position()
+        if scoreboard_owns_pointer(self, point):
+            if button == 1:
+                self.pointer_interaction.own_release()
+            self._control_mouse_point = None
+            event.accept()
+            return
         if (not self.gui_visible
                 and getattr(getattr(self, "gui_timeline", None), "progress", 0.0) > 0.0):
             # The exit animation may render old GUI hit targets again. They
@@ -813,6 +820,11 @@ class InputDispatchMixin:
         previous_tooltip = self.hover_tooltip
         previous_point = self.hover_point
         self.hover_point = event.position()
+        if scoreboard_owns_pointer(self, self.hover_point):
+            self._control_mouse_point = None
+            self.frame_scheduler.force()
+            event.accept()
+            return
         if (
             self.combat_control_input_allowed()
             and self._control_mouse_point is not None
@@ -964,6 +976,9 @@ class InputDispatchMixin:
             return
         point = event.position()
         pixel_delta = event.pixelDelta().y()
+        if scoreboard_owns_pointer(self, point):
+            event.accept()
+            return
         delta = -float(pixel_delta) if pixel_delta else -event.angleDelta().y() / 120.0 * 28.0
         if self.match_chat.input_open:
             self.match_chat.scroll(-1 if event.angleDelta().y() > 0 else 1)

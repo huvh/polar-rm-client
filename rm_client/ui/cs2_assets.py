@@ -25,12 +25,16 @@ IMAGE_IDS = frozenset({
     "money", "buy_icon", "kill_mask", "kill_extra", "kill_default", "kill_headshot", "kill_blast",
     "kill_flag", "elimination", "person",
     "buy_ammo", "buy_recovery", "buy_revive",
+    "sb_casual", "sb_camera", "sb_unmuted", "sb_ct_silhouette", "sb_menu",
     *(f"kill_{i}" for i in range(1, 6)),
 })
 SOUND_IDS = frozenset({"kill", "purchase", "cant_buy", "buy_select", "buy_hover"})
 # Event gains resolved from this installed build's game_sounds_ui table.
 CUE_GAINS = {"kill": .6, "purchase": .3, "cant_buy": .4, "buy_select": .5, "buy_hover": .3}
-FONT_IDS = frozenset({"font_regular", "font_bold", "font_condensed", "font_mono", "font_timer"})
+FONT_IDS = frozenset({"font_regular", "font_bold", "font_condensed", "font_mono", "font_timer",
+                      "font_medium", "font_condensed_regular", "font_mono_regular"})
+SCOREBOARD_ADDON_IDS = frozenset({"sb_casual", "sb_camera", "sb_unmuted", "sb_ct_silhouette", "sb_menu",
+                                 "font_medium", "font_condensed_regular", "font_mono_regular"})
 
 
 class Cs2Assets:
@@ -157,5 +161,18 @@ def local_cs2_assets() -> Cs2Assets:
     if (local / "manifest.json").is_file():
         pack = Cs2Assets(local)
         if pack.available:
+            # An older valid personal pack must not erase newly bundled Tab
+            # icons/faces. Fill ONLY missing new presentation resources; keep
+            # personal image/font choices, files and audio routing untouched.
+            missing = SCOREBOARD_ADDON_IDS - pack.paths.keys()
+            if missing:
+                bundled = Cs2Assets(paths.asset("cs2_ui_pack"))
+                for key in missing:
+                    if key in bundled.paths:
+                        pack.paths[key] = bundled.paths[key]
+                    if key in bundled.images:
+                        pack.images[key] = bundled.images[key]
+                    if key in bundled.families:
+                        pack.families[key] = bundled.families[key]
             return pack
     return Cs2Assets(paths.asset("cs2_ui_pack"))

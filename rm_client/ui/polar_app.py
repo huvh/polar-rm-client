@@ -251,6 +251,7 @@ from .polar.renderers.module_list import ModuleListMixin
 # _map_round_cache 保持方法内惰性创建；handle_tactical_map_hold_event（D15 输入域）
 # 与 liquid_map_enabled 族（D9 HUD 风格助手）按偏差决策留在本文件。
 from .polar.renderers.tactical_map import TacticalMapMixin
+from .cs2_scoreboard import paint_tab_scoreboard, prepare_tab_layout, tab_scoreboard_active
 from .polar.renderers.dynamic_island import DynamicIslandMixin
 # 阶段 2f 渲染器提取（REFACTOR_BLUEPRINT §5 表 2f 行）：D4 启动场景渲染族
 # 方法体已机械迁至 renderers/startup_scene.py 的 StartupSceneMixin（零修改），
@@ -1902,7 +1903,9 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                 clickgui_frame=lambda: build_clickgui_frame(self, width, height, gui_alpha),
                 motion_hud=draw_motion,
                 priority_interaction=lambda: self.paint_priority_interaction_layer(functions, width, height, ratio),
-                target_hud=lambda: self.paint_gpu_target_hud_layer(functions, width, height, ratio),
+                target_hud=lambda: (self.gpu_compositor.clear_target_layer(functions)
+                                    if tab_scoreboard_active(self) else
+                                    self.paint_gpu_target_hud_layer(functions, width, height, ratio)),
             )
             updated = OverlayLayerRenderer(
                 self.gpu_compositor, self.clickgui_gpu, clock=time.perf_counter,
@@ -2523,7 +2526,9 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         logical_height = max(1, int(height / scale))
         minecraft_active = self.minecraft_hud_active()
         self._last_minecraft_hud_layout = None
-        held_tab_list = self.student_ui.visible and self.student_ui.panel=="damage"
+        expanded_scores = include_map is not False and tab_scoreboard_active(self)
+        prepare_tab_layout(self, width, height, now, include_map=include_map is not False)
+        held_tab_list = expanded_scores or (self.student_ui.visible and self.student_ui.panel=="damage")
         if minecraft_active:
             # Original MC chrome is one low-resolution nearest-neighbour
             # layer.  Every client/mod overlay below remains at its own HUD
@@ -2535,6 +2540,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                 self.state,
                 self.registry,
                 self.registry.get("MinecraftCombatHUD"),
+                show_scoreboard=not expanded_scores,
             )
         p.save()
         p.scale(scale, scale)
@@ -2549,7 +2555,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         display_result = self.interpolated_vision_result(now)
         armor_module = self.registry.get("ArmorAutoAim")
         armor_3d = self.registry.get("Armor3DESP")
-        if armor_module and armor_module.enabled:
+        if armor_module and armor_module.enabled and not expanded_scores:
             if include_vision and display_result is not None and armor_3d and armor_3d.enabled:
                 self.draw_armor_3d_esp(
                     p,
@@ -2574,7 +2580,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                 self.draw_armor_fov_circle(p, logical_width, logical_height, armor_module)
 
         energy_module = self.registry.get("EnergyAutoAim")
-        if energy_module and energy_module.enabled and self._vision_source == "Mock":
+        if energy_module and energy_module.enabled and self._vision_source == "Mock" and not expanded_scores:
             mock_energy = self.vision.process(
                 logical_width,
                 logical_height,
@@ -2612,7 +2618,9 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             # 可见性判断：地图没画时它也不能凭空浮在视频上。
             self.draw_buff_timeline_hud(p, logical_width, logical_height)
         # ModuleList lives here so OpenZen RGB + row anim tick every frame.
-        if minecraft_active and self.setting_bool(hud, "Module List", True):
+        if expanded_scores:
+            pass  # Tab board temporarily owns the right HUD; settings stay intact.
+        elif minecraft_active and self.setting_bool(hud, "Module List", True):
             self.draw_minecraft_module_list(p, logical_width, logical_height, scale)
         elif self.setting_bool(hud, "Module List", True):
             mode_setting = hud.get_setting("Right Display") if hud else None
@@ -2643,6 +2651,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         if not self.menu_overlay_active():
             self.draw_elimination_fx(p, width, height)
         self.draw_hero_deploy_interface(p, width, height, now)
+        paint_tab_scoreboard(self, p, width, height, now, include_map=include_map is not False)
         self.dynamic_hud_ms = (time.perf_counter() - started_at) * 1000.0
 
     def paint_priority_interaction_layer(

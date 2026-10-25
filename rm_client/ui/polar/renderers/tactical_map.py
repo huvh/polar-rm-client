@@ -46,7 +46,7 @@ from ...tactical_map_geometry import (
     MapExtent, MapViewport, NormalizedMapPoint, RoundedMapSampling,
     fit_cuts_panel_corners, normalized_field_coordinate,
 )
-from ...tactical_map_interaction import MapHitGeometry, map_hit_position
+from ...tactical_map_interaction import MapHitGeometry, map_hit_position, logical_map_transform
 from ...tactical_map_telemetry import (
     RADAR_TTL_SECONDS, RadarLifetime, RadarMarker, own_active_buffs,
     penalty_notices, radar_coordinate_metres, special_mechanisms,
@@ -880,7 +880,16 @@ class TacticalMapMixin:
         base = MapExtent.collapsed(width, height, mode, density, self.minecraft_hud_active())
         target = base.target(width, height, self.tactical_map_hold)
         map_y = 48.0 if self.minecraft_hud_active() else 58.0
-        self.tactical_map_state.set_target(12.0, map_y, target.width, target.height, self.tactical_map_hold)
+        layout = getattr(self, '_tab_scoreboard_layout', None)
+        if self.tactical_map_hold and layout is not None:
+            # Prepared in physical HUD coordinates; use the SAME transform for
+            # spring geometry, rendering and existing MapHitGeometry capture.
+            scale = self.get_hud_scale(self.width(), self.height())
+            dock = layout.map_bounds
+            self.tactical_map_state.set_target(dock.x() / scale, dock.y() / scale,
+                                               dock.width() / scale, dock.height() / scale, True)
+        else:
+            self.tactical_map_state.set_target(12.0, map_y, target.width, target.height, self.tactical_map_hold)
         state = self.tactical_map_state.container
         return QRectF(state.x, state.y, state.width, state.height)
 
@@ -1770,7 +1779,7 @@ class TacticalMapMixin:
                 p.fillRect(fit, color("#07111d", 0.16 if self.hud_clean() else 0.28))
         rounded_rect(p, fit, 4, color("#000000", 0.0), with_alpha(self.hud_accent(), 0.30 if self.hud_clean() else 0.22), 1.0)
         self._tactical_map_hit_geometry = MapHitGeometry.from_paint(
-            fit, rect, p.combinedTransform(), p.clipPath() if p.hasClipping() else None,
+            fit, rect, logical_map_transform(p), p.clipPath() if p.hasClipping() else None,
             rounded=masked is not None,
         )
         return fit

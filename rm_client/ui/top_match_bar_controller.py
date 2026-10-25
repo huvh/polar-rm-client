@@ -157,7 +157,8 @@ class TopMatchBarController:
         return self.feed
 
     def observe_referee(self, name: str, data: dict[str, object], received_at: float) -> None:
-        if not self.enabled():
+        tactical = self.owner.registry.get("TacticalMap")
+        if not self.enabled() and not (tactical is not None and tactical.enabled):
             self.reset()
             return
         feed = self._ensure_feed()
@@ -177,6 +178,14 @@ class TopMatchBarController:
         feed.consume_referee(name, data, received_at=received_at,
                              own_alliance=str(owner.state.alliance_color),
                              local_robot_id=int(owner.state.robot_id))
+
+    def scoreboard_snapshot(self, now: float):
+        """Same presence/TTL/year/source projection, independent of mini-strip toggle."""
+        feed = self._ensure_feed()
+        if (not self.owner.backend.mqtt.connected
+                or getattr(self.owner.state, 'rules_season', 2026) != self.owner.backend.referee.year):
+            feed.reset()
+        return self._snapshot_frame(feed, now, chinese_enabled(self.owner.registry))
 
     def visible(self) -> bool:
         owner = self.owner
@@ -279,7 +288,11 @@ class TopMatchBarController:
         self.last_progress_bounds = None
         try:
             if not self.enabled():
-                self.reset()
+                tactical = self.owner.registry.get("TacticalMap")
+                if tactical is not None and tactical.enabled:
+                    self.hide()  # The independent Tab table still consumes this feed.
+                else:
+                    self.reset()
                 return
             if not self.visible():
                 self.hide()

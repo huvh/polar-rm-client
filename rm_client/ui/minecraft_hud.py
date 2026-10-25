@@ -465,7 +465,8 @@ class MinecraftCombatHudRenderer:
             texts.insert(2,'§6RULES PREVIEW / WIRE LOCKED')
         return tuple((text,QColor("#ffffff")) for text in texts)
 
-    def draw(self, painter: QPainter, width: int, height: int, state: Any, registry: Any, module: Any) -> MinecraftHudLayout:
+    def draw(self, painter: QPainter, width: int, height: int, state: Any, registry: Any, module: Any,
+             *, show_scoreboard: bool = True) -> MinecraftHudLayout:
         lines = self.scoreboard_lines(state)
         override_setting = module.get_setting("GUI Scale") if module is not None else None
         override = str(override_setting.value) if override_setting is not None else "Auto"
@@ -534,6 +535,7 @@ class MinecraftCombatHudRenderer:
             ))
         )
         layer_key: tuple[Any, ...] = (
+            show_scoreboard,
             logical_width,
             logical_height,
             chinese,
@@ -555,6 +557,7 @@ class MinecraftCombatHudRenderer:
         # 60-144 times per second for sub-pixel telemetry changes.  The cached
         # image remains composited every display frame with nearest sampling.
         priority_key: tuple[Any, ...] = (
+            show_scoreboard,
             chinese,
             logical_width,
             logical_height,
@@ -615,7 +618,8 @@ class MinecraftCombatHudRenderer:
             power_w = self._display_text_width(power_display) * label_scale
             _draw_display_text(self, layer_painter, layout.hotbar.right() - power_w, layout.food[-1].top() - power_h - label_scale, power_display, QColor("#55aaff") if chassis_ratio < 0.85 else QColor("#ffff55"), label_scale)
 
-            self._draw_scoreboard(layer_painter, layout.scoreboard, display_lines, scale)
+            if show_scoreboard:
+                self._draw_scoreboard(layer_painter, layout.scoreboard, display_lines, scale)
             if not tactical_map_enabled:
                 self._draw_effects(layer_painter, layout.effects_origin, tuple((HudDisplayText(label, hud_text(label, chinese)), active) for label, active in effects), scale)
             layer_painter.restore()

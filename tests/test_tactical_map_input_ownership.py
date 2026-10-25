@@ -61,7 +61,10 @@ class TacticalMapInputOwnershipTests(unittest.TestCase):
         original = window.draw_official_map
         def capture(p, rect, config):
             result = original(p, rect, config)
-            geometry.append((QRectF(result), QTransform(p.combinedTransform())))
+            # Mouse events use Qt logical positions, NOT the DPR-scaled
+            # device coordinates from combinedTransform(). Independent oracle.
+            logical = p.combinedTransform() * QTransform.fromScale(1/dpr, 1/dpr)
+            geometry.append((QRectF(result), logical))
             return result
         try:
             with patch.object(window, 'draw_official_map', side_effect=capture):

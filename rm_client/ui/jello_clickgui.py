@@ -489,6 +489,7 @@ class JelloClickGuiRenderer:
     draw_list_type = ClickGuiDrawList
 
     def __init__(self, asset_root: Path) -> None:
+        self._presentation_renderer = None
         self.asset_root = Path(asset_root)
         self.options_image = self.asset_root / "options.png"
         self.check_image = self.asset_root / "check.png"
@@ -512,6 +513,8 @@ class JelloClickGuiRenderer:
 
     @property
     def image_assets(self) -> tuple[Path, ...]:
+        if self._presentation_renderer is not None:
+            return self._presentation_renderer.image_assets
         return (
             self.options_image,
             self.check_image,
@@ -519,6 +522,18 @@ class JelloClickGuiRenderer:
             self.scrollbar_bottom_image,
             *(self.shadow_assets[name.removesuffix(".png")] for name in self._SHADOW_NAMES),
         )
+
+    def set_presentation_renderer(self, renderer: JelloClickGuiRenderer) -> None:
+        """Keep the public Jello facade stable while swapping presentation only.
+
+        Endfield is an implementation strategy, not a replacement for the
+        window's established jello_clickgui object/type or compatibility path.
+        """
+        if not isinstance(renderer, JelloClickGuiRenderer) or renderer is self:
+            raise TypeError('Expected an independent Jello presentation renderer')
+        if renderer._presentation_renderer is not None:
+            raise ValueError('Nested presentation delegation is not supported')
+        self._presentation_renderer = renderer
 
     def _image_available(self, path: Path) -> bool:
         return path in self._available_images
@@ -675,6 +690,8 @@ class JelloClickGuiRenderer:
         height: int,
         alpha: float,
     ) -> ClickGuiDrawList:
+        if self._presentation_renderer is not None:
+            return self._presentation_renderer.build(host, state, width, height, alpha)
         host._hotspot_clip = None
         hotspot_start = len(host.hotspots)
         click_gui = host.registry.get("ClickGui")
@@ -1863,6 +1880,8 @@ class JelloClickGuiRenderer:
         height: int,
         alpha: float,
     ) -> None:
+        if self._presentation_renderer is not None:
+            return self._presentation_renderer.paint_compat(host, state, painter, width, height, alpha)
         draw_list = self.build(host, state, width, height, alpha)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         painter.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)

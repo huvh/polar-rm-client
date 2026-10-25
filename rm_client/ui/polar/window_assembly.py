@@ -113,9 +113,11 @@ def create_presentation_services(paths: RuntimePaths) -> PresentationServices:
     fonts.load_from_project_assets(paths.resource_root)
     animation = AnimationBank()
     motion = GuiMotionController(animation)
+    jello = JelloClickGuiRenderer(paths.asset("jello"))
+    jello.set_presentation_renderer(EndfieldClickGuiRenderer(paths.asset("jello")))
     return PresentationServices(
         fonts, animation, motion, ClickGuiLayerCache(), ClickGuiGpuRenderer(),
-        EndfieldClickGuiRenderer(paths.asset("jello")),
+        jello,
         MinecraftCombatHudRenderer(paths.asset("minecraft_hud")),
         StudentUiState(), StudentPanelRenderer(paths.asset("minecraft_hud")),
         MinecraftServerChatRenderer(paths.asset("minecraft_hud")),

@@ -109,6 +109,22 @@ class EndfieldClickGuiThemeTests(unittest.TestCase):
                      for v in self.host.gui_scroll_viewports]
         return commands, list(self.host.hotspots), viewports
 
+    def test_public_jello_facade_keeps_exact_theme_commands_assets_and_hotspots(self):
+        facade = JelloClickGuiRenderer(ROOT / 'assets/jello')
+        facade.set_presentation_renderer(self.themed)
+        self.assertIs(type(facade), JelloClickGuiRenderer)
+        self.assertEqual(facade.image_assets, self.themed.image_assets)
+        state = JelloClickGuiState()
+        direct, direct_hits, direct_scroll = self.frame(self.themed, state)
+        delegated, hits, scroll = self.frame(facade, state)
+        self.assertEqual(delegated.commands, direct.commands)
+        self.assertEqual(hits, direct_hits)
+        self.assertEqual(scroll, direct_scroll)
+        with self.assertRaises(TypeError):
+            facade.set_presentation_renderer(facade)
+        with self.assertRaises(ValueError):
+            self.themed.set_presentation_renderer(facade)
+
     def assert_original_geometry(self, plain, themed):
         # Every original primitive must occur in order, with all geometry and
         # text sampling unchanged. Only extra chrome and colours are allowed.

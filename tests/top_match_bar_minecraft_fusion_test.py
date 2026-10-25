@@ -25,7 +25,10 @@ def production_methods(path, class_name, names):
     methods = [node for node in cls.body if isinstance(node, ast.FunctionDef) and node.name in names]
     assert {node.name for node in methods} == set(names)
     module = ast.Module(body=[ast.ImportFrom(module="__future__", names=[ast.alias(name="annotations")], level=0)] + methods, type_ignores=[])
-    scope = {"time": time, "HUD_MODES": ["ModuleListHud"]}
+    from rm_client.ui.cs2_scoreboard import paint_tab_scoreboard, prepare_tab_layout, tab_scoreboard_active
+    scope = {"time": time, "HUD_MODES": ["ModuleListHud"],
+             "paint_tab_scoreboard": paint_tab_scoreboard, "prepare_tab_layout": prepare_tab_layout,
+             "tab_scoreboard_active": tab_scoreboard_active}
     exec(compile(ast.fix_missing_locations(module), path, "exec"), scope)
     return scope
 
@@ -88,6 +91,7 @@ class MinecraftFusionTests(unittest.TestCase):
             _last_minecraft_hud_layout=None, _vision_source="Mock",
             menu_overlay_active=lambda: False, interpolated_vision_result=lambda now: None,
             tactical_map_rect=lambda w, h: QtCore.QRectF(12, 58, 170, 118),
+            tactical_map_hold_amount=lambda: 0.,  # Existing collapsed-HUD contracts.
             get_hud_scale=lambda w, h: self.hud_scale, devicePixelRatioF=lambda: self.dpr,
             setting_bool=lambda mod, key, default=False: bool(mod.get_setting(key).value) if mod and mod.get_setting(key) else default,
             setting_mode=lambda mod, key, default: str(mod.get_setting(key).value) if mod and mod.get_setting(key) else default,
