@@ -21,7 +21,8 @@ SOURCES = {
     'scoreboard.ts': 'panorama/scripts/scoreboard.vts_c',
     'csgostyles.css': 'panorama/styles/csgostyles.vcss_c',
 }
-ICONS = ('casual', 'camera', 'unmuted', 'ct_silhouette', 'menu')
+ICONS = ('casual', 'camera', 'unmuted', 'ct_silhouette', 'menu',
+         'competitive', 'ping_4', 'stats', 'elimination')
 FONTS = {'font_medium': 'stratum2-medium.otf',
          'font_condensed_regular': 'stratum2condensed-regular.otf',
          'font_mono_regular': 'stratum2mono-regular.otf'}
@@ -80,6 +81,10 @@ def bundle(reference, asset_root):
                                     'content_blocks': {k: hashlib.sha256(v).hexdigest() for k, v in after.items()}}
     for icon in ICONS:
         original = reference / 'raw' / (icon + '.vsvg_c')
+        compat = reference / 'metadata_compat_copy' / original.name
+        before, after = blocks(original), blocks(compat)
+        if {k: v for k, v in before.items() if k != 'RED2'} != after:
+            raise ValueError('SVG content changed in analysis copy: ' + icon)
         export = reference / 'export' / (icon + '.svg')
         svg = QSvgRenderer(str(export))
         if not svg.isValid():

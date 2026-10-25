@@ -21,6 +21,7 @@ from .overlay_coordinator import OverlayCoordinator
 from .jello_locale import chinese_enabled
 from .match_strip_locale import match_role_text, match_strip_text
 from .cs2_assets import local_cs2_assets
+from .cs2_scoreboard_history import ScoreboardHistory
 
 _LOG = logging.getLogger(__name__)
 
@@ -60,6 +61,7 @@ class TopMatchBarController:
         self._reset_progress = True
         self._frame_cache_key: tuple[object, ...] | None = None
         self._frame_cache = None
+        self._scoreboard_history = ScoreboardHistory()
 
     def enabled(self) -> bool:
         module = self.owner.registry.get("TopMatchBar")
@@ -89,6 +91,7 @@ class TopMatchBarController:
         self._reset_progress = True
         self._frame_cache_key = None
         self._frame_cache = None
+        self._scoreboard_history.reset()
 
     def _snapshot_frame(self, feed: TopMatchBarFeed, now: float, chinese: bool):
         """Reuse only an identical projection, including exact expiry edges.
@@ -178,6 +181,8 @@ class TopMatchBarController:
         feed.consume_referee(name, data, received_at=received_at,
                              own_alliance=str(owner.state.alliance_color),
                              local_robot_id=int(owner.state.robot_id))
+        frame = self._snapshot_frame(feed, received_at, chinese_enabled(owner.registry))
+        self._scoreboard_history.observe(frame, (self._context, feed._round))
 
     def scoreboard_snapshot(self, now: float):
         """Same presence/TTL/year/source projection, independent of mini-strip toggle."""
@@ -185,7 +190,9 @@ class TopMatchBarController:
         if (not self.owner.backend.mqtt.connected
                 or getattr(self.owner.state, 'rules_season', 2026) != self.owner.backend.referee.year):
             feed.reset()
-        return self._snapshot_frame(feed, now, chinese_enabled(self.owner.registry))
+        frame = self._snapshot_frame(feed, now, chinese_enabled(self.owner.registry))
+        self._scoreboard_history.observe(frame, (self._context, feed._round))
+        return frame
 
     def visible(self) -> bool:
         owner = self.owner

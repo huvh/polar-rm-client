@@ -6,6 +6,7 @@ data is temporary. Preview data is explicitly synthetic, not match evidence.
 from __future__ import annotations
 
 import argparse
+from dataclasses import replace
 import json
 import os
 from pathlib import Path
@@ -25,6 +26,8 @@ def run(out):
     from test_cs2_tab_scoreboard import frame
     from rm_client.ui.cs2_scoreboard import prepare_tab_layout
     from rm_client.ui.jello_locale import LANGUAGE_CHINESE
+    from rm_client.top_match_bar import LifeState
+    from rm_client.ui.cs2_scoreboard_history import LossObservation
 
     # The offscreen QPA does not enumerate Windows' installed font database.
     # Load a READ-ONLY system font for the preview only (never redistribute it).
@@ -43,6 +46,17 @@ def run(out):
         w.home_visible = False
         w.tactical_map_hold = True
         w.tactical_map_state.container.content.progress = 1
+        demo = frame()
+        def sample(team, score):
+            cards = tuple(replace(c, kills=(3, 0, 2, 1, None, 4, None)[i],
+                                  health=0 if i == 1 else (300, 0, 210, 176, None, 450, None)[i],
+                                  life=LifeState.DEAD if i == 1 else LifeState.ALIVE,
+                                  health_applicable=i not in (4, 6)) for i,c in enumerate(team.cards))
+            return replace(team, cards=cards, score=score)
+        demo = replace(demo, left=sample(demo.left, 2), right=sample(demo.right, 1), phase='MATCH')
+        # Synthetic labels stay visible; these are not generated field evidence.
+        history = (LossObservation(102,'Blue',350), LossObservation(2,'Red',288),
+                   LossObservation(103,'Blue',211), LossObservation(4,'Red',160))
         for width, height in ((1280, 720), (1600, 900), (1920, 1080), (2560, 1440)):
             w.resize(width, height)
             for dpr in (1., 1.25, 1.5, 2.):
@@ -51,7 +65,8 @@ def run(out):
                 image.fill(QColor('#474d4e'))
                 p = QPainter(image)
                 try:
-                    with patch.object(w.top_match_bar, 'scoreboard_snapshot', return_value=frame()):
+                    with patch.object(w.top_match_bar, 'scoreboard_snapshot', return_value=demo), \
+                            patch.object(w.top_match_bar._scoreboard_history, 'snapshot', return_value=history):
                         prepare_tab_layout(w, width, height, 10)
                         scale = w.get_hud_scale(width, height)
                         w.tactical_map_rect(int(width/scale), int(height/scale))

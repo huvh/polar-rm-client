@@ -81,6 +81,30 @@
       "source_sha256": "f79c101a175475324f3cb0f41a578ac9b2200ac4e107077f4baf7d701e40b3df",
       "sha256": "742e07454047ced0e03e6473fd667f9dba3f46912a4119a43902a5d676e523ac",
       "file": "sb_menu.png"
+    },
+    "competitive.svg": {
+      "source": "panorama/images/icons/ui/competitive.vsvg_c",
+      "source_sha256": "253adcbfe09ac1a2b615bc2a8c4dc4a66ce6fb0f2f8843f072d61f53b2160143",
+      "sha256": "051c285355286da1cf98553d12adf0a42da22595ccc8b9b9a15b517a9d8a4fa7",
+      "file": "sb_competitive.png"
+    },
+    "ping_4.svg": {
+      "source": "panorama/images/icons/ui/ping_4.vsvg_c",
+      "source_sha256": "fc41384c425b078aaeed3c8d1292ae224a23087090c08c3d1d337a7bface6817",
+      "sha256": "e387281264e95c0b1673f6e682e600a5d1b6f7abea4326fae8d37c09134a7f7e",
+      "file": "sb_ping_4.png"
+    },
+    "stats.svg": {
+      "source": "panorama/images/icons/ui/stats.vsvg_c",
+      "source_sha256": "f0edf11a08ed98ce9bdf6e658954a9065688b80ad3e3c659f5675aa4115fa6d6",
+      "sha256": "e7fcae7706bf382beda7c1e25aa6ce8fb1975a6acdd354cca784839dd4b34100",
+      "file": "sb_stats.png"
+    },
+    "elimination.svg": {
+      "source": "panorama/images/icons/ui/elimination.vsvg_c",
+      "source_sha256": "4a96a4bf1bf7fa8580be16683f276d476e0dcd4f3458b9ab4c871da3a7a58cb8",
+      "sha256": "c2e766a9be1eb72d63f9841b73a03534b1c3df47dfbb208a763b68147090b795",
+      "file": "sb_elimination.png"
     }
   }
 }

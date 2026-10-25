@@ -253,6 +253,30 @@
       "sha256": "ceff4f681953e8059e032d16134824016daf1ec53c1dc69f77ed75a02a14faba",
       "source": "game/csgo/panorama/fonts/stratum2.uifont",
       "source_sha256": "6a9d50938a37631bc49164aa1964a0fc33340b216880f212b95f171c8b48ebaf"
+    },
+    "sb_competitive": {
+      "source": "panorama/images/icons/ui/competitive.vsvg_c",
+      "source_sha256": "253adcbfe09ac1a2b615bc2a8c4dc4a66ce6fb0f2f8843f072d61f53b2160143",
+      "sha256": "1c077935f96e7ca284e31e2b9439e003f2596fb72bf327a421a67f893db2ff72",
+      "file": "sb_competitive.png"
+    },
+    "sb_ping_4": {
+      "source": "panorama/images/icons/ui/ping_4.vsvg_c",
+      "source_sha256": "fc41384c425b078aaeed3c8d1292ae224a23087090c08c3d1d337a7bface6817",
+      "sha256": "6db144a85ba1f07b333aaf24af171896cc67c78970e409c235581ab9b52a7a66",
+      "file": "sb_ping_4.png"
+    },
+    "sb_stats": {
+      "source": "panorama/images/icons/ui/stats.vsvg_c",
+      "source_sha256": "f0edf11a08ed98ce9bdf6e658954a9065688b80ad3e3c659f5675aa4115fa6d6",
+      "sha256": "368b3d6b98f96a842e4c0e66ac3d1b0c3359b666be4bcc1c384087bda5ce37d7",
+      "file": "sb_stats.png"
+    },
+    "sb_elimination": {
+      "source": "panorama/images/icons/ui/elimination.vsvg_c",
+      "source_sha256": "4a96a4bf1bf7fa8580be16683f276d476e0dcd4f3458b9ab4c871da3a7a58cb8",
+      "sha256": "fe7df1983b72a07a563581d770c07c8ce0e19d6518ad44c67cd2a57345d1d405",
+      "file": "sb_elimination.png"
     }
   },
   "source_files_before": {
