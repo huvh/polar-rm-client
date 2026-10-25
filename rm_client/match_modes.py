@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
+
+from .rules import competition_rules, match_modes_for_season, validate_season
 
 
 MATCH_MODE_KEYS = ["RMUC7v7", "RMUL3v3"]
@@ -26,6 +28,7 @@ class FieldLayout:
     height_m: float
     mirror_for_blue: bool = True
     zones: list[MapHotZone] = field(default_factory=list)
+    positions_calibrated: bool = True
 
 
 @dataclass
@@ -40,6 +43,8 @@ class MatchModeConfig:
     default_module_list_style: str
     enabled_modules: set[str]
     disabled_modules: set[str] = field(default_factory=set)
+    season: int = 2026
+    rule_version: str = 'legacy-client-baseline'
 
 
 MATCH_MODES: dict[str, MatchModeConfig] = {
@@ -145,17 +150,67 @@ MATCH_MODES: dict[str, MatchModeConfig] = {
 }
 
 
-class MatchModeManager:
-    def __init__(self, default: str = "RMUC7v7") -> None:
-        self.current = MATCH_MODES.get(default, MATCH_MODES["RMUC7v7"])
+def match_mode_config(key: str, season=2026) -> MatchModeConfig:
+    year=validate_season(season)
+    if year==2026:
+        if key=='RMUL1v1':
+            raise ValueError('RMUL1v1 is available only in the reviewed 2027 rule pack')
+        return MATCH_MODES.get(key,MATCH_MODES['RMUC7v7'])
+    rules=competition_rules(year,key)
+    if rules.duration_sec is None or rules.field_size_m is None:
+        raise ValueError(f'{rules.title}: duration/field geometry not reviewed')
+    base=MATCH_MODES['RMUL3v3' if key.startswith('RMUL') else 'RMUC7v7']
+    width,height=rules.field_size_m
+    # An old map's calibration/zones cannot be relabelled as the new field.
+    illustrations={'RMUL3v3':'assets/maps/rmul_2027_3v3_rules.png',
+                   'RMUL1v1':'assets/maps/rmul_2027_1v1_rules.png',
+                   'RMUC7v7':'assets/maps/rmuc_2027_7v7_rules.png'}
+    field=FieldLayout(key,rules.title+' · 规则图示（未标定）',
+        rules.facts.get('field_asset') or illustrations.get(key,''),
+        width,height,mirror_for_blue=False,zones=[],positions_calibrated=False)
+    enabled=set(base.enabled_modules);disabled=set(base.disabled_modules)
+    for feature,module in (('hero_deploy','HeroLob'),('rune','EnergyAutoAim'),
+                           ('base','BaseOutpostStatus'),('control_points','VictoryPointStatus')):
+        if rules.features.get(feature) is False:disabled.add(module)
+        elif rules.features.get(feature) is True:
+            disabled.discard(module)
+            enabled.add(module)
+    enabled-=disabled
+    if key=='RMUL1v1':
+        disabled.update({'VictoryPointStatus','BaseOutpostStatus','EnergyAutoAim','AirSupport','HeroLob',
+                         'EconomyPanel','ProjectileShop','ReloadingPanel'})
+        enabled-=disabled
+    return replace(base,key=key,title=rules.title,
+        subtitle=f'{width:g}m × {height:g}m · 2027 V{rules.version} · 协议须单独核对',
+        duration_sec=rules.duration_sec,field=field,enabled_modules=enabled,
+        disabled_modules=disabled,season=year,rule_version=rules.version)
 
-    def set_mode(self, key: str) -> MatchModeConfig:
-        self.current = MATCH_MODES.get(key, MATCH_MODES["RMUC7v7"])
+
+class MatchModeManager:
+    def __init__(self, default: str = "RMUC7v7", *, season=2026) -> None:
+        self.season=validate_season(season)
+        self.current=match_mode_config(default,self.season)
+
+    @property
+    def mode_keys(self):
+        return match_modes_for_season(self.season)
+
+    def config_for(self,key):
+        return match_mode_config(key,self.season)
+
+    def set_mode(self, key: str, *, season=None) -> MatchModeConfig:
+        year=self.season if season is None else validate_season(season)
+        current=match_mode_config(key,year)
+        self.season,self.current=year,current
         return self.current
 
     def apply_to_registry(self, registry: Any) -> None:
         config = self.current
+        self._set_setting(registry, "MatchMode", "Season", str(self.season))
         self._set_setting(registry, "MatchMode", "Mode", config.key)
+        module=registry.get('MatchMode')
+        setting=module.get_setting('Mode') if module else None
+        if setting is not None:setting.options=list(self.mode_keys)
         self._set_setting(registry, "TacticalMap", "Map Size", config.default_map_size)
         self._set_setting(registry, "TacticalMap", "Official Map", config.field.title)
         self._set_setting(registry, "HUD", "Right Display", config.default_right_display)

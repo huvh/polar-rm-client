@@ -71,6 +71,10 @@ def encode_air_support_command(command_id: int) -> bytes:
 
 def available_actions(state: Any) -> list[EconomyOffer]:
     """Dispatch annual rules without silently accepting an unsupported year."""
+    from .rules import validate_season
+    if validate_season(getattr(state,'rules_season',2026))==2027:
+        from .rules.economy import rule_economy_cards
+        return rule_economy_cards(state)
     from .backend.referee.registry import DEFAULT_PROFILE, get_profile
     return get_profile(getattr(state, "referee_profile", DEFAULT_PROFILE)).available_actions(state)
 
@@ -90,7 +94,7 @@ class EconomyCommandBridge:
     def _context(state: Any) -> tuple:
         # Retain the actual owner: equal dataclass values are not identity.
         return (state,) + tuple(getattr(state, name, None) for name in (
-            "referee_profile", "match_mode", "robot_profile", "robot_id",
+            "referee_profile", "rules_season", "rules_version", "match_mode", "robot_profile", "robot_id",
             "alliance_color", "current_round", "mock_simulation_enabled", "economy_mock_mode"))
 
     @property
@@ -106,6 +110,8 @@ class EconomyCommandBridge:
         mock: bool | None = None,
         now: float | None = None,
     ) -> EconomyTransaction:
+        if getattr(state,'rules_season',2026)!=2026:
+            raise ValueError('2027规则未绑定受审裁判协议，禁止复用2026经济编码')
         if not offer.enabled or offer.status_only:
             raise ValueError(offer.reason or "当前操作不可用")
         now = time.perf_counter() if now is None else float(now)

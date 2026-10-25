@@ -17,7 +17,7 @@ from PySide6.QtGui import QFont, QPainter, QPainterPath
 from ..economy_values import EconomyContext, EconomyOffer, CATEGORY_TITLES, TRANSACTION_LABELS
 from .clickgui_gpu import ClickGuiDrawList
 from .economy_locale import economy_text
-from .economy_presentation import EconomyConfirmation
+from .economy_presentation import EconomyConfirmation,offer_price_text,offer_detail_price_text
 from .economy_layout import EconomyModuleGeometry, EconomyCompatLayout
 from .economy_workspace import EconomyWorkspaceLayout
 from .theme import color
@@ -90,7 +90,7 @@ def append_gpu_offer(commands: ClickGuiDrawList, offer: EconomyOffer, rect: QRec
         offer.short_title, style.font("poppins_bold", 10.5 * style.scale), title_color,
         clip=clip,
     )
-    price = "仅状态" if offer.status_only else f"{offer.cost} 金币"
+    price = offer_price_text(offer)
     commands.text(
         QRectF(rect.left() + 18.0, rect.top() + 8.0, rect.width() - 32.0, 24.0),
         price, style.font("poppins_bold", 9.5 * style.scale),
@@ -114,10 +114,9 @@ def append_gpu_offer_detail(commands: ClickGuiDrawList, selected: EconomyOffer, 
         selected.title, style.font("poppins_bold", 13.5 * style.scale), color("#ffffff", alpha),
         clip=clip,
     )
-    tag = "预计价格" if selected.estimated else ("模拟请求" if mock_mode else "裁判系统")
     commands.text(
         QRectF(rect.left() + 16.0, rect.top() + 36.0, rect.width() - 16.0 * 2, 20.0),
-        f"{selected.unit}  ·  {selected.cost} 金币  ·  {tag}",
+        offer_detail_price_text(selected,mock_mode),
         style.font("poppins_medium", 9.0 * style.scale), color("#ffd56a", alpha),
         clip=clip,
     )
@@ -263,7 +262,7 @@ def paint_economy_offer(p: QPainter, offer: EconomyOffer, rect: QRectF, style: E
         style.font("poppins_bold", 10.5 * style.scale),
         title_color,
     )
-    price = "仅状态" if offer.status_only else f"{offer.cost} 金币"
+    price = offer_price_text(offer)
     paint.text(
         p,
         rect.adjusted(18.0 * style.scale, 8.0 * style.scale, -14.0 * style.scale, -rect.height() + 32.0 * style.scale),
@@ -291,11 +290,10 @@ def paint_economy_offer_detail(p: QPainter, selected: EconomyOffer, rect: QRectF
         style.font("poppins_bold", 13.5 * style.scale),
         color("#ffffff"),
     )
-    tag = "预计价格" if selected.estimated else ("模拟请求" if mock_mode else "裁判系统")
     paint.text(
         p,
         QRectF(rect.left() + 16.0 * style.scale, rect.top() + 44.0 * style.scale, rect.width() - 16.0 * style.scale * 2.0, 22.0 * style.scale),
-        f"{selected.unit}  ·  {selected.cost} 金币  ·  {tag}",
+        offer_detail_price_text(selected,mock_mode),
         style.font("poppins_medium", 9.0 * style.scale),
         color("#ffd56a"),
     )

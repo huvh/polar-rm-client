@@ -268,6 +268,11 @@ class RefereeDomainCharacterizationTests(unittest.TestCase):
         # pinned old source; preserve every historical fixture assertion.
         self.assertEqual(expected['EconomyCommandBridge'], 'dd830c44d074c70fbc536343b3df08ccefdb28019cf2bdef5ac484c1b7e6b46a')
         expected['EconomyCommandBridge'] = 'c98145e8bf23cad305fa2bfe6cc40971fa8e6684da534827ef922f4917541190'
+        # Reviewed annual admission + year/version transaction-context guard.
+        # 2026 offer/encoder scenarios below retain the untouched old oracle;
+        # test_rules_2027_runtime covers forged/mocked 2027 submissions.
+        self.assertEqual(expected['EconomyCommandBridge'], 'c98145e8bf23cad305fa2bfe6cc40971fa8e6684da534827ef922f4917541190')
+        expected['EconomyCommandBridge'] = '94294d584376644206f87e6a875e2a409f2a480737c98bc386b09d3d6969d6c2'
         self.assertEqual(expected['RefereeProfile'], '5871581885bd8b42c3d5f2aac64ea03f67c6f5e7c58665e4da7cddff426428ae')
         expected['RefereeProfile'] = 'a5f768e2953025d487c973df1b8c156a6b62edd5fc0d77223e6ba11d3ecc24f4'
         # Official213/V2 review: all structural uplink topics dispatch through

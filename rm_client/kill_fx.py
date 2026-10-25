@@ -1503,7 +1503,8 @@ class KillFxRenderer:
         companion_anchor = layout.anchor if anchor_policy == "Combat Focus" else None
         if "hit_info" in elements:
             self.hit_info.draw(painter, QPointF(width * 0.5, height * 0.5), now, layout.scale, anchor=companion_anchor)
-        if "match_progress" in elements and state is not None:
+        if ("match_progress" in elements and state is not None
+                and getattr(state, "rules_season", 2026) != 2027):
             own_blue = int(getattr(state, "robot_id", 3)) >= 100 or str(getattr(state, "alliance_color", "")).lower() == "blue"
             self.match_progress.draw(
                 painter, width, now, layout.scale,

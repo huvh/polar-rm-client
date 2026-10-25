@@ -110,6 +110,17 @@ class TopMatchBarController:
                observations(feed._max_hp), observations(feed._values), tuple(feed._kills.items()))
         if key != self._frame_cache_key:
             frame = feed.snapshot(now, local_robot_id=local_id)
+            if getattr(self.owner.state, 'rules_season', 2026) == 2027:
+                # The feed's legacy role vocabulary is deliberately unchanged
+                # for 2026. Project exact built-ins, never caller nicknames.
+                def annual_strip(strip):
+                    def annual_card(card):
+                        label = ({(1, 'HERO'): 'HEAVY', (6, 'UAV'): 'AIR SYSTEM'}
+                                 .get((card.robot_id % 100, card.label), card.label))
+                        return replace(card, label=label)
+                    return replace(strip, cards=tuple(map(annual_card, strip.cards)),
+                                   systems=tuple(map(annual_card, strip.systems)))
+                frame = replace(frame, left=annual_strip(frame.left), right=annual_strip(frame.right))
             self._frame_cache = replace(frame, roster_label=scope_label)
             self._frame_cache_key = key
         return self._frame_cache
@@ -128,13 +139,14 @@ class TopMatchBarController:
         source = (str(owner.backend.scenario_key), str(owner.backend.referee.profile_id),
                   str(mqtt.host), int(mqtt.port), int(mqtt.receive_generation),
                   float(mqtt.disconnected_at), bool(mqtt.connected))
-        context = (mode, str(state.alliance_color), int(state.robot_id), source, scope, label, self._custom_rosters)
+        year=getattr(state,'rules_season',2026)
+        context = (year,mode, str(state.alliance_color), int(state.robot_id), source, scope, label, self._custom_rosters)
         if self.feed is None or context != self._context:
-            profiles = profiles_for_match(mode)
+            profiles = profiles_for_match(mode,season=year)
             # Profiles are configuration candidates, not proof of life. Ground
             # scope selects only role profiles with a modeled HP capacity.
-            ground = {"Hero", "Engineer", "Infantry1", "Infantry2", "Sentinel"}
-            red = tuple(p.robot_id for p in profiles if scope != "Ground Robots" or p.key in ground)
+            ground = {"Hero", "Heavy", "Engineer", "Infantry1", "Infantry2", "Sentinel"}
+            red = tuple(p.robot_id for p in profiles if p.robot_id is not None and (scope != "Ground Robots" or p.key in ground))
             blue = tuple(robot_id + 100 for robot_id in red)
             if self._custom_rosters is not None:
                 red, blue, _ = self._custom_rosters
@@ -150,6 +162,9 @@ class TopMatchBarController:
             return
         feed = self._ensure_feed()
         owner = self.owner
+        if getattr(owner.state,'rules_season',2026)!=getattr(owner.backend.referee,'year',2026):
+            feed.reset()
+            return
         # These shared fields have been reviewed for both exact profiles.
         # Student and unknown profiles must not inherit their meanings.
         if owner.backend.referee.profile_id not in {"rm2026-v1.3.1", "rm2026-v2.0.0"} or not owner.backend.mqtt.connected:
@@ -190,7 +205,8 @@ class TopMatchBarController:
 
     def _paint_progress(self, painter: Any, frame: Any, width: int, now: float,
                         left: float, right: float, bottom: float, maximum_bottom: float) -> None:
-        if not bool(self._setting("BF6 Progress", True)) or self.owner.state.match_mode != "RMUC7v7":
+        if (not bool(self._setting("BF6 Progress", True)) or self.owner.state.match_mode != "RMUC7v7"
+                or getattr(self.owner.state, 'rules_season', 2026) == 2027):
             return  # RMUL victory points are a different metric.
         renderer = getattr(getattr(self.owner, "kill_fx", None), "match_progress", None)
         if renderer is None:

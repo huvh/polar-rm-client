@@ -30,7 +30,7 @@ class Host(PersistenceMixin):
             release_all=action("release"), clear_pending=action("clear"), set_binds=Mock())
         self.backend = SimpleNamespace(lock_control=action("lock"),
             mqtt=SimpleNamespace(client_id="1", mock_output=True), set_client_id=Mock())
-        self.match_mode_manager = SimpleNamespace(current=SimpleNamespace(key="RMUC7v7"), set_mode=Mock())
+        self.match_mode_manager = SimpleNamespace(current=SimpleNamespace(key="RMUC7v7"), season=2026, set_mode=Mock())
         self.reject_pending_configuration_edit = lambda: False
         self.current_robot_performance = lambda key: None
         self.get_setting_number = lambda *args: 1

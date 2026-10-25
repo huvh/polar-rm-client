@@ -48,7 +48,8 @@ def settings_specs(registry, page):
     for name, allowed, toggle in PAGES[page]:
         module = registry.get(name)
         if module is not None:
-            settings = [s for s in module.settings if s.kind in ("bool", "mode", "number")
+            from ..rules.presentation import visible_rule_settings
+            settings = [s for s in visible_rule_settings(registry,module) if s.kind in ("bool", "mode", "number")
                         and (allowed is None or s.name in allowed)]
             yield module, settings, toggle
 

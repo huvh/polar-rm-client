@@ -78,6 +78,7 @@ from .video_backend import AnnexBRecoveryGate, ContinuousMjpegDecoder, RmVideoBa
 from .field_log import RotatingJsonlLogger
 from .qualification import QualificationEvidenceStore, QualificationManager
 from ..runtime_paths import RuntimePaths
+from ..rules_compatibility import normalize_rule_season, retire_official_observations
 
 # 官方性能体系取值（对齐 messages.proto 与 Shark RoboModeSettings）
 HERO_MELEE = 3
@@ -115,6 +116,7 @@ class BackendManager:
         self.paths = RuntimePaths.discover()
         self.workspace = workspace if workspace is not None else self.paths.workspace_root
         self.state = state
+        self.rule_season = 2026
         self.scenario_key = scenario_key
         self.safety = OfficialSafety(scenario_key)
         self.referee = get_profile(referee_profile)
@@ -215,6 +217,7 @@ class BackendManager:
         self.mqtt.bind_economy_context(self.state, self.qualification)
         self.config = SCENARIOS.get(scenario_key, SCENARIOS["LabDebug"])
         self._apply_config(self.config)
+        self.set_rule_season(getattr(state, "rules_season", 2026))
 
     # ------------------------------------------------------------------
     # 场景应用
@@ -336,6 +339,31 @@ class BackendManager:
             self.state.referee_profile if self.state is not None else None,
             bool(self._referee_change_requested), self._referee_change_error,
         )
+
+    def set_rule_season(self, season: int) -> None:
+        """Invalidate annual official authority, not independent device schemas.
+
+        Called before runtime startup as well as from the owner-thread UI.
+        Never infer the rule season from a profile's version number.
+        """
+        season = normalize_rule_season(season)
+        state = self.state
+        changed = (getattr(self, "rule_season", 2026) != season
+                   or getattr(state, "rules_season", 2026) != season
+                   or self.mqtt.rule_season != season)
+        self.rule_season = season
+        if state is not None:
+            state.rules_season = season
+        if changed:
+            # Retire the in-memory context without deleting historical signed
+            # evidence or modifying its year/profile identity.
+            self.qualification.session = None
+        self.serial.bind_rule_state(state)
+        self.serial.set_rule_season(season, _invalidate=changed)
+        self.mqtt.set_rule_season(season, _invalidate=changed)
+        if changed:
+            # Revoke wire authority before any fallible state/UI data cleanup.
+            retire_official_observations(state)
 
     def set_referee_profile(self, profile_id: str, *, start_video: bool = True) -> None:
         """Accept a locked target; an explicit repeat retries incomplete application."""
@@ -1597,6 +1625,9 @@ class BackendManager:
         self._active_video_source = normalized
 
     def sync_frontend_state(self, state: RobotState) -> None:
+        from rm_client.rules_compatibility import backend_rule_compatibility
+        if not backend_rule_compatibility(self, state)[0]:
+            return
         if self._backend_transition_blocks_work():
             return
         return self.referee_adapter.sync_frontend_state(state)
@@ -1967,13 +1998,15 @@ class BackendManager:
 
     def apply_updates(self, state: RobotState) -> int:
         """消费解码队列并写入 RobotState；返回本次应用的消息条数。"""
+        from rm_client.rules_compatibility import backend_rule_compatibility
         if self._backend_transition_blocks_work():
             return 0
         generation = self.mqtt.receive_generation
         messages = self.mqtt.drain_decoded()
         count = 0
         for _topic, name, data, _ts in messages:
-            if self.mqtt.receive_generation != generation:
+            if (self.mqtt.receive_generation != generation
+                    or not backend_rule_compatibility(self, state)[0]):
                 break
             try:
                 # Disable synthetic state before applying the first official
@@ -1981,6 +2014,9 @@ class BackendManager:
                 # of clearing it immediately after it was written.
                 self._begin_official_state(state, _ts)
                 self._apply_one(state, name, data)
+                if (self.mqtt.receive_generation != generation
+                        or not backend_rule_compatibility(self, state)[0]):
+                    break
                 self._notify_referee_view(name, data, _ts)
                 count += 1
                 self._official_state_updates_count += 1
@@ -2007,6 +2043,9 @@ class BackendManager:
         return Rm2026StateAdapter._clean(data)
 
     def _apply_one(self, state: RobotState, name: str, data: dict[str, Any]) -> None:
+        from rm_client.rules_compatibility import backend_rule_compatibility
+        if not backend_rule_compatibility(self, state)[0]:
+            return
         if name == "RobotStaticStatus" and int(data.get("robot_id", 0)) not in {0, int(self.mqtt.client_id)}:
             self.safety.lock_control("referee robot ID differs from MQTT ClientId")
             self.field_log.emit("referee_identity_mismatch", client_id=self.mqtt.client_id, robot_id=data.get("robot_id"))
@@ -2346,10 +2385,19 @@ class BackendManager:
         self.field_log.emit("control_lock", reason=reason)
 
     def begin_qualification(self, intents: Any, *, ttl_s: float = 30.0):
+        from rm_client.rules_compatibility import backend_rule_compatibility
+        compatible, reason = backend_rule_compatibility(self, getattr(self, "state", None))
+        if not compatible:
+            raise ValueError(reason)
         self._drain_input_clear()
         if self._backend_transition_blocks_work():
             raise RuntimeError("Backend lifecycle transition must finish before qualification")
         token = self.safety.begin_qualification(intents, ttl_s=ttl_s)
+        compatible, reason = backend_rule_compatibility(self, getattr(self, "state", None))
+        if not compatible:
+            if not self.safety.estop_active:
+                self.safety.lock_control(reason)
+            raise ValueError(reason)
         if self._input_clear_incomplete():
             raise RuntimeError("Input clear must complete before qualification")
         self.field_log.emit(
@@ -2367,6 +2415,10 @@ class BackendManager:
         match_mode: str | None = None,
         video_source: str | None = None,
     ) -> tuple[bool, str]:
+        from rm_client.rules_compatibility import backend_rule_compatibility
+        compatible, reason = backend_rule_compatibility(self, getattr(self, "state", None))
+        if not compatible:
+            return False, reason
         try:
             self._drain_input_clear()
         except Exception:
@@ -2424,7 +2476,8 @@ class BackendManager:
                 return False, self.safety.last_reason
         if (not getattr(self.mqtt, "subscriptions_ready", False)
                 or arm_owner != (self.mqtt.client, self.mqtt.client_id,
-                                 self.mqtt.receive_generation, self.referee.profile_id)):
+                                 self.mqtt.receive_generation, self.referee.profile_id)
+                or not backend_rule_compatibility(self, getattr(self, "state", None))[0]):
             self.safety.lock_control("MQTT session changed during qualification verification")
             return False, self.safety.last_reason
         try:
@@ -2442,7 +2495,8 @@ class BackendManager:
         if (not getattr(self.mqtt, "subscriptions_ready", False)
                 or arm_owner != (self.mqtt.client, self.mqtt.client_id,
                                  self.mqtt.receive_generation, self.referee.profile_id)
-                or self.safety.control_state.value != "MATCH_ARMED"):
+                or self.safety.control_state.value != "MATCH_ARMED"
+                or not backend_rule_compatibility(self, getattr(self, "state", None))[0]):
             self.safety.lock_control("control authority changed during arm notification")
             return False, self.safety.last_reason
         self.field_log.emit("control_arm", capabilities=sorted(capabilities))

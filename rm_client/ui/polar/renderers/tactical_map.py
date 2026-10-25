@@ -27,6 +27,7 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import QInputDialog, QMessageBox
 
 # 相对导入层级：rm_client/ui/polar/renderers/ → .... = rm_client、... = rm_client.ui
+from ....rules.presentation import control_zone_display
 from ....match_modes import FieldLayout, MatchModeConfig
 from ....model import Module
 from ....referee_profiles import V2_PROFILE
@@ -547,7 +548,7 @@ class TacticalMapMixin:
         if self._bool_on("MatchTimer", "Show Scores"):
             if config.key == "RMUL3v3":
                 parts.append(
-                    f"VP {self.state.ally_victory_points}:{self.state.enemy_victory_points}"
+                    f"{getattr(self.state,'control_score_title','VP')} {self.state.ally_victory_points}:{self.state.enemy_victory_points}"
                 )
             else:
                 parts.append(
@@ -844,7 +845,7 @@ class TacticalMapMixin:
         self.draw_map_zones(p, field_rect, config.field, compact=compact)
         if self.setting_bool(module, "Map Marks", True):
             self.draw_map_markers(p, field_rect, config.field, compact=compact)
-        draw_radar_overlay(self, p, field_rect, config.field, compact=compact)
+        if config.field.positions_calibrated:draw_radar_overlay(self, p, field_rect, config.field, compact=compact)
         if self.setting_bool(module, "Robot Dots", True):
             self.draw_map_robots(p, field_rect, config.field, compact=compact)
         draw_penalty_strip(self, p, field_rect, compact=compact)
@@ -939,6 +940,9 @@ class TacticalMapMixin:
         # eventual release and drag remain map-owned even after Tab reverses.
         self.pointer_interaction.own_release()
         self._control_mouse_point = None
+        if not getattr(field,'positions_calibrated',True):
+            self.toast('2027规则图示未经战术坐标标定，不能发送屏幕标点')
+            return True
         if self.tactical_map_field_mirrored:
             position = position.mirrored()
         map_x, map_y = position.field_metres(field.width_m, field.height_m)
@@ -958,6 +962,9 @@ class TacticalMapMixin:
 
     def open_event_command_menu(self) -> None:
         """Reviewed forms only; publishers retain final identity/safety authority."""
+        if getattr(self.state, 'rules_season', 2026) == 2027:
+            self.toast('2027裁判命令尚未审定；不能使用2026表单发送')
+            return
         try:
             context = _event_context(self)
             commands = _event_command_options(self)
@@ -1161,7 +1168,7 @@ class TacticalMapMixin:
         self.draw_map_zones(p, field_rect, config.field, compact=compact, detail_progress=hold_amount)
         if self.setting_bool(module, "Map Marks", True):
             self.draw_map_markers(p, field_rect, config.field, compact=compact, detail_progress=hold_amount)
-        draw_radar_overlay(self, p, field_rect, config.field, compact=compact, detail_progress=hold_amount)
+        if config.field.positions_calibrated:draw_radar_overlay(self, p, field_rect, config.field, compact=compact, detail_progress=hold_amount)
         if self.setting_bool(module, "Robot Dots", True):
             self.draw_liquid_map_robots(p, field_rect, config.field, compact=compact, detail_progress=hold_amount)
         draw_penalty_strip(self, p, field_rect, compact=compact)
@@ -1203,6 +1210,7 @@ class TacticalMapMixin:
         compact: bool = False,
         detail_progress: float | None = None,
     ) -> None:
+        if not getattr(field,'positions_calibrated',True):return
         robots = list(self.state.map_robots)
         if not robots:
             return
@@ -1721,7 +1729,9 @@ class TacticalMapMixin:
         rounded_rect(p, rect, 6, color("#050506", 0.72), color("#ffffff", 0.08))
         masked = None
         if image is None or image.isNull():
-            self.draw_text(p, rect, hud_text("official map asset missing", chinese_enabled(self.registry)), self.font("poppins_regular", 8.0), self.hud_danger(), Qt.AlignmentFlag.AlignCenter)
+            message=('2027 rule illustration unavailable; positions uncalibrated' if config.season==2027
+                     else "official map asset missing")
+            self.draw_text(p, rect, hud_text(message, chinese_enabled(self.registry)), self.font("poppins_regular", 8.0), self.hud_danger(), Qt.AlignmentFlag.AlignCenter)
             fit = self.fit_aspect(rect, config.field.width_m / max(0.1, config.field.height_m))
         else:
             fit = self.fit_aspect(rect, image.width() / max(1.0, image.height()))
@@ -1830,6 +1840,7 @@ class TacticalMapMixin:
         return layer
 
     def official_map_image(self, config: MatchModeConfig) -> QImage | None:
+        if not config.field.asset_path:return None
         path = self.paths.resource_root / config.field.asset_path
         key = str(path)
         if key not in self.map_images:
@@ -1899,6 +1910,7 @@ class TacticalMapMixin:
             rounded_rect(p, zone_rect, 3, with_alpha(fill, fill_alpha), color("#ffffff", border_alpha))
 
     def draw_map_robots(self, p: QPainter, rect: QRectF, field: FieldLayout, compact: bool = False) -> None:
+        if not getattr(field,'positions_calibrated',True):return
         now = time.perf_counter()
         font = self.font("poppins_medium", 6.8)
         for index, robot in enumerate(self.state.map_robots):
@@ -1935,6 +1947,7 @@ class TacticalMapMixin:
         compact: bool = False,
         detail_progress: float | None = None,
     ) -> None:
+        if not getattr(field,'positions_calibrated',True):return
         now = time.perf_counter()
         detail = (0.0 if compact else 1.0) if detail_progress is None else max(0.0, min(1.0, detail_progress))
         font = self.font("poppins_medium", 6.5)
@@ -2232,18 +2245,22 @@ class TacticalMapMixin:
             if self.hud_row_visible("VictoryPointStatus", "Victory Points"):
                 match_rows.extend(
                     [
-                        (red_label, str(red_vp), red_vp / 200.0, self.map_team_color("red"), "red_vp", f"RED VP {red_vp}"),
-                        (blue_label, str(blue_vp), blue_vp / 200.0, self.map_team_color("blue"), "blue_vp", f"BLUE VP {blue_vp}"),
+                        (red_label, str(red_vp), red_vp / max(1,getattr(self.state,'control_score_max',200)), self.map_team_color("red"), "red_vp", f"RED VP {red_vp}"),
+                        (blue_label, str(blue_vp), blue_vp / max(1,getattr(self.state,'control_score_max',200)), self.map_team_color("blue"), "blue_vp", f"BLUE VP {blue_vp}"),
                     ]
                 )
             if self.hud_row_visible("VictoryPointStatus", "Control Zone"):
                 match_rows.append(
-                    ("CTRL", f"{int(self.state.control_progress)}%", self.state.control_progress / 100.0, self.map_control_color(), "control", f"CONTROL {self.state.control_owner} {self.state.control_progress}%")
+                    ("CTRL", control_zone_display(self.state), self.state.control_progress / 100.0, self.map_control_color(), "control", f"CONTROL {self.state.control_owner} {self.state.control_progress}%")
                 )
             if self.hud_row_visible("EconomyPanel", "Gold"):
                 match_rows.append(("GOLD", str(int(self.state.remaining_economy)), min(1.0, self.state.remaining_economy / 400.0), self.hud_state_color("gold"), "gold", self.economy_gold_text()))
         else:
-            show_shield = self._bool_on("BaseOutpostStatus", "Shield")
+            if (getattr(config,'season',2026)==2027 and config.key=='RMUC7v7'
+                    and self.hud_row_visible('VictoryPointStatus','Control Zone')):
+                match_rows.append(('CTRL', control_zone_display(self.state), 0.0,
+                    self.map_control_color(), 'control', '累计控制度待2027裁判同步，无固定获胜阈值'))
+            show_shield = self._bool_on("BaseOutpostStatus", "Shield") and getattr(self.state,'rules_season',2026)==2026
             if self.hud_row_visible("BaseOutpostStatus", "Own Base"):
                 match_rows.append(
                     (f"{own_side.upper()} BASE YOU", self.short_ring_number(self.state.base_health), self.state.base_health / max(1, self.state.base_max_health), self.map_team_color("ally"), "base", self.base_row_text(own_side, self.state.base_health, self.state.base_max_health, self.state.base_shield, show_shield))
@@ -2553,13 +2570,13 @@ class TacticalMapMixin:
             if self.hud_row_visible("VictoryPointStatus", "Victory Points"):
                 rows.extend(
                     [
-                        ("ALLY", str(self.state.ally_victory_points), self.state.ally_victory_points / 200.0, self.hud_state_color("ally")),
-                        ("ENEMY", str(self.state.enemy_victory_points), self.state.enemy_victory_points / 200.0, self.hud_state_color("enemy")),
+                        ("ALLY", str(self.state.ally_victory_points), self.state.ally_victory_points / max(1,getattr(self.state,'control_score_max',200)), self.hud_state_color("ally")),
+                        ("ENEMY", str(self.state.enemy_victory_points), self.state.enemy_victory_points / max(1,getattr(self.state,'control_score_max',200)), self.hud_state_color("enemy")),
                     ]
                 )
             if self.hud_row_visible("VictoryPointStatus", "Control Zone"):
                 rows.append(
-                    ("CTRL", f"{int(self.state.control_progress)}%", self.state.control_progress / 100.0, self.hud_state_color("control"))
+                    ("CTRL", control_zone_display(self.state), self.state.control_progress / 100.0, self.hud_state_color("control"))
                 )
             if self.hud_row_visible("ThermalPowerPanel", "Heat"):
                 ratio = self.state.current_heat / max(1.0, self.state.max_heat)
@@ -2595,8 +2612,8 @@ class TacticalMapMixin:
             if self.hud_row_visible("VictoryPointStatus", "Victory Points"):
                 rows.extend(
                     [
-                        ("ALLY VP", str(self.state.ally_victory_points), self.state.ally_victory_points / 200.0, self.hud_state_color("ally")),
-                        ("ENEMY VP", str(self.state.enemy_victory_points), self.state.enemy_victory_points / 200.0, self.hud_state_color("enemy")),
+                        ("ALLY "+getattr(self.state,"control_score_title","VP"), str(self.state.ally_victory_points), self.state.ally_victory_points / max(1,getattr(self.state,'control_score_max',200)), self.hud_state_color("ally")),
+                        ("ENEMY "+getattr(self.state,"control_score_title","VP"), str(self.state.enemy_victory_points), self.state.enemy_victory_points / max(1,getattr(self.state,'control_score_max',200)), self.hud_state_color("enemy")),
                     ]
                 )
             if self.hud_row_visible("VictoryPointStatus", "Control Zone"):

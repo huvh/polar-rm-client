@@ -43,6 +43,7 @@ _EXACT_EFFECTS = {
     SettingId("HUD", "Visual Tone"): SettingEffect.INVALIDATE_HUD_PALETTE,
     SettingId("Scenario", "Mode"): SettingEffect.APPLY_SCENARIO,
     SettingId("MatchMode", "Mode"): SettingEffect.APPLY_MATCH_MODE,
+    SettingId("MatchMode", "Season"): SettingEffect.APPLY_MATCH_MODE,
     SettingId("AllianceProfile", "Side"): SettingEffect.APPLY_ALLIANCE,
     SettingId("MatchMode", "Alliance"): SettingEffect.APPLY_LEGACY_ALLIANCE,
     SettingId("ClickGui", "Mode"): SettingEffect.APPLY_GUI_MODE,

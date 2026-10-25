@@ -59,7 +59,8 @@ class DisplayLocaleTests(unittest.TestCase):
         w.registry.get('ClickGui').get_setting('Language').value = language
         w.startup_step = 'scenario'
         w.scenario_manager = NS(current=SCENARIOS['OfficialEvent'])
-        w.match_mode_manager = NS(current=MATCH_MODES[MATCH_MODE_KEYS[0]])
+        from rm_client.match_modes import MatchModeManager
+        w.match_mode_manager = MatchModeManager(MATCH_MODE_KEYS[0])
         w.get_auto_ui_scale = lambda *args, **kwargs: 1
         w.liquid_menu_layout = lambda *args: (50, 130, 600, 130, 12)
         w.font = lambda *args: None

@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from .rules import competition_rules, validate_season
+
 
 @dataclass(frozen=True)
 class RobotPerformance:
@@ -11,6 +13,10 @@ class RobotPerformance:
     heat_limit: int
     cooling_rate: int
     projectile: str
+    verified: bool = True
+    rules_season: int = 2026
+    note: str = ''
+    initial_ammo: int | None = None
 
 
 @dataclass(frozen=True)
@@ -18,7 +24,7 @@ class RobotProfile:
     key: str
     title: str
     short_title: str
-    robot_id: int
+    robot_id: int | None
     icon: str
     description: str
     operator_role: bool = True
@@ -62,12 +68,17 @@ AERIAL_HEAT = (100, 110, 120, 130, 140, 150, 160, 170, 180, 200)
 AERIAL_COOL = (20, 30, 40, 50, 60, 70, 80, 90, 100, 120)
 
 
-def profiles_for_match(match_mode: str) -> tuple[RobotProfile, ...]:
+def profiles_for_match(match_mode: str, *, season=2026) -> tuple[RobotProfile, ...]:
+    if validate_season(season)==2027:
+        rules=competition_rules(2027,match_mode)
+        return tuple(RobotProfile(row['key'],row['title'],row['short_title'],row['robot_id'],
+            row['short_title'][0],f'2027 V{rules.version} · 性能/协议分别审查',row['operator']) for row in rules.roles)
     return RMUL_ROBOTS if match_mode == "RMUL3v3" else RMUC_ROBOTS
 
 
-def profile_by_key(match_mode: str, key: str) -> RobotProfile:
-    profiles = profiles_for_match(match_mode)
+def profile_by_key(match_mode: str, key: str, *, season=2026) -> RobotProfile:
+    profiles = profiles_for_match(match_mode,season=season)
+    if not profiles:raise ValueError(f'No reviewed roles for {season} {match_mode}')
     return next((profile for profile in profiles if profile.key == key), profiles[0])
 
 
@@ -77,10 +88,49 @@ def resolve_performance(
     *,
     level: int = 1,
     hero_type: str = "Melee",
-    infantry_chassis: str = "Power",
-    infantry_shooter: str = "Burst",
+    infantry_chassis: str | None = None,
+    infantry_shooter: str | None = None,
     sentinel_control: str = "Automatic",
+    season=2026,
 ) -> RobotPerformance:
+    year=validate_season(season)
+    if infantry_chassis is None:infantry_chassis='Health' if year==2027 else 'Power'
+    if infantry_shooter is None:infantry_shooter='Cooling' if year==2027 else 'Burst'
+    if year==2027:
+        rules=competition_rules(2027,match_mode)
+        if profile_key not in rules.performance:
+            return RobotPerformance(0,0,0,0,'None',False,2027,
+                '2027兵种未确认；不会按名称前缀借用步兵或旧赛季性能')
+        variant=f'{profile_key}:{infantry_chassis}:{infantry_shooter}'
+        variants=rules.facts.get('performance_variants',{})
+        if profile_key.startswith('Infantry') and variants and variant not in variants:
+            raise ValueError('Unreviewed 2027 infantry performance branch')
+        values=variants.get(variant,rules.performance.get(profile_key))
+        levels=rules.facts.get('infantry_levels',{})
+        if profile_key.startswith('Infantry') and levels:
+            if type(level) is not int or not 1<=level<=10:
+                raise ValueError('2027 infantry level must be 1..10')
+            try:
+                chassis=levels['chassis'][infantry_chassis]
+                shooter=levels['shooter'][infantry_shooter]
+            except KeyError as error:
+                raise ValueError('Unreviewed 2027 infantry performance branch') from error
+            values={name:rows[level-1] for name,rows in (*chassis.items(),*shooter.items())}
+            values['projectile']='17mm'
+        if profile_key=='Sentinel' and rules.facts.get('sentinel_control_modes'):
+            try:values=rules.facts['sentinel_control_modes'][sentinel_control]
+            except KeyError as error:raise ValueError('Unreviewed 2027 sentry control mode') from error
+        required=('max_health','power_limit_w','heat_limit','cooling_rate','projectile')
+        if values is None:
+            return RobotPerformance(0,0,0,0,'None',False,2027,
+                '2027性能未确认；不会使用2026等级/热量/功率表')
+        relevant=('max_health','power_limit_w') if values.get('projectile')=='None' else required
+        # Installation/assembly must be an observation, not a legacy selector.
+        known=all(values.get(name) is not None for name in relevant)
+        note=('2027未配置发射机构；热量/冷却不适用' if values.get('projectile')=='None' else '')
+        if not known:note='仅2027已核实基础项；未核实值不可使用2026表填充'
+        ammo=rules.facts.get('initial_ammo',{}).get(profile_key)
+        return RobotPerformance(*(values.get(name) or ("None" if name=='projectile' else 0) for name in required),known,2027,note,ammo)
     if match_mode == "RMUL3v3":
         if profile_key == "Hero":
             return RobotPerformance(350, 100, 200, 24, "42mm")
@@ -113,6 +163,8 @@ def resolve_performance(
 def robot_id_for_alliance(profile: RobotProfile, alliance: str) -> int:
     if alliance not in ("Red", "Blue"):
         raise ValueError("Unknown robot alliance")
+    if profile.robot_id is None:
+        raise ValueError(f'{profile.title}: 2027 robot identity has not been reviewed')
     return profile.robot_id + (100 if alliance == "Blue" else 0)
 
 
@@ -120,13 +172,20 @@ def apply_profile_to_state(state: Any, profile: RobotProfile, performance: Robot
     state.robot_profile = profile.key
     state.robot_type = profile.title
     state.robot_id = robot_id_for_alliance(profile, getattr(state, "alliance_color", "Red"))
-    state.level = max(1, min(10, int(level)))
+    state.level = (1 if performance.rules_season==2027 and not profile.key.startswith('Infantry')
+                   else max(1, min(10, int(level))))
     state.max_health = performance.max_health
     state.current_health = performance.max_health
     state.power_limit = performance.power_limit_w
     state.max_heat = float(performance.heat_limit)
     state.heat_cooldown_rate = float(performance.cooling_rate)
     state.projectile_type = performance.projectile
-    capacity = 12 if performance.projectile == "42mm" else (180 if performance.projectile == "17mm" else 0)
+    state.performance_rules_known=performance.verified
+    state.performance_rules_note=performance.note
+    capacity = (performance.initial_ammo or 0) if performance.rules_season==2027 else (
+        12 if performance.projectile == "42mm" else (180 if performance.projectile == "17mm" else 0))
     state.ammo_capacity = capacity
     state.remaining_ammo = capacity
+    if performance.rules_season == 2027:
+        state.projectile_allowance_17mm = capacity if performance.projectile == '17mm' else 0
+        state.projectile_allowance_42mm = capacity if performance.projectile == '42mm' else 0

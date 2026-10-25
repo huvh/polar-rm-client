@@ -1541,7 +1541,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             "HP", "AMMO", "MOCK", "G", "0 1 2 3 4 5 6 7 8 9",
             "× / · % . - [ ]",
             self.match_mode_manager.current.title,
-            profile_by_key(self.state.match_mode, self.state.robot_profile).title,
+            profile_by_key(self.state.match_mode, self.state.robot_profile, season=self.state.rules_season).title,
         }
         for title in CATEGORY_TITLES.values():
             economy_labels.add(title)
@@ -1991,9 +1991,10 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                 painter = session.begin_painter()
                 painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
                 scale = max(0.74, min(1.14, self.get_auto_ui_scale(width, height, strength=0.45)))
-                menu_x, menu_y, button_w, button_h, gap = self.liquid_menu_layout(width, height, 3, scale)
+                count=len(self.match_mode_manager.mode_keys)+1 if self.startup_step=='match' else 3
+                menu_x, menu_y, button_w, button_h, gap = self.liquid_menu_layout(width, height, count, scale)
                 accents = (
-                    [self.startup_menu_accent(index + 2) for index in range(2)] + [color("#ec5ad9")]
+                    [self.startup_menu_accent(index + 2) for index in range(len(self.match_mode_manager.mode_keys))] + [color("#ec5ad9")]
                     if self.startup_step == "match"
                     else [self.startup_menu_accent(index) for index in range(3)]
                 )
@@ -4334,8 +4335,9 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                 initial=0.0,
             )
         ) * max(0.0, min(1.0, visual_alpha))
-        menu_x, menu_y, button_w, button_h, gap = self.liquid_menu_layout(width, height, 3, scale)
         is_match = selected_page == "match"
+        count=len(self.match_mode_manager.mode_keys)+1 if is_match else 3
+        menu_x, menu_y, button_w, button_h, gap = self.liquid_menu_layout(width, height, count, scale)
         title = "MATCH MODE" if is_match else "SCENE SELECT"
         subtitle = (
             ui_text("{title} profile", chinese_enabled(self.registry), title=ui_text(self.startup_scenario_meta(self.scenario_manager.current.key)["title"], chinese_enabled(self.registry)))
@@ -4357,8 +4359,8 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
 
         if is_match:
             entries = []
-            for index, key in enumerate(MATCH_MODE_KEYS):
-                config = MATCH_MODES[key]
+            for index, key in enumerate(self.match_mode_manager.mode_keys):
+                config = self.match_mode_manager.config_for(key)
                 meta = self.startup_match_meta(key)
                 entries.append((key, meta["icon"], meta["title"], meta["subtitle"], f"{config.field.width_m:g}m x {config.field.height_m:g}m  {config.duration_sec // 60}:{config.duration_sec % 60:02d}", "NEXT", "select_match_mode", key, meta["tooltip"], self.startup_menu_accent(index + 2)))
             entries.append(("back", "back", "Back", "Return to scene select", "Backspace also works", "BACK", "startup_back", None, "Return to scene selection.", color("#ec5ad9")))
@@ -4380,7 +4382,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         active = self.anim.value(
             "startup.robot.open", 1.0, self.anim_duration(0.32), Easings.ease_out_pow4, initial=0.0
         ) * max(0.0, min(1.0, visual_alpha))
-        profiles = profiles_for_match(self.match_mode_manager.current.key)
+        profiles = profiles_for_match(self.match_mode_manager.current.key, season=self.match_mode_manager.season)
         selected_key = self.current_robot_profile_key()
 
         commands.text(QRectF(50 * scale, 28 * scale, 340 * scale, 38 * scale), "POLAR-RM", self.font("museo", 28 * scale, QFont.Weight.Bold), self.gpu_alpha(THEME.text, active))
@@ -4443,7 +4445,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             commands.text(rect.adjusted(13 * scale, 67 * scale, -13 * scale, -12 * scale), ui_text(profile.description, chinese_enabled(self.registry)), self.font("poppins_regular", 7.1 * scale), self.gpu_alpha(color("#dce6ec", 0.86), opacity), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
             self.add_hotspot(rect, "select_robot_profile", profile.key, tooltip=ui_text(f"选择{profile.title}并进入战斗 HUD", chinese_enabled(self.registry)))
 
-        profile = profile_by_key(self.match_mode_manager.current.key, selected_key)
+        profile = profile_by_key(self.match_mode_manager.current.key, selected_key, season=self.match_mode_manager.season)
         performance = self.current_robot_performance(selected_key)
         panel = QRectF(width - margin - detail_w, top, detail_w, min(390 * scale, height - top - bottom))
         self.build_gpu_glass_rect(

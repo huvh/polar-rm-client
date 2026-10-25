@@ -1147,6 +1147,8 @@ class JelloClickGuiRenderer:
         height: int,
         gui_scale: float,
     ) -> None:
+        from ..rules.presentation import visible_rule_settings
+        settings=visible_rule_settings(host.registry,module)
         raw = _clamp01(state.settings_panel_animation.progress)
         if raw <= 0.0 and state.settings_closing:
             return
@@ -1219,7 +1221,7 @@ class JelloClickGuiRenderer:
         )
         # SettingPanel starts at y=20 and appends its literal 20 px
         # "extentionhack" spacer after the final control.
-        total = settings_start + 20.0 + sum(self._setting_height(setting, old_progress) for setting in module.settings)
+        total = settings_start + 20.0 + sum(self._setting_height(setting, old_progress) for setting in settings)
         maximum = max(0.0, total * scale - content.height())
         scroll = state.settings_scroll_value(module.name, maximum)
         # Sigma normally reveals mode options below their header.  Move the
@@ -1227,7 +1229,7 @@ class JelloClickGuiRenderer:
         # physically too-short viewport is allowed to use the upward fallback.
         if state.dropdown_key is not None and state.dropdown_animation.target >= 0.5:
             active_y = settings_start
-            for candidate in module.settings:
+            for candidate in settings:
                 candidate_key = f"{module.name}:{candidate.name}"
                 if candidate_key == state.dropdown_key and candidate.kind == "mode":
                     # Long mode lists get their own viewport. Never scroll
@@ -1288,7 +1290,7 @@ class JelloClickGuiRenderer:
         state._setting_hovered_this_frame = False
         dropdown: _DropdownRequest | None = None
         logical_y = settings_start
-        for setting in module.settings:
+        for setting in settings:
             row_h = self._setting_height(setting, old_progress)
             logical_row = QRectF(
                 base_content.left(),

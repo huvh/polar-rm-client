@@ -593,6 +593,9 @@ class CombatTargetHudMixin:
         return f"{self.state.target_distance_m:.1f}m | LOCK {str(self.state.target_locked).upper()}"
 
     def draw_target_card(self, p: QPainter, rect: QRectF, target: VisionTarget, title: str) -> None:
+        if (getattr(self.state, 'rules_season', 2026) == 2027
+                and getattr(self, '_vision_source', 'Mock') == 'Mock'):
+            return
         active = self.anim.value(f"hud.target.{title}", 1.0, self.anim_duration(0.24), Easings.ease_out_pow4, initial=0.0)
         p.save()
         p.setOpacity(active)

@@ -446,6 +446,23 @@ class MinecraftCombatHudRenderer:
             f"§fGold: §6{int(getattr(state,'remaining_economy',0))}",
             "§epolar-rm-client",
         ]
+        if getattr(state,'rules_season',2026)==2027:
+            # League and infantry duels have no bases/shields. RMUC's 2026
+            # virtual shield is not a known 2027 quantity either.
+            texts=[line for line in texts if not line.startswith('§fShield:')]
+            # No reviewed 2027 life feed exists yet. Empty rows are unknown,
+            # not evidence that every robot is dead (nor demo 4 vs 3).
+            texts=[('§aA §fAlly: §7?' if line.startswith('§aA §fAlly:') else
+                    '§cE §fEnemy: §7?' if line.startswith('§cE §fEnemy:') else line)
+                   for line in texts]
+            mode=getattr(state,'match_mode','')
+            if mode.startswith('RMUL'):
+                texts=[line for line in texts if not line.startswith(('§fBase:','§fPost:'))]
+            if mode=='RMUL1v1':texts=[line for line in texts if not line.startswith('§fGold:')]
+            if mode=='RMUL3v3':
+                texts.insert(7,f"§fControl: §a{state.ally_victory_points} §7/ §c{state.enemy_victory_points}")
+            if mode=='RMUC7v7':texts.insert(7,'§fControl: §7AWAITING 2027 FEED')
+            texts.insert(2,'§6RULES PREVIEW / WIRE LOCKED')
         return tuple((text,QColor("#ffffff")) for text in texts)
 
     def draw(self, painter: QPainter, width: int, height: int, state: Any, registry: Any, module: Any) -> MinecraftHudLayout:

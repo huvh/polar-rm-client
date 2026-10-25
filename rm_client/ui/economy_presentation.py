@@ -12,6 +12,22 @@ from ..economy_values import EconomyOffer
 from .economy_interaction import HOLD_SECONDS
 
 
+def is_rule_reference(offer: EconomyOffer) -> bool:
+    return offer.status_only and offer.key.startswith('2027_')
+
+
+def offer_price_text(offer: EconomyOffer) -> str:
+    if is_rule_reference(offer):
+        return '按规则公式（未报价）' if offer.estimated else f'{offer.cost} 金币 · 规则参考'
+    return '仅状态' if offer.status_only else f'{offer.cost} 金币'
+
+
+def offer_detail_price_text(offer: EconomyOffer, mock_mode: bool) -> str:
+    if is_rule_reference(offer):return f'{offer.unit}  ·  {offer_price_text(offer)}  ·  未接入2027裁判'
+    tag='预计价格' if offer.estimated else ('模拟请求' if mock_mode else '裁判系统')
+    return f'{offer.unit}  ·  {offer.cost} 金币  ·  {tag}'
+
+
 @dataclass(frozen=True)
 class EconomyConfirmation:
     text: str

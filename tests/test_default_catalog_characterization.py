@@ -5,6 +5,7 @@ pre-extraction source digests and uses fake discovery, never a serial device.
 """
 from contextlib import contextmanager
 from dataclasses import fields
+from copy import deepcopy
 import hashlib
 import json
 from pathlib import Path
@@ -70,6 +71,21 @@ def canonical_defaults(value):
     return json.dumps(value, ensure_ascii=False, sort_keys=True, allow_nan=False)
 
 
+def annual_expected_defaults(frozen):
+    """Explicit reviewed deltas; never re-record the frozen old oracle."""
+    result = deepcopy(frozen)
+    # Already present in the a6c4893 Endfield base, not a 2027 behavior change.
+    clickgui = next(module for module in result if module['name'] == 'ClickGui')
+    clickgui['description'] = '终末地 × Jello 本地实验界面；保留 Jello 布局、动画与操作，旧界面收纳在 Old ClickGUIs 中。'
+    match = next(module for module in result if module['name'] == 'MatchMode')
+    match['settings'].insert(0, {
+        'name': 'Season', 'kind': 'mode', 'value': '2026', 'min_value': None,
+        'max_value': None, 'step': 1.0, 'options': ['2026', '2027'], 'unit': '',
+        'description': '比赛规则赛季，与裁判协议版本独立。2027未审协议不能沿用2026上行。',
+    })
+    return result
+
+
 def shared_option_ids(first, second):
     return [f"{left.name}.{setting.name}"
             for left, right in zip(first.modules, second.modules)
@@ -114,6 +130,7 @@ class DefaultCatalogCharacterizationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.baseline = json.loads(FIXTURE.read_text(encoding="utf-8"))
+        cls.baseline['modules'] = annual_expected_defaults(cls.baseline['modules'])
 
     def build(self):
         with fake_catalog_environment() as calls:

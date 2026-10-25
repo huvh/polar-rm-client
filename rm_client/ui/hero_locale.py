@@ -59,6 +59,7 @@ HERO_ZH = {
 # Shared translations are reused only for exact, application-owned reasons
 # emitted by HeroLobPlanner. This is also the bounded diagnostic inventory.
 HERO_READINESS_REASONS = frozenset({
+    "2027 rules removed the Hero deployment mechanic",
     "Hero profile required", "Hero Range preset required", "gimbal offline",
     "telemetry stale", "yaw not calibrated", "pitch not calibrated",
     "relocalization invalid", "roll/yaw coupling guard", "match stage required",

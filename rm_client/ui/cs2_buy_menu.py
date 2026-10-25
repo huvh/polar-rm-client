@@ -20,6 +20,7 @@ from .gpu_frame_compositor import LensMaterial
 from .theme import color
 from .economy_workspace import _lerp_rect, _layer_transform_rect
 from .economy_interaction import HOLD_SECONDS
+from .economy_presentation import offer_price_text,is_rule_reference
 from .student_reload import append_reload_details, reload_detail_height
 from .fonts import cjk_ui_font
 
@@ -169,7 +170,7 @@ def build_grid(host, width, height):
             icon = QRectF(rect.left()+18,rect.top()+28*scale,max(12,rect.width()-36),max(12,rect.height()-54*scale))
             commands.image(fit_icon(host,icon,key),icon_path(host,key),color("#b5d4ee" if offer.enabled else "#617281",body_alpha),clip=body_clip)
             label(QRectF(rect.left()+8,rect.bottom()-24*scale,rect.width()-16,20*scale),
-                  "仅状态" if offer.status_only else f"{offer.cost} 金币",size=9.2,
+                  offer_price_text(offer),size=9.2,
                   tint="#b5d4ee" if offer.enabled else "#7b8b95",align=Qt.AlignRight|Qt.AlignVCenter)
             hot(rect,"economy_offer",offer.key,offer.reason or offer.description)
         if not items:
@@ -187,10 +188,10 @@ def build_grid(host, width, height):
         y = detail_content.top()+preview_h
         label(QRectF(detail.left()+16,y,detail.width()-32,36),selected.title,size=13.5,bold=True,alpha=detail_alpha,clip=detail_clip)
         y += 40
-        for text,tint in ((f"{selected.cost} 金币 · {selected.unit}","#ffd56a"),
+        for text,tint in (((offer_price_text(selected) if is_rule_reference(selected) else f"{selected.cost} 金币")+f" · {selected.unit}","#ffd56a"),
                           (selected.description,"#bed0e1"),
                           (selected.reason or "可以购买","#70e0ae" if selected.enabled else "#ffc080"),
-                          ("按住确认" if selected.confirmation=="hold" else "二次确认后发送","#9caebb")):
+                          ("规则参考，不发送" if is_rule_reference(selected) else "按住确认" if selected.confirmation=="hold" else "二次确认后发送","#9caebb")):
             label(QRectF(detail.left()+16,y,detail.width()-32,28),text,size=9.5,tint=tint,alpha=detail_alpha,clip=detail_clip)
             y += 32
         if selected.category == "ammo":

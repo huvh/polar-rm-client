@@ -100,6 +100,7 @@ def default_modules(choices: CatalogChoices) -> list[Module]:
             "System",
             "None",
             [
+                mode_setting("Season", "2026", ["2026", "2027"], "比赛规则赛季，与裁判协议版本独立。2027未审协议不能沿用2026上行。"),
                 mode_setting("Mode", "RMUC7v7", list(choices.match_modes)),
                 mode_setting("Alliance", "Red", ["Red", "Blue"]),
                 bool_setting("Second Step", True, "场景选择后显示 RMUC/RMUL 二级选择页。"),

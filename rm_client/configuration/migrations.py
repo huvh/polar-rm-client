@@ -84,4 +84,8 @@ def migrated_modules(data: dict[str, Any]) -> dict[str, Any]:
     _migrate_startup_wallpaper(modules, data)
     _migrate_alliance(modules)
     _migrate_elimination_fx(modules)
+    # Absence means a historical 2026 profile, never "whatever year is new".
+    # A partial update to some other module must not reset a live 2027 season.
+    if 'MatchMode' in modules:
+        modules['MatchMode'].setdefault('settings',{}).setdefault('Season','2026')
     return modules

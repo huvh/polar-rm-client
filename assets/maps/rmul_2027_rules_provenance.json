@@ -1,0 +1,173 @@
+{
+  "schema_version": 1,
+  "source": {
+    "title": "RoboMaster 2027 机甲大师高校联盟赛比赛规则手册 V1.0.0（20261015）",
+    "file_name": "RoboMaster 2027 机甲大师高校联盟赛比赛规则手册 V1.0.0（20261015）.pdf",
+    "rule_version": "1.0.0",
+    "published": "2026-10-15",
+    "kind": "official_rules",
+    "sha256": "a8fd7b7f6ea5212b9e4dfa590b478827992598d91912ed671653c8bdd9727fd6",
+    "pdf_page_count": 68,
+    "url": null
+  },
+  "method": {
+    "name": "poppler_pdftoppm_original_page_crop",
+    "renderer": "pdftoppm version 26.07.0",
+    "crop_measurement_tool": "PyMuPDF 1.26.7",
+    "raster_dpi": 216,
+    "scale_from_pdf_points": 3.0,
+    "coordinates": "crop_box_pt is [left, top, right, bottom] in PDF points (1/72 inch), origin top-left of the unrotated page; raster_crop_px is [x, y, width, height] at 216 dpi. These are page-image crop coordinates, NOT field coordinates.",
+    "page_box": "MediaBox; CropBox equals MediaBox; rotation=0",
+    "output": "PNG, original PDF RGB rendering on white background; no redraw, synthesized labels, coordinate overlay, color edits, rotation, warping or perspective correction.",
+    "crop_rule": "Union of the complete original figure image bbox and its complete original caption text bbox, plus 4 PDF points on the left and right. Top/bottom kept at that union to exclude adjacent prose/figures. Integer pixel bounds use floor(left/top) and ceil(right/bottom).",
+    "command_template": "pdftoppm -f {pdf_page} -l {pdf_page} -r 216 -x {x} -y {y} -W {width} -H {height} -singlefile -png SOURCE.pdf OUTPUT_WITHOUT_EXTENSION"
+  },
+  "calibration": {
+    "status": "uncalibrated_rules_illustration",
+    "camera_calibrated": false,
+    "world_coordinates_calibrated": false,
+    "tactical_projection_ready": false,
+    "pixel_to_world_transform": null,
+    "warning": "Official rulebook illustrations only. The crops include the original walls, image whitespace and figure caption. Neither crop bounds nor image pixels define the playable field bounds, origin, axes, scale or a camera/world projection."
+  },
+  "assets": [
+    {
+      "repo_path": "assets/maps/rmul_2027_3v3_rules.png",
+      "mode": "RMUL3v3",
+      "pdf_page": 23,
+      "printed_page": 22,
+      "section": "3.2.1 战场概述",
+      "figure": "图 3-1",
+      "caption": "图 3-1 3V3 对抗赛场地俯视渲染图",
+      "source_image": {
+        "pdf_xref": 89,
+        "bbox_pt": [
+          74.89991760253906,
+          115.51995849609375,
+          520.0498657226562,
+          393.3715515136719
+        ],
+        "embedded_size_px": [
+          1232,
+          769
+        ]
+      },
+      "caption_bbox_pt": [
+        217.70120239257812,
+        394.2825622558594,
+        380.14569091796875,
+        424.4841613769531
+      ],
+      "crop_box_pt": [
+        70.89991760253906,
+        115.51995849609375,
+        524.0498657226562,
+        424.4841613769531
+      ],
+      "raster_crop_px": [
+        212,
+        346,
+        1361,
+        928
+      ],
+      "effective_crop_box_pt": [
+        70.66666666666667,
+        115.33333333333333,
+        524.3333333333334,
+        424.6666666666667
+      ],
+      "output_size_px": [
+        1361,
+        928
+      ],
+      "output_bytes": 495354,
+      "sha256": "72998ff64dfd7e16a7b9085e824684ba9e2e4e1e291aad9b994d8574103b14ca",
+      "preservation": {
+        "complete_figure_image": true,
+        "original_caption_included": true,
+        "labels_removed": false,
+        "labels_added": false
+      },
+      "visual_review": {
+        "status": "passed",
+        "reviewed_on": "2026-10-25",
+        "checks": [
+          "Inspected full source page and final PNG at original resolution.",
+          "Entire original top-view illustration, walls, field symbols and original figure caption are readable and not clipped.",
+          "No adjacent tilted-view figure, surrounding prose or invented labels included."
+        ],
+        "direct_rerender_byte_identical": true,
+        "source_image_and_caption_bboxes_fully_contained": true
+      }
+    },
+    {
+      "repo_path": "assets/maps/rmul_2027_1v1_rules.png",
+      "mode": "RMUL1v1",
+      "pdf_page": 42,
+      "printed_page": 41,
+      "section": "4.2 比赛场地",
+      "figure": "图 4-1",
+      "caption": "图 4-1 步兵对抗赛场地俯视渲染图",
+      "source_image": {
+        "pdf_xref": 160,
+        "bbox_pt": [
+          119.89991760253906,
+          186.786376953125,
+          474.82220458984375,
+          470.71551513671875
+        ],
+        "embedded_size_px": [
+          1120,
+          896
+        ]
+      },
+      "caption_bbox_pt": [
+        216.76132202148438,
+        471.8140869140625,
+        381.2756042480469,
+        502.01568603515625
+      ],
+      "crop_box_pt": [
+        115.89991760253906,
+        186.786376953125,
+        478.82220458984375,
+        502.01568603515625
+      ],
+      "raster_crop_px": [
+        347,
+        560,
+        1090,
+        947
+      ],
+      "effective_crop_box_pt": [
+        115.66666666666667,
+        186.66666666666666,
+        479.0,
+        502.3333333333333
+      ],
+      "output_size_px": [
+        1090,
+        947
+      ],
+      "output_bytes": 315848,
+      "sha256": "4bfc4e030049886139efce2302c8761087aff665f4850f18127ae1e1c6375428",
+      "preservation": {
+        "complete_figure_image": true,
+        "original_caption_included": true,
+        "labels_removed": false,
+        "labels_added": false
+      },
+      "visual_review": {
+        "status": "passed",
+        "reviewed_on": "2026-10-25",
+        "checks": [
+          "Inspected full source page and final PNG at original resolution.",
+          "Entire original top-view illustration, walls, field symbols and original figure caption are readable and not clipped.",
+          "No adjacent tilted-view figure, surrounding prose or invented labels included."
+        ],
+        "direct_rerender_byte_identical": true,
+        "source_image_and_caption_bboxes_fully_contained": true
+      }
+    }
+  ]
+}

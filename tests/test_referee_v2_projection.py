@@ -301,7 +301,8 @@ class V2ProjectionTests(unittest.TestCase):
                                student_ui=SimpleNamespace(settlement=snapshot))
         seed = method(Path(model.__file__).parent/'ui/polar/mixins/persistence_mixin.py',
                       'PersistenceMixin', 'seed_match_state')
-        seed(host, SimpleNamespace(key='RMUC7v7', title='Match', duration_sec=420))
+        from rm_client.match_modes import match_mode_config
+        seed(host, match_mode_config('RMUC7v7', 2026))
         self.assertEqual(self.values(), (None, None, None))
         self.assertEqual(self.state.current_stage, 'NOT_STARTED')
         self.assertEqual(self.state.sentry_status, {'is_powered': True})

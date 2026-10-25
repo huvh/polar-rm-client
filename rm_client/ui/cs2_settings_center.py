@@ -239,8 +239,14 @@ class RegistrySettingsPage(JelloScrollArea):
     def filter(self, query):
         query = query.strip().casefold()
         self._query = query
+        from ..rules.presentation import visible_rule_settings
+        unavailable=set()
+        for (name,key),widget in self.controls.items():
+            module=self.host.registry.get(name)
+            if module and key not in {item.name for item in visible_rule_settings(self.host.registry,module)}:
+                unavailable.add(widget)
         for label, widget, text in self.search_rows:
-            visible = not query or query in text
+            visible = (not query or query in text) and widget not in unavailable
             if label.isHidden() == visible: label.setVisible(visible)
             if widget.isHidden() == visible: widget.setVisible(visible)
             if isinstance(widget.parentWidget(), EndfieldSettingRow): widget.parentWidget().setVisible(visible)
@@ -300,10 +306,18 @@ class RegistrySettingsPage(JelloScrollArea):
                     if live is None:
                         continue
                     value = live.value
+                    if isinstance(widget,QComboBox):
+                        choices=[widget.itemData(i) for i in range(widget.count())]
+                        if choices!=list(live.options):
+                            widget.blockSignals(True)
+                            widget.clear()
+                            for option in live.options:widget.addItem(option_label(option,True),option)
+                            widget.blockSignals(False)
                 else:
                     value = module.enabled if kind == "toggle" else module.keybind
             self._set_widget_value(widget, value)
             self._draft.follow_live(key, self._widget_value(widget))
+        self.filter(getattr(self,'_query',''))
 
     def apply_draft(self):
         if not self.builder.ready:

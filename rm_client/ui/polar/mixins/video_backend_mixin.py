@@ -169,6 +169,9 @@ class VideoBackendMixin:
         )
 
     def open_hero_deploy_interface(self) -> bool:
+        if getattr(self.state,'rules_season',2026)==2027:
+            self.toast('2027已取消原英雄部署机制；不会沿用2026吊射界面/断图传条件',kind='warning')
+            return False
         self.close_student_panel(immediate=True)
         if self.home_visible:
             return False
