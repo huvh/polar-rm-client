@@ -3262,6 +3262,9 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         settings = getattr(self, "_settings_session", None)
         if settings is not None:
             prepare = (OwnerAction("settings dialog", settings.close_for_shutdown), *prepare)
+        team_editor = getattr(self, "_match_team_editor", None)
+        if team_editor is not None:
+            prepare = (OwnerAction("team identity editor", team_editor.reject), *prepare)
         feedback = getattr(self, "_endfield_feedback", None)
         if feedback is not None:
             prepare = (*prepare, OwnerAction("Endfield voice playback", feedback.voice.stop))
