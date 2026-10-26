@@ -22,6 +22,7 @@ from .jello_locale import chinese_enabled
 from .match_strip_locale import match_role_text, match_strip_text
 from .cs2_assets import local_cs2_assets
 from .cs2_scoreboard_history import ScoreboardHistory
+from .match_teams import MatchTeamStore
 
 _LOG = logging.getLogger(__name__)
 
@@ -62,6 +63,8 @@ class TopMatchBarController:
         self._frame_cache_key: tuple[object, ...] | None = None
         self._frame_cache = None
         self._scoreboard_history = ScoreboardHistory()
+        paths = getattr(owner, 'paths', None)
+        self.team_profiles = MatchTeamStore(paths.user_data_root/'match_teams' if paths is not None else None)
 
     def enabled(self) -> bool:
         module = self.owner.registry.get("TopMatchBar")

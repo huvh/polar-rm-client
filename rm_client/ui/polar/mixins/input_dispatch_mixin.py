@@ -651,6 +651,7 @@ class InputDispatchMixin:
         return bool(
             self._modal_input_blocked()
             or getattr(self, "_settings_session", None) is not None
+            or getattr(self, "_match_team_editor", None) is not None
             or getattr(getattr(self, "backend", None), "lifecycle_pending", False)
             or getattr(self, "configuration_change_pending", False)
             or getattr(getattr(self, "_window_lifecycle", None), "closing", False)
@@ -815,6 +816,7 @@ class InputDispatchMixin:
         self.hover_point = event.position()
         if scoreboard_owns_pointer(self, self.hover_point):
             self._control_mouse_point = None
+            self.hover_tooltip = ''  # Board paints its own final-layer identity tooltip.
             self.frame_scheduler.force()
             event.accept()
             return

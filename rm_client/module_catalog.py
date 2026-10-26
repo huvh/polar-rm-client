@@ -131,6 +131,7 @@ def default_modules(choices: CatalogChoices) -> list[Module]:
             [
                 mode_setting("Side", "Red", ["Red", "Blue"]),
                 bool_setting("Mirror Tactical Map", True),
+                action_setting("Match Team Identities", "导入或编辑比赛双方校徽、学校和战队名；只改变 CS 计分板的原位显示。"),
             ],
             enabled=True,
             description="本机阵营档案。统一驱动战术地图、雷达、ESP 与自瞄的红蓝敌我关系。",

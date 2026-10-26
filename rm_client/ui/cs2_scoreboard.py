@@ -130,6 +130,7 @@ class Cs2ScoreboardRenderer:
         self.last_layout = None
         self._stats, self._stat_changes = {}, {}
         self._stat_images = OrderedDict()
+        self._team_visuals = {}
 
     def _text(self, p, rect, text, size, tint, *, kind='regular', align=Qt.AlignCenter,
               fit=False, shadow=False):
@@ -153,7 +154,7 @@ class Cs2ScoreboardRenderer:
         if not image.isNull():
             p.drawImage(rect, image)
 
-    def _build(self, layout, frame, chinese, season, mode, density, dpi, history, duration):
+    def _build(self, layout, frame, chinese, season, mode, density, dpi, history, duration, identities):
         area = QRectF(0, 0, REFERENCE_WIDTH, layout.bounds.height() / layout.scale)
         image = QImage(math.ceil(layout.bounds.width() * density),
                        math.ceil(layout.bounds.height() * density), QImage.Format_ARGB32_Premultiplied)
@@ -182,17 +183,31 @@ class Cs2ScoreboardRenderer:
             for index, team in enumerate(ordered_teams(frame)):
                 y = layout.team_y(index)
                 tint = BLUE if team.alliance == 'Blue' else GOLD
+                visual = identities.get(team.alliance)
+                if visual is not None and not visual.image.isNull():
+                    # Source .sb-team-logo-bg: 80px rail, contain, opacity .2.
+                    # No new official-client header or extra crest slot.
+                    size = visual.image.size().scaled(80,80,Qt.KeepAspectRatio)
+                    p.save();p.setOpacity(.2)
+                    p.drawImage(QRectF(PAD, y, size.width(), size.height()), visual.image)
+                    p.restore()
                 # CS rail is 80px, score 70px, name/count 20px. No extra heading.
                 self._text(p, QRectF(PAD, y, RAIL, 80),
                            '—' if team.score is None else str(team.score), 70, tint, kind='mono',
                            fit=True, shadow=True)
-                label = ('蓝方' if team.alliance == 'Blue' else '红方') if chinese else team.alliance.upper()
-                self._text(p, QRectF(PAD, y + 82, RAIL, 24), label, 20, tint, kind='condensed_regular')
+                identity = visual.identity if visual is not None else None
+                named = identity is not None and bool(identity.school or identity.team)
+                label = (identity.school or identity.team) if named else (
+                    ('蓝方' if team.alliance == 'Blue' else '红方') if chinese else team.alliance.upper())
+                self._text(p, QRectF(PAD, y + 82, RAIL, 24), label, 14 if named else 20,
+                           tint, kind='condensed_regular')
                 count_color = QColor(tint)
                 count_color.setAlphaF(.2)
                 total = sum(c.health_applicable for c in team.cards)
                 count = f'{team.alive_text}/{total} ' + ('存活' if chinese else 'Alive')
-                self._text(p, QRectF(PAD, y + 108, RAIL, 24), count, 20, count_color, kind='condensed_regular')
+                caption = identity.team if named and identity.school and identity.team else count
+                self._text(p, QRectF(PAD, y + 108, RAIL, 24), caption, 13 if caption != count else 20,
+                           tint if caption != count else count_color, kind='condensed_regular')
             self._timeline(p, layout, frame, history, duration, chinese)
             self._footer(p, area, chinese, season)
         finally:
@@ -345,7 +360,7 @@ class Cs2ScoreboardRenderer:
             x += width
 
     def paint(self, p, width, height, map_rect, frame: MatchBarFrame, progress, *, chinese, season, mode, now,
-              pointer=None, history=(), duration=420):
+              pointer=None, history=(), duration=420, identities=None):
         progress = max(0., min(1., progress))
         counts = tuple(len(team_cards(t)) for t in ordered_teams(frame))
         layout = scoreboard_layout(width, height, map_rect, sum(counts), team_counts=counts)
@@ -353,6 +368,7 @@ class Cs2ScoreboardRenderer:
             self.last_layout = None
             return None
         self.last_layout = layout
+        self._team_visuals = identities or {}
         duration = max(1, min(3600, int(duration)))
         density = float(p.device().devicePixelRatioF())
         dpi = (p.device().dotsPerMeterX(), p.device().dotsPerMeterY())
@@ -362,8 +378,10 @@ class Cs2ScoreboardRenderer:
         key = (layout.bounds.width(), layout.bounds.height(), layout.scale, counts,
                header, tuple(t.alive_text for t in ordered_teams(frame)), tuple(history), duration,
                self.sort_key, chinese, season, mode, density, dpi)
+        key += (tuple((side,visual.cache_key) for side,visual in sorted(self._team_visuals.items())),)
         if key not in self._layers:
-            self._layers[key] = self._build(layout, frame, chinese, season, mode, density, dpi, history, duration)
+            self._layers[key] = self._build(layout, frame, chinese, season, mode, density, dpi, history, duration,
+                                           self._team_visuals)
             while len(self._layers) > 6:
                 self._layers.popitem(last=False)
         self._layers.move_to_end(key)
@@ -383,6 +401,17 @@ class Cs2ScoreboardRenderer:
         finally:
             p.restore()
         return QRectF(layout.bounds)
+
+    def team_tooltip(self, point):
+        layout = self.last_layout
+        if layout is None:
+            return ''
+        local = (point-layout.bounds.topLeft())/layout.scale
+        for index,side in enumerate(('Blue','Red')):
+            if QRectF(PAD,layout.team_y(index),RAIL,132).contains(local):
+                visual = self._team_visuals.get(side)
+                return visual.tooltip if visual is not None else ''
+        return ''
 
     def _row_image(self, card, tint, chinese, scale, density, dpi):
         key = (card, tint.rgba(), chinese, scale, density, dpi, self.sort_key)
@@ -548,7 +577,13 @@ def paint_tab_scoreboard(host, p, width, height, now, *, include_map=True):
         chinese=chinese_enabled(host.registry), season=host.state.rules_season,
         mode=host.state.match_mode, now=now, pointer=getattr(host, 'hover_point', None),
         history=host.top_match_bar._scoreboard_history.snapshot(),
-        duration=getattr(host.state, 'match_duration_sec', 420))
+        duration=getattr(host.state, 'match_duration_sec', 420),
+        identities=host.top_match_bar.team_profiles.visuals)
+    pointer = getattr(host,'hover_point',None)
+    if pointer is not None:
+        tooltip = renderer.team_tooltip(pointer)
+        if tooltip:
+            host.draw_tooltip(p,pointer,tooltip)
 
 
 def scoreboard_click(host, point):
