@@ -252,6 +252,8 @@ print('polar spec OK: %d segments, %d roles, %d warnings'
     if ($LASTEXITCODE -ne 0) { throw "Changelog resources are incomplete in the release source tree" }
     & $python (Join-Path $sourceRoot "tools\endfield\keybinds\check_assets.py") --asset-root (Join-Path $sourceRoot "rm_client\ui\endfield\keybinds\assets")
     if ($LASTEXITCODE -ne 0) { throw "Keybind resources are incomplete in the release source tree" }
+    & $python (Join-Path $sourceRoot "tools\jello\pack.py") check --pack (Join-Path $sourceRoot "rm_client\ui\jello")
+    if ($LASTEXITCODE -ne 0) { throw "Jello feature resources are incomplete in the release source tree" }
 
     # The two licensed wallpaper inputs intentionally stay outside Git. Inject
     # the hash-locked copies into the disposable source tree before tests and
@@ -363,6 +365,8 @@ print('polar spec OK: %d segments, %d roles, %d warnings'
         (Join-Path $portable "licenses") | Out-Null
     Copy-Item -LiteralPath $FfmpegPath -Destination (Join-Path $portable "bin\ffmpeg.exe") -Force
     Copy-Item -LiteralPath (Join-Path $sourceRoot "assets") -Destination (Join-Path $portable "resources\assets") -Recurse -Force
+    & $python (Join-Path $sourceRoot "tools\jello\pack.py") stage --source (Join-Path $sourceRoot "rm_client\ui\jello") --destination (Join-Path $portable "resources\assets\jello")
+    if ($LASTEXITCODE -ne 0) { throw "Jello portable resource staging failed" }
     # Wiki 资源与代码同目录封装；源码和便携版共用同一完整性清单。
     $wikiAssetSource = Join-Path $sourceRoot "rm_client\ui\endfield\wiki\assets"
     $wikiAssetDestination = Join-Path $portable "resources\assets\endfield\wiki"

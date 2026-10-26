@@ -26,3 +26,6 @@ rm_client/ui/endfield/keybinds/assets/** -text -whitespace
 # Original CS2 exports are hash-addressed vendor evidence.
 assets/cs2_scoreboard_source/** -text -whitespace
 assets/endfield_settings/** -text -whitespace
+
+# Jello UI images/fonts/samples are moved without changing any asset bytes.
+rm_client/ui/jello/**/assets/** -text

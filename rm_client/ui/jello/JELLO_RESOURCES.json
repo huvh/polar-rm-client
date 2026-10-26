@@ -1,0 +1,151 @@
+{
+  "schema": 1,
+  "reference": "Sigma Jello 5.1.0 existing authorized local exports",
+  "migration_base": "5bb0ec263757be013b9edfd0225c671de6facf1e",
+  "files": {
+    "clickgui/assets/options.png": {
+      "sha256": "e699621730ed21f4f96fcc315ae70aae3da729216eb1bd12dbacf1ce7fe65775",
+      "size": 1618,
+      "legacy_path": "assets/jello/options.png",
+      "kind": "image"
+    },
+    "widgets/assets/check.png": {
+      "sha256": "79211f4af3aeefd6a110ff3517fe30d48695ecb2442a31eec526d22501936810",
+      "size": 642,
+      "legacy_path": "assets/jello/check.png",
+      "kind": "image"
+    },
+    "scrolling/assets/verticalscrollbartop.png": {
+      "sha256": "0cfc660e6f03c4b9efb8bf6724e335d891eab62896e29b40943823af6a942927",
+      "size": 207,
+      "legacy_path": "assets/jello/verticalscrollbartop.png",
+      "kind": "image"
+    },
+    "scrolling/assets/verticalscrollbarbottom.png": {
+      "sha256": "b5fea46d47e8214166ac31ec728d147c63e675263142ed54f4e508d772bb20e4",
+      "size": 207,
+      "legacy_path": "assets/jello/verticalscrollbarbottom.png",
+      "kind": "image"
+    },
+    "hud/assets/hud_shadow.png": {
+      "sha256": "d7e9480437a138bd8cdeeef18a02275a62d733fa0c09a6f5c827a3f2c49ecc9d",
+      "size": 50367,
+      "legacy_path": "assets/jello/hud_shadow.png",
+      "kind": "image"
+    },
+    "shadows/assets/shadow_corner.png": {
+      "sha256": "7c66cffb50252931af3378c42968993e9b80e084b73d5c4aea2377385e26d2b8",
+      "size": 716,
+      "legacy_path": "assets/jello/shadow_corner.png",
+      "kind": "image"
+    },
+    "shadows/assets/shadow_corner_2.png": {
+      "sha256": "9d160adfa157b1eba423b696dae5ca759c6e311936a57e171141dba3ed6297f6",
+      "size": 757,
+      "legacy_path": "assets/jello/shadow_corner_2.png",
+      "kind": "image"
+    },
+    "shadows/assets/shadow_corner_3.png": {
+      "sha256": "a68038f3f5b31a197c58f7ae08a83ef4605598362c424fc1eb660e011379c314",
+      "size": 727,
+      "legacy_path": "assets/jello/shadow_corner_3.png",
+      "kind": "image"
+    },
+    "shadows/assets/shadow_corner_4.png": {
+      "sha256": "f1324d9a232ad47e231c638cbc485653234621c4cc22f8e9eae16d417239a1d5",
+      "size": 735,
+      "legacy_path": "assets/jello/shadow_corner_4.png",
+      "kind": "image"
+    },
+    "shadows/assets/shadow_left.png": {
+      "sha256": "affa124168f22baa1e7c6ef8b423b5d5a290b8c7835df14051361baf976540d8",
+      "size": 532,
+      "legacy_path": "assets/jello/shadow_left.png",
+      "kind": "image"
+    },
+    "shadows/assets/shadow_right.png": {
+      "sha256": "207545ed8a241c5f8ff01d707444de1fa51f73d5d174aab2efaffafc77e3ecf8",
+      "size": 541,
+      "legacy_path": "assets/jello/shadow_right.png",
+      "kind": "image"
+    },
+    "shadows/assets/shadow_top.png": {
+      "sha256": "b2f1b623bbd87846a422e2d1e71d22bec50b26553f8ab7d1e045eb93a0c84113",
+      "size": 539,
+      "legacy_path": "assets/jello/shadow_top.png",
+      "kind": "image"
+    },
+    "shadows/assets/shadow_bottom.png": {
+      "sha256": "d443be66e12537786e990244afae0ba51744b55f22eaf56d3a98b43f0bc233f8",
+      "size": 546,
+      "legacy_path": "assets/jello/shadow_bottom.png",
+      "kind": "image"
+    },
+    "typography/assets/Jello-Helvetica-Neue-Light.ttf": {
+      "sha256": "49f0d5a2d462cc218ad499a7bf3fdaf197c29f3b289b51753de55d46243253ab",
+      "size": 136416,
+      "legacy_path": "assets/fonts/Jello-Helvetica-Neue-Light.ttf",
+      "kind": "font"
+    },
+    "typography/assets/Jello-Helvetica-Neue-Medium.ttf": {
+      "sha256": "898bc09bab4f20f00658ed9f8e961ef50395a945c19e9966f0ce7e53bd7a4ecf",
+      "size": 39656,
+      "legacy_path": "assets/fonts/Jello-Helvetica-Neue-Medium.ttf",
+      "kind": "font"
+    },
+    "typography/assets/Jello-Regular.ttf": {
+      "sha256": "462fa16c0bccee134ac8dcd5b0d5cbc4e992d5d32de620ce290ba784ba46638a",
+      "size": 49424,
+      "legacy_path": "assets/fonts/Jello-Regular.ttf",
+      "kind": "font"
+    },
+    "audio/assets/activate.mp3": {
+      "sha256": "44f3eb6bf3e73fec9857cc8e0c87e70f64da6fffafb70b0d9f47c96844e4debc",
+      "size": 20292,
+      "legacy_path": "assets/ui_sounds/jello/activate.mp3",
+      "kind": "audio"
+    },
+    "audio/assets/click.mp3": {
+      "sha256": "69921bcf56cd4fde62464a010751972c84732ef326028991c90ea6decb4425bf",
+      "size": 4342,
+      "legacy_path": "assets/ui_sounds/jello/click.mp3",
+      "kind": "audio"
+    },
+    "audio/assets/clicksound.mp3": {
+      "sha256": "10974623ef9bfdf3445e29fae3b45656c3241a672b0f157914b88dbbfe39fdef",
+      "size": 38195,
+      "legacy_path": "assets/ui_sounds/jello/clicksound.mp3",
+      "kind": "audio"
+    },
+    "audio/assets/connect.mp3": {
+      "sha256": "3cbbaebc3d60201fb972cec226df0ea13b9d0a802a2db131edd253d0868cb64b",
+      "size": 119697,
+      "legacy_path": "assets/ui_sounds/jello/connect.mp3",
+      "kind": "audio"
+    },
+    "audio/assets/deactivate.mp3": {
+      "sha256": "bc1c0528d30da58384fbce5c20f1063d60d0997cc97e5b2ebc0d28ca223c9e56",
+      "size": 20292,
+      "legacy_path": "assets/ui_sounds/jello/deactivate.mp3",
+      "kind": "audio"
+    },
+    "audio/assets/error.mp3": {
+      "sha256": "86ce4da0779c60f5c7b22e640c379a260fe998346d25625c05ed8af86aaf361b",
+      "size": 10788,
+      "legacy_path": "assets/ui_sounds/jello/error.mp3",
+      "kind": "audio"
+    },
+    "audio/assets/pop.mp3": {
+      "sha256": "611a098ecfd2ab9f4cc88e09bdd3cf31b46a54e8a03c34fc8dec6143f5b959a2",
+      "size": 1350,
+      "legacy_path": "assets/ui_sounds/jello/pop.mp3",
+      "kind": "audio"
+    },
+    "audio/assets/switch.mp3": {
+      "sha256": "a687871710b92af3a8d313f5aa0d91ca214662fe6b70284414edddbe3a231b33",
+      "size": 13209,
+      "legacy_path": "assets/ui_sounds/jello/switch.mp3",
+      "kind": "audio"
+    }
+  }
+}
