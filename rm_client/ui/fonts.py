@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from functools import lru_cache
+from .jello.resources import FONTS, JelloResources
 
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import (
@@ -60,6 +61,10 @@ class FontBook:
                 self.loaded[key] = families[0]
 
     def _find_font(self, workspace: Path, pattern: str) -> Path:
+        if pattern in FONTS:
+            jello = JelloResources.for_workspace(workspace)
+            if jello.packaged:
+                return jello.font(pattern)
         direct = workspace / "assets" / "fonts" / pattern
         if direct.exists():
             return direct

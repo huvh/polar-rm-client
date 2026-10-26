@@ -9,6 +9,7 @@ import weakref
 from typing import Iterable
 
 from .runtime_paths import RuntimePaths
+from .ui.jello.resources import JelloResources, SOUNDS
 
 from shiboken6 import isValid
 from PySide6.QtCore import QObject, QUrl
@@ -90,6 +91,11 @@ class ReliableAudioPool(QObject):
             output.setDevice(device)
 
     def _sound_path(self, name: str) -> Path:
+        if (name.startswith('jello/') and name[6:] in SOUNDS
+                and self.root.name == 'ui_sounds' and self.root.parent.name == 'assets'):
+            resources = JelloResources.for_workspace(self.root.parent.parent)
+            if resources.packaged:
+                return resources.sound(name[6:])
         # Custom selections keep their portable "custom/<filename>" config key.
         # Resolve them outside the immutable, manifest-hashed resource tree.
         if name.startswith("custom/") and self.custom_root is not None:

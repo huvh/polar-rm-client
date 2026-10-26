@@ -26,7 +26,7 @@ def create_presentations(paths) -> EndfieldPresentations:
     menu = None
     if sys.platform == "win32" and QApplication.platformName() == "windows":
         from .menu.native import EndfieldNativeMenu
-        menu = EndfieldNativeMenu(paths.endfield_menu_pack)
+        menu = EndfieldNativeMenu(paths.endfield_menu_pack, renderer_pack=paths.endfield_renderer_pack)
     return EndfieldPresentations(EndfieldFeedback(private),EndfieldBootPresentation(private/"boot"),menu)
 
 

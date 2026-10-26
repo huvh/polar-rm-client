@@ -14,6 +14,7 @@ from PySide6.QtOpenGLWidgets import QOpenGLWidget
 from PySide6.QtWidgets import QApplication
 
 from rm_client.ui.clickgui_gpu import ClickGuiDrawList, ClickGuiGpuRenderer
+from rm_client.ui.jello.resources import JelloResources
 
 
 class GpuSmokeWidget(QOpenGLWidget):
@@ -36,7 +37,7 @@ class GpuSmokeWidget(QOpenGLWidget):
         commands.rect(QRectF(24, 28, 672, 224), 14, QColor(24, 28, 42, 224), QColor(255, 255, 255, 42), 1.0)
         commands.image(
             QRectF(636, 38, 42, 31),
-            Path(__file__).resolve().parents[1] / "assets" / "jello" / "options.png",
+            JelloResources.for_workspace(ROOT).image("options.png"),
             QColor(255, 255, 255, 180),
         )
         commands.text(

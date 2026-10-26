@@ -91,7 +91,7 @@ class WindowAssemblyTests(unittest.TestCase):
         self.assertIsNot(first.animation, second.animation)
         self.assertIsNot(first.gui_cache, second.gui_cache)
         self.assertIsNot(first.student_state, second.student_state)
-        self.assertEqual(first.jello.asset_root, self.paths.asset("jello"))
+        self.assertEqual(first.jello.asset_root, self.paths.jello_pack)
         self.assertEqual(first.minecraft_hud.asset_root, self.paths.asset("minecraft_hud"))
         self.assertEqual(first.student_renderer.asset_root, self.paths.asset("minecraft_hud"))
         self.assertFalse(first.clickgui_gpu.available)

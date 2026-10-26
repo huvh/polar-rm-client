@@ -1,0 +1,466 @@
+{
+  "run_started_at_utc": "2026-10-26T10:36:55Z",
+  "selected_count": 45,
+  "counts": {
+    "PASS": 43,
+    "SKIP": 0,
+    "INCOMPLETE": 0,
+    "FAIL": 2
+  },
+  "passed": false,
+  "source_stability": {
+    "schema_version": 1,
+    "status": "PASS",
+    "detail": "Declared verification source inputs have identical start/end fingerprints",
+    "scope": {
+      "directories": [
+        "rm_client",
+        "tests",
+        "tools",
+        "configs"
+      ],
+      "suffixes": [
+        ".bat",
+        ".c",
+        ".cfg",
+        ".cpp",
+        ".h",
+        ".hpp",
+        ".ini",
+        ".json",
+        ".ps1",
+        ".py",
+        ".spec",
+        ".toml",
+        ".yaml",
+        ".yml"
+      ],
+      "all_file_directories": [
+        "tests/fixtures"
+      ],
+      "root_files": [
+        "main.py",
+        "requirements*.txt"
+      ],
+      "exclusions": [
+        "hidden directories",
+        "__pycache__"
+      ],
+      "limits": "Start/end comparison only; includes all internal tests/fixtures files; excludes assets outside that fixture directory, external fixtures, installed packages and transient edits restored between captures."
+    },
+    "before": {
+      "status": "available",
+      "sha256": "373ab71cf5693150044c5349b3b19d34890ccf533c60947bd7ecb764c8265d7b",
+      "file_count": 1029
+    },
+    "after": {
+      "status": "available",
+      "sha256": "373ab71cf5693150044c5349b3b19d34890ccf533c60947bd7ecb764c8265d7b",
+      "file_count": 1029
+    }
+  },
+  "scope": "selected offline regressions; two suites also fail on unmodified main; not full application or field qualification",
+  "passing_suite_test_count": 448,
+  "results": [
+    {
+      "path": "tests/endfield/settings/test_center.py",
+      "status": "PASS",
+      "tests_run": 6,
+      "detail": "6 unittest tests passed"
+    },
+    {
+      "path": "tests/endfield/settings/test_geometry.py",
+      "status": "PASS",
+      "tests_run": 11,
+      "detail": "11 unittest tests passed"
+    },
+    {
+      "path": "tests/endfield/settings/test_keybinds.py",
+      "status": "PASS",
+      "tests_run": 11,
+      "detail": "11 unittest tests passed"
+    },
+    {
+      "path": "tests/endfield/settings/test_return_to_menu.py",
+      "status": "PASS",
+      "tests_run": 1,
+      "detail": "1 unittest tests passed"
+    },
+    {
+      "path": "tests/endfield/settings/test_scroll.py",
+      "status": "PASS",
+      "tests_run": 8,
+      "detail": "8 unittest tests passed"
+    },
+    {
+      "path": "tests/endfield/test_endfield_backdrop.py",
+      "status": "PASS",
+      "tests_run": 4,
+      "detail": "4 unittest tests passed"
+    },
+    {
+      "path": "tests/endfield/test_endfield_boot.py",
+      "status": "PASS",
+      "tests_run": 2,
+      "detail": "2 unittest tests passed"
+    },
+    {
+      "path": "tests/endfield/test_endfield_bundled_pack.py",
+      "status": "PASS",
+      "tests_run": 3,
+      "detail": "3 unittest tests passed"
+    },
+    {
+      "path": "tests/endfield/test_endfield_changelog.py",
+      "status": "PASS",
+      "tests_run": 3,
+      "detail": "3 unittest tests passed"
+    },
+    {
+      "path": "tests/endfield/test_endfield_delivery.py",
+      "status": "PASS",
+      "tests_run": 8,
+      "detail": "8 unittest tests passed"
+    },
+    {
+      "path": "tests/endfield/test_endfield_menu.py",
+      "status": "PASS",
+      "tests_run": 15,
+      "detail": "15 unittest tests passed"
+    },
+    {
+      "path": "tests/endfield/test_endfield_native.py",
+      "status": "PASS",
+      "tests_run": 8,
+      "detail": "8 unittest tests passed"
+    },
+    {
+      "path": "tests/endfield/test_endfield_pack_setup.py",
+      "status": "PASS",
+      "tests_run": 14,
+      "detail": "14 unittest tests passed"
+    },
+    {
+      "path": "tests/endfield/test_endfield_presentation.py",
+      "status": "PASS",
+      "tests_run": 8,
+      "detail": "8 unittest tests passed"
+    },
+    {
+      "path": "tests/endfield/test_endfield_runtime_import.py",
+      "status": "PASS",
+      "tests_run": 5,
+      "detail": "5 unittest tests passed"
+    },
+    {
+      "path": "tests/endfield/test_original_changelog.py",
+      "status": "PASS",
+      "tests_run": 8,
+      "detail": "8 unittest tests passed"
+    },
+    {
+      "path": "tests/endfield/test_renderer_pack_priority.py",
+      "status": "PASS",
+      "tests_run": 3,
+      "detail": "3 unittest tests passed"
+    },
+    {
+      "path": "tests/endfield/wiki/test_assets.py",
+      "status": "PASS",
+      "tests_run": 3,
+      "detail": "3 unittest tests passed"
+    },
+    {
+      "path": "tests/endfield/wiki/test_ime.py",
+      "status": "PASS",
+      "tests_run": 3,
+      "detail": "3 unittest tests passed"
+    },
+    {
+      "path": "tests/endfield/wiki/test_terminal.py",
+      "status": "PASS",
+      "tests_run": 63,
+      "detail": "63 unittest tests passed"
+    },
+    {
+      "path": "tests/test_audio_configuration_transactions.py",
+      "status": "PASS",
+      "tests_run": 9,
+      "detail": "9 unittest tests passed"
+    },
+    {
+      "path": "tests/test_audio_pool_lifetime.py",
+      "status": "PASS",
+      "tests_run": 5,
+      "detail": "5 unittest tests passed"
+    },
+    {
+      "path": "tests/test_audio_replay_regressions.py",
+      "status": "PASS",
+      "tests_run": 17,
+      "detail": "17 unittest tests passed"
+    },
+    {
+      "path": "tests/test_build_interpreter.py",
+      "status": "PASS",
+      "tests_run": 5,
+      "detail": "5 unittest tests passed"
+    },
+    {
+      "path": "tests/test_build_preflight_environment.py",
+      "status": "PASS",
+      "tests_run": 3,
+      "detail": "3 unittest tests passed"
+    },
+    {
+      "path": "tests/test_build_safety_regressions.py",
+      "status": "PASS",
+      "tests_run": 22,
+      "detail": "22 unittest tests passed"
+    },
+    {
+      "path": "tests/test_build_telemetry_environment.py",
+      "status": "PASS",
+      "tests_run": 2,
+      "detail": "2 unittest tests passed"
+    },
+    {
+      "path": "tests/test_clickgui_frame_contract.py",
+      "status": "PASS",
+      "tests_run": 20,
+      "detail": "20 unittest tests passed"
+    },
+    {
+      "path": "tests/test_cs2_source_assets.py",
+      "status": "PASS",
+      "tests_run": 7,
+      "detail": "7 unittest tests passed"
+    },
+    {
+      "path": "tests/test_cs2_tab_competitive.py",
+      "status": "PASS",
+      "tests_run": 8,
+      "detail": "8 unittest tests passed"
+    },
+    {
+      "path": "tests/test_endfield_clickgui_theme.py",
+      "status": "FAIL",
+      "tests_run": 11,
+      "detail": "FAIL: test_preloaded_raster_diagnostic_path_does_not_reload_sprites (__main__.EndfieldClickGuiThemeTests.test_preloaded_raster_diagnostic_path_does_not_reload_sprites)"
+    },
+    {
+      "path": "tests/test_endfield_settings_theme.py",
+      "status": "FAIL",
+      "tests_run": 13,
+      "detail": "ERROR: test_esc_backdrop_is_transferred_before_invalidation_and_consumed_once (__main__.ThemeTests.test_esc_backdrop_is_transferred_before_invalidation_and_consumed_once) | ERROR: test_resize_does_not_restart_entrance_or_resample_text_at_rest (__main__.ThemeTests.test_resize_does_not_restart_entrance_or_resample_text_at_rest) | FAIL: test_resource_failure_precedes_acquiring_dialog_owner (__main__.ThemeTests.test_resource_failure_precedes_acquiring_dialog_owner)"
+    },
+    {
+      "path": "tests/test_jello_animation_endpoints.py",
+      "status": "PASS",
+      "tests_run": 9,
+      "detail": "9 unittest tests passed"
+    },
+    {
+      "path": "tests/test_jello_atlas_pages.py",
+      "status": "PASS",
+      "tests_run": 10,
+      "detail": "10 unittest tests passed"
+    },
+    {
+      "path": "tests/test_jello_description_wrapping.py",
+      "status": "PASS",
+      "tests_run": 8,
+      "detail": "8 unittest tests passed"
+    },
+    {
+      "path": "tests/test_jello_fullscreen_scrolling.py",
+      "status": "PASS",
+      "tests_run": 14,
+      "detail": "14 unittest tests passed"
+    },
+    {
+      "path": "tests/test_jello_resource_pack.py",
+      "status": "PASS",
+      "tests_run": 9,
+      "detail": "9 unittest tests passed"
+    },
+    {
+      "path": "tests/test_jello_settings_keyboard.py",
+      "status": "PASS",
+      "tests_run": 16,
+      "detail": "16 unittest tests passed"
+    },
+    {
+      "path": "tests/test_module_list_cjk_layout.py",
+      "status": "PASS",
+      "tests_run": 13,
+      "detail": "13 unittest tests passed"
+    },
+    {
+      "path": "tests/test_release_archive_publication.py",
+      "status": "PASS",
+      "tests_run": 6,
+      "detail": "6 unittest tests passed"
+    },
+    {
+      "path": "tests/test_render_performance_regressions.py",
+      "status": "PASS",
+      "tests_run": 15,
+      "detail": "15 unittest tests passed"
+    },
+    {
+      "path": "tests/test_settings_cold_start.py",
+      "status": "PASS",
+      "tests_run": 14,
+      "detail": "14 unittest tests passed"
+    },
+    {
+      "path": "tests/test_ui_cjk_font_readability.py",
+      "status": "PASS",
+      "tests_run": 17,
+      "detail": "17 unittest tests passed"
+    },
+    {
+      "path": "tests/test_window_assembly.py",
+      "status": "PASS",
+      "tests_run": 12,
+      "detail": "12 unittest tests passed"
+    },
+    {
+      "path": "tests/top_match_bar_minecraft_fusion_test.py",
+      "status": "PASS",
+      "tests_run": 20,
+      "detail": "20 unittest tests passed"
+    }
+  ],
+  "baseline_comparison": {
+    "test_endfield_clickgui_theme": {
+      "baseline_commit": "5bb0ec263757be013b9edfd0225c671de6facf1e",
+      "baseline_failure_signatures": [
+        [
+          "FAIL",
+          "test_preloaded_raster_diagnostic_path_does_not_reload_sprites"
+        ]
+      ],
+      "candidate_failure_signatures": [
+        [
+          "FAIL",
+          "test_preloaded_raster_diagnostic_path_does_not_reload_sprites"
+        ]
+      ],
+      "same_failures": true
+    },
+    "test_endfield_settings_theme": {
+      "baseline_commit": "5bb0ec263757be013b9edfd0225c671de6facf1e",
+      "baseline_failure_signatures": [
+        [
+          "ERROR",
+          "test_esc_backdrop_is_transferred_before_invalidation_and_consumed_once"
+        ],
+        [
+          "ERROR",
+          "test_resize_does_not_restart_entrance_or_resample_text_at_rest"
+        ],
+        [
+          "FAIL",
+          "test_resource_failure_precedes_acquiring_dialog_owner"
+        ],
+        [
+          "FAIL",
+          "test_settings_sizes_and_tabs_fit_without_changing_host_mode"
+        ],
+        [
+          "FAIL",
+          "test_tab_fade_reversal_retires_old_effect_and_keeps_geometry"
+        ],
+        [
+          "FAIL",
+          "test_toggle_is_real_staged_checkbox_and_controls_remain_readable"
+        ],
+        [
+          "FAIL",
+          "test_video_source_list_is_one_column_without_old_scroll_owners"
+        ]
+      ],
+      "candidate_failure_signatures": [
+        [
+          "ERROR",
+          "test_esc_backdrop_is_transferred_before_invalidation_and_consumed_once"
+        ],
+        [
+          "ERROR",
+          "test_resize_does_not_restart_entrance_or_resample_text_at_rest"
+        ],
+        [
+          "FAIL",
+          "test_resource_failure_precedes_acquiring_dialog_owner"
+        ],
+        [
+          "FAIL",
+          "test_settings_sizes_and_tabs_fit_without_changing_host_mode"
+        ],
+        [
+          "FAIL",
+          "test_tab_fade_reversal_retires_old_effect_and_keeps_geometry"
+        ],
+        [
+          "FAIL",
+          "test_toggle_is_real_staged_checkbox_and_controls_remain_readable"
+        ],
+        [
+          "FAIL",
+          "test_video_source_list_is_one_column_without_old_scroll_owners"
+        ]
+      ],
+      "same_failures": true
+    }
+  },
+  "additional_legacy_smoke_attempt": {
+    "status": "BLOCKED_BEFORE_TEST_EXECUTION",
+    "baseline_same": true,
+    "reason": "ModuleNotFoundError: rm_client.ui.hero_deploy",
+    "executed_functions": 0
+  },
+  "migration": {
+    "base": "5bb0ec263757be013b9edfd0225c671de6facf1e",
+    "resources": 24,
+    "all_git_blob_bytes_identical": true,
+    "total_bytes": 511795
+  },
+  "native_selection": {
+    "scope": "actual owned offscreen D3D; production menu factory; feedback/boot disabled; no input/game/device/camera/network I/O",
+    "resource_selection": "unchanged existing private endfield_pack",
+    "private_renderer": "build_83a5af809b9ccdb1",
+    "loaded_renderer": "build_65994449a68ffa60",
+    "loaded_dll_sha256": "c6b65039111cb750bd1d7d1f4cf537cc8fdf4ba8030d38461cd87f8a195704c0",
+    "cases": [
+      {
+        "width": 1280,
+        "height": 720,
+        "nonblank": true,
+        "frames": 90.0
+      },
+      {
+        "width": 2560,
+        "height": 1440,
+        "nonblank": true,
+        "frames": 192.0
+      }
+    ],
+    "owner_retired": true,
+    "private_files_unchanged": true,
+    "status": "PASS",
+    "limits": "Not full app GPU, visual parity, FPS, portable deployment or field qualification."
+  },
+  "opengl_smoke": {
+    "counts": {
+      "PASS": 1,
+      "SKIP": 0,
+      "INCOMPLETE": 0,
+      "FAIL": 0
+    },
+    "passed": true,
+    "scope": "owned desktop test window; not full app performance; 144 FPS text is static diagnostic label"
+  },
+  "config_untouched_sha256": "67efb7a5cc0eae8d3e25868a6dd8ee219c73cc2fe85c85176da6d21d59f13475"
+}

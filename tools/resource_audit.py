@@ -18,12 +18,16 @@ def audit(root=ROOT):
         "settings":("tools.endfield.settings.check_assets","rm_client/ui/endfield/settings/assets"),
         "keybinds":("tools.endfield.keybinds.check_assets","rm_client/ui/endfield/keybinds/assets"),
         "changelog":("tools.endfield.changelog.check_assets","rm_client/ui/endfield/changelog/assets"),
+        "jello":("tools.jello.pack","rm_client/ui/jello"),
     }
     results = {}
     for name,(module,relative) in packages.items():
         path = root/relative
         result = import_module(module).validate(path)
         files = [item for item in path.rglob("*") if item.is_file()]
+        if name == 'jello':
+            from rm_client.ui.jello.resources import LEGACY_FILES, MANIFEST
+            files = [path/MANIFEST, *(path/relative for relative in LEGACY_FILES.values())]
         results[name] = {"path":relative,"files":len(files),"bytes":sum(item.stat().st_size for item in files),
                          "integrity":result}
     # 上游原始导出同时供离线导入器/曲线对照测试使用，不能按运行时引用删除。

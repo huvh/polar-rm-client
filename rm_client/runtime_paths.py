@@ -106,6 +106,13 @@ class RuntimePaths:
         return self.resource_root.joinpath("assets", *parts)
 
     @property
+    def jello_pack(self) -> Path:
+        """Function-owned immutable UI pack; never a private code/asset override."""
+        if self.source_mode:
+            return self.app_root/'rm_client/ui/jello'
+        return self.asset('jello')
+
+    @property
     def endfield_wiki_pack(self) -> Path:
         """源码资源随 Wiki 功能封装，便携版使用发布脚本复制的只读资源。"""
         if self.source_mode:
@@ -146,12 +153,12 @@ class RuntimePaths:
     def endfield_renderer_pack(self) -> Path:
         """Shipped native code must win over stale private resource-pack DLLs.
 
-        Resource/boot/audio overrides remain untouched. Source installations
-        without shipped assets can still use an explicitly prepared local DLL.
-        Both routes retain library_path's source pin and binary hash checks.
+        Resource/boot/audio overrides remain untouched. A missing/corrupt
+        shipped pack remains diagnosable; it must not execute a stale private
+        DLL as an implicit fallback. Development tools may still explicitly
+        construct EndfieldNativeMenu(pack). library_path retains pin/hash gates.
         """
-        shipped = self.endfield_bundled_menu_pack
-        return shipped if (shipped / "ENDFIELD_PACK_MANIFEST.json").is_file() else self.endfield_menu_pack
+        return self.endfield_bundled_menu_pack
 
     def ensure_writable_dirs(self) -> None:
         for path in (

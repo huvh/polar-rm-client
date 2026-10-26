@@ -24,6 +24,7 @@ from ..model import CATEGORIES, LEGACY_GUI_MODES, Module, Setting
 from .animation import Easings, step_damped_spring
 from .clickgui_gpu import ClickGuiDrawList, GpuImage, GpuRect, GpuText
 from .fonts import ui_font_key, ui_text_layout
+from .jello.resources import JelloResources
 from .jello_locale import (
     action_label,
     category_label,
@@ -491,12 +492,13 @@ class JelloClickGuiRenderer:
     def __init__(self, asset_root: Path) -> None:
         self._presentation_renderer = None
         self.asset_root = Path(asset_root)
-        self.options_image = self.asset_root / "options.png"
-        self.check_image = self.asset_root / "check.png"
-        self.scrollbar_top_image = self.asset_root / "verticalscrollbartop.png"
-        self.scrollbar_bottom_image = self.asset_root / "verticalscrollbarbottom.png"
+        resources = JelloResources.from_image_root(self.asset_root)
+        self.options_image = resources.image("options.png")
+        self.check_image = resources.image("check.png")
+        self.scrollbar_top_image = resources.image("verticalscrollbartop.png")
+        self.scrollbar_bottom_image = resources.image("verticalscrollbarbottom.png")
         self.shadow_assets = {
-            name.removesuffix(".png"): self.asset_root / name for name in self._SHADOW_NAMES
+            name.removesuffix(".png"): resources.image(name) for name in self._SHADOW_NAMES
         }
         # These bundled assets are immutable for the lifetime of the renderer.
         # Re-statting 49 shadow/options paths on every Jello frame cost several

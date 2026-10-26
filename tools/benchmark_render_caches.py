@@ -23,6 +23,8 @@ import time
 from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from rm_client.ui.jello.resources import FONTS, JelloResources
 
 
 def time_pair(before, after, *, iterations=200, samples=9):
@@ -138,7 +140,9 @@ def main():
                           ("jello_medium", "Jello-Helvetica-Neue-Medium.ttf"),
                           ("poppins_regular", "Poppins-Regular.ttf"),
                           ("tahoma", "tahoma.ttf")):
-        font_id = qt.QFontDatabase.addApplicationFont(str(ROOT / "assets/fonts" / filename))
+        font_path = (JelloResources.for_workspace(ROOT).font(filename) if filename in FONTS
+                     else ROOT / 'assets/fonts' / filename)
+        font_id = qt.QFontDatabase.addApplicationFont(str(font_path))
         names = qt.QFontDatabase.applicationFontFamilies(font_id)
         if names:
             families[key] = names[0]
