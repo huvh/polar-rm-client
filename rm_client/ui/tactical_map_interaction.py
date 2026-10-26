@@ -14,6 +14,16 @@ from PySide6.QtGui import QPainterPath, QTransform
 from .tactical_map_geometry import MapViewport, NormalizedMapPoint
 
 
+def logical_map_transform(painter) -> QTransform:
+    """Qt combinedTransform includes device DPR; QMouseEvent.position does not.
+
+    Keep world/window/viewport transforms, remove only the final device scale.
+    Applying DPR again made map clicks drift on 125–200% Windows displays.
+    """
+    dpr = float(painter.device().devicePixelRatioF())
+    return painter.combinedTransform() * QTransform.fromScale(1. / dpr, 1. / dpr)
+
+
 @dataclass(frozen=True)
 class MapHitGeometry:
     """Copied Qt values from one completed official-map drawing operation."""

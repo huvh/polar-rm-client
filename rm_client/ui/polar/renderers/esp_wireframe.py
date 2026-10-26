@@ -413,6 +413,9 @@ class EspWireframeMixin:
         return bool(getattr(setting, "value", True))
 
     def draw_target_overlay(self, p: QPainter, target: VisionTarget, module: Module | None = None) -> None:
+        if (getattr(self.state, 'rules_season', 2026) == 2027
+                and getattr(self, '_vision_source', 'Mock') == 'Mock'):
+            return  # A rule preview must not present generated targets as observations.
         if not self.lock_indicator_visible():
             return
         rect = QRectF(target.x, target.y, target.w, target.h)

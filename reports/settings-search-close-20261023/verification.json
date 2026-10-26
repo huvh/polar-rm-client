@@ -1,0 +1,390 @@
+{
+  "schema": 1,
+  "recorded_at_utc": "2026-10-23T14:27:24.223822+00:00",
+  "base_commit": "fa16a46b73cea3fba3d6e93dd8780a8b92b5e92d",
+  "scope": "Settings-center native host close while search owns focus; no asset, renderer-material, protocol or vehicle authorization change.",
+  "source_identity": {
+    "method": "base commit plus changed/new file hashes; report excludes itself",
+    "files_sha256": {
+      "docs/settings_search_close_20261023.md": "090b19a21f0172149aaa684bf13e78c1ada8fc48c28b2b7d6af0622125473246",
+      "rm_client/ui/cs2_settings_center.py": "5d76d46c70d1472e78d2697ec4de38a8020de9ac047f3d8e1ae3d670319d58e8",
+      "rm_client/ui/polar/mixins/input_dispatch_mixin.py": "c5b68a0cd7b54e90f61d0b31002c8fe3852715eba6e82f05e2fe724c23309d2b",
+      "rm_client/ui/polar_app.py": "d3920e8a09686772db68a9b47c3d353065eb5eb4c39b9d841f17bdb1816aa9e6",
+      "tests/test_gpu_warmup_budget.py": "c794535226610ffd1b02ff357a44a7fc31a0e032d6baba3e7ac61242c1da262e",
+      "tests/test_settings_host_close.py": "6513c9a577fc00251c6e6052286194bf422a369ba61d2e16f71e094ea73c8236",
+      "tests/test_startup_settings_fullscreen.py": "bd29db3b686cc31559031981237e333569bd645757bf8b62fedc03da9eed8e07",
+      "tools/verify_settings_close_desktop.py": "807f56e472309524f6dc8c62ac01fe1580b3d2442a24d9ee2270dda6b9bf1f23"
+    }
+  },
+  "environment": {
+    "os": "Windows-11-10.0.26200-SP0",
+    "python": "3.12.14",
+    "dependencies": {
+      "PySide6": "6.11.1",
+      "numpy": "2.4.6",
+      "opencv-python": "5.0.0.93"
+    }
+  },
+  "negative_control": {
+    "native_old": {
+      "version": "old",
+      "native_host_enabled": false,
+      "system_modal": true
+    },
+    "native_fixed": {
+      "version": "fixed",
+      "native_host_enabled": true,
+      "system_modal": false
+    },
+    "method": "Separate Windows processes: same settings/search action, IsWindowEnabled on each owned Host QWidget; old source is main fa16a46.",
+    "initial_offline_regressions": "Initial four new tests on baseline: 2 FAIL / 1 ERROR / 1 PASS. Expected missing semantic-owner and shutdown contracts; later expanded to nine cases."
+  },
+  "focused": {
+    "counts": {
+      "PASS": 15,
+      "SKIP": 0,
+      "INCOMPLETE": 0,
+      "FAIL": 0
+    },
+    "unittest_cases": 179,
+    "results": [
+      {
+        "id": "tests/test_cs2_settings_center",
+        "status": "PASS",
+        "tests_run": 13
+      },
+      {
+        "id": "tests/test_emergency_shortcut_lifetime",
+        "status": "PASS",
+        "tests_run": 7
+      },
+      {
+        "id": "tests/test_fullscreen_composition",
+        "status": "PASS",
+        "tests_run": 15
+      },
+      {
+        "id": "tests/test_fullscreen_input_extended",
+        "status": "PASS",
+        "tests_run": 14
+      },
+      {
+        "id": "tests/test_gpu_warmup_budget",
+        "status": "PASS",
+        "tests_run": 11
+      },
+      {
+        "id": "tests/test_jello_settings_keyboard",
+        "status": "PASS",
+        "tests_run": 16
+      },
+      {
+        "id": "tests/test_modal_input_epoch",
+        "status": "PASS",
+        "tests_run": 5
+      },
+      {
+        "id": "tests/test_settings_factory_failure_cleanup",
+        "status": "PASS",
+        "tests_run": 3
+      },
+      {
+        "id": "tests/test_settings_host_close",
+        "status": "PASS",
+        "tests_run": 9
+      },
+      {
+        "id": "tests/test_startup_settings_fullscreen",
+        "status": "PASS",
+        "tests_run": 19
+      },
+      {
+        "id": "tests/test_tactical_map_hold_retirement",
+        "status": "PASS",
+        "tests_run": 3
+      },
+      {
+        "id": "tests/test_window_api_contract",
+        "status": "PASS",
+        "tests_run": 41
+      },
+      {
+        "id": "tests/test_window_finalization_owner",
+        "status": "PASS",
+        "tests_run": 4
+      },
+      {
+        "id": "tests/test_window_focus_loss",
+        "status": "PASS",
+        "tests_run": 2
+      },
+      {
+        "id": "tests/test_window_lifecycle_controller",
+        "status": "PASS",
+        "tests_run": 17
+      }
+    ],
+    "source_stability": {
+      "schema_version": 1,
+      "status": "PASS",
+      "detail": "Declared verification source inputs have identical start/end fingerprints",
+      "scope": {
+        "directories": [
+          "rm_client",
+          "tests",
+          "tools",
+          "configs"
+        ],
+        "suffixes": [
+          ".bat",
+          ".c",
+          ".cfg",
+          ".cpp",
+          ".h",
+          ".hpp",
+          ".ini",
+          ".json",
+          ".ps1",
+          ".py",
+          ".spec",
+          ".toml",
+          ".yaml",
+          ".yml"
+        ],
+        "all_file_directories": [
+          "tests/fixtures"
+        ],
+        "root_files": [
+          "main.py",
+          "requirements*.txt"
+        ],
+        "exclusions": [
+          "hidden directories",
+          "__pycache__"
+        ],
+        "limits": "Start/end comparison only; includes all internal tests/fixtures files; excludes assets outside that fixture directory, external fixtures, installed packages and transient edits restored between captures."
+      },
+      "before": {
+        "status": "available",
+        "sha256": "4fa6ff2d272c0dc5fc387c006491ea666e087c6bfffa0ad476fe2fe029aa7798",
+        "file_count": 859
+      },
+      "after": {
+        "status": "available",
+        "sha256": "4fa6ff2d272c0dc5fc387c006491ea666e087c6bfffa0ad476fe2fe029aa7798",
+        "file_count": 859
+      }
+    },
+    "returncode": 0,
+    "command": "python tools/verify_all.py --test tests/test_settings_host_close.py --test tests/test_cs2_settings_center.py --test tests/test_startup_settings_fullscreen.py --test tests/test_emergency_shortcut_lifetime.py --test tests/test_gpu_warmup_budget.py --test tests/test_tactical_map_hold_retirement.py --test tests/test_jello_settings_keyboard.py --test tests/test_modal_input_epoch.py --test tests/test_settings_factory_failure_cleanup.py --test tests/test_window_lifecycle_controller.py --test tests/test_window_finalization_owner.py --test tests/test_window_focus_loss.py --test tests/test_fullscreen_composition.py --test tests/test_fullscreen_input_extended.py --test tests/test_window_api_contract.py --json tmp_settings_close/focused_final.json --log-dir tmp_settings_close/focused_final_logs"
+  },
+  "desktop": {
+    "scope": "Owned Windows OpenGL + native close message; inert transports, no robot I/O",
+    "cases": [
+      {
+        "case": "entrance",
+        "fullscreen": false,
+        "native_host_enabled": true,
+        "native_sc_close_completed": true,
+        "search_ime_committed": true,
+        "settings_owner_retired": true,
+        "native_renderer_retired": true,
+        "last_window_closed": true
+      },
+      {
+        "case": "search-ime",
+        "fullscreen": false,
+        "native_host_enabled": true,
+        "native_sc_close_completed": true,
+        "search_ime_committed": true,
+        "settings_owner_retired": true,
+        "native_renderer_retired": true,
+        "last_window_closed": true
+      },
+      {
+        "case": "fullscreen-search",
+        "fullscreen": true,
+        "native_host_enabled": true,
+        "native_sc_close_completed": true,
+        "search_ime_committed": true,
+        "settings_owner_retired": true,
+        "native_renderer_retired": true,
+        "last_window_closed": true
+      }
+    ],
+    "result": "PASS"
+  },
+  "desktop_command": "python tools/verify_settings_close_desktop.py --out tmp_settings_close/desktop_current",
+  "harness_corrections": [
+    "Initial manual-processEvents probe failed its immediate Qt-owner deletion assertion: deleteLater was queued outside QApplication.exec. Explicitly process deferred deletion; retain the owner-retirement assertion.",
+    "Second manual-processEvents probe did not receive lastWindowClosed. Run the same assertions under a real outer QApplication.exec instead of dropping the exit assertion. All three current cases passed."
+  ],
+  "full_offline": {
+    "run_state": "completed",
+    "counts": {
+      "PASS": 460,
+      "SKIP": 12,
+      "INCOMPLETE": 6,
+      "FAIL": 0
+    },
+    "returncode": 1,
+    "verdict": "NO-GO due to incomplete coverage; not an overall PASS",
+    "source_stability": {
+      "schema_version": 1,
+      "status": "PASS",
+      "detail": "Declared verification source inputs have identical start/end fingerprints",
+      "scope": {
+        "directories": [
+          "rm_client",
+          "tests",
+          "tools",
+          "configs"
+        ],
+        "suffixes": [
+          ".bat",
+          ".c",
+          ".cfg",
+          ".cpp",
+          ".h",
+          ".hpp",
+          ".ini",
+          ".json",
+          ".ps1",
+          ".py",
+          ".spec",
+          ".toml",
+          ".yaml",
+          ".yml"
+        ],
+        "all_file_directories": [
+          "tests/fixtures"
+        ],
+        "root_files": [
+          "main.py",
+          "requirements*.txt"
+        ],
+        "exclusions": [
+          "hidden directories",
+          "__pycache__"
+        ],
+        "limits": "Start/end comparison only; includes all internal tests/fixtures files; excludes assets outside that fixture directory, external fixtures, installed packages and transient edits restored between captures."
+      },
+      "before": {
+        "status": "available",
+        "sha256": "c4e20d790cd89ade855fc4bdc33819b5939991e408d82269146db58bebac181d",
+        "file_count": 859
+      },
+      "after": {
+        "status": "available",
+        "sha256": "c4e20d790cd89ade855fc4bdc33819b5939991e408d82269146db58bebac181d",
+        "file_count": 859
+      }
+    },
+    "nonpass": [
+      {
+        "id": "tests/polar_link_test",
+        "status": "INCOMPLETE",
+        "detail": "[SKIP] 未找到队内 CRC8_CRC16.py 参考实现，跳过三方对拍"
+      },
+      {
+        "id": "tests/test_legacy_video_bridge",
+        "status": "INCOMPLETE",
+        "detail": "1 unittest tests skipped"
+      },
+      {
+        "id": "tools/dt7_link/test_cc_link",
+        "status": "SKIP",
+        "detail": "SKIP: 找不到 <CHECKOUT>\\.firmware-not-selected\\components\\support\\CRC8_CRC16.c"
+      },
+      {
+        "id": "tools/dt7_link/test_dbus_frame_vs_firmware",
+        "status": "SKIP",
+        "detail": "SKIP: 找不到固件源码（<CHECKOUT>\\.firmware-not-selected\\application\\other\\remote_control.c）"
+      },
+      {
+        "id": "tools/dt7_link/test_dt7_link",
+        "status": "INCOMPLETE",
+        "detail": "[SKIP] 没有固件树 | [SKIP] 找不到 <LOCAL_REFERENCE>"
+      },
+      {
+        "id": "tools/dt7_link/test_dt7_ui_selftest",
+        "status": "INCOMPLETE",
+        "detail": "[SKIP] 缺少固件 application C 源文件：交叉核对未运行"
+      },
+      {
+        "id": "tools/firmware/controller_angle/test_controller_angle",
+        "status": "SKIP",
+        "detail": "SKIP: set POLAR_REFEREE_REFERENCE to a read-only StandardRobot++ checkout"
+      },
+      {
+        "id": "tools/firmware/gimbal_host/test_gimbal_host",
+        "status": "SKIP",
+        "detail": "SKIP: 固件副本不存在（<CHECKOUT>\\.firmware-not-selected）"
+      },
+      {
+        "id": "tools/firmware/host_bridge/test_host_bridge",
+        "status": "SKIP",
+        "detail": "SKIP: 固件副本不存在（<CHECKOUT>\\.firmware-not-selected）"
+      },
+      {
+        "id": "tools/firmware/host_bridge/test_rc_key_ledger",
+        "status": "SKIP",
+        "detail": "SKIP: 固件副本不存在（<CHECKOUT>\\.firmware-not-selected）"
+      },
+      {
+        "id": "tools/firmware/host_bridge/test_usb_receiver_portable",
+        "status": "SKIP",
+        "detail": "SKIP: supply a disposable prepared StandardRobot++ fixture"
+      },
+      {
+        "id": "tools/firmware/km_link/test_km_link",
+        "status": "SKIP",
+        "detail": "SKIP: 固件树或头文件不齐（先跑 prepare_hero_build.py）"
+      },
+      {
+        "id": "tools/firmware/km_link/test_km_payload_layout",
+        "status": "SKIP",
+        "detail": "SKIP: 固件树里还没有 application/typedef/host_km_link.h（先跑 prepare_hero_build.py）"
+      },
+      {
+        "id": "tools/firmware/km_link/test_serial_parsers_portable",
+        "status": "INCOMPLETE",
+        "detail": "1 unittest tests skipped"
+      },
+      {
+        "id": "tools/firmware/motion_feedback/test_motion_feedback",
+        "status": "SKIP",
+        "detail": "SKIP: 固件副本不存在（<CHECKOUT>\\.firmware-not-selected）"
+      },
+      {
+        "id": "tools/firmware/referee_rx/test_referee_rx",
+        "status": "SKIP",
+        "detail": "SKIP: set POLAR_REFEREE_REFERENCE to the explicitly selected read-only firmware reference"
+      },
+      {
+        "id": "tools/firmware/test_patch_logic",
+        "status": "INCOMPLETE",
+        "detail": "[INCOMPLETE] Legacy baseline patch test requires installation; excluded from read-only target validation"
+      },
+      {
+        "id": "tools/firmware/test_patch_real_headers",
+        "status": "SKIP",
+        "detail": "SKIP: 固件副本不存在（<CHECKOUT>\\.firmware-not-selected）"
+      }
+    ],
+    "command": "python tools/verify_all.py --profile offline --json tmp_settings_close/full_offline.json --log-dir tmp_settings_close/full_offline_logs"
+  },
+  "other_checks": {
+    "compileall_returncode": 0,
+    "git_diff_check_returncode": 0,
+    "protected_primary_config_unchanged": true,
+    "no_runtime_assets_changed": true
+  },
+  "limits": [
+    "Software/UI evidence only; no real referee, robot, physical DT7/video/audio qualification.",
+    "SC_CLOSE sent only to the test client HWND; no global mouse/keyboard injection or other-app manipulation.",
+    "Other explicit confirmation/key-binding subdialogs retain their existing Qt modality.",
+    "Settings preserve a synchronous caller using a local QEventLoop; this is not an asynchronous API rewrite.",
+    "No new portable EXE/release; saved locally, no implicit main merge or push."
+  ]
+}

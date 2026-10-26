@@ -1,0 +1,110 @@
+{
+  "schema": 1,
+  "scope": "authorized-distribution",
+  "source_snapshot": "installed CS2 selected copies 2026-10-25",
+  "decompiler": "Source2Viewer 20.0.0.0, offline copies only",
+  "analysis_transform": "RED2 editor metadata omitted ONLY in analysis copies; non-RED2 payloads verified identical",
+  "assets": {
+    "scoreboard.css": {
+      "source": "panorama/styles/scoreboard.vcss_c",
+      "source_sha256": "99dae05612bb1ad70588e15efc5bdbdbc92bd00b5873f05ff4cacdb653531c2b",
+      "sha256": "3baef1896cfa77faa49ebaa35256761e0dad6257b1b84ffb382ccf0c71a6c7ef",
+      "content_blocks": {
+        "RERL": "1015a8f2cbf30151e70a4d8e2dc948e7904568a5fbda1aa3eae955ef6c394cc6",
+        "DATA": "3789d0b3e85b40827d4a4862967d590c6cab0a96ac0acf018b82e84b0591f58f",
+        "SrMa": "d9ccda992c8cfc1638dc501bcb7f587ab31b3fe1820a4e0a8b82153ffc10269f"
+      }
+    },
+    "scoreboard.xml": {
+      "source": "panorama/layout/scoreboard.vxml_c",
+      "source_sha256": "c4e47209ad9d7d4481d7ea8e81b95b90d485bc6cf00e601ff44439f5c44aa881",
+      "sha256": "3e2dc03180145f9d5ae707debd727e9947c4c6538aafeb813713e5d280d5cc90",
+      "content_blocks": {
+        "DATA": "c4bcc9f3ed97ce22d83263aa53b44700669f1d2c99a933bc5cb6a5f1b0b25253",
+        "LaCo": "39f16ddeed60f05d381b5ac5b955dde8ddf275ee710a36cd874a3188653a1fe1"
+      }
+    },
+    "scoreboard_owner.xml": {
+      "source": "panorama/layout/scoreboard_owner.vxml_c",
+      "source_sha256": "7d9b25b8e0ebd67ae2be6314beae6f16206e4f76a7490b6b9485ffee25c20d34",
+      "sha256": "a3b81450a349865b71731ebca650ef1522c9d57877bbb186b82345c779260cf3",
+      "content_blocks": {
+        "DATA": "0bb6cbc8619267a76a7fa274ebb789626ac0368727959c31eaa8c3bf90afcbda",
+        "LaCo": "f92d8835f17e9591c28ca049eee95ce0e071b1f232983a85e3434c06c6e77c3a"
+      }
+    },
+    "scoreboard.ts": {
+      "source": "panorama/scripts/scoreboard.vts_c",
+      "source_sha256": "b72cbf5ca652e8ff84e4835f82251fe9e9bf403d70af643ae911e20ef72e5e1b",
+      "sha256": "2bff88966047057aebb3b9994a6a9c29c7e59e55decbacb0e01e57bcbe171966",
+      "content_blocks": {
+        "DATA": "2bff88966047057aebb3b9994a6a9c29c7e59e55decbacb0e01e57bcbe171966",
+        "STAT": "e5bfec71fce962860400527bc6daba287cff21f3a4fb2e9a24c4b2b2bd9a7eb9"
+      }
+    },
+    "csgostyles.css": {
+      "source": "panorama/styles/csgostyles.vcss_c",
+      "source_sha256": "eb93cad5509380266b198a38d6e69cc7812201838139bde985699c059a67af32",
+      "sha256": "8c3b4548fefa082090e8942afd6b7d44c8229b67dbadc8466e70d4364e0e24d3",
+      "content_blocks": {
+        "RERL": "f6f898623baee4c51a3e596c683aeff3452c8f6b8b49545189ccbf704f3f7ba5",
+        "DATA": "51b43ad0659a957d66da97f732d1823f2c5aab07cc0daf5cce8742d5cd320baa",
+        "SrMa": "a036e8a20f61ccb0e90557c9e402d7619eb3e8040de87ce5724bede9fab3ae69"
+      }
+    },
+    "casual.svg": {
+      "source": "panorama/images/icons/ui/casual.vsvg_c",
+      "source_sha256": "a18c678eabfac24b564c49f7870d3c8aebb756819ce60ce2b4507e015c3cbba2",
+      "sha256": "a2f130dbf387f0e029f42eabb2f632d3ca0e97111e68aaf5b6da54ac135ba9e8",
+      "file": "sb_casual.png"
+    },
+    "camera.svg": {
+      "source": "panorama/images/icons/ui/camera.vsvg_c",
+      "source_sha256": "53d92f2f5b627917fee3b61378d476ce35baad44b45d362e2056129392478083",
+      "sha256": "bcd73959e85898b68092e4294414b1bbc13296b168182d8c658a8e394faf0ba5",
+      "file": "sb_camera.png"
+    },
+    "unmuted.svg": {
+      "source": "panorama/images/icons/ui/unmuted.vsvg_c",
+      "source_sha256": "bda3017de962f61f65ffe133302f1e8d95e2f09b9c425b9980fd02de95fa823e",
+      "sha256": "616f7a88a90f48a1978444455f13366c48c1d89cd5c2cff5d2cd37085d43e16c",
+      "file": "sb_unmuted.png"
+    },
+    "ct_silhouette.svg": {
+      "source": "panorama/images/icons/ui/ct_silhouette.vsvg_c",
+      "source_sha256": "02b7090c63cf89dbd48971868dcfb6705134488238528b3b0a971859d48def2e",
+      "sha256": "34bde1e4140faa22194ab2d61da16c50919a25a4e7812c426013ca2f97aa9ed7",
+      "file": "sb_ct_silhouette.png"
+    },
+    "menu.svg": {
+      "source": "panorama/images/icons/ui/menu.vsvg_c",
+      "source_sha256": "f79c101a175475324f3cb0f41a578ac9b2200ac4e107077f4baf7d701e40b3df",
+      "sha256": "742e07454047ced0e03e6473fd667f9dba3f46912a4119a43902a5d676e523ac",
+      "file": "sb_menu.png"
+    },
+    "competitive.svg": {
+      "source": "panorama/images/icons/ui/competitive.vsvg_c",
+      "source_sha256": "253adcbfe09ac1a2b615bc2a8c4dc4a66ce6fb0f2f8843f072d61f53b2160143",
+      "sha256": "051c285355286da1cf98553d12adf0a42da22595ccc8b9b9a15b517a9d8a4fa7",
+      "file": "sb_competitive.png"
+    },
+    "ping_4.svg": {
+      "source": "panorama/images/icons/ui/ping_4.vsvg_c",
+      "source_sha256": "fc41384c425b078aaeed3c8d1292ae224a23087090c08c3d1d337a7bface6817",
+      "sha256": "e387281264e95c0b1673f6e682e600a5d1b6f7abea4326fae8d37c09134a7f7e",
+      "file": "sb_ping_4.png"
+    },
+    "stats.svg": {
+      "source": "panorama/images/icons/ui/stats.vsvg_c",
+      "source_sha256": "f0edf11a08ed98ce9bdf6e658954a9065688b80ad3e3c659f5675aa4115fa6d6",
+      "sha256": "e7fcae7706bf382beda7c1e25aa6ce8fb1975a6acdd354cca784839dd4b34100",
+      "file": "sb_stats.png"
+    },
+    "elimination.svg": {
+      "source": "panorama/images/icons/ui/elimination.vsvg_c",
+      "source_sha256": "4a96a4bf1bf7fa8580be16683f276d476e0dcd4f3458b9ab4c871da3a7a58cb8",
+      "sha256": "c2e766a9be1eb72d63f9841b73a03534b1c3df47dfbb208a763b68147090b795",
+      "file": "sb_elimination.png"
+    }
+  }
+}

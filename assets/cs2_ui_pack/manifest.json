@@ -205,6 +205,78 @@
       "sha256": "297a5708f324dc7219ba85d652b4c8d6a63d04f93bfa63080691ae972f3e3df8",
       "source": "game/csgo/panorama/fonts/stratum2.uifont",
       "source_sha256": "d646bea1eb757ef5bfae083bfc721566098725d4d9fb82c75dbe0d802be05b02"
+    },
+    "sb_casual": {
+      "source": "panorama/images/icons/ui/casual.vsvg_c",
+      "source_sha256": "a18c678eabfac24b564c49f7870d3c8aebb756819ce60ce2b4507e015c3cbba2",
+      "sha256": "937ca545c1be89a4b09b557c1a14c2a71e7d2544add67ddd83b8422be3692a94",
+      "file": "sb_casual.png"
+    },
+    "sb_camera": {
+      "source": "panorama/images/icons/ui/camera.vsvg_c",
+      "source_sha256": "53d92f2f5b627917fee3b61378d476ce35baad44b45d362e2056129392478083",
+      "sha256": "00de277672bbde33b1cf9f6bddf4d0402aaed18cf222ea1e4ec5eec54498a0e2",
+      "file": "sb_camera.png"
+    },
+    "sb_unmuted": {
+      "source": "panorama/images/icons/ui/unmuted.vsvg_c",
+      "source_sha256": "bda3017de962f61f65ffe133302f1e8d95e2f09b9c425b9980fd02de95fa823e",
+      "sha256": "7f81e9faf125b5c0e43b93c28cb07d56b5008de13f39648ce517ab317c395eb4",
+      "file": "sb_unmuted.png"
+    },
+    "sb_ct_silhouette": {
+      "source": "panorama/images/icons/ui/ct_silhouette.vsvg_c",
+      "source_sha256": "02b7090c63cf89dbd48971868dcfb6705134488238528b3b0a971859d48def2e",
+      "sha256": "15a0286044dab26caff0c1db5611ee7be2107e4b576724f27856638c44f167df",
+      "file": "sb_ct_silhouette.png"
+    },
+    "sb_menu": {
+      "source": "panorama/images/icons/ui/menu.vsvg_c",
+      "source_sha256": "f79c101a175475324f3cb0f41a578ac9b2200ac4e107077f4baf7d701e40b3df",
+      "sha256": "432c7d030f378cba384f3084838db1379fb5cb9cc81bf6a90013f1bda35a98e3",
+      "file": "sb_menu.png"
+    },
+    "font_medium": {
+      "file": "stratum2-medium.otf",
+      "sha256": "9e806f0fae5fd340c3fa21c0200668ef110d5790f71c92bc6217720e3f595b99",
+      "source": "game/csgo/panorama/fonts/stratum2.uifont",
+      "source_sha256": "6a9d50938a37631bc49164aa1964a0fc33340b216880f212b95f171c8b48ebaf"
+    },
+    "font_condensed_regular": {
+      "file": "stratum2condensed-regular.otf",
+      "sha256": "47798f417aaa728a5f61822659f91960214a9313074db06791c3f850431e544c",
+      "source": "game/csgo/panorama/fonts/stratum2.uifont",
+      "source_sha256": "6a9d50938a37631bc49164aa1964a0fc33340b216880f212b95f171c8b48ebaf"
+    },
+    "font_mono_regular": {
+      "file": "stratum2mono-regular.otf",
+      "sha256": "ceff4f681953e8059e032d16134824016daf1ec53c1dc69f77ed75a02a14faba",
+      "source": "game/csgo/panorama/fonts/stratum2.uifont",
+      "source_sha256": "6a9d50938a37631bc49164aa1964a0fc33340b216880f212b95f171c8b48ebaf"
+    },
+    "sb_competitive": {
+      "source": "panorama/images/icons/ui/competitive.vsvg_c",
+      "source_sha256": "253adcbfe09ac1a2b615bc2a8c4dc4a66ce6fb0f2f8843f072d61f53b2160143",
+      "sha256": "1c077935f96e7ca284e31e2b9439e003f2596fb72bf327a421a67f893db2ff72",
+      "file": "sb_competitive.png"
+    },
+    "sb_ping_4": {
+      "source": "panorama/images/icons/ui/ping_4.vsvg_c",
+      "source_sha256": "fc41384c425b078aaeed3c8d1292ae224a23087090c08c3d1d337a7bface6817",
+      "sha256": "6db144a85ba1f07b333aaf24af171896cc67c78970e409c235581ab9b52a7a66",
+      "file": "sb_ping_4.png"
+    },
+    "sb_stats": {
+      "source": "panorama/images/icons/ui/stats.vsvg_c",
+      "source_sha256": "f0edf11a08ed98ce9bdf6e658954a9065688b80ad3e3c659f5675aa4115fa6d6",
+      "sha256": "368b3d6b98f96a842e4c0e66ac3d1b0c3359b666be4bcc1c384087bda5ce37d7",
+      "file": "sb_stats.png"
+    },
+    "sb_elimination": {
+      "source": "panorama/images/icons/ui/elimination.vsvg_c",
+      "source_sha256": "4a96a4bf1bf7fa8580be16683f276d476e0dcd4f3458b9ab4c871da3a7a58cb8",
+      "sha256": "fe7df1983b72a07a563581d770c07c8ce0e19d6518ad44c67cd2a57345d1d405",
+      "file": "sb_elimination.png"
     }
   },
   "source_files_before": {

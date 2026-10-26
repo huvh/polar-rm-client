@@ -1,10 +1,14 @@
 """核验客户端随附资源和当前原生构建；不加载Qt、游戏或设备。"""
 import argparse
+import hashlib
 from importlib import import_module
 import json
 from pathlib import Path
+import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 
 def audit(root=ROOT):
@@ -22,13 +26,29 @@ def audit(root=ROOT):
         files = [item for item in path.rglob("*") if item.is_file()]
         results[name] = {"path":relative,"files":len(files),"bytes":sum(item.stat().st_size for item in files),
                          "integrity":result}
+    # 上游原始导出同时供离线导入器/曲线对照测试使用，不能按运行时引用删除。
+    references = {}
+    for relative, manifest_name, table in (
+            ("assets/endfield_settings", "PROVENANCE.json", "files"),
+            ("assets/cs2_scoreboard_source", "provenance.json", "assets")):
+        path = root/relative
+        data = json.loads((path/manifest_name).read_text(encoding="utf-8"))
+        for name, record in data[table].items():
+            target = (path/name).resolve()
+            if not target.is_relative_to(path.resolve()):
+                raise ValueError("Reference entry escapes package: "+name)
+            expected = record["sha256"] if isinstance(record, dict) else record
+            if hashlib.sha256(target.read_bytes()).hexdigest() != expected:
+                raise ValueError("Reference resource changed: "+str(target))
+        references[relative] = {"hashed_entries":len(data[table]),
+            "role":"offline source/importer regression reference"}
     native = root/"rm_client/ui/endfield/menu/assets/native_renderer"
     current = json.loads((native/"CURRENT.json").read_text(encoding="utf-8"))["directory"]
     obsolete = sorted(item.name for item in native.glob("build_*") if item.name != current)
     if obsolete:
         raise ValueError("Unselected native builds remain in runtime pack: "+", ".join(obsolete))
     return {"status":"PASS","scope":"manifest/source/mesh validation only; no GPU or hardware qualification",
-            "current_native_build":current,"packages":results,
+            "current_native_build":current,"packages":results,"reference_packages":references,
             "local_only":"Python environment, personal profiles and imported media are not application source changes"}
 
 

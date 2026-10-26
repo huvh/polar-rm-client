@@ -2,6 +2,7 @@
 from pathlib import Path
 import hashlib
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -61,6 +62,17 @@ class NativeOwnerTests(unittest.TestCase):
         api.action.side_effect = [7, 0]
         self.assertEqual(menu.tick(width=1280, height=720, chinese=True, mode="RMUL3v3", paused=True), 0)
         self.assertEqual(menu.tick(width=1280, height=720, chinese=True, mode="RMUL3v3", paused=False), 0)
+
+    def test_shipped_renderer_can_use_private_pinned_resources_without_loading_old_dll(self):
+        menu = EndfieldNativeMenu(Path("private-scene"), renderer_pack=Path("shipped-code"))
+        api = Mock(create=Mock(return_value=17), status=Mock(return_value=1))
+        with patch("rm_client.ui.endfield.menu.native.library_path", return_value=Path("fixed.dll")) as locate, \
+             patch("rm_client.ui.endfield.menu.native.NativeApi", return_value=api) as load:
+            menu.prepare(42, 1280, 720)
+        locate.assert_called_once_with(Path("shipped-code"))
+        load.assert_called_once_with(Path("fixed.dll"))
+        self.assertEqual(api.create.call_args.args[1],
+                         os.fsencode(Path("private-scene/native_source_runtime")))
 
     def test_cleanup_retains_library_until_worker_ack(self):
         menu, api = self.make_owner()

@@ -22,3 +22,7 @@ rm_client/ui/endfield/changelog/assets/** -text -whitespace
 # Settings and standalone keyboard assets include byte-addressed JSON curves.
 rm_client/ui/endfield/settings/assets/** -text -whitespace
 rm_client/ui/endfield/keybinds/assets/** -text -whitespace
+
+# Original CS2 exports are hash-addressed vendor evidence.
+assets/cs2_scoreboard_source/** -text -whitespace
+assets/endfield_settings/** -text -whitespace

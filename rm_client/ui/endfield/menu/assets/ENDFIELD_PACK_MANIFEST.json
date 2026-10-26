@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "reference_commit": "cdbd4f573c8fa3b9c2048fa3d1b089e69196537b",
-  "adapter_sha256": "530baca73f2f1557054eb4bb8ec672ded17ef12dadf3919570ad95ce5f77ec71",
+  "adapter_sha256": "831506e45160efe83cc6dec20d73b84ef59a72c40516344d3386738db0b3d144",
   "optional_assets": "boot and audio not included or needed for Esc",
   "redistribution": "Included in Git at repository maintainer request on 2026-10-22; third-party rights unchanged. See THIRD_PARTY_NOTICES.md.",
   "files": {
@@ -17,10 +17,10 @@
     "maps/RMUL3v3.efmesh": "75c2b2af6edb32bf38ad5867fc5f1546388b21f3bd7fa0575932e24cafdfb247",
     "maps/RMUL3v3.json": "0bd2cbf9e583b37aa52e370f393a771dede7fa0eb75e0f3e9983ed22b10c68b6",
     "maps/RMUL3v3.png": "4dcf2cab017f2f8ce56629f3058db4a71b7efffe4640cafb066f5864dca1d661",
-    "native_renderer/build_530baca73f2f1557/BUILD_MANIFEST.json": "bad78210017a27cefd42d9512d76a41f60473cda69e2eac88dea2935b2dcf2a5",
-    "native_renderer/build_530baca73f2f1557/EndfieldHUD-MIT-LICENSE.txt": "f8ad1cefdf9375f999fd2688c9d1f9cd6c27f6adf31380c8342af2778491d638",
-    "native_renderer/build_530baca73f2f1557/polar_endfield.dll": "0b0bd7475f7ba5a9674c39af13fbbde96ca651cbce25783d01a37d10904958ea",
-    "native_renderer/CURRENT.json": "b5e65bee5585a683550fb71a8b3bf6cb12510df9a28da61c458ef6c112eb8cc2",
+    "native_renderer/build_831506e45160efe8/BUILD_MANIFEST.json": "cfbcd2bee17f060caaf4a3b2b7578ad104e65751ef3f411414efd2d65c94db2f",
+    "native_renderer/build_831506e45160efe8/EndfieldHUD-MIT-LICENSE.txt": "f8ad1cefdf9375f999fd2688c9d1f9cd6c27f6adf31380c8342af2778491d638",
+    "native_renderer/build_831506e45160efe8/polar_endfield.dll": "61279dce265adb19c2a4411873e5072f5f2c5ed8a767e22f842aa77bfd17dc15",
+    "native_renderer/CURRENT.json": "5c84b223bda326426090857051f894e6436083832eae75bcabac4078698605e3",
     "native_source_runtime/fonts/manifest.json": "6f1db043b53a2e85e1e26b240aa11e2a78401bc673394cf416beb01752cbf04a",
     "native_source_runtime/fonts/NotoSansKR-OFL.txt": "1c05c68c34f9708415aada51f17e1b0092d2cea709bf4a94cd38114f9e73d7d9",
     "native_source_runtime/fonts/NotoSansKR.ttf": "194018e6b2b293a7964f037b25c0249ce1418bc9ab3c971060a03aa57861e252",

@@ -251,6 +251,7 @@ from .polar.renderers.module_list import ModuleListMixin
 # _map_round_cache 保持方法内惰性创建；handle_tactical_map_hold_event（D15 输入域）
 # 与 liquid_map_enabled 族（D9 HUD 风格助手）按偏差决策留在本文件。
 from .polar.renderers.tactical_map import TacticalMapMixin
+from .cs2_scoreboard import paint_tab_scoreboard, prepare_tab_layout, tab_scoreboard_active
 from .polar.renderers.dynamic_island import DynamicIslandMixin
 # 阶段 2f 渲染器提取（REFACTOR_BLUEPRINT §5 表 2f 行）：D4 启动场景渲染族
 # 方法体已机械迁至 renderers/startup_scene.py 的 StartupSceneMixin（零修改），
@@ -1505,7 +1506,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             "HP", "AMMO", "MOCK", "G", "0 1 2 3 4 5 6 7 8 9",
             "× / · % . - [ ]",
             self.match_mode_manager.current.title,
-            profile_by_key(self.state.match_mode, self.state.robot_profile).title,
+            profile_by_key(self.state.match_mode, self.state.robot_profile, season=self.state.rules_season).title,
         }
         for title in CATEGORY_TITLES.values():
             economy_labels.add(title)
@@ -1584,7 +1585,8 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         # Keep the iterator intact; a successful frame resumes it after close.
         # Esc uses Qt text, not these atlases. Do not let a cold font upload
         # compete with menu input or native settings construction/animation.
-        if self.escape_menu_visible or QApplication.activeModalWidget() is not None:
+        if (self.escape_menu_visible or QApplication.activeModalWidget() is not None
+                or getattr(self, "_settings_session", None) is not None):
             return
         context = self.context()
         if context is None or not context.isValid():
@@ -1861,7 +1863,9 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                 clickgui_frame=lambda: build_clickgui_frame(self, width, height, gui_alpha),
                 motion_hud=draw_motion,
                 priority_interaction=lambda: self.paint_priority_interaction_layer(functions, width, height, ratio),
-                target_hud=lambda: self.paint_gpu_target_hud_layer(functions, width, height, ratio),
+                target_hud=lambda: (self.gpu_compositor.clear_target_layer(functions)
+                                    if tab_scoreboard_active(self) else
+                                    self.paint_gpu_target_hud_layer(functions, width, height, ratio)),
             )
             updated = OverlayLayerRenderer(
                 self.gpu_compositor, self.clickgui_gpu, clock=time.perf_counter,
@@ -1949,9 +1953,10 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                 painter = session.begin_painter()
                 painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
                 scale = max(0.74, min(1.14, self.get_auto_ui_scale(width, height, strength=0.45)))
-                menu_x, menu_y, button_w, button_h, gap = self.liquid_menu_layout(width, height, 3, scale)
+                count=len(self.match_mode_manager.mode_keys)+1 if self.startup_step=='match' else 3
+                menu_x, menu_y, button_w, button_h, gap = self.liquid_menu_layout(width, height, count, scale)
                 accents = (
-                    [self.startup_menu_accent(index + 2) for index in range(2)] + [color("#ec5ad9")]
+                    [self.startup_menu_accent(index + 2) for index in range(len(self.match_mode_manager.mode_keys))] + [color("#ec5ad9")]
                     if self.startup_step == "match"
                     else [self.startup_menu_accent(index) for index in range(3)]
                 )
@@ -2452,7 +2457,9 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         logical_height = max(1, int(height / scale))
         minecraft_active = self.minecraft_hud_active()
         self._last_minecraft_hud_layout = None
-        held_tab_list = self.student_ui.visible and self.student_ui.panel=="damage"
+        expanded_scores = include_map is not False and tab_scoreboard_active(self)
+        prepare_tab_layout(self, width, height, now, include_map=include_map is not False)
+        held_tab_list = expanded_scores or (self.student_ui.visible and self.student_ui.panel=="damage")
         if minecraft_active:
             # Original MC chrome is one low-resolution nearest-neighbour
             # layer.  Every client/mod overlay below remains at its own HUD
@@ -2464,6 +2471,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                 self.state,
                 self.registry,
                 self.registry.get("MinecraftCombatHUD"),
+                show_scoreboard=not expanded_scores,
             )
         p.save()
         p.scale(scale, scale)
@@ -2478,7 +2486,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         display_result = self.interpolated_vision_result(now)
         armor_module = self.registry.get("ArmorAutoAim")
         armor_3d = self.registry.get("Armor3DESP")
-        if armor_module and armor_module.enabled:
+        if armor_module and armor_module.enabled and not expanded_scores:
             if include_vision and display_result is not None and armor_3d and armor_3d.enabled:
                 self.draw_armor_3d_esp(
                     p,
@@ -2503,7 +2511,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                 self.draw_armor_fov_circle(p, logical_width, logical_height, armor_module)
 
         energy_module = self.registry.get("EnergyAutoAim")
-        if energy_module and energy_module.enabled and self._vision_source == "Mock":
+        if energy_module and energy_module.enabled and self._vision_source == "Mock" and not expanded_scores:
             mock_energy = self.vision.process(
                 logical_width,
                 logical_height,
@@ -2541,7 +2549,9 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             # 可见性判断：地图没画时它也不能凭空浮在视频上。
             self.draw_buff_timeline_hud(p, logical_width, logical_height)
         # ModuleList lives here so OpenZen RGB + row anim tick every frame.
-        if minecraft_active and self.setting_bool(hud, "Module List", True):
+        if expanded_scores:
+            pass  # Tab board temporarily owns the right HUD; settings stay intact.
+        elif minecraft_active and self.setting_bool(hud, "Module List", True):
             self.draw_minecraft_module_list(p, logical_width, logical_height, scale)
         elif self.setting_bool(hud, "Module List", True):
             mode_setting = hud.get_setting("Right Display") if hud else None
@@ -2571,6 +2581,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         # While menu is open, skip elim FX so card bursts do not flash over panels.
         if not self.menu_overlay_active():
             self.draw_elimination_fx(p, width, height)
+        paint_tab_scoreboard(self, p, width, height, now, include_map=include_map is not False)
         self.dynamic_hud_ms = (time.perf_counter() - started_at) * 1000.0
 
     def paint_priority_interaction_layer(
@@ -3248,6 +3259,9 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             OwnerAction("pending configuration", self.cancel_pending_configuration_for_close),
             OwnerAction("kill audio playback", self.kill_fx.sounds.close),
         )
+        settings = getattr(self, "_settings_session", None)
+        if settings is not None:
+            prepare = (OwnerAction("settings dialog", settings.close_for_shutdown), *prepare)
         feedback = getattr(self, "_endfield_feedback", None)
         if feedback is not None:
             prepare = (*prepare, OwnerAction("Endfield voice playback", feedback.voice.stop))
@@ -4252,8 +4266,9 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                 initial=0.0,
             )
         ) * max(0.0, min(1.0, visual_alpha))
-        menu_x, menu_y, button_w, button_h, gap = self.liquid_menu_layout(width, height, 3, scale)
         is_match = selected_page == "match"
+        count=len(self.match_mode_manager.mode_keys)+1 if is_match else 3
+        menu_x, menu_y, button_w, button_h, gap = self.liquid_menu_layout(width, height, count, scale)
         title = "MATCH MODE" if is_match else "SCENE SELECT"
         subtitle = (
             ui_text("{title} profile", chinese_enabled(self.registry), title=ui_text(self.startup_scenario_meta(self.scenario_manager.current.key)["title"], chinese_enabled(self.registry)))
@@ -4275,8 +4290,8 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
 
         if is_match:
             entries = []
-            for index, key in enumerate(MATCH_MODE_KEYS):
-                config = MATCH_MODES[key]
+            for index, key in enumerate(self.match_mode_manager.mode_keys):
+                config = self.match_mode_manager.config_for(key)
                 meta = self.startup_match_meta(key)
                 entries.append((key, meta["icon"], meta["title"], meta["subtitle"], f"{config.field.width_m:g}m x {config.field.height_m:g}m  {config.duration_sec // 60}:{config.duration_sec % 60:02d}", "NEXT", "select_match_mode", key, meta["tooltip"], self.startup_menu_accent(index + 2)))
             entries.append(("back", "back", "Back", "Return to scene select", "Backspace also works", "BACK", "startup_back", None, "Return to scene selection.", color("#ec5ad9")))
@@ -4298,7 +4313,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         active = self.anim.value(
             "startup.robot.open", 1.0, self.anim_duration(0.32), Easings.ease_out_pow4, initial=0.0
         ) * max(0.0, min(1.0, visual_alpha))
-        profiles = profiles_for_match(self.match_mode_manager.current.key)
+        profiles = profiles_for_match(self.match_mode_manager.current.key, season=self.match_mode_manager.season)
         selected_key = self.current_robot_profile_key()
 
         commands.text(QRectF(50 * scale, 28 * scale, 340 * scale, 38 * scale), "POLAR-RM", self.font("museo", 28 * scale, QFont.Weight.Bold), self.gpu_alpha(THEME.text, active))
@@ -4361,7 +4376,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             commands.text(rect.adjusted(13 * scale, 67 * scale, -13 * scale, -12 * scale), ui_text(profile.description, chinese_enabled(self.registry)), self.font("poppins_regular", 7.1 * scale), self.gpu_alpha(color("#dce6ec", 0.86), opacity), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
             self.add_hotspot(rect, "select_robot_profile", profile.key, tooltip=ui_text(f"选择{profile.title}并进入战斗 HUD", chinese_enabled(self.registry)))
 
-        profile = profile_by_key(self.match_mode_manager.current.key, selected_key)
+        profile = profile_by_key(self.match_mode_manager.current.key, selected_key, season=self.match_mode_manager.season)
         performance = self.current_robot_performance(selected_key)
         panel = QRectF(width - margin - detail_w, top, detail_w, min(390 * scale, height - top - bottom))
         self.build_gpu_glass_rect(

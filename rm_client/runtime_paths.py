@@ -142,6 +142,17 @@ class RuntimePaths:
         shipped = self.endfield_bundled_menu_pack
         return shipped if (shipped / "ENDFIELD_PACK_MANIFEST.json").is_file() else local
 
+    @property
+    def endfield_renderer_pack(self) -> Path:
+        """Shipped native code must win over stale private resource-pack DLLs.
+
+        Resource/boot/audio overrides remain untouched. Source installations
+        without shipped assets can still use an explicitly prepared local DLL.
+        Both routes retain library_path's source pin and binary hash checks.
+        """
+        shipped = self.endfield_bundled_menu_pack
+        return shipped if (shipped / "ENDFIELD_PACK_MANIFEST.json").is_file() else self.endfield_menu_pack
+
     def ensure_writable_dirs(self) -> None:
         for path in (
             self.user_data_root,

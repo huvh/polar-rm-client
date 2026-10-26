@@ -486,8 +486,10 @@ class JelloClickGuiRenderer:
         "shadow_top.png",
         "shadow_bottom.png",
     )
+    draw_list_type = ClickGuiDrawList
 
     def __init__(self, asset_root: Path) -> None:
+        self._presentation_renderer = None
         self.asset_root = Path(asset_root)
         self.options_image = self.asset_root / "options.png"
         self.check_image = self.asset_root / "check.png"
@@ -511,6 +513,8 @@ class JelloClickGuiRenderer:
 
     @property
     def image_assets(self) -> tuple[Path, ...]:
+        if self._presentation_renderer is not None:
+            return self._presentation_renderer.image_assets
         return (
             self.options_image,
             self.check_image,
@@ -518,6 +522,18 @@ class JelloClickGuiRenderer:
             self.scrollbar_bottom_image,
             *(self.shadow_assets[name.removesuffix(".png")] for name in self._SHADOW_NAMES),
         )
+
+    def set_presentation_renderer(self, renderer: JelloClickGuiRenderer) -> None:
+        """Keep the public Jello facade stable while swapping presentation only.
+
+        Endfield is an implementation strategy, not a replacement for the
+        window's established jello_clickgui object/type or compatibility path.
+        """
+        if not isinstance(renderer, JelloClickGuiRenderer) or renderer is self:
+            raise TypeError('Expected an independent Jello presentation renderer')
+        if renderer._presentation_renderer is not None:
+            raise ValueError('Nested presentation delegation is not supported')
+        self._presentation_renderer = renderer
 
     def _image_available(self, path: Path) -> bool:
         return path in self._available_images
@@ -674,13 +690,15 @@ class JelloClickGuiRenderer:
         height: int,
         alpha: float,
     ) -> ClickGuiDrawList:
+        if self._presentation_renderer is not None:
+            return self._presentation_renderer.build(host, state, width, height, alpha)
         host._hotspot_clip = None
         hotspot_start = len(host.hotspots)
         click_gui = host.registry.get("ClickGui")
         scale_setting = click_gui.get_setting("Scale") if click_gui else None
         requested_scale = float(scale_setting.value) if scale_setting else 1.0
         layout = self.layout(width, height, requested_scale)
-        commands = ClickGuiDrawList(
+        commands = self.draw_list_type(
             default_text_shadow=False,
             default_text_raster_scale=self.raster_scale_for(layout.scale),
             # Sigma's Helvetica Neue Light must stay Light.  The shared GPU
@@ -1146,6 +1164,8 @@ class JelloClickGuiRenderer:
         height: int,
         gui_scale: float,
     ) -> None:
+        from ..rules.presentation import visible_rule_settings
+        settings=visible_rule_settings(host.registry,module)
         raw = _clamp01(state.settings_panel_animation.progress)
         if raw <= 0.0 and state.settings_closing:
             return
@@ -1218,7 +1238,7 @@ class JelloClickGuiRenderer:
         )
         # SettingPanel starts at y=20 and appends its literal 20 px
         # "extentionhack" spacer after the final control.
-        total = settings_start + 20.0 + sum(self._setting_height(setting, old_progress) for setting in module.settings)
+        total = settings_start + 20.0 + sum(self._setting_height(setting, old_progress) for setting in settings)
         maximum = max(0.0, total * scale - content.height())
         scroll = state.settings_scroll_value(module.name, maximum)
         # Sigma normally reveals mode options below their header.  Move the
@@ -1226,7 +1246,7 @@ class JelloClickGuiRenderer:
         # physically too-short viewport is allowed to use the upward fallback.
         if state.dropdown_key is not None and state.dropdown_animation.target >= 0.5:
             active_y = settings_start
-            for candidate in module.settings:
+            for candidate in settings:
                 candidate_key = f"{module.name}:{candidate.name}"
                 if candidate_key == state.dropdown_key and candidate.kind == "mode":
                     # Long mode lists get their own viewport. Never scroll
@@ -1287,7 +1307,7 @@ class JelloClickGuiRenderer:
         state._setting_hovered_this_frame = False
         dropdown: _DropdownRequest | None = None
         logical_y = settings_start
-        for setting in module.settings:
+        for setting in settings:
             row_h = self._setting_height(setting, old_progress)
             logical_row = QRectF(
                 base_content.left(),
@@ -1860,6 +1880,8 @@ class JelloClickGuiRenderer:
         height: int,
         alpha: float,
     ) -> None:
+        if self._presentation_renderer is not None:
+            return self._presentation_renderer.paint_compat(host, state, painter, width, height, alpha)
         draw_list = self.build(host, state, width, height, alpha)
         self.paint_commands_compat(painter, draw_list, width, height)
 

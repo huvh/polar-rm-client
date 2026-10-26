@@ -101,6 +101,7 @@ def default_modules(choices: CatalogChoices) -> list[Module]:
             "System",
             "None",
             [
+                mode_setting("Season", "2026", ["2026", "2027"], "比赛规则赛季，与裁判协议版本独立。2027未审协议不能沿用2026上行。"),
                 mode_setting("Mode", "RMUC7v7", list(choices.match_modes)),
                 mode_setting("Alliance", "Red", ["Red", "Blue"]),
                 bool_setting("Second Step", True, "场景选择后显示 RMUC/RMUL 二级选择页。"),
@@ -1118,7 +1119,7 @@ def default_modules(choices: CatalogChoices) -> list[Module]:
                     "显示所有旧 ClickGUI",
                 ),
             ],
-            description="Jello Sigma 5.1.0 主 ClickGUI 一比一复刻；旧界面收纳在 Old ClickGUIs 中。",
+            description="终末地 × Jello 本地实验界面；保留 Jello 布局、动画与操作，旧界面收纳在 Old ClickGUIs 中。",
         ),
         Module(
             "GimbalPower",

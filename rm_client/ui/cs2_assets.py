@@ -25,12 +25,18 @@ IMAGE_IDS = frozenset({
     "money", "buy_icon", "kill_mask", "kill_extra", "kill_default", "kill_headshot", "kill_blast",
     "kill_flag", "elimination", "person",
     "buy_ammo", "buy_recovery", "buy_revive",
+    "sb_casual", "sb_camera", "sb_unmuted", "sb_ct_silhouette", "sb_menu",
+    "sb_competitive", "sb_ping_4", "sb_stats", "sb_elimination",
     *(f"kill_{i}" for i in range(1, 6)),
 })
 SOUND_IDS = frozenset({"kill", "purchase", "cant_buy", "buy_select", "buy_hover"})
 # Event gains resolved from this installed build's game_sounds_ui table.
 CUE_GAINS = {"kill": .6, "purchase": .3, "cant_buy": .4, "buy_select": .5, "buy_hover": .3}
-FONT_IDS = frozenset({"font_regular", "font_bold", "font_condensed", "font_mono", "font_timer"})
+FONT_IDS = frozenset({"font_regular", "font_bold", "font_condensed", "font_mono", "font_timer",
+                      "font_medium", "font_condensed_regular", "font_mono_regular"})
+SCOREBOARD_ADDON_IDS = frozenset({"sb_casual", "sb_camera", "sb_unmuted", "sb_ct_silhouette", "sb_menu",
+                                 "sb_competitive", "sb_ping_4", "sb_stats", "sb_elimination",
+                                 "font_medium", "font_condensed_regular", "font_mono_regular"})
 
 
 class Cs2Assets:
@@ -42,6 +48,7 @@ class Cs2Assets:
         self.error = ""
         self._audio = None
         self._tinted = {}
+        self._washed = {}
         if root is not None:
             self._load(Path(root))
 
@@ -132,6 +139,35 @@ class Cs2Assets:
             self._tinted[token] = tinted
         return self._tinted[token]
 
+    def washed(self, key: str, color: QColor) -> QImage:
+        """Panorama wash multiplies RGB; SourceIn erases multicolour details.
+
+        In particular competitive.svg is an opaque team emblem: treating its
+        alpha as a monochrome glyph turns the entire emblem into a square.
+        """
+        image = self.image(key)
+        if image.isNull():
+            return image
+        token = (key, color.rgba())
+        if token not in self._washed:
+            washed = image.copy()
+            p = QPainter(washed)
+            try:
+                wash = QColor(color)
+                wash.setAlpha(255)
+                p.setCompositionMode(QPainter.CompositionMode_Multiply)
+                p.fillRect(washed.rect(), wash)
+                p.setCompositionMode(QPainter.CompositionMode_DestinationIn)
+                p.drawImage(0, 0, image)
+                if color.alpha() < 255:
+                    p.fillRect(washed.rect(), QColor(0, 0, 0, color.alpha()))
+            finally:
+                p.end()
+            if len(self._washed) >= 64:
+                self._washed.pop(next(iter(self._washed)))
+            self._washed[token] = washed
+        return self._washed[token]
+
     def preload_audio(self) -> None:
         if self._audio is not None or self.root is None or QCoreApplication.instance() is None:
             return
@@ -157,5 +193,18 @@ def local_cs2_assets() -> Cs2Assets:
     if (local / "manifest.json").is_file():
         pack = Cs2Assets(local)
         if pack.available:
+            # An older valid personal pack must not erase newly bundled Tab
+            # icons/faces. Fill ONLY missing new presentation resources; keep
+            # personal image/font choices, files and audio routing untouched.
+            missing = SCOREBOARD_ADDON_IDS - pack.paths.keys()
+            if missing:
+                bundled = Cs2Assets(paths.asset("cs2_ui_pack"))
+                for key in missing:
+                    if key in bundled.paths:
+                        pack.paths[key] = bundled.paths[key]
+                    if key in bundled.images:
+                        pack.images[key] = bundled.images[key]
+                    if key in bundled.families:
+                        pack.families[key] = bundled.families[key]
             return pack
     return Cs2Assets(paths.asset("cs2_ui_pack"))

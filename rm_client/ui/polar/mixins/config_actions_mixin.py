@@ -164,7 +164,9 @@ class ConfigActionsMixin:
         self.apply_scenario(str(setting.value), close_home=False)
 
     def _apply_match_mode_setting(self, setting: Setting) -> None:
-        self.apply_match_mode(str(setting.value), close_home=False)
+        key=(self.setting_mode(self.registry.get('MatchMode'),'Mode','RMUC7v7')
+             if setting.name=='Season' else str(setting.value))
+        self.apply_match_mode(key, close_home=False)
 
     def _apply_robot_profile_setting(self, setting: Setting) -> None:
         self.apply_robot_profile(self.current_robot_profile_key(), close_home=False, announce=False)

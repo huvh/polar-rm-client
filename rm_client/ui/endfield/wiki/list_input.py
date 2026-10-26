@@ -88,4 +88,4 @@ def handle_list_pointer(host, event, phase):
     host.frame_scheduler.force()
     host.update()
     event.accept()
-        return True
+    return True

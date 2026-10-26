@@ -94,6 +94,17 @@ class WarmupTests(unittest.TestCase):
         self.assertIsNone(w._gpu_prewarm_jobs_pending)
         self.assertEqual(w.calls[-1], 'done')
 
+    def test_client_modal_settings_pause_then_resume_without_system_modality(self):
+        w = self.make_window(); w.prewarm_gpu_clickgui_resources(); w.calls.clear()
+        jobs = w._gpu_prewarm_jobs_pending
+        w._settings_session = object()
+        w._run_gpu_prewarm_slice()
+        self.assertEqual(w.calls, [])
+        self.assertIs(w._gpu_prewarm_jobs_pending, jobs)
+        w._settings_session = None
+        w._run_gpu_prewarm_slice()
+        self.assertTrue(w.calls)
+
     def test_first_paint_never_calls_bulk_prewarm(self):
         tree = ast.parse(SOURCE.read_text())
         window = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == 'PolarRMWindow')

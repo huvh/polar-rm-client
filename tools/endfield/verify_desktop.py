@@ -20,31 +20,6 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tests"))
 
 
-def check_native_window_composition(window):
-    """Read actual HWND visibility; FBO pixels alone miss native occlusion."""
-    from ctypes import wintypes
-    user32 = ctypes.WinDLL("user32", use_last_error=True)
-    callback_type = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
-    user32.EnumChildWindows.argtypes = [wintypes.HWND, callback_type, wintypes.LPARAM]
-    user32.GetClassNameW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
-    user32.IsWindowVisible.argtypes = [wintypes.HWND]
-    owners = []
-
-    @callback_type
-    def inspect(hwnd, _data):
-        name = ctypes.create_unicode_buffer(256)
-        user32.GetClassNameW(hwnd, name, len(name))
-        if name.value == "PolarEndfieldSourceVisual":
-            owners.append({"visible": bool(user32.IsWindowVisible(hwnd))})
-        return True
-
-    user32.EnumChildWindows(int(window.winId()), inspect, 0)
-    assert len(owners) == 1, owners
-    assert not owners[0]["visible"], (
-        "A visible native child occludes Qt's GL backdrop with the window backing store", owners)
-    return {"render_owners": len(owners), "visible_native_children": 0}
-
-
 def check_backdrop(window, out):
     """Explicit owned-GL readback only; never used by the runtime renderer."""
     import numpy as np
@@ -75,7 +50,16 @@ def check_backdrop(window, out):
     finally:
         window.doneCurrent()
     source = rgba(raw)[:, :, :3].astype(np.float32)
-    blurred = rgba(shown)[:, :, :3].astype(np.float32) / (1-treatment.dim_alpha)
+    shown_pixels = rgba(shown)
+    # Edge energy alone accepts an all-white (or all-black) failed output!
+    # This pass has no foreground: every pixel must be opaque, dimmed and
+    # retain the world's mean luminance within the bounded blur-edge error.
+    ceiling = 255*(1-treatment.dim_alpha)
+    assert int(shown_pixels[:, :, 3].min()) == 255, "Backdrop lost opacity"
+    assert int(shown_pixels[:, :, :3].max()) <= ceiling + 3, "White/undimmed backdrop"
+    blurred = shown_pixels[:, :, :3].astype(np.float32) / (1-treatment.dim_alpha)
+    mean_error = float(np.abs(blurred.mean(axis=(0, 1))-source.mean(axis=(0, 1))).max())
+    assert mean_error < 5, ("Backdrop lost the world", mean_error)
 
     def gradient(image):
         return float(np.abs(np.diff(image, axis=0)).mean() + np.abs(np.diff(image, axis=1)).mean())
@@ -86,7 +70,41 @@ def check_backdrop(window, out):
     return {"empty_combat_layers_alpha_max": empty, "world_edge_energy": source_edges,
             "gaussian_edge_energy_after_undoing_dim": soft_edges,
             "kernel": treatment.blur_kernel, "radius_dp": treatment.blur_radius_px,
-            "dim_alpha": treatment.dim_alpha}
+            "dim_alpha": treatment.dim_alpha, "maximum_rgb": int(shown_pixels[:, :, :3].max()),
+            "undimmed_mean_error": mean_error}
+
+
+def check_native_surface(menu, parent, *, visible=True):
+    """Inspect only the HWND explicitly returned by this menu's own worker."""
+    from ctypes import wintypes
+    api = menu.api.lib.pe_surface
+    api.argtypes, api.restype = [ctypes.c_uint64], ctypes.c_size_t
+    surface = api(menu.handle)
+    assert surface
+    user = ctypes.WinDLL("user32", use_last_error=True)
+    user.GetWindowLongPtrW.argtypes = [wintypes.HWND, ctypes.c_int]
+    user.GetWindowLongPtrW.restype = ctypes.c_ssize_t
+    user.GetWindow.argtypes, user.GetWindow.restype = [wintypes.HWND, ctypes.c_uint], wintypes.HWND
+    user.GetWindowRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
+    user.ClientToScreen.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.POINT)]
+    user.IsWindowVisible.argtypes = [wintypes.HWND]
+    hwnd = int(parent.winId())
+    style, extended = user.GetWindowLongPtrW(surface, -16), user.GetWindowLongPtrW(surface, -20)
+    assert not style & 0x40000000, "WS_CHILD can clip away Qt's world backdrop"
+    assert style & 0x80000000 and user.GetWindow(surface, 4) == hwnd, "Not owned by this client"
+    assert extended & 0x08000000 and extended & 0x00200000, "Activation/redirection contract changed"
+    assert not extended & 0x8, "Menu must never be a desktop-topmost overlay"
+    origin, rect = wintypes.POINT(), wintypes.RECT()
+    assert user.ClientToScreen(hwnd, ctypes.byref(origin))
+    assert user.GetWindowRect(surface, ctypes.byref(rect))
+    dpr = parent.devicePixelRatioF()
+    expected = (origin.x, origin.y, round(parent.width()*dpr), round(parent.height()*dpr))
+    actual = (rect.left, rect.top, rect.right-rect.left, rect.bottom-rect.top)
+    assert bool(user.IsWindowVisible(surface)) == visible, "Owner visibility did not propagate"
+    if visible:
+        assert actual == expected, (actual, expected)
+    return {"owned_popup": True, "clips_parent": False, "topmost": False,
+            "aligned_physical_size": list(actual[2:]), "visible": bool(user.IsWindowVisible(surface))}
 
 
 def run(pack: Path | None, out: Path, cycles: int) -> None:
@@ -138,6 +156,7 @@ def run(pack: Path | None, out: Path, cycles: int) -> None:
         report["pack_selection"] = ("production-default" if pack is None else "explicit-test-pack")
         report["private_pack_present"] = (window.paths.user_data_root / "endfield_pack").exists()
         report["uses_shipped_pack"] = menu.pack == window.paths.endfield_bundled_menu_pack
+        report["renderer_uses_shipped_pack"] = menu.renderer_pack == window.paths.endfield_renderer_pack
         try:
             window.resize(1280, 720)
             window.show()
@@ -156,22 +175,35 @@ def run(pack: Path | None, out: Path, cycles: int) -> None:
             report["initial"] = menu.stats()
             report["display_hz"] = window.screen().refreshRate()
             report["dpr"] = window.devicePixelRatioF()
-            report["native_window_composition"] = check_native_window_composition(window)
             report["esc_backdrop"] = check_backdrop(window, out)
+            report["native_surface"] = check_native_surface(menu, window)
+            window.move(147, 93)
+            wait(.3)
+            report["moved_surface"] = check_native_surface(menu, window)
             for width, height in ((1280, 720), (1600, 900), (1920, 1080), (2560, 1440)):
                 window.resize(width, height)
                 wait(.5)
                 dpr = window.devicePixelRatioF()
                 w, h = round(window.width()*dpr), round(window.height()*dpr)
+                check_native_surface(menu, window)
                 target = out / f"source_{w}x{h}.bgra"
                 menu.api.capture(menu.handle, str(target).encode("utf-8"))
                 until(lambda: menu.api.captured(menu.handle) != 0)
                 if menu.api.captured(menu.handle) != 1:
                     raise RuntimeError(menu.api.error(menu.handle))
-                QImage(target.read_bytes(), w, h, w*4, QImage.Format.Format_ARGB32).save(str(target.with_suffix(".png")))
+                image = QImage(target.read_bytes(), w, h, w*4, QImage.Format.Format_ARGB32)
+                assert image.pixelColor(0, 0).alpha() == 0, "Native empty backdrop is not transparent"
+                image.save(str(target.with_suffix(".png")))
+            window.showMinimized()
+            wait(.3)
+            report["minimized_surface"] = check_native_surface(menu, window, visible=False)
+            window.showNormal()
+            wait(.5)
+            report["restored_surface"] = check_native_surface(menu, window)
             set_fullscreen(window, True)
             wait(.4)
             assert window.isFullScreen()
+            report["fullscreen_surface"] = check_native_surface(menu, window)
             from tools.endfield.verify_hover import check_hover
             # A visible native HWND must use the real OS cursor: otherwise its
             # genuine WM_MOUSELEAVE correctly supersedes an injected Qt point.

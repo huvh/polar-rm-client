@@ -12,6 +12,7 @@ import re
 from .jello_locale import CATEGORY_ZH, MODULE_ZH
 
 HUD_ZH = {
+    "2027 rule illustration unavailable; positions uncalibrated": "2027规则图示不可用；场地坐标待标定",
     "Sentry map intervention (fee confirmation)": "哨兵地图干预（费用确认）",
     "1 = Supply-point ammunition": "1 = 补血点补弹", "2 = Supply-station physical ammunition": "2 = 补给站实体补弹",
     "3 = Remote ammunition": "3 = 远程补弹", "4 = Remote healing": "4 = 远程回血",

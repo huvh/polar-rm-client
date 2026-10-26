@@ -13,7 +13,7 @@ sys.path.insert(0, str(ROOT))
 from rm_client import model, module_settings
 from rm_client.module_catalog import CatalogChoices, assemble_registry, default_modules
 from rm_client.student_ui import student_modules
-from test_default_catalog_characterization import FIXTURE, canonical_defaults, snapshot
+from test_default_catalog_characterization import FIXTURE, canonical_defaults, snapshot, annual_expected_defaults
 
 
 def choices():
@@ -39,7 +39,7 @@ class CatalogBoundaryTests(unittest.TestCase):
                 patch.object(model, "supported_profiles", side_effect=AssertionError("profile discovery")):
             registry = assemble_registry(default_modules(choices()), student_modules())
         self.assertEqual(canonical_defaults(snapshot(registry)),
-                         canonical_defaults(baseline["modules"]))
+                         canonical_defaults(annual_expected_defaults(baseline["modules"])))
 
     def test_environment_candidates_are_explicit_and_leave_defaults_unchanged(self):
         supplied = replace(choices(), robot_ports=("Z", "A", "Z"), dt7_ports=(),
@@ -116,7 +116,7 @@ choices = CatalogChoices(("LabDebug",), ("RMUC7v7",), ("Infantry1",), "test", ("
                          ("Stub",), ("Stub",), ("Auto",), ("Auto",), ("Auto",))
 registry = assemble_registry(default_modules(choices), student_modules())
 assert len(registry.modules) == 74
-assert sum(len(module.settings) for module in registry.modules) == 470
+assert sum(len(module.settings) for module in registry.modules) == 471  # Reviewed Season addition only.
 print("PASS: standalone catalog without runtime, Qt, or device imports")
 '''
         result = subprocess.run([sys.executable, "-c", program], cwd=ROOT,

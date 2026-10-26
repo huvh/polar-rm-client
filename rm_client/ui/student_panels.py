@@ -277,6 +277,12 @@ class StudentPanelRenderer:
             live = _v2_live_rows(host, settlement=True, now=time.perf_counter())
             return live + (host.student_ui.settlement or settlement_rows(state))
         if panel == "skills":
+            if getattr(state,'rules_season',2026)==2027:
+                return (('规则赛季',f'2027 V{state.rules_version}'),
+                        ('规则参数', '已核实基础项' if state.performance_rules_known else '部分基础项 / 未知'),
+                        ('裁判配置','等待受审2027协议同步'),
+                        ('技能 / 性能点','不沿用2026等级与命令'),
+                        ('说明',state.performance_rules_note or '当前仅规则预览，不下发'))
             static = (getattr(state, "robot_statics", {}) or {}).get(state.robot_id, {})
             sync = getattr(state, "performance_sync", {}) or {}
             return (("可分配性能点", value_text(data.get("assignable_points"))), ("当前等级", value_text(static.get("level"))),
@@ -437,6 +443,10 @@ class StudentPanelRenderer:
                 self.button(host,p,QRectF(458*s,343*s,244*s,36*s),"发射飞镖 [L]",s,hits,"student_draft","dart_fire")
                 self.text(host,p,QRectF(458*s,391*s,244*s,26*s),"本轮仅前端，不接线、不发射",10,s,"#a77d2b")
             elif panel == "skills":
+                if getattr(host.state,'rules_season',2026)==2027:
+                    self.text(host,p,QRectF(458*s,118*s,244*s,120*s),
+                        '2027规则预览；性能点/技能命令需独立审查，未复用2026配置',11,s)
+                    return
                 mod=host.registry.get("SkillConfiguration")
                 for i,name in enumerate(("Chassis Points","Shooter Points","Shooter Draft","Chassis Draft")):
                     setting=mod.get_setting(name)

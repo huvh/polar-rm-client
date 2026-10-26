@@ -102,7 +102,7 @@ class EconomyMixin:
         panel = QRectF(width / 2 - panel_w / 2, 108 * scale + (1.0 - morph) * 24 * scale, panel_w, panel_h)
         self.draw_liquid_glass_panel(p, panel, 20 * scale, accent=THEME.cyan, hover=0.12, scale=scale, surface="ModalGlass")
         self.draw_glass_text(p, panel.adjusted(28 * scale, 20 * scale, -28 * scale, -panel.height() + 54 * scale), "战斗经济操作", self.font("poppins_bold", 16 * scale), THEME.text)
-        profile = profile_by_key(self.match_mode_manager.current.key, self.current_robot_profile_key())
+        profile = profile_by_key(self.match_mode_manager.current.key, self.current_robot_profile_key(), season=getattr(self.match_mode_manager.current,'season',2026))
         self.draw_glass_text(p, panel.adjusted(28 * scale, 54 * scale, -28 * scale, -panel.height() + 76 * scale), economy_text("{match} · {profile} · 默认 MOCK", chinese_enabled(self.registry), match=self.match_mode_manager.current.title, profile=profile.title), self.font("poppins_regular", 8 * scale), THEME.muted)
 
         count = len(actions)
@@ -277,7 +277,7 @@ class EconomyMixin:
             QTimer.singleShot(0, open_pending_overlay)
 
     def open_economy_workspace(self, category: str | None = None) -> None:
-        if self.backend.referee.profile_id == V2_PROFILE:
+        if self.backend.referee.profile_id == V2_PROFILE and getattr(self.state,'rules_season',2026)==2026:
             from ..renderers.v2_economy_dialog import _open_v2_economy_dialog
             _open_v2_economy_dialog(self, "CommonCommand")
             return
@@ -561,7 +561,7 @@ class EconomyMixin:
             p.setOpacity(p.opacity() * content_alpha)
             self.draw_glass_text(p, header, "战斗经济", self.font("poppins_bold", 17.0 * scale), color("#ffffff"))
             link = "模拟" if context.mock_mode else "裁判"
-            profile_title = profile_by_key(context.match_mode, context.robot_profile).title
+            profile_title = profile_by_key(context.match_mode, context.robot_profile, season=self.state.rules_season).title
             subtitle = f"{self.match_mode_manager.current.title}  ·  {profile_title}  ·  {link}"
             self.draw_glass_text(
                 p,
@@ -807,7 +807,7 @@ class EconomyMixin:
             color("#ffffff", header_alpha),
         )
         link = "模拟" if context.mock_mode else "裁判"
-        profile_title = profile_by_key(context.match_mode, context.robot_profile).title
+        profile_title = profile_by_key(context.match_mode, context.robot_profile, season=self.state.rules_season).title
         subtitle = f"{self.match_mode_manager.current.title}  ·  {profile_title}  ·  {link}"
         commands.text(
             QRectF(header.left(), header.top() + 26.0, header.width() - 200.0, 18.0),

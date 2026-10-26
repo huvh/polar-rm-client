@@ -27,6 +27,9 @@ def match_strip_text(value: str, chinese: bool) -> str:
 
 
 def match_role_text(card: RobotCard, chinese: bool) -> str:
+    annual = {(1, 'HEAVY'): '重装', (6, 'AIR SYSTEM'): '空中支援系统'}
+    if chinese and (card.robot_id % 100, card.label) in annual:
+        return annual[(card.robot_id % 100, card.label)]
     role = _ROLES.get(card.robot_id % 100)
     return role[1] if chinese and role is not None and card.label == role[0] else card.label
 

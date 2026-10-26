@@ -349,7 +349,9 @@ def test_decoded_video_timestamp_and_source_selection() -> None:
     backend.running = False
 
     queued_decoder = ContinuousMjpegDecoder("h264")
+    from rm_client.backend.video.decoder import _DecoderSession
     queued_decoder._proc = object()
+    queued_decoder._session = _DecoderSession(queued_decoder._proc, queued_decoder._input_queue)
     queued_decoder._running = True
     accepted = all(
         queued_decoder.write(b"x")

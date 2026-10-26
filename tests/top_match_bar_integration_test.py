@@ -35,7 +35,9 @@ class FakeBackend:
         self._apply_error_count = self._official_state_updates_count = 0
         self._last_apply_error = ""
         self.queue = [("/GameStatus", "GameStatus", {"stage_countdown_sec": 85}, 10.0)]
-        self.mqtt = NS(drain_decoded=self.drain, receive_generation=0)
+        self.rule_season = 2026
+        self.referee = NS(profile_id='rm2026-v1.3.1', year=2026)
+        self.mqtt = NS(drain_decoded=self.drain, receive_generation=0, rule_season=2026)
         self.order = []
 
     def drain(self):
@@ -233,6 +235,9 @@ class ControllerIntegrationTests(unittest.TestCase):
         self.assertTrue(all(card.life == LifeState.UNKNOWN for card in frame.left.cards))
 
     def test_module_toggle_waits_for_new_observation(self):
+        # With no independent Tab consumer the original opt-out still retires
+        # all observations. Tab-enabled collection is tested separately.
+        self.registry.get("TacticalMap").enabled = False
         self.controller.observe_referee("GameStatus", {"stage_countdown_sec": 85}, 10)
         module = self.registry.get("TopMatchBar")
         module.enabled = False

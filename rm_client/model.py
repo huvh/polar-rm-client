@@ -36,6 +36,14 @@ def normalize_angle_deg(value: float) -> float:
 @dataclass
 class RobotState:
     referee_profile: str = DEFAULT_PROFILE
+    rules_season: int = 2026
+    rules_version: str = 'legacy-client-baseline'
+    rules_status: str = '2026 legacy rules'
+    performance_rules_known: bool = True
+    performance_rules_note: str = ''
+    control_score_max: int = 200
+    control_score_title: str = 'VP'
+    control_zones: list[dict[str,Any]] = field(default_factory=list)
     match_mode: str = "RMUC7v7"
     match_title: str = "RMUC 7v7"
     match_duration_sec: int = 420
@@ -472,6 +480,10 @@ class RobotState:
         self.official_state_at = self.official_state_at or time.perf_counter()
 
     def tick(self, dt: float) -> None:
+        if self.rules_season==2027:
+            # No 2026 demo HP/economy/sine-wave map/role rows may overwrite
+            # reviewed 2027 initial facts or masquerade as a 2027 referee feed.
+            return
         # The desktop demo must never race 1--10 Hz referee messages. Official
         # and Campus scenes hold the last authoritative values between updates.
         if not self.mock_simulation_enabled or self.official_state_active:

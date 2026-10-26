@@ -142,11 +142,11 @@ class LifecycleAudit(Base):
 
     def test_crosshair_styling_failure_releases_temporary_editor(self):
         d=self.dialog();d.show();QTest.qWait(480)
-        original=settings.apply_jello_widgets
+        original=settings.apply_endfield_widgets
         def fail_editor(w,*a,**kw):
             if w.objectName()=='cs2_crosshair_editor':raise RuntimeError('injected style failure')
             return original(w,*a,**kw)
-        with patch.object(settings,'apply_jello_widgets',side_effect=fail_editor):
+        with patch.object(settings,'apply_endfield_widgets',side_effect=fail_editor):
             d.tabs.setCurrentWidget(d.crosshair);QTest.qWait(200)
         p=d.crosshair;editor=p.editor
         self.assertIn('injected style failure',p.builder.error)

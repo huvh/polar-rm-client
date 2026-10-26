@@ -23,6 +23,7 @@ from .referee.rm2026_v2.observations import WireSnapshot, observe
 from .referee.rm2026_v2.uplink_validation import validate_uplink, is_sentry_map
 from .safety import OfficialSafety, ControlState, CONTROL_TOPICS
 from .mqtt_cleanup import MqttClientResources
+from ..rules_compatibility import normalize_rule_season, official_rule_compatibility
 
 
 class RmMqttBackend(OfficialMqttBridge):
@@ -40,6 +41,7 @@ class RmMqttBackend(OfficialMqttBridge):
         referee_profile: str = DEFAULT_PROFILE,
     ) -> None:
         self.referee = get_profile(referee_profile)
+        self.rule_season = 2026
         super().__init__(host=host, port=port, client_id=self.referee.validate_client_id(client_id))
         self.mock_output = bool(mock_output)
         self.safety = safety or OfficialSafety()
@@ -102,7 +104,33 @@ class RmMqttBackend(OfficialMqttBridge):
             self._request_start_locked()
         self._flush_input_clear()
 
+    def _admit_rule_connection_locked(self) -> bool:
+        """No annual wire admission means no new Paho/network owner, even mock.
+
+        Called under lifecycle_lock at both request and actual acquisition.
+        A delayed cleanup/reconnect must not resurrect a canceled annual start.
+        Existing owners may only be retired; this never creates one for zero.
+        """
+        compatible, reason = self.official_rules_admission()
+        if compatible:
+            return True
+        if self.client is not None or self._started:
+            self._stop_client_locked()
+        self._started = self._pending_start = self._reconnect_required = False
+        self._zero_after_reconnect = False
+        self.connected = self._subscriptions_ready = False
+        self._subscription_request = None
+        self._receive_blocked = True
+        self.safety.clear_stage_evidence()
+        if (not self.safety.estop_active
+                and self.safety.control_state != ControlState.LOCKED):
+            self._lock_safety_locked(reason)
+        self.last_error = reason
+        return False
+
     def _request_start_locked(self) -> None:
+        if not self._admit_rule_connection_locked():
+            return
         if self._started and (self.client is not None or self._pending_start):
             return
         if self._cleanup_error:
@@ -118,10 +146,15 @@ class RmMqttBackend(OfficialMqttBridge):
 
     def _start_client_locked(self) -> None:
         """Start Paho's asynchronous connection after previous ownership ends."""
+        if not self._admit_rule_connection_locked():
+            return
+        generation, profile = self._lifecycle_generation, self.referee
         try:
             import paho.mqtt.client as mqtt  # type: ignore
             self.client_id = self.referee.validate_client_id(self.client_id)
             self._mqtt = mqtt
+            if not self._admit_rule_connection_locked():
+                return
             try:
                 self.client = mqtt.Client(
                     mqtt.CallbackAPIVersion.VERSION2,
@@ -131,6 +164,8 @@ class RmMqttBackend(OfficialMqttBridge):
                     reconnect_on_failure=False,
                 )
             except Exception:
+                if not self._admit_rule_connection_locked():
+                    return
                 self.client = mqtt.Client(client_id=self.client_id or None,
                                           protocol=mqtt.MQTTv311,
                                           reconnect_on_failure=False)
@@ -142,7 +177,15 @@ class RmMqttBackend(OfficialMqttBridge):
             self.client.on_message = self._on_message
             self.client.on_subscribe = self._on_subscribe
             self.client.reconnect_delay_set(min_delay=1, max_delay=30)
+            if not self._admit_rule_connection_locked():
+                return
+            if generation != self._lifecycle_generation or profile is not self.referee:
+                raise RuntimeError("MQTT start context changed; explicit new start required")
             self.client.connect_async(self.host, self.port, keepalive=30)
+            if not self._admit_rule_connection_locked():
+                return
+            if generation != self._lifecycle_generation or profile is not self.referee:
+                raise RuntimeError("MQTT start context changed before network loop")
             self._started = True
             result = self._client_resources.start_network_loop()
             if result is not None and result != 0:
@@ -301,6 +344,11 @@ class RmMqttBackend(OfficialMqttBridge):
         # Observer delivery cannot wait for reconnect backoff to expire.
         self._flush_input_clear()
         with self._lifecycle_lock:
+            admitted = self._admit_rule_connection_locked()
+        if not admitted:
+            self._flush_input_clear()
+            return
+        with self._lifecycle_lock:
             request = self._subscription_request
             expired = request if (request is not None
                 and time.perf_counter() - self._subscription_started_at >= self.SUBACK_TIMEOUT_S) else None
@@ -311,6 +359,8 @@ class RmMqttBackend(OfficialMqttBridge):
             return
         with self._lifecycle_lock:
             if not self._reconnect_required or time.perf_counter() < self._next_reconnect_at:
+                return
+            if not self._admit_rule_connection_locked():
                 return
             self._stop_client_locked()
             self._zero_after_reconnect = True
@@ -336,6 +386,44 @@ class RmMqttBackend(OfficialMqttBridge):
             self._economy_state_owner = state
             self._economy_qualification_owner = qualification
             self.clear_received_epoch()
+
+    def official_rules_admission(self, state: Any = None) -> tuple[bool, str]:
+        return official_rule_compatibility(
+            self.rule_season, self.referee.year,
+            state=self._economy_state_owner if state is None else state)
+
+    def set_rule_season(self, season: int, *, _invalidate: bool = False) -> None:
+        season = normalize_rule_season(season)
+        with self._lifecycle_lock:
+            if self.rule_season == season and not _invalidate:
+                return
+            # Same lock as final enqueue. Invalidate stage/receipts while
+            # holding decoded as well, so an old in-flight decode cannot land.
+            with self._decoded_lock:
+                self.rule_season = season
+                self._lock_safety_locked("rules season changed; explicit requalification required")
+                if self.safety.estop_active:
+                    self.safety.control_state = ControlState.ESTOP
+                self.safety.clear_stage_evidence()
+                self.receive_generation += 1
+                self._decoded.clear()
+                self._v2_wire_snapshot = None
+                self._v2_wire_context = None
+            with self._received_lock:
+                self._received_messages.clear()
+            if self._started or self._client_resources is not None:
+                # Discard Paho's old QoS queue rather than allowing reconnect
+                # to replay already-enqueued 2026 requests into another year.
+                self.publish_estop_zero()
+                self._stop_client_locked()
+        self._flush_input_clear()
+
+    def _require_rule_wire(self, topic: str, payload: bytes) -> None:
+        compatible, reason = self.official_rules_admission()
+        fixed_zero = (topic == "KeyboardMouseControl" and type(payload) is bytes
+                      and payload == self.referee.codec.encode_keyboard_mouse_control())
+        if not compatible and not fixed_zero:
+            raise RuntimeError(reason)
 
     def _economy_scope_locked(self) -> tuple:
         state, qualification = self._economy_state_owner, self._economy_qualification_owner
@@ -370,7 +458,8 @@ class RmMqttBackend(OfficialMqttBridge):
         """Caller holds lifecycle then decoded; never reacquire either lock."""
         context = self._v2_wire_context
         snapshot = self._v2_wire_snapshot
-        if (context is None or snapshot is None
+        if (not self.official_rules_admission()[0]
+                or context is None or snapshot is None
                 or context[0] is not self.referee
                 or context[1] is not self.client
                 or context[2] != str(self.client_id)
@@ -439,6 +528,8 @@ class RmMqttBackend(OfficialMqttBridge):
         with self._lifecycle_lock:
             if client is not self.client:
                 return
+            if not self._admit_rule_connection_locked():
+                return
             self.connected = ok
             self._receive_blocked = not ok
             self._subscription_request = None
@@ -456,10 +547,14 @@ class RmMqttBackend(OfficialMqttBridge):
         self._emit_event("mqtt_connect", host=self.host, port=self.port)
         downlinks = (v2_codec.DECODABLE_MESSAGES if profile.codec is v2_codec
                      else profile.codec.DOWNLINK_MESSAGES)
-        with self._lifecycle_lock:
-            if client is not self.client or generation != self._lifecycle_generation:
-                return
         try:
+            with self._lifecycle_lock:
+                if (client is not self.client or generation != self._lifecycle_generation
+                        or not self._admit_rule_connection_locked()):
+                    return
+            # Preserve the callback ownership boundary: a vendor subscribe may
+            # stall, so never hold lifecycle_lock across it. Completion is
+            # checked against this exact owner/year again below.
             result = client.subscribe([(name, profile.max_qos) for name in sorted(downlinks)])
             if (not isinstance(result, tuple) or len(result) != 2
                     or result[0] != 0 or type(result[1]) is not int
@@ -470,7 +565,8 @@ class RmMqttBackend(OfficialMqttBridge):
                 f"MQTT subscription failed: {type(exc).__name__}: {exc}")
             return
         with self._lifecycle_lock:
-            if client is not self.client or generation != self._lifecycle_generation:
+            if (client is not self.client or generation != self._lifecycle_generation
+                    or not self._admit_rule_connection_locked()):
                 return
             self._subscription_request = (client, generation, result[1], len(downlinks))
             self._subscription_started_at = time.perf_counter()
@@ -509,6 +605,8 @@ class RmMqttBackend(OfficialMqttBridge):
             if (request is None or client is not self.client or request[0] is not client
                     or request[1] != self._lifecycle_generation or request[2] != mid):
                 return
+            if not self._admit_rule_connection_locked():
+                return
             generation, count = request[1], request[3]
             try:
                 grants = tuple(getattr(code, "value", code) for code in reason_codes)
@@ -517,6 +615,8 @@ class RmMqttBackend(OfficialMqttBridge):
             except (TypeError, ValueError):
                 grants, accepted = (), False
             if accepted:
+                if not self._admit_rule_connection_locked():
+                    return
                 self._subscription_request = None
                 self._subscriptions_ready = True
                 self._subscription_error = ""
@@ -540,7 +640,11 @@ class RmMqttBackend(OfficialMqttBridge):
             self.clear_received_epoch()
             self._lock_safety_locked(reason)
             self.safety.clear_stage_evidence()
-            self._reconnect_required = self._started
+            compatible, rule_reason = self.official_rules_admission()
+            self._reconnect_required = self._started and compatible
+            if not compatible:
+                self._pending_start = self._started = self._zero_after_reconnect = False
+                self.last_error = rule_reason
             self._next_reconnect_at = time.perf_counter() + self._reconnect_backoff_s
             self._reconnect_backoff_s = min(5.0, self._reconnect_backoff_s * 2.0)
         self._flush_input_clear()
@@ -555,7 +659,8 @@ class RmMqttBackend(OfficialMqttBridge):
         self._schedule_reconnect(f"MQTT disconnected: {_reason_code}", client=_client)
 
     def _on_message(self, client, userdata, msg) -> None:
-        if client is not self.client or self._receive_blocked:
+        if (client is not self.client or self._receive_blocked
+                or not self.official_rules_admission()[0]):
             return
         received_at = time.perf_counter()
         generation = self.receive_generation
@@ -599,7 +704,8 @@ class RmMqttBackend(OfficialMqttBridge):
         with self._decoded_lock:
             if (generation != self.receive_generation or profile is not self.referee
                     or client is not self.client or self._receive_blocked
-                    or not self._subscriptions_ready):
+                    or not self._subscriptions_ready
+                    or not self.official_rules_admission()[0]):
                 return
             if is_v2:
                 if client_id != str(self.client_id):
@@ -638,6 +744,10 @@ class RmMqttBackend(OfficialMqttBridge):
                       now: float | None = None, intent: str = "control",
                       qualification_token: str | None = None,
                       expected_economy_snapshot: WireSnapshot | None = None) -> tuple[bool, str]:
+        compatible, reason = self.official_rules_admission()
+        if not compatible:
+            self.last_error = reason
+            return False, reason
         try:
             if self.referee.codec is v2_codec:
                 payload = bytes(payload)  # Freeze V2 before classification/admission.
@@ -863,6 +973,9 @@ class RmMqttBackend(OfficialMqttBridge):
         # into a replacement session, even if its new connection is already up.
         # Paho publish enqueues on nonblocking sockets; no observers run here.
         with self._lifecycle_lock:
+            # No caller-supplied intent/absent generation can bypass the season
+            # gate. Only the exact fixed zero KMC remains wire-admissible.
+            self._require_rule_wire(topic, payload)
             if (client is None or client is not self.client or not self.connected
                     or generation != self._lifecycle_generation):
                 raise RuntimeError("MQTT session changed; command discarded")
@@ -881,6 +994,7 @@ class RmMqttBackend(OfficialMqttBridge):
                     raise RuntimeError("V2 request context required; command discarded")
                 profile, safety, snapshot, token, mock_output, scope = v2_context
                 with self._decoded_lock:
+                    self._require_rule_wire(topic, payload)
                     if (self.safety.estop_active
                             or authority_generation != self.safety.control_generation):
                         raise RuntimeError("MQTT control authority changed; command discarded")
@@ -915,6 +1029,7 @@ class RmMqttBackend(OfficialMqttBridge):
                         safety.mark_published(topic, now=current)
                     return info
             with self._decoded_lock:
+                self._require_rule_wire(topic, payload)
                 # Receipt-side expiry can revoke authority while we wait for
                 # decoded. Recheck inside that same lock before the wire write.
                 if authority_generation is not None and (
@@ -994,6 +1109,10 @@ class RmMqttBackend(OfficialMqttBridge):
     def stats(self) -> dict[str, Any]:
         return {
             "connected": self.connected,
+            "rule_season": self.rule_season,
+            "protocol_year": self.referee.year,
+            "rule_protocol_compatible": self.official_rules_admission()[0],
+            "rule_protocol_reason": self.official_rules_admission()[1],
             "referee_profile": self.referee.profile_id,
             "protocol_version": self.referee.protocol_version,
             "read_only": self.referee.read_only,

@@ -479,7 +479,7 @@ class StartupSceneMixin:
 
     def draw_robot_profile_screen(self, p: QPainter, width: int, height: int) -> None:
         scale = max(0.72, min(1.12, self.get_auto_ui_scale(width, height, strength=0.42)))
-        profiles = profiles_for_match(self.match_mode_manager.current.key)
+        profiles = profiles_for_match(self.match_mode_manager.current.key, season=self.match_mode_manager.season)
         selected = self.current_robot_profile_key()
         top = 112 * scale
         margin = 48 * scale
@@ -527,7 +527,7 @@ class StartupSceneMixin:
         menu_w = min(470.0 * scale, width - 88.0)
         row_h = 76.0 * scale
         gap = 12.0 * scale
-        total_h = row_h * len(MATCH_MODE_KEYS) + gap * (len(MATCH_MODE_KEYS) - 1)
+        total_h = row_h * len(self.match_mode_manager.mode_keys) + gap * (len(self.match_mode_manager.mode_keys) - 1)
         x = width / 2 - menu_w / 2
         y = height / 2 - total_h / 2 + 38.0 * scale
 
@@ -535,8 +535,8 @@ class StartupSceneMixin:
         glow_text(p, "MATCH MODE", x, logo_y, title_font, THEME.text, THEME.cyan, 8 * scale)
         self.draw_text(p, QRectF(x, logo_y + 10 * scale, menu_w, 44 * scale), ui_text(self.scenario_manager.current.title.upper(), chinese_enabled(self.registry)), body_font, THEME.muted, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
 
-        for index, key in enumerate(MATCH_MODE_KEYS):
-            config = MATCH_MODES[key]
+        for index, key in enumerate(self.match_mode_manager.mode_keys):
+            config = self.match_mode_manager.config_for(key)
             rect = QRectF(x, y + index * (row_h + gap), menu_w, row_h)
             hovered = rect.contains(self.hover_point)
             hover_v = self.anim.value(f"startup.match.hover.{key}", 1.0 if hovered else 0.0, self.anim_duration(0.18), Easings.ease_out_quad)
@@ -621,9 +621,10 @@ class StartupSceneMixin:
         body_font = self.font("poppins_medium", 10.5 * scale)
         small_font = self.font("poppins_regular", 8.0 * scale)
         gap = 24.0 * scale
-        card_w = min(370.0 * scale, (width - 112.0 * scale - gap) / 2.0)
+        count=len(self.match_mode_manager.mode_keys)
+        card_w = min(370.0 * scale, (width - 112.0 * scale - gap*(count-1)) / count)
         card_h = 186.0 * scale
-        total_w = card_w * 2.0 + gap
+        total_w = card_w * count + gap*(count-1)
         x = width / 2.0 - total_w / 2.0
         y = height / 2.0 - card_h / 2.0 + 30.0 * scale
 
@@ -633,8 +634,8 @@ class StartupSceneMixin:
         self.draw_text(p, QRectF(x, logo_y + 11 * scale, total_w, 42 * scale), ui_text(scenario_meta["title"].upper(), chinese_enabled(self.registry)), body_font, THEME.muted, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         self.draw_text(p, QRectF(x, logo_y + 46 * scale, total_w, 18 * scale), ui_text("选择比赛制式", chinese_enabled(self.registry)), self.font("poppins_medium", 8.5 * scale), color("#c9d6dc", 0.90))
 
-        for index, key in enumerate(MATCH_MODE_KEYS):
-            config = MATCH_MODES[key]
+        for index, key in enumerate(self.match_mode_manager.mode_keys):
+            config = self.match_mode_manager.config_for(key)
             meta = self.startup_match_meta(key)
             rect = QRectF(x + index * (card_w + gap), y, card_w, card_h)
             detail = f"{config.field.width_m:g}m x {config.field.height_m:g}m | {config.duration_sec // 60}:{config.duration_sec % 60:02d}"
@@ -708,12 +709,13 @@ class StartupSceneMixin:
         self.draw_startup_vignette(p, width, height)
 
         scale = max(0.74, min(1.14, self.get_auto_ui_scale(width, height, strength=0.45)))
-        menu_x, menu_y, button_w, button_h, gap = self.liquid_menu_layout(width, height, 3, scale)
+        count=len(self.match_mode_manager.mode_keys)
+        menu_x, menu_y, button_w, button_h, gap = self.liquid_menu_layout(width, height, count+1, scale)
         scenario_meta = self.startup_scenario_meta(self.scenario_manager.current.key)
         self.draw_liquid_menu_header(p, width, height, scale, "MATCH MODE", ui_text("{title} profile", chinese_enabled(self.registry), title=ui_text(scenario_meta["title"], chinese_enabled(self.registry))), active)
 
-        for index, key in enumerate(MATCH_MODE_KEYS):
-            config = MATCH_MODES[key]
+        for index, key in enumerate(self.match_mode_manager.mode_keys):
+            config = self.match_mode_manager.config_for(key)
             meta = self.startup_match_meta(key)
             rect = QRectF(menu_x, menu_y + index * (button_h + gap), button_w, button_h)
             detail = f"{config.field.width_m:g}m x {config.field.height_m:g}m  {config.duration_sec // 60}:{config.duration_sec % 60:02d}  official map"
@@ -735,11 +737,11 @@ class StartupSceneMixin:
                 active,
             )
 
-        back_rect = QRectF(menu_x, menu_y + 2 * (button_h + gap), button_w, button_h)
+        back_rect = QRectF(menu_x, menu_y + count * (button_h + gap), button_w, button_h)
         self.draw_liquid_main_button(
             p,
             back_rect,
-            2,
+            count,
             "match.back",
             "<",
             "Back",
@@ -1399,6 +1401,10 @@ class StartupSceneMixin:
         }.get(key, {"icon": "RM", "title": key, "subtitle": "POLAR profile", "tooltip": key})
 
     def startup_match_meta(self, key: str) -> dict[str, str]:
+        if self.match_mode_manager.season==2027:
+            config=self.match_mode_manager.config_for(key)
+            return {'icon':key[4:],'title':config.title,'subtitle':config.subtitle,
+                    'tooltip':config.subtitle+'；2027裁判协议与实车资格须分别验证。'}
         return {
             "RMUC7v7": {
                 "icon": "7v7",
@@ -1432,7 +1438,7 @@ class StartupSceneMixin:
                 self.reset_startup_page_animation(back_page)
                 self.begin_startup_page_transition(back_page)
                 return True
-            profiles = profiles_for_match(self.match_mode_manager.current.key)
+            profiles = profiles_for_match(self.match_mode_manager.current.key, season=self.match_mode_manager.season)
             mapping = {getattr(Qt.Key, f"Key_{index + 1}"): profile.key for index, profile in enumerate(profiles[:9])}
             mapping[Qt.Key.Key_Return] = self.current_robot_profile_key()
             mapping[Qt.Key.Key_Enter] = self.current_robot_profile_key()
@@ -1455,6 +1461,8 @@ class StartupSceneMixin:
                 Qt.Key.Key_Return: self.match_mode_manager.current.key,
                 Qt.Key.Key_Enter: self.match_mode_manager.current.key,
             }
+            if 'RMUL1v1' in self.match_mode_manager.mode_keys:
+                mapping[Qt.Key.Key_3]='RMUL1v1'
             key = mapping.get(event.key())
             if key is None:
                 return False

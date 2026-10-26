@@ -62,7 +62,7 @@ def run(output, fullscreen=False):
             assert not menu.error,menu.error
             assert host.escape_menu_visible and menu.requested,"Esc disappeared during child dialog"
             code,close = cases[state["index"]]
-            modal = app.activeModalWidget()
+            modal = app.activeModalWidget() or getattr(host, "_settings_session", None)
             if state["stage"] == "open" and menu.ready and menu.phase == 1 and now-state["changed"] > 1:
                 state.update(stage="modal",changed=now)
                 # 注入原生动作队列返回值，随后完整走advance与生产模态；D3D仍实际呈现。

@@ -264,7 +264,7 @@ class StartupSettingsTests(unittest.TestCase):
         self.w.hide(); self.w.deleteLater()
         APP.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
-    def test_startup_action_keeps_every_page_and_opens_real_modal(self):
+    def test_startup_action_keeps_every_page_and_opens_client_modal(self):
         for page in ("scenario", "match", "robot"):
             for outcome in ("accept", "reject", "close", "escape"):
                 with self.subTest(page=page, outcome=outcome):
@@ -272,7 +272,7 @@ class StartupSettingsTests(unittest.TestCase):
                     errors = []
                     def dismiss():
                         try:
-                            dialog = APP.activeModalWidget()
+                            dialog = self.w._settings_session
                             self.assertEqual(dialog.objectName(), "JelloSettingsCenter")
                             self.assertTrue(self.w.home_visible)
                             self.assertEqual(self.w.startup_step, page)
@@ -280,7 +280,8 @@ class StartupSettingsTests(unittest.TestCase):
                             else: getattr(dialog, outcome)()
                         except BaseException as exc:
                             errors.append(exc)
-                            if APP.activeModalWidget(): APP.activeModalWidget().reject()
+                            dialog = getattr(self.w, '_settings_session', None)
+                            if dialog is not None: dialog.reject()
                     QTimer.singleShot(0, dismiss)
                     self.w.dispatch("startup_open_settings", None, QPointF(), 1, QRectF())
                     if errors: raise errors[0]
@@ -295,7 +296,7 @@ class StartupSettingsTests(unittest.TestCase):
     def test_operator_settings_still_returns_to_operator_menu(self):
         self.w.home_visible = False
         self.w._escape_menu_visible = True
-        QTimer.singleShot(0, lambda: APP.activeModalWidget().reject())
+        QTimer.singleShot(0, lambda: self.w._settings_session.reject())
         self.w.activate_escape_menu_choice(1)
         self.assertFalse(self.w.home_visible)
         self.assertTrue(self.w.escape_menu_visible)

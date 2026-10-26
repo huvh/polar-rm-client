@@ -122,6 +122,7 @@ def child_environment(user_data: str, firmware: Path | None, *, desktop: bool = 
     # installed package or another checkout inherited through PYTHONPATH.
     env["PYTHONPATH"] = str(ROOT)
     env["PYTHONIOENCODING"] = "utf-8"
+    env["PYTHONUTF8"] = "1"
     env["POLAR_USER_DATA_ROOT"] = user_data
     # This runner verifies the selected source checkout. A portable-app root
     # would bypass POLAR_USER_DATA_ROOT and redirect writes to another install.

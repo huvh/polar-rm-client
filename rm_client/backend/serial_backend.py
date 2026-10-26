@@ -17,6 +17,7 @@ from typing import Any
 from ..protocol import MAX_REFEREE_PAYLOAD, RefereeFrameCodec, crc8, crc16
 from ..transports import SerialBridgeStub
 from .resource_close import close_resource
+from ..rules_compatibility import normalize_rule_season, official_rule_compatibility
 
 
 class RmSerialBackend(SerialBridgeStub):
@@ -50,6 +51,45 @@ class RmSerialBackend(SerialBridgeStub):
         self._write_lock = threading.RLock()
         self._estop_guard = threading.Lock()
         self._estop_generation = 0
+        # Metadata only: season revocation must not wait for a blocked driver.
+        # The immutable epoch is captured before a request waits for write_lock.
+        self._rule_guard = threading.Lock()
+        self._rule_context = (2026, 0)
+        self._rule_state_owner: Any = None
+
+    @property
+    def rule_season(self) -> int:
+        return self._rule_context[0]
+
+    def bind_rule_state(self, state: Any) -> None:
+        with self._rule_guard:
+            if state is not self._rule_state_owner:
+                self._rule_state_owner = state
+                season, generation = self._rule_context
+                self._rule_context = (season, generation + 1)
+
+    def set_rule_season(self, season: int, *, _invalidate: bool = False) -> None:
+        season = normalize_rule_season(season)
+        with self._rule_guard:
+            current, generation = self._rule_context
+            if current == season and not _invalidate:
+                return
+            self._rule_context = (season, generation + 1)
+        with self._rx_lock:
+            self._rx.clear()
+            self.last_frame_at = 0.0
+        # No stop packet is defined on this generic A5 channel. Do not invent
+        # one, release the E-stop latch, or touch independent device schemas.
+
+    def official_rules_admission(self) -> tuple[bool, str]:
+        return official_rule_compatibility(self.rule_season, 2026,
+                                           state=self._rule_state_owner)
+
+    def _rule_write_admission(self, expected: tuple[int, int]) -> tuple[bool, str]:
+        compatible, reason = self.official_rules_admission()
+        if expected is not self._rule_context:
+            return False, "serial rules season epoch changed; request discarded"
+        return compatible, reason
 
     # ------------------------------------------------------------------
     def start(self) -> None:
@@ -126,6 +166,7 @@ class RmSerialBackend(SerialBridgeStub):
 
     # ------------------------------------------------------------------
     def write_frame(self, cmd_id: int, data: bytes = b"") -> tuple[bool, str]:
+        rule_context = self._rule_context
         if not isinstance(cmd_id, int) or isinstance(cmd_id, bool) or not 0 <= cmd_id <= 0xFFFF:
             self.last_error = "cmd_id 必须是 uint16 整数"
             return False, self.last_error
@@ -143,12 +184,22 @@ class RmSerialBackend(SerialBridgeStub):
             except (TypeError, ValueError, OverflowError) as exc:
                 self.last_error = str(exc)
                 return False, self.last_error
-            return self.write(frame)
+            return self._write_payload(frame, bypass_estop=False,
+                                       _expected_rule_context=rule_context)
 
     def write(self, payload: bytes) -> tuple[bool, str]:
-        return self._write_payload(payload, bypass_estop=False)
+        return self._write_payload(payload, bypass_estop=False,
+                                   _expected_rule_context=self._rule_context)
 
-    def _write_payload(self, payload: bytes, *, bypass_estop: bool) -> tuple[bool, str]:
+    def send(self, payload: bytes) -> tuple[bool, str]:
+        """Raw A5 send alias; exactly the same validation and final gate."""
+        return self._write_payload(payload, bypass_estop=False,
+                                   _expected_rule_context=self._rule_context)
+
+    def _write_payload(self, payload: bytes, *, bypass_estop: bool,
+                       _expected_rule_context: tuple[int, int] | None = None) -> tuple[bool, str]:
+        rule_context = (self._rule_context if _expected_rule_context is None
+                        else _expected_rule_context)
         # Every public/raw path must enforce the same route boundary. Reject
         # incomplete/junk prefixes rather than allowing a decoder to skip them.
         with self._write_lock:
@@ -175,16 +226,35 @@ class RmSerialBackend(SerialBridgeStub):
                 return False, self.last_error
             self.last_write = payload
             # No caller, including the legacy private argument, can bypass E-stop.
-            if self.estop_active:
+            if self.estop_active or (self.safety is not None and self.safety.estop_active):
                 self.last_error = "急停激活，串口写入被禁止"
                 return False, self.last_error
+            compatible, reason = self._rule_write_admission(rule_context)
+            if rule_context is not self._rule_context:
+                self.last_error = reason
+                return False, reason
             if self.mock_writes:
-                return True, "mock"
+                return True, "mock" if compatible else "mock; " + reason
+            if not compatible:
+                self.last_error = reason
+                return False, reason
             if self._serial is None or not self.connected:
                 self.last_error = "串口未连接"
                 return False, self.last_error
             try:
-                written = self._serial.write(payload)
+                stream = self._serial
+                writer = stream.write
+                # Recheck after payload conversion/validation and driver-method
+                # resolution, immediately before entering the native writer.
+                if (self.estop_active or (self.safety is not None and self.safety.estop_active)
+                        or stream is not self._serial or not self.connected):
+                    self.last_error = "serial authority/driver changed; request discarded"
+                    return False, self.last_error
+                compatible, reason = self._rule_write_admission(rule_context)
+                if not compatible:
+                    self.last_error = reason
+                    return False, reason
+                written = writer(payload)
                 if written != len(payload):
                     raise IOError(f"串口短写 {written}/{len(payload)} 字节")
                 self.frames_written += 1
@@ -287,6 +357,11 @@ class RmSerialBackend(SerialBridgeStub):
     def stats(self) -> dict[str, Any]:
         return {
             "connected": self.connected,
+            "rule_season": self.rule_season,
+            "rule_generation": self._rule_context[1],
+            "protocol_year": 2026,
+            "rule_protocol_compatible": self.official_rules_admission()[0],
+            "rule_protocol_reason": self.official_rules_admission()[1],
             "port": self.port,
             "baud": self.baud,
             "mock_writes": self.mock_writes,

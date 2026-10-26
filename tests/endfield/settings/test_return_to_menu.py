@@ -46,7 +46,8 @@ class SettingsReturnTests(unittest.TestCase):
                         try:
                             self.assertTrue(host.escape_menu_visible)
                             self.assertTrue(self.menu.requested)
-                            self.assertIs(APP.activeModalWidget(),dialog)
+                            self.assertIs(host._settings_session,dialog)
+                            self.assertIsNone(APP.activeModalWidget())
                             with patch.object(self.menu,"tick",wraps=self.menu.tick) as tick:
                                 host.advance_endfield_menu()
                                 self.assertTrue(tick.call_args.kwargs["paused"])

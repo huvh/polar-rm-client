@@ -34,6 +34,7 @@ from ....configuration.transactions import (
 )
 from ....control import validate_control_binds
 from ....match_modes import MatchModeConfig
+from ....rules import competition_rules, match_modes_for_season, validate_season
 from ....model import CONTROL_SLOT_ORDER, PRIMARY_GUI_MODE, Module, normalize_gui_mode
 from ....robot_profiles import (
     apply_profile_to_state,
@@ -55,9 +56,9 @@ class PersistenceMixin:
     def current_robot_profile_key(self) -> str:
         module = self.registry.get("RobotProfile")
         setting = module.get_setting("Role") if module else None
-        valid = {profile.key for profile in profiles_for_match(self.match_mode_manager.current.key)}
+        valid = {profile.key for profile in profiles_for_match(self.match_mode_manager.current.key, season=self.match_mode_manager.season)}
         value = str(setting.value) if setting else "Infantry1"
-        return value if value in valid else profiles_for_match(self.match_mode_manager.current.key)[0].key
+        return value if value in valid else profiles_for_match(self.match_mode_manager.current.key, season=self.match_mode_manager.season)[0].key
 
     def current_robot_performance(self, role: str | None = None):
         module = self.registry.get("RobotProfile")
@@ -69,6 +70,7 @@ class PersistenceMixin:
             infantry_chassis=self.setting_mode(module, "Infantry Chassis", "Power"),
             infantry_shooter=self.setting_mode(module, "Infantry Shooter", "Burst"),
             sentinel_control=self.setting_mode(module, "Sentinel Control", "Automatic"),
+            season=self.match_mode_manager.season,
         )
 
     def apply_match_mode(self, key: str, close_home: bool, announce: bool = True) -> None:
@@ -79,13 +81,42 @@ class PersistenceMixin:
             release=lambda: self.control.release_all(self.state, self.registry),
             clear_pending=lambda: self.control.clear_pending(),
         )
-        config = self.match_mode_manager.set_mode(key)
+        season=validate_season(self.setting_mode(self.registry.get('MatchMode'),'Season','2026'))
+        previous_season=getattr(self.state,'rules_season',2026)
+        if previous_season!=season:
+            # Separate local draft branches by season. A fresh 2027 preview
+            # defaults to the formal Health/Cooling selection, not the old
+            # client's Power/Burst. Returning restores this session's old draft.
+            module=self.registry.get('RobotProfile')
+            cache=getattr(self,'_rule_role_preferences',{})
+            cache[previous_season]={item.name:item.value for item in module.settings}
+            values=cache.get(season,{'Infantry Chassis':'Health','Infantry Shooter':'Cooling','Level':1}
+                             if season==2027 else {})
+            for name,value in values.items():
+                item=module.get_setting(name)
+                if item is not None:
+                    item.value=value
+            self._rule_role_preferences=cache
+        if season!=getattr(self.state,'rules_season',2026) and any(
+                bool(getattr(owner,flag,False))
+                for owner in (self.backend.mqtt,getattr(self.backend,'polar',None),getattr(self.backend,'serial',None))
+                for flag in ('_started','_running','connected')):
+            # A season is also an operator identity/role epoch. Never carry a
+            # live old Hero/Engineer driver's intent into the new Heavy role.
+            self.backend.trigger_estop()
+            self.toast('切换规则赛季已急停；新兵种/固件需重新核对，输出不会自动恢复',kind='warning')
+        if season==2026 and key not in match_modes_for_season(season):
+            key='RMUL3v3' if key.startswith('RMUL') else 'RMUC7v7'
+        config = self.match_mode_manager.set_mode(key,season=season)
+        self.backend.set_rule_season(season)
+        if season==2027 and hasattr(self,'hero_deploy_ui'):
+            self.close_hero_deploy_interface(force=True)
         self.match_mode_manager.apply_to_registry(self.registry)
         self.seed_match_state(config)
         profile_module = self.registry.get("RobotProfile")
         role_setting = profile_module.get_setting("Role") if profile_module else None
         if role_setting is not None:
-            role_setting.options = [profile.key for profile in profiles_for_match(config.key)]
+            role_setting.options = [profile.key for profile in profiles_for_match(config.key, season=config.season)]
             if str(role_setting.value) not in role_setting.options:
                 role_setting.value = role_setting.options[0]
         self.apply_robot_profile(self.current_robot_profile_key(), close_home=False, announce=False)
@@ -100,9 +131,9 @@ class PersistenceMixin:
         if self.reject_pending_configuration_edit():
             return
         module = self.registry.get("RobotProfile")
-        profiles = profiles_for_match(self.match_mode_manager.current.key)
+        profiles = profiles_for_match(self.match_mode_manager.current.key, season=self.match_mode_manager.season)
         valid_keys = [profile.key for profile in profiles]
-        profile = profile_by_key(self.match_mode_manager.current.key, key)
+        profile = profile_by_key(self.match_mode_manager.current.key, key, season=self.match_mode_manager.season)
         role = module.get_setting("Role") if module else None
         if role is not None:
             role.options = valid_keys
@@ -173,6 +204,10 @@ class PersistenceMixin:
             self.toast(f"Robot profile: {profile.title}")
 
     def seed_match_state(self, config: MatchModeConfig) -> None:
+        self.state.rules_season=config.season
+        self.state.rules_version=config.rule_version
+        self.state.rules_status=(f'2027 V{config.rule_version} · 规则预览；裁判协议须独立审查'
+                                 if config.season==2027 else '2026 legacy rules')
         self.state.match_mode = config.key
         self.state.match_title = config.title
         self.state.match_duration_sec = config.duration_sec
@@ -183,7 +218,49 @@ class PersistenceMixin:
         self.state.clear_match_settlement()
         self.state.current_stage = "NOT_STARTED"
         self.state.alliance_color = self.alliance_side()
+        if config.season==2027:
+            rules=competition_rules(config.season,config.key)
+            points=rules.facts.get('victory_points')
+            self.state.control_score_max=points or 0
+            self.state.control_score_title=rules.facts.get('score_title','控制度')
+            self.state.ally_victory_points=self.state.enemy_victory_points=points or 0
+            self.state.control_owner='NEUTRAL'
+            self.state.control_progress=0
+            self.state.control_zones=[{'index':index,'owner':None,'progress':None,'observed':False}
+                for index in range(int(rules.facts.get('control',{}).get('zone_count',0)))]
+            # No stale 2026 opponent, buffs or geometry survives a season switch.
+            self.state.robot_rows=[]
+            self.state.map_robots=[]
+            self.state.map_markers=[]
+            self.state.buff_rows=[]
+            self.state.student_ui_data={}
+            self.state.performance_sync={}
+            self.state.robot_statics={}
+            self.state.small_buff=self.state.large_buff=False
+            # A rule preview is not an observation. Retire the old demo target;
+            # independently received, calibrated vision may repopulate it later.
+            self.state.target_locked=self.state.lock_state=self.state.energy_target_locked=False
+            self.state.target_id=0
+            self.state.target_distance_m=self.state.energy_target_distance_m=0.0
+            self.state.target_health=self.state.target_max_health=0
+            self.state.energy_rune_progress=0
+            self.state.base_shield=self.state.enemy_base_shield=0
+            self.state.base_status=self.state.enemy_base_status='UNKNOWN'
+            self.state.outpost_status=self.state.enemy_outpost_status='UNKNOWN'
+            self.state.current_heat=self.state.chassis_power_w=0.0
+            self.state.current_chassis_energy=self.state.current_buffer_energy=0
+            self.state.capacitor_percent=self.state.total_projectiles_fired=0
+            self.state.friction_wheel=False
+            for name in ('base_health','enemy_base_health','base_max_health','enemy_base_max_health',
+                         'outpost_health','enemy_outpost_health','outpost_max_health','enemy_outpost_max_health'):
+                setattr(self.state,name,int(rules.facts.get(name) or 0))
+            gold=rules.economy.get('initial_gold',rules.economy.get('initial_coins'))
+            self.state.remaining_economy=self.state.total_economy_obtained=int(gold or 0)
+            return
         if config.key == "RMUL3v3":
+            self.state.control_zones=[]
+            self.state.control_score_max=200
+            self.state.control_score_title='VP'
             self.state.ally_victory_points = 200
             self.state.enemy_victory_points = 200
             self.state.control_owner = "NEUTRAL"
@@ -193,6 +270,13 @@ class PersistenceMixin:
             self.state.outpost_health = 0
             self.state.enemy_outpost_health = 0
         else:
+            # Do not retain the 2027 10000/1000 maxima when returning to the
+            # historical client baseline. This is display seeding, not telemetry.
+            self.state.control_zones=[]
+            self.state.control_score_max=200
+            self.state.control_score_title='VP'
+            self.state.base_max_health=self.state.enemy_base_max_health=5000
+            self.state.outpost_max_health=self.state.enemy_outpost_max_health=1500
             self.state.base_health = self.state.base_max_health
             self.state.enemy_base_health = self.state.enemy_base_max_health
             self.state.outpost_health = self.state.outpost_max_health
@@ -759,14 +843,20 @@ class PersistenceMixin:
     def _request_registry_runtime(self, *, start: bool | None = None) -> int:
         self.sync_control_binds()
         match = self.registry.get("MatchMode")
-        self.match_mode_manager.set_mode(self.setting_mode(match, "Mode", "RMUC7v7"))
+        season=validate_season(self.setting_mode(match,'Season','2026'))
+        selected_mode=self.setting_mode(match,'Mode','RMUC7v7')
+        if season==2026 and selected_mode not in match_modes_for_season(season):
+            selected_mode='RMUL3v3'
+        self.match_mode_manager.set_mode(selected_mode,season=season)
+        self.match_mode_manager.apply_to_registry(self.registry)
+        self.backend.set_rule_season(season)
         scenario = self.registry.get("Scenario")
         self.scenario_manager.set_scenario(self.setting_mode(scenario, "Mode", "LabDebug"))
-        profile = profile_by_key(self.match_mode_manager.current.key, self.current_robot_profile_key())
+        profile = profile_by_key(self.match_mode_manager.current.key, self.current_robot_profile_key(), season=self.match_mode_manager.season)
         module = self.registry.get("RobotProfile")
         role = module.get_setting("Role") if module else None
         if role is not None:
-            role.options = [item.key for item in profiles_for_match(self.match_mode_manager.current.key)]
+            role.options = [item.key for item in profiles_for_match(self.match_mode_manager.current.key, season=self.match_mode_manager.season)]
             role.value = profile.key
         robot_id = robot_id_for_alliance(profile, self.alliance_side())
         if start is None:
@@ -785,7 +875,7 @@ class PersistenceMixin:
         """Commit display identity after backend activation; never arm or start."""
         self.control.mock_output = bool(self.backend.mqtt.mock_output)
         self.seed_match_state(self.match_mode_manager.current)
-        profile = profile_by_key(self.match_mode_manager.current.key, self.current_robot_profile_key())
+        profile = profile_by_key(self.match_mode_manager.current.key, self.current_robot_profile_key(), season=self.match_mode_manager.season)
         module = self.registry.get("RobotProfile")
         level = int(self.get_setting_number(module, "Level", 1))
         side = self.alliance_side()

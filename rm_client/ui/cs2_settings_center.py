@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import logging
 
-from PySide6.QtCore import Qt, QEvent, QObject
+from PySide6.QtCore import Qt, QEvent, QObject, QEventLoop
 from PySide6.QtGui import QFont, QKeySequence, QShortcut, QResizeEvent, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFormLayout, QGroupBox,
@@ -19,6 +19,7 @@ from ..configuration.registry import SettingId
 from ..configuration.transactions import ConfigurationApplyError, apply_configuration_transaction
 from ..emergency_actions import request_emergency_stop
 from ..model import CONTROL_SLOT_ORDER, build_default_registry, Setting
+from ..module_settings import CONTROL_BIND_OPTIONS
 from .jello_locale import module_label, option_label, setting_label
 from .endfield.settings.shell import EndfieldSettingsDialog as JelloDialog, apply_settings_widgets as apply_jello_widgets
 from .endfield.settings.widgets import EndfieldCheckBox as QCheckBox, EndfieldComboBox as QComboBox, SettingsTabBar, add_setting_row
@@ -230,8 +231,14 @@ class RegistrySettingsPage(JelloScrollArea):
     def filter(self, query):
         query = query.strip().casefold()
         self._query = query
+        from ..rules.presentation import visible_rule_settings
+        unavailable = set()
+        for (name, key), widget in self.controls.items():
+            module = self.host.registry.get(name)
+            if module and key not in {item.name for item in visible_rule_settings(self.host.registry, module)}:
+                unavailable.add(widget)
         for label, widget, text in self.search_rows:
-            visible = not query or query in text
+            visible = (not query or query in text) and widget not in unavailable
             label.parentWidget().setVisible(visible)
             if label.isHidden() == visible: label.setVisible(visible)
             if widget.isHidden() == visible: widget.setVisible(visible)
@@ -291,10 +298,19 @@ class RegistrySettingsPage(JelloScrollArea):
                     if live is None:
                         continue
                     value = live.value
+                    if isinstance(widget, QComboBox):
+                        choices = [widget.itemData(i) for i in range(widget.count())]
+                        if choices != list(live.options):
+                            widget.blockSignals(True)
+                            widget.clear()
+                            for option in live.options:
+                                widget.addItem(option_label(option, True), option)
+                            widget.blockSignals(False)
                 else:
                     value = module.enabled if kind == "toggle" else module.keybind
             self._set_widget_value(widget, value)
             self._draft.follow_live(key, self._widget_value(widget))
+        self.filter(getattr(self, "_query", ""))
 
     def apply_draft(self):
         if not self.builder.ready:
@@ -380,10 +396,47 @@ class CrosshairSettingsPage(JelloScrollArea):
             self.editor.display_scale.setValue(default_scale)
 
 
+class SettingsDialog(JelloDialog):
+    """由客户端输入锁维持设置会话，宿主标题栏关闭仍交给正常关机流程。"""
+    def exec(self):
+        host = self.parentWidget()
+        if bool(getattr(getattr(host, "_window_lifecycle", None), "closing", False)):
+            return QDialog.DialogCode.Rejected
+        loop = QEventLoop(self)
+        self.finished.connect(loop.quit)
+        host._settings_session = self
+        try:
+            self.setWindowModality(Qt.WindowModality.NonModal)
+            self.show()
+            if self.isVisible():
+                loop.exec()
+            return self.result()
+        finally:
+            self.finished.disconnect(loop.quit)
+            if getattr(host, "_settings_session", None) is self:
+                host._settings_session = None
+            loop.deleteLater()
+
+    def close_for_shutdown(self):
+        """宿主已准许关机后，立即结束会话，跳过普通返回的退场动画。"""
+        self._timer.stop()
+        self._resize_timer.stop()
+        self._enter_pending = False
+        errors = []
+        for builder in self.findChildren(SettingsBuildQueue):
+            try:
+                builder.cancel()
+            except Exception as error:
+                errors.append(error)
+        QDialog.done(self, QDialog.DialogCode.Rejected)
+        if errors:
+            raise errors[0]
+
+
 def build_settings_center(host):
     """Non-modal construction for visual/regression tests; open owns input lock."""
     from .cs2_video_settings import open_video_settings
-    dialog = JelloDialog(host)
+    dialog = SettingsDialog(host)
     try:
         dialog.setWindowTitle("POLAR · Endfield 设置")
         dialog.setObjectName("JelloSettingsCenter")  # 稳定的历史对象ID，供已有启动入口使用。
@@ -466,6 +519,9 @@ def build_settings_center(host):
         dialog.reset_button = reset
         dialog.install_header()
         apply_jello_widgets(dialog)
+        for button in dialog.findChildren(QPushButton):
+            button.setAutoDefault(False)
+            button.setDefault(False)
         dialog.apply_layout_scale()
         dialog.estop_shortcut = install_estop_shortcut(dialog, host)
         return dialog
@@ -487,6 +543,11 @@ def build_settings_center(host):
 
 
 def open_settings_center(host):
+    existing = getattr(host, "_settings_session", None)
+    if existing is not None:
+        existing.raise_()
+        existing.activateWindow()
+        return
     host.backend.lock_control("settings opened")
     host.control.release_all(host.state, host.registry)
     host._control_mouse_point = None

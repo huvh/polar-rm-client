@@ -59,7 +59,10 @@ class EndfieldMenuMixin:
             pending = getattr(self, "_endfield_pending_action", None)
             self._endfield_pending_action = None
             if pending is not None:
-                self.dispatch_endfield_action(pending)
+                try:
+                    self.dispatch_endfield_action(pending)
+                finally:
+                    self._endfield_settings_backdrop = None
 
     def set_endfield_menu_visible(self, visible: bool) -> None:
         menu = self._endfield_menu
@@ -73,6 +76,8 @@ class EndfieldMenuMixin:
         self.drag = None
         self._escape_menu_pressed = None
         self._endfield_pending_action = None
+        if visible:
+            self._endfield_settings_backdrop = None
         menu.request(visible, wait_for_backdrop=visible)
         # Conceal is asynchronous: never leak keys to the robot under the
         # final 333ms of source exit animation.

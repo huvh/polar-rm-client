@@ -21,6 +21,7 @@ from .overlay_coordinator import OverlayCoordinator
 from .jello_locale import chinese_enabled
 from .match_strip_locale import match_role_text, match_strip_text
 from .cs2_assets import local_cs2_assets
+from .cs2_scoreboard_history import ScoreboardHistory
 
 _LOG = logging.getLogger(__name__)
 
@@ -60,6 +61,7 @@ class TopMatchBarController:
         self._reset_progress = True
         self._frame_cache_key: tuple[object, ...] | None = None
         self._frame_cache = None
+        self._scoreboard_history = ScoreboardHistory()
 
     def enabled(self) -> bool:
         module = self.owner.registry.get("TopMatchBar")
@@ -89,6 +91,7 @@ class TopMatchBarController:
         self._reset_progress = True
         self._frame_cache_key = None
         self._frame_cache = None
+        self._scoreboard_history.reset()
 
     def _snapshot_frame(self, feed: TopMatchBarFeed, now: float, chinese: bool):
         """Reuse only an identical projection, including exact expiry edges.
@@ -110,6 +113,17 @@ class TopMatchBarController:
                observations(feed._max_hp), observations(feed._values), tuple(feed._kills.items()))
         if key != self._frame_cache_key:
             frame = feed.snapshot(now, local_robot_id=local_id)
+            if getattr(self.owner.state, 'rules_season', 2026) == 2027:
+                # The feed's legacy role vocabulary is deliberately unchanged
+                # for 2026. Project exact built-ins, never caller nicknames.
+                def annual_strip(strip):
+                    def annual_card(card):
+                        label = ({(1, 'HERO'): 'HEAVY', (6, 'UAV'): 'AIR SYSTEM'}
+                                 .get((card.robot_id % 100, card.label), card.label))
+                        return replace(card, label=label)
+                    return replace(strip, cards=tuple(map(annual_card, strip.cards)),
+                                   systems=tuple(map(annual_card, strip.systems)))
+                frame = replace(frame, left=annual_strip(frame.left), right=annual_strip(frame.right))
             self._frame_cache = replace(frame, roster_label=scope_label)
             self._frame_cache_key = key
         return self._frame_cache
@@ -128,13 +142,14 @@ class TopMatchBarController:
         source = (str(owner.backend.scenario_key), str(owner.backend.referee.profile_id),
                   str(mqtt.host), int(mqtt.port), int(mqtt.receive_generation),
                   float(mqtt.disconnected_at), bool(mqtt.connected))
-        context = (mode, str(state.alliance_color), int(state.robot_id), source, scope, label, self._custom_rosters)
+        year=getattr(state,'rules_season',2026)
+        context = (year,mode, str(state.alliance_color), int(state.robot_id), source, scope, label, self._custom_rosters)
         if self.feed is None or context != self._context:
-            profiles = profiles_for_match(mode)
+            profiles = profiles_for_match(mode,season=year)
             # Profiles are configuration candidates, not proof of life. Ground
             # scope selects only role profiles with a modeled HP capacity.
-            ground = {"Hero", "Engineer", "Infantry1", "Infantry2", "Sentinel"}
-            red = tuple(p.robot_id for p in profiles if scope != "Ground Robots" or p.key in ground)
+            ground = {"Hero", "Heavy", "Engineer", "Infantry1", "Infantry2", "Sentinel"}
+            red = tuple(p.robot_id for p in profiles if p.robot_id is not None and (scope != "Ground Robots" or p.key in ground))
             blue = tuple(robot_id + 100 for robot_id in red)
             if self._custom_rosters is not None:
                 red, blue, _ = self._custom_rosters
@@ -145,11 +160,15 @@ class TopMatchBarController:
         return self.feed
 
     def observe_referee(self, name: str, data: dict[str, object], received_at: float) -> None:
-        if not self.enabled():
+        tactical = self.owner.registry.get("TacticalMap")
+        if not self.enabled() and not (tactical is not None and tactical.enabled):
             self.reset()
             return
         feed = self._ensure_feed()
         owner = self.owner
+        if getattr(owner.state,'rules_season',2026)!=getattr(owner.backend.referee,'year',2026):
+            feed.reset()
+            return
         # These shared fields have been reviewed for both exact profiles.
         # Student and unknown profiles must not inherit their meanings.
         if owner.backend.referee.profile_id not in {"rm2026-v1.3.1", "rm2026-v2.0.0"} or not owner.backend.mqtt.connected:
@@ -162,6 +181,18 @@ class TopMatchBarController:
         feed.consume_referee(name, data, received_at=received_at,
                              own_alliance=str(owner.state.alliance_color),
                              local_robot_id=int(owner.state.robot_id))
+        frame = self._snapshot_frame(feed, received_at, chinese_enabled(owner.registry))
+        self._scoreboard_history.observe(frame, (self._context, feed._round))
+
+    def scoreboard_snapshot(self, now: float):
+        """Same presence/TTL/year/source projection, independent of mini-strip toggle."""
+        feed = self._ensure_feed()
+        if (not self.owner.backend.mqtt.connected
+                or getattr(self.owner.state, 'rules_season', 2026) != self.owner.backend.referee.year):
+            feed.reset()
+        frame = self._snapshot_frame(feed, now, chinese_enabled(self.owner.registry))
+        self._scoreboard_history.observe(frame, (self._context, feed._round))
+        return frame
 
     def visible(self) -> bool:
         owner = self.owner
@@ -187,7 +218,8 @@ class TopMatchBarController:
 
     def _paint_progress(self, painter: Any, frame: Any, width: int, now: float,
                         left: float, right: float, bottom: float, maximum_bottom: float) -> None:
-        if not bool(self._setting("BF6 Progress", True)) or self.owner.state.match_mode != "RMUC7v7":
+        if (not bool(self._setting("BF6 Progress", True)) or self.owner.state.match_mode != "RMUC7v7"
+                or getattr(self.owner.state, 'rules_season', 2026) == 2027):
             return  # RMUL victory points are a different metric.
         renderer = getattr(getattr(self.owner, "kill_fx", None), "match_progress", None)
         if renderer is None:
@@ -260,7 +292,11 @@ class TopMatchBarController:
         self.last_progress_bounds = None
         try:
             if not self.enabled():
-                self.reset()
+                tactical = self.owner.registry.get("TacticalMap")
+                if tactical is not None and tactical.enabled:
+                    self.hide()  # The independent Tab table still consumes this feed.
+                else:
+                    self.reset()
                 return
             if not self.visible():
                 self.hide()

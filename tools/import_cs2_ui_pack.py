@@ -37,6 +37,9 @@ MEMBERS = {
     "kill_flag": "panorama/images/icons/ui/kill.vsvg_c",
     "elimination": "panorama/images/icons/ui/elimination.vsvg_c",
     "person": "panorama/images/icons/person.vsvg_c",
+    **{f"sb_{name}": f"panorama/images/icons/ui/{name}.vsvg_c"
+       for name in ("casual", "camera", "unmuted", "ct_silhouette", "menu",
+                    "competitive", "ping_4", "stats", "elimination")},
     "kill_mask": HUD + "kill_mask.vsvg_c",
     **{f"kill_{i}": HUD + f"kill_{i}.vsvg_c" for i in range(1, 6)},
     "kill_extra": HUD + "kill_extra.vsvg_c",
@@ -57,6 +60,9 @@ STYLE_MEMBERS = (
     "soundevents/game_sounds_ui.vsndevts_c",
 )
 FONTS = {
+    "font_medium": "stratum2-medium.otf",
+    "font_condensed_regular": "stratum2condensed-regular.otf",
+    "font_mono_regular": "stratum2mono-regular.otf",
     "font_regular": "stratum2-regular.otf",
     "font_bold": "stratum2-bold.otf",
     "font_condensed": "stratum2condensed-bold.otf",

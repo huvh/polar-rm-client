@@ -17,7 +17,7 @@ from PySide6.QtWidgets import QApplication
 
 from rm_client.runtime_paths import RuntimePaths
 from rm_client.ui.cs2_assets import (
-    Cs2Assets, FONT_IDS, IMAGE_IDS, SOUND_IDS, local_cs2_assets,
+    Cs2Assets, FONT_IDS, IMAGE_IDS, SOUND_IDS, SCOREBOARD_ADDON_IDS, local_cs2_assets,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -103,6 +103,24 @@ class BundledAssetsTests(unittest.TestCase):
             pack = self.load()
         self.assertTrue(pack.available)
         self.assertEqual(pack.root, target)
+        self.assertEqual(RuntimePaths.hash_tree(personal), before)
+
+    def test_old_personal_pack_cannot_hide_new_scoreboard_resources(self):
+        target = self.install()
+        personal = self.paths.user_data_root / 'cs2_ui_pack'
+        shutil.copytree(BUNDLE, personal)
+        manifest_path = personal / 'manifest.json'
+        manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+        for key in SCOREBOARD_ADDON_IDS:
+            entry = manifest['assets'].pop(key)
+            (personal / entry['file']).unlink()
+        manifest_path.write_text(json.dumps(manifest), encoding='utf-8')
+        before = RuntimePaths.hash_tree(personal)
+        pack = self.load()
+        self.assertEqual(pack.root, personal)
+        for key in SCOREBOARD_ADDON_IDS:
+            self.assertEqual(pack.paths[key].parent, target)
+        self.assertEqual(pack.paths['skull'].parent, personal)
         self.assertEqual(RuntimePaths.hash_tree(personal), before)
 
     def test_missing_both_packs_preserves_original_fallback(self):

@@ -187,6 +187,8 @@ class HeroLobPlanner:
         age = (now - telemetry_at if math.isfinite(now) and math.isfinite(telemetry_at)
                and 0 < telemetry_at <= now else math.inf)
         reasons: list[str] = []
+        if getattr(state,'rules_season',2026)==2027:
+            reasons.append('2027 rules removed the Hero deployment mechanic')
         if str(getattr(state, "robot_profile", "")) != "Hero":
             reasons.append("Hero profile required")
         if not hero_range_profile:

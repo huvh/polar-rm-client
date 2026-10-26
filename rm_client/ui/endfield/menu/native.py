@@ -74,8 +74,12 @@ class NativeApi:
 
 
 class EndfieldNativeMenu:
-    def __init__(self, pack: Path):
+    def __init__(self, pack: Path, *, renderer_pack: Path | None = None):
         self.pack = pack
+        # Executable code belongs to this application revision. An older
+        # user_data pack may still supply the same pinned scene/resources,
+        # but must not silently shadow a shipped native composition fix.
+        self.renderer_pack = renderer_pack if renderer_pack is not None else pack
         self.api = None
         self.handle = 0
         self.error = ""
@@ -92,7 +96,7 @@ class EndfieldNativeMenu:
             return
         self.attempted = True
         try:
-            self.api = NativeApi(library_path(self.pack))
+            self.api = NativeApi(library_path(self.renderer_pack))
             self.handle = int(self.api.create(parent, os.fsencode(self.pack / "native_source_runtime"), width, height, int(offscreen)))
             if not self.handle:
                 raise RuntimeError("Could not create source renderer owner")

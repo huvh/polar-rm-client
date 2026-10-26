@@ -1,0 +1,5 @@
+{
+  "status": "PASS",
+  "verified_files": 474,
+  "scope": "staged blob bytes equal manifest-validated workspace packages"
+}

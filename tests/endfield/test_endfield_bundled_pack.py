@@ -18,7 +18,7 @@ class EndfieldBundledPackTests(unittest.TestCase):
         self.assertEqual(report['status'], 'PACK_VALID')
         self.assertEqual(set(report['maps']), {'RMUC7v7', 'RMUL3v3', 'RMUL1v1'})
         files = read_json(pack / MANIFEST)['files']
-        # 可保留已校验的旧DLL版本；清单仍须精确覆盖所有文件，CURRENT只选一个。
+        # 清单精确覆盖当前构建；旧构建不作为发布依赖。
         self.assertGreaterEqual(len(files), 54)
         self.assertEqual(len([p for p in pack.rglob('*') if p.is_file()]), len(files)+1)
         self.assertEqual(library_path(pack).read_bytes()[:2], b'MZ')
@@ -33,6 +33,18 @@ class EndfieldBundledPackTests(unittest.TestCase):
             self.assertEqual(paths.endfield_menu_pack, ROOT / 'rm_client/ui/endfield/menu/assets')
             self.assertTrue(library_path(paths.endfield_menu_pack).is_file())
             self.assertFalse((Path(directory) / 'endfield_pack').exists())
+
+    def test_private_pack_does_not_shadow_shipped_native_bugfix(self):
+        with tempfile.TemporaryDirectory() as directory:
+            local = Path(directory) / 'endfield_pack'
+            renderer = local / 'native_renderer'
+            renderer.mkdir(parents=True)
+            (renderer / 'CURRENT.json').write_text('{"directory":"old-build"}')
+            paths = RuntimePaths.discover(module_file=ROOT / 'rm_client/runtime_paths.py',
+                frozen=False, environ={'POLAR_USER_DATA_ROOT': directory})
+            self.assertEqual(paths.endfield_menu_pack, local)
+            self.assertEqual(paths.endfield_renderer_pack, ROOT / 'rm_client/ui/endfield/menu/assets')
+            self.assertEqual((renderer / 'CURRENT.json').read_text(), '{"directory":"old-build"}')
 
 
 if __name__ == '__main__':
