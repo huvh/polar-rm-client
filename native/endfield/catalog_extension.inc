@@ -36,7 +36,16 @@ for(const auto* target:{"nowPlaying","reader","mediaAssembly"}){
     std::erase_if(entries_,[&](const auto& entry){return entry.action==*action;});
     for(auto& surface:surfaces_)surface.variants.erase(*action);
 }
-// 删项后条目会进入其他复用槽位；为新槽位复制同类的原版内容，保持图标及文字配对。
+// 交换左侧快捷键与右侧功能列表的导航动作，图标和标题随同一动作迁移。
+const auto hotkeys=actionForTarget("hotkeys"),notes=actionForTarget("notes");
+need(hotkeys.has_value()&&notes.has_value(),"Missing swapped client navigation target");
+const auto fixed=std::find_if(navigation_.fixedActions.begin(),navigation_.fixedActions.end(),
+    [&](const auto& entry){return entry.second==*hotkeys;});
+const auto right=std::find(navigation_.rightActions.begin(),navigation_.rightActions.end(),*notes);
+need(fixed!=navigation_.fixedActions.end()&&right!=navigation_.rightActions.end(),
+    "Missing swapped client navigation slot");
+std::swap(fixed->second,*right);
+// 删项及换位后条目会进入其他复用槽位；复制同类的原版内容，保持图标及文字配对。
 for(auto& surface:surfaces_)for(const auto& entry:entries_){
     if(surface.variants.contains(entry.action))continue;
     const Json* source=nullptr;

@@ -60,7 +60,7 @@ std::atomic<unsigned> live{};
 
 struct Action {const char* target;const char* en;const char* zh;int code;};
 constexpr Action actions[]{
-    {"system","Settings","系统设置",2},{"display","Display","显示设置",6},{"hotkeys","Key bindings","快捷键",5},{"about","Changelog","更新日志",7},
+    {"system","Settings","系统设置",2},{"display","Display","显示设置",6},{"hotkeys","Hotkeys","快捷键",5},{"about","Changelog","更新日志",7},
     {"storage","Inventory","模块背包",10},{"activityMonitor","Match readiness","比赛就绪",12},
     {"notes","ClickGUI","功能列表",11},{"fileShelf","Economy","经济补给",8},{"clipboard","Tactical map","战术地图",9},
     {"archive","HUD","战斗界面",13},{"minigame","Minecraft HUD","MC 战斗界面",15},
