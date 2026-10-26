@@ -143,11 +143,10 @@ class DialogServiceWiringTests(unittest.TestCase):
         editor.show()
         with patch.object(window.backend, "trigger_estop", wraps=window.backend.trigger_estop) as stop, \
              patch.object(window.backend, "arm_match_control") as arm:
-            QTest.keyClick(editor.canvas, Qt.Key.Key_F12)
+            QTest.keyClick(editor, Qt.Key.Key_F12)
             stop.assert_called_once_with()
             editor.reject()
-            editor.timeline.update(1)
-            editor._advance()
+            QTest.qWait(200)
             self.assertFalse(editor.isVisible())
             self.assertTrue(dialog.isVisible())
             QTest.keyClick(dialog.search, Qt.Key.Key_F12)
@@ -210,8 +209,7 @@ class DialogServiceWiringTests(unittest.TestCase):
         self.assertEqual(toast.call_args.kwargs, {"kind": "warning"})
         with patch.object(APP, "removeEventFilter", wraps=APP.removeEventFilter) as remove:
             dialog.reject()
-            dialog.timeline.update(1)
-            dialog._advance()
+            QTest.qWait(200)
         self.assertFalse(dialog.isVisible())
         remove.assert_called_once_with(dialog.estop_shortcut)
 

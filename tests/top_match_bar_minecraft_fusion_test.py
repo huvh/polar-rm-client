@@ -103,7 +103,7 @@ class MinecraftFusionTests(unittest.TestCase):
                      "draw_tactical_map_hud", "draw_buff_timeline_hud", "draw_minecraft_module_list",
                      "draw_module_list_hud", "draw_keybinds_strip", "draw_chassis_gimbal_indicator",
                      "draw_telemetry_strip", "draw_student_status", "draw_match_chat",
-                     "draw_quick_action_wheel", "draw_hero_deploy_interface"):
+                     "draw_quick_action_wheel"):
             setattr(owner, name, Mock())
         owner.top_match_bar = self.controller = TopMatchBarController(owner)
         self.assertTrue(owner.minecraft_hud.available)

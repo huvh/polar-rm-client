@@ -1,0 +1,107 @@
+{
+  "scope": "actual owned D3D rendering; no game/device/robot I/O",
+  "cases": [
+    {
+      "mode": "RMUC7v7",
+      "width": 1280,
+      "height": 720,
+      "chinese": false,
+      "image": "RMUC7v7_1280x720.png",
+      "stats": {
+        "frames": 107.0,
+        "last_ms": 0.36019999970449135,
+        "textures": 56.0,
+        "meshes": 57.0,
+        "owners": 1.0
+      }
+    },
+    {
+      "mode": "RMUC7v7",
+      "width": 2560,
+      "height": 1440,
+      "chinese": true,
+      "image": "RMUC7v7_2560x1440.png",
+      "stats": {
+        "frames": 232.0,
+        "last_ms": 0.41080000664805993,
+        "textures": 56.0,
+        "meshes": 57.0,
+        "owners": 1.0
+      }
+    },
+    {
+      "mode": "RMUL3v3",
+      "width": 1280,
+      "height": 720,
+      "chinese": false,
+      "image": "RMUL3v3_1280x720.png",
+      "stats": {
+        "frames": 337.0,
+        "last_ms": 0.30420000257436186,
+        "textures": 56.0,
+        "meshes": 57.0,
+        "owners": 1.0
+      }
+    },
+    {
+      "mode": "RMUL3v3",
+      "width": 2560,
+      "height": 1440,
+      "chinese": true,
+      "image": "RMUL3v3_2560x1440.png",
+      "stats": {
+        "frames": 457.0,
+        "last_ms": 0.4191999978502281,
+        "textures": 56.0,
+        "meshes": 57.0,
+        "owners": 1.0
+      }
+    },
+    {
+      "mode": "RMUL1v1",
+      "width": 1280,
+      "height": 720,
+      "chinese": false,
+      "image": "RMUL1v1_1280x720.png",
+      "stats": {
+        "frames": 564.0,
+        "last_ms": 0.3949999954784289,
+        "textures": 56.0,
+        "meshes": 57.0,
+        "owners": 1.0
+      }
+    },
+    {
+      "mode": "RMUL1v1",
+      "width": 2560,
+      "height": 1440,
+      "chinese": true,
+      "image": "RMUL1v1_2560x1440.png",
+      "stats": {
+        "frames": 690.0,
+        "last_ms": 0.4898999977740459,
+        "textures": 56.0,
+        "meshes": 57.0,
+        "owners": 1.0
+      }
+    }
+  ],
+  "pack": {
+    "status": "PACK_VALID",
+    "files": 57,
+    "maps": {
+      "RMUC7v7": 118677,
+      "RMUL3v3": 8971,
+      "RMUL1v1": 4860
+    },
+    "binary_sha256": "cc45f496848279df5c369c3e20c8a991fae9fd5a043b4366fcc8130aca5b1d3e",
+    "optional_boot": false,
+    "optional_audio": false,
+    "native_render_verified": false,
+    "limits": "Integrity/source check only; run verify_endfield_pack_runtime.py for owned D3D rendering. No hardware/match qualification."
+  },
+  "boot_audio_absent": true,
+  "owner_retired": true,
+  "status": "PASS",
+  "limits": "Not exact pixel parity, full app regression, throughput, packaging or match qualification."
+}

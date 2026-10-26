@@ -1,15 +1,13 @@
-"""CS2-style settings navigation backed by actual RM client settings.
+"""Endfield 设置中心，沿用既有偏好草稿、事务与输入安全服务。
 
-The installed game's settings.xml is a read-only layout reference, not executable
-code. No Valve ConVars or files are modified. Vehicle authorization switches are
-deliberately excluded: a preferences page must never act as an Arm shortcut.
+历史模块路径保留供旧调用者使用；表现层资源来自本机游戏只读导出。
 """
 from __future__ import annotations
 
 import logging
 
 from PySide6.QtCore import Qt, QEvent, QObject
-from PySide6.QtGui import QFont, QKeySequence, QShortcut
+from PySide6.QtGui import QFont, QKeySequence, QShortcut, QResizeEvent, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFormLayout, QGroupBox,
     QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPushButton, QScrollArea,
@@ -22,10 +20,11 @@ from ..configuration.transactions import ConfigurationApplyError, apply_configur
 from ..emergency_actions import request_emergency_stop
 from ..model import CONTROL_SLOT_ORDER, build_default_registry, Setting
 from .jello_locale import module_label, option_label, setting_label
-from .jello_widgets import JelloDialog, JelloCheckBox as QCheckBox, JelloComboBox as QComboBox, apply_jello_widgets, jello_font, use_jello_font_book
+from .endfield.settings.shell import EndfieldSettingsDialog as JelloDialog, apply_settings_widgets as apply_jello_widgets
+from .endfield.settings.widgets import EndfieldCheckBox as QCheckBox, EndfieldComboBox as QComboBox, SettingsTabBar, add_setting_row
 from .settings_preparation import SettingsBuildQueue
 from .preference_draft import PreferenceDraft
-from .jello_scroll import JelloScrollArea
+from .endfield.settings.scroll import EndfieldScrollArea as JelloScrollArea
 # Keep historical imports working while both dialogs use shared services.
 from .settings_application import (
     PAGES, settings_specs, preference_capabilities, validate_draft, apply_registry_draft,
@@ -122,6 +121,7 @@ class RegistrySettingsPage(JelloScrollArea):
         self.setWidgetResizable(True)
         self.content = QWidget(); self.setWidget(self.content)
         root = QVBoxLayout(self.content); root.setSpacing(22)
+        root.setContentsMargins(0,0,8,0)
         self.loading = QLabel("正在准备设置…")
         root.addWidget(self.loading)
         self.content.setEnabled(False)
@@ -220,10 +220,10 @@ class RegistrySettingsPage(JelloScrollArea):
         yield
 
     def add_row(self, form, module, title, widget, original=""):
-        label = QLabel(title); label.setMinimumWidth(240)
+        label = QLabel(title)
         apply_jello_widgets(label, stylesheet=False)
         apply_jello_widgets(widget, stylesheet=False)
-        form.addRow(label, widget)
+        add_setting_row(form, label, widget)
         record = (label, widget, f"{module} {title} {original}".casefold())
         self.search_rows.append(record); self.groups[-1][1].append(record)
 
@@ -232,6 +232,7 @@ class RegistrySettingsPage(JelloScrollArea):
         self._query = query
         for label, widget, text in self.search_rows:
             visible = not query or query in text
+            label.parentWidget().setVisible(visible)
             if label.isHidden() == visible: label.setVisible(visible)
             if widget.isHidden() == visible: widget.setVisible(visible)
         for group, rows in self.groups:
@@ -382,26 +383,32 @@ class CrosshairSettingsPage(JelloScrollArea):
 def build_settings_center(host):
     """Non-modal construction for visual/regression tests; open owns input lock."""
     from .cs2_video_settings import open_video_settings
-    use_jello_font_book(getattr(host, "fonts", None))
     dialog = JelloDialog(host)
     try:
-        dialog.setWindowTitle("POLAR · Jello 设置")
-        dialog.setObjectName("JelloSettingsCenter")
+        dialog.setWindowTitle("POLAR · Endfield 设置")
+        dialog.setObjectName("JelloSettingsCenter")  # 稳定的历史对象ID，供已有启动入口使用。
         screen = host.screen()
         available = screen.availableGeometry() if screen else host.rect()
-        dialog.resize(min(1280,available.width()-30,max(720,host.width()-20)),
-                      min(840,available.height()-40,max(540,host.height()-20)))
+        dialog.resize(max(720, host.width()), max(540, host.height()))
         dialog.setMinimumSize(720, 540)
         center = host.mapToGlobal(host.rect().center())
         dialog.move(max(available.left(), min(center.x() - dialog.width() // 2, available.right() - dialog.width())),
                     max(available.top(), min(center.y() - dialog.height() // 2, available.bottom() - dialog.height())))
         root = dialog.panel.layout()
-        top = QHBoxLayout(); root.addLayout(top)
-        title = QLabel("Jello · 设置"); title.setFont(jello_font(36,True)); title.setStyleSheet("font-size:36px;font-weight:500;color:#666666;"); top.addWidget(title)
-        top.addStretch()
+        dialog.heading = QLabel("//设置", dialog.panel)
+        dialog.close_button = QPushButton(dialog.panel)
+        from .endfield.settings.resources import ASSETS
+        from PySide6.QtCore import QSize
+        dialog.close_button.setObjectName("EndfieldSettingsClose")
+        dialog.close_button.setIcon(QIcon(str(ASSETS / "close.png")))
+        dialog.close_button.setIconSize(QSize(40,40))
+        dialog.close_button.setAccessibleName("关闭设置")
+        dialog.close_button.setToolTip("返回 · Esc")
+        dialog.close_button.clicked.connect(dialog.reject)
         search = QLineEdit(); search.setPlaceholderText("搜索鼠标、键位、声音、HUD…")
-        search.setMaximumWidth(370); top.addWidget(search)
+        search.setMaximumWidth(370)
         tabs = QTabWidget(); tabs.setObjectName("SettingsTabs"); root.addWidget(tabs, 1)
+        tabs.setTabBar(SettingsTabBar(tabs))
         video = open_video_settings(host, embedded=True); tabs.addTab(video, "视频")
         defaults = build_default_registry()
         # Lightweight shells preserve tab identity and drafts. Only the selected
@@ -412,12 +419,18 @@ def build_settings_center(host):
             pages[page] = widget; tabs.addTab(widget, page)
         crosshair_scroll = CrosshairSettingsPage(host)
         tabs.insertTab(4, crosshair_scroll, "准星")
+        for index in range(tabs.count()):
+            tabs.setTabToolTip(index, tabs.tabText(index))
+            tabs.tabBar().setAccessibleName("设置分类 · Q / E 切换")
         deferred_pages = (*pages.values(), crosshair_scroll)
         search.textChanged.connect(lambda text: [page.filter(text) for page in pages.values()])
         status = QLabel("F12 急停始终有效 · 设置不暂停裁判监测 · 返回后不会自动恢复操控")
-        status.setWordWrap(True); root.addWidget(status)
+        status.setProperty("hint",True)
+        status.setWordWrap(True)
+        info = QHBoxLayout(); info.addWidget(status, 1); info.addWidget(search); root.addLayout(info)
         row = QHBoxLayout(); root.addLayout(row)
-        reset = QPushButton("恢复当前页默认值"); row.addWidget(reset); row.addStretch()
+        reset_hint = QLabel("重置当前分类设置"); row.addWidget(reset_hint); row.addStretch()
+        reset = QPushButton("重置设置  ⟳"); row.addWidget(reset)
         apply = QPushButton("应用当前页"); back = QPushButton("返回")
         apply.setProperty("primary",True)
         row.addWidget(apply); row.addWidget(back)
@@ -443,13 +456,17 @@ def build_settings_center(host):
             ready = builder is None or builder.ready
             apply.setEnabled(ready); reset.setEnabled(ready)
         tabs.currentChanged.connect(current_changed)
+        tabs.currentChanged.connect(dialog.animate_page)
         for page in deferred_pages:
             page.builder.finished.connect(current_changed)
             dialog.finished.connect(page.builder.cancel)
         dialog.tabs, dialog.pages, dialog.crosshair = tabs, pages, crosshair_scroll
 
         dialog.search, dialog.status, dialog.apply_button = search, status, apply
+        dialog.reset_button = reset
+        dialog.install_header()
         apply_jello_widgets(dialog)
+        dialog.apply_layout_scale()
         dialog.estop_shortcut = install_estop_shortcut(dialog, host)
         return dialog
     except Exception as error:

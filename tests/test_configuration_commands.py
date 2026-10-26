@@ -42,8 +42,16 @@ class CommandHost(ConfigActionsMixin):
         }
         self.backend.controller_angles.config.mock_output = True
         self.backend.controller_angles.arm.return_value = (True, "fresh input required")
-        self.backend._sync_controller_angles.return_value = {
-            "valid": True, "armed": False, "forwarded": 2, "mock_forwarded": 3, "last_error": "none"}
+        self.backend.sync_controller_angles.side_effect = lambda registry: {
+            "mock_output": self.backend.controller_angles.config.mock_output,
+        }
+        self.backend.arm_controller_angles.side_effect = lambda registry: (
+            self.backend.sync_controller_angles(registry), self.backend.controller_angles.arm(),
+        )[1]
+        self.backend.disarm_controller_angles.side_effect = self.backend.controller_angles.disarm
+        self.backend.controller_angle_snapshot.side_effect = lambda: {
+            "angles": self.backend.controller_angles.stats(), "receiver": {},
+        }
         self.match_mode_manager = NS(current=NS(key="RMUC7v7"))
         self.scenario_manager = NS(current=NS(key="LabDebug"))
         self.economy_bridge = NS(latest=None)
@@ -99,7 +107,7 @@ class ConfigurationCommandTests(unittest.TestCase):
             "Import Config": "import_config_from_dialog", "Import Wallpaper": "import_wallpaper_from_dialog",
             "Reset Wallpaper": "reset_wallpaper_profile", "Restore Compact HUD": "restore_compact_hud",
             "Run DT7 Link Selftest": "run_dt7_link_selftest", "Rescan Serial Ports": "rescan_serial_ports",
-            "Run Wireless KM Selftest": "run_radio_km_selftest", "Open Deploy Interface": "open_hero_deploy_interface",
+            "Run Wireless KM Selftest": "run_radio_km_selftest",
         }
         for command, method in routes.items():
             with self.subTest(command=command):
@@ -151,7 +159,7 @@ class ConfigurationCommandTests(unittest.TestCase):
         commands = (
             "New Qualification Session", "Reset Qualification Session", "Run Preflight", "Run Video Test",
             "Run KMC Test", "Record DT7 Safety Test", "Run Economy Send Test", "Record E-Stop Test",
-            "Observe Firmware Zero", "Record Firmware Zero Test", "Run Loss Recovery Test", "Record Hero Test",
+            "Observe Firmware Zero", "Record Firmware Zero Test", "Run Loss Recovery Test",
             "Record Economy Test", "Review PRM1 Vision Schema", "Run PRM1 Vision Bench",
             "Review PRM1 Spin Schema", "Run PRM1 Spin Bench", "Start Match Soak", "Stop Match Soak",
             "Export Evidence", "Field Sign-off", "Arm Match Control", "Lock Match Control",
@@ -160,7 +168,7 @@ class ConfigurationCommandTests(unittest.TestCase):
             for command in commands:
                 self.host.handle_config_action(command)
                 qualification.assert_called_with(command)
-            self.assertEqual(qualification.call_count, 23)
+            self.assertEqual(qualification.call_count, 22)
 
     def test_lob_pitch_recomputes_residual_after_installing_bounded_offset(self):
         state = self.host.state
@@ -204,21 +212,63 @@ class ConfigurationCommandTests(unittest.TestCase):
         self.host.backend.release_estop.assert_called_once_with()
 
     def test_live_angle_arm_requires_exact_phrase_and_rechecks_after_dialog(self):
+        self.host._show_angle_diagnostic = Mock()
         link = self.host.backend.controller_angles
         link.config.mock_output = False
+        status = dict(armed=True, received=28, forwarded=0)
+        link.stats.return_value = status
         for answer in (("arm", True), ("ARM", False)):
             with patch(f"{MODULE}.QInputDialog.getText", return_value=answer):
                 self.host.handle_config_action("Arm Angle Forward")
         link.arm.assert_not_called()
-        self.host.backend._sync_controller_angles.reset_mock()
+        self.host.backend.field_log.emit.assert_not_called()
+        self.host.toast.assert_not_called()
+        self.host.backend.sync_controller_angles.reset_mock()
         with patch(f"{MODULE}.QInputDialog.getText", return_value=(" ARM ", True)):
             self.host.handle_config_action("Arm Angle Forward")
-        self.assertEqual(self.host.backend._sync_controller_angles.call_count, 2)
+        self.assertEqual(self.host.backend.sync_controller_angles.call_count, 2)
         link.arm.assert_called_once_with()
+        self.host._show_angle_diagnostic.assert_not_called()
+        self.host.toast.assert_called_once_with("角度转发已授权：fresh input required")
+        self.host.backend.field_log.emit.assert_called_once_with(
+            "controller_angle_arm", status=status, success=True, reason="fresh input required")
         self.host.handle_config_action("Disarm Angle Forward")
         link.disarm.assert_called_once_with()
         self.host.handle_config_action("Show Angle Status")
-        self.assertIn("真发=2 mock=3", self.host.toast.call_args.args[0])
+        self.host._show_angle_diagnostic.assert_called_with()
+
+    def test_failed_angle_arm_keeps_diagnostic_and_records_denial(self):
+        self.host._show_angle_diagnostic = Mock()
+        link = self.host.backend.controller_angles
+        link.arm.return_value = (False, "fresh valid angles are required")
+        status = dict(armed=False, received=0, forwarded=0)
+        link.stats.return_value = status
+
+        self.host.handle_config_action("Arm Angle Forward")
+
+        self.host._show_angle_diagnostic.assert_called_once_with(
+            "角度转发未授权：fresh valid angles are required")
+        self.host.toast.assert_not_called()
+        self.host.backend.field_log.emit.assert_called_once_with(
+            "controller_angle_arm", status=status, success=False,
+            reason="fresh valid angles are required")
+
+    def test_angle_diagnostic_persists_complete_receive_and_radio_snapshot(self):
+        link = self.host.backend.controller_angles
+        status = dict(rx_port="COM13", connected=True, output_route="Legacy Receiver",
+                      valid=True, armed=False, received=28, rejected=2, angles_rad=[1.25, 0, 0, 0, 0, 0],
+                      forwarded=0, mock_forwarded=0, last_error="MQTT stopped")
+        radio = dict(port="COM14", ready=True, angle_packets_written=0, angle_error="")
+        link.stats.return_value = status
+        self.host.backend.controller_angle_snapshot.side_effect = None
+        self.host.backend.controller_angle_snapshot.return_value = {"angles": status, "receiver": radio}
+        with patch(f"{MODULE}.QMessageBox.information") as dialog:
+            self.host._show_angle_diagnostic()
+        text = dialog.call_args.args[2]
+        for detail in ("COM13", "COM14", "有效接收=28", "拒收=2", "1.25000", "MQTT stopped"):
+            self.assertIn(detail, text)
+        self.host.backend.field_log.emit.assert_called_with(
+            "controller_angle_status", status=status, receiver=radio)
 
     def test_lob_stale_calibration_preserves_prior_flag_and_always_repaints(self):
         self.host.state.hero_lob_yaw_calibrated = True
@@ -323,7 +373,7 @@ class QualificationCommandTests(unittest.TestCase):
         self.host.economy_bridge.latest = NS(status="succeeded", request=NS(mock=False, timestamp=101))
         cases = {
             "Record E-Stop Test": "estop_robot_test", "Record Firmware Zero Test": "firmware_loss_zero_test",
-            "Run Loss Recovery Test": "loss_recovery_test", "Record Hero Test": "hero_deploy_status_test",
+            "Run Loss Recovery Test": "loss_recovery_test",
             "Record Economy Test": "economy_live_test",
         }
         for action, key in cases.items():

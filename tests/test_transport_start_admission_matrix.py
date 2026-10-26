@@ -41,8 +41,8 @@ class TransportStartAdmissionMatrixTests(unittest.TestCase):
                         started.append(worker)
                     # Run real Thread objects and native-session bookkeeping;
                     # replace only pipe I/O so synthetic fds cannot reach os.read.
-                    with patch('rm_client.backend.video_backend.resolve_ffmpeg_executable', return_value='ffmpeg'), \
-                         patch('rm_client.backend.video_backend.subprocess.Popen', return_value=process), \
+                    with patch('rm_client.backend.video.decoder.resolve_ffmpeg_executable', return_value='ffmpeg'), \
+                         patch('rm_client.backend.video.decoder.subprocess.Popen', return_value=process), \
                          patch.object(decoder, '_run_session_worker', return_value=None), \
                          patch('threading.Thread.start', new=admit):
                         self.assertFalse(decoder.start())

@@ -189,7 +189,7 @@ class DecoderLifecycleQualityTests(unittest.TestCase):
             return True
 
         with patch.object(decoder, "_close_session", side_effect=close), patch(
-            "rm_client.backend.video_backend.subprocess.Popen"
+            "rm_client.backend.video.decoder.subprocess.Popen"
         ) as popen, patch.dict(sys.modules, {"cv2": SimpleNamespace(), "numpy": SimpleNamespace()}):
             generation = decoder.lifecycle_generation
             worker = threading.Thread(target=lambda: decoder.restart(expected_generation=generation))
@@ -218,8 +218,8 @@ class DecoderLifecycleQualityTests(unittest.TestCase):
             release.wait(3)
             return proc
 
-        with patch("rm_client.backend.video_backend.resolve_ffmpeg_executable", return_value="ffmpeg"), patch(
-            "rm_client.backend.video_backend.subprocess.Popen", side_effect=spawn
+        with patch("rm_client.backend.video.decoder.resolve_ffmpeg_executable", return_value="ffmpeg"), patch(
+            "rm_client.backend.video.decoder.subprocess.Popen", side_effect=spawn
         ), patch.dict(sys.modules, {"cv2": SimpleNamespace(), "numpy": SimpleNamespace()}):
             worker = threading.Thread(target=decoder.start)
             worker.start()
@@ -241,7 +241,7 @@ class DecoderLifecycleQualityTests(unittest.TestCase):
         decoder = ContinuousMjpegDecoder()
         generation = decoder.lifecycle_generation
         decoder.stop()
-        with patch("rm_client.backend.video_backend.subprocess.Popen") as popen:
+        with patch("rm_client.backend.video.decoder.subprocess.Popen") as popen:
             self.assertFalse(decoder.restart(expected_generation=generation))
         popen.assert_not_called()
         self.assertEqual(decoder.restart_count, 0)
@@ -281,7 +281,7 @@ class DecoderLifecycleQualityTests(unittest.TestCase):
                     release.wait(3)
                     return b"late error" if loop == "_stderr_loop" else b""
 
-                with patch("rm_client.backend.video_backend.os.read", side_effect=read):
+                with patch("rm_client.backend.video.decoder.os.read", side_effect=read):
                     worker = threading.Thread(target=getattr(decoder, loop), args=(old,))
                     worker.start()
                     try:

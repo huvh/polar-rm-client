@@ -92,7 +92,7 @@ class WindowHarness:
         self.timer = NS(setInterval=record("timer.interval"))
         self.frame_scheduler = NS(force=record("frame.force"), should_request=lambda *args: True)
         self.gui_motion = NS(begin_frame=record("gui.begin"))
-        for name in ("polar_unified_scroll_motion", "economy_category_scroll", "economy_offers_scroll", "economy_detail_scroll", "quick_action_wheel", "gui_timeline", "jello_state", "polar_unified_morph", "economy_island", "hero_deploy_ui", "tactical_map_state", "dynamic_island_state"):
+        for name in ("polar_unified_scroll_motion", "economy_category_scroll", "economy_offers_scroll", "economy_detail_scroll", "quick_action_wheel", "gui_timeline", "jello_state", "polar_unified_morph", "economy_island", "tactical_map_state", "dynamic_island_state"):
             setattr(self, name, Motion(name, self.calls))
         self.polar_settings_scroll_motion = {"setting": Motion("setting", self.calls)}
         self.polar_unified_scroll = 0.0
@@ -135,7 +135,7 @@ class WindowHarness:
         self.startup_wallpaper = NS(set_active=record("wallpaper.active"))
         for name in ("flush_auto_save_if_due", "update_student_frontend", "invalidate_transient_overlay_scene", "update", "ensure_camera_started", "refresh_vision_runtime", "consume_capture_frame", "toast"):
             setattr(self, name, record(name))
-        for name, stage in (("update_backend_readiness", "backend.readiness"), ("update_hero_deploy_state", "hero.deploy"), ("update_hero_lob_guard", "hero.lob"), ("update_auto_spin_guard", "auto.spin"), ("consume_official_messages", "official.consume"), ("apply_official_state", "official.apply"), ("update_elimination_hit_info", "fx.hit_info"), ("sync_tongji_vision_state", "vision.sync"), ("process_vision_kill_events", "vision.events")):
+        for name, stage in (("update_backend_readiness", "backend.readiness"), ("update_hero_lob_guard", "hero.lob"), ("update_auto_spin_guard", "auto.spin"), ("consume_official_messages", "official.consume"), ("apply_official_state", "official.apply"), ("update_elimination_hit_info", "fx.hit_info"), ("sync_tongji_vision_state", "vision.sync"), ("process_vision_kill_events", "vision.events")):
             setattr(self, name, record(stage))
         self.anim_duration = lambda value: value
         self.combat_control_input_allowed = lambda: self.input_allowed
@@ -203,7 +203,7 @@ class WindowClockContractTests(unittest.TestCase):
         window = WindowHarness()
         window.tick()
         names = [entry[0] for entry in window.calls]
-        stages = ("control.75hz", "state.tick", "backend.tick", "backend.apply", "backend.readiness", "hero.deploy", "hero.lob", "auto.spin", "official.consume", "official.apply", "fx.hit_info", "vision.sync", "vision.events", "registry", "mqtt.link", "polar.link")
+        stages = ("control.75hz", "state.tick", "backend.tick", "backend.apply", "backend.readiness", "hero.lob", "auto.spin", "official.consume", "official.apply", "fx.hit_info", "vision.sync", "vision.events", "registry", "mqtt.link", "polar.link")
         self.assertEqual([name for name in names if name in stages], list(stages))
         self.assertTrue(window.state.camera_connected)
         self.assertTrue(window.state.mqtt_connected)

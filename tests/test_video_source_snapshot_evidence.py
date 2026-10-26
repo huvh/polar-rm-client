@@ -29,7 +29,7 @@ class VideoSourceOwnerEvidenceTests(unittest.TestCase):
         self.addCleanup(repair)
         native.proc.stdout.fail_close = hevc.proc.stderr.fail_close = sock.fail_close = True
         with patch('rm_client.transports.socket.socket', side_effect=AssertionError('real socket')), \
-             patch('rm_client.backend.video_backend.subprocess.Popen', side_effect=AssertionError('real process')):
+             patch('rm_client.backend.video.decoder.subprocess.Popen', side_effect=AssertionError('real process')):
             self.backend.set_active_video_source('Synthetic')
             self.join_closers()
             failed = self.backend.video_source_snapshot

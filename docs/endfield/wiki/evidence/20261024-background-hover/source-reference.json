@@ -1,0 +1,3627 @@
+{
+  "origin": "read-only local game export verified against current installed VFS bundles",
+  "clip_sources": [
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/animations/wiki/wiki_btnoption_select.anim",
+      "clip": "wiki_btnoption_select",
+      "object": -3590017310672649542,
+      "serialized_file": "CAB-8c63feebd4e44a54fad2050d90ed86dd",
+      "bundle": "Data/Bundles/Windows/main/f8ae5ed540ab02faccd58958.ab"
+    },
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/animations/wiki/wiki_btnoption_select_out.anim",
+      "clip": "wiki_btnoption_select_out",
+      "object": 7779121122604826044,
+      "serialized_file": "CAB-9bc22808cb215f9dfa1406de494e890f",
+      "bundle": "Data/Bundles/Windows/main/3ed0724ec3f690b425c1aedf.ab"
+    },
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/animations/wiki/wiki_uideco_in.anim",
+      "clip": "wiki_uideco_in",
+      "object": 2282682812665964896,
+      "serialized_file": "CAB-624aba541e7f5b5d6e566a313ddaae4d",
+      "bundle": "Data/Bundles/Windows/main/70c82e6e1b0c9026026659e3.ab"
+    },
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/animations/wiki/wiki_uideco_loop.anim",
+      "clip": "wiki_uideco_loop",
+      "object": -9201442267719591218,
+      "serialized_file": "CAB-012a6cb9db64a67167fc04e0084b127f",
+      "bundle": "Data/Bundles/Windows/main/8ded53537439bc5f03140db3.ab"
+    }
+  ],
+  "prefab_sources": [
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/widgets/wikibtnoptionwidget.prefab",
+      "bundle": "Data/Bundles/Windows/main/9c8db74934fc35562f2877ee.ab"
+    },
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/prefabs/wiki/wiki_uideco.prefab",
+      "bundle": "Data/Bundles/Windows/main/e7a9a2777d11a247eef23bf6.ab"
+    }
+  ],
+  "rotation_tracks": [
+    {
+      "path": "DecoDecoRing",
+      "sample_count": 7199,
+      "first": {
+        "time": 0.0,
+        "value": {
+          "x": -0.0,
+          "y": -0.0,
+          "z": -0.0,
+          "w": -1.0
+        },
+        "inSlope": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.02618357539176941,
+          "w": 7.152556918299524e-06
+        },
+        "outSlope": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.02618357539176941,
+          "w": 7.152556918299524e-06
+        },
+        "weightedMode": 0,
+        "inWeight": {
+          "x": 0.3333333432674408,
+          "y": 0.3333333432674408,
+          "z": 0.3333333432674408,
+          "w": 0.3333333432674408
+        },
+        "outWeight": {
+          "x": 0.3333333432674408,
+          "y": 0.3333333432674408,
+          "z": 0.3333333432674408,
+          "w": 0.3333333432674408
+        }
+      },
+      "last": {
+        "time": 119.98332977294922,
+        "value": {
+          "x": -0.0,
+          "y": -0.0,
+          "z": -8.742277657347586e-08,
+          "w": 1.0
+        },
+        "inSlope": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": -0.026199277490377426,
+          "w": 8.059662832238246e-06
+        },
+        "outSlope": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": -0.026199277490377426,
+          "w": 8.059662832238246e-06
+        },
+        "weightedMode": 0,
+        "inWeight": {
+          "x": 0.3333333432674408,
+          "y": 0.3333333432674408,
+          "z": 0.3333333432674408,
+          "w": 0.3333333432674408
+        },
+        "outWeight": {
+          "x": 0.3333333432674408,
+          "y": 0.3333333432674408,
+          "z": 0.3333333432674408,
+          "w": 0.3333333432674408
+        }
+      }
+    },
+    {
+      "path": "DecoDot1",
+      "sample_count": 7199,
+      "first": {
+        "time": 0.0,
+        "value": {
+          "x": -0.0,
+          "y": -0.0,
+          "z": -0.0,
+          "w": -1.0
+        },
+        "inSlope": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.02618357539176941,
+          "w": 7.152556918299524e-06
+        },
+        "outSlope": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.02618357539176941,
+          "w": 7.152556918299524e-06
+        },
+        "weightedMode": 0,
+        "inWeight": {
+          "x": 0.3333333432674408,
+          "y": 0.3333333432674408,
+          "z": 0.3333333432674408,
+          "w": 0.3333333432674408
+        },
+        "outWeight": {
+          "x": 0.3333333432674408,
+          "y": 0.3333333432674408,
+          "z": 0.3333333432674408,
+          "w": 0.3333333432674408
+        }
+      },
+      "last": {
+        "time": 119.98332977294922,
+        "value": {
+          "x": -0.0,
+          "y": -0.0,
+          "z": -8.742277657347586e-08,
+          "w": 1.0
+        },
+        "inSlope": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": -0.026199277490377426,
+          "w": 8.059662832238246e-06
+        },
+        "outSlope": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": -0.026199277490377426,
+          "w": 8.059662832238246e-06
+        },
+        "weightedMode": 0,
+        "inWeight": {
+          "x": 0.3333333432674408,
+          "y": 0.3333333432674408,
+          "z": 0.3333333432674408,
+          "w": 0.3333333432674408
+        },
+        "outWeight": {
+          "x": 0.3333333432674408,
+          "y": 0.3333333432674408,
+          "z": 0.3333333432674408,
+          "w": 0.3333333432674408
+        }
+      }
+    },
+    {
+      "path": "DecoDot2",
+      "sample_count": 7199,
+      "first": {
+        "time": 0.0,
+        "value": {
+          "x": -0.0,
+          "y": -0.0,
+          "z": -0.0,
+          "w": -1.0
+        },
+        "inSlope": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.02618357539176941,
+          "w": 7.152556918299524e-06
+        },
+        "outSlope": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.02618357539176941,
+          "w": 7.152556918299524e-06
+        },
+        "weightedMode": 0,
+        "inWeight": {
+          "x": 0.3333333432674408,
+          "y": 0.3333333432674408,
+          "z": 0.3333333432674408,
+          "w": 0.3333333432674408
+        },
+        "outWeight": {
+          "x": 0.3333333432674408,
+          "y": 0.3333333432674408,
+          "z": 0.3333333432674408,
+          "w": 0.3333333432674408
+        }
+      },
+      "last": {
+        "time": 119.98332977294922,
+        "value": {
+          "x": -0.0,
+          "y": -0.0,
+          "z": -8.742277657347586e-08,
+          "w": 1.0
+        },
+        "inSlope": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": -0.026199277490377426,
+          "w": 8.059662832238246e-06
+        },
+        "outSlope": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": -0.026199277490377426,
+          "w": 8.059662832238246e-06
+        },
+        "weightedMode": 0,
+        "inWeight": {
+          "x": 0.3333333432674408,
+          "y": 0.3333333432674408,
+          "z": 0.3333333432674408,
+          "w": 0.3333333432674408
+        },
+        "outWeight": {
+          "x": 0.3333333432674408,
+          "y": 0.3333333432674408,
+          "z": 0.3333333432674408,
+          "w": 0.3333333432674408
+        }
+      }
+    },
+    {
+      "path": "DecoRingNode2",
+      "sample_count": 7199,
+      "first": {
+        "time": 0.0,
+        "value": {
+          "x": -0.0,
+          "y": -0.0,
+          "z": -1.0,
+          "w": 4.371138828673793e-08
+        },
+        "inSlope": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0,
+          "w": 0.013089179061353207
+        },
+        "outSlope": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0,
+          "w": 0.013089179061353207
+        },
+        "weightedMode": 0,
+        "inWeight": {
+          "x": 0.3333333432674408,
+          "y": 0.3333333432674408,
+          "z": 0.3333333432674408,
+          "w": 0.3333333432674408
+        },
+        "outWeight": {
+          "x": 0.3333333432674408,
+          "y": 0.3333333432674408,
+          "z": 0.3333333432674408,
+          "w": 0.3333333432674408
+        }
+      },
+      "last": {
+        "time": 119.98332977294922,
+        "value": {
+          "x": -0.0,
+          "y": -0.0,
+          "z": 8.742277657347586e-08,
+          "w": 1.0
+        },
+        "inSlope": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.013099638745188713,
+          "w": 2.6865543532039737e-06
+        },
+        "outSlope": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.013099638745188713,
+          "w": 2.6865543532039737e-06
+        },
+        "weightedMode": 0,
+        "inWeight": {
+          "x": 0.3333333432674408,
+          "y": 0.3333333432674408,
+          "z": 0.3333333432674408,
+          "w": 0.3333333432674408
+        },
+        "outWeight": {
+          "x": 0.3333333432674408,
+          "y": 0.3333333432674408,
+          "z": 0.3333333432674408,
+          "w": 0.3333333432674408
+        }
+      }
+    },
+    {
+      "path": "DecoRingNode1",
+      "sample_count": 7199,
+      "first": {
+        "time": 0.0,
+        "value": {
+          "x": -0.0,
+          "y": -0.0,
+          "z": -0.0,
+          "w": -1.0
+        },
+        "inSlope": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": -0.013091787695884705,
+          "w": 0.0
+        },
+        "outSlope": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": -0.013091787695884705,
+          "w": 0.0
+        },
+        "weightedMode": 0,
+        "inWeight": {
+          "x": 0.3333333432674408,
+          "y": 0.3333333432674408,
+          "z": 0.3333333432674408,
+          "w": 0.3333333432674408
+        },
+        "outWeight": {
+          "x": 0.3333333432674408,
+          "y": 0.3333333432674408,
+          "z": 0.3333333432674408,
+          "w": 0.3333333432674408
+        }
+      },
+      "last": {
+        "time": 119.98332977294922,
+        "value": {
+          "x": -0.0,
+          "y": -0.0,
+          "z": -1.0,
+          "w": 4.371138828673793e-08
+        },
+        "inSlope": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": -2.6865543532039737e-06,
+          "w": 0.013099638745188713
+        },
+        "outSlope": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": -2.6865543532039737e-06,
+          "w": 0.013099638745188713
+        },
+        "weightedMode": 0,
+        "inWeight": {
+          "x": 0.3333333432674408,
+          "y": 0.3333333432674408,
+          "z": 0.3333333432674408,
+          "w": 0.3333333432674408
+        },
+        "outWeight": {
+          "x": 0.3333333432674408,
+          "y": 0.3333333432674408,
+          "z": 0.3333333432674408,
+          "w": 0.3333333432674408
+        }
+      }
+    }
+  ],
+  "background_hierarchy": {
+    "path": "BgDecoLayout",
+    "transform": {
+      "m_AnchoredPosition": {
+        "x": 0.0,
+        "y": 6.0
+      },
+      "m_SizeDelta": {
+        "x": 1010.0,
+        "y": 1010.0
+      },
+      "m_Pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "m_LocalScale": {
+        "x": 1.0,
+        "y": 1.0,
+        "z": 1.0
+      },
+      "m_LocalRotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      }
+    },
+    "color": {
+      "r": 1,
+      "g": 1,
+      "b": 1,
+      "a": 1
+    },
+    "alpha": 1,
+    "children": [
+      {
+        "path": "BgDecoLayout/DecoDeco1",
+        "transform": {
+          "m_AnchoredPosition": {
+            "x": 0.0,
+            "y": -35.959999084472656
+          },
+          "m_SizeDelta": {
+            "x": 2351.0,
+            "y": 1186.9000244140625
+          },
+          "m_Pivot": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "m_LocalScale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          },
+          "m_LocalRotation": {
+            "x": -0.0,
+            "y": -0.0,
+            "z": -0.0,
+            "w": 1.0
+          }
+        },
+        "color": {
+          "r": 0.1921568661928177,
+          "g": 0.1921568661928177,
+          "b": 0.1921568661928177,
+          "a": 0.10196078568696976
+        },
+        "alpha": 1,
+        "children": [],
+        "image": "scene_DecoDeco1"
+      },
+      {
+        "path": "BgDecoLayout/DecoDeco2",
+        "transform": {
+          "m_AnchoredPosition": {
+            "x": 167.60000610351562,
+            "y": -226.25
+          },
+          "m_SizeDelta": {
+            "x": 49.0,
+            "y": 43.0
+          },
+          "m_Pivot": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "m_LocalScale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          },
+          "m_LocalRotation": {
+            "x": -0.0,
+            "y": -0.0,
+            "z": -0.0,
+            "w": 1.0
+          }
+        },
+        "color": {
+          "r": 1.0,
+          "g": 1.0,
+          "b": 1.0,
+          "a": 0.501960813999176
+        },
+        "alpha": 1,
+        "children": [],
+        "image": "scene_DecoDeco2"
+      },
+      {
+        "path": "BgDecoLayout/DecoDeco2 (1)",
+        "transform": {
+          "m_AnchoredPosition": {
+            "x": -242.0,
+            "y": 64.0
+          },
+          "m_SizeDelta": {
+            "x": 49.0,
+            "y": 43.0
+          },
+          "m_Pivot": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "m_LocalScale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          },
+          "m_LocalRotation": {
+            "x": -0.0,
+            "y": -0.0,
+            "z": -0.0,
+            "w": 1.0
+          }
+        },
+        "color": {
+          "r": 1.0,
+          "g": 1.0,
+          "b": 1.0,
+          "a": 0.501960813999176
+        },
+        "alpha": 1,
+        "children": [],
+        "image": "scene_DecoDeco2_1"
+      },
+      {
+        "path": "BgDecoLayout/DecoDeco4",
+        "transform": {
+          "m_AnchoredPosition": {
+            "x": 0.0,
+            "y": -500.0
+          },
+          "m_SizeDelta": {
+            "x": 2700.0,
+            "y": 16.0
+          },
+          "m_Pivot": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "m_LocalScale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          },
+          "m_LocalRotation": {
+            "x": -0.0,
+            "y": -0.0,
+            "z": -0.0,
+            "w": 1.0
+          }
+        },
+        "color": {
+          "r": 0.5773584842681885,
+          "g": 0.5773584842681885,
+          "b": 0.5773584842681885,
+          "a": 1.0
+        },
+        "alpha": 1,
+        "children": [],
+        "image": "scene_DecoDeco4"
+      },
+      {
+        "path": "BgDecoLayout/DecoRingNode1",
+        "transform": {
+          "m_AnchoredPosition": {
+            "x": 0.0,
+            "y": 0.0
+          },
+          "m_SizeDelta": {
+            "x": 50.0,
+            "y": 50.0
+          },
+          "m_Pivot": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "m_LocalScale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          },
+          "m_LocalRotation": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0,
+            "w": 1.0
+          }
+        },
+        "color": {
+          "r": 1,
+          "g": 1,
+          "b": 1,
+          "a": 1
+        },
+        "alpha": 1,
+        "children": [
+          {
+            "path": "BgDecoLayout/DecoRingNode1/DecoDeco3",
+            "transform": {
+              "m_AnchoredPosition": {
+                "x": 0.0,
+                "y": -387.6220703125
+              },
+              "m_SizeDelta": {
+                "x": 30.0,
+                "y": 21.0
+              },
+              "m_Pivot": {
+                "x": 0.26978346705436707,
+                "y": 0.8791150450706482
+              },
+              "m_LocalScale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+              },
+              "m_LocalRotation": {
+                "x": -0.0,
+                "y": -0.0,
+                "z": -0.0,
+                "w": 1.0
+              }
+            },
+            "color": {
+              "r": 0.14716970920562744,
+              "g": 0.14716970920562744,
+              "b": 0.14716970920562744,
+              "a": 0.501960813999176
+            },
+            "alpha": 1,
+            "children": [],
+            "image": "scene_DecoDeco3"
+          }
+        ]
+      },
+      {
+        "path": "BgDecoLayout/DecoRingNode2",
+        "transform": {
+          "m_AnchoredPosition": {
+            "x": 0.0,
+            "y": 0.0
+          },
+          "m_SizeDelta": {
+            "x": 50.0,
+            "y": 50.0
+          },
+          "m_Pivot": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "m_LocalScale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          },
+          "m_LocalRotation": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 1.0,
+            "w": 0.0
+          }
+        },
+        "color": {
+          "r": 1,
+          "g": 1,
+          "b": 1,
+          "a": 1
+        },
+        "alpha": 1,
+        "children": [
+          {
+            "path": "BgDecoLayout/DecoRingNode2/DecoDeco3",
+            "transform": {
+              "m_AnchoredPosition": {
+                "x": 0.0,
+                "y": -387.6221008300781
+              },
+              "m_SizeDelta": {
+                "x": 30.0,
+                "y": 21.0
+              },
+              "m_Pivot": {
+                "x": 0.26978346705436707,
+                "y": 0.8791150450706482
+              },
+              "m_LocalScale": {
+                "x": -1.0,
+                "y": 1.0,
+                "z": 1.0
+              },
+              "m_LocalRotation": {
+                "x": -0.0,
+                "y": -0.0,
+                "z": -0.0,
+                "w": 1.0
+              }
+            },
+            "color": {
+              "r": 0.41886788606643677,
+              "g": 0.41886788606643677,
+              "b": 0.41886788606643677,
+              "a": 0.2980392277240753
+            },
+            "alpha": 1,
+            "children": [],
+            "image": "scene_DecoDeco3"
+          }
+        ]
+      },
+      {
+        "path": "BgDecoLayout/DecoDot1",
+        "transform": {
+          "m_AnchoredPosition": {
+            "x": 0.0,
+            "y": 0.0
+          },
+          "m_SizeDelta": {
+            "x": 1744.0,
+            "y": 1744.0
+          },
+          "m_Pivot": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "m_LocalScale": {
+            "x": 0.9999999403953552,
+            "y": 0.9999999403953552,
+            "z": 1.0
+          },
+          "m_LocalRotation": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0,
+            "w": 1.0
+          }
+        },
+        "color": {
+          "r": 0.13962268829345703,
+          "g": 0.13962268829345703,
+          "b": 0.13962268829345703,
+          "a": 0.2549019753932953
+        },
+        "alpha": 1,
+        "children": [],
+        "image": "scene_DecoDot1"
+      },
+      {
+        "path": "BgDecoLayout/DecoDot2",
+        "transform": {
+          "m_AnchoredPosition": {
+            "x": 0.0,
+            "y": 0.0
+          },
+          "m_SizeDelta": {
+            "x": 716.0,
+            "y": 716.0
+          },
+          "m_Pivot": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "m_LocalScale": {
+            "x": 0.9999999403953552,
+            "y": 0.9999999403953552,
+            "z": 1.0
+          },
+          "m_LocalRotation": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0,
+            "w": 1.0
+          }
+        },
+        "color": {
+          "r": 0.13962268829345703,
+          "g": 0.13962268829345703,
+          "b": 0.13962268829345703,
+          "a": 0.2549019753932953
+        },
+        "alpha": 1,
+        "children": [],
+        "image": "scene_DecoDot2"
+      },
+      {
+        "path": "BgDecoLayout/DecoDecoLogo",
+        "transform": {
+          "m_AnchoredPosition": {
+            "x": 0.0,
+            "y": 0.0
+          },
+          "m_SizeDelta": {
+            "x": 564.0,
+            "y": 488.0
+          },
+          "m_Pivot": {
+            "x": 0.5,
+            "y": 0.6499999761581421
+          },
+          "m_LocalScale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          },
+          "m_LocalRotation": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0,
+            "w": 1.0
+          }
+        },
+        "color": {
+          "r": 1.0,
+          "g": 1.0,
+          "b": 1.0,
+          "a": 0.4000000059604645
+        },
+        "alpha": 1,
+        "children": [],
+        "image": "scene_DecoDecoLogo"
+      },
+      {
+        "path": "BgDecoLayout/DecoDecoRing",
+        "transform": {
+          "m_AnchoredPosition": {
+            "x": 0.0,
+            "y": 0.0
+          },
+          "m_SizeDelta": {
+            "x": 1080.0,
+            "y": 1080.0
+          },
+          "m_Pivot": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "m_LocalScale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          },
+          "m_LocalRotation": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": -0.31448954343795776,
+            "w": 0.949260950088501
+          }
+        },
+        "color": {
+          "r": 0.0,
+          "g": 0.0,
+          "b": 0.0,
+          "a": 0.0313725508749485
+        },
+        "alpha": 1,
+        "children": [
+          {
+            "path": "BgDecoLayout/DecoDecoRing/DecoDecoRing (2)",
+            "transform": {
+              "m_AnchoredPosition": {
+                "x": 0.002910614013671875,
+                "y": 0.009124755859375
+              },
+              "m_SizeDelta": {
+                "x": 1080.0,
+                "y": 1080.0
+              },
+              "m_Pivot": {
+                "x": 0.5,
+                "y": 0.5
+              },
+              "m_LocalScale": {
+                "x": 1.0396841764450073,
+                "y": 1.039685606956482,
+                "z": 1.0396032333374023
+              },
+              "m_LocalRotation": {
+                "x": -0.0,
+                "y": -0.0,
+                "z": -0.9428161382675171,
+                "w": -0.33331334590911865
+              }
+            },
+            "color": {
+              "r": 0.0,
+              "g": 0.0,
+              "b": 0.0,
+              "a": 0.0313725508749485
+            },
+            "alpha": 1,
+            "children": [],
+            "image": "scene_DecoDecoRing_2"
+          }
+        ],
+        "image": "scene_DecoDecoRing"
+      },
+      {
+        "path": "BgDecoLayout/DecoDecoMap",
+        "transform": {
+          "m_AnchoredPosition": {
+            "x": -64.0,
+            "y": -5.0
+          },
+          "m_SizeDelta": {
+            "x": 870.0,
+            "y": 874.0
+          },
+          "m_Pivot": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "m_LocalScale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          },
+          "m_LocalRotation": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0,
+            "w": 1.0
+          }
+        },
+        "color": {
+          "r": 0.14716970920562744,
+          "g": 0.14716970920562744,
+          "b": 0.14716970920562744,
+          "a": 0.2980392277240753
+        },
+        "alpha": 1,
+        "children": [],
+        "image": "scene_DecoDecoMap"
+      }
+    ]
+  },
+  "selected_node_geometry": {
+    "LeftPointImage": {
+      "path": "SelectNode/LeftPointImage",
+      "transform": {
+        "m_AnchoredPosition": {
+          "x": 0.0,
+          "y": 3.0
+        },
+        "m_SizeDelta": {
+          "x": 8.0,
+          "y": 8.0
+        },
+        "m_Pivot": {
+          "x": 1.0,
+          "y": 0.0
+        },
+        "m_LocalScale": {
+          "x": 1.0,
+          "y": 1.0,
+          "z": 1.0
+        },
+        "m_LocalRotation": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0,
+          "w": 1.0
+        }
+      },
+      "color": {
+        "r": 0.0235294122248888,
+        "g": 0.0235294122248888,
+        "b": 0.0235294122248888,
+        "a": 1.0
+      },
+      "alpha": 1,
+      "children": []
+    },
+    "RightPointImage": {
+      "path": "SelectNode/RightPointImage",
+      "transform": {
+        "m_AnchoredPosition": {
+          "x": 0.0,
+          "y": 3.0
+        },
+        "m_SizeDelta": {
+          "x": 8.0,
+          "y": 8.0
+        },
+        "m_Pivot": {
+          "x": 0.0,
+          "y": 0.0
+        },
+        "m_LocalScale": {
+          "x": 1.0,
+          "y": 1.0,
+          "z": 1.0
+        },
+        "m_LocalRotation": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0,
+          "w": 1.0
+        }
+      },
+      "color": {
+        "r": 0.0235294122248888,
+        "g": 0.0235294122248888,
+        "b": 0.0235294122248888,
+        "a": 1.0
+      },
+      "alpha": 1,
+      "children": []
+    },
+    "ImgDeco1": {
+      "path": "SelectNode/ImgDeco1",
+      "transform": {
+        "m_AnchoredPosition": {
+          "x": -125.0,
+          "y": 199.0
+        },
+        "m_SizeDelta": {
+          "x": 14.0,
+          "y": 12.0
+        },
+        "m_Pivot": {
+          "x": 0.0,
+          "y": 0.5
+        },
+        "m_LocalScale": {
+          "x": 1.0,
+          "y": 1.0,
+          "z": 1.0
+        },
+        "m_LocalRotation": {
+          "x": -0.0,
+          "y": -0.0,
+          "z": -0.0,
+          "w": 1.0
+        }
+      },
+      "color": {
+        "r": 0.4470588266849518,
+        "g": 0.4470588266849518,
+        "b": 0.4470588266849518,
+        "a": 1.0
+      },
+      "alpha": 1,
+      "children": []
+    },
+    "ImgDeco2": {
+      "path": "SelectNode/ImgDeco2",
+      "transform": {
+        "m_AnchoredPosition": {
+          "x": 131.0,
+          "y": -91.0
+        },
+        "m_SizeDelta": {
+          "x": 14.0,
+          "y": 12.0
+        },
+        "m_Pivot": {
+          "x": 1.0,
+          "y": 0.5
+        },
+        "m_LocalScale": {
+          "x": 1.0,
+          "y": 1.0,
+          "z": 1.0
+        },
+        "m_LocalRotation": {
+          "x": -0.0,
+          "y": -0.0,
+          "z": -0.0,
+          "w": 1.0
+        }
+      },
+      "color": {
+        "r": 0.4470588266849518,
+        "g": 0.4470588266849518,
+        "b": 0.4470588266849518,
+        "a": 1.0
+      },
+      "alpha": 1,
+      "children": []
+    },
+    "ImgTriangle1": {
+      "path": "SelectNode/ImgTriangle1",
+      "transform": {
+        "m_AnchoredPosition": {
+          "x": 0.0,
+          "y": -59.0
+        },
+        "m_SizeDelta": {
+          "x": 17.0,
+          "y": 14.0
+        },
+        "m_Pivot": {
+          "x": 0.5,
+          "y": 0.5
+        },
+        "m_LocalScale": {
+          "x": 1.0,
+          "y": 1.0,
+          "z": 1.0
+        },
+        "m_LocalRotation": {
+          "x": -0.0,
+          "y": -0.0,
+          "z": -0.0,
+          "w": 1.0
+        }
+      },
+      "color": {
+        "r": 0.9921568632125854,
+        "g": 0.9921568632125854,
+        "b": 0.0941176488995552,
+        "a": 1.0
+      },
+      "alpha": 1,
+      "children": []
+    },
+    "ImgTriangle2": {
+      "path": "SelectNode/ImgTriangle2",
+      "transform": {
+        "m_AnchoredPosition": {
+          "x": 0.0,
+          "y": -74.0
+        },
+        "m_SizeDelta": {
+          "x": 17.0,
+          "y": 14.0
+        },
+        "m_Pivot": {
+          "x": 0.5,
+          "y": 0.5
+        },
+        "m_LocalScale": {
+          "x": 1.0,
+          "y": 1.0,
+          "z": 1.0
+        },
+        "m_LocalRotation": {
+          "x": -0.0,
+          "y": -0.0,
+          "z": -0.0,
+          "w": 1.0
+        }
+      },
+      "color": {
+        "r": 0.9921568632125854,
+        "g": 0.9921568632125854,
+        "b": 0.0941176488995552,
+        "a": 1.0
+      },
+      "alpha": 1,
+      "children": []
+    }
+  },
+  "selected_scalar_tracks": [
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.44999998807907104,
+            "value": 84.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.75,
+            "value": 199.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 3,
+            "inWeight": 1.0,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_AnchoredPosition.y",
+      "path": "ImgDeco1",
+      "classID": 224,
+      "script": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.3333333432674408,
+            "value": 50.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.44999998807907104,
+            "value": 14.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 3,
+            "inWeight": 1.0,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_SizeDelta.x",
+      "path": "ImgDeco1",
+      "classID": 224,
+      "script": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.44999998807907104,
+            "value": 84.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.75,
+            "value": -91.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 3,
+            "inWeight": 1.0,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_AnchoredPosition.y",
+      "path": "ImgDeco2",
+      "classID": 224,
+      "script": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.3333333432674408,
+            "value": 50.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.44999998807907104,
+            "value": 14.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 3,
+            "inWeight": 1.0,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_SizeDelta.x",
+      "path": "ImgDeco2",
+      "classID": 224,
+      "script": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.38333332538604736,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.75,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_Color.a",
+      "path": "ImgDeco4",
+      "classID": 114,
+      "script": {
+        "m_FileID": 1,
+        "m_PathID": -4167318944366303535
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.38333332538604736,
+            "value": 140.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.75,
+            "value": 338.0,
+            "inSlope": -0.7365542054176331,
+            "outSlope": -0.7365542054176331,
+            "weightedMode": 3,
+            "inWeight": 1.0,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_AnchoredPosition.y",
+      "path": "ImgDeco4",
+      "classID": 224,
+      "script": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.38333332538604736,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.75,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_Color.a",
+      "path": "ImgDeco5",
+      "classID": 114,
+      "script": {
+        "m_FileID": 1,
+        "m_PathID": -4167318944366303535
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.38333332538604736,
+            "value": -137.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.75,
+            "value": -332.1815185546875,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 3,
+            "inWeight": 1.0,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_AnchoredPosition.y",
+      "path": "ImgDeco5",
+      "classID": 224,
+      "script": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.6333333253860474,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.6666666865348816,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.699999988079071,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.7333333492279053,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_Color.a",
+      "path": "ImgTriangle1",
+      "classID": 114,
+      "script": {
+        "m_FileID": 1,
+        "m_PathID": -4167318944366303535
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.7333333492279053,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.7666666507720947,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.800000011920929,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.8333333134651184,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_Color.a",
+      "path": "ImgTriangle2",
+      "classID": 114,
+      "script": {
+        "m_FileID": 1,
+        "m_PathID": -4167318944366303535
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.0,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.3333333432674408,
+            "value": 0.10000000149011612,
+            "inSlope": 0.5333333611488342,
+            "outSlope": 0.5333333611488342,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.75,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_Color.a",
+      "path": "ImgBg",
+      "classID": 114,
+      "script": {
+        "m_FileID": 1,
+        "m_PathID": -4167318944366303535
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.0,
+            "value": 1.0,
+            "inSlope": "Infinity",
+            "outSlope": "Infinity",
+            "weightedMode": 0,
+            "inWeight": 0.0,
+            "outWeight": 0.0
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_IsActive",
+      "path": "ImgBgBlackmask",
+      "classID": 1,
+      "script": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.0,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.0833333358168602,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_Alpha",
+      "path": "ImgBgBlackmask",
+      "classID": 225,
+      "script": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.0,
+            "value": 1.0,
+            "inSlope": "Infinity",
+            "outSlope": "Infinity",
+            "weightedMode": 0,
+            "inWeight": 0.0,
+            "outWeight": 0.0
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_IsActive",
+      "path": "Mask/ImgIconVFX",
+      "classID": 1,
+      "script": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.0,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.18333333730697632,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.30000001192092896,
+            "value": 0.800000011920929,
+            "inSlope": -1.6551722288131714,
+            "outSlope": -1.6551722288131714,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.6666666865348816,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_Color.a",
+      "path": "Mask/ImgIconVFX",
+      "classID": 114,
+      "script": {
+        "m_FileID": 1,
+        "m_PathID": 5811777990414324376
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.05000000074505806,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.10000000149011612,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_Color.a",
+      "path": "ImgDeco1",
+      "classID": 114,
+      "script": {
+        "m_FileID": 1,
+        "m_PathID": -4167318944366303535
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.05000000074505806,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.10000000149011612,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_Color.a",
+      "path": "ImgDeco2",
+      "classID": 114,
+      "script": {
+        "m_FileID": 1,
+        "m_PathID": -4167318944366303535
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.0,
+            "value": 1.0,
+            "inSlope": "Infinity",
+            "outSlope": "Infinity",
+            "weightedMode": 0,
+            "inWeight": 0.0,
+            "outWeight": 0.0
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_IsActive",
+      "path": "ImgNumberVFX2",
+      "classID": 1,
+      "script": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.0,
+            "value": 1.0,
+            "inSlope": "Infinity",
+            "outSlope": "Infinity",
+            "weightedMode": 0,
+            "inWeight": 0.0,
+            "outWeight": 0.0
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_IsActive",
+      "path": "ImgIconVFX2",
+      "classID": 1,
+      "script": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.18333333730697632,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.20000000298023224,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.3166666626930237,
+            "value": 0.20000000298023224,
+            "inSlope": -3.4285712242126465,
+            "outSlope": -3.4285712242126465,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.4333333373069763,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_Color.a",
+      "path": "ImgNumberVFX2",
+      "classID": 114,
+      "script": {
+        "m_FileID": 1,
+        "m_PathID": -4167318944366303535
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.0833333358168602,
+            "value": 1000.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 3,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.5,
+            "value": 200.0,
+            "inSlope": -0.0,
+            "outSlope": -0.0,
+            "weightedMode": 3,
+            "inWeight": 1.0,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_Softness.y",
+      "path": "ImgBgBlackmask",
+      "classID": 114,
+      "script": {
+        "m_FileID": 1,
+        "m_PathID": 536591447201701790
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.0833333358168602,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.30000001192092896,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.5833333134651184,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_Color.r",
+      "path": "Mask/ImgIcon",
+      "classID": 114,
+      "script": {
+        "m_FileID": 1,
+        "m_PathID": -4167318944366303535
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.0833333358168602,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.30000001192092896,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.5833333134651184,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_Color.g",
+      "path": "Mask/ImgIcon",
+      "classID": 114,
+      "script": {
+        "m_FileID": 1,
+        "m_PathID": -4167318944366303535
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.0833333358168602,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.30000001192092896,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.5833333134651184,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_Color.b",
+      "path": "Mask/ImgIcon",
+      "classID": 114,
+      "script": {
+        "m_FileID": 1,
+        "m_PathID": -4167318944366303535
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.0833333358168602,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.18333333730697632,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.5833333134651184,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_Color.a",
+      "path": "Mask/ImgIcon",
+      "classID": 114,
+      "script": {
+        "m_FileID": 1,
+        "m_PathID": -4167318944366303535
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.0,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.01666666753590107,
+            "value": 0.5,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.18333333730697632,
+            "value": 0.30000001192092896,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.20000000298023224,
+            "value": 0.30000001192092896,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.5833333134651184,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_Color.a",
+      "path": "ImgIconVFX2",
+      "classID": 114,
+      "script": {
+        "m_FileID": 1,
+        "m_PathID": -4167318944366303535
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.0833333358168602,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.5,
+            "value": 0.30000001192092896,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.75,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_Color.a",
+      "path": "ImgBgSlash",
+      "classID": 114,
+      "script": {
+        "m_FileID": 1,
+        "m_PathID": 5811777990414324376
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.0,
+            "value": 1.0,
+            "inSlope": "Infinity",
+            "outSlope": "Infinity",
+            "weightedMode": 0,
+            "inWeight": 0.0,
+            "outWeight": 0.0
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_IsActive",
+      "path": "ImgBgSlash",
+      "classID": 1,
+      "script": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.18333333730697632,
+            "value": 0.4490565061569214,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.23333333432674408,
+            "value": 0.8415094017982483,
+            "inSlope": 4.722372531890869,
+            "outSlope": 4.722372531890869,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.30000001192092896,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "_propertiesColor2.r",
+      "path": "Mask/ImgIconVFX",
+      "classID": 114,
+      "script": {
+        "m_FileID": 1,
+        "m_PathID": 6677602529694647435
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.18333333730697632,
+            "value": 0.4490565061569214,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.23333333432674408,
+            "value": 0.8415094017982483,
+            "inSlope": 4.722372531890869,
+            "outSlope": 4.722372531890869,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.30000001192092896,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "_propertiesColor2.g",
+      "path": "Mask/ImgIconVFX",
+      "classID": 114,
+      "script": {
+        "m_FileID": 1,
+        "m_PathID": 6677602529694647435
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.18333333730697632,
+            "value": 0.4490565061569214,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.23333333432674408,
+            "value": 0.8415094017982483,
+            "inSlope": 4.722372531890869,
+            "outSlope": 4.722372531890869,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.30000001192092896,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "_propertiesColor2.b",
+      "path": "Mask/ImgIconVFX",
+      "classID": 114,
+      "script": {
+        "m_FileID": 1,
+        "m_PathID": 6677602529694647435
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.5,
+            "value": 0.07000000029802322,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_Color.r",
+      "path": "ImgBgSlash",
+      "classID": 114,
+      "script": {
+        "m_FileID": 1,
+        "m_PathID": 5811777990414324376
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.5,
+            "value": 0.07000000029802322,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_Color.g",
+      "path": "ImgBgSlash",
+      "classID": 114,
+      "script": {
+        "m_FileID": 1,
+        "m_PathID": 5811777990414324376
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.5,
+            "value": 0.07000000029802322,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_Color.b",
+      "path": "ImgBgSlash",
+      "classID": 114,
+      "script": {
+        "m_FileID": 1,
+        "m_PathID": 5811777990414324376
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.21666666865348816,
+            "value": 0.501960813999176,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.23333333432674408,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.3499999940395355,
+            "value": 0.501960813999176,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_Color.a",
+      "path": "ImgDeco3",
+      "classID": 114,
+      "script": {
+        "m_FileID": 1,
+        "m_PathID": -4167318944366303535
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.21666666865348816,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.23333333432674408,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.3499999940395355,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_Color.r",
+      "path": "ImgDeco3",
+      "classID": 114,
+      "script": {
+        "m_FileID": 1,
+        "m_PathID": -4167318944366303535
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.21666666865348816,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.23333333432674408,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.3499999940395355,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_Color.g",
+      "path": "ImgDeco3",
+      "classID": 114,
+      "script": {
+        "m_FileID": 1,
+        "m_PathID": -4167318944366303535
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.21666666865348816,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.23333333432674408,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.3499999940395355,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_Color.b",
+      "path": "ImgDeco3",
+      "classID": 114,
+      "script": {
+        "m_FileID": 1,
+        "m_PathID": -4167318944366303535
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.18333333730697632,
+            "value": 0.29019609093666077,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.20000000298023224,
+            "value": 0.4470588266849518,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_Color.r",
+      "path": "ImgDeco1",
+      "classID": 114,
+      "script": {
+        "m_FileID": 1,
+        "m_PathID": -4167318944366303535
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.18333333730697632,
+            "value": 0.29019609093666077,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.20000000298023224,
+            "value": 0.4470588266849518,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_Color.g",
+      "path": "ImgDeco1",
+      "classID": 114,
+      "script": {
+        "m_FileID": 1,
+        "m_PathID": -4167318944366303535
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.18333333730697632,
+            "value": 0.29019609093666077,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.20000000298023224,
+            "value": 0.4470588266849518,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_Color.b",
+      "path": "ImgDeco1",
+      "classID": 114,
+      "script": {
+        "m_FileID": 1,
+        "m_PathID": -4167318944366303535
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.18333333730697632,
+            "value": 0.29019609093666077,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.20000000298023224,
+            "value": 0.4470588266849518,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_Color.r",
+      "path": "ImgDeco2",
+      "classID": 114,
+      "script": {
+        "m_FileID": 1,
+        "m_PathID": -4167318944366303535
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.18333333730697632,
+            "value": 0.29019609093666077,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.20000000298023224,
+            "value": 0.4470588266849518,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_Color.g",
+      "path": "ImgDeco2",
+      "classID": 114,
+      "script": {
+        "m_FileID": 1,
+        "m_PathID": -4167318944366303535
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.18333333730697632,
+            "value": 0.29019609093666077,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.20000000298023224,
+            "value": 0.4470588266849518,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_Color.b",
+      "path": "ImgDeco2",
+      "classID": 114,
+      "script": {
+        "m_FileID": 1,
+        "m_PathID": -4167318944366303535
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.0,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.01666666753590107,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.18333333730697632,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_Color.r",
+      "path": "ImgIconVFX2",
+      "classID": 114,
+      "script": {
+        "m_FileID": 1,
+        "m_PathID": -4167318944366303535
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.0,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.01666666753590107,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.18333333730697632,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_Color.g",
+      "path": "ImgIconVFX2",
+      "classID": 114,
+      "script": {
+        "m_FileID": 1,
+        "m_PathID": -4167318944366303535
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.0,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.01666666753590107,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.18333333730697632,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_Color.b",
+      "path": "ImgIconVFX2",
+      "classID": 114,
+      "script": {
+        "m_FileID": 1,
+        "m_PathID": -4167318944366303535
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.0,
+            "value": 160.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 3,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.5,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 3,
+            "inWeight": 1.0,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_AnchoredPosition.x",
+      "path": "RightPointImage",
+      "classID": 224,
+      "script": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.0,
+            "value": -160.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 3,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.5,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 3,
+            "inWeight": 1.0,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_AnchoredPosition.x",
+      "path": "LeftPointImage",
+      "classID": 224,
+      "script": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.0,
+            "value": 0.699999988079071,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.5833333134651184,
+            "value": 0.699999988079071,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.6333333253860474,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.6833333373069763,
+            "value": 0.699999988079071,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.75,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_Color.a",
+      "path": "Deco8Image",
+      "classID": 114,
+      "script": {
+        "m_FileID": 1,
+        "m_PathID": -4167318944366303535
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.0,
+            "value": 0.699999988079071,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.4833333194255829,
+            "value": 0.699999988079071,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.5333333611488342,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.5833333134651184,
+            "value": 0.699999988079071,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.6833333373069763,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_Color.a",
+      "path": "Deco9Image",
+      "classID": 114,
+      "script": {
+        "m_FileID": 1,
+        "m_PathID": -4167318944366303535
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.5,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.5333333611488342,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.5666666626930237,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.6166666746139526,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_Color.a",
+      "path": "ImgDeco6",
+      "classID": 114,
+      "script": {
+        "m_FileID": 1,
+        "m_PathID": -4167318944366303535
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.36666667461395264,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.4000000059604645,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.4333333373069763,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.46666666865348816,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_Color.a",
+      "path": "ImgDeco7",
+      "classID": 114,
+      "script": {
+        "m_FileID": 1,
+        "m_PathID": -4167318944366303535
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.4333333373069763,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.46666666865348816,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.5,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.5333333611488342,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_Color.a",
+      "path": "ImgDeco8",
+      "classID": 114,
+      "script": {
+        "m_FileID": 1,
+        "m_PathID": -4167318944366303535
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.3333333432674408,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.36666667461395264,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.4000000059604645,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.46666666865348816,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_Color.a",
+      "path": "ImgDeco9",
+      "classID": 114,
+      "script": {
+        "m_FileID": 1,
+        "m_PathID": -4167318944366303535
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.4333333373069763,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.46666666865348816,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.5,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.5333333611488342,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_Color.a",
+      "path": "ImgDeco10",
+      "classID": 114,
+      "script": {
+        "m_FileID": 1,
+        "m_PathID": -4167318944366303535
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.3333333432674408,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.36666667461395264,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.4000000059604645,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.4333333373069763,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_Color.a",
+      "path": "ImgDeco11",
+      "classID": 114,
+      "script": {
+        "m_FileID": 1,
+        "m_PathID": -4167318944366303535
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.46666666865348816,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.5,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.5333333611488342,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.5666666626930237,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_Color.a",
+      "path": "ImgDeco12",
+      "classID": 114,
+      "script": {
+        "m_FileID": 1,
+        "m_PathID": -4167318944366303535
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.5333333611488342,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.5666666626930237,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.6000000238418579,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.6333333253860474,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_Color.a",
+      "path": "ImgDeco13",
+      "classID": 114,
+      "script": {
+        "m_FileID": 1,
+        "m_PathID": -4167318944366303535
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.0,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.18333333730697632,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_Color.a",
+      "path": "LeftPointImage",
+      "classID": 114,
+      "script": {
+        "m_FileID": 1,
+        "m_PathID": -4167318944366303535
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.0,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.18333333730697632,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_Color.a",
+      "path": "RightPointImage",
+      "classID": 114,
+      "script": {
+        "m_FileID": 1,
+        "m_PathID": -4167318944366303535
+      }
+    }
+  ],
+  "gpu_verification": "Real Windows/OpenGL at 100% and 150% DPR; 50ms image pixel samples prove the center darkens before the edges.",
+  "runtime_smoke": "python tests/gpu_renderer_runtime_smoke.py: GPU renderer runtime smoke passed",
+  "adaptation": "Source world UI is projected into the terminal canvas; VFX appearance is adapted with source alpha/color tracks and image masks rather than embedding game-specific materials."
+}

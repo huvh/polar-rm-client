@@ -145,7 +145,7 @@ class CaptureOutputTests(unittest.TestCase):
     def test_import_has_no_directory_writes_or_native_construction(self):
         self.assertTrue(callable(self.load_capture().main))
 
-    def test_windows_location_is_preserved_and_posix_output_is_ignored(self):
+    def test_windows_location_is_preserved_and_posix_output_is_visible(self):
         self.assertEqual(str(self.load_capture("win32").OUT), r"C:\tmp\polar-rm-validation")
         relative = "tmp_economy_live_capture/probe.png"
         for platform in ("linux", "darwin"):
@@ -155,8 +155,8 @@ class CaptureOutputTests(unittest.TestCase):
             ["git", "-c", "core.excludesFile=", "check-ignore", "--no-index", "--", relative],
             cwd=ROOT, capture_output=True, text=True, timeout=15,
         )
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout.strip(), relative)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertEqual(result.stdout.strip(), "")
 
     def test_help_does_not_create_output(self):
         module = self.load_capture()

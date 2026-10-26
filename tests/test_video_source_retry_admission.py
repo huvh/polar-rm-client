@@ -78,9 +78,9 @@ class VideoSourceRetryAdmissionTests(unittest.TestCase):
         resource = 'Native 0x0310' if source == 'native' else 'UDP/HEVC'
         proc = PipeHeldProcess()
         self.addCleanup(proc.release)
-        with patch('rm_client.backend.video_backend.subprocess.Popen', return_value=proc), \
-             patch('rm_client.backend.video_backend.resolve_ffmpeg_executable', return_value='ffmpeg'), \
-             patch('rm_client.backend.video_backend.os.read', side_effect=proc.read):
+        with patch('rm_client.backend.video.decoder.subprocess.Popen', return_value=proc), \
+             patch('rm_client.backend.video.decoder.resolve_ffmpeg_executable', return_value='ffmpeg'), \
+             patch('rm_client.backend.video.decoder.os.read', side_effect=proc.read):
             try:
                 self.assertTrue(decoder.start())
                 self.assertTrue(proc.reader_entered.wait(1))

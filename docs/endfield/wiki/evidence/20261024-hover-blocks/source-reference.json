@@ -1,0 +1,1238 @@
+{
+  "origin": "read-only installed game VFS, bundle offsets/length/MD5 verified during current rebuild",
+  "sources": [
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/widgets/wikibtnoptionwidget.prefab",
+      "bundle": "Data/Bundles/Windows/main/9c8db74934fc35562f2877ee.ab"
+    },
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/animations/wiki/wiki_btnoption_select.anim",
+      "bundle": "Data/Bundles/Windows/main/f8ae5ed540ab02faccd58958.ab",
+      "object": -3590017310672649542
+    },
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/animations/wiki/wiki_btnoption_select_out.anim",
+      "bundle": "Data/Bundles/Windows/main/3ed0724ec3f690b425c1aedf.ab",
+      "object": 7779121122604826044
+    },
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/animations/wiki/wiki_btnoption_in.anim",
+      "bundle": "Data/Bundles/Windows/main/5c6a82f826f5822440bfacf8.ab",
+      "object": 4108286174981655957
+    },
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/animations/wiki/wiki_in.anim",
+      "bundle": "Data/Bundles/Windows/main/2dd54a01358dbc155fbb3b7c.ab",
+      "object": 6833132018013214468
+    },
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/wikipanel.prefab",
+      "bundle": "Data/Bundles/Windows/main/9cb527d9924ad9aeffb3a577.ab"
+    }
+  ],
+  "verified_game_bundles": [
+    {
+      "bundle": "Data/Bundles/Windows/main/9cb527d9924ad9aeffb3a577.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\1D1687FD22E1DA19349E550B959537C5.chk",
+      "offset": 1001949269,
+      "length": 384149,
+      "md5": "0e46805360b2fcd3b80b5161a3709495",
+      "sha256": "f223a87af8861d0d193f9c4e6ab7dfab54e032fe1de9fc47716ad79f94d78211"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/2dd54a01358dbc155fbb3b7c.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 432235149,
+      "length": 7873,
+      "md5": "49914c10bd87dad7b913f5eaec745068",
+      "sha256": "90609a084381a38c5595abbb6e58f6ba9feaf6bba318f4af21e6972ae6fe1073"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/3ed0724ec3f690b425c1aedf.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 437936738,
+      "length": 7980,
+      "md5": "64db1508c3bb3c480959f5d6423893ae",
+      "sha256": "a23039dd65f92c94c90b6bae5b7f2d94f8e7cea0bd789585e3426e529f91ca27"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/5c6a82f826f5822440bfacf8.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 410595791,
+      "length": 7608,
+      "md5": "af1f494ed15d3811a92a5a155595a469",
+      "sha256": "f5efde5d60fc698791e4c5f6389fc61954e7d45b77c539695fec5eca766bdfeb"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/9c8db74934fc35562f2877ee.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 848737172,
+      "length": 25897,
+      "md5": "de65c6924c0f6d14e6156052bbde4cc6",
+      "sha256": "32eb47fd9891a7481511de4c22c7c0e45a62229550dac4f99347dc0af339340f"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/f8ae5ed540ab02faccd58958.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 462069426,
+      "length": 8589,
+      "md5": "a1393d311194103f167091c5e6b92fff",
+      "sha256": "95722ea7f6c3bbee4c144c3557673e3dea27e5b105387fce35ff1f15e59ff2a6"
+    }
+  ],
+  "nodes": [
+    {
+      "name": "RightPointImage",
+      "transform": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": -6565737223846918041
+        },
+        "m_LocalRotation": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0,
+          "w": 1.0
+        },
+        "m_LocalPosition": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "m_LocalScale": {
+          "x": 1.0,
+          "y": 1.0,
+          "z": 1.0
+        },
+        "m_Children": [],
+        "m_Father": {
+          "m_FileID": 0,
+          "m_PathID": -4467877554551551897
+        },
+        "m_AnchorMin": {
+          "x": 0.0,
+          "y": 1.0
+        },
+        "m_AnchorMax": {
+          "x": 0.0,
+          "y": 1.0
+        },
+        "m_AnchoredPosition": {
+          "x": 0.0,
+          "y": 3.0
+        },
+        "m_SizeDelta": {
+          "x": 8.0,
+          "y": 8.0
+        },
+        "m_Pivot": {
+          "x": 0.0,
+          "y": 0.0
+        }
+      },
+      "graphic": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": -6565737223846918041
+        },
+        "m_Enabled": 1,
+        "m_Script": {
+          "m_FileID": 1,
+          "m_PathID": -4167318944366303535
+        },
+        "m_Name": "",
+        "m_Material": {
+          "m_FileID": 0,
+          "m_PathID": 0
+        },
+        "m_Color": {
+          "r": 0.0235294122248888,
+          "g": 0.0235294122248888,
+          "b": 0.0235294122248888,
+          "a": 1.0
+        },
+        "m_RaycastTarget": 0,
+        "m_RaycastPadding": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0,
+          "w": 0.0
+        },
+        "m_RaycastIgnoreMask": 0,
+        "m_Maskable": 1,
+        "m_OnCullStateChanged": {
+          "m_PersistentCalls": {
+            "m_Calls": []
+          }
+        },
+        "m_Sprite": {
+          "m_FileID": 11,
+          "m_PathID": -4694853232896180352
+        },
+        "m_Type": 1,
+        "m_PreserveAspect": 0,
+        "m_FillCenter": 1,
+        "m_FillMethod": 4,
+        "m_FillAmount": 1.0,
+        "m_FillClockwise": 1,
+        "m_FillOrigin": 0,
+        "m_UseSpriteMesh": 0,
+        "m_PixelsPerUnitMultiplier": 1.0,
+        "m_DynamicAtlasActiveMode": 0,
+        "_packIntoRuntimeAtlas": 1,
+        "_atlasHandleId": 0,
+        "_referencedImages": [],
+        "enableAutoImgUsePathReference": 1,
+        "imgUsePathReference": 0,
+        "imgRefPath": ""
+      }
+    },
+    {
+      "name": "LeftPointImage",
+      "transform": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 8914445962633185383
+        },
+        "m_LocalRotation": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0,
+          "w": 1.0
+        },
+        "m_LocalPosition": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "m_LocalScale": {
+          "x": 1.0,
+          "y": 1.0,
+          "z": 1.0
+        },
+        "m_Children": [],
+        "m_Father": {
+          "m_FileID": 0,
+          "m_PathID": -4467877554551551897
+        },
+        "m_AnchorMin": {
+          "x": 1.0,
+          "y": 1.0
+        },
+        "m_AnchorMax": {
+          "x": 1.0,
+          "y": 1.0
+        },
+        "m_AnchoredPosition": {
+          "x": 0.0,
+          "y": 3.0
+        },
+        "m_SizeDelta": {
+          "x": 8.0,
+          "y": 8.0
+        },
+        "m_Pivot": {
+          "x": 1.0,
+          "y": 0.0
+        }
+      },
+      "graphic": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 8914445962633185383
+        },
+        "m_Enabled": 1,
+        "m_Script": {
+          "m_FileID": 1,
+          "m_PathID": -4167318944366303535
+        },
+        "m_Name": "",
+        "m_Material": {
+          "m_FileID": 0,
+          "m_PathID": 0
+        },
+        "m_Color": {
+          "r": 0.0235294122248888,
+          "g": 0.0235294122248888,
+          "b": 0.0235294122248888,
+          "a": 1.0
+        },
+        "m_RaycastTarget": 0,
+        "m_RaycastPadding": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0,
+          "w": 0.0
+        },
+        "m_RaycastIgnoreMask": 0,
+        "m_Maskable": 1,
+        "m_OnCullStateChanged": {
+          "m_PersistentCalls": {
+            "m_Calls": []
+          }
+        },
+        "m_Sprite": {
+          "m_FileID": 11,
+          "m_PathID": -4694853232896180352
+        },
+        "m_Type": 1,
+        "m_PreserveAspect": 0,
+        "m_FillCenter": 1,
+        "m_FillMethod": 4,
+        "m_FillAmount": 1.0,
+        "m_FillClockwise": 1,
+        "m_FillOrigin": 0,
+        "m_UseSpriteMesh": 0,
+        "m_PixelsPerUnitMultiplier": 1.0,
+        "m_DynamicAtlasActiveMode": 0,
+        "_packIntoRuntimeAtlas": 1,
+        "_atlasHandleId": 0,
+        "_referencedImages": [],
+        "enableAutoImgUsePathReference": 1,
+        "imgUsePathReference": 0,
+        "imgRefPath": ""
+      }
+    },
+    {
+      "name": "ImgDeco1",
+      "transform": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": -5467632565032089497
+        },
+        "m_LocalRotation": {
+          "x": -0.0,
+          "y": -0.0,
+          "z": -0.0,
+          "w": 1.0
+        },
+        "m_LocalPosition": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "m_LocalScale": {
+          "x": 1.0,
+          "y": 1.0,
+          "z": 1.0
+        },
+        "m_Children": [],
+        "m_Father": {
+          "m_FileID": 0,
+          "m_PathID": -4467877554551551897
+        },
+        "m_AnchorMin": {
+          "x": 0.5,
+          "y": 0.5
+        },
+        "m_AnchorMax": {
+          "x": 0.5,
+          "y": 0.5
+        },
+        "m_AnchoredPosition": {
+          "x": -125.0,
+          "y": 199.0
+        },
+        "m_SizeDelta": {
+          "x": 14.0,
+          "y": 12.0
+        },
+        "m_Pivot": {
+          "x": 0.0,
+          "y": 0.5
+        }
+      },
+      "graphic": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": -5467632565032089497
+        },
+        "m_Enabled": 1,
+        "m_Script": {
+          "m_FileID": 1,
+          "m_PathID": -4167318944366303535
+        },
+        "m_Name": "",
+        "m_Material": {
+          "m_FileID": 0,
+          "m_PathID": 0
+        },
+        "m_Color": {
+          "r": 0.4470588266849518,
+          "g": 0.4470588266849518,
+          "b": 0.4470588266849518,
+          "a": 1.0
+        },
+        "m_RaycastTarget": 0,
+        "m_RaycastPadding": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0,
+          "w": 0.0
+        },
+        "m_RaycastIgnoreMask": 0,
+        "m_Maskable": 1,
+        "m_OnCullStateChanged": {
+          "m_PersistentCalls": {
+            "m_Calls": []
+          }
+        },
+        "m_Sprite": {
+          "m_FileID": 11,
+          "m_PathID": -4694853232896180352
+        },
+        "m_Type": 1,
+        "m_PreserveAspect": 0,
+        "m_FillCenter": 1,
+        "m_FillMethod": 4,
+        "m_FillAmount": 1.0,
+        "m_FillClockwise": 1,
+        "m_FillOrigin": 0,
+        "m_UseSpriteMesh": 0,
+        "m_PixelsPerUnitMultiplier": 1.0,
+        "m_DynamicAtlasActiveMode": 0,
+        "_packIntoRuntimeAtlas": 1,
+        "_atlasHandleId": 0,
+        "_referencedImages": [],
+        "enableAutoImgUsePathReference": 1,
+        "imgUsePathReference": 0,
+        "imgRefPath": ""
+      }
+    },
+    {
+      "name": "ImgDeco2",
+      "transform": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 5975163685826234471
+        },
+        "m_LocalRotation": {
+          "x": -0.0,
+          "y": -0.0,
+          "z": -0.0,
+          "w": 1.0
+        },
+        "m_LocalPosition": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "m_LocalScale": {
+          "x": 1.0,
+          "y": 1.0,
+          "z": 1.0
+        },
+        "m_Children": [],
+        "m_Father": {
+          "m_FileID": 0,
+          "m_PathID": -4467877554551551897
+        },
+        "m_AnchorMin": {
+          "x": 0.5,
+          "y": 0.5
+        },
+        "m_AnchorMax": {
+          "x": 0.5,
+          "y": 0.5
+        },
+        "m_AnchoredPosition": {
+          "x": 131.0,
+          "y": -91.0
+        },
+        "m_SizeDelta": {
+          "x": 14.0,
+          "y": 12.0
+        },
+        "m_Pivot": {
+          "x": 1.0,
+          "y": 0.5
+        }
+      },
+      "graphic": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 5975163685826234471
+        },
+        "m_Enabled": 1,
+        "m_Script": {
+          "m_FileID": 1,
+          "m_PathID": -4167318944366303535
+        },
+        "m_Name": "",
+        "m_Material": {
+          "m_FileID": 0,
+          "m_PathID": 0
+        },
+        "m_Color": {
+          "r": 0.4470588266849518,
+          "g": 0.4470588266849518,
+          "b": 0.4470588266849518,
+          "a": 1.0
+        },
+        "m_RaycastTarget": 0,
+        "m_RaycastPadding": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0,
+          "w": 0.0
+        },
+        "m_RaycastIgnoreMask": 0,
+        "m_Maskable": 1,
+        "m_OnCullStateChanged": {
+          "m_PersistentCalls": {
+            "m_Calls": []
+          }
+        },
+        "m_Sprite": {
+          "m_FileID": 11,
+          "m_PathID": -4694853232896180352
+        },
+        "m_Type": 1,
+        "m_PreserveAspect": 0,
+        "m_FillCenter": 1,
+        "m_FillMethod": 4,
+        "m_FillAmount": 1.0,
+        "m_FillClockwise": 1,
+        "m_FillOrigin": 0,
+        "m_UseSpriteMesh": 0,
+        "m_PixelsPerUnitMultiplier": 1.0,
+        "m_DynamicAtlasActiveMode": 0,
+        "_packIntoRuntimeAtlas": 1,
+        "_atlasHandleId": 0,
+        "_referencedImages": [],
+        "enableAutoImgUsePathReference": 1,
+        "imgUsePathReference": 0,
+        "imgRefPath": ""
+      }
+    }
+  ],
+  "layout": {
+    "cell_width": 320.0,
+    "spacing": 1.5,
+    "select_transform": {
+      "m_AnchorMin": {
+        "x": 0.0,
+        "y": 0.0
+      },
+      "m_AnchorMax": {
+        "x": 1.0,
+        "y": 1.0
+      },
+      "m_AnchoredPosition": {
+        "x": 0.0,
+        "y": 0.0
+      },
+      "m_SizeDelta": {
+        "x": 4.0,
+        "y": 0.0
+      },
+      "m_Pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "m_LocalScale": {
+        "x": 1.0,
+        "y": 1.0,
+        "z": 1.0
+      },
+      "m_LocalRotation": {
+        "x": -0.0,
+        "y": -0.0,
+        "z": -0.0,
+        "w": 1.0
+      }
+    }
+  },
+  "tracks": {
+    "wiki_btnoption_select": [
+      {
+        "curve": {
+          "m_Curve": [
+            {
+              "time": 0.44999998807907104,
+              "value": 84.0,
+              "inSlope": 0.0,
+              "outSlope": 0.0,
+              "weightedMode": 0,
+              "inWeight": 0.3333333432674408,
+              "outWeight": 0.3333333432674408
+            },
+            {
+              "time": 0.75,
+              "value": 199.0,
+              "inSlope": 0.0,
+              "outSlope": 0.0,
+              "weightedMode": 3,
+              "inWeight": 1.0,
+              "outWeight": 0.3333333432674408
+            }
+          ],
+          "m_PreInfinity": 2,
+          "m_PostInfinity": 2,
+          "m_RotationOrder": 4
+        },
+        "attribute": "m_AnchoredPosition.y",
+        "path": "ImgDeco1",
+        "classID": 224,
+        "script": {
+          "m_FileID": 0,
+          "m_PathID": 0
+        }
+      },
+      {
+        "curve": {
+          "m_Curve": [
+            {
+              "time": 0.3333333432674408,
+              "value": 50.0,
+              "inSlope": 0.0,
+              "outSlope": 0.0,
+              "weightedMode": 0,
+              "inWeight": 0.3333333432674408,
+              "outWeight": 0.3333333432674408
+            },
+            {
+              "time": 0.44999998807907104,
+              "value": 14.0,
+              "inSlope": 0.0,
+              "outSlope": 0.0,
+              "weightedMode": 3,
+              "inWeight": 1.0,
+              "outWeight": 0.3333333432674408
+            }
+          ],
+          "m_PreInfinity": 2,
+          "m_PostInfinity": 2,
+          "m_RotationOrder": 4
+        },
+        "attribute": "m_SizeDelta.x",
+        "path": "ImgDeco1",
+        "classID": 224,
+        "script": {
+          "m_FileID": 0,
+          "m_PathID": 0
+        }
+      },
+      {
+        "curve": {
+          "m_Curve": [
+            {
+              "time": 0.44999998807907104,
+              "value": 84.0,
+              "inSlope": 0.0,
+              "outSlope": 0.0,
+              "weightedMode": 0,
+              "inWeight": 0.3333333432674408,
+              "outWeight": 0.3333333432674408
+            },
+            {
+              "time": 0.75,
+              "value": -91.0,
+              "inSlope": 0.0,
+              "outSlope": 0.0,
+              "weightedMode": 3,
+              "inWeight": 1.0,
+              "outWeight": 0.3333333432674408
+            }
+          ],
+          "m_PreInfinity": 2,
+          "m_PostInfinity": 2,
+          "m_RotationOrder": 4
+        },
+        "attribute": "m_AnchoredPosition.y",
+        "path": "ImgDeco2",
+        "classID": 224,
+        "script": {
+          "m_FileID": 0,
+          "m_PathID": 0
+        }
+      },
+      {
+        "curve": {
+          "m_Curve": [
+            {
+              "time": 0.3333333432674408,
+              "value": 50.0,
+              "inSlope": 0.0,
+              "outSlope": 0.0,
+              "weightedMode": 0,
+              "inWeight": 0.3333333432674408,
+              "outWeight": 0.3333333432674408
+            },
+            {
+              "time": 0.44999998807907104,
+              "value": 14.0,
+              "inSlope": 0.0,
+              "outSlope": 0.0,
+              "weightedMode": 3,
+              "inWeight": 1.0,
+              "outWeight": 0.3333333432674408
+            }
+          ],
+          "m_PreInfinity": 2,
+          "m_PostInfinity": 2,
+          "m_RotationOrder": 4
+        },
+        "attribute": "m_SizeDelta.x",
+        "path": "ImgDeco2",
+        "classID": 224,
+        "script": {
+          "m_FileID": 0,
+          "m_PathID": 0
+        }
+      },
+      {
+        "curve": {
+          "m_Curve": [
+            {
+              "time": 0.05000000074505806,
+              "value": 0.0,
+              "inSlope": 0.0,
+              "outSlope": 0.0,
+              "weightedMode": 0,
+              "inWeight": 0.3333333432674408,
+              "outWeight": 0.3333333432674408
+            },
+            {
+              "time": 0.10000000149011612,
+              "value": 1.0,
+              "inSlope": 0.0,
+              "outSlope": 0.0,
+              "weightedMode": 0,
+              "inWeight": 0.3333333432674408,
+              "outWeight": 0.3333333432674408
+            }
+          ],
+          "m_PreInfinity": 2,
+          "m_PostInfinity": 2,
+          "m_RotationOrder": 4
+        },
+        "attribute": "m_Color.a",
+        "path": "ImgDeco1",
+        "classID": 114,
+        "script": {
+          "m_FileID": 1,
+          "m_PathID": -4167318944366303535
+        }
+      },
+      {
+        "curve": {
+          "m_Curve": [
+            {
+              "time": 0.05000000074505806,
+              "value": 0.0,
+              "inSlope": 0.0,
+              "outSlope": 0.0,
+              "weightedMode": 0,
+              "inWeight": 0.3333333432674408,
+              "outWeight": 0.3333333432674408
+            },
+            {
+              "time": 0.10000000149011612,
+              "value": 1.0,
+              "inSlope": 0.0,
+              "outSlope": 0.0,
+              "weightedMode": 0,
+              "inWeight": 0.3333333432674408,
+              "outWeight": 0.3333333432674408
+            }
+          ],
+          "m_PreInfinity": 2,
+          "m_PostInfinity": 2,
+          "m_RotationOrder": 4
+        },
+        "attribute": "m_Color.a",
+        "path": "ImgDeco2",
+        "classID": 114,
+        "script": {
+          "m_FileID": 1,
+          "m_PathID": -4167318944366303535
+        }
+      },
+      {
+        "curve": {
+          "m_Curve": [
+            {
+              "time": 0.18333333730697632,
+              "value": 0.29019609093666077,
+              "inSlope": 0.0,
+              "outSlope": 0.0,
+              "weightedMode": 0,
+              "inWeight": 0.3333333432674408,
+              "outWeight": 0.3333333432674408
+            },
+            {
+              "time": 0.20000000298023224,
+              "value": 0.4470588266849518,
+              "inSlope": 0.0,
+              "outSlope": 0.0,
+              "weightedMode": 0,
+              "inWeight": 0.3333333432674408,
+              "outWeight": 0.3333333432674408
+            }
+          ],
+          "m_PreInfinity": 2,
+          "m_PostInfinity": 2,
+          "m_RotationOrder": 4
+        },
+        "attribute": "m_Color.r",
+        "path": "ImgDeco1",
+        "classID": 114,
+        "script": {
+          "m_FileID": 1,
+          "m_PathID": -4167318944366303535
+        }
+      },
+      {
+        "curve": {
+          "m_Curve": [
+            {
+              "time": 0.18333333730697632,
+              "value": 0.29019609093666077,
+              "inSlope": 0.0,
+              "outSlope": 0.0,
+              "weightedMode": 0,
+              "inWeight": 0.3333333432674408,
+              "outWeight": 0.3333333432674408
+            },
+            {
+              "time": 0.20000000298023224,
+              "value": 0.4470588266849518,
+              "inSlope": 0.0,
+              "outSlope": 0.0,
+              "weightedMode": 0,
+              "inWeight": 0.3333333432674408,
+              "outWeight": 0.3333333432674408
+            }
+          ],
+          "m_PreInfinity": 2,
+          "m_PostInfinity": 2,
+          "m_RotationOrder": 4
+        },
+        "attribute": "m_Color.g",
+        "path": "ImgDeco1",
+        "classID": 114,
+        "script": {
+          "m_FileID": 1,
+          "m_PathID": -4167318944366303535
+        }
+      },
+      {
+        "curve": {
+          "m_Curve": [
+            {
+              "time": 0.18333333730697632,
+              "value": 0.29019609093666077,
+              "inSlope": 0.0,
+              "outSlope": 0.0,
+              "weightedMode": 0,
+              "inWeight": 0.3333333432674408,
+              "outWeight": 0.3333333432674408
+            },
+            {
+              "time": 0.20000000298023224,
+              "value": 0.4470588266849518,
+              "inSlope": 0.0,
+              "outSlope": 0.0,
+              "weightedMode": 0,
+              "inWeight": 0.3333333432674408,
+              "outWeight": 0.3333333432674408
+            }
+          ],
+          "m_PreInfinity": 2,
+          "m_PostInfinity": 2,
+          "m_RotationOrder": 4
+        },
+        "attribute": "m_Color.b",
+        "path": "ImgDeco1",
+        "classID": 114,
+        "script": {
+          "m_FileID": 1,
+          "m_PathID": -4167318944366303535
+        }
+      },
+      {
+        "curve": {
+          "m_Curve": [
+            {
+              "time": 0.18333333730697632,
+              "value": 0.29019609093666077,
+              "inSlope": 0.0,
+              "outSlope": 0.0,
+              "weightedMode": 0,
+              "inWeight": 0.3333333432674408,
+              "outWeight": 0.3333333432674408
+            },
+            {
+              "time": 0.20000000298023224,
+              "value": 0.4470588266849518,
+              "inSlope": 0.0,
+              "outSlope": 0.0,
+              "weightedMode": 0,
+              "inWeight": 0.3333333432674408,
+              "outWeight": 0.3333333432674408
+            }
+          ],
+          "m_PreInfinity": 2,
+          "m_PostInfinity": 2,
+          "m_RotationOrder": 4
+        },
+        "attribute": "m_Color.r",
+        "path": "ImgDeco2",
+        "classID": 114,
+        "script": {
+          "m_FileID": 1,
+          "m_PathID": -4167318944366303535
+        }
+      },
+      {
+        "curve": {
+          "m_Curve": [
+            {
+              "time": 0.18333333730697632,
+              "value": 0.29019609093666077,
+              "inSlope": 0.0,
+              "outSlope": 0.0,
+              "weightedMode": 0,
+              "inWeight": 0.3333333432674408,
+              "outWeight": 0.3333333432674408
+            },
+            {
+              "time": 0.20000000298023224,
+              "value": 0.4470588266849518,
+              "inSlope": 0.0,
+              "outSlope": 0.0,
+              "weightedMode": 0,
+              "inWeight": 0.3333333432674408,
+              "outWeight": 0.3333333432674408
+            }
+          ],
+          "m_PreInfinity": 2,
+          "m_PostInfinity": 2,
+          "m_RotationOrder": 4
+        },
+        "attribute": "m_Color.g",
+        "path": "ImgDeco2",
+        "classID": 114,
+        "script": {
+          "m_FileID": 1,
+          "m_PathID": -4167318944366303535
+        }
+      },
+      {
+        "curve": {
+          "m_Curve": [
+            {
+              "time": 0.18333333730697632,
+              "value": 0.29019609093666077,
+              "inSlope": 0.0,
+              "outSlope": 0.0,
+              "weightedMode": 0,
+              "inWeight": 0.3333333432674408,
+              "outWeight": 0.3333333432674408
+            },
+            {
+              "time": 0.20000000298023224,
+              "value": 0.4470588266849518,
+              "inSlope": 0.0,
+              "outSlope": 0.0,
+              "weightedMode": 0,
+              "inWeight": 0.3333333432674408,
+              "outWeight": 0.3333333432674408
+            }
+          ],
+          "m_PreInfinity": 2,
+          "m_PostInfinity": 2,
+          "m_RotationOrder": 4
+        },
+        "attribute": "m_Color.b",
+        "path": "ImgDeco2",
+        "classID": 114,
+        "script": {
+          "m_FileID": 1,
+          "m_PathID": -4167318944366303535
+        }
+      },
+      {
+        "curve": {
+          "m_Curve": [
+            {
+              "time": 0.0,
+              "value": 160.0,
+              "inSlope": 0.0,
+              "outSlope": 0.0,
+              "weightedMode": 3,
+              "inWeight": 0.3333333432674408,
+              "outWeight": 0.3333333432674408
+            },
+            {
+              "time": 0.5,
+              "value": 0.0,
+              "inSlope": 0.0,
+              "outSlope": 0.0,
+              "weightedMode": 3,
+              "inWeight": 1.0,
+              "outWeight": 0.3333333432674408
+            }
+          ],
+          "m_PreInfinity": 2,
+          "m_PostInfinity": 2,
+          "m_RotationOrder": 4
+        },
+        "attribute": "m_AnchoredPosition.x",
+        "path": "RightPointImage",
+        "classID": 224,
+        "script": {
+          "m_FileID": 0,
+          "m_PathID": 0
+        }
+      },
+      {
+        "curve": {
+          "m_Curve": [
+            {
+              "time": 0.0,
+              "value": -160.0,
+              "inSlope": 0.0,
+              "outSlope": 0.0,
+              "weightedMode": 3,
+              "inWeight": 0.3333333432674408,
+              "outWeight": 0.3333333432674408
+            },
+            {
+              "time": 0.5,
+              "value": 0.0,
+              "inSlope": 0.0,
+              "outSlope": 0.0,
+              "weightedMode": 3,
+              "inWeight": 1.0,
+              "outWeight": 0.3333333432674408
+            }
+          ],
+          "m_PreInfinity": 2,
+          "m_PostInfinity": 2,
+          "m_RotationOrder": 4
+        },
+        "attribute": "m_AnchoredPosition.x",
+        "path": "LeftPointImage",
+        "classID": 224,
+        "script": {
+          "m_FileID": 0,
+          "m_PathID": 0
+        }
+      },
+      {
+        "curve": {
+          "m_Curve": [
+            {
+              "time": 0.0,
+              "value": 0.0,
+              "inSlope": 0.0,
+              "outSlope": 0.0,
+              "weightedMode": 0,
+              "inWeight": 0.3333333432674408,
+              "outWeight": 0.3333333432674408
+            },
+            {
+              "time": 0.18333333730697632,
+              "value": 1.0,
+              "inSlope": 0.0,
+              "outSlope": 0.0,
+              "weightedMode": 0,
+              "inWeight": 0.3333333432674408,
+              "outWeight": 0.3333333432674408
+            }
+          ],
+          "m_PreInfinity": 2,
+          "m_PostInfinity": 2,
+          "m_RotationOrder": 4
+        },
+        "attribute": "m_Color.a",
+        "path": "LeftPointImage",
+        "classID": 114,
+        "script": {
+          "m_FileID": 1,
+          "m_PathID": -4167318944366303535
+        }
+      },
+      {
+        "curve": {
+          "m_Curve": [
+            {
+              "time": 0.0,
+              "value": 0.0,
+              "inSlope": 0.0,
+              "outSlope": 0.0,
+              "weightedMode": 0,
+              "inWeight": 0.3333333432674408,
+              "outWeight": 0.3333333432674408
+            },
+            {
+              "time": 0.18333333730697632,
+              "value": 1.0,
+              "inSlope": 0.0,
+              "outSlope": 0.0,
+              "weightedMode": 0,
+              "inWeight": 0.3333333432674408,
+              "outWeight": 0.3333333432674408
+            }
+          ],
+          "m_PreInfinity": 2,
+          "m_PostInfinity": 2,
+          "m_RotationOrder": 4
+        },
+        "attribute": "m_Color.a",
+        "path": "RightPointImage",
+        "classID": 114,
+        "script": {
+          "m_FileID": 1,
+          "m_PathID": -4167318944366303535
+        }
+      }
+    ],
+    "wiki_btnoption_select_out": [
+      {
+        "curve": {
+          "m_Curve": [
+            {
+              "time": 0.0,
+              "value": 1.0,
+              "inSlope": 0.0,
+              "outSlope": 0.0,
+              "weightedMode": 0,
+              "inWeight": 0.3333333432674408,
+              "outWeight": 0.3333333432674408
+            },
+            {
+              "time": 0.1666666716337204,
+              "value": 0.0,
+              "inSlope": 0.0,
+              "outSlope": 0.0,
+              "weightedMode": 0,
+              "inWeight": 0.3333333432674408,
+              "outWeight": 0.3333333432674408
+            }
+          ],
+          "m_PreInfinity": 2,
+          "m_PostInfinity": 2,
+          "m_RotationOrder": 4
+        },
+        "attribute": "m_Color.a",
+        "path": "LeftPointImage",
+        "classID": 114,
+        "script": {
+          "m_FileID": 1,
+          "m_PathID": -4167318944366303535
+        }
+      },
+      {
+        "curve": {
+          "m_Curve": [
+            {
+              "time": 0.0,
+              "value": 1.0,
+              "inSlope": 0.0,
+              "outSlope": 0.0,
+              "weightedMode": 0,
+              "inWeight": 0.3333333432674408,
+              "outWeight": 0.3333333432674408
+            },
+            {
+              "time": 0.1666666716337204,
+              "value": 0.0,
+              "inSlope": 0.0,
+              "outSlope": 0.0,
+              "weightedMode": 0,
+              "inWeight": 0.3333333432674408,
+              "outWeight": 0.3333333432674408
+            }
+          ],
+          "m_PreInfinity": 2,
+          "m_PostInfinity": 2,
+          "m_RotationOrder": 4
+        },
+        "attribute": "m_Color.a",
+        "path": "RightPointImage",
+        "classID": 114,
+        "script": {
+          "m_FileID": 1,
+          "m_PathID": -4167318944366303535
+        }
+      },
+      {
+        "curve": {
+          "m_Curve": [
+            {
+              "time": 0.0,
+              "value": 1.0,
+              "inSlope": 0.0,
+              "outSlope": 0.0,
+              "weightedMode": 0,
+              "inWeight": 0.3333333432674408,
+              "outWeight": 0.3333333432674408
+            },
+            {
+              "time": 0.1666666716337204,
+              "value": 0.0,
+              "inSlope": 0.0,
+              "outSlope": 0.0,
+              "weightedMode": 0,
+              "inWeight": 0.3333333432674408,
+              "outWeight": 0.3333333432674408
+            }
+          ],
+          "m_PreInfinity": 2,
+          "m_PostInfinity": 2,
+          "m_RotationOrder": 4
+        },
+        "attribute": "m_Color.a",
+        "path": "ImgDeco2",
+        "classID": 114,
+        "script": {
+          "m_FileID": 1,
+          "m_PathID": -4167318944366303535
+        }
+      },
+      {
+        "curve": {
+          "m_Curve": [
+            {
+              "time": 0.0,
+              "value": 1.0,
+              "inSlope": 0.0,
+              "outSlope": 0.0,
+              "weightedMode": 0,
+              "inWeight": 0.3333333432674408,
+              "outWeight": 0.3333333432674408
+            },
+            {
+              "time": 0.1666666716337204,
+              "value": 0.0,
+              "inSlope": 0.0,
+              "outSlope": 0.0,
+              "weightedMode": 0,
+              "inWeight": 0.3333333432674408,
+              "outWeight": 0.3333333432674408
+            }
+          ],
+          "m_PreInfinity": 2,
+          "m_PostInfinity": 2,
+          "m_RotationOrder": 4
+        },
+        "attribute": "m_Color.a",
+        "path": "ImgDeco1",
+        "classID": 114,
+        "script": {
+          "m_FileID": 1,
+          "m_PathID": -4167318944366303535
+        }
+      }
+    ]
+  },
+  "observed_errors": [
+    "top point anchor offsets combined a 238px column with a different .816 local scale",
+    "corner markers used icon-derived center instead of SelectNode center",
+    "out clip unbound geometry drifted toward prefab defaults",
+    "fresh hover inherited previous cycle offsets"
+  ]
+}

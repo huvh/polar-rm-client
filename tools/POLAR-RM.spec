@@ -20,10 +20,13 @@ hiddenimports = []
 # Public exports are lazy to keep schema imports free of Qt/OpenCV. Explicit
 # inclusion is required because import_module names are otherwise invisible.
 hiddenimports += ["rm_client.backend." + name for name in (
-    "manager", "safety", "mqtt_backend", "video_backend", "serial_backend",
+    "manager", "safety", "mqtt_backend", "video", "video_backend", "serial_backend",
     "readiness", "qualification", "protocol", "team_control",
 )]
-for package in ("cv2", "openvino"):
+hiddenimports += ["rm_client.backend.video." + name for name in (
+    "annexb", "codec", "decoder", "udp", "receiver_protocol", "receiver", "angle_egress", "angle_protocol",
+)]
+for package in ("cv2", "openvino", "av"):
     try:
         d, b, h = collect_all(package)
         datas += d

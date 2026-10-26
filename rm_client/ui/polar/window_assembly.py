@@ -27,9 +27,9 @@ from ..clickgui_gpu import ClickGuiGpuRenderer
 from ..fonts import FontBook
 from ..gpu_frame_compositor import GpuFrameCompositor
 from ..gui_cache import ClickGuiLayerCache
-from ..hero_deploy import HeroDeployInterfaceState, HeroDeployRenderer
 from ..island_icon_gpu import IslandIconGpuRenderer
 from ..jello_clickgui import JelloClickGuiRenderer
+from rm_client.ui.endfield.wiki import EndfieldWikiRenderer
 from ..liquid_glass import LiquidGlassRenderer
 from ..minecraft_chat import MinecraftServerChatRenderer
 from ..minecraft_hud import MinecraftCombatHudRenderer
@@ -103,8 +103,6 @@ class PresentationServices:
     student_state: StudentUiState
     student_renderer: StudentPanelRenderer
     chat_renderer: MinecraftServerChatRenderer
-    hero_state: HeroDeployInterfaceState
-    hero_renderer: HeroDeployRenderer
 
 
 def create_presentation_services(paths: RuntimePaths) -> PresentationServices:
@@ -114,11 +112,10 @@ def create_presentation_services(paths: RuntimePaths) -> PresentationServices:
     motion = GuiMotionController(animation)
     return PresentationServices(
         fonts, animation, motion, ClickGuiLayerCache(), ClickGuiGpuRenderer(),
-        JelloClickGuiRenderer(paths.asset("jello")),
+        EndfieldWikiRenderer(paths.endfield_wiki_pack, paths.asset("jello")),
         MinecraftCombatHudRenderer(paths.asset("minecraft_hud")),
         StudentUiState(), StudentPanelRenderer(paths.asset("minecraft_hud")),
         MinecraftServerChatRenderer(paths.asset("minecraft_hud")),
-        HeroDeployInterfaceState(), HeroDeployRenderer(),
     )
 
 

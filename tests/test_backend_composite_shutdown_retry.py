@@ -75,7 +75,7 @@ class CompositeShutdownRetryTests(unittest.TestCase):
         # No transport worker or subprocess may be opened by this test. The
         # installed Paho client uses its actual disconnect/loop_stop close path.
         with patch('socket.socket', side_effect=AssertionError('network access forbidden')), \
-             patch('rm_client.backend.video_backend.subprocess.Popen',
+             patch('rm_client.backend.video.decoder.subprocess.Popen',
                    side_effect=AssertionError('process creation forbidden')):
             backend.set_active_video_source('Synthetic')
             backend.request_shutdown()

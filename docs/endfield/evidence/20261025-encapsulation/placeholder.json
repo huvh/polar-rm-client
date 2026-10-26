@@ -1,0 +1,48 @@
+{
+  "scope": "owned native D3D; placeholder never activates a client action",
+  "cases": [
+    {
+      "physical_size": [
+        1280,
+        720
+      ],
+      "chinese": true,
+      "hover": {
+        "code": 21,
+        "changes": 7
+      },
+      "clicks": 2,
+      "action": 0,
+      "phase": 1,
+      "stats": {
+        "frames": 362.0,
+        "last_ms": 0.5653000043821521,
+        "textures": 56.0,
+        "meshes": 57.0,
+        "owners": 1.0
+      }
+    },
+    {
+      "physical_size": [
+        1920,
+        1080
+      ],
+      "chinese": false,
+      "hover": {
+        "code": 21,
+        "changes": 7
+      },
+      "clicks": 2,
+      "action": 0,
+      "phase": 1,
+      "stats": {
+        "frames": 378.0,
+        "last_ms": 0.3206999972462654,
+        "textures": 56.0,
+        "meshes": 57.0,
+        "owners": 1.0
+      }
+    }
+  ],
+  "status": "PASS"
+}

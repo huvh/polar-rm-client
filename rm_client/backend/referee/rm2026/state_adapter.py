@@ -310,20 +310,6 @@ class Rm2026StateAdapter:
                 state.deploy_status_revision += 1
             state.deploy_mode = next_status
             state.deploy_status_at = time.perf_counter()
-            if bool(next_status) != self.host._hero_native_override:
-                self.host._hero_native_override = bool(next_status)
-                if self.host._hero_native_override:
-                    self.host.set_active_video_source("Native 0x0310", _hero_transition=True)
-                else:
-                    self.host.set_active_video_source(
-                        self.host._normal_video_source or self.host.config.connection.video_source,
-                        _hero_transition=True,
-                    )
-                self.host.field_log.emit(
-                    "hero_video_source",
-                    deployed=bool(next_status),
-                    active_source=self.host._active_video_source,
-                )
         elif name == "RuneStatusSync":
             if ("rune_status" in data and "average_rings" not in data
                     and data["rune_status"] != state.rune_status.get("rune_status")):

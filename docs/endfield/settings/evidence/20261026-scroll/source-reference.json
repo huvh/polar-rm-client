@@ -1,0 +1,73 @@
+{
+  "origin": "read-only current installed game; four Lua exports, zero failures; decrypted VFS MD5 verified by VfsLoader",
+  "prefab_bundle": {
+    "bundle": "Data/Bundles/Windows/main/1c2d2cbdb7de00f4d4ae8f10.ab",
+    "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\1D1687FD22E1DA19349E550B959537C5.chk",
+    "offset": 578170390,
+    "length": 275269,
+    "md5": "417300b7df1d6b162aa82240d7d2bd70",
+    "sha256": "a32465c5b9b57c7d87b6bff2c4d3a4f3423ebb3bed60c29cd98002afd0ca8480"
+  },
+  "scroll": {
+    "m_MovementType": 1,
+    "m_Elasticity": 0.10000000149011612,
+    "m_Inertia": 1,
+    "m_DecelerationRate": 0.13500000536441803,
+    "m_ScrollSensitivity": 45.0,
+    "smoothScrollTweenSpd": 1000.0,
+    "smoothScrollTweenEase": 3,
+    "smoothScrollTweenMaxDur": 2.0,
+    "_enableOverScrollEffect": 0,
+    "mask_softness": {
+      "x": 0,
+      "y": 50
+    },
+    "mask_padding": {
+      "x": 0.0,
+      "y": 0.0,
+      "z": 0.0,
+      "w": -20.0
+    }
+  },
+  "lua": [
+    {
+      "source": "Data/LuaScripts/Phase/GameSetting/PhaseGameSetting.lua",
+      "chunk": "AAD53AD4107AFFB6E36C244BE8BEE1F6.chk",
+      "offset": 555042,
+      "length": 2892,
+      "vfs_decrypted_md5": "32b4261be458744aa31589d319beb31b",
+      "decoded_sha256": "ed7997062cc4db4b5c9701427270e8f40500f528d4b193c2a7ef898f03b56973"
+    },
+    {
+      "source": "Data/LuaScripts/UI/Widgets/GameSettingItemCell.lua",
+      "chunk": "AAD53AD4107AFFB6E36C244BE8BEE1F6.chk",
+      "offset": 1909178,
+      "length": 6236,
+      "vfs_decrypted_md5": "7b8b65a9fefcc17cdaa16a33e89de2ca",
+      "decoded_sha256": "f71fd7af5c87a753d8dd39402be5312382b22d1a5de9fc3013a26cfe352653d2"
+    },
+    {
+      "source": "Data/LuaScripts/Common/Utils/UIUtils.lua",
+      "chunk": "AAD53AD4107AFFB6E36C244BE8BEE1F6.chk",
+      "offset": 20682082,
+      "length": 126828,
+      "vfs_decrypted_md5": "15fec1bcb776e81081e37bd72dc30dce",
+      "decoded_sha256": "d3e6055677c3c3f69eb2f71f82f0dc99a18074b4a1efe8601026f05a487e8327"
+    },
+    {
+      "source": "Data/LuaScripts/UI/Panels/GameSetting/GameSettingCtrl.lua",
+      "chunk": "AAD53AD4107AFFB6E36C244BE8BEE1F6.chk",
+      "offset": 21337730,
+      "length": 144700,
+      "vfs_decrypted_md5": "1e88c03fc13c65474bbcdd6e678b6fa2",
+      "decoded_sha256": "750fd2db1fe92f8827222c31f98f77f92665c48ca9e4fc4a99b255cacadffc79"
+    }
+  ],
+  "runtime_configuration": {
+    "configuration": "settings_scroll",
+    "bundle": "Data/Bundles/Windows/main/1c2d2cbdb7de00f4d4ae8f10.ab",
+    "object": -8056646110461742634,
+    "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/settings/gamesettingpanel.prefab",
+    "raw_sha256": "107d9c1ff8f708211bed93baaa5cc61c268bba753f341a79cac3d3b7288f2c98"
+  }
+}

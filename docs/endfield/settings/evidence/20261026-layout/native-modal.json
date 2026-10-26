@@ -1,0 +1,272 @@
+{
+  "scope": "actual PolarRMWindow, shared GL contexts, active QApplication.exec and production open_settings_center; inert transports",
+  "cases": [
+    {
+      "size": [
+        1225,
+        704
+      ],
+      "samples": [
+        {
+          "phase": "snapshot",
+          "dialog": [
+            1225,
+            704
+          ],
+          "minimum_row_width": 1102,
+          "controls": 11,
+          "snapshot": true,
+          "close": [
+            1154,
+            12,
+            30,
+            30
+          ]
+        },
+        {
+          "phase": "settled",
+          "dialog": [
+            1225,
+            704
+          ],
+          "minimum_row_width": 1102,
+          "controls": 11,
+          "snapshot": true,
+          "close": [
+            1154,
+            12,
+            30,
+            30
+          ]
+        },
+        {
+          "phase": "snapshot",
+          "dialog": [
+            1225,
+            704
+          ],
+          "minimum_row_width": 1102,
+          "controls": 11,
+          "snapshot": true,
+          "close": [
+            1154,
+            12,
+            30,
+            30
+          ]
+        }
+      ],
+      "pages": [
+        {
+          "page": "视频",
+          "capture": "1225x704_page_0.png",
+          "rows": 11
+        },
+        {
+          "page": "音频",
+          "capture": "1225x704_page_1.png",
+          "rows": 14
+        },
+        {
+          "page": "游戏",
+          "capture": "1225x704_page_2.png",
+          "rows": 33
+        },
+        {
+          "page": "键盘 / 鼠标",
+          "capture": "1225x704_page_3.png",
+          "rows": 91
+        },
+        {
+          "page": "准星",
+          "capture": "1225x704_page_4.png",
+          "rows": 31
+        },
+        {
+          "page": "界面 / HUD",
+          "capture": "1225x704_page_5.png",
+          "rows": 82
+        }
+      ]
+    },
+    {
+      "size": [
+        1000,
+        620
+      ],
+      "samples": [
+        {
+          "phase": "snapshot",
+          "dialog": [
+            1000,
+            620
+          ],
+          "minimum_row_width": 895,
+          "controls": 11,
+          "snapshot": true,
+          "close": [
+            937,
+            12,
+            30,
+            30
+          ]
+        },
+        {
+          "phase": "settled",
+          "dialog": [
+            1000,
+            620
+          ],
+          "minimum_row_width": 895,
+          "controls": 11,
+          "snapshot": false,
+          "close": [
+            937,
+            12,
+            30,
+            30
+          ]
+        },
+        {
+          "phase": "snapshot",
+          "dialog": [
+            1000,
+            620
+          ],
+          "minimum_row_width": 895,
+          "controls": 11,
+          "snapshot": true,
+          "close": [
+            937,
+            12,
+            30,
+            30
+          ]
+        }
+      ],
+      "pages": [
+        {
+          "page": "视频",
+          "capture": "1000x620_page_0.png",
+          "rows": 11
+        },
+        {
+          "page": "音频",
+          "capture": "1000x620_page_1.png",
+          "rows": 14
+        },
+        {
+          "page": "游戏",
+          "capture": "1000x620_page_2.png",
+          "rows": 33
+        },
+        {
+          "page": "键盘 / 鼠标",
+          "capture": "1000x620_page_3.png",
+          "rows": 91
+        },
+        {
+          "page": "准星",
+          "capture": "1000x620_page_4.png",
+          "rows": 31
+        },
+        {
+          "page": "界面 / HUD",
+          "capture": "1000x620_page_5.png",
+          "rows": 82
+        }
+      ]
+    },
+    {
+      "size": [
+        1920,
+        1080
+      ],
+      "samples": [
+        {
+          "phase": "snapshot",
+          "dialog": [
+            1920,
+            1080
+          ],
+          "minimum_row_width": 1743,
+          "controls": 11,
+          "snapshot": true,
+          "close": [
+            1814,
+            19,
+            42,
+            42
+          ]
+        },
+        {
+          "phase": "settled",
+          "dialog": [
+            1920,
+            1080
+          ],
+          "minimum_row_width": 1743,
+          "controls": 11,
+          "snapshot": false,
+          "close": [
+            1814,
+            19,
+            42,
+            42
+          ]
+        },
+        {
+          "phase": "snapshot",
+          "dialog": [
+            1920,
+            1080
+          ],
+          "minimum_row_width": 1743,
+          "controls": 11,
+          "snapshot": true,
+          "close": [
+            1814,
+            19,
+            42,
+            42
+          ]
+        }
+      ],
+      "pages": [
+        {
+          "page": "视频",
+          "capture": "1920x1080_page_0.png",
+          "rows": 11
+        },
+        {
+          "page": "音频",
+          "capture": "1920x1080_page_1.png",
+          "rows": 14
+        },
+        {
+          "page": "游戏",
+          "capture": "1920x1080_page_2.png",
+          "rows": 33
+        },
+        {
+          "page": "键盘 / 鼠标",
+          "capture": "1920x1080_page_3.png",
+          "rows": 91
+        },
+        {
+          "page": "准星",
+          "capture": "1920x1080_page_4.png",
+          "rows": 31
+        },
+        {
+          "page": "界面 / HUD",
+          "capture": "1920x1080_page_5.png",
+          "rows": 82
+        }
+      ]
+    }
+  ],
+  "modal_loop_level": 2,
+  "dpr": 1.0,
+  "status": "PASS"
+}

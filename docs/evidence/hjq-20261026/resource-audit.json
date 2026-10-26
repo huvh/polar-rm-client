@@ -1,0 +1,61 @@
+{
+  "status": "PASS",
+  "scope": "manifest/source/mesh validation only; no GPU or hardware qualification",
+  "current_native_build": "build_530baca73f2f1557",
+  "packages": {
+    "menu": {
+      "path": "rm_client/ui/endfield/menu/assets",
+      "files": 55,
+      "bytes": 61445465,
+      "integrity": {
+        "status": "PACK_VALID",
+        "files": 54,
+        "maps": {
+          "RMUC7v7": 118677,
+          "RMUL3v3": 8971,
+          "RMUL1v1": 4860
+        },
+        "binary_sha256": "0b0bd7475f7ba5a9674c39af13fbbde96ca651cbce25783d01a37d10904958ea",
+        "optional_boot": false,
+        "optional_audio": false,
+        "native_render_verified": false,
+        "limits": "Integrity/source check only; run python -m tools.endfield.verify_pack_runtime for owned D3D rendering. No hardware/match qualification."
+      }
+    },
+    "wiki": {
+      "path": "rm_client/ui/endfield/wiki/assets",
+      "files": 250,
+      "bytes": 22061025,
+      "integrity": {
+        "status": "PASS",
+        "root": "D:\\StandardRobot++\\polar-rm-client\\rm_client\\ui\\endfield\\wiki\\assets",
+        "files": 250,
+        "images": 244,
+        "clips": 29,
+        "bytes": 22025050
+      }
+    },
+    "settings": {
+      "path": "rm_client/ui/endfield/settings/assets",
+      "files": 19,
+      "bytes": 8460630,
+      "integrity": 18
+    },
+    "keybinds": {
+      "path": "rm_client/ui/endfield/keybinds/assets",
+      "files": 90,
+      "bytes": 431127,
+      "integrity": 86
+    },
+    "changelog": {
+      "path": "rm_client/ui/endfield/changelog/assets",
+      "files": 21,
+      "bytes": 10428549,
+      "integrity": {
+        "status": "PASS",
+        "files": 20
+      }
+    }
+  },
+  "local_only": "Python environment, personal profiles and imported media are not application source changes"
+}

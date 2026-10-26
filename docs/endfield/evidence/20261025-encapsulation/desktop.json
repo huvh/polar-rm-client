@@ -1,0 +1,255 @@
+{
+  "scope": "owned Windows GPU + inert transports; NOT real match validation",
+  "cycles": 5,
+  "pack_selection": "production-default",
+  "private_pack_present": false,
+  "uses_shipped_pack": true,
+  "initial": {
+    "frames": 230.0,
+    "last_ms": 4.878599997027777,
+    "textures": 56.0,
+    "meshes": 57.0,
+    "owners": 1.0
+  },
+  "display_hz": 199.999,
+  "dpr": 1.0,
+  "native_window_composition": {
+    "render_owners": 1,
+    "visible_native_children": 0
+  },
+  "esc_backdrop": {
+    "empty_combat_layers_alpha_max": {
+      "overlay": 0,
+      "vision": 0,
+      "dynamic": 0,
+      "target": 0,
+      "hud_glass": 0,
+      "glass": 0
+    },
+    "world_edge_energy": 2.3954920768737793,
+    "gaussian_edge_energy_after_undoing_dim": 1.0312467813491821,
+    "kernel": "endfield_gaussian",
+    "radius_dp": 10.0,
+    "dim_alpha": 0.42
+  },
+  "fullscreen_hover": [
+    {
+      "button": 2,
+      "stationary": true,
+      "duplicate_moves": true,
+      "initial": {
+        "code": 2,
+        "changes": 1
+      },
+      "final": {
+        "code": 2,
+        "changes": 1
+      },
+      "samples": [
+        {
+          "code": 2,
+          "changes": 1
+        },
+        {
+          "code": 2,
+          "changes": 1
+        },
+        {
+          "code": 2,
+          "changes": 1
+        },
+        {
+          "code": 2,
+          "changes": 1
+        },
+        {
+          "code": 2,
+          "changes": 1
+        },
+        {
+          "code": 2,
+          "changes": 1
+        },
+        {
+          "code": 2,
+          "changes": 1
+        },
+        {
+          "code": 2,
+          "changes": 1
+        },
+        {
+          "code": 2,
+          "changes": 1
+        },
+        {
+          "code": 2,
+          "changes": 1
+        },
+        {
+          "code": 2,
+          "changes": 1
+        },
+        {
+          "code": 2,
+          "changes": 1
+        }
+      ]
+    },
+    {
+      "button": 6,
+      "stationary": true,
+      "duplicate_moves": true,
+      "initial": {
+        "code": 6,
+        "changes": 2
+      },
+      "final": {
+        "code": 6,
+        "changes": 2
+      },
+      "samples": [
+        {
+          "code": 6,
+          "changes": 2
+        },
+        {
+          "code": 6,
+          "changes": 2
+        },
+        {
+          "code": 6,
+          "changes": 2
+        },
+        {
+          "code": 6,
+          "changes": 2
+        },
+        {
+          "code": 6,
+          "changes": 2
+        },
+        {
+          "code": 6,
+          "changes": 2
+        },
+        {
+          "code": 6,
+          "changes": 2
+        },
+        {
+          "code": 6,
+          "changes": 2
+        },
+        {
+          "code": 6,
+          "changes": 2
+        },
+        {
+          "code": 6,
+          "changes": 2
+        },
+        {
+          "code": 6,
+          "changes": 2
+        },
+        {
+          "code": 6,
+          "changes": 2
+        }
+      ]
+    },
+    {
+      "button": 5,
+      "stationary": true,
+      "duplicate_moves": true,
+      "initial": {
+        "code": 5,
+        "changes": 3
+      },
+      "final": {
+        "code": 5,
+        "changes": 3
+      },
+      "samples": [
+        {
+          "code": 5,
+          "changes": 3
+        },
+        {
+          "code": 5,
+          "changes": 3
+        },
+        {
+          "code": 5,
+          "changes": 3
+        },
+        {
+          "code": 5,
+          "changes": 3
+        },
+        {
+          "code": 5,
+          "changes": 3
+        },
+        {
+          "code": 5,
+          "changes": 3
+        },
+        {
+          "code": 5,
+          "changes": 3
+        },
+        {
+          "code": 5,
+          "changes": 3
+        },
+        {
+          "code": 5,
+          "changes": 3
+        },
+        {
+          "code": 5,
+          "changes": 3
+        },
+        {
+          "code": 5,
+          "changes": 3
+        },
+        {
+          "code": 5,
+          "changes": 3
+        }
+      ]
+    }
+  ],
+  "ui_switch_placeholder": {
+    "code": 21,
+    "dpr": 1.0,
+    "escape_still_open": true,
+    "client_actions": 0,
+    "status": "PASS"
+  },
+  "baseline": {
+    "frames": 3004.0,
+    "last_ms": 3.8827000025776215,
+    "textures": 56.0,
+    "meshes": 57.0,
+    "owners": 1.0
+  },
+  "final": {
+    "frames": 4086.0,
+    "last_ms": 3.7235999989206903,
+    "textures": 56.0,
+    "meshes": 57.0,
+    "owners": 1.0
+  },
+  "fullscreen_preserved": true,
+  "actual_source_hit": true,
+  "texture_growth": 0,
+  "synthetic_hud_frame_ms_p95": 199.12810000096215,
+  "synthetic_hud_fps": 11.390751835184547,
+  "result": "PASS",
+  "native_error": "",
+  "retired": true
+}

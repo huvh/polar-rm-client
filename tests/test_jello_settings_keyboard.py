@@ -16,6 +16,8 @@ from rm_client.ui.jello_keybinds import (ALL_KEYS, NATIVE_KEYS, BindingSession, 
                                         BindingPicker, build_keyboard_manager, open_keyboard_manager)
 from rm_client.ui.cs2_settings_center import build_settings_center
 from test_cs2_settings_center import Host, APP, ready_page
+from legacy_keyboard_fixture import legacy_keyboard_dialog
+from rm_client.ui.endfield.keybinds.capture import KeyCapturePopup
 
 
 def logical_pixel_color(image, x, y):
@@ -121,7 +123,7 @@ class JelloKeyboardTests(unittest.TestCase):
         self.host.backend.arm_match.assert_not_called()
 
     def test_mapping_matches_dpr_independent_geometry_all_sizes(self):
-        dialog=build_keyboard_manager(self.host)
+        dialog=legacy_keyboard_dialog(self.host)
         canvas=dialog.canvas
         for width,height in ((600,430),(1280,720),(1600,900),(1920,1080),(2560,1440)):
             canvas.resize(width,height)
@@ -133,7 +135,7 @@ class JelloKeyboardTests(unittest.TestCase):
         dialog.deleteLater();APP.processEvents()
 
     def test_popover_250x330_flips_and_stays_inside_logical_viewport(self):
-        dialog=build_keyboard_manager(self.host)
+        dialog=legacy_keyboard_dialog(self.host)
         for name in ('W','Space','RightShift','F10','Right'):
             dialog.canvas.selected=name;rect=dialog.canvas.pop_rect()
             self.assertEqual((rect.width(),rect.height()),(250,330))
@@ -144,12 +146,12 @@ class JelloKeyboardTests(unittest.TestCase):
     def test_real_keyboard_and_nested_picker_f12_single_dispatch(self):
         dialog=build_keyboard_manager(self.host)
         def keys():
-            QTest.keyClick(dialog.canvas,Qt.Key.Key_F12)
-            APP.sendEvent(dialog.canvas,QKeyEvent(QKeyEvent.Type.KeyPress,Qt.Key.Key_F12,
+            QTest.keyClick(dialog.search,Qt.Key.Key_F12)
+            APP.sendEvent(dialog.search,QKeyEvent(QKeyEvent.Type.KeyPress,Qt.Key.Key_F12,
                                                 Qt.KeyboardModifier.NoModifier,'',True))
-            picker=BindingPicker(dialog,'F10')
+            picker=KeyCapturePopup(dialog,dialog.session.entries[0])
             def child_keys():
-                QTest.keyClick(picker.search,Qt.Key.Key_F12);picker.reject()
+                QTest.keyClick(picker,Qt.Key.Key_F12);picker.reject()
             QTimer.singleShot(30,child_keys);picker.exec();picker.deleteLater()
             dialog.reject()
         QTimer.singleShot(250,keys);dialog.exec()

@@ -65,7 +65,8 @@ class LegacyIntraRefreshTests(unittest.TestCase):
         if not sample:
             self.skipTest("set POLAR_LEGACY_CAPTURE to the local, unshared receiver capture")
         stream = Path(sample).read_bytes()
-        types = {payload[0] & 31 for _, payload in iter_annexb_nal_units(stream)}
+        units = iter_annexb_nal_units(stream)
+        types = {payload[0] & 31 for _, payload in units}
         self.assertTrue({1, 7, 8}.issubset(types))
         self.assertNotIn(5, types)
         strict = AnnexBRecoveryGate("h264")
@@ -73,9 +74,18 @@ class LegacyIntraRefreshTests(unittest.TestCase):
         backend = RmVideoBackend()
         self.addCleanup(backend.stop)
         backend.configure_ingress("legacy-vt02-h264")
+        # 录制样本为 60 FPS。按首 slice 的 first_mb_in_slice=0 统计画面数，
+        # 以原速回放；原来的 32 KiB/5 ms 会把约 4 秒码流压进半秒，触发积压保护。
+        pictures = sum(1 for _, payload in units if len(payload) > 1
+                       and payload[0] & 31 in {1, 5} and payload[1] & 0x80)
+        self.assertGreater(pictures, 0)
+        bytes_per_second = len(stream) / (pictures / 60)
+        next_send = time.perf_counter()
         for offset in range(0, len(stream), 32768):
-            backend._on_assembled_frame(stream[offset:offset + 32768])
-            time.sleep(.005)
+            chunk = stream[offset:offset + 32768]
+            backend._on_assembled_frame(chunk)
+            next_send += len(chunk) / bytes_per_second
+            time.sleep(max(0.0, next_send - time.perf_counter()))
         deadline = time.perf_counter() + 5
         while not backend.decoded_frame_fresh() and time.perf_counter() < deadline:
             time.sleep(.01)

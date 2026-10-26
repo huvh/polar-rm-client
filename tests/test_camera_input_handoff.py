@@ -28,7 +28,7 @@ EconomyScenePhase = NS(CLOSED="closed", OPEN="open", CLOSING="closing")
 SOURCE = ROOT / 'rm_client/ui/polar/mixins/video_backend_mixin.py'
 NAMES = ('ensure_camera_started', '_bind_camera_frame_sink', '_sync_local_vision_input',
          'on_captured_camera_frame', 'consume_capture_frame', 'consume_backend_video_frame',
-         'update_hero_deploy_state', 'refresh_vision_runtime')
+         'refresh_vision_runtime')
 
 class Frame:
     shape = (120, 160, 3)
@@ -108,7 +108,7 @@ def inert_backend():
     """Actual source-admission and scenario-activation AST, inert resource ports."""
     source = ROOT / 'rm_client/backend/manager.py'
     cls = next(n for n in ast.parse(source.read_text()).body if isinstance(n, ast.ClassDef) and n.name == 'BackendManager')
-    names = {'_activate_scenario', 'set_active_video_source', 'video_source_snapshot'}
+    names = {'_activate_scenario', 'configure_video_source', 'set_active_video_source', 'video_source_snapshot'}
     nodes = [n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name in names]
     tree = ast.Module(body=[ast.ImportFrom(module='__future__', names=[ast.alias(name='annotations')], level=0), *nodes], type_ignores=[])
     scope = dict(VideoSourceRequest=VideoSourceRequest, VideoSourceSnapshot=VideoSourceSnapshot,
@@ -124,6 +124,7 @@ def inert_backend():
     b._hero_native_override = False; b._native_restart_thread = None
     b._native_restart_generation = 0; b.state = None
     b.udp = NS(running=True, ingress_mode='shark-framed', stop_pending=False, stop_status=VideoStopStatus(),
+        configure_legacy_receiver=lambda channel: None,
         request_stop=lambda: None, request_decode_enabled=lambda value: None,
         start=lambda: None, clear_stale_decoded_frame=lambda *args: None)
     b.native_decoder = NS(stop_pending=False, stop_status=VideoStopStatus(), request_stop=lambda: None)
@@ -331,28 +332,6 @@ class CameraInputHandoffTests(unittest.TestCase):
                 h.consume_backend_video_frame()
                 self.assertIsNone(replacement._pending)
 
-    def test_acknowledged_deployment_revokes_copy_before_any_normal_consume(self):
-        h, _ = make_host()
-        h._last_deploy_mode = h._last_deploy_status_revision = 0
-        h.state.deploy_mode = h.state.deploy_status_revision = 1
-        h.state.hero_lob_status = ''
-        h.economy_phase = EconomyScenePhase.CLOSED; h.gui_visible = False
-        h.hero_deploy_ui.sync = lambda *args: None
-        h.hero_deploy_ui.open = lambda *args: None
-        h.invalidate_transient_overlay_scene = lambda: None
-        h.close_match_chat = lambda **kwargs: None
-        h.cancel_quick_action_wheel = lambda: None
-        h.overlay_coordinator = NS(request_modal=lambda *args: None)
-        h.play_gui_transition_sound = lambda *args: None
-        h.frame_scheduler = NS(force=lambda: None)
-        def deploy():
-            h.hero_deploy_video_cut_active = lambda: True
-            h.update_hero_deploy_state(20.)
-        frame = captured(h.camera_worker, 'OLD', deploy)
-        h.on_captured_camera_frame(frame)
-        self.assertIsNone(h.local_vision._pending)
-        self.assertFalse(h._camera_activation.started)
-        self.assertEqual(h._last_deploy_mode, 1)
 
     def test_stopped_and_nonlocal_vision_keep_existing_submission_gate(self):
         for mode, running in (('Mock', True), ('local', True), ('Local', False)):

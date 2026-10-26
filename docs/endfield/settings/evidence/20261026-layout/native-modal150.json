@@ -1,0 +1,96 @@
+{
+  "scope": "actual PolarRMWindow, shared GL contexts, active QApplication.exec and production open_settings_center; inert transports",
+  "cases": [
+    {
+      "size": [
+        1225,
+        704
+      ],
+      "samples": [
+        {
+          "phase": "snapshot",
+          "dialog": [
+            1225,
+            704
+          ],
+          "minimum_row_width": 1102,
+          "controls": 11,
+          "snapshot": true,
+          "close": [
+            1154,
+            12,
+            30,
+            30
+          ]
+        },
+        {
+          "phase": "settled",
+          "dialog": [
+            1225,
+            704
+          ],
+          "minimum_row_width": 1102,
+          "controls": 11,
+          "snapshot": true,
+          "close": [
+            1154,
+            12,
+            30,
+            30
+          ]
+        },
+        {
+          "phase": "snapshot",
+          "dialog": [
+            1225,
+            704
+          ],
+          "minimum_row_width": 1102,
+          "controls": 11,
+          "snapshot": true,
+          "close": [
+            1154,
+            12,
+            30,
+            30
+          ]
+        }
+      ],
+      "pages": [
+        {
+          "page": "视频",
+          "capture": "1225x704_page_0.png",
+          "rows": 11
+        },
+        {
+          "page": "音频",
+          "capture": "1225x704_page_1.png",
+          "rows": 14
+        },
+        {
+          "page": "游戏",
+          "capture": "1225x704_page_2.png",
+          "rows": 33
+        },
+        {
+          "page": "键盘 / 鼠标",
+          "capture": "1225x704_page_3.png",
+          "rows": 91
+        },
+        {
+          "page": "准星",
+          "capture": "1225x704_page_4.png",
+          "rows": 31
+        },
+        {
+          "page": "界面 / HUD",
+          "capture": "1225x704_page_5.png",
+          "rows": 82
+        }
+      ]
+    }
+  ],
+  "modal_loop_level": 2,
+  "dpr": 1.5,
+  "status": "PASS"
+}

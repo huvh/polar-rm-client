@@ -1,0 +1,9 @@
+{
+  "regression_tests": 103,
+  "settings_tests": 6,
+  "static_quality": "PASS",
+  "entry": "QApplication.exec -> production open_settings_center -> QDialog.exec",
+  "modal_loop_level": 2,
+  "source": "Temporary profile and inert transport starts; native GL parent; no forced resize of dialog after construction",
+  "notes": "Verified cached entrance geometry and live controls; navigation and F12 are exercised through actual Qt events."
+}

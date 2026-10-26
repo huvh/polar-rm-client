@@ -135,6 +135,7 @@ from .fonts import FontBook
 from .gui_cache import ClickGuiLayerCache
 from .clickgui_gpu import ClickGuiDrawList, ClickGuiGpuRenderer
 from .jello_clickgui import JelloClickGuiRenderer, JelloClickGuiState, JelloMainTimeline
+from rm_client.ui.endfield.wiki import EndfieldWikiRenderer, EndfieldWikiState, EndfieldWikiTimeline
 from .jello_locale import (
     chinese_enabled,
     description_label as jello_description_label,
@@ -148,7 +149,6 @@ from .jello_locale import (
     option_label as jello_option_label,
     setting_label as jello_setting_label,
 )
-from .hero_deploy import HeroDeployInterfaceState, HeroDeployRenderer
 from .status_locale import dt7_display_token, status_text
 from .minecraft_hud import MinecraftCombatHudRenderer
 from .top_match_bar_controller import TopMatchBarController
@@ -269,11 +269,11 @@ from .polar.renderers.startup_scene import StartupSceneMixin
 # 的调用点不变，mixin 方法可用性由 MRO 保证。
 from .polar.mixins.persistence_mixin import PersistenceMixin
 # 阶段 3b 大域 mixin 化（REFACTOR_BLUEPRINT §5 阶段 3 表 3b 行）：D7 视频管线/
-# 后端接线/英雄部署 + D18 官方消息/战斗事件/击杀特效 + D14 Minecraft 功能槽族
+# 后端接线 + D18 官方消息/战斗事件/击杀特效 + D14 Minecraft 功能槽族
 # 方法体已机械迁至 mixins/video_backend_mixin.py 的 VideoBackendMixin（零修改，
 # 四段不连续区块整体搬迁），由下方 PolarRMWindow 继承装配；tick stage 列表仍在
 # on_tick 按原方法名引用这些成员（名字不变）；synthetic_video_cache* /
-# _hero_native_* 等状态字段与 NORMAL_BACKEND_VIDEO_STALE_S 类常量仍在原位初始化。
+# NORMAL_BACKEND_VIDEO_STALE_S 类常量仍在原位初始化。
 from .polar.mixins.video_backend_mixin import VideoBackendMixin
 # 阶段 3c 大域 mixin 化（REFACTOR_BLUEPRINT §5 阶段 3 表 3c 行）：D5 ClickGUI
 # 构建族（GPU builders + 打开/关闭 + legacy CPU GUI）方法体已机械迁至
@@ -474,6 +474,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
 
     def __init__(self) -> None:
         super().__init__()
+        self.setAttribute(Qt.WidgetAttribute.WA_InputMethodEnabled, True)
         self._pointer_interaction = PointerInteraction()
         self._tick_diagnostics = TickDiagnostics()
         self._clickgui_presenter: ClickGuiGpuPresenter | None = None
@@ -521,14 +522,9 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         feedback = create_feedback_assets(self.paths)
         self.kill_fx = feedback.kill_fx
         self.ui_audio = feedback.ui_audio
-        from ..endfield_feedback import EndfieldFeedback
-        self._endfield_feedback = EndfieldFeedback(self.paths.user_data_root / "endfield_pack")
-        from .endfield_boot import EndfieldBootPresentation
-        self._endfield_boot = EndfieldBootPresentation(self.paths.user_data_root / "endfield_pack" / "boot")
-        self._endfield_menu = None
-        if sys.platform == "win32" and QApplication.platformName() == "windows":
-            from .endfield_native import EndfieldNativeMenu
-            self._endfield_menu = EndfieldNativeMenu(self.paths.endfield_menu_pack)
+        from .endfield.lifecycle import create_presentations
+        endfield = create_presentations(self.paths)
+        self._endfield_feedback,self._endfield_boot,self._endfield_menu = endfield.feedback,endfield.boot,endfield.menu
         self.backend.referee_view_observer = self._observe_referee_views
         self.registry.add_toggle_listener(self.on_module_toggled)
         # P6: ModuleRegistry 在 toggle/set/direct assignment 三条 enabled
@@ -597,21 +593,6 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         self.server_chat_renderer = presentation.chat_renderer
         self.student_reload_expanded = False
         self._student_pending_panel = None
-        self.hero_deploy_ui = presentation.hero_state
-        self.hero_deploy_renderer = presentation.hero_renderer
-        # Align the baseline instead of leaving it at zero: scenario setup
-        # already bumps deploy_status_revision once, and treating that as a
-        # state change invalidated the whole compositor scene one second after
-        # the launcher appeared — wiping the cached startup glass commands
-        # while _startup_static_page_key still claimed the page was cached.
-        self._last_deploy_status_revision = int(self.state.deploy_status_revision)
-        self._last_deploy_mode = int(self.state.deploy_mode)
-        self.hero_native_image: QImage | None = None
-        self.hero_native_pixmap: QPixmap | None = None
-        self._hero_native_video_at = 0.0
-        self._hero_native_sequence = 0
-        self._hero_native_source = "none"
-        self._hero_native_wait_started = time.perf_counter()
         gpu = create_gpu_services()
         self.vision_wire_gpu = gpu.vision_wire
         self.island_icon_gpu = gpu.island_icon
@@ -686,8 +667,8 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         self._startup_navigation.defer_static(self.anim_duration(0.42))
         self._startup_last_hover_action = ""
         self.gui_visible = False
-        self.gui_timeline = JelloMainTimeline()
-        self.jello_state = JelloClickGuiState()
+        self.gui_timeline = EndfieldWikiTimeline()
+        self.jello_state = EndfieldWikiState()
         self.startup_page_morph = MorphState(progress=1.0, target=1.0, duration=0.42)
         self.dynamic_island_state = IslandContainerState(response_per_60hz_frame=0.20)
         self._bottom_left_diagnostics: list[tuple[str, QColor, int]] = []
@@ -942,8 +923,6 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             and self.economy_island.progress >= 0.999
         ):
             self.economy_phase = EconomyScenePhase.OPEN
-        # Hero presentation stays on the display clock, before close-restore.
-        self.hero_deploy_ui.update_presentation(now)
         if (
             self.economy_phase == EconomyScenePhase.CLOSING
             and self._economy_closing_generation == self._economy_generation
@@ -1003,7 +982,7 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         if plan.logic_dt is not None:
             logic_dt = plan.logic_dt
             self._last_logic_time = now
-            if not self.home_visible and not self.hero_deploy_video_cut_active():
+            if not self.home_visible:
                 self._run_tick_stage("camera.runtime", self.ensure_camera_started, now)
             self.startup_wallpaper.set_active(self.home_visible)
             if not self.home_visible:
@@ -1023,7 +1002,6 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                 ("backend.tick", self.backend.tick),
                 ("backend.apply", lambda: self.backend.apply_updates(self.state)),
                 ("backend.readiness", lambda: self.update_backend_readiness(now)),
-                ("hero.deploy", lambda: self.update_hero_deploy_state(now)),
                 ("hero.lob", self.update_hero_lob_guard),
                 ("auto.spin", lambda: self.update_auto_spin_guard(now)),
                 ("official.consume", self.consume_official_messages),
@@ -1068,8 +1046,6 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             or self.economy_island.progress > 0.01
             or self.quick_action_wheel.visible
             or self.match_chat.input_open
-            or self.hero_deploy_ui.active
-            or self.hero_deploy_ui.pending_mode is not None
         )
         if self.frame_scheduler.should_request(now, high_rate, self.render_fps_target):
             self.update()
@@ -1084,23 +1060,8 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         )
 
     def _advance_endfield_feedback(self, now: float) -> None:
-        self.advance_endfield_menu()
-        native = self._endfield_menu
-        if self.gpu_compositor.available and (native is None or native.ready):
-            self._endfield_feedback.boot.mark("graphics", now)
-        if self._gpu_warmup.completed:
-            self._endfield_feedback.boot.mark("atlases", now)
-        module = self.registry.get("PowerGuard")
-        audio = self.registry.get("AudioFeedback")
-        self._endfield_feedback.tick(
-            now=now, identity=(self.backend.referee.profile_id, self.state.robot_id),
-            connected=self.mqtt.connected and not self.backend.mqtt.mock_output,
-            enabled=bool(module and module.enabled and (audio is None or audio.enabled)),
-            threshold=self.get_setting_number(module, "Energy Warn", 20),
-            launcher=self.home_visible,
-            audio_enabled=bool(audio and audio.enabled and self.setting_bool(audio, "Enabled", True)),
-            volume=self.get_setting_number(audio, "UI Volume", 45),
-        )
+        from .endfield.lifecycle import advance_feedback
+        advance_feedback(self,now)
 
     def _publish_tick_performance(self, now: float) -> None:
         report = self._tick_diagnostics.finish_tick(now, time.perf_counter())
@@ -1164,7 +1125,6 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         return {
             "captured_at_perf": time.perf_counter(),
             "captured_at_wall": time.time(),
-            "deploy_revision": int(self.state.deploy_status_revision),
             "economy_revision": int(self.state.economy_status_revision),
             "mqtt_reconnect_count": int(self.backend.mqtt.reconnect_count),
             "estop_at": float(self.backend.safety.estop_at),
@@ -1359,6 +1319,9 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
     def prewarm_jello_module_resources(self, module: Module) -> None:
         """Warm one settings page before its 200/240 ms reveal starts."""
 
+        if isinstance(self.jello_clickgui, EndfieldWikiRenderer):
+            # Wiki 的字形页由空闲队列准备；首次缺页仍由统一 GPU prepare_frame 补齐。
+            return
         if not self.clickgui_gpu.available or self.context() is None:
             return
         fonts = self._jello_gpu_fonts()
@@ -1406,6 +1369,8 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         """
         if not self.clickgui_gpu.available:
             return
+        if isinstance(self.jello_clickgui, EndfieldWikiRenderer):
+            yield from self.jello_clickgui.prewarm_jobs(self.registry, self.devicePixelRatioF())
         labels = {
             "POLAR-RM", "Search modules...", "Keybind", "None", "KEY", "--", "POLAR VIEW",
             "Combat", "Movement", "Vision", "Strategy", "System", "Render",
@@ -1689,10 +1654,6 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                 )
                 self.paint_overlay(None, startup_background_ready=True)
                 return True
-            if self.hero_deploy_video_cut_active():
-                # The cached compositor owns the aspect-fit/letterbox Hero
-                # path.  Never let this legacy fast path upload frame_image.
-                return False
             if (
                 self.frame_image is None
                 or self.frame_image.isNull()
@@ -1921,7 +1882,6 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                 static_ui_rebuilt=rebuild_hud_static,
                 overlay_owners=scene.glass_owners(
                     radial_visible=self.quick_action_wheel.visible,
-                    hero_visible=self.hero_deploy_ui.render_visible,
                 ),
                 target_framebuffer=self.defaultFramebufferObject(),
             )
@@ -2128,8 +2088,6 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             bool(self.student_ui.visible),
             self.escape_menu_visible,
             self.student_ui.panel if self.student_ui.visible else None,
-            int(self.state.deploy_mode),
-            int(self.state.deploy_status_revision),
         )
 
     def paint_gpu_background(self, functions, width: int, height: int, ratio: float) -> bool:
@@ -2180,30 +2138,6 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                 float(self.startup_wallpaper.parallax_y) / max(1.0, float(height)),
             )
             blur_source_key = ("startup-blur", mode, profile, content_sequence, width, height, round(ratio, 3))
-        elif self.hero_deploy_video_cut_active():
-            hero_frame_state = self.hero_native_frame_state()
-            background_key = (
-                "hero-deploy-video-cut",
-                chinese_enabled(self.registry),
-                int(self.state.deploy_status_revision),
-                self._hero_native_sequence,
-                hero_frame_state,
-                width,
-                height,
-                round(ratio, 3),
-            )
-            transform_key = ("hero-deploy-video-cut-transform", width, height)
-            self.gpu_compositor.set_scene_uv_offset(0.0, 0.0)
-            blur_source_key = (
-                "hero-deploy-video-cut-blur",
-                chinese_enabled(self.registry),
-                int(self.state.deploy_status_revision),
-                self._hero_native_sequence,
-                hero_frame_state,
-                width,
-                height,
-                round(ratio, 3),
-            )
         elif self.backend_video_source_selected() and not self.normal_backend_video_fresh():
             background_key = (
                 "backend-video-lost",
@@ -2295,8 +2229,6 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
                 painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, smooth_video(not self.high_res_optimize(width,height)))
                 if self.home_visible:
                     self.draw_startup_background(painter, width, height)
-                elif self.hero_deploy_video_cut_active():
-                    self.draw_hero_native_background(painter, width, height)
                 elif self.backend_video_source_selected() and not self.normal_backend_video_fresh():
                     self.draw_backend_video_lost(painter, width, height)
                 elif self.normal_video_frame_ready() and self.frame_image is not None and not self.frame_image.isNull():
@@ -2639,7 +2571,6 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         # While menu is open, skip elim FX so card bursts do not flash over panels.
         if not self.menu_overlay_active():
             self.draw_elimination_fx(p, width, height)
-        self.draw_hero_deploy_interface(p, width, height, now)
         self.dynamic_hud_ms = (time.perf_counter() - started_at) * 1000.0
 
     def paint_priority_interaction_layer(
@@ -3059,17 +2990,11 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
         module = self.registry.get("MatchChat")
         if module is None or not module.enabled or self.home_visible:
             return
-        if self.hero_deploy_video_cut_active():
-            self.open_hero_deploy_interface()
-            self.toast("Hero deploy console is locked until exit sync")
-            return
         if self.economy_phase != EconomyScenePhase.CLOSED:
             self._economy_pending_overlay = OverlayKind.CHAT
             if self.economy_phase != EconomyScenePhase.CLOSING:
                 self.close_economy_workspace(play_sound=False)
             return
-        if self.hero_deploy_ui.visible:
-            self.close_hero_deploy_interface(force=True)
         if self.economy_visible:
             self.close_economy_workspace(play_sound=False)
         if self.gui_visible:
@@ -3218,8 +3143,6 @@ class PolarRMWindow(TextMetricsMixin, CombatTargetHudMixin, EspWireframeMixin, M
             return False
 
     def draw_hud_gpu_background(self) -> bool:
-        if self.hero_deploy_video_cut_active():
-            return False
         if (
             self.home_visible
             or not self.hud_video_gpu.available

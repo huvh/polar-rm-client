@@ -48,7 +48,7 @@ class DecoderStopRequestTests(unittest.TestCase):
             decoder.request_stop()
         self.assertIs(decoder._stop_worker, first)
         self.assertFalse(decoder.cleanup_complete)
-        with patch('rm_client.backend.video_backend.subprocess.Popen') as spawn:
+        with patch('rm_client.backend.video.decoder.subprocess.Popen') as spawn:
             self.assertFalse(decoder.start())
             self.assertFalse(decoder.restart())
             spawn.assert_not_called()
@@ -90,7 +90,7 @@ class DecoderStopRequestTests(unittest.TestCase):
         self.assertIn(session, decoder._retired_sessions)
         self.assertFalse(decoder.cleanup_complete)
         self.assertIn('pipe close failed', decoder.last_error)
-        with patch('rm_client.backend.video_backend.subprocess.Popen') as spawn:
+        with patch('rm_client.backend.video.decoder.subprocess.Popen') as spawn:
             self.assertFalse(decoder.start())
             spawn.assert_not_called()
         proc.stdout.fail_close = False
@@ -132,8 +132,8 @@ class DecoderStopRequestTests(unittest.TestCase):
                 raise TimeoutError('test spawn not released')
             return proc
         starts = []
-        with patch('rm_client.backend.video_backend.subprocess.Popen', side_effect=spawn), \
-             patch('rm_client.backend.video_backend.resolve_ffmpeg_executable', return_value='ffmpeg'):
+        with patch('rm_client.backend.video.decoder.subprocess.Popen', side_effect=spawn), \
+             patch('rm_client.backend.video.decoder.resolve_ffmpeg_executable', return_value='ffmpeg'):
             starter = threading.Thread(target=lambda: starts.append(decoder.start()))
             starter.start()
             self.assertTrue(entered.wait(1))
@@ -162,8 +162,8 @@ class DecoderStopRequestTests(unittest.TestCase):
                 raise TimeoutError('test spawn not released')
             return proc
         starts = []
-        with patch('rm_client.backend.video_backend.subprocess.Popen', side_effect=spawn), \
-             patch('rm_client.backend.video_backend.resolve_ffmpeg_executable', return_value='ffmpeg'):
+        with patch('rm_client.backend.video.decoder.subprocess.Popen', side_effect=spawn), \
+             patch('rm_client.backend.video.decoder.resolve_ffmpeg_executable', return_value='ffmpeg'):
             starter = threading.Thread(target=lambda: starts.append(decoder.start()))
             starter.start()
             self.assertTrue(entered.wait(1))

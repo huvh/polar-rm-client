@@ -1,0 +1,320 @@
+{
+  "scope": "actual PolarRMWindow, shared GL contexts, active QApplication.exec and production open_settings_center; inert transports",
+  "cases": [
+    {
+      "size": [
+        1225,
+        704
+      ],
+      "samples": [
+        {
+          "phase": "snapshot",
+          "dialog": [
+            1225,
+            704
+          ],
+          "minimum_row_width": 1102,
+          "controls": 11,
+          "snapshot": true,
+          "close": [
+            1154,
+            12,
+            30,
+            30
+          ]
+        },
+        {
+          "phase": "settled",
+          "dialog": [
+            1225,
+            704
+          ],
+          "minimum_row_width": 1102,
+          "controls": 11,
+          "snapshot": true,
+          "close": [
+            1154,
+            12,
+            30,
+            30
+          ]
+        },
+        {
+          "phase": "snapshot",
+          "dialog": [
+            1280,
+            720
+          ],
+          "minimum_row_width": 1153,
+          "controls": 11,
+          "snapshot": true,
+          "close": [
+            1207,
+            12,
+            30,
+            30
+          ]
+        }
+      ],
+      "pages": [
+        {
+          "page": "视频",
+          "capture": "1225x704_page_0.png",
+          "rows": 11
+        }
+      ],
+      "opened_fullscreen": false,
+      "geometry": [
+        {
+          "phase": "opened",
+          "fullscreen": false,
+          "host": [
+            667,
+            448,
+            1225,
+            704
+          ],
+          "settings": [
+            667,
+            448,
+            1225,
+            704
+          ],
+          "dpr": 1.0,
+          "capture": "case_0_opened.png"
+        },
+        {
+          "phase": "f11_once",
+          "fullscreen": true,
+          "host": [
+            0,
+            0,
+            2560,
+            1600
+          ],
+          "settings": [
+            0,
+            0,
+            2560,
+            1600
+          ],
+          "dpr": 1.0,
+          "capture": "case_0_f11_once.png"
+        },
+        {
+          "phase": "f11_twice",
+          "fullscreen": false,
+          "host": [
+            667,
+            448,
+            1225,
+            704
+          ],
+          "settings": [
+            667,
+            448,
+            1225,
+            704
+          ],
+          "dpr": 1.0,
+          "capture": "case_0_f11_twice.png"
+        },
+        {
+          "phase": "applied_fullscreen",
+          "fullscreen": true,
+          "host": [
+            0,
+            0,
+            2560,
+            1600
+          ],
+          "settings": [
+            0,
+            0,
+            2560,
+            1600
+          ],
+          "dpr": 1.0,
+          "capture": "case_0_applied_fullscreen.png"
+        },
+        {
+          "phase": "applied_windowed",
+          "fullscreen": false,
+          "host": [
+            667,
+            448,
+            1280,
+            720
+          ],
+          "settings": [
+            667,
+            448,
+            1280,
+            720
+          ],
+          "dpr": 1.0,
+          "capture": "case_0_applied_windowed.png"
+        }
+      ]
+    },
+    {
+      "size": [
+        1225,
+        704
+      ],
+      "samples": [
+        {
+          "phase": "snapshot",
+          "dialog": [
+            2560,
+            1600
+          ],
+          "minimum_row_width": 2336,
+          "controls": 11,
+          "snapshot": true,
+          "close": [
+            2419,
+            31,
+            56,
+            56
+          ]
+        },
+        {
+          "phase": "settled",
+          "dialog": [
+            2560,
+            1600
+          ],
+          "minimum_row_width": 2336,
+          "controls": 11,
+          "snapshot": true,
+          "close": [
+            2419,
+            31,
+            56,
+            56
+          ]
+        },
+        {
+          "phase": "snapshot",
+          "dialog": [
+            1280,
+            720
+          ],
+          "minimum_row_width": 1153,
+          "controls": 11,
+          "snapshot": true,
+          "close": [
+            1207,
+            12,
+            30,
+            30
+          ]
+        }
+      ],
+      "pages": [
+        {
+          "page": "视频",
+          "capture": "1225x704_page_0.png",
+          "rows": 11
+        }
+      ],
+      "opened_fullscreen": true,
+      "geometry": [
+        {
+          "phase": "opened",
+          "fullscreen": true,
+          "host": [
+            0,
+            0,
+            2560,
+            1600
+          ],
+          "settings": [
+            0,
+            0,
+            2560,
+            1600
+          ],
+          "dpr": 1.0,
+          "capture": "case_1_opened.png"
+        },
+        {
+          "phase": "f11_once",
+          "fullscreen": false,
+          "host": [
+            667,
+            448,
+            1225,
+            704
+          ],
+          "settings": [
+            667,
+            448,
+            1225,
+            704
+          ],
+          "dpr": 1.0,
+          "capture": "case_1_f11_once.png"
+        },
+        {
+          "phase": "f11_twice",
+          "fullscreen": true,
+          "host": [
+            0,
+            0,
+            2560,
+            1600
+          ],
+          "settings": [
+            0,
+            0,
+            2560,
+            1600
+          ],
+          "dpr": 1.0,
+          "capture": "case_1_f11_twice.png"
+        },
+        {
+          "phase": "applied_fullscreen",
+          "fullscreen": true,
+          "host": [
+            0,
+            0,
+            2560,
+            1600
+          ],
+          "settings": [
+            0,
+            0,
+            2560,
+            1600
+          ],
+          "dpr": 1.0,
+          "capture": "case_1_applied_fullscreen.png"
+        },
+        {
+          "phase": "applied_windowed",
+          "fullscreen": false,
+          "host": [
+            667,
+            448,
+            1280,
+            720
+          ],
+          "settings": [
+            667,
+            448,
+            1280,
+            720
+          ],
+          "dpr": 1.0,
+          "capture": "case_1_applied_windowed.png"
+        }
+      ]
+    }
+  ],
+  "modal_loop_level": 2,
+  "dpr": 1.0,
+  "status": "PASS"
+}

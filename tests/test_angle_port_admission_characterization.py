@@ -58,7 +58,7 @@ def run(method, *, angle=None, robot=None, prior=None, serial=None,
     def configure(config, authorized):
         trace.append(('configure', asdict(config), authorized))
 
-    def disarm(reason):
+    def disarm(reason, *, preserve_startup=False):
         trace.append(('disarm', reason))
 
     status = {'fixture': 'status', 'armed': False}
@@ -69,20 +69,35 @@ def run(method, *, angle=None, robot=None, prior=None, serial=None,
     manager = object.__new__(BackendManager)
     manager._backend_transition_blocks_work = lambda: blocked
     manager.safety = SimpleNamespace(estop_active=estop)
-    manager.controller_angles = SimpleNamespace(configure=configure, disarm=disarm, stats=stats)
+    manager.controller_angles = SimpleNamespace(
+        configure=configure, disarm=disarm, stats=stats,
+        arm_on_startup=lambda: (False, 'Auto arm disabled'),
+    )
     manager.state = SimpleNamespace(backend_stats={})
     for name, values in (prior or {}).items():
         setattr(manager, '_' + name + '_link', SimpleNamespace(**values))
     if serial is not None:
         manager.serial = SimpleNamespace(**serial)
     result = method(manager, None if absent_registry else SimpleNamespace(get=get))
+    # 新增出口设置是有意扩展；历史串口路径仍逐项比较原有观察顺序及副作用。
+    # 默认出口和关闭的自动授权新增读取不产生副作用；不改冻结方法或配置/撤权事件。
+    trace = [event for event in trace if event not in (
+        ('setting', 'angle', 'Angle Output'), ('setting', 'angle', 'Angle Auto Arm'),
+    )]
     return trace, result, manager.state.backend_stats
 
 
 class AnglePortAdmissionCharacterizationTests(unittest.TestCase):
     def compare(self, **case):
-        self.assertEqual(run(BackendManager._sync_controller_angles, **case),
-                         run(frozen_method(), **case))
+        actual = run(BackendManager._sync_controller_angles, **case)
+        expected = run(frozen_method(), **case)
+        # 当前启动授权链在急停时显式撤权；历史方法仅关闭 configure 授权。
+        # 精确验证这一个新增事件及其位置，其他冲突/配置顺序继续逐项对比。
+        trace = expected[0]
+        if case.get('estop') and not case.get('blocked') and not any(
+                event[0] == 'disarm' for event in trace):
+            trace.insert(len(trace) - 1, ('disarm', 'E-stop active'))
+        self.assertEqual(actual, expected)
 
     def test_gates_forwarding_and_absent_sources(self):
         for enabled in (False, True):

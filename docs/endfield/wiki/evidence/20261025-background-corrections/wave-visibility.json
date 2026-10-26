@@ -1,0 +1,13 @@
+{
+  "scope": "visibility at same original mesh phase, not synthetic extra waves",
+  "before": {
+    "pixels_at_least_2_grey_levels": 44691,
+    "total": 115200,
+    "coverage": 0.38794270833333333
+  },
+  "after": {
+    "pixels_at_least_2_grey_levels": 76416,
+    "total": 115200,
+    "coverage": 0.6633333333333333
+  }
+}

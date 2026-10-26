@@ -29,7 +29,7 @@ class UdpH264HudHandoffTests(unittest.TestCase):
     def close_fixture(self):
         self.assertTrue(self.fixture.doCleanups(), 'actual-window cleanup failed')
 
-    def test_both_udp_labels_deliver_to_hud_while_hero_and_stop_keep_ownership(self):
+    def test_udp_labels_deliver_to_hud_and_stop_retires_frames(self):
         window = self.window
         stream = (ROOT / 'assets/selftest/h264_one_gop.h264').read_bytes()
         # FrameAssembler exercises the documented Shark envelope. No UDP
@@ -65,8 +65,10 @@ class UdpH264HudHandoffTests(unittest.TestCase):
                 self.assertTrue(window.normal_video_frame_ready())
         window.state.deploy_mode = 1
         with patch.object(window.backend.udp, 'latest_video_frame',
-                          side_effect=AssertionError('deployed Hero must not query UDP')):
+                          wraps=window.backend.udp.latest_video_frame) as latest:
             window.consume_capture_frame()
+            latest.assert_called_once()
+        self.assertTrue(window.normal_video_frame_ready())
         window.state.deploy_mode = 0
         window.backend.udp.request_stop()
         self.assertTrue(window.backend.udp.wait_closed())

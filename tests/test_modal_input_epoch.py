@@ -35,10 +35,10 @@ class ModalInputEpochTests(unittest.TestCase):
         callback = Mock()
         coordinator = OverlayCoordinator(on_input_claimed=callback)
         for _ in range(10):
-            coordinator.request_modal(OverlayKind.HERO_DEPLOY)
+            coordinator.request_modal(OverlayKind.STUDENT)
         callback.assert_called_once()
         coordinator.close_modal()
-        coordinator.request_modal(OverlayKind.HERO_DEPLOY)
+        coordinator.request_modal(OverlayKind.STUDENT)
         self.assertEqual(callback.call_count, 2)
         for _ in range(10):
             coordinator.begin_chat()
@@ -68,7 +68,6 @@ class ModalInputEpochTests(unittest.TestCase):
             lambda w: w.open_match_chat(),
             lambda w: w.set_clickgui_visible(True, announce=False, play_sound=False),
             lambda w: w.begin_quick_action_wheel(QPointF(30, 30)),
-            lambda w: w.open_hero_deploy_interface(),
             lambda w: w.open_economy_workspace(),
             lambda w: w.open_student_panel('damage'),
             lambda w: w.set_escape_menu_visible(True),
@@ -120,7 +119,7 @@ class ModalInputEpochTests(unittest.TestCase):
                     nested.append(True)
                     w.close_match_chat()
                     case.key(Qt.Key.Key_W)
-                    w.open_hero_deploy_interface()
+                    w.open_student_panel("damage")
                 return original(*args, **kwargs)
             with patch.object(sink, 'publish_keyboard_mouse', side_effect=publish):
                 w.open_match_chat()

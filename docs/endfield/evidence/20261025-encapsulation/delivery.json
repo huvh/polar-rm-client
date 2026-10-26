@@ -1,0 +1,40 @@
+{
+  "status": "PASS",
+  "unchanged_original_resource_files": 306,
+  "updated_manifests": [
+    "assets/endfield_pack/ENDFIELD_PACK_MANIFEST.json",
+    "assets/endfield_pack/native_renderer/CURRENT.json"
+  ],
+  "current_resource_files": 311,
+  "git_ignored_resources": 0,
+  "portable_tree_hashes_match": true,
+  "portable_paths": {
+    "wiki": "resources/assets/endfield/wiki",
+    "menu": "resources/assets/endfield/menu"
+  },
+  "validators": {
+    "wiki": {
+      "status": "PASS",
+      "root": "D:\\StandardRobot++\\polar-rm-client\\tmp\\endfield\\20261025-encapsulation\\portable\\resources\\assets\\endfield\\wiki",
+      "files": 250,
+      "images": 244,
+      "clips": 29,
+      "bytes": 22025050
+    },
+    "menu": {
+      "status": "PACK_VALID",
+      "files": 60,
+      "maps": {
+        "RMUC7v7": 118677,
+        "RMUL3v3": 8971,
+        "RMUL1v1": 4860
+      },
+      "binary_sha256": "cb2523924a387dd2f3316a439ceac490baf96dd4f9fac49975506e75ba091142",
+      "optional_boot": false,
+      "optional_audio": false,
+      "native_render_verified": false,
+      "limits": "Integrity/source check only; run python -m tools.endfield.verify_pack_runtime for owned D3D rendering. No hardware/match qualification."
+    }
+  },
+  "scope": "resource assembly and frozen RuntimePaths; no complete EXE build"
+}

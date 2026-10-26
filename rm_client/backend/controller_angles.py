@@ -9,16 +9,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 import math
 import os
-import struct
 import threading
 import time
 from typing import Any, Callable
 
 from .resource_close import close_resource
 
-from ..protocol import RefereeFrameCodec, crc8, crc16
+from ..protocol import crc8, crc16
+from .controller_angle_protocol import ANGLE_CMD, ANGLE_BOUNDS, ANGLE_TOLERANCE, angle_payload
+from .video.angle_protocol import (
+    LEGACY_ANGLE_ROUTES, encode_angle_forward_frame, vt02_encoder_payload,
+)
 
-ANGLE_CMD = 0x0302
 ANGLE_TIMEOUT_S = 0.300  # Provisional bench default; matches the firmware patch.
 PARTIAL_TIMEOUT_S = 0.100
 MAX_CHUNK = 512
@@ -26,14 +28,6 @@ MAX_BUFFER = 1024
 FORWARD_INTERVAL_S = 1.0 / 30.0
 GUARD_TIMEOUT_S = 0.250
 PROFILE_ID = "standardrobotpp-engineer-2722e0d"
-# Proven source clamps in robot_param_engineer_controller.h + its observer.
-# J4/J5 are ALREADY coupled source positions; never invert them again here.
-ANGLE_BOUNDS = ((-2 * math.pi, 2 * math.pi), (-1.10, 1.20), (-2.50, 0.0),
-                (-4 * math.pi, 4 * math.pi), (-4.5 * math.pi, 4.5 * math.pi),
-                (-4.5 * math.pi, 4.5 * math.pi))
-ANGLE_TOLERANCE = 1e-5  # Binary32 rounding at source clamp boundaries, radians.
-
-
 def port_key(port: str) -> str:
     """Compare explicit OS names, including POSIX symlink aliases; no probing."""
     value = str(port).strip()
@@ -42,25 +36,6 @@ def port_key(port: str) -> str:
 
 def explicit_port(port: str) -> bool:
     return bool(str(port).strip()) and str(port).strip().lower() not in {"auto", "stub", "none"}
-
-
-def angle_payload(data: bytes) -> tuple[tuple[float, ...], bytes]:
-    """Validate the known six-axis contract; never forward source padding.
-
-    Old firmware sends 30 bytes from a 28-byte object. The last six bytes
-    are not part of the six-angle contract and can contain out-of-bounds data.
-    Units/axis signs remain exactly those chosen by the source firmware.
-    """
-    data = bytes(data)
-    if len(data) != 30:
-        raise ValueError("controller angles require exactly 30 bytes")
-    angles = struct.unpack("<6f", data[:24])
-    if not all(math.isfinite(value) for value in angles):
-        raise ValueError("controller angles must be finite")
-    if any(not low - ANGLE_TOLERANCE <= value <= high + ANGLE_TOLERANCE
-           for value, (low, high) in zip(angles, ANGLE_BOUNDS)):
-        raise ValueError("angles outside the pinned engineer controller source bounds")
-    return angles, data[:24] + bytes(6)
 
 
 @dataclass(frozen=True)
@@ -172,14 +147,17 @@ class AngleRelayConfig:
     tx_port: str = "Stub"
     forward: bool = False
     mock_output: bool = True
+    output_route: str = "Official Client Serial"
+    auto_arm: bool = False
 
 
 class ControllerAngleRelay:
-    """One background owner, latest-only forwarding, explicit process-local arm.
+    """One background owner, latest-only forwarding, process-local arm.
 
     UI methods do not open/read/write/join serial ports. The worker never
     repeats a sample to keep a robot alive. On stale input/failure/lock/config
-    change forwarding disarms; fresh reception alone cannot re-arm it.
+    change forwarding disarms. Optional startup arm still requires fresh data;
+    an operator stop or a running-link failure requires manual re-arm.
     """
 
     def __init__(self, *, time_fn: Callable[[], float] = time.perf_counter,
@@ -206,11 +184,24 @@ class ControllerAngleRelay:
         self._tx_busy = False
         self._arm_epoch = 0
         self.armed = False
+        self._startup_arm_pending = False
         self.connected = False
         self.forwarded = 0
         self.mock_forwarded = 0
         self.last_error = "disabled"
         self.last_frame = b""
+        self._legacy_receiver = None
+
+    def set_legacy_receiver(self, receiver) -> None:
+        """绑定视频后端已有的串口所有者；换连接必须重新授权。"""
+        with self._lock:
+            if receiver is not self._legacy_receiver:
+                self.disarm("legacy receiver changed; re-arm required", preserve_startup=True)
+                self._legacy_receiver = receiver
+
+    def _legacy_ready(self) -> bool:
+        receiver = self._legacy_receiver
+        return receiver is not None and receiver.stats().get("ready") is True
 
     def configure(self, config: AngleRelayConfig, authorized: bool, *, reason: str = "") -> None:
         with self._lock:
@@ -223,21 +214,27 @@ class ControllerAngleRelay:
                 self._failed = False
                 self.connected = False
                 self.config = config
+                self._startup_arm_pending = config.auto_arm
             self._authorized = bool(authorized)
             self._guard_at = self.time_fn()
             if not authorized:
-                self.disarm(reason or "RobotLink/Allow Drive/stop gate denied forwarding")
+                self.disarm(reason or "RobotLink/Allow Drive/stop gate denied forwarding",
+                            preserve_startup=True)
             if not config.enabled:
                 self._stop.set()
                 self.decoder.reset()
-                self.disarm("disabled")
+                self.disarm("disabled", preserve_startup=True)
+                return
+            if config.output_route not in ("Official Client Serial", *LEGACY_ANGLE_ROUTES):
+                self.disarm("select a supported angle output route", preserve_startup=True)
                 return
             if not explicit_port(config.rx_port):
-                self.disarm("select an explicit controller RX port (Auto is forbidden)")
+                self.disarm("select an explicit controller RX port (Auto is forbidden)",
+                            preserve_startup=True)
                 return
-            if config.forward and (not explicit_port(config.tx_port)
+            if config.forward and config.output_route == "Official Client Serial" and (not explicit_port(config.tx_port)
                     or port_key(config.rx_port) == port_key(config.tx_port)):
-                self.disarm("select distinct explicit RX and player-end TX ports")
+                self.disarm("select distinct explicit RX and player-end TX ports", preserve_startup=True)
                 return
             if self.start_workers and not self._failed and not self._retained_streams and (
                     self._thread is None or not self._thread.is_alive()):
@@ -262,6 +259,18 @@ class ControllerAngleRelay:
                         stop.set()
                     raise
 
+    def prepare_startup_arm(self) -> None:
+        """新场景完成停机与身份切换后，重新等待本次启动的有效输入。"""
+        with self._lock:
+            self._startup_arm_pending = self.config.auto_arm
+
+    def arm_on_startup(self) -> tuple[bool, str]:
+        """配置加载后等待输入与出口就绪；成功一次或主动撤销后不再自动重试。"""
+        with self._lock:
+            if not self.config.auto_arm or not self._startup_arm_pending:
+                return False, self.last_error
+            return self.arm()
+
     @property
     def owned_ports(self) -> tuple[str, ...]:
         """Reserved until the old worker closes, even after reconfiguration."""
@@ -270,7 +279,7 @@ class ControllerAngleRelay:
             if config is None:
                 return ()
             ports = [config.rx_port]
-            if config.forward and not config.mock_output:
+            if config.forward and not config.mock_output and config.output_route == "Official Client Serial":
                 ports.append(config.tx_port)
             return tuple(ports)
 
@@ -279,9 +288,12 @@ class ControllerAngleRelay:
         return sample is not None and 0 <= now - sample.received_at < ANGLE_TIMEOUT_S
 
     def _expire(self, now: float) -> None:
+        if (self.armed and self.config.output_route in LEGACY_ANGLE_ROUTES
+                and not self.config.mock_output and not self._legacy_ready()):
+            self.disarm("legacy receiver disconnected; reconnect and re-arm required")
         if self.decoder.latest is not None and not self._fresh(now):
             self.decoder.reset()
-            self.disarm("angle input stale; receive fresh angles, then re-arm")
+            self.disarm("angle input stale; receive fresh angles, then re-arm", preserve_startup=True)
         if self.armed and (not self._authorized or now - self._guard_at > GUARD_TIMEOUT_S):
             self.disarm("forward permission heartbeat expired; re-arm required")
 
@@ -294,9 +306,17 @@ class ControllerAngleRelay:
                 return False, "enable receiver and Forward Angles; RobotLink and Allow Drive are required"
             if self._failed or not self._fresh(now) or now - self._guard_at > GUARD_TIMEOUT_S:
                 return False, "fresh valid angles and current permission are required"
-            if not explicit_port(c.rx_port) or not explicit_port(c.tx_port) or port_key(c.rx_port) == port_key(c.tx_port):
+            if not explicit_port(c.rx_port):
+                return False, "select an explicit controller RX port"
+            if c.output_route in LEGACY_ANGLE_ROUTES:
+                if not c.mock_output and not self._legacy_ready():
+                    return False, "connect the legacy video receiver before arming"
+            elif c.output_route != "Official Client Serial":
+                return False, "select a supported angle output route"
+            elif not explicit_port(c.tx_port) or port_key(c.rx_port) == port_key(c.tx_port):
                 return False, "select distinct explicit RX and player-end TX ports"
             self.armed = True
+            self._startup_arm_pending = False
             self._arm_epoch += 1
             self._arm_revision = self.decoder.revision
             # A pre-arm prefix must not become an eligible sample when its
@@ -306,9 +326,11 @@ class ControllerAngleRelay:
             self.last_error = "armed; waiting for the next fresh source frame"
             return True, self.last_error
 
-    def disarm(self, reason: str = "operator disarmed") -> None:
+    def disarm(self, reason: str = "operator disarmed", *, preserve_startup: bool = False) -> None:
         with self._lock:
             self.armed = False
+            if not preserve_startup:
+                self._startup_arm_pending = False
             self._arm_epoch += 1
             self._arm_revision = self.decoder.revision
             self.last_error = str(reason)
@@ -343,11 +365,21 @@ class ControllerAngleRelay:
             sample = self._pending(now)
             if sample is None or self._tx_busy:
                 return False, self.last_error or "no new eligible sample"
-            frame = RefereeFrameCodec().encode(ANGLE_CMD, sample.payload, seq=sample.seq)
+            try:
+                frame = encode_angle_forward_frame(sample.payload, sample.seq, self.config.output_route)
+            except ValueError as exc:
+                self.disarm(str(exc))
+                return False, self.last_error
             mock = self.config.mock_output
+            epoch = (self._epoch, self._arm_epoch)
+            if not mock and self.config.output_route in LEGACY_ANGLE_ROUTES:
+                receiver = self._legacy_receiver
+                if receiver is None:
+                    return False, "legacy receiver unavailable"
+                writer = lambda data: receiver.write_angles(
+                    data, lambda: self._legacy_write_permitted(epoch, sample, receiver))
             if not mock and writer is None:
                 return False, "output writer unavailable"
-            epoch = (self._epoch, self._arm_epoch)
             self._tx_busy = True
             self._last_forward_revision = sample.revision
             self._last_forward_at = now
@@ -376,6 +408,17 @@ class ControllerAngleRelay:
             with self._lock:
                 self._tx_busy = False
 
+    def _legacy_write_permitted(self, epoch, sample, receiver) -> bool:
+        """排队期间的撤权、断流或换连接不能延迟成一次真实输出。"""
+        with self._lock:
+            now = self.time_fn()
+            self._expire(now)
+            return bool(epoch == (self._epoch, self._arm_epoch) and self.armed
+                        and receiver is self._legacy_receiver
+                        and self._authorized and self._fresh(now)
+                        and self.decoder.latest is sample
+                        and now - self._guard_at <= GUARD_TIMEOUT_S)
+
     def stats(self, now: float | None = None) -> dict:
         with self._lock:
             now = self.time_fn() if now is None else now
@@ -383,6 +426,8 @@ class ControllerAngleRelay:
             sample = self.decoder.latest if self._fresh(now) else None
             return {"enabled": self.config.enabled, "connected": self.connected,
                     "valid": sample is not None, "armed": self.armed,
+                    "auto_arm": self.config.auto_arm,
+                    "startup_arm_pending": self._startup_arm_pending,
                     "angles_rad": list(sample.angles) if sample else None,
                     "age_s": now - sample.received_at if sample else None,
                     "received": self.decoder.revision, "rejected": self.decoder.rejected,
@@ -390,6 +435,9 @@ class ControllerAngleRelay:
                     "write_in_flight": self._tx_busy,
                     "mock_forwarded": self.mock_forwarded, "mock_output": self.config.mock_output,
                     "last_error": self.last_error, "timeout_s": ANGLE_TIMEOUT_S,
+                    "output_route": self.config.output_route,
+                    "rx_port": self.config.rx_port, "tx_port": self.config.tx_port,
+                    "legacy_ready": self._legacy_ready() if self.config.output_route in LEGACY_ANGLE_ROUTES else False,
                     "profile": PROFILE_ID}
 
     def close(self) -> None:
@@ -451,7 +499,8 @@ class ControllerAngleRelay:
                         self.decoder.feed(chunk, received_at)
                         pending = self._pending(now)
                 if pending is not None:
-                    if not config.mock_output and tx is None:
+                    if (not config.mock_output and tx is None
+                            and config.output_route == "Official Client Serial"):
                         tx = self._open(config.tx_port)
                     with self._lock:
                         if epoch != self._epoch or stop.is_set():

@@ -101,8 +101,8 @@ class BackendVideoSourceTests(unittest.TestCase):
         self.assertTrue(entered.wait(1))
         stopper = decoder._stop_worker
         replacement = Process()
-        with patch('rm_client.backend.video_backend.subprocess.Popen', return_value=replacement) as spawn, \
-             patch('rm_client.backend.video_backend.resolve_ffmpeg_executable', return_value='ffmpeg'), \
+        with patch('rm_client.backend.video.decoder.subprocess.Popen', return_value=replacement) as spawn, \
+             patch('rm_client.backend.video.decoder.resolve_ffmpeg_executable', return_value='ffmpeg'), \
              patch.object(decoder, '_run_session_worker'):
             for _ in range(50):
                 self.backend.set_active_video_source('Native 0x0310')
@@ -257,7 +257,7 @@ class BackendVideoSourceTests(unittest.TestCase):
         self.assertEqual(self.backend.safety.control_state.value, 'LOCKED')
         self.assertFalse(decoder.available)
         self.assertIn(session, decoder._retired_sessions)
-        with patch('rm_client.backend.video_backend.subprocess.Popen') as spawn:
+        with patch('rm_client.backend.video.decoder.subprocess.Popen') as spawn:
             self.assertFalse(decoder.start())
             spawn.assert_not_called()
         release.set()

@@ -271,10 +271,6 @@ class RuntimeProfileTests(unittest.TestCase):
         self.assertIn('预览',option_label(V2_PROFILE,True))
         self.assertEqual(option_label(DEFAULT_PROFILE,False),DEFAULT_PROFILE)
 
-    def test_unsupported_hero_mock_entry_cannot_begin_request(self):
-        cls=methods('rm_client/ui/polar/mixins/video_backend_mixin.py','VideoBackendMixin',{'send_hero_deploy_request'})
-        host=cls();host.backend=NS(referee=get_profile(V2_PROFILE));notes=[];host.toast=notes.append
-        self.assertFalse(host.send_hero_deploy_request(1));self.assertIn('pending',notes[0])
 
 
 if __name__=='__main__': unittest.main()

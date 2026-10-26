@@ -1,0 +1,3381 @@
+{
+  "origin": "local Endfield Wiki original export",
+  "files": [
+    {
+      "output": "Combat.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/wikipanel.prefab",
+      "texture_name": "deco_wiki_icon_3",
+      "bundle": "Data/Bundles/Windows/main/9cb527d9924ad9aeffb3a577.ab",
+      "object": 7763659587518007144,
+      "sha256": "3b0c903306c5702a7f914577aa19103c44b30ad24b4bbf8fb086aaf52969143d",
+      "adaptation": "UIImage tint (121, 122, 120, 255)"
+    },
+    {
+      "output": "CombatSelected.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/wikipanel.prefab",
+      "texture_name": "deco_wiki_select_icon_3",
+      "bundle": "Data/Bundles/Windows/main/9cb527d9924ad9aeffb3a577.ab",
+      "object": 7778600108506129741,
+      "sha256": "bcf088d94594790cf19e3d5c997f1516900cf14aaac0a8df0932cad4b8812380",
+      "adaptation": "decoded source texture"
+    },
+    {
+      "output": "CombatFlash.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/wikipanel.prefab",
+      "texture_name": "deco_wiki_select_icon_3",
+      "bundle": "Data/Bundles/Windows/main/9cb527d9924ad9aeffb3a577.ab",
+      "object": 7778600108506129741,
+      "sha256": "44b6cc6633452d26659aad5cab95ae99282f38054086fb5bde8cbc6444d34763",
+      "adaptation": "UIImage tint (255, 255, 255, 255)"
+    },
+    {
+      "output": "CombatGrid.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/wikipanel.prefab",
+      "texture_name": "deco_wiki_icon_3_3",
+      "bundle": "Data/Bundles/Windows/main/9cb527d9924ad9aeffb3a577.ab",
+      "object": -5229483110887215859,
+      "sha256": "18d4702968216bf8bc8eddfcdb2117376518e91ab66ee37958fb585e68eba4dc",
+      "adaptation": "UIImage tint (121, 122, 120, 255)"
+    },
+    {
+      "output": "CombatDeco.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/wikipanel.prefab",
+      "texture_name": "deco_wiki_bg_3",
+      "bundle": "Data/Bundles/Windows/main/9cb527d9924ad9aeffb3a577.ab",
+      "object": 2390992579557408471,
+      "sha256": "09237d89042bb67e87e19c7b46bb7e83ffb434e3d620dc41eb97c993710a8724",
+      "adaptation": "UIImage tint (121, 122, 120, 255)"
+    },
+    {
+      "output": "Movement.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/wikipanel.prefab",
+      "texture_name": "deco_wiki_icon_6",
+      "bundle": "Data/Bundles/Windows/main/9cb527d9924ad9aeffb3a577.ab",
+      "object": 8915473712906810314,
+      "sha256": "a69fa216fdd4981c5491b780bb74c7e90f76d6d7c2d136cd043549713ecfe38d",
+      "adaptation": "UIImage tint (121, 122, 120, 255)"
+    },
+    {
+      "output": "MovementSelected.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_select_icon_6.png",
+      "texture_name": "deco_wiki_select_icon_6",
+      "bundle": "Data/Bundles/Windows/main/55b96badcaf644f16f90aa06.ab",
+      "object": -7707503214810279694,
+      "sha256": "3ee87ec7ac2c59a1cab75ed5877861ba56d770bf0940aea669a5a3b23ebdf138",
+      "adaptation": "decoded source texture"
+    },
+    {
+      "output": "MovementFlash.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_select_icon_6.png",
+      "texture_name": "deco_wiki_select_icon_6",
+      "bundle": "Data/Bundles/Windows/main/55b96badcaf644f16f90aa06.ab",
+      "object": -7707503214810279694,
+      "sha256": "7bb4bc4d9955c6dec63592c71550a9bc512416323f7b3400db66746ea79e84d7",
+      "adaptation": "UIImage tint (255, 255, 255, 255)"
+    },
+    {
+      "output": "MovementGrid.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/wikipanel.prefab",
+      "texture_name": "deco_wiki_icon_6_6",
+      "bundle": "Data/Bundles/Windows/main/9cb527d9924ad9aeffb3a577.ab",
+      "object": -6336311875836548627,
+      "sha256": "72b7f3144e6c00829cdeb179cc949c17c421ef0b0d14e0602187f5df5260d381",
+      "adaptation": "UIImage tint (121, 122, 120, 255)"
+    },
+    {
+      "output": "MovementDeco.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/wikipanel.prefab",
+      "texture_name": "deco_wiki_bg_6",
+      "bundle": "Data/Bundles/Windows/main/9cb527d9924ad9aeffb3a577.ab",
+      "object": 4380056839821681692,
+      "sha256": "b029adb8d88c928d44220cd4dd1db3c45f5df1df58a752233782346e0eda7575",
+      "adaptation": "UIImage tint (121, 122, 120, 255)"
+    },
+    {
+      "output": "Vision.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/wikipanel.prefab",
+      "texture_name": "deco_wiki_icon_1",
+      "bundle": "Data/Bundles/Windows/main/9cb527d9924ad9aeffb3a577.ab",
+      "object": -6006230096644602934,
+      "sha256": "3d19436c2d25c267e1f997a83b5a2fb9ce79878dbe20d4891ad0dc1e5aa7bbcc",
+      "adaptation": "UIImage tint (121, 122, 120, 255)"
+    },
+    {
+      "output": "VisionSelected.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/wikipanel.prefab",
+      "texture_name": "deco_wiki_select_icon_1",
+      "bundle": "Data/Bundles/Windows/main/9cb527d9924ad9aeffb3a577.ab",
+      "object": 3038455407717802336,
+      "sha256": "8e778f1289e72e83daa13c917ea92707020b95830cdd3659869c34fb00c64f74",
+      "adaptation": "decoded source texture"
+    },
+    {
+      "output": "VisionFlash.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/wikipanel.prefab",
+      "texture_name": "deco_wiki_select_icon_1",
+      "bundle": "Data/Bundles/Windows/main/9cb527d9924ad9aeffb3a577.ab",
+      "object": 3038455407717802336,
+      "sha256": "8853cd33f5c976c3697084f6f80365351a71bc060e4d2e69e9f809994f832118",
+      "adaptation": "UIImage tint (255, 255, 255, 255)"
+    },
+    {
+      "output": "VisionGrid.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/wikipanel.prefab",
+      "texture_name": "deco_wiki_icon_1_1",
+      "bundle": "Data/Bundles/Windows/main/9cb527d9924ad9aeffb3a577.ab",
+      "object": -1459249904388524103,
+      "sha256": "f6700f3a03f4c96bb09113e281db490b660d103a9ea929e3f7e443eebb630b36",
+      "adaptation": "UIImage tint (121, 122, 120, 255)"
+    },
+    {
+      "output": "VisionDeco.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/wikipanel.prefab",
+      "texture_name": "deco_wiki_bg_1",
+      "bundle": "Data/Bundles/Windows/main/9cb527d9924ad9aeffb3a577.ab",
+      "object": -4351804319848843740,
+      "sha256": "92e0f956bd8ef1edb59e507071b25a561c26401ec2116ec5bc384bbc018eb00a",
+      "adaptation": "UIImage tint (121, 122, 120, 255)"
+    },
+    {
+      "output": "Strategy.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/wikipanel.prefab",
+      "texture_name": "deco_wiki_icon_2",
+      "bundle": "Data/Bundles/Windows/main/9cb527d9924ad9aeffb3a577.ab",
+      "object": 2410310885393980411,
+      "sha256": "fa9064c6b29b5edf170154a305aa3471570e658f2a4198921e1616a6cd2114fd",
+      "adaptation": "UIImage tint (121, 122, 120, 255)"
+    },
+    {
+      "output": "StrategySelected.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/wikipanel.prefab",
+      "texture_name": "deco_wiki_select_icon_2",
+      "bundle": "Data/Bundles/Windows/main/9cb527d9924ad9aeffb3a577.ab",
+      "object": 6923446432065056718,
+      "sha256": "1a2a76d70fc5507ebecbc9ebc6152cb709ef65017bb008bb39e7854f9e1cf4ba",
+      "adaptation": "decoded source texture"
+    },
+    {
+      "output": "StrategyFlash.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/wikipanel.prefab",
+      "texture_name": "deco_wiki_select_icon_2",
+      "bundle": "Data/Bundles/Windows/main/9cb527d9924ad9aeffb3a577.ab",
+      "object": 6923446432065056718,
+      "sha256": "1fa958bfe0c7821920892edf3ae2618ed2e8b110dc6508c9cb5070e58e38229e",
+      "adaptation": "UIImage tint (255, 255, 255, 255)"
+    },
+    {
+      "output": "StrategyGrid.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/wikipanel.prefab",
+      "texture_name": "deco_wiki_icon_2_2",
+      "bundle": "Data/Bundles/Windows/main/9cb527d9924ad9aeffb3a577.ab",
+      "object": -1687437506230223407,
+      "sha256": "13cab6b28fa4cfdf08c3e3dc85b52ac250fcaa386143a988a322477d8ab432c1",
+      "adaptation": "UIImage tint (121, 122, 120, 255)"
+    },
+    {
+      "output": "StrategyDeco.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/wikipanel.prefab",
+      "texture_name": "deco_wiki_bg_2",
+      "bundle": "Data/Bundles/Windows/main/9cb527d9924ad9aeffb3a577.ab",
+      "object": 9135773002101978323,
+      "sha256": "32ab433febff7d57aadd99d2af9fb7086efa4f19ff8cb5bd4728bee0dea8d80c",
+      "adaptation": "UIImage tint (121, 122, 120, 255)"
+    },
+    {
+      "output": "System.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_icon_4.png",
+      "texture_name": "deco_wiki_icon_4",
+      "bundle": "Data/Bundles/Windows/main/67a04e23b78b7c360e81c22b.ab",
+      "object": 8714024218955559857,
+      "sha256": "b709538c3d56ba0af2c4e4688880cc1e34f3c4b70894b90c24adfc8b02053737",
+      "adaptation": "UIImage tint (121, 122, 120, 255)"
+    },
+    {
+      "output": "SystemSelected.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/wikipanel.prefab",
+      "texture_name": "deco_wiki_select_icon_4",
+      "bundle": "Data/Bundles/Windows/main/9cb527d9924ad9aeffb3a577.ab",
+      "object": -1692380395532482448,
+      "sha256": "a05ce95e8f83fa0fe052f3395c339b656786d5211def3d9d4dab430ee94a21a5",
+      "adaptation": "decoded source texture"
+    },
+    {
+      "output": "SystemFlash.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/wikipanel.prefab",
+      "texture_name": "deco_wiki_select_icon_4",
+      "bundle": "Data/Bundles/Windows/main/9cb527d9924ad9aeffb3a577.ab",
+      "object": -1692380395532482448,
+      "sha256": "63df2c888409ed4748fa364f1be534b40f462563895ba6fe4ea6039c85af568e",
+      "adaptation": "UIImage tint (255, 255, 255, 255)"
+    },
+    {
+      "output": "SystemGrid.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/wikipanel.prefab",
+      "texture_name": "deco_wiki_icon_4_4",
+      "bundle": "Data/Bundles/Windows/main/9cb527d9924ad9aeffb3a577.ab",
+      "object": -3866497192350192523,
+      "sha256": "34b040a2e8590f91e0ad645441c641f326139e90d81d85af86e0c0b140d9f647",
+      "adaptation": "UIImage tint (121, 122, 120, 255)"
+    },
+    {
+      "output": "SystemDeco.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_bg_4.png",
+      "texture_name": "deco_wiki_bg_4",
+      "bundle": "Data/Bundles/Windows/main/011befa5bd9c60075359ba4a.ab",
+      "object": 7596348692794798347,
+      "sha256": "adc0fdda2ec16b63747972f925495df56517619bf158db85f4d2bc1570be8b76",
+      "adaptation": "UIImage tint (121, 122, 120, 255)"
+    },
+    {
+      "output": "Render.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/wikipanel.prefab",
+      "texture_name": "deco_wiki_icon_5",
+      "bundle": "Data/Bundles/Windows/main/9cb527d9924ad9aeffb3a577.ab",
+      "object": 2166136984828214287,
+      "sha256": "2213e70316d3f6f9240df9a7821121d39fdcc7e54e54e706593c49053b0e5211",
+      "adaptation": "UIImage tint (121, 122, 120, 255)"
+    },
+    {
+      "output": "RenderSelected.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/wikipanel.prefab",
+      "texture_name": "deco_wiki_select_icon_5",
+      "bundle": "Data/Bundles/Windows/main/9cb527d9924ad9aeffb3a577.ab",
+      "object": -3168939898520133588,
+      "sha256": "badaa50946790a3d56349011be62c888a60aabeb01a9e3043874a8bfd5dc5f15",
+      "adaptation": "decoded source texture"
+    },
+    {
+      "output": "RenderFlash.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/wikipanel.prefab",
+      "texture_name": "deco_wiki_select_icon_5",
+      "bundle": "Data/Bundles/Windows/main/9cb527d9924ad9aeffb3a577.ab",
+      "object": -3168939898520133588,
+      "sha256": "d32001b45aa9f7d871b60de18f0df38ba55df091d37d992ab8a94c82cef4e513",
+      "adaptation": "UIImage tint (255, 255, 255, 255)"
+    },
+    {
+      "output": "RenderGrid.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/wikipanel.prefab",
+      "texture_name": "deco_wiki_icon_5_5",
+      "bundle": "Data/Bundles/Windows/main/9cb527d9924ad9aeffb3a577.ab",
+      "object": 5212301370886922303,
+      "sha256": "b8f83aab25c9e1b91b7e2f4a211827895db33d3468f568f63c935ea1cf9448e7",
+      "adaptation": "UIImage tint (121, 122, 120, 255)"
+    },
+    {
+      "output": "RenderDeco.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/wikipanel.prefab",
+      "texture_name": "deco_wiki_bg_5",
+      "bundle": "Data/Bundles/Windows/main/9cb527d9924ad9aeffb3a577.ab",
+      "object": 721731684091691015,
+      "sha256": "cf1b65915bc01bac8d7e88bc5203c0dd1efcea8df8ca96316bdb37e1558b80b1",
+      "adaptation": "UIImage tint (121, 122, 120, 255)"
+    },
+    {
+      "output": "number1.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/wikipanel.prefab",
+      "texture_name": "deco_wiki_icon_01",
+      "bundle": "Data/Bundles/Windows/main/9cb527d9924ad9aeffb3a577.ab",
+      "object": -4302768058639991026,
+      "sha256": "78ef102fc0339852c79ef122ee097db64baf43ed5a0832d138be91a7f1522996",
+      "adaptation": "decoded source texture"
+    },
+    {
+      "output": "number2.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/wikipanel.prefab",
+      "texture_name": "deco_wiki_icon_02",
+      "bundle": "Data/Bundles/Windows/main/9cb527d9924ad9aeffb3a577.ab",
+      "object": 3607955852333303541,
+      "sha256": "61a98610d1a1f2304c227abb8989cddbeb42f61f7f15172242f8dab9ea5a5d16",
+      "adaptation": "decoded source texture"
+    },
+    {
+      "output": "number3.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/wikipanel.prefab",
+      "texture_name": "deco_wiki_icon_03",
+      "bundle": "Data/Bundles/Windows/main/9cb527d9924ad9aeffb3a577.ab",
+      "object": 7260314039247395656,
+      "sha256": "e61a5986cbf0174022e0614e8cfe38c6dda579698ef606dd1f7e8c6652f80324",
+      "adaptation": "decoded source texture"
+    },
+    {
+      "output": "number4.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_icon_04.png",
+      "texture_name": "deco_wiki_icon_04",
+      "bundle": "Data/Bundles/Windows/main/e0f4c090768b78ffb972b3e0.ab",
+      "object": 6332896069727488560,
+      "sha256": "f78a862f8e2ca256d39fda9ebd27072b20c0557d7fbd19ce23e64d78e5fde583",
+      "adaptation": "decoded source texture"
+    },
+    {
+      "output": "number5.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/wikipanel.prefab",
+      "texture_name": "deco_wiki_icon_05",
+      "bundle": "Data/Bundles/Windows/main/9cb527d9924ad9aeffb3a577.ab",
+      "object": 6901318684427922585,
+      "sha256": "9e7986e80f268540e160d4efc1416767c3c60507fc12b618300efd063b658159",
+      "adaptation": "decoded source texture"
+    },
+    {
+      "output": "number6.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/wikipanel.prefab",
+      "texture_name": "deco_wiki_icon_06",
+      "bundle": "Data/Bundles/Windows/main/9cb527d9924ad9aeffb3a577.ab",
+      "object": -1903195555757031958,
+      "sha256": "f909322bd090367f04ca2c85dd35fc9b868d804639abd7c557703e0b8d7534b5",
+      "adaptation": "decoded source texture"
+    },
+    {
+      "output": "module_guide_adventure.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/sprites/wiki/groupicon/icon_wiki_group_guide_adventure.png",
+      "texture_name": "icon_wiki_group_guide_adventure",
+      "bundle": "Data/Bundles/Windows/main/09ff4bfb7f822708352ba64f.ab",
+      "object": -2152583230436395860,
+      "sha256": "ec701597dc7b471cd4d9412765c1ee7b13320900309920fa845546a4eb2c417e",
+      "adaptation": "UIImage tint (44, 44, 44, 255)"
+    },
+    {
+      "output": "module_guide_adventure_selected.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/sprites/wiki/groupicon/icon_wiki_group_guide_adventure.png",
+      "texture_name": "icon_wiki_group_guide_adventure",
+      "bundle": "Data/Bundles/Windows/main/09ff4bfb7f822708352ba64f.ab",
+      "object": -2152583230436395860,
+      "sha256": "0483d0513947b60aab94796c38775c69a0886d9dfd7950d7ba9cf05eb1ede7e9",
+      "adaptation": "UIImage tint (253, 253, 24, 255)"
+    },
+    {
+      "output": "module_item_portable_device.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/sprites/wiki/groupicon/icon_wiki_group_item_portable_device.png",
+      "texture_name": "icon_wiki_group_item_portable_device",
+      "bundle": "Data/Bundles/Windows/main/09ff4bfb7f822708352ba64f.ab",
+      "object": -6313308614072135843,
+      "sha256": "5fcd596c08f469e19ab6b6d9ef06e3b122fc2b7994e980e0ef10dc9ef6865ae7",
+      "adaptation": "UIImage tint (44, 44, 44, 255)"
+    },
+    {
+      "output": "module_item_portable_device_selected.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/sprites/wiki/groupicon/icon_wiki_group_item_portable_device.png",
+      "texture_name": "icon_wiki_group_item_portable_device",
+      "bundle": "Data/Bundles/Windows/main/09ff4bfb7f822708352ba64f.ab",
+      "object": -6313308614072135843,
+      "sha256": "032e912ffbac2ce53f07808b568aca07d147e51145df68dc1c60f642c65a7598",
+      "adaptation": "UIImage tint (253, 253, 24, 255)"
+    },
+    {
+      "output": "module_building_electric.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/sprites/wiki/groupicon/icon_wiki_group_building_electric.png",
+      "texture_name": "icon_wiki_group_building_electric",
+      "bundle": "Data/Bundles/Windows/main/09ff4bfb7f822708352ba64f.ab",
+      "object": 1346083583953386093,
+      "sha256": "6c824532c006fb6c3818f1c1774adfea738eb05086243c52c5277fc9a928b84e",
+      "adaptation": "UIImage tint (44, 44, 44, 255)"
+    },
+    {
+      "output": "module_building_electric_selected.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/sprites/wiki/groupicon/icon_wiki_group_building_electric.png",
+      "texture_name": "icon_wiki_group_building_electric",
+      "bundle": "Data/Bundles/Windows/main/09ff4bfb7f822708352ba64f.ab",
+      "object": 1346083583953386093,
+      "sha256": "c31661d57b2909eb1b4c315ff8064d307873997d4814023e049f855065a88a53",
+      "adaptation": "UIImage tint (253, 253, 24, 255)"
+    },
+    {
+      "output": "module_guide_battle.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/sprites/wiki/groupicon/icon_wiki_group_guide_battle.png",
+      "texture_name": "icon_wiki_group_guide_battle",
+      "bundle": "Data/Bundles/Windows/main/09ff4bfb7f822708352ba64f.ab",
+      "object": -6481718593897578674,
+      "sha256": "f7a7c50103d3fec79a8545f1bb1d0d48a6307931ed305f77307cbe6d8f4f1558",
+      "adaptation": "UIImage tint (44, 44, 44, 255)"
+    },
+    {
+      "output": "module_guide_battle_selected.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/sprites/wiki/groupicon/icon_wiki_group_guide_battle.png",
+      "texture_name": "icon_wiki_group_guide_battle",
+      "bundle": "Data/Bundles/Windows/main/09ff4bfb7f822708352ba64f.ab",
+      "object": -6481718593897578674,
+      "sha256": "507a401b50f8791aab4b635f17556373261e5eb95aeb8216d3cb4580d405df2c",
+      "adaptation": "UIImage tint (253, 253, 24, 255)"
+    },
+    {
+      "output": "module_item_special.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/sprites/wiki/groupicon/icon_wiki_group_item_special.png",
+      "texture_name": "icon_wiki_group_item_special",
+      "bundle": "Data/Bundles/Windows/main/09ff4bfb7f822708352ba64f.ab",
+      "object": 736971153392185751,
+      "sha256": "242ea9bb82ba58b330a21e2fb1e141d9c6890520f613f7cf1b0790cfc342b468",
+      "adaptation": "UIImage tint (44, 44, 44, 255)"
+    },
+    {
+      "output": "module_item_special_selected.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/sprites/wiki/groupicon/icon_wiki_group_item_special.png",
+      "texture_name": "icon_wiki_group_item_special",
+      "bundle": "Data/Bundles/Windows/main/09ff4bfb7f822708352ba64f.ab",
+      "object": 736971153392185751,
+      "sha256": "6efc99d94e6c1f1d3e2363eac8f6560fb9eda8c8a60fa96685321159a1801697",
+      "adaptation": "UIImage tint (253, 253, 24, 255)"
+    },
+    {
+      "output": "module_weapon_lance.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/sprites/wiki/groupicon/icon_wiki_group_weapon_lance.png",
+      "texture_name": "icon_wiki_group_weapon_lance",
+      "bundle": "Data/Bundles/Windows/main/09ff4bfb7f822708352ba64f.ab",
+      "object": 4985318710692141384,
+      "sha256": "8da16ec6337e998afa9596a6b62fb7d1aeccac4f9f457b9e104475f175ae9887",
+      "adaptation": "UIImage tint (44, 44, 44, 255)"
+    },
+    {
+      "output": "module_weapon_lance_selected.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/sprites/wiki/groupicon/icon_wiki_group_weapon_lance.png",
+      "texture_name": "icon_wiki_group_weapon_lance",
+      "bundle": "Data/Bundles/Windows/main/09ff4bfb7f822708352ba64f.ab",
+      "object": 4985318710692141384,
+      "sha256": "ff7316dc28919002f612e8a1ff49e7684889cc0e4c3d9aed57a0ac4dfa67f437",
+      "adaptation": "UIImage tint (253, 253, 24, 255)"
+    },
+    {
+      "output": "module_building_assemble.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/sprites/wiki/groupicon/icon_wiki_group_building_assemble.png",
+      "texture_name": "icon_wiki_group_building_assemble",
+      "bundle": "Data/Bundles/Windows/main/09ff4bfb7f822708352ba64f.ab",
+      "object": -4905516318130896964,
+      "sha256": "c2607debf47c9b0501c8e6d0ac0fe40f9688c87647989eaf197c28e897233483",
+      "adaptation": "UIImage tint (44, 44, 44, 255)"
+    },
+    {
+      "output": "module_building_assemble_selected.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/sprites/wiki/groupicon/icon_wiki_group_building_assemble.png",
+      "texture_name": "icon_wiki_group_building_assemble",
+      "bundle": "Data/Bundles/Windows/main/09ff4bfb7f822708352ba64f.ab",
+      "object": -4905516318130896964,
+      "sha256": "1ec772f63282ea0ad6c6e3a7098ce500e14006b10336b630824353e621c22cb8",
+      "adaptation": "UIImage tint (253, 253, 24, 255)"
+    },
+    {
+      "output": "module_building_logistic.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/sprites/wiki/groupicon/icon_wiki_group_building_logistic.png",
+      "texture_name": "icon_wiki_group_building_logistic",
+      "bundle": "Data/Bundles/Windows/main/09ff4bfb7f822708352ba64f.ab",
+      "object": 1303047033658039010,
+      "sha256": "61e0494309365d6069ae8ddb924c2ea00c01d2abbfd35741b07824669058d41b",
+      "adaptation": "UIImage tint (44, 44, 44, 255)"
+    },
+    {
+      "output": "module_building_logistic_selected.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/sprites/wiki/groupicon/icon_wiki_group_building_logistic.png",
+      "texture_name": "icon_wiki_group_building_logistic",
+      "bundle": "Data/Bundles/Windows/main/09ff4bfb7f822708352ba64f.ab",
+      "object": 1303047033658039010,
+      "sha256": "51bc1a81fcab215d8ff07be31657a0325135fbe1654ed8e949c4451b0ff59f14",
+      "adaptation": "UIImage tint (253, 253, 24, 255)"
+    },
+    {
+      "output": "module_building_battle.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/sprites/wiki/groupicon/icon_wiki_group_building_battle.png",
+      "texture_name": "icon_wiki_group_building_battle",
+      "bundle": "Data/Bundles/Windows/main/09ff4bfb7f822708352ba64f.ab",
+      "object": -4249681143945943293,
+      "sha256": "cc667a6d5e87ade1ea601573bed68e9a718e30a79388b288a0debc4e44c9d8cc",
+      "adaptation": "UIImage tint (44, 44, 44, 255)"
+    },
+    {
+      "output": "module_building_battle_selected.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/sprites/wiki/groupicon/icon_wiki_group_building_battle.png",
+      "texture_name": "icon_wiki_group_building_battle",
+      "bundle": "Data/Bundles/Windows/main/09ff4bfb7f822708352ba64f.ab",
+      "object": -4249681143945943293,
+      "sha256": "47e066ff90e6cd6468951f72e19c3e206077d23916872c20d9c75b75378a6700",
+      "adaptation": "UIImage tint (253, 253, 24, 255)"
+    },
+    {
+      "output": "module_item_nature.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/sprites/wiki/groupicon/icon_wiki_group_item_nature.png",
+      "texture_name": "icon_wiki_group_item_nature",
+      "bundle": "Data/Bundles/Windows/main/09ff4bfb7f822708352ba64f.ab",
+      "object": 8149712965216862853,
+      "sha256": "4f1915dca103ecbeffd60bd4cdeeb1c575283bf9be9347664cd27ab9c30c656f",
+      "adaptation": "UIImage tint (44, 44, 44, 255)"
+    },
+    {
+      "output": "module_item_nature_selected.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/sprites/wiki/groupicon/icon_wiki_group_item_nature.png",
+      "texture_name": "icon_wiki_group_item_nature",
+      "bundle": "Data/Bundles/Windows/main/09ff4bfb7f822708352ba64f.ab",
+      "object": 8149712965216862853,
+      "sha256": "999cd8d3d4a927b9a09cb98a4a71b092ada2a595f2c9a4855fe0761794b1c33f",
+      "adaptation": "UIImage tint (253, 253, 24, 255)"
+    },
+    {
+      "output": "module_item_material.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/sprites/wiki/groupicon/icon_wiki_group_item_material.png",
+      "texture_name": "icon_wiki_group_item_material",
+      "bundle": "Data/Bundles/Windows/main/09ff4bfb7f822708352ba64f.ab",
+      "object": 7079145975948858398,
+      "sha256": "65cbfc719abe7602b1fa1b1ed591d104f3ca6664dbef81c06e8ec7f808b79867",
+      "adaptation": "UIImage tint (44, 44, 44, 255)"
+    },
+    {
+      "output": "module_item_material_selected.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/sprites/wiki/groupicon/icon_wiki_group_item_material.png",
+      "texture_name": "icon_wiki_group_item_material",
+      "bundle": "Data/Bundles/Windows/main/09ff4bfb7f822708352ba64f.ab",
+      "object": 7079145975948858398,
+      "sha256": "7163a82739c336ba6ab5f818ea945a1108f34729e24daabe204b16b3ab9306fb",
+      "adaptation": "UIImage tint (253, 253, 24, 255)"
+    },
+    {
+      "output": "module_item_usable.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/sprites/wiki/groupicon/icon_wiki_group_item_usable.png",
+      "texture_name": "icon_wiki_group_item_usable",
+      "bundle": "Data/Bundles/Windows/main/09ff4bfb7f822708352ba64f.ab",
+      "object": -8114292248493411420,
+      "sha256": "277882621264b8d4f226071f1ca8eab485c7c2ac5bc5fe586a49a85777e1d0c7",
+      "adaptation": "UIImage tint (44, 44, 44, 255)"
+    },
+    {
+      "output": "module_item_usable_selected.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/sprites/wiki/groupicon/icon_wiki_group_item_usable.png",
+      "texture_name": "icon_wiki_group_item_usable",
+      "bundle": "Data/Bundles/Windows/main/09ff4bfb7f822708352ba64f.ab",
+      "object": -8114292248493411420,
+      "sha256": "a1ce473194d787a6607cb4d4c85819572e32e25cfae1b6a75eef938adf67deee",
+      "adaptation": "UIImage tint (253, 253, 24, 255)"
+    },
+    {
+      "output": "module_guide_all.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/sprites/wiki/groupicon/icon_wiki_group_guide_all.png",
+      "texture_name": "icon_wiki_group_guide_all",
+      "bundle": "Data/Bundles/Windows/main/09ff4bfb7f822708352ba64f.ab",
+      "object": -8152108783116285436,
+      "sha256": "0355a53e10dbb3ea50e4e5bd957e6a1ccdc634756b812097c332994f0cc97f39",
+      "adaptation": "UIImage tint (44, 44, 44, 255)"
+    },
+    {
+      "output": "module_guide_all_selected.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/sprites/wiki/groupicon/icon_wiki_group_guide_all.png",
+      "texture_name": "icon_wiki_group_guide_all",
+      "bundle": "Data/Bundles/Windows/main/09ff4bfb7f822708352ba64f.ab",
+      "object": -8152108783116285436,
+      "sha256": "97bdde0117f0a1cfd8cfadd55274dab6cf9c888d27f0c13f6161c6d96bfe97d2",
+      "adaptation": "UIImage tint (253, 253, 24, 255)"
+    },
+    {
+      "output": "module_guide_system.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/sprites/wiki/groupicon/icon_wiki_group_guide_system.png",
+      "texture_name": "icon_wiki_group_guide_system",
+      "bundle": "Data/Bundles/Windows/main/09ff4bfb7f822708352ba64f.ab",
+      "object": -277437915912392813,
+      "sha256": "7b6ab4203b424ec14a282faa21882ac79593b8be1e819a04acb8ac7ac6182594",
+      "adaptation": "UIImage tint (44, 44, 44, 255)"
+    },
+    {
+      "output": "module_guide_system_selected.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/sprites/wiki/groupicon/icon_wiki_group_guide_system.png",
+      "texture_name": "icon_wiki_group_guide_system",
+      "bundle": "Data/Bundles/Windows/main/09ff4bfb7f822708352ba64f.ab",
+      "object": -277437915912392813,
+      "sha256": "cc443318e3780e343f255a434a418c6dfc4b892ba87c05950ac8245af8814294",
+      "adaptation": "UIImage tint (253, 253, 24, 255)"
+    },
+    {
+      "output": "folder.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/wiki_folder.png",
+      "texture_name": "wiki_folder",
+      "bundle": "Data/Bundles/Windows/main/ead05b0a8ba8c89838c58841.ab",
+      "object": 626190643943580484,
+      "sha256": "4c2ece8cdbea132902291305bbff0372745dd576d5c3fb98c5f5ed62e351850f",
+      "adaptation": "UIImage tint (57, 57, 57, 255)"
+    },
+    {
+      "output": "path_arrow.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/wiki_arrows.png",
+      "texture_name": "wiki_arrows",
+      "bundle": "Data/Bundles/Windows/main/a9f7f5d0de6474ea55142bdf.ab",
+      "object": -7956792017479645700,
+      "sha256": "d1d814e0db8da8fc5694ee336e0a66684d0585123e53be5e30184a60f3ab4881",
+      "adaptation": "UIImage tint (57, 57, 57, 255)"
+    },
+    {
+      "output": "path_parent.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_top_bg.png",
+      "texture_name": "deco_wiki_top_bg",
+      "bundle": "Data/Bundles/Windows/main/f69405ec73bc25900d5caa36.ab",
+      "object": -6621547036455723737,
+      "sha256": "41108013a81ac72c839bca13dc39e980cfb659ccc5c5817075a454a5f4b10672",
+      "adaptation": "UIImage tint (57, 57, 57, 255)"
+    },
+    {
+      "output": "module_selected_bg.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/bg_wiki_equip_btn_select.png",
+      "texture_name": "bg_wiki_equip_btn_select",
+      "bundle": "Data/Bundles/Windows/main/11e8c5a6e27f3bb382cf589a.ab",
+      "object": -4187277239448191180,
+      "sha256": "0cd1a4b5cff8e4edb4c4a3661bd03db04d2b25d33955e4f4f289421d7f68e628",
+      "adaptation": "decoded source texture"
+    },
+    {
+      "output": "module_deco.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_group_17.png",
+      "texture_name": "deco_wiki_group_17",
+      "bundle": "Data/Bundles/Windows/main/f1047eb9664e3ffa1081dcab.ab",
+      "object": -4108162402473371193,
+      "sha256": "64b161b5efc6c2cfc452925ccfaf5dd12606dc68e1657eb4bed577509bf54efb",
+      "adaptation": "decoded source texture"
+    },
+    {
+      "output": "back.png",
+      "source": "assets/beyond/arts/ui/sprites/common/button/btn_common_return_shadeless.png",
+      "texture_name": "btn_common_return_shadeless",
+      "bundle": "Data/Bundles/Windows/main/a4fe02f7a8166ffaaf934c6f.ab",
+      "object": 5730122546972234251,
+      "sha256": "7afe5cb5a6097ef166b96f1e6c2141a1513cb43d083baf5e4bb98d472b87f7ff",
+      "adaptation": "UIImage tint (68, 68, 68, 255)"
+    },
+    {
+      "output": "close.png",
+      "source": "assets/beyond/arts/ui/sprites/common/button/close_btn_bg_shadeless.png",
+      "texture_name": "close_btn_bg_shadeless",
+      "bundle": "Data/Bundles/Windows/main/96b6b9070f4392f2ac954567.ab",
+      "object": 3556605786332437465,
+      "sha256": "3ae945fe5ad24f7d06210aeac689a51b518228e2b4561e6083b1474faace8eb4",
+      "adaptation": "UIImage tint (68, 68, 68, 255)"
+    },
+    {
+      "output": "search.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/wiki_magnifying_glass.png",
+      "texture_name": "wiki_magnifying_glass",
+      "bundle": "Data/Bundles/Windows/main/71c797d99f868642661064e0.ab",
+      "object": 7064600372897622790,
+      "sha256": "a2548ab8678c6177c378f7b7fb4a979cc74b6346761251b15afa44ffda8d1547",
+      "adaptation": "UIImage tint (57, 57, 57, 255)"
+    },
+    {
+      "output": "background.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_bg09_map.png",
+      "texture_name": "deco_wiki_bg09_map",
+      "bundle": "Data/Bundles/Windows/main/039a5ee8ae9433eb916ae884.ab",
+      "object": 6754251398532059436,
+      "sha256": "775b6a1fa549b3165ddce2d04735ac0ca7b92a488b3966d580086a4b42c893d0",
+      "adaptation": "UIImage tint (121, 122, 120, 255)"
+    },
+    {
+      "output": "logo.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_bg07_logo.png",
+      "texture_name": "deco_wiki_bg07_logo",
+      "bundle": "Data/Bundles/Windows/main/6a3a1286662f5a331aa51c31.ab",
+      "object": -5747272856656460299,
+      "sha256": "480167143f265a1fcb2a994caca5185be1174f6ba162e303cc121f8c6d35d273",
+      "adaptation": "decoded source texture"
+    },
+    {
+      "output": "ring.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_bg04_ring.png",
+      "texture_name": "deco_wiki_bg04_ring",
+      "bundle": "Data/Bundles/Windows/main/4c6e163bfe2002674dccaac3.ab",
+      "object": 6353352657426703717,
+      "sha256": "b1a3e8aceeb88715a3e37cc87eede337f4b10368560dd4b3faac319e4becd966",
+      "adaptation": "decoded source texture"
+    },
+    {
+      "output": "line.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_bgbuttomline.png",
+      "texture_name": "deco_wiki_bgbuttomline",
+      "bundle": "Data/Bundles/Windows/main/ea979c4ab431d79ddb90b0fe.ab",
+      "object": 6781066548362168817,
+      "sha256": "9d3b26c37a04407ca0e5176657b2e1676b2b5d447ac0fd4d7ab5c84f6f330dd4",
+      "adaptation": "UIImage tint (121, 122, 120, 255)"
+    },
+    {
+      "output": "triangle.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_triangle.png",
+      "texture_name": "deco_wiki_triangle",
+      "bundle": "Data/Bundles/Windows/main/ed0d941b8cd49ea0b68a440d.ab",
+      "object": -7807990754914068634,
+      "sha256": "513246ddb2d7afd1d7e43efc91ca2f27b5142d1195c193ed7e76d22533e959a4",
+      "adaptation": "decoded source texture"
+    },
+    {
+      "output": "topdeco.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_17.png",
+      "texture_name": "deco_wiki_17",
+      "bundle": "Data/Bundles/Windows/main/89b5b8a0d7ea851d63859468.ab",
+      "object": -6540581230547043294,
+      "sha256": "a6c10ee73b81cd2843b9e03bb554ec3af269fb40c8d922a85d8fc449c53425ff",
+      "adaptation": "decoded source texture"
+    },
+    {
+      "output": "select_background.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_select_bg.png",
+      "texture_name": "deco_wiki_select_bg",
+      "bundle": "Data/Bundles/Windows/main/be59018e8020ebbcf3367f99.ab",
+      "object": -3917025620973254556,
+      "sha256": "3260987e8cf2b705062d638e7e80316b1cf64734ac9db2034ea3a790039eb154",
+      "adaptation": "decoded source texture"
+    },
+    {
+      "output": "selected_disc.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_1.png",
+      "texture_name": "deco_wiki_1",
+      "bundle": "Data/Bundles/Windows/main/32e937d83577e27d21be65b7.ab",
+      "object": 8016051496456362218,
+      "sha256": "8c5a3da17b7b296934e82c2a0f8176fedd0a5be4c8e931dfd5152fdf8b6dc3eb",
+      "adaptation": "decoded source texture"
+    },
+    {
+      "output": "selected_symbol1.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_symbol_1.png",
+      "texture_name": "deco_wiki_symbol_1",
+      "bundle": "Data/Bundles/Windows/main/4934b7a29a1b5595b26bc663.ab",
+      "object": -380778015295199655,
+      "sha256": "d538b63117126a9cb0350889b9287a4c38082926e8cac3f808b7ee9137773c02",
+      "adaptation": "decoded source texture"
+    },
+    {
+      "output": "selected_symbol2.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_symbol_2.png",
+      "texture_name": "deco_wiki_symbol_2",
+      "bundle": "Data/Bundles/Windows/main/d66d9cd17a7b245b7c5e4a55.ab",
+      "object": 2151026151309913648,
+      "sha256": "ff6ab2fab474b0959b44e4ab05665de0d2575b82a99a4c72c47e3c280f9c09b4",
+      "adaptation": "decoded source texture"
+    },
+    {
+      "output": "selected_symbol3.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_symbol_3.png",
+      "texture_name": "deco_wiki_symbol_3",
+      "bundle": "Data/Bundles/Windows/main/17cf448a64807db830bc2a2d.ab",
+      "object": 8533042272696372174,
+      "sha256": "f220337287c8239e7d722fb05dced5a340457c6f3ce1260277eb0498f89873e9",
+      "adaptation": "decoded source texture"
+    },
+    {
+      "output": "selected_symbol4.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_symbol_4.png",
+      "texture_name": "deco_wiki_symbol_4",
+      "bundle": "Data/Bundles/Windows/main/029f922b04dba498e73c70fd.ab",
+      "object": 666561287723598474,
+      "sha256": "4eb6608aa49394dffcaf54f6424edce23d3c6644e56dfff3c596f8f1e3823cf1",
+      "adaptation": "decoded source texture"
+    },
+    {
+      "output": "scene_DecoDeco1.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_bg01.png",
+      "texture_name": "deco_wiki_bg01",
+      "bundle": "Data/Bundles/Windows/main/8b1b3daffd9f56287ecf9221.ab",
+      "object": -628310321223423916,
+      "sha256": "db09e0821c5017e59026ce9f9786a245b6f59c7c5ac14db3bea8edfff8b17ca8",
+      "adaptation": "source UIImage tiled at prefab size and pixel multiplier"
+    },
+    {
+      "output": "scene_DecoDeco2.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_bg02.png",
+      "texture_name": "deco_wiki_bg02",
+      "bundle": "Data/Bundles/Windows/main/5fa98bafa12916987e863326.ab",
+      "object": 6219113987525036739,
+      "sha256": "4bf2464c3afaf2cb0babe44d5a574af3b4364028ce8e1d1d7289fe6484c4d885",
+      "adaptation": "decoded source texture"
+    },
+    {
+      "output": "scene_DecoDeco2_1.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_bg02.png",
+      "texture_name": "deco_wiki_bg02",
+      "bundle": "Data/Bundles/Windows/main/5fa98bafa12916987e863326.ab",
+      "object": 6219113987525036739,
+      "sha256": "4bf2464c3afaf2cb0babe44d5a574af3b4364028ce8e1d1d7289fe6484c4d885",
+      "adaptation": "decoded source texture"
+    },
+    {
+      "output": "scene_DecoDeco4.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_bg08.png",
+      "texture_name": "deco_wiki_bg08",
+      "bundle": "Data/Bundles/Windows/main/c64a8190250f18c870597c20.ab",
+      "object": 6969050277292233756,
+      "sha256": "fb90b1ea7f8b29f53c43de2c365a9c5867fa3bcf1447371d67dfe76860e33a15",
+      "adaptation": "source UIImage tiled at prefab size and pixel multiplier"
+    },
+    {
+      "output": "scene_DecoDeco3.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_bg03.png",
+      "texture_name": "deco_wiki_bg03",
+      "bundle": "Data/Bundles/Windows/main/d10df5ac6c46f6114e3ac8ac.ab",
+      "object": 2194819814701547432,
+      "sha256": "bb091a9cf91d0bb5b895b1916c3850cc2de4613a5f30f1e4462c4cc46fb65674",
+      "adaptation": "decoded source texture"
+    },
+    {
+      "output": "scene_DecoDeco3.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_bg03.png",
+      "texture_name": "deco_wiki_bg03",
+      "bundle": "Data/Bundles/Windows/main/d10df5ac6c46f6114e3ac8ac.ab",
+      "object": 2194819814701547432,
+      "sha256": "bb091a9cf91d0bb5b895b1916c3850cc2de4613a5f30f1e4462c4cc46fb65674",
+      "adaptation": "decoded source texture"
+    },
+    {
+      "output": "scene_DecoDot1.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_bg04_ring.png",
+      "texture_name": "deco_wiki_bg04_ring",
+      "bundle": "Data/Bundles/Windows/main/4c6e163bfe2002674dccaac3.ab",
+      "object": 6353352657426703717,
+      "sha256": "b1a3e8aceeb88715a3e37cc87eede337f4b10368560dd4b3faac319e4becd966",
+      "adaptation": "decoded source texture"
+    },
+    {
+      "output": "scene_DecoDot2.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_bg05_ring.png",
+      "texture_name": "deco_wiki_bg05_ring",
+      "bundle": "Data/Bundles/Windows/main/d622cb72f425732b1cc1e390.ab",
+      "object": -6278670095306684,
+      "sha256": "a440f8b8f3079552196fddbc656058071a4558e663f0dc631dd90d0393c94fa6",
+      "adaptation": "decoded source texture"
+    },
+    {
+      "output": "scene_DecoDecoLogo.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_bg07_logo.png",
+      "texture_name": "deco_wiki_bg07_logo",
+      "bundle": "Data/Bundles/Windows/main/6a3a1286662f5a331aa51c31.ab",
+      "object": -5747272856656460299,
+      "sha256": "480167143f265a1fcb2a994caca5185be1174f6ba162e303cc121f8c6d35d273",
+      "adaptation": "decoded source texture"
+    },
+    {
+      "output": "scene_DecoDecoRing_2.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_bg06.png",
+      "texture_name": "deco_wiki_bg06",
+      "bundle": "Data/Bundles/Windows/main/5f4b6fb64338c4bb0c87a10f.ab",
+      "object": 1759358004598863530,
+      "sha256": "609cfdbba85d6bba0ae99af5ed9cf629ce2c445ce50fb694734df540c4a5c6b5",
+      "adaptation": "source UIImage Radial360 fill geometry"
+    },
+    {
+      "output": "scene_DecoDecoRing.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_bg06.png",
+      "texture_name": "deco_wiki_bg06",
+      "bundle": "Data/Bundles/Windows/main/5f4b6fb64338c4bb0c87a10f.ab",
+      "object": 1759358004598863530,
+      "sha256": "f5a325f89d3c3df1ed93da74684e99755db7eab4121f2faafb33bd4afbba8a49",
+      "adaptation": "source UIImage Radial360 fill geometry"
+    },
+    {
+      "output": "scene_DecoDecoMap.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_bg09_map.png",
+      "texture_name": "deco_wiki_bg09_map",
+      "bundle": "Data/Bundles/Windows/main/039a5ee8ae9433eb916ae884.ab",
+      "object": 6754251398532059436,
+      "sha256": "81affc5062b587824622e0777e958947da5b70aa41cb89de15a8c1ff2d80f063",
+      "adaptation": "decoded source texture"
+    },
+    {
+      "output": "path_bg_00.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_top_bg.png",
+      "texture_name": "deco_wiki_top_bg",
+      "bundle": "Data/Bundles/Windows/main/f69405ec73bc25900d5caa36.ab",
+      "object": -8197235482546463449,
+      "sha256": "dbcad0bf6bf2b5006b93cfe7860741a28b76a4b40a6f5c199635ee0e48293fce",
+      "adaptation": "source Sprite textureRect crop and nine-slice border",
+      "slice": [
+        0,
+        0
+      ]
+    },
+    {
+      "output": "path_bg_01.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_top_bg.png",
+      "texture_name": "deco_wiki_top_bg",
+      "bundle": "Data/Bundles/Windows/main/f69405ec73bc25900d5caa36.ab",
+      "object": -8197235482546463449,
+      "sha256": "77431ef01f5a4260016799232c3151ea7ba6b0fc74d740bbad7fdd7d8f5ab50a",
+      "adaptation": "source Sprite textureRect crop and nine-slice border",
+      "slice": [
+        0,
+        1
+      ]
+    },
+    {
+      "output": "path_bg_02.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_top_bg.png",
+      "texture_name": "deco_wiki_top_bg",
+      "bundle": "Data/Bundles/Windows/main/f69405ec73bc25900d5caa36.ab",
+      "object": -8197235482546463449,
+      "sha256": "1cd212bf67ae824ceee1716a7310c92c0e288d7d2ffffe84fac6ee4fd8ac9151",
+      "adaptation": "source Sprite textureRect crop and nine-slice border",
+      "slice": [
+        0,
+        2
+      ]
+    },
+    {
+      "output": "path_bg_10.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_top_bg.png",
+      "texture_name": "deco_wiki_top_bg",
+      "bundle": "Data/Bundles/Windows/main/f69405ec73bc25900d5caa36.ab",
+      "object": -8197235482546463449,
+      "sha256": "afc560823f7014b60e6c5884054ec8b6caf170d3d5de4580a992ffd794381f61",
+      "adaptation": "source Sprite textureRect crop and nine-slice border",
+      "slice": [
+        1,
+        0
+      ]
+    },
+    {
+      "output": "path_bg_11.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_top_bg.png",
+      "texture_name": "deco_wiki_top_bg",
+      "bundle": "Data/Bundles/Windows/main/f69405ec73bc25900d5caa36.ab",
+      "object": -8197235482546463449,
+      "sha256": "d5a51b6aed15684ec8c123e30fe5703155359d6543b6d7b47cb5766ef44939de",
+      "adaptation": "source Sprite textureRect crop and nine-slice border",
+      "slice": [
+        1,
+        1
+      ]
+    },
+    {
+      "output": "path_bg_12.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_top_bg.png",
+      "texture_name": "deco_wiki_top_bg",
+      "bundle": "Data/Bundles/Windows/main/f69405ec73bc25900d5caa36.ab",
+      "object": -8197235482546463449,
+      "sha256": "3ae86244d59b4a030aad6dddb0a500fbbf12966b270fa4f148152e70942284f4",
+      "adaptation": "source Sprite textureRect crop and nine-slice border",
+      "slice": [
+        1,
+        2
+      ]
+    },
+    {
+      "output": "path_bg_20.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_top_bg.png",
+      "texture_name": "deco_wiki_top_bg",
+      "bundle": "Data/Bundles/Windows/main/f69405ec73bc25900d5caa36.ab",
+      "object": -8197235482546463449,
+      "sha256": "577b102b64bd79666e3b73220b115153568d23431c1780f1a6ba5a5fb8874a19",
+      "adaptation": "source Sprite textureRect crop and nine-slice border",
+      "slice": [
+        2,
+        0
+      ]
+    },
+    {
+      "output": "path_bg_21.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_top_bg.png",
+      "texture_name": "deco_wiki_top_bg",
+      "bundle": "Data/Bundles/Windows/main/f69405ec73bc25900d5caa36.ab",
+      "object": -8197235482546463449,
+      "sha256": "49b4c3f67b8bc88ae319eac507e36e7e3c4534e6e56a6eb3cfe150b6ec32f6e8",
+      "adaptation": "source Sprite textureRect crop and nine-slice border",
+      "slice": [
+        2,
+        1
+      ]
+    },
+    {
+      "output": "path_bg_22.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_top_bg.png",
+      "texture_name": "deco_wiki_top_bg",
+      "bundle": "Data/Bundles/Windows/main/f69405ec73bc25900d5caa36.ab",
+      "object": -8197235482546463449,
+      "sha256": "a37654eb7e0cde56c83ae301d439510964a4c857479b473d9a68028ead4231bf",
+      "adaptation": "source Sprite textureRect crop and nine-slice border",
+      "slice": [
+        2,
+        2
+      ]
+    },
+    {
+      "output": "layer_7260221034527420121.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_bgbuttomline.png",
+      "texture_name": "deco_wiki_bgbuttomline",
+      "bundle": "Data/Bundles/Windows/main/ea979c4ab431d79ddb90b0fe.ab",
+      "object": 6781066548362168817,
+      "sha256": "f4b003410705ec1bdbad39853afedc991687c1e7803e38480451c297cebd8381",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_7772655589163495129.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_bg09_star02.png",
+      "texture_name": "deco_wiki_bg09_star02",
+      "bundle": "Data/Bundles/Windows/main/81bda4d86ab0f7075a2272fb.ab",
+      "object": -8384941800281813982,
+      "sha256": "966f4c471135e2d9509cd5473b1c0e086d0094cb08f66934f3f309013b809df5",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_n2749888157589934375.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_bg09_star01.png",
+      "texture_name": "deco_wiki_bg09_star01",
+      "bundle": "Data/Bundles/Windows/main/59f8a3a6f754f1db73e20eab.ab",
+      "object": -3911353276201472381,
+      "sha256": "2e876dc243488c152dc53a74fa28b460354c9081f64227ca88d44eaed6e2d213",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_6138533081307049689.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_bg09_star03.png",
+      "texture_name": "deco_wiki_bg09_star03",
+      "bundle": "Data/Bundles/Windows/main/5dd6ffed2ef5a22ce1b3e032.ab",
+      "object": -6830108051032493835,
+      "sha256": "f4229ab871e103b04d627f1b41c7f3ae569b2f326c0f3a671001e8a8633e067c",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "scene_white_ground.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/t_texture/mask/linemask/t_fx_mask_1123_m.png",
+      "texture_name": "T_fx_mask_1123_M",
+      "bundle": "Data/Bundles/Windows/main/88dae96a7bf9c7a2dc98e83e.ab",
+      "object": 6509367021810203110,
+      "sha256": "4131e068b69a1a025d5f7f5d1be56c449d47a230bb5ed77d971af97a6fcf2a04",
+      "adaptation": "2D projection of source white-ground main/mask; source material UV speed",
+      "dependencies": [
+        {
+          "source": "assets/beyond/arts/effects/commonassets/arts/t_texture/mask/linemask/t_fx_mask_1124_m.png",
+          "bundle": "Data/Bundles/Windows/main/3f9ea6a6404e9888c40f34eb.ab",
+          "object": 4414360980966126031
+        },
+        {
+          "source": "assets/beyond/arts/effects/ui/wiki/material/m_fxui_wiki_white_ground_01.mat",
+          "bundle": "Data/Bundles/Windows/main/6cc705dd584657a06dc2efa6.ab",
+          "object": -5611585278553019446
+        }
+      ]
+    },
+    {
+      "output": "layer_7541986568038728153.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_8.png",
+      "texture_name": "deco_wiki_8",
+      "bundle": "Data/Bundles/Windows/main/37c15bbf7d903af6bb68d427.ab",
+      "object": 449406473505592721,
+      "sha256": "12651118cf6a6b6a560be28646ffa17e0fcec1fdbfb9709a9e2db1d4ddd82846",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_6919589133121176025.png",
+      "source": "assets/beyond/arts/ui/sprites/common/square/bg_common_basemap.png",
+      "texture_name": "bg_common_BaseMap",
+      "bundle": "Data/Bundles/Windows/main/0a3b6ed7f7d54e5248c25726.ab",
+      "object": 8069244279189340032,
+      "sha256": "508e92238640e05034d4f6ac7d906a3288e82dbe047b7e8f55ff4d993a7523ef",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_6919589133121176025_00.png",
+      "source": "assets/beyond/arts/ui/sprites/common/square/bg_common_basemap.png",
+      "texture_name": "bg_common_BaseMap",
+      "bundle": "Data/Bundles/Windows/main/0a3b6ed7f7d54e5248c25726.ab",
+      "object": 8069244279189340032,
+      "sha256": "d5a51b6aed15684ec8c123e30fe5703155359d6543b6d7b47cb5766ef44939de",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_6919589133121176025_01.png",
+      "source": "assets/beyond/arts/ui/sprites/common/square/bg_common_basemap.png",
+      "texture_name": "bg_common_BaseMap",
+      "bundle": "Data/Bundles/Windows/main/0a3b6ed7f7d54e5248c25726.ab",
+      "object": 8069244279189340032,
+      "sha256": "f9cd14267465cf42282993d2aa8e6cdae13b26b561f38ae38d33358f832e7771",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_6919589133121176025_02.png",
+      "source": "assets/beyond/arts/ui/sprites/common/square/bg_common_basemap.png",
+      "texture_name": "bg_common_BaseMap",
+      "bundle": "Data/Bundles/Windows/main/0a3b6ed7f7d54e5248c25726.ab",
+      "object": 8069244279189340032,
+      "sha256": "d5a51b6aed15684ec8c123e30fe5703155359d6543b6d7b47cb5766ef44939de",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_6919589133121176025_10.png",
+      "source": "assets/beyond/arts/ui/sprites/common/square/bg_common_basemap.png",
+      "texture_name": "bg_common_BaseMap",
+      "bundle": "Data/Bundles/Windows/main/0a3b6ed7f7d54e5248c25726.ab",
+      "object": 8069244279189340032,
+      "sha256": "5d36521f8bb3c67bf34e967676d29e3d2bd504f4e80ef55d06f3d010b4cfd879",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_6919589133121176025_11.png",
+      "source": "assets/beyond/arts/ui/sprites/common/square/bg_common_basemap.png",
+      "texture_name": "bg_common_BaseMap",
+      "bundle": "Data/Bundles/Windows/main/0a3b6ed7f7d54e5248c25726.ab",
+      "object": 8069244279189340032,
+      "sha256": "803f3b73e9e4960c1b25d25b1dcb493de6cb51a001fbcc7f604e4dfe62c8c26e",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_6919589133121176025_12.png",
+      "source": "assets/beyond/arts/ui/sprites/common/square/bg_common_basemap.png",
+      "texture_name": "bg_common_BaseMap",
+      "bundle": "Data/Bundles/Windows/main/0a3b6ed7f7d54e5248c25726.ab",
+      "object": 8069244279189340032,
+      "sha256": "5d36521f8bb3c67bf34e967676d29e3d2bd504f4e80ef55d06f3d010b4cfd879",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_6919589133121176025_20.png",
+      "source": "assets/beyond/arts/ui/sprites/common/square/bg_common_basemap.png",
+      "texture_name": "bg_common_BaseMap",
+      "bundle": "Data/Bundles/Windows/main/0a3b6ed7f7d54e5248c25726.ab",
+      "object": 8069244279189340032,
+      "sha256": "d5a51b6aed15684ec8c123e30fe5703155359d6543b6d7b47cb5766ef44939de",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_6919589133121176025_21.png",
+      "source": "assets/beyond/arts/ui/sprites/common/square/bg_common_basemap.png",
+      "texture_name": "bg_common_BaseMap",
+      "bundle": "Data/Bundles/Windows/main/0a3b6ed7f7d54e5248c25726.ab",
+      "object": 8069244279189340032,
+      "sha256": "f9cd14267465cf42282993d2aa8e6cdae13b26b561f38ae38d33358f832e7771",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_6919589133121176025_22.png",
+      "source": "assets/beyond/arts/ui/sprites/common/square/bg_common_basemap.png",
+      "texture_name": "bg_common_BaseMap",
+      "bundle": "Data/Bundles/Windows/main/0a3b6ed7f7d54e5248c25726.ab",
+      "object": 8069244279189340032,
+      "sha256": "d5a51b6aed15684ec8c123e30fe5703155359d6543b6d7b47cb5766ef44939de",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_7237588209860362713.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_10.png",
+      "texture_name": "deco_wiki_10",
+      "bundle": "Data/Bundles/Windows/main/cfa1ea74db3ea511ff0135b7.ab",
+      "object": -321675103219247111,
+      "sha256": "c6c044292dc73b75a458ea7be4f188d36b82d1d8df940f6a0af4ae122d096e93",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_n7952900164215946791.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_11.png",
+      "texture_name": "deco_wiki_11",
+      "bundle": "Data/Bundles/Windows/main/8ddb4252d9150657bef961c0.ab",
+      "object": -7608083797080682459,
+      "sha256": "69ecbe832f066e7b664feb37ccc626e85ebf53c61b6b0492c55bb732e1b1d5f4",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_4266081714907267545.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_12.png",
+      "texture_name": "deco_wiki_12",
+      "bundle": "Data/Bundles/Windows/main/3266c3c07f89561a998faef8.ab",
+      "object": -2555016507069069848,
+      "sha256": "b2456adc1298cdfcbef7cd347617535e8e8a6b3e94dd5e2bbb48dc1fcc9975ff",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_81881175782212057.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_13.png",
+      "texture_name": "deco_wiki_13",
+      "bundle": "Data/Bundles/Windows/main/0a88759b1f9e8a6ff4613361.ab",
+      "object": -6500276212524968273,
+      "sha256": "1c474811a006a1fe814c12c4019df7187f48a98ffe956cb3eca6a056937e6b4e",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_2362060993574631798.png",
+      "source": "assets/beyond/arts/effects/ui/sprites/common/t_ui_deco_factravelpole_text02.png",
+      "texture_name": "T_ui_deco_factravelpole_text02",
+      "bundle": "Data/Bundles/Windows/main/18aa19cb6c2860c230b319ca.ab",
+      "object": -2543661712004359687,
+      "sha256": "b57d3580ca6b0d4ab17c233498f790429420c992c8664eb53557f0b889a43d84",
+      "adaptation": "source text alpha and black material intensity; runtime UV scroll",
+      "dependencies": [
+        {
+          "source": "assets/beyond/arts/effects/ui/material/common/m_fx_text_scroll_blcak.mat",
+          "bundle": "Data/Bundles/Windows/main/20630c5d60fe3097ffc92ed7.ab",
+          "object": -1185827249841981678
+        }
+      ]
+    },
+    {
+      "output": "layer_n6343399618886731402.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/wikipanel.prefab",
+      "texture_name": "deco_wiki_9",
+      "bundle": "Data/Bundles/Windows/main/9cb527d9924ad9aeffb3a577.ab",
+      "object": -72401797687120658,
+      "sha256": "4da97b08c82d707e5847a9fcd8ebc045a2d946ab46a1758f30c07d1dc892d432",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_3621961782078699894.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/wikipanel.prefab",
+      "texture_name": "deco_wiki_3",
+      "bundle": "Data/Bundles/Windows/main/9cb527d9924ad9aeffb3a577.ab",
+      "object": -7372734312976287787,
+      "sha256": "3cb16728b2e476db32de03bb4a50fcac88fb628c28bc6b18d9085e9aa69bc9d8",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_8977526844047954687.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_group_2.png",
+      "texture_name": "deco_wiki_group_2",
+      "bundle": "Data/Bundles/Windows/main/f8ba548c55ef58fd05b2663d.ab",
+      "object": -4407377111621659841,
+      "sha256": "ec1bef9d6fd8d89a3816bd06a7ffe0940f713b85e6a6d19386064dc2fe5e6238",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_8977526844047954687_00.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_group_2.png",
+      "texture_name": "deco_wiki_group_2",
+      "bundle": "Data/Bundles/Windows/main/f8ba548c55ef58fd05b2663d.ab",
+      "object": -4407377111621659841,
+      "sha256": "9002e58571af28b07574bd1ff62819a98315a6c8842e1c9769f958b4eb9be8d2",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_8977526844047954687_01.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_group_2.png",
+      "texture_name": "deco_wiki_group_2",
+      "bundle": "Data/Bundles/Windows/main/f8ba548c55ef58fd05b2663d.ab",
+      "object": -4407377111621659841,
+      "sha256": "731432cbe50aec86bf4baa3cf8c6586800df94ca3f3e899a44dbb11076e6dfe6",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_8977526844047954687_02.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_group_2.png",
+      "texture_name": "deco_wiki_group_2",
+      "bundle": "Data/Bundles/Windows/main/f8ba548c55ef58fd05b2663d.ab",
+      "object": -4407377111621659841,
+      "sha256": "3ab0eade4ccd221b29d053c5ee2e4265a8e1701e2366f8450e420361a7004721",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_8977526844047954687_10.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_group_2.png",
+      "texture_name": "deco_wiki_group_2",
+      "bundle": "Data/Bundles/Windows/main/f8ba548c55ef58fd05b2663d.ab",
+      "object": -4407377111621659841,
+      "sha256": "c60e2a990210c10c4968e369ecc788f77e8ef70b1272fa0907cffeb4d9fad7ab",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_8977526844047954687_11.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_group_2.png",
+      "texture_name": "deco_wiki_group_2",
+      "bundle": "Data/Bundles/Windows/main/f8ba548c55ef58fd05b2663d.ab",
+      "object": -4407377111621659841,
+      "sha256": "e2719552d5c97f5279c1da9f4a1663f7a2c0f309d488a1a2b3a964c1174cb8d1",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_8977526844047954687_12.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_group_2.png",
+      "texture_name": "deco_wiki_group_2",
+      "bundle": "Data/Bundles/Windows/main/f8ba548c55ef58fd05b2663d.ab",
+      "object": -4407377111621659841,
+      "sha256": "9b0d07b16b0ec537d00d828f09a1f4abe7561516b0d103b3a6dceece5110848f",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_8977526844047954687_20.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_group_2.png",
+      "texture_name": "deco_wiki_group_2",
+      "bundle": "Data/Bundles/Windows/main/f8ba548c55ef58fd05b2663d.ab",
+      "object": -4407377111621659841,
+      "sha256": "02d9fbdc348187e5f3e52a72030e1e764fa0bc7d75178a7b4cb040cfa9cd13b8",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_8977526844047954687_21.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_group_2.png",
+      "texture_name": "deco_wiki_group_2",
+      "bundle": "Data/Bundles/Windows/main/f8ba548c55ef58fd05b2663d.ab",
+      "object": -4407377111621659841,
+      "sha256": "e593b26f4bfa7eeff5a7bd2ce93a7f5b960a2c76369b2cb71e5a911f0c2a3d60",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_8977526844047954687_22.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_group_2.png",
+      "texture_name": "deco_wiki_group_2",
+      "bundle": "Data/Bundles/Windows/main/f8ba548c55ef58fd05b2663d.ab",
+      "object": -4407377111621659841,
+      "sha256": "0bb100e0a0a3b55f5fb24b5b64d4969a8bbdd4d865400e86f7e2bc0cbae426bc",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_7100914836220351231.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_wiki_search_2.png",
+      "texture_name": "deco_wiki_search_2",
+      "bundle": "Data/Bundles/Windows/main/1878515ec0a820afb9f6c084.ab",
+      "object": 7098859520315949045,
+      "sha256": "f40f3b69b9392a64d7cc475947314fb6c0b1525be41c21fe1414b13db81e22eb",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_n48604112704302337.png",
+      "source": "assets/beyond/arts/ui/sprites/factory/common/deco_assembly07.png",
+      "texture_name": "deco_assembly07",
+      "bundle": "Data/Bundles/Windows/main/ab318adafe06d18f06890279.ab",
+      "object": 2202319636932961586,
+      "sha256": "6c96a2b7db45bf785323f4400c9bd315c34b6981e7578c27cd55cc415bbff84d",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_n2271108492306083073.png",
+      "source": "assets/beyond/arts/ui/sprites/wiki/deco_search_group_1.png",
+      "texture_name": "deco_search_group_1",
+      "bundle": "Data/Bundles/Windows/main/153e58c9909b262eb5211004.ab",
+      "object": 4241677795651675157,
+      "sha256": "335f5bf2061f878604c78cb1bc3f6249ec6488a3e17722716d58a48576ade9fd",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_6221897133431460607.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/wikisearchpanel.prefab",
+      "texture_name": "btn_search_bg_r5_shadow",
+      "bundle": "Data/Bundles/Windows/main/4da9bf14b200c39c07b8b00c.ab",
+      "object": 1878516715192335954,
+      "sha256": "56e85bd6046566fe880d446ec7d358a12ee36679737deec13fd4c2b547b8a843",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_6221897133431460607_00.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/wikisearchpanel.prefab",
+      "texture_name": "btn_search_bg_r5_shadow",
+      "bundle": "Data/Bundles/Windows/main/4da9bf14b200c39c07b8b00c.ab",
+      "object": 1878516715192335954,
+      "sha256": "8ac699dd6c4bd0604b4023a2c6a303b9b74590ea048e13aeda3a3272a732ce74",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_6221897133431460607_01.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/wikisearchpanel.prefab",
+      "texture_name": "btn_search_bg_r5_shadow",
+      "bundle": "Data/Bundles/Windows/main/4da9bf14b200c39c07b8b00c.ab",
+      "object": 1878516715192335954,
+      "sha256": "c42d843878da6c834aeb510212e38164a524834eec09dc7cc8b469e30793993b",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_6221897133431460607_02.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/wikisearchpanel.prefab",
+      "texture_name": "btn_search_bg_r5_shadow",
+      "bundle": "Data/Bundles/Windows/main/4da9bf14b200c39c07b8b00c.ab",
+      "object": 1878516715192335954,
+      "sha256": "056ce7e7ec297c400a2a16c3b8e0fef19a192e1c5350c6deb54e4a8505abf67b",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_6221897133431460607_10.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/wikisearchpanel.prefab",
+      "texture_name": "btn_search_bg_r5_shadow",
+      "bundle": "Data/Bundles/Windows/main/4da9bf14b200c39c07b8b00c.ab",
+      "object": 1878516715192335954,
+      "sha256": "a49801c0c03ef2d2f77b5c4c295786375206a5f4bbdee5eb2a6827bbff9351f8",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_6221897133431460607_11.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/wikisearchpanel.prefab",
+      "texture_name": "btn_search_bg_r5_shadow",
+      "bundle": "Data/Bundles/Windows/main/4da9bf14b200c39c07b8b00c.ab",
+      "object": 1878516715192335954,
+      "sha256": "637304643a1b6fdb33c5e7260be4361b03977f813ff189bfd7ad1de3ea2bf889",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_6221897133431460607_12.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/wikisearchpanel.prefab",
+      "texture_name": "btn_search_bg_r5_shadow",
+      "bundle": "Data/Bundles/Windows/main/4da9bf14b200c39c07b8b00c.ab",
+      "object": 1878516715192335954,
+      "sha256": "3e37c532f4e1757bd074d4ef77a3dad6234107fcde84a92a06355df115e729af",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_6221897133431460607_20.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/wikisearchpanel.prefab",
+      "texture_name": "btn_search_bg_r5_shadow",
+      "bundle": "Data/Bundles/Windows/main/4da9bf14b200c39c07b8b00c.ab",
+      "object": 1878516715192335954,
+      "sha256": "b42749e3c02842e79573396e8d3a9983203c04a7f093e1c6cebd388e837bc493",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_6221897133431460607_21.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/wikisearchpanel.prefab",
+      "texture_name": "btn_search_bg_r5_shadow",
+      "bundle": "Data/Bundles/Windows/main/4da9bf14b200c39c07b8b00c.ab",
+      "object": 1878516715192335954,
+      "sha256": "f53dcb6c753d6c58e66daed624106376da67da57c99d94f03cad63dc0c24a9cc",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_6221897133431460607_22.png",
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/wikisearchpanel.prefab",
+      "texture_name": "btn_search_bg_r5_shadow",
+      "bundle": "Data/Bundles/Windows/main/4da9bf14b200c39c07b8b00c.ab",
+      "object": 1878516715192335954,
+      "sha256": "4a52e08e7f16fcfbc21626e5379c509c2f5dbdf5f6384c718dca8ad8ae161cd9",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_3245403157506364159.png",
+      "source": "assets/beyond/arts/ui/sprites/common/square/bg_common_r5_p2.png",
+      "texture_name": "bg_common_r5_p2",
+      "bundle": "Data/Bundles/Windows/main/58f48a3147b03992072cc8b1.ab",
+      "object": -8450225974240167772,
+      "sha256": "9fbe0ccef746f5f90295919e88307e1df03cfbc48367c391adad364fec551e1f",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_3245403157506364159_00.png",
+      "source": "assets/beyond/arts/ui/sprites/common/square/bg_common_r5_p2.png",
+      "texture_name": "bg_common_r5_p2",
+      "bundle": "Data/Bundles/Windows/main/58f48a3147b03992072cc8b1.ab",
+      "object": -8450225974240167772,
+      "sha256": "be02c150551ab45c1b17b45ec91e053557941021a4761428e8959e499dd25cf1",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_3245403157506364159_01.png",
+      "source": "assets/beyond/arts/ui/sprites/common/square/bg_common_r5_p2.png",
+      "texture_name": "bg_common_r5_p2",
+      "bundle": "Data/Bundles/Windows/main/58f48a3147b03992072cc8b1.ab",
+      "object": -8450225974240167772,
+      "sha256": "b80ad65af18e7e47b69a6ddc20508a97531b0eeb4e31ab3dbd1d93b29a20963e",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_3245403157506364159_02.png",
+      "source": "assets/beyond/arts/ui/sprites/common/square/bg_common_r5_p2.png",
+      "texture_name": "bg_common_r5_p2",
+      "bundle": "Data/Bundles/Windows/main/58f48a3147b03992072cc8b1.ab",
+      "object": -8450225974240167772,
+      "sha256": "abc3d9e1dbf915e969652b4df2981ae164335a153add980ca940abe0abc617a4",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_3245403157506364159_10.png",
+      "source": "assets/beyond/arts/ui/sprites/common/square/bg_common_r5_p2.png",
+      "texture_name": "bg_common_r5_p2",
+      "bundle": "Data/Bundles/Windows/main/58f48a3147b03992072cc8b1.ab",
+      "object": -8450225974240167772,
+      "sha256": "d8044a3923d288e7284cd8c339e22f4de63bc7658559f64b2728670e5d1550d3",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_3245403157506364159_11.png",
+      "source": "assets/beyond/arts/ui/sprites/common/square/bg_common_r5_p2.png",
+      "texture_name": "bg_common_r5_p2",
+      "bundle": "Data/Bundles/Windows/main/58f48a3147b03992072cc8b1.ab",
+      "object": -8450225974240167772,
+      "sha256": "e44fe88396070626b1e73ee3f820dad230f9b084d6a64c4dfc54d4cd60b22056",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_3245403157506364159_12.png",
+      "source": "assets/beyond/arts/ui/sprites/common/square/bg_common_r5_p2.png",
+      "texture_name": "bg_common_r5_p2",
+      "bundle": "Data/Bundles/Windows/main/58f48a3147b03992072cc8b1.ab",
+      "object": -8450225974240167772,
+      "sha256": "5c7d8a27acc17c29a9ddc4ecd01fc1b0a01cceaca8f496fc5e1ddf27ce17ec55",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_3245403157506364159_20.png",
+      "source": "assets/beyond/arts/ui/sprites/common/square/bg_common_r5_p2.png",
+      "texture_name": "bg_common_r5_p2",
+      "bundle": "Data/Bundles/Windows/main/58f48a3147b03992072cc8b1.ab",
+      "object": -8450225974240167772,
+      "sha256": "a3c265e295073f5fdecd9d38ede73667a684ce7a37d763416e97bb71658caeb0",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_3245403157506364159_21.png",
+      "source": "assets/beyond/arts/ui/sprites/common/square/bg_common_r5_p2.png",
+      "texture_name": "bg_common_r5_p2",
+      "bundle": "Data/Bundles/Windows/main/58f48a3147b03992072cc8b1.ab",
+      "object": -8450225974240167772,
+      "sha256": "71c61d5ad7957cafd2a9538a0ca212deb79e5c98ce1a852d7a6e608860d9536c",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "layer_3245403157506364159_22.png",
+      "source": "assets/beyond/arts/ui/sprites/common/square/bg_common_r5_p2.png",
+      "texture_name": "bg_common_r5_p2",
+      "bundle": "Data/Bundles/Windows/main/58f48a3147b03992072cc8b1.ab",
+      "object": -8450225974240167772,
+      "sha256": "d443f7478e9af63ec9311264ff3d6ffb002a8030d2574e65d4ee6ff6b26e1550",
+      "adaptation": "source Sprite crop / border preserved"
+    },
+    {
+      "output": "waves/000.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "fb2f05be2b70c0d99ddc79c389e110b897d536c37733f5949d2dff1637e021b6",
+      "dependencies": [
+        {
+          "source": "assets/beyond/arts/effects/ui/wiki/material/m_fxui_wiki_white_ground_01.mat",
+          "bundle": "Data/Bundles/Windows/main/6cc705dd584657a06dc2efa6.ab",
+          "object": -5611585278553019446
+        },
+        {
+          "source": "assets/beyond/dynamicassets/gameplay/prefabs/wiki/wikicameragroup.prefab",
+          "bundle": "Data/Bundles/Windows/main/a703d3a5a244009679486067.ab",
+          "object": 8843913985749677385
+        },
+        {
+          "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+          "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+          "object": 374149229920228294
+        },
+        {
+          "source": "assets/beyond/dynamicassets/gameplay/prefabs/wiki/wikimodelshow.prefab",
+          "bundle": "Data/Bundles/Windows/main/b9aac4d23920f68201638f45.ab",
+          "object": 8179581310422553187
+        },
+        {
+          "source": "assets/beyond/arts/effects/commonassets/arts/t_texture/mask/linemask/t_fx_mask_1123_m.png",
+          "bundle": "Data/Bundles/Windows/main/88dae96a7bf9c7a2dc98e83e.ab",
+          "object": 6509367021810203110
+        },
+        {
+          "source": "assets/beyond/arts/effects/commonassets/arts/t_texture/mask/linemask/t_fx_mask_1124_m.png",
+          "bundle": "Data/Bundles/Windows/main/3f9ea6a6404e9888c40f34eb.ab",
+          "object": 4414360980966126031
+        },
+        {
+          "source": "assets/beyond/arts/effects/commonassets/arts/t_texture/mask/noise/t_fx_flow_904_m.png",
+          "bundle": "Data/Bundles/Windows/main/d4540c857e15dc556b9aa0cd.ab",
+          "object": 701954606319280908
+        }
+      ],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/001.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "34195669a43a81613f278ddc9f60918549bdbece2d97f4f0af8528af69073e9b",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/002.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "ece1a56627f0419f4211c21b1ddc3827d103972e7bba59e7f41c81a628b0bb90",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/003.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "ff7986852a78db5c3438540077122508619ef392ed4a743bc3170943fc2b6903",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/004.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "5e5574f48f6dfe0fa7ab0a32425335634220b40908fd3624536ff5a6fe015e9d",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/005.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "7f303c8659c878ca4f60b0c5093a10c46f8ddb0dfaa058106e593b6722929c96",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/006.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "4fbd8ec2750072e9c9e01f4486023eea4b3c1cf14d8451175d875a4bdc49c802",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/007.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "379787ecadabd5828a98892f068c280f82c07c924cf8c57449104299d574ece1",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/008.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "c0a170c95374f951d3360839cc8661b7413f30571c9e858644a996c209f618c4",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/009.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "d1a71164d82afd09f0da1d3a2ea95620560fe2deceef1a66ed1058ebc03d3dd2",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/010.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "626e6d1b9921e4fd00eede1f020750679360aadb6b56051bcfd5bc4c6725a44e",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/011.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "da7f4235c91ffc86d2ed2d72b3c2df9f7971183008b1fdbdf9440204d1b847b2",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/012.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "48d69dc2938a716e1b184ff5c0dd70fa35b15ec1f346372bb9c1e5dfb0f7d49b",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/013.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "319d3147ce437564eb42a31645945f51b360d0ccd0fd9ef18a3e5853d7bac570",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/014.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "f892865c64254e42b2138f777d770529d7609cabf56ea57c302c04fe74c639d2",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/015.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "086f6119c7bc3d4e01d5088ae529855c17e23edf5a9e949328615ea49665aef0",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/016.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "3054faca594dd6525a18fd64fe7e55ca96c5cc558214dc99b538bc5b901c55bd",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/017.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "bf6695cee1504f68e60c11c42304a068404a5c86d46f3161570b97b79f83f144",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/018.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "42d2967a60d7042896ee080f0db22d20f37641cf7c4c6380f5d19bf6f58f22a4",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/019.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "f9ade27cd7dfbcd03844dc82bcbcee8ae510e5fe4a47ff489ae70805052a9b48",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/020.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "980ee38b5e5f6f84a4a51606248628370dc1fd0176e77731800bce3733553192",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/021.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "59b434a37885cdac5d45aff6ba3e1c7021d85a990546fe31e26eab5912ad509a",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/022.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "2ef7cda32f6fedc338feb633c4f1c1a17723ab5f976e5b812194dbb64a604cc9",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/023.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "fa4f119562e6c96c957385f61a6acb09a4b597cdbc809b3bd98a3ebbf5def143",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/024.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "683c71e09eb806c05397d97ec5161e1b48267502f0d3905ba08f2149240cce60",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/025.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "952899a244afc72e5cb8647395de3790fbc66f2df81d41acaa3d0df6a7baf829",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/026.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "9d42fd8043b0178d10206460505105b9ca986ae54292f76ce226d55adc88ff7a",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/027.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "90e7fb81b779c02d17f10f842973df949b8b573f67b57c3eb1a907aafbe1c82a",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/028.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "4a2e137a6a4ae96ac8f057e3afa47a75f2f17ea43a4d67a10e412d94c0ba99d8",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/029.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "4f4d16be082cbd1617100fbd4d24f87a119d7e4aea95d5294d19b56d4a47f0da",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/030.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "a09541a6ad09b8923c4102a25d0fa7fbcd984aea40dfaef2d10077bf6c95d6a1",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/031.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "9fffa45c4774be14cae0b428967e46515db27829ed0608ddbc4cb55f27aaaafa",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/032.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "6225585e31391b25ad8deb7ff7c6eae60fa9cbe179a09fd91007ae8abb1843e6",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/033.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "7d5631f43fb1bfba9cfff82911210245dde9778885a12b7765c1c768fb191d3d",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/034.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "f175970557df0cf774713fa0ba06159a59382ffbb55a5d3527f106db11876909",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/035.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "aa62b693e34b9b0bc6e6fb286498075e39f0a6b9f52d8e71d99cbb2f61a13044",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/036.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "d50fe372352886caccab7417d198b0f8eee5ee18287795a88171c799d04376b8",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/037.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "3ed00a6843ec29c91bd3c9c7d4ea518addedd1f8c417c165d4759e7c40bab507",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/038.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "ca7a3286c69c7f93355ba9bc4d9092036a80a18b01c55b8de681831e4e767ad6",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/039.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "0950b885e80e6c45cf59a77e1806bfad958e6ab987fa6e5b80ce632f0f31b74d",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/040.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "9a45c4c84119ff0393fe6e8416cb035cc9c295fbdca7c43e3944093ece32b32a",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/041.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "a0eb265d140759f9118963121307074c64f5c0c9f741e59a1fb2a885b1c3a87a",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/042.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "7ce2cfa75c91966dee38cef13f67876b6b0d32762d0ae66fef2c40c9c791a865",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/043.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "84d357b69d9fa44177b7a37d981c113b6489c5a93b654ac3d3f35b65a75a33f0",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/044.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "60f50395607f8a720552de18181ed647921fb20e13d63925c5f9b476ac6cb652",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/045.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "8e3f10379e554b7bb0a4bcfe935890d23de17725ee2bc4f09b74b3e5a71402e4",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/046.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "195d2da80598fcc1e30ea6ce9c1f6296424409b9897ed6fcef2ad9df98540217",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/047.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "70c6b7cfa089c534aff772a06ba672a3f0bd8de70d84db7f4f01167491f47c45",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/048.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "fafeb98ddcc1489d64a857545f2a693a11b70fa7fe2c14f13886e2c00f8ba1ef",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/049.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "f54c8d9a79fb550935022170e761f3b8223108b4bcdbecf9d10c964b3bb58403",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/050.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "7b84bff2eb01de924272cf7f394004eb06297ae1eaaae36a3be44d1f6d77a0d1",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/051.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "7213973ae1b69ad20eddd472fa43cc96249baa04fb9fb24fb4df51460fc49dfc",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/052.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "8a639f1f0d4545344b465a9afb0e930b89999db53f6aa24d76bcd681867ba941",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/053.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "1f89b4349343f410e000cd7f6aa21579177d191e0566d66f2e4073f166d26d28",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/054.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "de8d23e34a1fe634ad37bbb765c2a83e24c26a6eca49b776969913a005b5b4cd",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/055.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "a6ce1a1727da011585a60dd6cd84a15b3761a6b138ec02d58880cc0cea93a62e",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/056.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "0d4eca0b050bb7629aa9dff281e9204c9ed7581041bda108b3bd2ef01e70ec43",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/057.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "21c1abd853d1b79fdd1e949960763349cf21609f2243b844a1158d77d6aaab86",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/058.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "198fa88fb270ac90b6811cbf32494cf0646734d4340d6ba880469c00f990a7e1",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/059.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "aa5ac5a2f2e3ed921106c5450093b39f65677b502656fefa046cb933e2043341",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/060.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "9e92c402af19b0fdd8257fa5ca1d536fb1c45268d6bb8bf5f587663a86393430",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/061.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "a3370100db120e0546e724af6383e555d0d1d1ff3368ddca924bfa5f89d1201d",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/062.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "2d934380af546a7208f7aae06692a1b0714b0cf5b1ce511f192cec446976f424",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/063.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "5ae20596acfbb86d37183e794fb6f6f628a1c598e7440ffca61a70739a33d785",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/064.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "9d8a8712b57ffafd0f1db8019aa0b9e2b46789f9acbafec60dd0001dbe3eaa3f",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/065.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "483bf5e59a31820e29afe6a24b19010167f9323c2e9e7cb69014bb2a8459d0bc",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/066.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "becca2bd42010a4e824a86197787eb4e138c865d26bcd01afff9ab076157e142",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/067.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "5af43df81c6238b4bf64e8400abc7672a7fa8e194b5fe27d23b57e4cc34b4a01",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/068.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "fe3851fc91c47d61e267756a8ffd9c4ddd4d98ed1eb06c4f5762a7d084600460",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/069.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "f58b020d168d5ece288d14e058983c3f6ecfb62c4ea4d936d302bf0450aa1f57",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/070.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "46f58142109b9344991c44f0bbf22aab70aa3006285f9f26e5ed8c7a4a41b2a6",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/071.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "67f166e2722bbebe34645ed2dd935e5fb196fb027f84c5b7a0080eefbe8a8d68",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/072.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "25f194a9bff3fce9f8322d595a7bf707e8b84b52980e23ce7284700e093b0041",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/073.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "67986a6d4fa709fdaa2dc1d7691a1b252a3bff991e4d75c800b51f5df33aa05c",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/074.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "a6dc12a6e292307f5eb12ebb1d6d0e64ddc47946fabea16f1774bd5d60cae5b9",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/075.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "26ad1f8ca5558d8973b0165b77df4809f7cc6feed396d1ce2820978b74ac248c",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/076.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "415b8574162a8f8e7cdb96cc94b32dd96938850ac418171acb9b8e2e0dfbe2c4",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/077.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "65584f54d799a9198f7ef8dbbdf21db3bd8c1613ab23670b27d1368b3e32a764",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/078.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "4ec2d540886509f98ad7492c9dbe4331a327f53254fe92778a32b7bc892a18bc",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    },
+    {
+      "output": "waves/079.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "0ba683491c149cc8fa6168dcaa273815c3a4fca7e10d2def13fe25b9025e7491",
+      "dependencies": [],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    }
+  ],
+  "clips": [
+    "wiki_in",
+    "wiki_out",
+    "wiki_btnoption_in",
+    "wiki_btnoption_select",
+    "wiki_btnoption_select_out",
+    "wiki_group_in",
+    "wiki_group_out",
+    "wiki_weapon_in",
+    "wiki_weapon_out",
+    "wiki_search_in",
+    "wiki_search_content_in",
+    "wiki_search_out",
+    "wiki_uideco_in",
+    "wiki_uideco_loop",
+    "wiki_topwidget_loop",
+    "wiki_group_leftcell_in",
+    "wiki_group_leftcellselect",
+    "wiki_group_leftcellselect_out",
+    "wiki_groupitemlist_in",
+    "wiki_groupitemlist_out",
+    "wiki_search_history_in",
+    "wiki_search_content_out",
+    "wiki_search_history_out",
+    "itembigleft_in",
+    "wiki_uideco_star_loop",
+    "wiki_search_historycell_in",
+    "wiki_uideco_grouppanel_in",
+    "wiki_uideco_grouppanel_out",
+    "wiki_uideco_out"
+  ],
+  "source_documents": [
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/wikipanel.prefab",
+      "bundle": "Data/Bundles/Windows/main/9cb527d9924ad9aeffb3a577.ab"
+    },
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/wikigrouppanel.prefab",
+      "bundle": "Data/Bundles/Windows/main/139c0a8c0fd4cd177d62460f.ab"
+    },
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/wikisearchpanel.prefab",
+      "bundle": "Data/Bundles/Windows/main/4da9bf14b200c39c07b8b00c.ab"
+    },
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/widgets/wikitopwidget.prefab",
+      "bundle": "Data/Bundles/Windows/main/d182f559c71ffd7bbe82edea.ab"
+    },
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/widgets/wikibtnoptionwidget.prefab",
+      "bundle": "Data/Bundles/Windows/main/9c8db74934fc35562f2877ee.ab"
+    },
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/animations/wiki/wiki_in.anim",
+      "clip": "wiki_in",
+      "object": 6833132018013214468,
+      "serialized_file": "CAB-fb509dde28416abdb303fb54ce7a5c82",
+      "bundle": "Data/Bundles/Windows/main/2dd54a01358dbc155fbb3b7c.ab"
+    },
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/animations/wiki/wiki_out.anim",
+      "clip": "wiki_out",
+      "object": -7048233100796434083,
+      "serialized_file": "CAB-ed751987f534336729bae1dfd18a9798",
+      "bundle": "Data/Bundles/Windows/main/e538f051f33899c77bf3deec.ab"
+    },
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/animations/wiki/wiki_btnoption_in.anim",
+      "clip": "wiki_btnoption_in",
+      "object": 4108286174981655957,
+      "serialized_file": "CAB-0d380ae3a5566510a20ed2cdbbbad487",
+      "bundle": "Data/Bundles/Windows/main/5c6a82f826f5822440bfacf8.ab"
+    },
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/animations/wiki/wiki_btnoption_select.anim",
+      "clip": "wiki_btnoption_select",
+      "object": -3590017310672649542,
+      "serialized_file": "CAB-8c63feebd4e44a54fad2050d90ed86dd",
+      "bundle": "Data/Bundles/Windows/main/f8ae5ed540ab02faccd58958.ab"
+    },
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/animations/wiki/wiki_btnoption_select_out.anim",
+      "clip": "wiki_btnoption_select_out",
+      "object": 7779121122604826044,
+      "serialized_file": "CAB-9bc22808cb215f9dfa1406de494e890f",
+      "bundle": "Data/Bundles/Windows/main/3ed0724ec3f690b425c1aedf.ab"
+    },
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/animations/wiki/wiki_group_in.anim",
+      "clip": "wiki_group_in",
+      "object": -5206539733760805613,
+      "serialized_file": "CAB-c5a9064aa05e897db5573b519fcd3714",
+      "bundle": "Data/Bundles/Windows/main/9065ec054321fb394bf17d97.ab"
+    },
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/animations/wiki/wiki_group_out.anim",
+      "clip": "wiki_group_out",
+      "object": 4523027925299860854,
+      "serialized_file": "CAB-1eabb4a63723d3c7f439a7a4ca873fc5",
+      "bundle": "Data/Bundles/Windows/main/44a30cc704d3830fec1db7b8.ab"
+    },
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/animations/wiki/wiki_weapon_in.anim",
+      "clip": "wiki_weapon_in",
+      "object": 2093629315444579994,
+      "serialized_file": "CAB-82f976304eb09f3bccbfa116f12880c1",
+      "bundle": "Data/Bundles/Windows/main/9f08f0fac840f1107beaa926.ab"
+    },
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/animations/wiki/wiki_weapon_out.anim",
+      "clip": "wiki_weapon_out",
+      "object": 7335416820573978295,
+      "serialized_file": "CAB-2555de1b130fe8065352a87fa26c7b96",
+      "bundle": "Data/Bundles/Windows/main/3c1d50294761ab51275aa56f.ab"
+    },
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/animations/wiki/wiki_search_in.anim",
+      "clip": "wiki_search_in",
+      "object": 8804971170887645200,
+      "serialized_file": "CAB-1cf328234ab761e1dfd9e2478fadd9ee",
+      "bundle": "Data/Bundles/Windows/main/dd3944072033d23d3f5efaa7.ab"
+    },
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/animations/wiki/wiki_search_content_in.anim",
+      "clip": "wiki_search_content_in",
+      "object": 8447915356637856974,
+      "serialized_file": "CAB-4ec0217aa516976caf1d831374777fed",
+      "bundle": "Data/Bundles/Windows/main/9d8dbdb8d1fa36a894e78754.ab"
+    },
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/animations/wiki/wiki_search_out.anim",
+      "clip": "wiki_search_out",
+      "object": 9170086827918167674,
+      "serialized_file": "CAB-3e63db4278cd88e6487da4aeb9f6ab1d",
+      "bundle": "Data/Bundles/Windows/main/b67c3f760e777d88084d3db8.ab"
+    },
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/animations/wiki/wiki_uideco_in.anim",
+      "clip": "wiki_uideco_in",
+      "object": 2282682812665964896,
+      "serialized_file": "CAB-624aba541e7f5b5d6e566a313ddaae4d",
+      "bundle": "Data/Bundles/Windows/main/70c82e6e1b0c9026026659e3.ab"
+    },
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/animations/wiki/wiki_uideco_loop.anim",
+      "clip": "wiki_uideco_loop",
+      "object": -9201442267719591218,
+      "serialized_file": "CAB-012a6cb9db64a67167fc04e0084b127f",
+      "bundle": "Data/Bundles/Windows/main/8ded53537439bc5f03140db3.ab"
+    },
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/animations/wiki/wiki_topwidget_loop.anim",
+      "clip": "wiki_topwidget_loop",
+      "object": 7884528424736477548,
+      "serialized_file": "CAB-7bc80c861b6714f7afb6917ab4ea8ac9",
+      "bundle": "Data/Bundles/Windows/main/5d48047cd5001975ed1bf0c8.ab"
+    },
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/animations/wiki/wiki_group_leftcell_in.anim",
+      "clip": "wiki_group_leftcell_in",
+      "object": 119177231940380862,
+      "serialized_file": "CAB-4e3bcf8eb8b7d70a7c8e684bc2d0a4d7",
+      "bundle": "Data/Bundles/Windows/main/9c27bc07a57d2787a4943f86.ab"
+    },
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/animations/wiki/wiki_group_leftcellselect.anim",
+      "clip": "wiki_group_leftcellselect",
+      "object": 404207974926365279,
+      "serialized_file": "CAB-ac945e2d266fa010a3dfe4d2ae27b9a8",
+      "bundle": "Data/Bundles/Windows/main/c0da235cd970366f7b874710.ab"
+    },
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/animations/wiki/wiki_group_leftcellselect_out.anim",
+      "clip": "wiki_group_leftcellselect_out",
+      "object": 6605659185851778968,
+      "serialized_file": "CAB-589744d509912ad058312641a15db577",
+      "bundle": "Data/Bundles/Windows/main/efda56a538bdb8efcdd5c008.ab"
+    },
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/animations/wiki/wiki_groupitemlist_in.anim",
+      "clip": "wiki_groupitemlist_in",
+      "object": -3619645288931435114,
+      "serialized_file": "CAB-3dab417417c76c33db27b300e60e77da",
+      "bundle": "Data/Bundles/Windows/main/c658c284fd5072c66e5bed4c.ab"
+    },
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/animations/wiki/wiki_groupitemlist_out.anim",
+      "clip": "wiki_groupitemlist_out",
+      "object": 925136100337973146,
+      "serialized_file": "CAB-64f1748ebc44624c4e1fba6a2c628baa",
+      "bundle": "Data/Bundles/Windows/main/6db3742971c940012250e16d.ab"
+    },
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/animations/wiki/wiki_search_history_in.anim",
+      "clip": "wiki_search_history_in",
+      "object": -3186046457903735650,
+      "serialized_file": "CAB-84b503197912c75c5d9b573c05018ee2",
+      "bundle": "Data/Bundles/Windows/main/f51d450f06ba83256d8ae4ef.ab"
+    },
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/animations/wiki/wiki_search_content_out.anim",
+      "clip": "wiki_search_content_out",
+      "object": 2487615692558560344,
+      "serialized_file": "CAB-92f4df0b8c662421e631dbb5d7041e53",
+      "bundle": "Data/Bundles/Windows/main/5fa0ec4ba04bfb57c350876d.ab"
+    },
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/animations/wiki/wiki_search_history_out.anim",
+      "clip": "wiki_search_history_out",
+      "object": 388098336663887564,
+      "serialized_file": "CAB-a5f543a7cfe65bf5eb85a16a8ef40065",
+      "bundle": "Data/Bundles/Windows/main/27a4bc4846057f4d2c980d92.ab"
+    },
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/animations/common/itembigleft_in.anim",
+      "clip": "itembigleft_in",
+      "object": 1847661073427808780,
+      "serialized_file": "CAB-78d92be8479259eeb8dec10606c248b2",
+      "bundle": "Data/Bundles/Windows/main/c5b8c4a00d7b1fa1209a2683.ab"
+    },
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/animations/wiki/wiki_uideco_star_loop.anim",
+      "clip": "wiki_uideco_star_loop",
+      "object": 5740037777205753809,
+      "serialized_file": "CAB-08063d1f8cf065e41038c9aef15bc754",
+      "bundle": "Data/Bundles/Windows/main/bbc58f81c67588461582a141.ab"
+    },
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/animations/wiki/wiki_search_historycell_in.anim",
+      "clip": "wiki_search_historycell_in",
+      "object": 1248674963352272934,
+      "serialized_file": "CAB-fced4d5e6ec0ee01876128a7af203b3d",
+      "bundle": "Data/Bundles/Windows/main/547092113aebd0c9c400d00e.ab"
+    },
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/animations/wiki/wiki_uideco_grouppanel_in.anim",
+      "clip": "wiki_uideco_grouppanel_in",
+      "object": -416267942166738331,
+      "serialized_file": "CAB-5b60e8e38b00de87da34ac47986b004f",
+      "bundle": "Data/Bundles/Windows/main/189ffaf96f0d040d7eb82680.ab"
+    },
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/animations/wiki/wiki_uideco_grouppanel_out.anim",
+      "clip": "wiki_uideco_grouppanel_out",
+      "object": -4103030785678839840,
+      "serialized_file": "CAB-af6caecdabbb1c80a1fd126d485b66be",
+      "bundle": "Data/Bundles/Windows/main/1335561f09b919856b6f791e.ab"
+    },
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/animations/wiki/wiki_uideco_out.anim",
+      "clip": "wiki_uideco_out",
+      "object": 6790078129258234267,
+      "serialized_file": "CAB-1bb1ea0ac76a6d8568b772ca2614c6f2",
+      "bundle": "Data/Bundles/Windows/main/acfc7d7fa57dbcb163402fa9.ab"
+    },
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/animations/wiki/wiki_group_leftcellselect_btn.controller",
+      "bundle": "Data/Bundles/Windows/main/dba594d5236698a731036b04.ab"
+    },
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/prefabs/wiki/wiki_uideco.prefab",
+      "bundle": "Data/Bundles/Windows/main/e7a9a2777d11a247eef23bf6.ab"
+    },
+    {
+      "source": "assets/beyond/arts/effects/commonassets/arts/t_texture/mask/linemask/t_fx_mask_1124_m.png",
+      "bundle": "Data/Bundles/Windows/main/3f9ea6a6404e9888c40f34eb.ab",
+      "object": 4414360980966126031
+    },
+    {
+      "source": "assets/beyond/arts/effects/ui/wiki/material/m_fxui_wiki_white_ground_01.mat",
+      "bundle": "Data/Bundles/Windows/main/6cc705dd584657a06dc2efa6.ab",
+      "object": -5611585278553019446
+    },
+    {
+      "source": "assets/beyond/arts/effects/ui/material/common/m_fx_text_scroll_blcak.mat",
+      "bundle": "Data/Bundles/Windows/main/20630c5d60fe3097ffc92ed7.ab",
+      "object": -1185827249841981678
+    },
+    {
+      "source": "assets/beyond/arts/effects/ui/wiki/material/m_fxui_wiki_white_ground_01.mat",
+      "bundle": "Data/Bundles/Windows/main/6cc705dd584657a06dc2efa6.ab",
+      "object": -5611585278553019446
+    },
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/prefabs/wiki/wikicameragroup.prefab",
+      "bundle": "Data/Bundles/Windows/main/a703d3a5a244009679486067.ab",
+      "object": 8843913985749677385
+    },
+    {
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294
+    },
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/prefabs/wiki/wikimodelshow.prefab",
+      "bundle": "Data/Bundles/Windows/main/b9aac4d23920f68201638f45.ab",
+      "object": 8179581310422553187
+    },
+    {
+      "source": "assets/beyond/arts/effects/commonassets/arts/t_texture/mask/linemask/t_fx_mask_1123_m.png",
+      "bundle": "Data/Bundles/Windows/main/88dae96a7bf9c7a2dc98e83e.ab",
+      "object": 6509367021810203110
+    },
+    {
+      "source": "assets/beyond/arts/effects/commonassets/arts/t_texture/mask/linemask/t_fx_mask_1124_m.png",
+      "bundle": "Data/Bundles/Windows/main/3f9ea6a6404e9888c40f34eb.ab",
+      "object": 4414360980966126031
+    },
+    {
+      "source": "assets/beyond/arts/effects/commonassets/arts/t_texture/mask/noise/t_fx_flow_904_m.png",
+      "bundle": "Data/Bundles/Windows/main/d4540c857e15dc556b9aa0cd.ab",
+      "object": 701954606319280908
+    }
+  ],
+  "verified_game_bundles": [
+    {
+      "bundle": "Data/Bundles/Windows/main/9cb527d9924ad9aeffb3a577.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\1D1687FD22E1DA19349E550B959537C5.chk",
+      "offset": 1001949269,
+      "length": 384149,
+      "md5": "0e46805360b2fcd3b80b5161a3709495",
+      "sha256": "f223a87af8861d0d193f9c4e6ab7dfab54e032fe1de9fc47716ad79f94d78211"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\377F7FCF37D850664E4738D8778846B3.chk",
+      "offset": 159516413,
+      "length": 648016,
+      "md5": "0f81e9c1347d25de87b43a5055e6ba3c",
+      "sha256": "c5f79deab0797bc970e3a32feb1342bd520bbcd0e8815f7a9de4353d16704fbf"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/011befa5bd9c60075359ba4a.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 771207870,
+      "length": 20532,
+      "md5": "f7a96e4e17858c34d2098f46d14c7fc0",
+      "sha256": "88c6854d02e30eb299fdb9981fe323eddb9e5cd091aaf627ca1468f139717fc7"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/029f922b04dba498e73c70fd.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 173491131,
+      "length": 4699,
+      "md5": "6f4dfab0ee02e0d922faba3051082691",
+      "sha256": "be161661c1119329fd91ae6cdea637c3bc2241f08214f1a50d88e1ee35f2beb8"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/0a88759b1f9e8a6ff4613361.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 173403002,
+      "length": 4697,
+      "md5": "9c8804bb786265fa0b8fc9cd998f340b",
+      "sha256": "63535a980089e682fbf4a39e801b43e7464218efc34563ec2b578827408377d6"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/11e8c5a6e27f3bb382cf589a.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 810132664,
+      "length": 22745,
+      "md5": "6ef98c00b61d4958b8e8ce6107701230",
+      "sha256": "a13e1ee29fa90489ae71b0f2aa60fccdbc7bf6d2bfaa3182771cd8394b2d857f"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/1335561f09b919856b6f791e.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 396696897,
+      "length": 7422,
+      "md5": "1611440d84dcdef649f54708512ae92d",
+      "sha256": "2f885aedea016db0ad41c7df298ecc4c59640a15d9a89d7d543d45854ec9aff6"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/17cf448a64807db830bc2a2d.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 173308605,
+      "length": 4695,
+      "md5": "1902d1488f888ead46456dfbfbd37eb6",
+      "sha256": "289c70f5e5f96bc7af43a5438be5c8afc7d1c5a17252e4d5141811e5dec21e18"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/1878515ec0a820afb9f6c084.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 228358177,
+      "length": 5636,
+      "md5": "5364c049434ad1535f2e297137fd5e37",
+      "sha256": "2c6217d4deec86c00b0a5d9ef3d5a77b4f5b1000565b412dc4df9c87b204dfd9"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/189ffaf96f0d040d7eb82680.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 398877466,
+      "length": 7456,
+      "md5": "88ece72ce1d735dc694ef68f945577ae",
+      "sha256": "ec3065a441089b5d7009ce2e864be970dfcc8fe028217a820d7533c6f057e322"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/18aa19cb6c2860c230b319ca.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 555271666,
+      "length": 10430,
+      "md5": "643546d7f345150849d2a4de5344aaee",
+      "sha256": "40944a07e5dba11fd80ea28d053674b586e5f38ac2d6633d80a701a66d71cef1"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/20630c5d60fe3097ffc92ed7.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 172664429,
+      "length": 6628,
+      "md5": "5e9d1d1f3b90876fca1bc92f9577acd6",
+      "sha256": "a625c7e1532969d3d8e6cec4db695f80723ce1fc5964c612853f88135292161b"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/27a4bc4846057f4d2c980d92.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 400507553,
+      "length": 7482,
+      "md5": "0928b899418cfbaaedc41794c4b5719c",
+      "sha256": "17140ee4e528eb809e93fc51ad8a819c68ffd1a6871edf9afd8a625a4d67b51a"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/2dd54a01358dbc155fbb3b7c.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 432235149,
+      "length": 7873,
+      "md5": "49914c10bd87dad7b913f5eaec745068",
+      "sha256": "90609a084381a38c5595abbb6e58f6ba9feaf6bba318f4af21e6972ae6fe1073"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/3266c3c07f89561a998faef8.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 173200520,
+      "length": 4693,
+      "md5": "117d7a2b7e6410afa792a0aec1041028",
+      "sha256": "030dec6572b4da1360e882150e8e3da6d2e43fb1c02c2b2cfb684bf5da37b185"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/37c15bbf7d903af6bb68d427.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 524672069,
+      "length": 9802,
+      "md5": "2953d0f1a03b58398cc799c831791036",
+      "sha256": "ec7682f2508b1a84ac28225ee19f244c4c06ed93a5eaf19c197e6f67feb36989"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/3c1d50294761ab51275aa56f.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 411443565,
+      "length": 7617,
+      "md5": "d620f895fde4079d983997c22e41ecdb",
+      "sha256": "70c3597354b3c13b484fffa2052b86f320d117aae0450d0fac7eb2b26eacd344"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/3ed0724ec3f690b425c1aedf.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 437936738,
+      "length": 7980,
+      "md5": "64db1508c3bb3c480959f5d6423893ae",
+      "sha256": "a23039dd65f92c94c90b6bae5b7f2d94f8e7cea0bd789585e3426e529f91ca27"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/44a30cc704d3830fec1db7b8.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 408145900,
+      "length": 7582,
+      "md5": "45c12fcb8a94388ed99055f6237e637c",
+      "sha256": "8b8fc366d6f287a5dd543792b5b109d3dca3fd7bd1883b26e78836a9c91f9489"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/4934b7a29a1b5595b26bc663.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 175759901,
+      "length": 4748,
+      "md5": "da42eea89b79cef2203e8871d566f2c2",
+      "sha256": "71a67705b16e7601425c52b33a3509b82bd30011de555080ebfe870afb04f31c"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/547092113aebd0c9c400d00e.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 398892856,
+      "length": 7456,
+      "md5": "101261b6bb8703c01905096f3ab3116b",
+      "sha256": "31a1677d2ad9b1a5d2171e5ad90b7514643790e4571fb663df0eabde6aa0b045"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/59f8a3a6f754f1db73e20eab.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 174401769,
+      "length": 4720,
+      "md5": "d5beb7881d1a96f8588823cc3af1b3d7",
+      "sha256": "76576c284bcc1932047b793e6a2b7d87ede2b6d27c722c889fdf40c0e171b766"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/5c6a82f826f5822440bfacf8.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 410595791,
+      "length": 7608,
+      "md5": "af1f494ed15d3811a92a5a155595a469",
+      "sha256": "f5efde5d60fc698791e4c5f6389fc61954e7d45b77c539695fec5eca766bdfeb"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/5d48047cd5001975ed1bf0c8.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 445263423,
+      "length": 8100,
+      "md5": "a34842060d40ef58fc0fb4e68d336379",
+      "sha256": "3e26b258fbd2fd7f9c1ba859492e5cd824feb1f5508cc02e6b7f2548036a579b"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/5dd6ffed2ef5a22ce1b3e032.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 240872948,
+      "length": 5806,
+      "md5": "f0645e45400e07229b046b5912b5ff49",
+      "sha256": "e0c1f5dbc08617f801482634b159d4dda13ac864e0b2686e4aa3deeb9bafe38c"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/5fa0ec4ba04bfb57c350876d.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 408535889,
+      "length": 7586,
+      "md5": "ad91346a1eb28fe406bc03973a3dff95",
+      "sha256": "d8357681c33fb9f853b597373de710b6f6d89e132d4d5cd9703ec07f0ba2f66c"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/5fa98bafa12916987e863326.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 201182961,
+      "length": 5114,
+      "md5": "284b2960b357ba1e93a910560a255baa",
+      "sha256": "c9c742c9b7b792d1c12a4e3d5f4bf507ee9384d5ee2e9ab7b4dded1c85b83d7e"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/67a04e23b78b7c360e81c22b.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 350507645,
+      "length": 6430,
+      "md5": "bc88a07a9094575829af45b22ce274b1",
+      "sha256": "fef9150449425f2f427710713ecad99cdc7dc3360d947c4721cafc48b0b6cf69"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/6a3a1286662f5a331aa51c31.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 742759883,
+      "length": 18584,
+      "md5": "4a5844958aaeb8db7cd1d397b2109b9d",
+      "sha256": "9d46efcf10b407fcfcc1db756faec57d0162a778b0cf52f402217a7376497cfa"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/6db3742971c940012250e16d.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 397666735,
+      "length": 7438,
+      "md5": "84e4d7ed4b93283efa06f39cc8dce524",
+      "sha256": "d314101e09ab816ee5d619dc4897dc8daf10a0d7eacae693398c9351d2c76505"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/70c82e6e1b0c9026026659e3.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 448618615,
+      "length": 8171,
+      "md5": "d4d71eff473072ea46395fcd139a1150",
+      "sha256": "229b42df7c4ce58a3152841956d4ebcfeeea5b014da5aefdf67dc72957a072e1"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/71c797d99f868642661064e0.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 203008949,
+      "length": 5163,
+      "md5": "9b83cb68006345f2d74810ae1a1e5fe8",
+      "sha256": "1acd2f92de4733781fbfe9fadcb16b06b755dc6656d4f862dfadba7d818a438a"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/81bda4d86ab0f7075a2272fb.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 211938838,
+      "length": 5371,
+      "md5": "739908c676669ac0349c7dbb2fb52da4",
+      "sha256": "6bb67c1a49c5339cbdc3b191ddaf5e2e71a4a85535a7892f8b6ad5bae9cefb9b"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/88dae96a7bf9c7a2dc98e83e.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 870880795,
+      "length": 26880,
+      "md5": "393e4103d0dbc12842b40e0c78f4bf4c",
+      "sha256": "1dcac74ae35ace0b6c7ac063129febc083abab007558c3ac4e8cacb2c5106c6a"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/89b5b8a0d7ea851d63859468.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 171864876,
+      "length": 4662,
+      "md5": "a12f1d9f81af8ef6e9d07b69236e67a1",
+      "sha256": "8ab3440afad263b2f5b15ad7769ab5e92b37439cd137ffd2750de82df1291b5b"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/8b1b3daffd9f56287ecf9221.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 196506351,
+      "length": 5012,
+      "md5": "38e16562c4c9e0ec6c5f736c23ab26a8",
+      "sha256": "54e4e1bfe40274b4dc8b894c1fc8c427d5bb75820fbd212e6134126f6cd3c497"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/8ddb4252d9150657bef961c0.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 173067504,
+      "length": 4689,
+      "md5": "d015bec899900b34225209148b14783c",
+      "sha256": "62488ffdad7fa8a2659c2878de8c84e5e198d0606855e62fb6c79b2de0718700"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/9065ec054321fb394bf17d97.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 412568197,
+      "length": 7630,
+      "md5": "b8c8b36901dcbd0ae6530c039206ada3",
+      "sha256": "a4932235ca051c263cb59cbf854c8dfd5c88145910d516d49e13e8bb403117a1"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/96b6b9070f4392f2ac954567.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 254511636,
+      "length": 5953,
+      "md5": "4e4d50735dd992da0b459699ea660ba8",
+      "sha256": "b8dd7098cff4886baa231dd17e74a2bbf6601a71c66521229b9a59aeaf2daef2"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/9c27bc07a57d2787a4943f86.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 407241863,
+      "length": 7570,
+      "md5": "c43068b964bd42a41581c3f63a821b8e",
+      "sha256": "3eb326671f1a118a2286181b196238bde2ae0b972d4fd42dd9dab2381f4d1f67"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/9c8db74934fc35562f2877ee.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 848737172,
+      "length": 25897,
+      "md5": "de65c6924c0f6d14e6156052bbde4cc6",
+      "sha256": "32eb47fd9891a7481511de4c22c7c0e45a62229550dac4f99347dc0af339340f"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/9d8dbdb8d1fa36a894e78754.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 412482844,
+      "length": 7629,
+      "md5": "c6e83a9d8f6cc127b06dc4db2555cffa",
+      "sha256": "ee3749c12b7f083ef55a63a85b0e479841ff34b5d9c2bf0ac25e60a7bead6bc5"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/9f08f0fac840f1107beaa926.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 441745917,
+      "length": 8049,
+      "md5": "bf7319bc157ac0833e10bd57c49da828",
+      "sha256": "2468cbb951ed03c8ec84f2375f9c1ff769dbf886d54e22e9f2199b264486a5e2"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/a4fe02f7a8166ffaaf934c6f.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 342643930,
+      "length": 6201,
+      "md5": "ac7f7dbeaad725c6a74745855e68924e",
+      "sha256": "b92fa1baf647332c4e99bf5606b0bd609cf8f401c2eb0773b072745ee14cecab"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/a703d3a5a244009679486067.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 406010506,
+      "length": 7554,
+      "md5": "a46271005a128c11c2214b2fb7073d0c",
+      "sha256": "64cd9004affa934640809d04b9404bcc047a4c64059afcaa49306e3fc2abf8f6"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/a9f7f5d0de6474ea55142bdf.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 172142829,
+      "length": 4670,
+      "md5": "7688d537742652146d60e638e953e0e8",
+      "sha256": "6a2af67e68e7f26375f5454b7c2da449b5fc9f635e7c2814d910c4c5af6a0260"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/ab318adafe06d18f06890279.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 196777690,
+      "length": 5020,
+      "md5": "233245ec3422f6347f0d4d16648ce2f7",
+      "sha256": "69ef20e7a76a17dd939b2fb215bb57c7c191fb73ad3a0bb7c2cb12f6e92a6360"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/acfc7d7fa57dbcb163402fa9.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 377226150,
+      "length": 7210,
+      "md5": "57f7ae39c3fc956133422bfbc4111fc8",
+      "sha256": "7a34cf01f3485b40d784905424ccb32302f53ddfaacd22df74bb32b2e955c4a0"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/b67c3f760e777d88084d3db8.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 413417157,
+      "length": 7641,
+      "md5": "2b75bc3431736ded12b613be9684bb2d",
+      "sha256": "59646818e8057bdf33c1f1c6ae3c1a5cd9cc8bc4d03f3991e9faf30d4064d9f9"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/b9aac4d23920f68201638f45.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 918436737,
+      "length": 30776,
+      "md5": "d3d1ac1027586394f77837198d881397",
+      "sha256": "e5e03b396c0c55ec061fd3fe9d604b111fa2d7a5d7a64b9b711ede449fdbdc00"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/bbc58f81c67588461582a141.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 429713157,
+      "length": 7834,
+      "md5": "2b1b82357b584f2551fe79c872ba8009",
+      "sha256": "3d31448727e11a484fa62aabf5ca526c5406252877d131787ede084a211056a7"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/c0da235cd970366f7b874710.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 426765611,
+      "length": 7796,
+      "md5": "06cce80c0c8abfe316dd5e18198fdd5c",
+      "sha256": "e3aebce0668ce1d82e76c5a85bee47778482a422b70e0e2c4d3d9199ded4e3f5"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/c5b8c4a00d7b1fa1209a2683.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 382459263,
+      "length": 7258,
+      "md5": "d90a1773a7a6e4b3f13ff0ee15e9aaf4",
+      "sha256": "1113ed5dd714a82ff13e11e2b43043328e140b63c346e7855b372b2baf1b5d49"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/c64a8190250f18c870597c20.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 173939087,
+      "length": 4708,
+      "md5": "5e9504460d0fb79d87897eb2078b7bef",
+      "sha256": "c8accc14c0ae64ec5839e1a51556d885bd8eee6bee4a5596e8d7b95ea4967b8a"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/c658c284fd5072c66e5bed4c.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 410619551,
+      "length": 7608,
+      "md5": "5f92125689f73498216353ef4f82a3c4",
+      "sha256": "768d76c71ddae0d05e2e8e288ebf6b6e9dd263e89092f1110ae1b9ac12f620e7"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/cfa1ea74db3ea511ff0135b7.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 191931012,
+      "length": 4913,
+      "md5": "bb198359575bcf242ba9a1a891332fd1",
+      "sha256": "10ab375c0079ac3463583bca787b375bd706bdd37b60487843d8e3501d997b15"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/d10df5ac6c46f6114e3ac8ac.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 190030955,
+      "length": 4893,
+      "md5": "ac6367e95e20801f48c4049c632ab286",
+      "sha256": "89d2a6dad9804e5fa4824113d68d685d14362ca353cb4ec17b665cedd7543de0"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/d622cb72f425732b1cc1e390.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 688722559,
+      "length": 16012,
+      "md5": "83598e0821ca921fdaa4327f2c99494c",
+      "sha256": "ea58679c9e6bb19cf009787e8be8aefc7bc26050d5e188a6b6a0e2315e2abc20"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/d66d9cd17a7b245b7c5e4a55.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 173722915,
+      "length": 4703,
+      "md5": "c1135c16453f919a2f76274006d02373",
+      "sha256": "58fef6643f8c167c4a871c53d8fc1d70e129821e502e4ed3377d543e2d0fb17b"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/dba594d5236698a731036b04.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 613394250,
+      "length": 12637,
+      "md5": "503992e4a50130ef17de3d4bd2a49ae9",
+      "sha256": "dc5b9dff4c894db1a8d0a40db425531ef90d5f9485005ff11d7bc8f063526ad0"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/dd3944072033d23d3f5efaa7.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 416403148,
+      "length": 7677,
+      "md5": "4a900ad6ac932c460861ad13bf3f9319",
+      "sha256": "bac9be1dd1fe1ac7f1bf3e408e4911cca0b4a962d06de488e3459d682a366de0"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/e0f4c090768b78ffb972b3e0.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 617257019,
+      "length": 12792,
+      "md5": "2b0a4b73a744f332fb70ff05ee95f4c0",
+      "sha256": "56d652a84ff5847feb0b682c5c8719b2715b6d183c2b0de0feb3d44bff90f3e6"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/e538f051f33899c77bf3deec.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 410173317,
+      "length": 7602,
+      "md5": "8bbbd6e64a0112fff6eb49dcfb22d472",
+      "sha256": "da5da88bab75d2998d89b6acdb9d8dd3523fb3b4fa75bc7ec151cd3c907ec8a4"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/e7a9a2777d11a247eef23bf6.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 806005047,
+      "length": 22921,
+      "md5": "c713780c95e8f7fb773e9e3aa1ea6785",
+      "sha256": "d9b44ad752ea5f843e62b1b24ab349345ed8db91f8ea81d7a334994ba5de7695"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/ea979c4ab431d79ddb90b0fe.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 234679765,
+      "length": 5718,
+      "md5": "358cd6c1fad733131623467a5873e118",
+      "sha256": "c99696f365e545677e1f6c3d1b5451565184ca878d63c260ea331a498e832acd"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/ead05b0a8ba8c89838c58841.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 172128820,
+      "length": 4669,
+      "md5": "9a18a47fd04d109ea1b693ddce0ac992",
+      "sha256": "96a63fbd60926a746929c3fefc172b8364eb6af5df30ed9b75d9d116d33bc4c9"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/ed0d941b8cd49ea0b68a440d.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 173853450,
+      "length": 4706,
+      "md5": "0bfbce32f71b76b2ccbc7f441c0a509d",
+      "sha256": "22bf3c923b34f751f670951a813771fb0ec118d98041237da0386e854621074d"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/efda56a538bdb8efcdd5c008.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 411727864,
+      "length": 7620,
+      "md5": "30a4bf367b43b3f4a5809fdfa9efd9b1",
+      "sha256": "44e3145d08cbd07cb9624d0e763779f3d094ff7263711610e080634b132e4399"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/f1047eb9664e3ffa1081dcab.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 213674904,
+      "length": 5403,
+      "md5": "83049a1e9b923b06ef910f80565e0053",
+      "sha256": "353002b89c3b083a0c1577be8869298ec544e0606ec81b4769f5d8d7e0182a22"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/f51d450f06ba83256d8ae4ef.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 400546216,
+      "length": 7482,
+      "md5": "e4b638e5d624d9509673507def980018",
+      "sha256": "4a4026e5a7f4357231714d15f6cb68949429810538d10ffea73ee781e18dd3fd"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/f69405ec73bc25900d5caa36.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 173770169,
+      "length": 4704,
+      "md5": "1f71c55d71ce9cf4b42b927a69a7c8af",
+      "sha256": "4c62ad76910bcf0c1edc9490121279876f753df405d0e90b335d019f674d1f7f"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/f8ae5ed540ab02faccd58958.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 462069426,
+      "length": 8589,
+      "md5": "a1393d311194103f167091c5e6b92fff",
+      "sha256": "95722ea7f6c3bbee4c144c3557673e3dea27e5b105387fce35ff1f15e59ff2a6"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/f8ba548c55ef58fd05b2663d.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 188511435,
+      "length": 4870,
+      "md5": "557ad24fe5880cbd6d11cee7f96f196f",
+      "sha256": "e61c14e4039e226789fd5574a424d270b286c5f93a62c0b751103653213ce3f7"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/039a5ee8ae9433eb916ae884.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\92C494C114F7F9676F38CCD679DE5BE6.chk",
+      "offset": 195773474,
+      "length": 125568,
+      "md5": "7870b48d57f1b2ce1a5a53f446f1aa78",
+      "sha256": "61362ec3927f7bc866948effaaef778773ab61f1fd87d1fdcaee557cbbcd4522"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/153e58c9909b262eb5211004.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\92C494C114F7F9676F38CCD679DE5BE6.chk",
+      "offset": 265294452,
+      "length": 131372,
+      "md5": "975a92e6422266c4f47ac1225ba709ef",
+      "sha256": "b63f06c577399eda75aa8d702df7d18bfde53ada33ad3a445274de74b2867350"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/32e937d83577e27d21be65b7.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\92C494C114F7F9676F38CCD679DE5BE6.chk",
+      "offset": 839107162,
+      "length": 174232,
+      "md5": "d6d5dbad37abccd16cfe2580e3733019",
+      "sha256": "99730c04d1cf60a888c6abf6e574cdaa3526f3d1e4d9736a6cdb3802639e724d"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/4da9bf14b200c39c07b8b00c.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\92C494C114F7F9676F38CCD679DE5BE6.chk",
+      "offset": 55997755,
+      "length": 117338,
+      "md5": "c5a29ed5709412370b193c5b8db84451",
+      "sha256": "62b1838e3aebf2b3b367ba80c02fdafe7966a6ea43c73539c7df50034412ff6e"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/be59018e8020ebbcf3367f99.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\92C494C114F7F9676F38CCD679DE5BE6.chk",
+      "offset": 1118032094,
+      "length": 211774,
+      "md5": "b1196049a39720c8bb03f4090ecdcfa9",
+      "sha256": "6237f196f6ca1baf5333b95e865b4650a97bf8b929a55ccbb2ecebddddff3c46"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/0a3b6ed7f7d54e5248c25726.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\D01EA7B1D94F0F1ACFE28BC672B2FA55.chk",
+      "offset": 30795708,
+      "length": 4553,
+      "md5": "59e10557f3f69f96293b3e230b12c001",
+      "sha256": "54668f0f359bb696814e6b48bf6b31bec30dc270d1d60496bc7a21bca7dcdd02"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/58f48a3147b03992072cc8b1.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\D01EA7B1D94F0F1ACFE28BC672B2FA55.chk",
+      "offset": 33549840,
+      "length": 4796,
+      "md5": "e4870d552a198b96e09e79a08d957da5",
+      "sha256": "2e26a176c030b6c2f6d7ba523c83547b7bc20467b0365b4620d78950e85e5c13"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/8ded53537439bc5f03140db3.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\ECB3C91B337A9E53290BA5F98F537B1C.chk",
+      "offset": 937196506,
+      "length": 987648,
+      "md5": "7e0b9ce077957d87ce3a8263a83041d6",
+      "sha256": "0efea8cef92b3a3ee2c4a209a9fddd3a6dfbec53fcfda07a3debe6baaef8e4b3"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/09ff4bfb7f822708352ba64f.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\FCC20C36ADBBD4D50AEC8A24F57459AA.chk",
+      "offset": 286868953,
+      "length": 54012,
+      "md5": "d913bf34c38f2702b1912858c44f8be3",
+      "sha256": "a67ea71f3bc4d0d3d30b5cbc96e86caaf0d702a31f4be12f2e0711e2360bc369"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/139c0a8c0fd4cd177d62460f.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\FCC20C36ADBBD4D50AEC8A24F57459AA.chk",
+      "offset": 843267903,
+      "length": 85957,
+      "md5": "67a73fed6f05ec22dd159bea4a16a2cb",
+      "sha256": "95352384826c73e3afcc8c9a3b8e9ae1d2151737af4c8fb186a7c5131ebc7597"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/3f9ea6a6404e9888c40f34eb.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\FCC20C36ADBBD4D50AEC8A24F57459AA.chk",
+      "offset": 41839111,
+      "length": 32137,
+      "md5": "92d713a21ca2f64dae5e817451034bcd",
+      "sha256": "b34f8efc59ad6c5e8fc659f6074de6eff3a03ea34af3d3825ae77719534a8181"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/4c6e163bfe2002674dccaac3.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\FCC20C36ADBBD4D50AEC8A24F57459AA.chk",
+      "offset": 389038476,
+      "length": 47914,
+      "md5": "523bcb5c915eb4f70513dd29c12d32c5",
+      "sha256": "0c793ea55681abdf50345cf61142bf73b3ebecd1e54494f82ff97e0b6caad699"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/55b96badcaf644f16f90aa06.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\FCC20C36ADBBD4D50AEC8A24F57459AA.chk",
+      "offset": 13238205,
+      "length": 31261,
+      "md5": "440e11538f759e32cdad57b25fdfa74d",
+      "sha256": "4e1b63706145eeb648cc93551128afe586a482487158983844611618f3b01380"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/5f4b6fb64338c4bb0c87a10f.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\FCC20C36ADBBD4D50AEC8A24F57459AA.chk",
+      "offset": 51409616,
+      "length": 32517,
+      "md5": "fc1086409b208326fb7c5328f8faf2b6",
+      "sha256": "9cabc63d6214613835003898f66aaca1eb643e354a06d468112bb7e78f16ef22"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/6cc705dd584657a06dc2efa6.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\FCC20C36ADBBD4D50AEC8A24F57459AA.chk",
+      "offset": 27168196,
+      "length": 32887,
+      "md5": "34e86d849f9591240d05faa3bc96386b",
+      "sha256": "5ce47ecef5ca9fe484fc04aa5817723938d4e7824b674f2343eb451558fbab11"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/d182f559c71ffd7bbe82edea.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\FCC20C36ADBBD4D50AEC8A24F57459AA.chk",
+      "offset": 145216531,
+      "length": 37896,
+      "md5": "aa799ce1d68fe3d86400285f1cb33eb1",
+      "sha256": "95d7fb113ef16c41de025d31aec0dcc4159b44499df41457e5b49085a2e63b9e"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/d4540c857e15dc556b9aa0cd.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\FCC20C36ADBBD4D50AEC8A24F57459AA.chk",
+      "offset": 555110946,
+      "length": 5882,
+      "md5": "e4dde7114beee2ff92ce2bf149dfc9eb",
+      "sha256": "99da47c11d4630f5148dd06699cb789b64b32a47ce725e01c5b56c29a7bf738f"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "python": "3.11.9 (tags/v3.11.9:de54cf5, Apr  2 2024, 10:12:12) [MSC v.1938 64 bit (AMD64)]",
+  "PySide6": "6.12.0",
+  "scope": "real Windows/OpenGL, temporary profile, inert transport starts",
+  "modules": 74,
+  "settings": 472,
+  "dpr": 1.5,
+  "gl": 4,
+  "gui_gpu_error": "",
+  "compositor_error": "",
+  "layout_ms": 0.8135999960359186,
+  "status": "PASS"
+}

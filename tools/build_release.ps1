@@ -244,6 +244,15 @@ print('polar spec OK: %d segments, %d roles, %d warnings'
 "@
     if ($LASTEXITCODE -ne 0) { throw "polar protocol spec is not usable in the release source tree" }
 
+    & $python (Join-Path $sourceRoot "tools\endfield\wiki\check_assets.py") --asset-root (Join-Path $sourceRoot "rm_client\ui\endfield\wiki\assets")
+    if ($LASTEXITCODE -ne 0) {
+        throw "Wiki resources are incomplete in the release source tree; commit the complete feature and assets first"
+    }
+    & $python (Join-Path $sourceRoot "tools\endfield\changelog\check_assets.py") --asset-root (Join-Path $sourceRoot "rm_client\ui\endfield\changelog\assets")
+    if ($LASTEXITCODE -ne 0) { throw "Changelog resources are incomplete in the release source tree" }
+    & $python (Join-Path $sourceRoot "tools\endfield\keybinds\check_assets.py") --asset-root (Join-Path $sourceRoot "rm_client\ui\endfield\keybinds\assets")
+    if ($LASTEXITCODE -ne 0) { throw "Keybind resources are incomplete in the release source tree" }
+
     # The two licensed wallpaper inputs intentionally stay outside Git. Inject
     # the hash-locked copies into the disposable source tree before tests and
     # freezing so both exercise exactly the resources shipped in the bundle.
@@ -354,6 +363,33 @@ print('polar spec OK: %d segments, %d roles, %d warnings'
         (Join-Path $portable "licenses") | Out-Null
     Copy-Item -LiteralPath $FfmpegPath -Destination (Join-Path $portable "bin\ffmpeg.exe") -Force
     Copy-Item -LiteralPath (Join-Path $sourceRoot "assets") -Destination (Join-Path $portable "resources\assets") -Recurse -Force
+    # Wiki 资源与代码同目录封装；源码和便携版共用同一完整性清单。
+    $wikiAssetSource = Join-Path $sourceRoot "rm_client\ui\endfield\wiki\assets"
+    $wikiAssetDestination = Join-Path $portable "resources\assets\endfield\wiki"
+    New-Item -ItemType Directory -Force (Split-Path -Parent $wikiAssetDestination) | Out-Null
+    Copy-Item -LiteralPath $wikiAssetSource -Destination $wikiAssetDestination -Recurse -Force
+    & $python (Join-Path $sourceRoot "tools\endfield\wiki\check_assets.py") --asset-root $wikiAssetDestination
+    if ($LASTEXITCODE -ne 0) { throw "Wiki runtime assets are incomplete" }
+    $endfieldMenuSource = Join-Path $sourceRoot "rm_client\ui\endfield\menu\assets"
+    $endfieldMenuDestination = Join-Path $portable "resources\assets\endfield\menu"
+    Copy-Item -LiteralPath $endfieldMenuSource -Destination $endfieldMenuDestination -Recurse -Force
+    & $python (Join-Path $sourceRoot "tools\endfield\prepare_pack.py") check --pack $endfieldMenuDestination
+    if ($LASTEXITCODE -ne 0) { throw "Endfield menu runtime assets are incomplete" }
+    $settingsSource = Join-Path $sourceRoot "rm_client\ui\endfield\settings\assets"
+    $settingsDestination = Join-Path $portable "resources\assets\endfield\settings"
+    Copy-Item -LiteralPath $settingsSource -Destination $settingsDestination -Recurse -Force
+    & $python (Join-Path $sourceRoot "tools\endfield\settings\check_assets.py") --asset-root $settingsDestination
+    if ($LASTEXITCODE -ne 0) { throw "Endfield settings runtime assets are incomplete" }
+    $keybindSource = Join-Path $sourceRoot "rm_client\ui\endfield\keybinds\assets"
+    $keybindDestination = Join-Path $portable "resources\assets\endfield\keybinds"
+    Copy-Item -LiteralPath $keybindSource -Destination $keybindDestination -Recurse -Force
+    & $python (Join-Path $sourceRoot "tools\endfield\keybinds\check_assets.py") --asset-root $keybindDestination
+    if ($LASTEXITCODE -ne 0) { throw "Endfield keybind runtime assets are incomplete" }
+    $changelogSource = Join-Path $sourceRoot "rm_client\ui\endfield\changelog\assets"
+    $changelogDestination = Join-Path $portable "resources\assets\endfield\changelog"
+    Copy-Item -LiteralPath $changelogSource -Destination $changelogDestination -Recurse -Force
+    & $python (Join-Path $sourceRoot "tools\endfield\changelog\check_assets.py") --asset-root $changelogDestination
+    if ($LASTEXITCODE -ne 0) { throw "Changelog runtime assets are incomplete" }
     if (Test-Path -LiteralPath (Join-Path $sourceRoot "3000925581")) {
         Copy-Item -LiteralPath (Join-Path $sourceRoot "3000925581") -Destination (Join-Path $portable "resources\3000925581") -Recurse -Force
     }

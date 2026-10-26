@@ -247,9 +247,6 @@ class ControllerIntegrationTests(unittest.TestCase):
         self.owner.home_visible = True
         self.assertFalse(self.controller.visible())
         self.owner.home_visible = False
-        self.owner.hero_deploy_ui.active = True
-        self.assertFalse(self.controller.visible())
-        self.owner.hero_deploy_ui.active = False
         self.owner.overlay_coordinator.modal = "economy"
         self.assertFalse(self.controller.visible())
         self.owner.overlay_coordinator.modal = None

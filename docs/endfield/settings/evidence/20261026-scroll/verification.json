@@ -1,0 +1,12 @@
+{
+  "regression_tests": 103,
+  "settings_tests": 6,
+  "scroll_tests": 8,
+  "static_quality": "PASS",
+  "native_dpr": [
+    1,
+    1.5
+  ],
+  "scope": "actual PolarRMWindow with active QApplication loop, production modal entry, inert transports",
+  "recording": "60 real QWidget frames driven by the same scroll state and source timing, sampled at 30 Hz"
+}

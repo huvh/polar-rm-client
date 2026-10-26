@@ -81,7 +81,6 @@ class NormalVideoTimelineContractTests(unittest.TestCase):
         self.source = self.camera.get_setting("Source")
         self.camera.get_setting("Mirror").value = False
         self.window.state.deploy_mode = 0
-        self.window.hero_deploy_ui.pending_mode = None
         self.window._vision_source = "Mock"
         self.bgr = np.zeros((2, 4, 3), dtype=np.uint8)
         self.bgr[:, 0, 2] = 255
@@ -772,22 +771,6 @@ class NormalVideoTimelineContractTests(unittest.TestCase):
             window.consume_capture_frame()
         self.assertEqual(self.snapshot()[:6], ("webcam", "webcam", 0.0, 9, 34, 4))
 
-    def test_authoritative_deploy_state_is_rechecked_after_native_callback(self):
-        window = self.window
-        window.hero_deploy_ui.pending_mode = 1
-        before = self.snapshot()
-
-        def native():
-            window.state.deploy_mode = 1
-
-        with patch.object(window, "consume_hero_native_video_frame", side_effect=native) as native_call, \
-             patch.object(window, "setting_mode") as source, \
-             patch.object(window.camera_worker, "latest_frame") as capture:
-            window.consume_capture_frame()
-        native_call.assert_called_once_with()
-        source.assert_not_called()
-        capture.assert_not_called()
-        self.assertEqual(self.snapshot(), before)
 
 
 if __name__ == "__main__":

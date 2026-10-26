@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import rm_client.backend.video_backend as video
+import rm_client.backend.video.decoder as video
 from test_video_close_ownership import Process
 
 

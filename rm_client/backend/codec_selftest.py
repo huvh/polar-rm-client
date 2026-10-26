@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import time
 from typing import Any
 
-from .video_backend import ContinuousMjpegDecoder, resolve_ffmpeg_executable
+from .video import ContinuousMjpegDecoder, resolve_ffmpeg_executable
 from ..runtime_paths import RuntimePaths
 
 

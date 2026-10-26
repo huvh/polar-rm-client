@@ -101,6 +101,8 @@ class GpuImage:
     tint: QColor = field(default_factory=lambda: QColor(255, 255, 255, 255))
     clip: QRectF | None = None
     nearest: bool = False
+    rotation_degrees: float = 0.0
+    softness_y: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -133,6 +135,9 @@ class ClickGuiDrawList:
     # of implicit-shared QRect/QColor/QFont copies for substantially lower
     # Python/Qt bridge overhead.  The conservative public default stays True.
     copy_payloads: bool = True
+    frosted_background: ClickGuiDrawList | None = None
+    frost_amount: float = 1.0
+    frost_radius: float = 12.0
 
     def _append(self, payload: GpuRect | GpuText | GpuImage, *, layer: int = 0, opacity: float = 1.0) -> None:
         self.commands.append(GpuUiCommand(len(self.commands), payload, layer, opacity))
@@ -196,7 +201,7 @@ class ClickGuiDrawList:
             self.texts.append(payload)
             self._append(payload)
 
-    def image(self, rect: QRectF, source: str | Path, tint: QColor | None = None, clip: QRectF | None = None, *, nearest: bool = False) -> None:
+    def image(self, rect: QRectF, source: str | Path, tint: QColor | None = None, clip: QRectF | None = None, *, nearest: bool = False, rotation_degrees: float = 0.0, softness_y: float = 0.0) -> None:
         # Jello submits the same absolute shadow/options assets dozens of
         # times per frame.  ``Path.resolve()`` calls GetFinalPathNameByHandle
         # on Windows, which alone cost ~20 ms at 2K/2x even though the files
@@ -213,6 +218,8 @@ class ClickGuiDrawList:
             ),
             QRectF(clip) if clip is not None and self.copy_payloads else clip,
             bool(nearest),
+            float(rotation_degrees),
+            max(0.0, float(softness_y)),
         )
         self.images.append(payload)
         self._append(payload)
@@ -393,6 +400,7 @@ class ClickGuiGpuRenderer:
         self.atlas_snapshot = GlyphAtlasSnapshot(0, ())
         self._atlas_locked = False
         self.small_text_policy = SmallTextPolicy()
+        self._frost = None
 
     def initialize(self) -> bool:
         if self.available:
@@ -416,7 +424,7 @@ class ClickGuiGpuRenderer:
             self.text_uniforms = self._uniform_locations(self.text_program, ("viewport", "glyph"))
             self.image_uniforms = self._uniform_locations(
                 self.image_program,
-                ("viewport", "rect", "sourceTexture", "tint"),
+                ("viewport", "rect", "sourceTexture", "tint", "rotation", "softnessY"),
             )
             self.available = True
             self.last_error = ""
@@ -623,19 +631,42 @@ class ClickGuiGpuRenderer:
         return self._build_program(vertex, fragment)
 
     def _build_image_program(self) -> QOpenGLShaderProgram:
+        vertex = """
+            #version 330
+            layout(location=0) in vec2 position;
+            uniform vec2 viewport;
+            uniform vec4 rect;
+            uniform float rotation;
+            out vec2 localUv;
+            void main() {
+                localUv = position;
+                vec2 offset = (position - 0.5) * rect.zw;
+                float c = cos(rotation), s = sin(rotation);
+                vec2 pixel = rect.xy + rect.zw * 0.5
+                    + vec2(c * offset.x - s * offset.y, s * offset.x + c * offset.y);
+                gl_Position = vec4(pixel.x / viewport.x * 2.0 - 1.0,
+                                   1.0 - pixel.y / viewport.y * 2.0, 0.0, 1.0);
+            }
+        """
         fragment = """
             #version 330
             in vec2 localUv;
             out vec4 fragColor;
             uniform sampler2D sourceTexture;
             uniform vec4 tint;
+            uniform vec4 rect;
+            uniform float softnessY;
             void main() {
                 vec4 sampleColor = texture(sourceTexture, localUv);
                 float alpha = sampleColor.a * tint.a;
+                if (softnessY > 0.0) {
+                    float edge = (0.5 - abs(localUv.y - 0.5)) * rect.w;
+                    alpha *= clamp(edge / (softnessY * 0.5 + 1.0), 0.0, 1.0);
+                }
                 fragColor = vec4(sampleColor.rgb * tint.rgb * alpha, alpha);
             }
         """
-        return self._build_program(self._vertex_source(), fragment)
+        return self._build_program(vertex, fragment)
 
     @staticmethod
     def _build_program(vertex: str, fragment: str) -> QOpenGLShaderProgram:
@@ -683,6 +714,15 @@ class ClickGuiGpuRenderer:
             return False
         try:
             started = time.perf_counter()
+            if commands.frosted_background is not None:
+                from .clickgui_frost import ClickGuiFrost
+                if self._frost is None:
+                    self._frost = ClickGuiFrost()
+                self._frost.render(functions, max(1, round(width * self._pixel_ratio)),
+                    max(1, round(height * self._pixel_ratio)),
+                    lambda: self.render(functions, commands.frosted_background, width, height,
+                                        device_pixel_ratio, atlas_prepared=True),
+                    radius=commands.frost_radius * self._pixel_ratio, amount=commands.frost_amount)
             self.draw_calls = 0
             self._atlas_locked = True
             framebuffer_width = max(1, round(width * self._pixel_ratio))
@@ -738,11 +778,15 @@ class ClickGuiGpuRenderer:
         if self._atlas_locked:
             raise RuntimeError("glyph atlas preparation attempted during a render pass")
         self._pixel_ratio = max(1.0, float(device_pixel_ratio))
+        if commands.frosted_background is not None:
+            self.prepare_frame(commands.frosted_background, device_pixel_ratio)
         self._prepare_atlases(commands)
         self._prepare_images(commands)
         return self.atlas_snapshot
 
     def _resources_ready(self, draw_list: ClickGuiDrawList) -> bool:
+        if draw_list.frosted_background is not None and not self._resources_ready(draw_list.frosted_background):
+            return False
         source = (
             [command.payload for command in draw_list.commands if isinstance(command.payload, GpuText)]
             if draw_list.commands
@@ -866,6 +910,8 @@ class ClickGuiGpuRenderer:
                 faded(payload.tint),
                 QRectF(payload.clip) if payload.clip is not None else None,
                 payload.nearest,
+                payload.rotation_degrees,
+                payload.softness_y,
             )
         return GpuText(
             QRectF(payload.rect),
@@ -1066,6 +1112,9 @@ class ClickGuiGpuRenderer:
             )
             red, green, blue, alpha = self._rgba(command.tint)
             program.setUniformValue(uniforms["tint"], red, green, blue, alpha)
+            # PySide 的单值重载可能选择 uint；显式1f保留软边小数及负旋转角。
+            program.setUniformValue1f(uniforms["rotation"], math.radians(command.rotation_degrees))
+            program.setUniformValue1f(uniforms["softnessY"], float(command.softness_y * ratio))
             functions.glActiveTexture(_GL_TEXTURE0)
             texture.bind(0)
             functions.glDrawArrays(_GL_TRIANGLE_STRIP, 0, 4)
@@ -1859,6 +1908,9 @@ class ClickGuiGpuRenderer:
         functions.glScissor(x, y, w, h)
 
     def release(self) -> None:
+        if self._frost is not None:
+            self._frost.release()
+            self._frost = None
         for atlas in self.atlases.values():
             atlas.texture.destroy()
         self.atlases.clear()

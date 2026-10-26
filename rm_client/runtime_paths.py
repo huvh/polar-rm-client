@@ -106,6 +106,27 @@ class RuntimePaths:
         return self.resource_root.joinpath("assets", *parts)
 
     @property
+    def endfield_wiki_pack(self) -> Path:
+        """源码资源随 Wiki 功能封装，便携版使用发布脚本复制的只读资源。"""
+        if self.source_mode:
+            return self.app_root / "rm_client/ui/endfield/wiki/assets"
+        return self.asset("endfield/wiki")
+
+    @property
+    def endfield_changelog_pack(self) -> Path:
+        """原版公告页资源随功能目录提供，便携版使用只读资源目录。"""
+        if self.source_mode:
+            return self.app_root / "rm_client/ui/endfield/changelog/assets"
+        return self.asset("endfield/changelog")
+
+    @property
+    def endfield_bundled_menu_pack(self) -> Path:
+        """Endfield功能包内的只读Esc资源；可写私有覆盖仍由原路径持有。"""
+        if self.source_mode:
+            return self.app_root / "rm_client/ui/endfield/menu/assets"
+        return self.asset("endfield/menu")
+
+    @property
     def endfield_menu_pack(self) -> Path:
         """Use an explicitly prepared local pack, otherwise shipped read-only data.
 
@@ -118,7 +139,7 @@ class RuntimePaths:
         if any((local / "native_renderer" / name).is_file()
                for name in ("CURRENT.json", "BUILD_MANIFEST.json")):
             return local
-        shipped = self.asset("endfield_pack")
+        shipped = self.endfield_bundled_menu_pack
         return shipped if (shipped / "ENDFIELD_PACK_MANIFEST.json").is_file() else local
 
     def ensure_writable_dirs(self) -> None:

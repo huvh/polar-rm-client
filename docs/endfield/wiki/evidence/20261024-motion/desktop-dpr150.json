@@ -1,0 +1,97 @@
+{
+  "python": "3.11.9 (tags/v3.11.9:de54cf5, Apr  2 2024, 10:12:12) [MSC v.1938 64 bit (AMD64)]",
+  "PySide6": "6.12.0",
+  "scope": "real Windows/OpenGL, temporary profile, inert transport starts",
+  "hover_input": "production Qt mouse adapter on owned native OpenGL window",
+  "hover_first_frame_ms": 230.7618999911938,
+  "hover_sample_elapsed_ms": 514.4334000069648,
+  "hover_background_rgb": [
+    10,
+    10,
+    10
+  ],
+  "hover_pointer": [
+    209.0,
+    354.0
+  ],
+  "hover_target": [
+    129.33333333333331,
+    90.66666666666666,
+    158.66666666666666,
+    526.6666666666666
+  ],
+  "hover_mask_progress": 1.0,
+  "motion_frames": [
+    {
+      "event": "enter_movement",
+      "at_ms": 80.0
+    },
+    {
+      "event": "enter_movement",
+      "at_ms": 250.0
+    },
+    {
+      "event": "enter_movement",
+      "at_ms": 450.0
+    },
+    {
+      "event": "enter_movement",
+      "at_ms": 800.0
+    },
+    {
+      "event": "switch_module",
+      "at_ms": 50.0
+    },
+    {
+      "event": "switch_module",
+      "at_ms": 220.0
+    },
+    {
+      "event": "switch_module",
+      "at_ms": 450.0
+    },
+    {
+      "event": "search_over_module",
+      "at_ms": 80.0
+    },
+    {
+      "event": "search_over_module",
+      "at_ms": 250.0
+    },
+    {
+      "event": "search_over_module",
+      "at_ms": 500.0
+    },
+    {
+      "event": "search_return",
+      "at_ms": 80.0
+    },
+    {
+      "event": "search_return",
+      "at_ms": 240.0
+    },
+    {
+      "event": "category_return",
+      "at_ms": 80.0
+    },
+    {
+      "event": "category_return",
+      "at_ms": 240.0
+    },
+    {
+      "event": "category_return",
+      "at_ms": 900.0
+    }
+  ],
+  "gpu_frost_passes": 174,
+  "modules": 74,
+  "category_layout": "left: category modules; right: selected module settings",
+  "source_game_bundles": 53,
+  "settings": 472,
+  "dpr": 1.5,
+  "gl": 4,
+  "gui_gpu_error": "",
+  "compositor_error": "",
+  "layout_ms": 1.1079999967478216,
+  "status": "PASS"
+}

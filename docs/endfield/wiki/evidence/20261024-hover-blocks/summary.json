@@ -1,0 +1,32 @@
+{
+  "source_game_bundles": 6,
+  "unit": 0.7993779160186625,
+  "source_cell_width": 320.0,
+  "source_spacing": 1.5,
+  "top_point_width": 8,
+  "gray_width": [
+    50,
+    14
+  ],
+  "gray_y": [
+    84,
+    199,
+    -91
+  ],
+  "desktop100": "PASS",
+  "block_pixel_red": [
+    114,
+    114,
+    6,
+    6
+  ],
+  "gpu_error": "",
+  "compositor_error": "",
+  "desktop150": "PASS",
+  "block_pixel_red_150": [
+    114,
+    114,
+    6,
+    6
+  ]
+}

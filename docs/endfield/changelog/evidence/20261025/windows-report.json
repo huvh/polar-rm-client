@@ -1,0 +1,19 @@
+{
+  "title": "POLAR-RM · 更新日志",
+  "language": "zh-cn",
+  "text": "2026.10.25 · Esc 菜单精简\n\n▼//界面调整\n\n・Esc 菜单只保留一个声音设置入口。\n\n・保留左侧更新日志，删除右侧重复入口。\n\n▼//功能移除\n\n・英雄部署控制台、特殊快捷键、部署指令与自动图传切换已移除。\n\n・独立 HeroLob 吊射标定、弹道预览继续可用。\n\n▼//本地记录\n\n・这些是本地客户端改动，不代表已发布新版本或通过实战资格验证。",
+  "font": "HarmonyOS_Sans_SC",
+  "faces": [
+    "HarmonyOS_Sans_SC",
+    "HarmonyOS_Sans_SC"
+  ],
+  "motion": "0.3s",
+  "status": "PASS",
+  "platform": "windows",
+  "assets": {
+    "status": "PASS",
+    "files": 20
+  },
+  "errors": [],
+  "network_requests": []
+}

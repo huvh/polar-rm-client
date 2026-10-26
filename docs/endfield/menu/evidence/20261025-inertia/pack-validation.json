@@ -1,0 +1,16 @@
+{
+  "status": "PACK_VALID",
+  "files": 57,
+  "maps": {
+    "RMUC7v7": 118677,
+    "RMUL3v3": 8971,
+    "RMUL1v1": 4860
+  },
+  "binary_sha256": "cc45f496848279df5c369c3e20c8a991fae9fd5a043b4366fcc8130aca5b1d3e",
+  "optional_boot": false,
+  "optional_audio": false,
+  "native_render_verified": false,
+  "limits": "Integrity/source check only; run verify_endfield_pack_runtime.py for owned D3D rendering. No hardware/match qualification.",
+  "ignored_files": [],
+  "previous_renderer_retained": true
+}

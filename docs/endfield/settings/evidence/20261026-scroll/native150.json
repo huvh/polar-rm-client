@@ -1,0 +1,127 @@
+{
+  "scope": "actual PolarRMWindow, shared GL contexts, active QApplication.exec and production open_settings_center; inert transports",
+  "cases": [
+    {
+      "size": [
+        1225,
+        704
+      ],
+      "samples": [
+        {
+          "phase": "snapshot",
+          "dialog": [
+            1225,
+            704
+          ],
+          "minimum_row_width": 1102,
+          "controls": 11,
+          "snapshot": true,
+          "close": [
+            1154,
+            12,
+            30,
+            30
+          ]
+        },
+        {
+          "phase": "settled",
+          "dialog": [
+            1225,
+            704
+          ],
+          "minimum_row_width": 1102,
+          "controls": 11,
+          "snapshot": true,
+          "close": [
+            1154,
+            12,
+            30,
+            30
+          ]
+        },
+        {
+          "phase": "snapshot",
+          "dialog": [
+            1225,
+            704
+          ],
+          "minimum_row_width": 1102,
+          "controls": 11,
+          "snapshot": true,
+          "close": [
+            1154,
+            12,
+            30,
+            30
+          ]
+        }
+      ],
+      "pages": [
+        {
+          "page": "视频",
+          "capture": "1225x704_page_0.png",
+          "rows": 11
+        },
+        {
+          "page": "音频",
+          "capture": "1225x704_page_1.png",
+          "rows": 14
+        },
+        {
+          "page": "游戏",
+          "capture": "1225x704_page_2.png",
+          "rows": 33
+        },
+        {
+          "page": "键盘 / 鼠标",
+          "capture": "1225x704_page_3.png",
+          "rows": 91
+        },
+        {
+          "page": "准星",
+          "capture": "1225x704_page_4.png",
+          "rows": 31
+        },
+        {
+          "page": "界面 / HUD",
+          "capture": "1225x704_page_5.png",
+          "rows": 82
+        }
+      ],
+      "scroll": {
+        "wheel": [
+          {
+            "at": 0.02,
+            "position": 19.86359355417896,
+            "target": 86.1328125
+          },
+          {
+            "at": 0.06,
+            "position": 55.36510466245563,
+            "target": 86.1328125
+          },
+          {
+            "at": 0.16,
+            "position": 86.1328125,
+            "target": 86.1328125
+          }
+        ],
+        "drag": {
+          "released": 296.0,
+          "coasting": 321.5346754718818,
+          "initial_velocity": 368.6261365065315,
+          "velocity": 317.4934478010333
+        },
+        "edge": {
+          "released": -49.949916527545895,
+          "at_250ms": -0.44138568174991105,
+          "settled": 0
+        },
+        "lifecycle": "page switch cancelled motion and restored content transform"
+      }
+    }
+  ],
+  "modal_loop_level": 2,
+  "dpr": 1.5,
+  "status": "PASS"
+}

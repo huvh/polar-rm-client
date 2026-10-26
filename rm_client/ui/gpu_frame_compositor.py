@@ -67,7 +67,6 @@ class GlassOwner(str, Enum):
     CLICKGUI = "ClickGUI"
     ECONOMY = "Economy"
     RADIAL = "Radial"
-    HERO_DEPLOY = "HeroDeploy"
 
 
 def compose_combined_backdrop_pixel(

@@ -103,7 +103,7 @@ class EscapeMenuTests(unittest.TestCase):
         self.w.control.add_mouse_motion.assert_not_called()
         self.w.control.add_wheel.assert_not_called()
     def test_existing_modal_esc_priority(self):
-        for target, attr in ((self.w,'gui_visible'), (self.w,'economy_visible'), (self.w,'search_focus'), (self.w,'binding_module'), (self.w.match_chat,'input_open'), (self.w.hero_deploy_ui,'visible')):
+        for target, attr in ((self.w,'gui_visible'), (self.w,'economy_visible'), (self.w,'search_focus'), (self.w,'binding_module'), (self.w.match_chat,'input_open')):
             setattr(target, attr, True)
             self.key(Qt.Key.Key_Escape)
             self.assertFalse(self.w.escape_menu_visible, attr)

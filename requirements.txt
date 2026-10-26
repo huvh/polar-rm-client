@@ -10,6 +10,7 @@ PySide6>=6.6,<7
 # --- 图传 / 图像 / 数值 ---
 opencv-python>=4.8
 numpy>=1.26
+av>=14
 # FFmpeg is an explicit external runtime asset. The field build injects the
 # manifest-matched binary into bin/ and never downloads a decoder at runtime.
 

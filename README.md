@@ -14,7 +14,7 @@ Jello 结算/飞镖/性能面板、原经济区补弹详情、MC 判罚/连杀�
 > 弹丸、补血、复活和空中支援的规则与正式请求边界见
 > [《POLAR-RM 经济操作与裁判链路》](README_经济操作与裁判链路.md)。
 
-这是一个使用 Python / PySide6 编写的 RoboMaster 2026 自定义客户端。当前版本按本机 JAR 的字节码常量、原始资源和调用时序移植 Sigma Jello 5.1.0 ClickGUI，并提供 RM 模块注册表、共享设置系统、进入 HUD 后启用摄像头图传、POLAR 风格覆盖层、按键绑定捕获、本地配置，以及由 `BackendManager` 编排的 MQTT/UDP/串口后端。通信代码已实现不等于完成现场资格验证，当前仍为 **NOT READY FOR REAL MATCH**。
+这是一个使用 Python / PySide6 编写的 RoboMaster 2026 自定义客户端。终端配置界面使用 Endfield Wiki 的六分类、路径导航、搜索与原始动画曲线，接入现有 RM 模块注册表和共享设置系统；并提供进入 HUD 后启用摄像头图传、POLAR 风格覆盖层、按键绑定捕获、本地配置，以及由 `BackendManager` 编排的 MQTT/UDP/串口后端。通信代码已实现不等于完成现场资格验证，当前仍为 **NOT READY FOR REAL MATCH**。
 
 ## 运行
 
@@ -30,12 +30,14 @@ python -m venv .venv
 用于发布/编译验证，不是现场运行依赖。这些清单都不是模型、素材或 FFmpeg 的下载器。
 
 开发前先读 [贡献与验证约定](CONTRIBUTING.md) 和 [当前架构与所有权](docs/architecture.md)。
-Windows x64 原生 Esc 菜单的完整运行包已随源保存在 `assets/endfield_pack`；拉取完整 main
+Endfield UI 的运行代码、资源、工具、测试与文档按功能集中维护，目录与当前验证结果见 [Endfield UI 功能封装](docs/endfield/README.md)。Esc 右侧新增“UI切换”占位卡片，暂不执行实际切换。
+
+Windows x64 原生 Esc 菜单的完整运行包已随源保存在 `rm_client/ui/endfield/menu/assets`；拉取完整 main
 并重启即可使用，不需要另装游戏、下载素材或编译 DLL。旧 v0.1.0 Release 不含此包。
-固定输入、离线重建和校验命令见[完整原生 Esc 资源准备指南](docs/ENDFIELD_PACK_SETUP.md)。
+固定输入、离线重建和校验命令见[完整原生 Esc 资源准备指南](docs/endfield/PACK_SETUP.md)。
 **不要创建空清单代替资源包。**
 已有完整运行包时，可直接按[跨电脑迁移说明](docs/endfield_delivery_video_reconnect_20261022.md)
-导出到只读 `assets/endfield_pack`（便携版为 `resources/assets/endfield_pack`），无需在每台电脑重新编译。
+导出到只读 `rm_client/ui/endfield/menu/assets`（便携版为 `resources/assets/endfield/menu`），无需在每台电脑重新编译。
 正式入口是 `main.py`：它先处理运行目录、preflight、回放和队内链路自检，再进入
 `rm_client.ui.polar_app.main`，实际 Qt 装配位于 `rm_client/ui/polar/app_entry.py`。
 `rm_client/app.py` 是惰性兼容入口，直接运行也进入 Qt；历史 Tk 实现保留在
@@ -87,25 +89,26 @@ Windows x64 原生 Esc 菜单的完整运行包已随源保存在 `assets/endfie
 
 ## 快捷键
 
-- 主 HUD 按 `Esc` 打开菜单。Windows 配有经校验的本机 Endfield 资源包时使用原生 EndfieldHUD 场景、RM 2027 场地预览和模糊背景；设置继续使用 Jello，关于入口改为更新日志。Windows 缺少资源包时会显示准备诊断，请按完整准备指南补齐资源，不以更换菜单绕过。已有输入框/弹窗优先处理 Esc，退出客户端需要二次确认；菜单不暂停遥测或安全监控，菜单键鼠不会下发为控制输入。原生菜单准备和资源边界见 [Endfield UI 接入说明](docs/ENDFIELD_SOURCE_PORT.md)，通用安全约定见 [Esc 菜单说明](docs/escape_menu.md)。
+- 主 HUD 按 `Esc` 打开菜单。Windows 配有经校验的本机 Endfield 资源包时使用原生 EndfieldHUD 场景、RM 2027 场地预览和模糊背景；设置入口保留现有设置中心，关于入口改为更新日志。Windows 缺少资源包时会显示准备诊断，请按完整准备指南补齐资源，不以更换菜单绕过。已有输入框/弹窗优先处理 Esc，退出客户端需要二次确认；菜单不暂停遥测或安全监控，菜单键鼠不会下发为控制输入。原生菜单准备和资源边界见 [Endfield UI 接入说明](docs/endfield/SOURCE_PORT.md)，通用安全约定见 [Esc 菜单说明](docs/escape_menu.md)。
 
-- `Right Shift` 或 `F8`：打开/关闭配置界面（ClickGUI）。Jello 界面左键点击面板外空白处也可关闭；面板标题、留白、控件和拖动不会误关。
+- `Right Shift` 或 `F8`：打开/关闭终端配置界面。首页显示战斗、移动、视觉、战术、系统、渲染六个入口；右上角关闭按钮关闭整页。
 - `F9`：已停用，不再轮换 ClickGUI。
 - 长按 `Tab`：放大 `TacticalMap`；松开 `Tab` 后回到缩略小地图。修改 `TacticalMap` 模块绑定键后，新的绑定键也会作为长按查看键。
 - 启动页：`1/2/3` 选择运行场景，然后 `1/2` 选择 `RMUC7v7/RMUL3v3`；`Backspace` 返回场景选择。
 - `B`：打开/关闭独立经济工作区；`ProjectileShop` 绑定键直接进入弹丸页。
 - `K`：打开/关闭 Hero 专用部署/吊射控制台；进入或退出部署模式需要在确认窗口内再次确认。
 - 经济工作区：滚轮/方向键浏览，`Enter` 确认，远程弹丸、补血、复活和支援需长按 600ms，`Esc` 取消或关闭。
-- Jello 主界面中左键点击模块切换开关，右键打开居中设置面板。
-- `Esc` 先关闭设置面板；临时旧界面中第一次返回 Jello，再次关闭 ClickGUI。
+- 进入首页分类后，左侧显示该分类的模块（如“移动”下的小陀螺），右侧直接显示所选模块的设置。首次默认选中第一个模块，再次进入恢复上次选择；方向键直接切换模块，左右两栏独立滚动。右侧顶部开关仍可拖到九格功能栏，所有设置与快捷键绑定入口保留。
+- `Esc` 依次关闭下拉、退出搜索覆盖层、返回首页、关闭终端；左上路径可以直接返回首页或当前分类。右上角首页为叉号退出，分类页和搜索层为左箭头返回；返回先播放退场。`Ctrl+F` 搜索会磨砂化当前终端页，空输入提示“请输入文字”，关闭后恢复原模块及滚动位置；支持中文输入及模块 ID/设置关键词，结果先预览再进入设置。
 - 六套旧界面只在 `ClickGui -> Old ClickGUIs` 展开后出现，并且不会写入配置。
 
 ## ClickGUI
 
-- `JelloSigma` 是唯一默认主界面：固定六分类 4+2 卡片布局、Sigma 原始字体/图片/颜色、450 ms 入场、125 ms 退场、20 px 模糊和原始模块开关音效。
+- 默认主界面为 Endfield Wiki 终端：六项横向编号入口、顶部路径与搜索，分类内左侧模块目录、右侧可编辑设置。运行包为 `rm_client/ui/endfield/wiki/assets`，无需启动或安装游戏。原配置 ID `JelloSigma` 保留以兼容已有文件，不再代表默认界面的视觉样式。
+- 首页、悬停、列表与搜索使用本机 Wiki 导出中的 29 组 60 Hz 动画曲线及二级按钮 Animator 状态，保留加权切线及阶跃；首页入场 750 ms，分类入场约 417 ms、退场约 167 ms。六类对应终端原有分类，74 个模块、473 项设置继续使用原对象和动作路由。来源、重建及验证见 [终端 Wiki 接入说明](docs/endfield/wiki/README.md)。 背景按原层级播放环形旋转、闪动与扫描，首页悬停包含中心扩散的软遮罩、顶部定位方块、图标明暗闪现、两角灰块和下方错峰黄色三角。
 - `PolarOld`、`PolarPanel`、`PolarNew`、`PolarDropdown`、`PolarUnified`、`PolarMulti` 保留为临时兼容界面，只能从 `Old ClickGUIs` 进入。
 - 旧配置中的 Polar/Vape 模式会迁移到 `JelloSigma`；临时进入旧界面不会改变下次打开结果。
-- `ClickGui -> Scale` 可在 `0.50x–2.00x` 调节；窗口布局会按可用宽高封顶。Jello 字形按实际 DPR 高分辨率栅格化并保持 Helvetica Neue Light 原始字重，图片/字体页预加载，绝对时钟帧调度避免 2K 入场动画因定时器量化而顿挫。
+- `ClickGui -> Scale` 保留 `0.50x–2.00x` 设置，Wiki 布局按可用宽高封顶；文字与图形共用命中坐标，字体和图片通过空闲队列预加载。
 
 ## Jello HUD 与 Minecraft 战斗预设
 
@@ -118,7 +121,7 @@ Windows x64 原生 Esc 菜单的完整运行包已随源保存在 `assets/endfie
 ## Hero 吊射与后端就绪性
 
 - `HeroLob` 提供高/低弧预览、炮口随 pitch 位移的迭代补偿、yaw/pitch 校准、遥测时效、热量、横滚和重定位门禁。
-- `K` 或 `HeroLob -> Open Deploy Interface` 从顶部 Apple 风格灵动岛展开 Hero 吊射控制面；根面板、轨迹/遥测卡片和按钮直接复用现有 AndroidLiquidGlass GPU 镜片、文字保护、按压反馈与 Control Center 弹簧，不再使用独立科幻风全屏设计。部署进入/退出采用二次确认；mock 按官方 2 秒切换过程模拟，`OfficialEvent` 等待 `DeployModeStatusSync`，部署期间图传被切断时自定义 UI 和地图继续显示。
+- 英雄部署控制台、进入/退出指令与自动图传切换已移除；`HeroLob` 设置页继续提供吊射标定和弹道预览。
 - 它是 fail-closed 的决策支持功能，**不会发送自动发射或云台命令**；定位重置或遥测异常会自动撤销预备状态。
 - `AutoSpinOnHit` 只依据 `RobotInjuryStat` 的新增 17/42 mm 弹丸伤害触发，首个累计样本不触发；提供阈值、持续时间、冷却、比赛/裁判链路/功率门禁和人工 SpinMode 所有权保护。
 - `rm-native-viewer` 的 `PDL1` 遥测和 `0x0310` 固定分块已接入常驻 H.264 解码器；reset、缺包或解码器异常后会停止喂流并等待下一个 Annex-B SPS，再从 SPS 精确恢复，序号回绕/重复/迟到包均有统计，历史码流不会无限驻留内存。UDP H.265 解码异常在接收线程外恢复，并与原生 H.264 使用同一单调解码时间线后再发布到 HUD。
@@ -212,6 +215,8 @@ Windows x64 原生 Esc 菜单的完整运行包已随源保存在 `assets/endfie
 PRM1 自瞄/小陀螺仍是独立 `LOCKED MOCK` 能力；客户端不提供自动发射输出。
 
 ## 旧图传接收入口
+
+图传代码的模块划分、兼容入口、运行依赖和诊断工具见 [图传模块](docs/video/README.md)。
 
 `CameraFeed → Source → Legacy VT02 UDP` 使用官方 2019 VT02 客户端观察到的
 原始 H.264 UDP 8080 接收契约，不再把旧视频字节误送入 Shark 8 字节分片重组器。

@@ -1,0 +1,1131 @@
+{
+  "files": [
+    {
+      "file": "common_pop_up_logo.png",
+      "sha256": "68a0dde231aa82609800a28ecd3454b5d71858f6baf7de530fb67e8e57b26af2",
+      "bundle": "Data/Bundles/Windows/main/645225557730922e3c2270ff.ab",
+      "object": -8660045800835680881
+    },
+    {
+      "file": "common_pop_up_text.png",
+      "sha256": "8d2f018395d0987823d86567d844e2fb9f46fa944a6b1c4711c1ea2cadf980dd",
+      "bundle": "Data/Bundles/Windows/main/e751dbaa97aba899d07e11da.ab",
+      "object": 4908540056381443326
+    },
+    {
+      "file": "icon_key_a.png",
+      "sha256": "c8846db746799d63c6e6b6fd26f22c9a6bc3f7734ee6bf86fcfadf7d230c6c7e",
+      "bundle": "Data/Bundles/Windows/initial/2d1bcb7736e78a99e20deb12.ab",
+      "object": 113792580788050209
+    },
+    {
+      "file": "icon_key_alpha0.png",
+      "sha256": "9739cd0b95060c8904a88e2e39a750d2197ed29d475ad819801ab18310b3ee31",
+      "bundle": "Data/Bundles/Windows/initial/64cf63ef9c74010cdc7dc4e3.ab",
+      "object": 1255703366220673432
+    },
+    {
+      "file": "icon_key_alpha1.png",
+      "sha256": "2d4abeef49de10398cc1a660544bbaf2f28e8576585d7410effe56a7eb9ec60f",
+      "bundle": "Data/Bundles/Windows/initial/82753ab5456cbc537f8acba8.ab",
+      "object": -6385525380443521207
+    },
+    {
+      "file": "icon_key_alpha2.png",
+      "sha256": "96bed52c6c71bfb9bffa42028e5f18fab0e1ef477446c5a89fb3f4e5d5a33f9a",
+      "bundle": "Data/Bundles/Windows/initial/b2ea84ab46ee3464dd96739f.ab",
+      "object": 4335834542562925252
+    },
+    {
+      "file": "icon_key_alpha3.png",
+      "sha256": "df645d3106aefbb4508c586bcf886d4f2f13dd690b4f3f0e640e6833d8c0b708",
+      "bundle": "Data/Bundles/Windows/initial/285f30d81fa858f29c45c9b6.ab",
+      "object": -7528768573173921106
+    },
+    {
+      "file": "icon_key_alpha4.png",
+      "sha256": "1dd12a57e31535acfb626f0a7bf79244418e89deab4480f3423116e1a6a2d984",
+      "bundle": "Data/Bundles/Windows/initial/b2dfbab5d16fc5b99c871d78.ab",
+      "object": -1215632882804579313
+    },
+    {
+      "file": "icon_key_alpha5.png",
+      "sha256": "abc583eededcee204d66aacea9f5d5a0e53b75170bba65ee7612fe6bae0c703f",
+      "bundle": "Data/Bundles/Windows/initial/62468d7fb35d52265e50adc7.ab",
+      "object": -4671745387710931295
+    },
+    {
+      "file": "icon_key_alpha6.png",
+      "sha256": "3d1404cce1755ce0b37ea1bda7bef91345e771b3e937a4fb12d00c9c65c37af2",
+      "bundle": "Data/Bundles/Windows/initial/0df27f51ed1534e962baac20.ab",
+      "object": 6125261489880426196
+    },
+    {
+      "file": "icon_key_alpha7.png",
+      "sha256": "173646aa4fdd9fa352db06cca0dfe94c759a659943e066281a8d8c7582222dc0",
+      "bundle": "Data/Bundles/Windows/initial/37ec3d9234dce0fb4f6a958d.ab",
+      "object": 6258650278910528608
+    },
+    {
+      "file": "icon_key_alpha8.png",
+      "sha256": "2f93989866612ef1d58707e9af6ab4eeb9b5a52f7b3a420d8f1109a6b19f5946",
+      "bundle": "Data/Bundles/Windows/initial/48e87df001886fc7ad93bc61.ab",
+      "object": -2097541820359881084
+    },
+    {
+      "file": "icon_key_alpha9.png",
+      "sha256": "29e2befee1e883f88fdd1fedbea1a6e19b4502d31643a61ec1191d76943becef",
+      "bundle": "Data/Bundles/Windows/initial/6f6369412c70f7e11615f919.ab",
+      "object": -4464572091260557962
+    },
+    {
+      "file": "icon_key_alt.png",
+      "sha256": "c7d4fad212bc2f4ebc44206fc3c55efd0b32bb7325feb7f6d1a802f711f7b4c3",
+      "bundle": "Data/Bundles/Windows/initial/2faaca4f25fbf6ec9d36d454.ab",
+      "object": -5018481926160707232
+    },
+    {
+      "file": "icon_key_altgr.png",
+      "sha256": "d4970a7f1cebfb5831487d00b737f3bb1850c61192c0c2f28d23326e6be00f7d",
+      "bundle": "Data/Bundles/Windows/initial/1d57515b4da3de8fbf24898e.ab",
+      "object": -8138194962620096216
+    },
+    {
+      "file": "icon_key_b.png",
+      "sha256": "58104f04a4ec01ae9a173b0d2d74af17061fe073bd74ac13cb46d61d872d59fb",
+      "bundle": "Data/Bundles/Windows/initial/4c1ffb0b7abc1bac0a390743.ab",
+      "object": 5766435714072706367
+    },
+    {
+      "file": "icon_key_backquote.png",
+      "sha256": "77fbdf597bfd7a489b0408ce29f6e890afc7b9366bc8f8d73677c9efa49a4963",
+      "bundle": "Data/Bundles/Windows/initial/a6c1d5c9099f9726823ccd52.ab",
+      "object": 4251344901863290421
+    },
+    {
+      "file": "icon_key_backslash.png",
+      "sha256": "c0e67146ae7c2d0218f31acaaad9d864e7d91b3b301d8bfed4a2d3779d2c499c",
+      "bundle": "Data/Bundles/Windows/initial/3e6ab82f733be0861124a217.ab",
+      "object": -4226268865607563305
+    },
+    {
+      "file": "icon_key_backspace.png",
+      "sha256": "658acd0193487588289d7be70f5fdacf0171fcc9f4201a2f67615dbfcaac0ca2",
+      "bundle": "Data/Bundles/Windows/initial/71aafcb1128c2319ced8a1ea.ab",
+      "object": 5344318211568467947
+    },
+    {
+      "file": "icon_key_c.png",
+      "sha256": "88fcb118baa3bb01f2c3c361f14d6027ae6a5f7adefae552c68a5c14b7819b72",
+      "bundle": "Data/Bundles/Windows/initial/a856df3f19a0c41d550e5bd9.ab",
+      "object": 2125371879074794771
+    },
+    {
+      "file": "icon_key_capslock.png",
+      "sha256": "2f629959d6a7bed13f19c8a76f628e8ad4f7eb638c906a8667a2bb4c58461470",
+      "bundle": "Data/Bundles/Windows/initial/802f9ae65b9cb717f5055cde.ab",
+      "object": 4572494337614824474
+    },
+    {
+      "file": "icon_key_comma.png",
+      "sha256": "5b5b201b4f3990c5832dcf58779947294e4f61a20848d156294e6c363386bcd8",
+      "bundle": "Data/Bundles/Windows/initial/b53078274985f7ec3fc2a61b.ab",
+      "object": -5441471358133520936
+    },
+    {
+      "file": "icon_key_ctrl.png",
+      "sha256": "b08cf45e6193aaac4dd0f2b61c7687c20481f15d455a5e04b91a439e84d58328",
+      "bundle": "Data/Bundles/Windows/initial/ef9efff64c3f5561bf51774e.ab",
+      "object": -253324077723213098
+    },
+    {
+      "file": "icon_key_d.png",
+      "sha256": "28cba6b153daac1188d5f0573c318e8570e678be440ea540b918ffd33af26645",
+      "bundle": "Data/Bundles/Windows/initial/b3cf7a57ad523e3885041f00.ab",
+      "object": -8344487966644274814
+    },
+    {
+      "file": "icon_key_delete.png",
+      "sha256": "8c3de47a35490638d8f473b7f11bb4025c85b65d1e0da4adc5fddf816fb5c90e",
+      "bundle": "Data/Bundles/Windows/initial/01c7fd2b6059bb025cbf5734.ab",
+      "object": -24243938565860993
+    },
+    {
+      "file": "icon_key_downarrow.png",
+      "sha256": "02953be0af6856f3315951e96253ee1e801c3e5333655e2f25b7996330d94ae2",
+      "bundle": "Data/Bundles/Windows/initial/3858d8a908566495a26594de.ab",
+      "object": -1954183854114639856
+    },
+    {
+      "file": "icon_key_e.png",
+      "sha256": "211680403f35ed61c3575d24a8491502875595408fb27ff98d223b8d861e46ca",
+      "bundle": "Data/Bundles/Windows/initial/b3cf7a57ad523e3885041f00.ab",
+      "object": -6042725379502931708
+    },
+    {
+      "file": "icon_key_end.png",
+      "sha256": "b383d500664b9fced4dccb83389cfc40dd87bf9e3f2ddf3e92a0973d66fcf40a",
+      "bundle": "Data/Bundles/Windows/initial/7dc49357bcfc76cc0ab9115d.ab",
+      "object": 1679437673987393824
+    },
+    {
+      "file": "icon_key_equals.png",
+      "sha256": "1b8854accd9bc5b02e72deef7eb90cb6396f78d20ef58a0753eb60a505ac2d03",
+      "bundle": "Data/Bundles/Windows/initial/12fcef6a0be2dbb89db7ec97.ab",
+      "object": 4282222701646269174
+    },
+    {
+      "file": "icon_key_esc.png",
+      "sha256": "bac19ba2736ce2e418166c12fa9c8b81bb9774c851b71617fd744bf0b5d4280b",
+      "bundle": "Data/Bundles/Windows/initial/4a9be7ad090fe434b3db2778.ab",
+      "object": -6854629773128176884
+    },
+    {
+      "file": "icon_key_f.png",
+      "sha256": "dc6823d1447fbffc22b7f2e9dbf50f29122c6e3b5d9dd03b8c63128b5f593cc1",
+      "bundle": "Data/Bundles/Windows/initial/460ccc60ba6adab0449aa51e.ab",
+      "object": -1501137933348283877
+    },
+    {
+      "file": "icon_key_f1.png",
+      "sha256": "8f874740eb2938092d9fa3616e7576a92b5675e380b4ba636c4b47122186840b",
+      "bundle": "Data/Bundles/Windows/initial/9aad8fd4365dd587fa5be146.ab",
+      "object": 3875242116080784626
+    },
+    {
+      "file": "icon_key_f10.png",
+      "sha256": "625b00780c810bbf3aeb46e9d9700d2ddb1eb579387306d61841d5754977645b",
+      "bundle": "Data/Bundles/Windows/initial/6e99d100600801900add0d2b.ab",
+      "object": -2741983523192035078
+    },
+    {
+      "file": "icon_key_f11.png",
+      "sha256": "d74f239609d0919eade2b13e7135da6373e371277d28c8ee8cf3224219bf38da",
+      "bundle": "Data/Bundles/Windows/initial/292ade1c98c7d9b077d3186d.ab",
+      "object": 4202646076150740184
+    },
+    {
+      "file": "icon_key_f12.png",
+      "sha256": "8c0f1246bafa0d0c7f3fe2898379aa7aeb1ef1ce54639baada98cd5e4f88bc71",
+      "bundle": "Data/Bundles/Windows/initial/6799131c52905f948fac7b96.ab",
+      "object": -3512560132293843784
+    },
+    {
+      "file": "icon_key_f2.png",
+      "sha256": "21aab32c9ed535fd726c07553d508cab2bbd875b6c72a7773e0bf78a859196e0",
+      "bundle": "Data/Bundles/Windows/initial/3fd681d37e4c86503d6fa968.ab",
+      "object": -3609506936247096027
+    },
+    {
+      "file": "icon_key_f3.png",
+      "sha256": "d7f44230fed0c69ef14b5bffbd76c3d31d12bce994b969b7d9a4b022a7274b57",
+      "bundle": "Data/Bundles/Windows/initial/70e367ab97cc102649b6a744.ab",
+      "object": -8775306257104151585
+    },
+    {
+      "file": "icon_key_f4.png",
+      "sha256": "892bdbdfc0cc6172b0044cda0b43ac9fab2b3bf74646bebf4cb6d44df0566deb",
+      "bundle": "Data/Bundles/Windows/initial/7097b192c4fedb936d3679af.ab",
+      "object": 3486764607382788102
+    },
+    {
+      "file": "icon_key_f5.png",
+      "sha256": "8ee0d0b1ff4b7131f46c8243e2cbedce96ecab4ad3dea2818179d7ef9a509d01",
+      "bundle": "Data/Bundles/Windows/initial/17ce37e46a036067a9ce3941.ab",
+      "object": 1704132445010052677
+    },
+    {
+      "file": "icon_key_f6.png",
+      "sha256": "a3881d6c88d4170851a900d8859f13f86e0897b342433c84a2e640341810780b",
+      "bundle": "Data/Bundles/Windows/initial/14d46774665cb9cfa41f8f6c.ab",
+      "object": -5455050972934841457
+    },
+    {
+      "file": "icon_key_f7.png",
+      "sha256": "c2d72e839043ed6c13dea4e38c2aa9e472bdd2442b1f7a3a367113df87cd1841",
+      "bundle": "Data/Bundles/Windows/initial/79a96ee8e97df9d43ba7989f.ab",
+      "object": 3971094315738712180
+    },
+    {
+      "file": "icon_key_f8.png",
+      "sha256": "bb63481378475fd0cd30a80e222a6bfb34b75d64673c67e3a43c36b493eae2d5",
+      "bundle": "Data/Bundles/Windows/initial/f5afa9e168d5b780e1e1ea0c.ab",
+      "object": -1771996994134384498
+    },
+    {
+      "file": "icon_key_f9.png",
+      "sha256": "53f2a55231567d5cdd1f320195d1a6a6f48a768b45f0ecd4fe387b82cda67726",
+      "bundle": "Data/Bundles/Windows/initial/2024edbc2149d983c1334acd.ab",
+      "object": -9032123635011563862
+    },
+    {
+      "file": "icon_key_g.png",
+      "sha256": "fafcbf70cc050ad2f270c7c98619cfe0150e8d17c4781b4891b8008ef3bd554b",
+      "bundle": "Data/Bundles/Windows/initial/37d5af1c2050535975498943.ab",
+      "object": 1834290003886222926
+    },
+    {
+      "file": "icon_key_h.png",
+      "sha256": "6c94b9a6eb3b3b2a2547cd9692224d9d6dfdfaece2986d91092a39993f04b509",
+      "bundle": "Data/Bundles/Windows/initial/86b8579aa865d73ab6cf6d8a.ab",
+      "object": 5801064733114582143
+    },
+    {
+      "file": "icon_key_home.png",
+      "sha256": "725087cea6fe17c3dfd39a8190a040db2ad15bbfba23a4e11bbc8eab6faa1cec",
+      "bundle": "Data/Bundles/Windows/initial/62c6508094c341c8669c9bee.ab",
+      "object": 8769711040112243958
+    },
+    {
+      "file": "icon_key_i.png",
+      "sha256": "e79cb08959f2378285bf740f1026b62591d931bbf6ab70923acb4028ee98bcca",
+      "bundle": "Data/Bundles/Windows/initial/fcbc482d59e09a73456a63b0.ab",
+      "object": 702000726165435072
+    },
+    {
+      "file": "icon_key_insert.png",
+      "sha256": "52db235f1eea652b1011c46f74f0e62dec37ad35597968c7b5562ad47e19eacb",
+      "bundle": "Data/Bundles/Windows/initial/24fbb60acf618e544d8b504b.ab",
+      "object": -4053727529968255934
+    },
+    {
+      "file": "icon_key_j.png",
+      "sha256": "69178e3e941620aae4f2984625612636a215ffdaffc30bc30b1ab5a31831ef3c",
+      "bundle": "Data/Bundles/Windows/initial/0949bbbd8e6f999e9d721381.ab",
+      "object": 5394949279291852967
+    },
+    {
+      "file": "icon_key_k.png",
+      "sha256": "e4d7991fabef991ce31d5c87748890cbfa3255b98f308581ef0f09054e8c0944",
+      "bundle": "Data/Bundles/Windows/initial/82c5cd570c13604515edc6bb.ab",
+      "object": 39173356377561344
+    },
+    {
+      "file": "icon_key_l.png",
+      "sha256": "2b5c1fdcf7fc68e33a93c9a1c886dd760c78850188e95ed6c19ba14e7b70022d",
+      "bundle": "Data/Bundles/Windows/initial/ca028439d1a096ca03c55c7b.ab",
+      "object": 2367740465239053501
+    },
+    {
+      "file": "icon_key_leftarrow.png",
+      "sha256": "742677897210a5a0b627cde0bafa468de99fed040c4a3af54edb1c76150f0e65",
+      "bundle": "Data/Bundles/Windows/initial/bad2700eddaf1c0b4d7a1870.ab",
+      "object": -8082253259203532789
+    },
+    {
+      "file": "icon_key_leftbracket.png",
+      "sha256": "5421bafb940bee1a5e56fccacd2075b589c6efa1fd5e4c1ba8804541e1037bd8",
+      "bundle": "Data/Bundles/Windows/initial/b36c5c52c500d9cb0792e938.ab",
+      "object": 8753549591952533795
+    },
+    {
+      "file": "icon_key_m.png",
+      "sha256": "7782a05f4f85b4f80705efc33dacbb85bdf7c8ef6ed304243613fdda8f57d182",
+      "bundle": "Data/Bundles/Windows/initial/b3cf7a57ad523e3885041f00.ab",
+      "object": -5155715833388291313
+    },
+    {
+      "file": "icon_key_menu.png",
+      "sha256": "576b4ee708063d26e759ed7e14d2b730c51c3944dfa0b59bc6a336846ee3f14b",
+      "bundle": "Data/Bundles/Windows/initial/953f4f83c3c5f74c4f0d71c2.ab",
+      "object": -2248809481150918607
+    },
+    {
+      "file": "icon_key_minus.png",
+      "sha256": "6bc65a7e12f8d2a9d7c904eda32a747fc027e75967d09592ac7b09f8ec2607d8",
+      "bundle": "Data/Bundles/Windows/initial/7d87e6ab4fee8bdb5c8f6f56.ab",
+      "object": 3475071700872118645
+    },
+    {
+      "file": "icon_key_n.png",
+      "sha256": "efe17eea484c351f2581c95c78237de5ae53a2afe907ac6799ac279cd35738bb",
+      "bundle": "Data/Bundles/Windows/initial/b3cf7a57ad523e3885041f00.ab",
+      "object": -541460610052947805
+    },
+    {
+      "file": "icon_key_o.png",
+      "sha256": "ca9fc2d2a055ffeb2d67b59a786917a6c995474505627e6ea9eaa23b70fff158",
+      "bundle": "Data/Bundles/Windows/initial/a3ffe0b0547a09757898b57b.ab",
+      "object": -8125242866156647702
+    },
+    {
+      "file": "icon_key_p.png",
+      "sha256": "db0a90e8cf545845554dd8d6a6945426283f63b2261c58b362071fcf20167ca6",
+      "bundle": "Data/Bundles/Windows/initial/b3cf7a57ad523e3885041f00.ab",
+      "object": 677307451113364959
+    },
+    {
+      "file": "icon_key_pagedown.png",
+      "sha256": "7a09ede1a7937a78e1bde23946d28a062e4b94b31755906371274c006acf12aa",
+      "bundle": "Data/Bundles/Windows/initial/507a6898af9ba44275c725d6.ab",
+      "object": -116888609259944372
+    },
+    {
+      "file": "icon_key_pageup.png",
+      "sha256": "1d138a62b556b060660853c592c9a88dac0cd5ae1f3f7aab95ff642232467f41",
+      "bundle": "Data/Bundles/Windows/initial/e31a6c0f1a30418088caa8b8.ab",
+      "object": -3754117548650078490
+    },
+    {
+      "file": "icon_key_period.png",
+      "sha256": "a20ac446288c985f74fe7721748ad1b4d2ab2978ec0313fddc533ebd415c53ce",
+      "bundle": "Data/Bundles/Windows/initial/2e87ecc0d48905df16ea7b4c.ab",
+      "object": -8489269527510518771
+    },
+    {
+      "file": "icon_key_q.png",
+      "sha256": "0f9c78c7a99004a10f3de314489790a79c7361d7b4f713a69a4e34b42a214925",
+      "bundle": "Data/Bundles/Windows/initial/694032368374ad790e1db5b3.ab",
+      "object": -8231146049160450109
+    },
+    {
+      "file": "icon_key_quote.png",
+      "sha256": "9ab2eb686555af4a3676dff99652d0137320bcc9fc70423313707a834e4011cc",
+      "bundle": "Data/Bundles/Windows/initial/76822852c8f194d7ac8deac0.ab",
+      "object": -337430064658744990
+    },
+    {
+      "file": "icon_key_r.png",
+      "sha256": "b78f5bfaf1ac787ad40ea071368bf416acf5e81aa4beb4c7f9ffd841ba31e889",
+      "bundle": "Data/Bundles/Windows/initial/baf738e906cf135b75f9c30d.ab",
+      "object": 593944962469572006
+    },
+    {
+      "file": "icon_key_return.png",
+      "sha256": "b8cf14aa116a0955b16470e89d9e11608a62318b07ce708183f6ba3f48552294",
+      "bundle": "Data/Bundles/Windows/initial/3c016864a11d1106a92f2bc9.ab",
+      "object": 8382135387276731857
+    },
+    {
+      "file": "icon_key_rightarrow.png",
+      "sha256": "597f63dafb3ec636937cad9dc151f5fc9d983fd84f5c5499c73811f42bb9beb1",
+      "bundle": "Data/Bundles/Windows/initial/788048f893c96199574265eb.ab",
+      "object": 374629559979831446
+    },
+    {
+      "file": "icon_key_rightbracket.png",
+      "sha256": "5cdd00d1534aa65f49f95ff2d9d099f34d727bfb8f4818a80eb9552e51f4ded6",
+      "bundle": "Data/Bundles/Windows/initial/5786dfba456adf7b81e41923.ab",
+      "object": 7560895973787906699
+    },
+    {
+      "file": "icon_key_rightwindows.png",
+      "sha256": "b5027b97070b39d0e24a7034c73c0746be53ed7dcb4619121dc83ae555c93781",
+      "bundle": "Data/Bundles/Windows/initial/4e3dabdd84ce0edf820fd415.ab",
+      "object": -7564774017472399344
+    },
+    {
+      "file": "icon_key_s.png",
+      "sha256": "afc32a17afc1b20d377ad68c3a0d006b05465e3646ff2c0c2b790657e2953b79",
+      "bundle": "Data/Bundles/Windows/initial/cf77938e52c98b9174583736.ab",
+      "object": -6340543780511126464
+    },
+    {
+      "file": "icon_key_semicolon.png",
+      "sha256": "febe14ecc54a195a9c20dcea21330d4fb55b51313deb644485e447b1dce9ba9b",
+      "bundle": "Data/Bundles/Windows/initial/e75acfc3a1874e75e65b2ba4.ab",
+      "object": 8089556034175737181
+    },
+    {
+      "file": "icon_key_shift.png",
+      "sha256": "eec1bc8ba2e41567c0922d413357a5027d698efcf4fb4370df9a50bb2fd0549e",
+      "bundle": "Data/Bundles/Windows/initial/d4a31e2605f91f61938db45e.ab",
+      "object": 4305028091626979365
+    },
+    {
+      "file": "icon_key_slash.png",
+      "sha256": "281a86a29e8f20d1ed70a94cd96ae9f941fdff56e5793feb6faf1a7eddb50153",
+      "bundle": "Data/Bundles/Windows/initial/8d87c71dead78a8ccb7cc983.ab",
+      "object": 1254203454963025925
+    },
+    {
+      "file": "icon_key_space.png",
+      "sha256": "57f9c3a60a230da1a21be8271ccb4e12c4596110e9491ce23dc0a1c5dcd7e3d0",
+      "bundle": "Data/Bundles/Windows/initial/d3c7885dd86f8df32c95d5f3.ab",
+      "object": -790558623206905128
+    },
+    {
+      "file": "icon_key_t.png",
+      "sha256": "26b8f8e786b2a27aa17e18e643547181383724b8bafccfec19b4e05734512ab5",
+      "bundle": "Data/Bundles/Windows/initial/0e3809a76ea13e8fee13e84c.ab",
+      "object": 5024099194274480235
+    },
+    {
+      "file": "icon_key_tab.png",
+      "sha256": "3bc9ba647de44a9a7a6e8a4b5eb201b4b751dc302e45b16da49579e759b3e6f3",
+      "bundle": "Data/Bundles/Windows/initial/77de2b6a44db6dc2ac5bcf5a.ab",
+      "object": 6709953527425149536
+    },
+    {
+      "file": "icon_key_u.png",
+      "sha256": "704928b0a849311f23fb7ec02f772341d7ebf79e66bff59716485f15638b0942",
+      "bundle": "Data/Bundles/Windows/initial/12ac4bf03013bec781d39d5a.ab",
+      "object": -1868192731134004062
+    },
+    {
+      "file": "icon_key_uparrow.png",
+      "sha256": "9d0ee26772214dd8a836d9ec063a5082101c25f1f1509ba197e8774417b17425",
+      "bundle": "Data/Bundles/Windows/initial/71594028871ce9a9b1767d14.ab",
+      "object": 2861042913055047493
+    },
+    {
+      "file": "icon_key_v.png",
+      "sha256": "8723b335236c02fcff475d9c89368977622f800641f4551182ca8100ffc19dc4",
+      "bundle": "Data/Bundles/Windows/initial/d07e807df385628f99c1c36c.ab",
+      "object": 2495011065378861210
+    },
+    {
+      "file": "icon_key_w.png",
+      "sha256": "78c684069ecd693c8f50ef295a952b22172b315d52ab33667ab56832f539bd84",
+      "bundle": "Data/Bundles/Windows/initial/58b18a37703ef45946af249b.ab",
+      "object": 2405138466834704656
+    },
+    {
+      "file": "icon_key_windows.png",
+      "sha256": "b827e101be4790432536a6baf16676b0e496d78814507d3f5ea4ae57d4735396",
+      "bundle": "Data/Bundles/Windows/initial/16b2275d7d362f2e66cd1eff.ab",
+      "object": 5417508639460981122
+    },
+    {
+      "file": "icon_key_x.png",
+      "sha256": "083b72357d40a35c6366cfd17c9bfae0c0d12e0c4243ac71876a5328f43358f1",
+      "bundle": "Data/Bundles/Windows/initial/bad14f479ca858e354ce1fca.ab",
+      "object": -4384717846231066884
+    },
+    {
+      "file": "icon_key_y.png",
+      "sha256": "cc78f1e133121e8bcddd841b896b7ea2622e2451443125d2b55ea10dd766cf1c",
+      "bundle": "Data/Bundles/Windows/initial/18d411492ef845b6d58d82b3.ab",
+      "object": 5064788906900004174
+    },
+    {
+      "file": "icon_key_z.png",
+      "sha256": "0cbf0d3212a0a5fedb7edaa469523a457c86dd991fdd465e5af98813a85d0264",
+      "bundle": "Data/Bundles/Windows/initial/e2f937c48653d5376d103f7e.ab",
+      "object": 8864036566374088110
+    },
+    {
+      "file": "pup_up_bg.png",
+      "sha256": "18679cbe75a68ea6ebefad4c240807ddf32ff041a57864072b299925010025c6",
+      "bundle": "Data/Bundles/Windows/main/e4785b8a09f1c36197b584f6.ab",
+      "object": 3708882610381679569
+    },
+    {
+      "file": "pup_up_shadow.png",
+      "sha256": "97dbbb5a4d82ae85146ccc4c88eb920f2f1f708f2a333dc99e61937b02587df0",
+      "bundle": "Data/Bundles/Windows/main/0e5e5f0c80ea3c631d708c58.ab",
+      "object": 5152256907021136206
+    }
+  ],
+  "verified_game_bundles": [
+    {
+      "bundle": "Data/Bundles/Windows/initial/01c7fd2b6059bb025cbf5734.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 2519984,
+      "length": 6782,
+      "sha256": "570871995527320ce57ffa17bed165c6c2774bc7a3d360d5679dea1c943d4da6"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/0949bbbd8e6f999e9d721381.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 757583,
+      "length": 5923,
+      "sha256": "b523df2977ae7131423208451f181214d6b34cf6f820f39c552f5184c441bc5b"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/0df27f51ed1534e962baac20.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 906486,
+      "length": 5996,
+      "sha256": "707d31ad652a745433b4a0d4f66598e7d4176da1ccf19e83092b3838cd344229"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/0e3809a76ea13e8fee13e84c.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 810955,
+      "length": 5941,
+      "sha256": "c670a16f00b1eee3cefec20f7c205d7921f265385f1977d25eeeb21430ece44b"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/12ac4bf03013bec781d39d5a.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 1050658,
+      "length": 6023,
+      "sha256": "44121054692106470742506f6d186b2b217b9746a9b994ed25280f343aa0e42d"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/12fcef6a0be2dbb89db7ec97.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 675055,
+      "length": 5879,
+      "sha256": "bd7ba890d6c7decc93c760801696758a236ddcf8f00150a0c07e3bcfe6b2eba0"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/14d46774665cb9cfa41f8f6c.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 1905563,
+      "length": 6319,
+      "sha256": "40faf5e521b86d1b057d08584e0165ea97a60629277b931aff13f5bd104dcfb9"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/16b2275d7d362f2e66cd1eff.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 3266748,
+      "length": 7271,
+      "sha256": "2d2c828e0dae0e9a407946bcc480e9bb92c65e3f1fbf0e482b3425129b1b6fab"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/17ce37e46a036067a9ce3941.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 1899245,
+      "length": 6318,
+      "sha256": "b2e9d1e79d6963f3530919bba66ccd0a50e54aa85c4784c5d425308744924162"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/18d411492ef845b6d58d82b3.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 864603,
+      "length": 5975,
+      "sha256": "35304dfe9fac6ced5ee19f653009384057181ac1c8245a298053cdc1b79b53bf"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/1d57515b4da3de8fbf24898e.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 2691152,
+      "length": 6926,
+      "sha256": "5e835b9b984b62260bb445758b3b6ffebf9da2b8526ad65b3f13f3c900e19d8a"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/2024edbc2149d983c1334acd.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 1930865,
+      "length": 6338,
+      "sha256": "d270e370af6c242af1a8a2a701d226cd0f274b5f15f7ccd758ea80b05a1aaa7d"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/24fbb60acf618e544d8b504b.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 2567548,
+      "length": 6821,
+      "sha256": "db641b803bd44dca3672db79840edf71124286163c105a1e07f9b95287f7d1da"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/285f30d81fa858f29c45c9b6.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 930474,
+      "length": 5999,
+      "sha256": "57316f70d8526ff5d882bf445dcfa4098584a9fff3021471b9cab7986bf1f523"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/292ade1c98c7d9b077d3186d.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 2026086,
+      "length": 6368,
+      "sha256": "4f33cdf4a270f5e26dcdfe2117cee2f0736e186404b5f1ee852fbfdc5cef77a9"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/2d1bcb7736e78a99e20deb12.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 1056681,
+      "length": 6028,
+      "sha256": "5922a420ad12920b94408e5c502f33cb1f0959f842bf1747e8b9eab7add5b137"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/2e87ecc0d48905df16ea7b4c.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 511170,
+      "length": 5786,
+      "sha256": "ad97591f18de686bc0ba77880e5fb5172e125d1e032c9e5951a450ed757c2dd5"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/2faaca4f25fbf6ec9d36d454.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 1911882,
+      "length": 6321,
+      "sha256": "7a9aac71738dcae838226f5fbe7918770aad4eafc5b6d442034a1ef8073e9fb7"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/37d5af1c2050535975498943.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 1135202,
+      "length": 6058,
+      "sha256": "2bfbd9a19a5b301b7167632b66007d78fd859a3ff5a729a896efdbd4472524e3"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/37ec3d9234dce0fb4f6a958d.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 822841,
+      "length": 5951,
+      "sha256": "5b4a7c5266ca9b93c03ca1ff07235cf4049cb290d334a1ea6eb906be7ff69157"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/3858d8a908566495a26594de.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 622211,
+      "length": 5868,
+      "sha256": "3d0858ff25ef5882bb2305298edae4ffa378844502623b01b249f7483663cc31"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/3c016864a11d1106a92f2bc9.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 2560734,
+      "length": 6814,
+      "sha256": "e776fb34cf42fba9c7bbc253c239981975e20197f474f80ca2bfcd9243859afe"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/3e6ab82f733be0861124a217.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 799078,
+      "length": 5938,
+      "sha256": "1ec4ff1440ef9743c2c1e0f5a97a0a95f1e9bd63bdcc3b0bc116ae980c893699"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/3fd681d37e4c86503d6fa968.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 2007008,
+      "length": 6359,
+      "sha256": "2eb8844bdcb7a33328ea9d07e60dbe133322572bbe96b0124740a819eea17432"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/460ccc60ba6adab0449aa51e.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 793144,
+      "length": 5934,
+      "sha256": "d4ccc6097cb5e58644c3a09a787d518977571399060f16f9e0715791d6fdea4f"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/48e87df001886fc7ad93bc61.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 1026577,
+      "length": 6019,
+      "sha256": "5b5119878037108d2989ec0b3d933475310ad7ca3890b86981529fc0da0d3b5f"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/4a9be7ad090fe434b3db2778.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 2128637,
+      "length": 6452,
+      "sha256": "70e8d98758fae249a1f1aca4ec2fb9b4dfbf39ed3f2b6194bef1749a729ce4b9"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/4c1ffb0b7abc1bac0a390743.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 1008538,
+      "length": 6012,
+      "sha256": "d3a0e66498f4eb20d3759d0911533823bfe4980be6bcc52f0dd124791b0a1684"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/4e3dabdd84ce0edf820fd415.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 2045237,
+      "length": 6397,
+      "sha256": "2b40233bff7bf888c80c69ed3143e5c80e1e5b97693d5885872a57c8545e6153"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/507a6898af9ba44275c725d6.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 3781134,
+      "length": 7621,
+      "sha256": "c9da2897d8cec5196539e68037382c90f083a39450932fc449626fcc128f4196"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/5786dfba456adf7b81e41923.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 805016,
+      "length": 5939,
+      "sha256": "f487a902d0f18f94ea14959350b4732dd596b0d29150f3fdbb1f192f1ad881c9"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/58b18a37703ef45946af249b.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 1214050,
+      "length": 6078,
+      "sha256": "8178a2db86acc69f45f134c7ca79c852078999ccc15e40f316da2d0eb0abc1e2"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/62468d7fb35d52265e50adc7.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 978500,
+      "length": 6007,
+      "sha256": "7f530d2239bc0c06bc4b10168cf6b9bd134f581036cdfa4642ec1d327d080352"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/62c6508094c341c8669c9bee.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 2540344,
+      "length": 6793,
+      "sha256": "c0ba7836713a9ec97b4cb09987e762538fa113952d8093f933f4a94258bc52cf"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/64cf63ef9c74010cdc7dc4e3.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 1002528,
+      "length": 6010,
+      "sha256": "852ccfbe4190668fa55f344ae9b348adcb81387da754f5cc340e207f6dd200f1"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/6799131c52905f948fac7b96.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 2064430,
+      "length": 6404,
+      "sha256": "dc30ade8e1ea3154af681166579d2939a1f3a1bc3f8f4fe852419f708eb926b1"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/694032368374ad790e1db5b3.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 1189766,
+      "length": 6068,
+      "sha256": "d707f1cdb648b43cd7a991aad7b2558c47c41ea6ccffd0081b793b394c2a8712"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/6e99d100600801900add0d2b.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 2051634,
+      "length": 6398,
+      "sha256": "cb4df21701f1ec2e1ec67b54b3c7ea425f361ad8ed82d36dbe798fcd8c9fbaee"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/6f6369412c70f7e11615f919.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 888512,
+      "length": 5990,
+      "sha256": "2ae3a71b75c8cfd728f5064f5a3a908f6f20ac1571a30f3e267d284fad7725d0"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/7097b192c4fedb936d3679af.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 1924529,
+      "length": 6336,
+      "sha256": "2b1e0946508227ddb5a84dbe5e1e5d5f95fdeb5b4e1a900ffac8aaee3efdf24f"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/70e367ab97cc102649b6a744.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 1892935,
+      "length": 6310,
+      "sha256": "b4fd6589358a274f358a6d39932ee87bd77b83966149c3af209fdad075145c97"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/71594028871ce9a9b1767d14.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 557795,
+      "length": 5849,
+      "sha256": "825106cdb1a6a8eaac10b1127261c6fd14cd597e813bea5d43b492e8066b5d2a"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/71aafcb1128c2319ced8a1ea.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 3339783,
+      "length": 7337,
+      "sha256": "1243c6d048abecbbba4861d6205dc31798b5b6183e80b7778a7d14cf9c4ed808"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/76822852c8f194d7ac8deac0.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 651557,
+      "length": 5873,
+      "sha256": "e11193228f91b288db7d0237912542fc327ddbeb547911ef5222b62f43b818f7"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/77de2b6a44db6dc2ac5bcf5a.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 2167500,
+      "length": 6494,
+      "sha256": "4b658d8ccdc31e32504302d67880bb0b534a1473436e166a61cc1fde23361e11"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/788048f893c96199574265eb.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 669177,
+      "length": 5878,
+      "sha256": "62a34190acedeb972b2a8e21fc0718253aaa3b328e1e23edd03096ed29a9bc85"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/79a96ee8e97df9d43ba7989f.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 1886630,
+      "length": 6305,
+      "sha256": "32b424e8349c907141e77afa048fb8efcc266307614c32fc77f43671b0f833c3"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/7d87e6ab4fee8bdb5c8f6f56.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 528593,
+      "length": 5828,
+      "sha256": "ede9f8da650efabf8d5eca1a58ec3d7c7633c7039e12e1e73de214d2802c1b9b"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/7dc49357bcfc76cc0ab9115d.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 2180506,
+      "length": 6513,
+      "sha256": "bb0b337a7cacf78d36b8b146aa4a91134442ed66adac1ad23f922f5b8e9885c0"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/802f9ae65b9cb717f5055cde.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 3569659,
+      "length": 7470,
+      "sha256": "c5ecbbb2c60d0634df37b152d84ad0f736187c16d4869eeb35b7ded7df6448fb"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/82753ab5456cbc537f8acba8.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 781280,
+      "length": 5932,
+      "sha256": "137245ba6b0761bf6de8e25c1c4b2f516f0bd0de1e51aa04f3f092a792b2a9c0"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/82c5cd570c13604515edc6bb.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 1074765,
+      "length": 6028,
+      "sha256": "a062dcfe7a5200d9fe5c1af470fd0df771f73753cf8e98b8589a81cff41c129f"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/86b8579aa865d73ab6cf6d8a.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 1014550,
+      "length": 6013,
+      "sha256": "2ce6fffaaaa4a2acfbc249562b692cc457c24283a1b8215cf89933b1d4a4ef0f"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/8d87c71dead78a8ccb7cc983.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 775353,
+      "length": 5927,
+      "sha256": "24f044a5f2d5593cc925d49fae30e128491046e2c060f6811879a596ae7300b0"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/953f4f83c3c5f74c4f0d71c2.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 2472649,
+      "length": 6756,
+      "sha256": "ad5295eadf1a765c5b4bfc44cf6031a3bf9a7d7747213bea97b9beebf6c83665"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/9aad8fd4365dd587fa5be146.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 1823996,
+      "length": 6236,
+      "sha256": "c5ff30c43a9b14ae838a19c6cc4f9f9b34b747d6afcf4dd81ae25e97dc8877b0"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/a3ffe0b0547a09757898b57b.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 1104935,
+      "length": 6046,
+      "sha256": "309fdf286839e45314187846715829df5dd1ce49068a7159906f9a87f57263d7"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/a6c1d5c9099f9726823ccd52.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 680934,
+      "length": 5880,
+      "sha256": "befc4adb70eb4b9a58d4a327c206c8660d7f9a93f77a0a3782313419ccdbcf03"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/a856df3f19a0c41d550e5bd9.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 1153378,
+      "length": 6062,
+      "sha256": "1c590bd4d8dd4aa9a3cb4a753769cb18f3775c0bb570606795117bad42e95d94"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/b2dfbab5d16fc5b99c871d78.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 828792,
+      "length": 5963,
+      "sha256": "18f383033ab8e1f332696a5d6d643c5f4ece1a4e7c59756ce02ede1bd036a50b"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/b2ea84ab46ee3464dd96739f.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 834755,
+      "length": 5965,
+      "sha256": "36a4ac23eef3fa9073a2cfe01af8f1beefc58a725d9ab87d71a22d9f9acddc89"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/b36c5c52c500d9cb0792e938.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 787212,
+      "length": 5932,
+      "sha256": "ddd13dbf7c8c2aa837bbec8da6890f384c38b89ef684995a36e97440edc255ac"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/b3cf7a57ad523e3885041f00.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 3659755,
+      "length": 7550,
+      "sha256": "d08340644b6f59077cfbf66a86c232c67d5be3f32bec7b6945eb8a5becdb2c4a"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/b53078274985f7ec3fc2a61b.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 610488,
+      "length": 5861,
+      "sha256": "c827dffb4a123775558aacf9265641e912a23b1a04d865ef79276da691b8a916"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/bad14f479ca858e354ce1fca.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 1110981,
+      "length": 6053,
+      "sha256": "22e93a713544f945039f31dc86ab03e4025c922e2c4083979ae985e581579bed"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/bad2700eddaf1c0b4d7a1870.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 710361,
+      "length": 5894,
+      "sha256": "a54ef8fecd2fa22a88bb105e7c827b2c6f7793ca4732bc6514b9d656800689b8"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/baf738e906cf135b75f9c30d.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 1038616,
+      "length": 6021,
+      "sha256": "454f826d42d61ae02843e2b4ddab683944222e9a506566cdd5d42c133affd741"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/ca028439d1a096ca03c55c7b.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 728049,
+      "length": 5901,
+      "sha256": "f86463ece291fc2b6375c67d2a6a96cb8ac3dc43a7b17f2250fa66b96c6d1e6b"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/cf77938e52c98b9174583736.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 990514,
+      "length": 6007,
+      "sha256": "c4282bb8db7cff7fb069ee3929d510e549d8431382f9251f041791a6a3347834"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/d07e807df385628f99c1c36c.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 936473,
+      "length": 6000,
+      "sha256": "d1bc111d2918c7807aaab69aabfe0ecc576b6f7ec2f86b37699e372b46512b43"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/d3c7885dd86f8df32c95d5f3.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 722150,
+      "length": 5899,
+      "sha256": "94c9a95ab53512dc63b3ef1063635e8f010d48b89283220988f874116fa892e1"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/d4a31e2605f91f61938db45e.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 2385161,
+      "length": 6694,
+      "sha256": "d49b71f1dbc970f69c0349b23366535363bddc86d7d01d1f8fb7d5879033e731"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/e2f937c48653d5376d103f7e.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 1080793,
+      "length": 6030,
+      "sha256": "fa753d073cb1d8b8847ecb57e7dd6c0a9fc820866687d581661399ba93bde4a4"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/e31a6c0f1a30418088caa8b8.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 2725884,
+      "length": 6974,
+      "sha256": "0a629a0226b6315081c301473814bcf1f8e90069c68fd612eb03f0f0e67e359e"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/e75acfc3a1874e75e65b2ba4.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 733950,
+      "length": 5903,
+      "sha256": "c65402eaee5f413e25ffc4983c7c3d6495236d06f9896c896463bedd0eb898e2"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/ef9efff64c3f5561bf51774e.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 2318673,
+      "length": 6620,
+      "sha256": "3e0b76f270a973d5413c0c932952943cc80084827ae008174e5469cae36c72ec"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/f5afa9e168d5b780e1e1ea0c.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 1918203,
+      "length": 6326,
+      "sha256": "1d32a0526e6df3302052d1ec6a22cc789d902af615951ce1d0056a0d8d9179b2"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/initial/fcbc482d59e09a73456a63b0.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\0CE8FA57\\9AF5ABA7537D61D0E0F495AA66CA86BF.chk",
+      "offset": 569494,
+      "length": 5852,
+      "sha256": "ebe4790260a1d8809e0e0bf461d2f7d0cbde1974ae5f1cbfb702b70d73e52392"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/07884537aa88f59ae576eabf.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 400968937,
+      "length": 7488,
+      "sha256": "11a6cc518d368639b330e0e04739d24ff40733cdecad48fa0f750b716e11b9d6"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/0e5e5f0c80ea3c631d708c58.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 349599553,
+      "length": 6397,
+      "sha256": "5f3e373e38c929e7782585cd3ab61dca61abdc43a8162189cc75d4aedeec06b5"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/1c2508325848fea60fb8bea7.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 610127221,
+      "length": 12498,
+      "sha256": "f05afb397b30d9277da5ac3f7c7d4b8b0b3ac4c2c8eabc0bfca436ee86e3e188"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/1fb36cdf60b99286e5a1a648.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 451919192,
+      "length": 8432,
+      "sha256": "a72bc90a73a7e203dda8b0800a440ca65b843d19f002f94e07cbb21a2b7dd971"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/772440749121a3ba7270ee1e.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 377708611,
+      "length": 7215,
+      "sha256": "bd2112c4afe87a2866469a2761e762123c0f1947c124799e572f7f7e3dd4898a"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/e4785b8a09f1c36197b584f6.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 201167590,
+      "length": 5113,
+      "sha256": "e21a0e5a5d6eb0e3f2022f1dd550ba9943568f86754c20e27cb3f47db5a13d74"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/e751dbaa97aba899d07e11da.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 343953287,
+      "length": 6231,
+      "sha256": "69e3af30ddd940a6d1ff49bd90424cd85242863c9b5ca1423425589d822b419b"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/645225557730922e3c2270ff.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\FCC20C36ADBBD4D50AEC8A24F57459AA.chk",
+      "offset": 780426280,
+      "length": 77834,
+      "sha256": "d609657bf5781b00377d4211292cb680382a8ed5dd0c3d2d7dd799f6f3596a2d"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/bf3034c4d2ee77f02d819886.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\FCC20C36ADBBD4D50AEC8A24F57459AA.chk",
+      "offset": 416521111,
+      "length": 50907,
+      "sha256": "164b2a6f2101c08b0afe22168b75a78fb382ebd4130b3c9f2a8512e4b3834201"
+    }
+  ]
+}

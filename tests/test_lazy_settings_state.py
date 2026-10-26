@@ -26,7 +26,7 @@ class Base(unittest.TestCase):
     def dialog(self):
         d=settings.build_settings_center(self.host);self.dialogs.append(d);return d
     def wait_ready(self,d,name): return ready_page(d,name)
-    def reset_button(self,d): return next(b for b in d.findChildren(QPushButton) if b.text()=='恢复当前页默认值')
+    def reset_button(self,d): return d.reset_button
 
 
 class LifecycleAudit(Base):

@@ -1,4 +1,4 @@
-﻿"""ClickGUI builders for Jello and retained GPU/CPU interfaces.
+"""ClickGUI builders for Jello and retained GPU/CPU interfaces.
 
 The public ``build_gpu_clickgui`` method keeps its historical draw-list return
 and host interaction-registration API for direct callers. Compositor paths use
@@ -99,10 +99,6 @@ class ClickGuiBuildersMixin:
         self._jello_background_press = None
         if visible:
             self.close_student_panel(immediate=True)
-        if visible and self.hero_deploy_video_cut_active():
-            self.open_hero_deploy_interface()
-            self.toast("Hero deploy console is locked until exit sync")
-            return
         if visible and self.economy_phase != EconomyScenePhase.CLOSED:
             self._economy_pending_overlay = OverlayKind.CLICKGUI
             if self.economy_phase != EconomyScenePhase.CLOSING:
@@ -115,12 +111,14 @@ class ClickGuiBuildersMixin:
             # Any public/open command is a Jello command, even if a retained
             # legacy preview happened to be visible already.
             self.jello_state.begin_session()
+            self.search_focus = False
+            self.search_query = ""
             self.mode_manager.set_mode(PRIMARY_GUI_MODE)
         elif not visible:
+            self.search_focus = False
+            self.search_query = ""
             self.jello_state.request_reset()
         if visible:
-            if self.hero_deploy_ui.visible:
-                self.close_hero_deploy_interface(force=True)
             if self.economy_visible:
                 self.close_economy_workspace(play_sound=False)
             self.close_match_chat(clear=False)

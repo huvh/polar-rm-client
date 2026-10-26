@@ -74,8 +74,9 @@ from .robot_link_settings import (
 )
 from .safety import OfficialSafety
 from .serial_backend import RmSerialBackend
-from .controller_angles import AngleRelayConfig, ControllerAngleRelay, explicit_port, port_key
-from .video_backend import AnnexBRecoveryGate, ContinuousMjpegDecoder, RmVideoBackend
+from .controller_angles import (AngleRelayConfig, ControllerAngleRelay, LEGACY_ANGLE_ROUTES,
+                                explicit_port, port_key)
+from .video import AnnexBRecoveryGate, ContinuousMjpegDecoder, RmVideoBackend
 from .field_log import RotatingJsonlLogger
 from .qualification import QualificationEvidenceStore, QualificationManager
 from ..runtime_paths import RuntimePaths
@@ -127,6 +128,7 @@ class BackendManager:
             mock_output=True, safety=self.safety, referee_profile=referee_profile,
         )
         self.udp = RmVideoBackend(host="127.0.0.1", port=3334)
+        self.udp.legacy_control_enabled = True
         self.serial = RmSerialBackend(port="Stub", baud=115200, mock_writes=True, safety=self.safety)
         self.controller_angles = ControllerAngleRelay()
         # 队内 StandardRobot++ 0x5A 链路。与 referee 串口是两条独立物理链路：
@@ -186,7 +188,6 @@ class BackendManager:
         self._referee_change_requested = ""
         self._referee_change_error = ""
         self._normal_video_source = ""
-        self._hero_native_override = False
         self._estop_triggered_at = 0.0
         self._last_estop_zero_ok = False
         self._last_estop_zero_reason = "not run"
@@ -228,6 +229,7 @@ class BackendManager:
         self.mqtt.mock_output = not bool(config.safety.allow_mqtt_publish)
         self.udp.host = config.connection.udp_host
         self.udp.port = int(config.connection.udp_port)
+        self.udp.configure_legacy_receiver(int(config.connection.legacy_video_channel))
         self.serial.port = config.connection.serial_port
         self.serial.baud = int(config.connection.serial_baud)
         self.serial.mock_writes = bool(config.safety.mock_writes)
@@ -267,7 +269,10 @@ class BackendManager:
             "serial_port": str(value("SerialBridge", "Port", connection.serial_port)),
             "serial_baud": int(value("SerialBridge", "Baud", connection.serial_baud)),
             "video_source": str(value("CameraFeed", "Source", connection.video_source)),
+            "legacy_video_channel": int(value("CameraFeed", "Legacy Channel", connection.legacy_video_channel)),
         }
+        if changes["legacy_video_channel"] not in range(1, 7):
+            raise ValueError("Legacy receiver channel must be 1..6")
         for name in ("mqtt_host", "udp_host"):
             if not changes[name] or any(ch.isspace() for ch in changes[name]):
                 raise ValueError(f"Invalid configured {name}")
@@ -327,6 +332,14 @@ class BackendManager:
             self.mqtt.last_error = endpoint.note
         if changed:
             print(f"[mqtt] broker 改为 {self.mqtt.host}:{self.mqtt.port}")
+        # 停用 MQTT 模块要真正停止其重连；否则每次连接失败都会撤销独立串口角度授权。
+        if not module.enabled:
+            if self.mqtt._started:
+                self.mqtt.stop(publish_status=False, wait=False)
+        else:
+            auto_connect = module.get_setting("Auto Connect")
+            if auto_connect is not None and auto_connect.value and not self.mqtt._started:
+                self.mqtt.start()
         return endpoint.note
 
     @property
@@ -366,7 +379,6 @@ class BackendManager:
             self.native_decoder.request_stop()
             self._native_recovery.reset()
             self._native_0310_last_sequence = None
-            self._hero_native_override = False
             self._normal_video_source = ""
             if self.state is not None:
                 self._reset_state_for_scenario(self.state)
@@ -417,8 +429,12 @@ class BackendManager:
         config = deepcopy(self._config_from_registry(SCENARIOS[key], registry))
         profile_id = self.referee.profile_id
         mode, host, port = self.polar.transport, self.polar.host, self.polar.tcp_port
+        mqtt_autostart = True
         if registry is not None:
             mqtt_module = registry.get("MQTTLink")
+            auto_connect = mqtt_module.get_setting("Auto Connect") if mqtt_module else None
+            mqtt_autostart = bool(mqtt_module and mqtt_module.enabled and
+                                  (auto_connect is None or auto_connect.value))
             item = mqtt_module.get_setting("Referee Profile") if mqtt_module else None
             if item is not None:
                 profile_id = str(item.value)
@@ -441,7 +457,7 @@ class BackendManager:
             preserve_estop = (self._lifecycle.pending_scenario.preserve_estop
                               or self.safety.estop_at != self._lifecycle.transition_estop_at)
         return ScenarioRequest(key, config, bool(start), identity, profile.profile_id,
-                               mode, host, port, preserve_estop, synchronous_start)
+                               mode, host, port, preserve_estop, synchronous_start, mqtt_autostart)
 
     def request_scenario(self, key: str, *, start: bool = True, registry: Any = None,
                          robot_id: int | None = None) -> int:
@@ -487,7 +503,6 @@ class BackendManager:
         self._video_source_failures = ()
         self._active_video_source = ""
         self.scenario_key = request.key
-        self._hero_native_override = False
         self._normal_video_source = ""
         if self.state is not None:
             self._reset_state_for_scenario(self.state)
@@ -503,9 +518,14 @@ class BackendManager:
             self.safety.release_estop()
         if self._input_clear_incomplete():
             raise RuntimeError("Scenario input clear incomplete: " + (self._input_clear_error or "pending observer"))
+        # 场景启动的临时急停已结束；编码器授权独立等待数据和图传就绪。
+        angle_link = getattr(self, "controller_angles", None)
+        if angle_link is not None and not self.safety.estop_active:
+            angle_link.prepare_startup_arm()
         if not request.start:
             return
-        self.mqtt.start()
+        if request.mqtt_autostart:
+            self.mqtt.start()
         if self._active_video_source in {"shark udp", "udp", "udp hevc", "hevc", "h265", "legacy vt02 udp", "legacy official bridge"}:
             self.udp.start()
         if request.synchronous_start:
@@ -608,6 +628,22 @@ class BackendManager:
         self.polar.set_spin_command(decision.command)
         return decision.command
 
+    def sync_controller_angles(self, registry: Any) -> dict[str, Any]:
+        """由管理器统一检查端口、配置和授权；前端只消费值快照。"""
+        return self._sync_controller_angles(registry)
+
+    def arm_controller_angles(self, registry: Any) -> tuple[bool, str]:
+        """在用户完成确认后重新检查当前配置与授权，再尝试开启转发。"""
+        self.sync_controller_angles(registry)
+        return self.controller_angles.arm()
+
+    def disarm_controller_angles(self) -> None:
+        self.controller_angles.disarm()
+
+    def controller_angle_snapshot(self) -> dict[str, Any]:
+        """汇总角度与接收端诊断，不向 UI 暴露设备所有者。"""
+        return {"angles": self.controller_angles.stats(), "receiver": self.video_receiver_status()}
+
     def _sync_controller_angles(self, registry: Any) -> dict[str, Any]:
         """Configure the independent RX relay; never open a device on the UI thread.
 
@@ -616,7 +652,7 @@ class BackendManager:
         this separate physical-controller serial link.
         """
         if self._backend_transition_blocks_work():
-            self.controller_angles.disarm("Backend transition pending or failed")
+            self.controller_angles.disarm("Backend transition pending or failed", preserve_startup=True)
             status = self.controller_angles.stats()
             if self.state is not None:
                 self.state.backend_stats["controller_angles"] = status
@@ -634,7 +670,12 @@ class BackendManager:
             tx_port=str(value(module, "Angle TX Port", "Stub")).strip(),
             forward=bool(value(module, "Forward Angles", False)),
             mock_output=bool(value(module, "Angle Mock Writes", True)),
+            output_route=str(value(module, "Angle Output", "Official Client Serial")),
+            auto_arm=bool(value(module, "Angle Auto Arm", False)),
         )
+        receiver = getattr(getattr(self, "udp", None), "legacy_control", None)
+        if config.output_route in LEGACY_ANGLE_ROUTES:
+            self.controller_angles.set_legacy_receiver(receiver)
         authorized = bool(robot is not None and robot.enabled
                           and value(robot, "Allow Drive", False)
                           and not self.safety.estop_active)
@@ -643,6 +684,9 @@ class BackendManager:
         # change its answer before an independent owner opens a port. Require
         # explicit disjoint names while this receiver owns physical hardware.
         owners = []
+        receiver_port = getattr(receiver, "owned_port", "") if receiver is not None else ""
+        if receiver_port:
+            owners.append(("Legacy receiver", receiver_port))
         if robot is not None:
             if value(robot, "Link Mode", "serial") == "serial":
                 owners.append(("RobotLink", str(value(robot, "Port", "Stub"))))
@@ -662,7 +706,7 @@ class BackendManager:
         if serial is not None and getattr(serial, "running", False):
             owners.append(("referee serial", str(serial.port)))
         used = {port_key(config.rx_port)}
-        if config.forward and not config.mock_output:
+        if config.forward and not config.mock_output and config.output_route == "Official Client Serial":
             used.add(port_key(config.tx_port))
         if config.enabled:
             # Keep alias observations lazy: the first conflict stops evaluation,
@@ -680,6 +724,14 @@ class BackendManager:
         self.controller_angles.configure(config, authorized)
         if conflict:
             self.controller_angles.disarm(conflict)
+        elif self.safety.estop_active:
+            self.controller_angles.disarm("E-stop active")
+        else:
+            armed, reason = self.controller_angles.arm_on_startup()
+            log = getattr(self, "field_log", None)
+            if armed and log is not None:
+                log.emit("controller_angle_auto_arm", reason=reason,
+                         status=self.controller_angles.stats())
         status = self.controller_angles.stats()
         if self.state is not None:
             self.state.backend_stats["controller_angles"] = status
@@ -1207,7 +1259,7 @@ class BackendManager:
             return
         self.mqtt.poll_connection()
         self.serial.tick()
-        if not self.mqtt.connected and self.mqtt.disconnected_at > 0.0:
+        if self.mqtt._started and not self.mqtt.connected and self.mqtt.disconnected_at > 0.0:
             if time.perf_counter() - self.mqtt.disconnected_at > 2.0 and not self._mqtt_disconnect_lock_applied:
                 self.lock_control("MQTT disconnected for more than 2 seconds")
                 self._mqtt_disconnect_lock_applied = True
@@ -1251,14 +1303,14 @@ class BackendManager:
         )
 
     def _native_video_selected(self, state: RobotState | None) -> bool:
-        """Recovery and chunk admission share source/deploy activation policy.
+        """Recovery and chunk admission share video-source activation policy.
 
         The caller supplies its authoritative state; chunk application can use
         a different state object from the manager's current UI state.
         """
         return self._active_video_source in {
             "native", "native 0x0310", "0x0310",
-        } or int(getattr(state, "deploy_mode", 0)) == 1
+        }
 
     def _recover_video_decoders(self) -> None:
         """Schedule at most one recovery; the UI tick never tears down pipes."""
@@ -1425,10 +1477,13 @@ class BackendManager:
         return bool(self._input_clear_error) or not self._input_clear_requests.empty()
 
     def _request_device_neutral(self, reason: str, *, worker: bool = False) -> tuple[bool | None, bool | None]:
-        """Revoke angle forwarding and admit fixed neutral without observers."""
+        """Clear keyboard outputs; independent encoder forwarding survives focus loss."""
         angle_link = getattr(self, "controller_angles", None)
-        if angle_link is not None:
-            angle_link.disarm(reason)
+        if angle_link is not None and reason not in {"window focus lost", "menu dialog opened"}:
+            if reason == "video settings applied":
+                angle_link.disarm(reason, preserve_startup=True)
+            else:
+                angle_link.disarm(reason)
         dt7_ok = cc_ok = None
         link = getattr(self, "_dt7_link", None)
         if link is not None and not link.wire_neutral:
@@ -1525,10 +1580,18 @@ class BackendManager:
         if request is None or not snapshot.retryable:
             raise RuntimeError("No failed or pending video-source request to retry")
         self.set_active_video_source(request.source, start=request.start,
-                                     _hero_transition=True, _retry=True)
+                                     _retry=True)
 
-    def set_active_video_source(self, source_mode: str, *, _hero_transition: bool = False,
-                                start: bool = True, _retry: bool = False) -> None:
+    def configure_video_source(self, source_mode: str, *, legacy_channel: int) -> None:
+        """统一接入来源与接收信道配置；无效信道不能触发来源切换。"""
+        self.udp.configure_legacy_receiver(legacy_channel)
+        self.set_active_video_source(source_mode)
+
+    def video_receiver_status(self) -> dict[str, Any]:
+        """返回接收端诊断快照，前端无需访问 UDP 内部所有者。"""
+        return self.udp.receiver_status()
+
+    def set_active_video_source(self, source_mode: str, *, start: bool = True, _retry: bool = False) -> None:
         if (hasattr(self, "_lifecycle") and not self._lifecycle.applying
                 and self._backend_transition_blocks_work()):
             return
@@ -1537,10 +1600,7 @@ class BackendManager:
             "shark udp": "udp hevc", "udp": "udp hevc", "hevc": "udp hevc",
             "h265": "udp hevc", "native": "native 0x0310", "0x0310": "native 0x0310",
         }.get(normalized, normalized)
-        if not _hero_transition:
-            self._normal_video_source = normalized
-        if self._hero_native_override:
-            normalized = "native 0x0310"
+        self._normal_video_source = normalized
         request = VideoSourceRequest(normalized, start)
         previous = self._video_source_request
         if (not _retry and previous is not None and previous.source == normalized
@@ -1553,6 +1613,11 @@ class BackendManager:
         ingress_change = udp_selected and self.udp.ingress_mode != ingress_mode
         if (not _retry and normalized == self._active_video_source
                 and (not udp_selected or self.udp.running)):
+            # 配置阶段的 start=False 可能已由模块启动了 socket。
+            # 前端正式选中后仍需记录 start=True，否则视频维护不会运行。
+            if previous != request:
+                self._video_source_generation += 1
+                self._video_source_request = request
             return
         if not _retry and previous == request and (
                 self.udp.stop_pending or self.native_decoder.stop_pending):
@@ -1568,9 +1633,7 @@ class BackendManager:
             # This operation disables HEVC and attempts both native owners,
             # including a retained stopped session after a failed admission.
             admission.attempt("UDP/HEVC", self.udp.request_stop)
-        if ((normalized != "native 0x0310" and int(
-                getattr(self.state, "deploy_mode", 0) if self.state is not None else 0) != 1)
-                or (_retry and self.native_decoder.stop_pending)):
+        if normalized != "native 0x0310" or (_retry and self.native_decoder.stop_pending):
             self._native_restart_generation += 1
             self._native_0310_blocked_until_sps = True
             admission.attempt("Native recovery reset", self._native_recovery.reset)
@@ -2485,8 +2548,6 @@ class BackendManager:
                 return False, f"{name}.{field} must be integer"
         if name == "AssemblyCommand" and (values['operation'] not in {0,1,2} or values['difficulty'] not in {1,2,3,4}):
             return False, "V2 Assembly requires operation0/1/2 and difficulty1..4"
-        if name == "HeroDeployModeEventCommand" and values['mode'] not in {0,1}:
-            return False, "V2 Hero deploy mode must be0/1"
         if name == "RuneActivateCommand" and values['activate'] != 1:
             return False, "V2 Rune only defines activate1"
         if name == "DartCommand" and values['target_id'] not in range(1,6):
@@ -2536,13 +2597,6 @@ class BackendManager:
         return self._publish("RobotPerformanceSelectionCommand",
             self.referee.codec.encode_robot_performance_selection_command(shooter, chassis, sentry_control),
             intent="core_kmc", qualification_token=qualification_token)
-
-    def publish_hero_deploy(self, mode: int) -> tuple[bool, str]:
-        allowed, reason = self._v2_action_admission("HeroDeployModeEventCommand", mode=mode)
-        if not allowed:
-            return False, reason
-        return self._publish("HeroDeployModeEventCommand",
-            self.referee.codec.encode_hero_deploy_mode_event_command(mode), intent="hero")
 
     def publish_rune_activate(self, activate: int) -> tuple[bool, str]:
         allowed, reason = self._v2_action_admission("RuneActivateCommand", activate=activate)

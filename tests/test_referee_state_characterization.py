@@ -546,6 +546,12 @@ class RefereeStateCharacterizationTests(unittest.TestCase):
                         # Direct compatibility mappings remain raw data; no
                         # percentage conversion remains to raise an exception.
                         contract_v2["errors"] = []
+                if "DeployModeStatusSync" in name or name.startswith("deploy_"):
+                    retired = {"host._hero_native_override", "host._active_video_source", "video.source", "log.hero_video_source"}
+                    contract_v2["events"] = [event for event in contract_v2["events"] if event[0] not in retired]
+                    contract_v2["host"]["_hero_native_override"] = case.get("host", {}).get("_hero_native_override", False)
+                    contract_v2["host"]["_active_video_source"] = case.get("host", {}).get("_active_video_source", "udp hevc")
+                    contract_v2["errors"] = []
                 self.assertEqual(canonical(observe(case)), canonical(contract_v2))
 
     def test_every_current_downlink_has_wire_and_presence_cases(self):
@@ -581,6 +587,9 @@ class RefereeStateCharacterizationTests(unittest.TestCase):
                         self.assertEqual(observed["errors"], [])
                         self.assertNotIn("safety.stage", [event[0] for event in observed["events"]])
                         self.assertEqual(observed["safety"], {"current_stage": "0", "stage_seen": False})
+                    elif name.startswith("deploy_") and case["fail"] in {"video.source", "log.hero_video_source"}:
+                        self.assertEqual(observed["errors"], [])
+                        self.assertNotIn(case["fail"], [event[0] for event in observed["events"]])
                     else:
                         self.assertTrue(observed["errors"])
                         self.assertIn(case["fail"], [event[0] for event in observed["events"]])

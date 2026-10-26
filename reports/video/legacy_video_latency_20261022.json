@@ -1,0 +1,23 @@
+{
+  "scope": "Local H.264 input to BGR publication, 1280x720@60; excludes RF, capture and display",
+  "baseline": {
+    "backend": "ffmpeg-mjpeg",
+    "frames_sent": 180,
+    "frames_decoded": 179,
+    "first_frame_ms": 73.91,
+    "steady_median_ms": 23.75,
+    "steady_p95_ms": 24.43,
+    "input_dropped": 0,
+    "pipe_output_bytes": 11915696
+  },
+  "optimized": {
+    "backend": "pyav-bgr",
+    "frames_sent": 180,
+    "frames_decoded": 179,
+    "first_frame_ms": 24.61,
+    "steady_median_ms": 20.71,
+    "steady_p95_ms": 21.77,
+    "input_dropped": 0,
+    "pipe_output_bytes": 0
+  }
+}

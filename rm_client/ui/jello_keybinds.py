@@ -1,8 +1,8 @@
-"""Sigma 5.1.0 keyboard geometry/popover workflow, adapted to safe RM bindings.
+"""快捷键会话与兼容导入；生产独立入口使用Endfield键位界面。
 
 The original Keys/Child/KeyboardScreen/PopOver classes in the user's original
 archive were read, not executed. Native five-row coordinates are preserved;
-function/navigation keys are an explicitly labelled RM extension. Draft changes
+function/navigation keys are an explicitly labelled RM extension. 旧画布仅保留兼容和回归夹具。Draft changes
 do not send controls, toggle modules, or silently evict conflicting bindings.
 """
 from __future__ import annotations
@@ -428,25 +428,13 @@ class KeyboardCanvas(QWidget):
 
 
 def build_keyboard_manager(host, manager=None, target=None, parent=None):
-    dialog=JelloDialog(parent or host,keyboard=True)
-    try:
-        dialog.setObjectName("JelloKeyboardManager");dialog.setWindowTitle("Jello · Keybind Manager")
-        available=host.screen().availableGeometry()
-        dialog.resize(min(1280,available.width()-30,max(600,host.width()-20)),
-                      min(860,available.height()-40,max(430,host.height()-20)));dialog.setMinimumSize(600,430)
-        dialog.session=BindingSession(host,manager)
-        dialog.canvas=KeyboardCanvas(dialog,dialog.session,target)
-        dialog.focus_widget=dialog.canvas
-        dialog.panel.layout().setContentsMargins(0,0,0,0);dialog.panel.layout().addWidget(dialog.canvas)
-        dialog.estop_shortcut=install_estop_shortcut(dialog,host)
-        apply_jello_widgets(dialog)
-        return dialog
-    except Exception as error:
-        # The caller cannot clean up a dialog that the factory never returned.
-        try:
-            dialog.deleteLater()
-        finally:
-            raise error
+    from .endfield.settings.shell import EndfieldSettingsDialog
+    if manager is not None and isinstance(manager.window(), EndfieldSettingsDialog):
+        from .endfield.settings.bindings import build_binding_manager
+        return build_binding_manager(host, BindingSession(host, manager),
+                                     [key.name for key in ALL_KEYS], target, parent)
+    from .endfield.keybinds.dialog import build_keybind_dialog
+    return build_keybind_dialog(host,BindingSession(host,manager),[key.name for key in ALL_KEYS],target,parent)
 
 
 def open_keyboard_manager(host, manager=None, target=None):

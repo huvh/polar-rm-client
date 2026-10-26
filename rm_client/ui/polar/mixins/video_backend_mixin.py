@@ -5,7 +5,7 @@ These methods translate between those collaborators, select video sources and
 present explicit recovery actions. Worker stop admission and owner-thread
 lifecycle completion are separate from native cleanup confirmation.
 
-This legacy mixin also retains hero deployment, Minecraft slots and combat-event
+This legacy mixin also retains Minecraft slots and combat-event
 presentation. Its methods share the full window through ``self``; moving them
 here did not create independently owned domain services. Compatibility is checked
 by the explicit window contract and behavior tests, not implementing qualnames.
@@ -45,8 +45,7 @@ from ....vision import (
 from ..primitives import EconomyScenePhase
 from ...clickgui_gpu import ClickGuiDrawList
 from ...gpu_frame_compositor import GlassOwner
-from ...hero_locale import hero_text
-from ...jello_locale import chinese_enabled
+from ...jello_locale import chinese_enabled, ui_label
 from ...overlay_coordinator import OverlayKind
 from ...paint import glow_rect, rounded_rect
 from ...theme import color
@@ -62,7 +61,7 @@ __all__ = [
 
 
 class VideoBackendMixin:
-    """D7 视频管线/后端接线/英雄部署 + D18 官方事件/击杀特效 + D14 Minecraft 功能槽。"""
+    """D7 视频管线/后端接线 + D18 官方事件/击杀特效 + D14 Minecraft 功能槽。"""
 
     def append_minecraft_drop_overlay(self, commands: ClickGuiDrawList) -> None:
         drag = self.drag
@@ -157,165 +156,6 @@ class VideoBackendMixin:
             and self.setting_mode(profile, "Hero Type", "Melee") == "Range"
         )
 
-    def hero_deploy_video_cut_active(self) -> bool:
-        """Only acknowledged deploy status cuts video; a pending request does not."""
-
-        return int(self.state.deploy_mode) == 1
-
-    def hero_deploy_uses_mock_transport(self) -> bool:
-        module = self.registry.get("HeroLob")
-        return bool(
-            self.scenario_manager.current.key != "OfficialEvent"
-            or self.setting_bool(module, "Mock Output", True)
-        )
-
-    def open_hero_deploy_interface(self) -> bool:
-        self.close_student_panel(immediate=True)
-        if self.home_visible:
-            return False
-        module = self.registry.get("HeroLob")
-        if module is None:
-            return False
-        if not module.enabled and int(self.state.deploy_mode) != 1:
-            self.toast("Enable HeroLob before opening the deploy console")
-            return False
-        if self.economy_phase != EconomyScenePhase.CLOSED:
-            self._economy_pending_overlay = OverlayKind.HERO_DEPLOY
-            if self.economy_phase != EconomyScenePhase.CLOSING:
-                self.close_economy_workspace(play_sound=False)
-            return True
-        if self.gui_visible:
-            self.set_clickgui_visible(False, announce=False, play_sound=False)
-        if self.economy_visible:
-            self.close_economy_workspace(play_sound=False)
-        self.close_match_chat(clear=False)
-        self.cancel_quick_action_wheel()
-        self.overlay_coordinator.request_modal(OverlayKind.HERO_DEPLOY)
-        self.hero_deploy_ui.open(time.perf_counter())
-        self.invalidate_transient_overlay_scene()
-        self.play_gui_transition_sound("expand")
-        self.frame_scheduler.force()
-        self.update()
-        return True
-
-    def close_hero_deploy_interface(self, *, force: bool = False) -> bool:
-        if self.hero_deploy_video_cut_active():
-            self.toast("Exit deploy mode and wait for DeployModeStatusSync before closing")
-            return False
-        if not self.hero_deploy_ui.visible:
-            if force and self.hero_deploy_ui.render_visible:
-                self.hero_deploy_ui.close(time.perf_counter(), immediate=True)
-                self.invalidate_transient_overlay_scene()
-            self.overlay_coordinator.close_modal(OverlayKind.HERO_DEPLOY)
-            return True
-        if self.hero_deploy_ui.pending_mode is not None and not force:
-            self.toast("Wait for DeployModeStatusSync before closing the console")
-            return False
-        self.hero_deploy_ui.close(time.perf_counter(), immediate=force)
-        self.overlay_coordinator.close_modal(OverlayKind.HERO_DEPLOY)
-        self.invalidate_transient_overlay_scene()
-        self.play_gui_transition_sound("collapse")
-        self.frame_scheduler.force()
-        self.update()
-        return True
-
-    def send_hero_deploy_request(self, mode: int) -> bool:
-        if self.backend.referee.profile_id == "rm2026-v2.0.0":
-            self.toast("V2 preview: Hero requests are pending review; no command submitted")
-            return False
-        mode = 1 if int(mode) else 0
-        module = self.registry.get("HeroLob")
-        if self.hero_deploy_ui.pending_mode is not None:
-            self.toast("A deploy-mode request is already pending")
-            return False
-        if mode == int(self.state.deploy_mode):
-            self.toast("Deploy mode is already in the requested state")
-            return False
-        if mode == 1:
-            if module is None or not module.enabled:
-                self.toast("HeroLob is disabled")
-                return False
-            if not self.hero_range_profile_selected():
-                self.toast("Deploy mode requires the Hero / Range profile")
-                return False
-            if str(self.state.current_stage).upper() not in {"4", "MATCH"}:
-                self.toast("Deploy mode entry is available only during the match stage")
-                return False
-
-        now = time.perf_counter()
-        mock = self.hero_deploy_uses_mock_transport()
-        if not mock:
-            accepted, reason = self.backend.publish_hero_deploy(mode)
-            if not accepted:
-                self.hero_deploy_ui.last_error = str(reason)
-                self.toast(f"Deploy command blocked: {reason}")
-                return False
-        self.hero_deploy_ui.begin_request(mode, now, mock=mock)
-        verb = "ENTER" if mode else "EXIT"
-        self.state.hero_lob_status = f"DEPLOY {verb} PENDING"
-        self.toast(f"{verb} deploy mode requested ({'mock' if mock else 'official'})")
-        self.frame_scheduler.force()
-        return True
-
-    def update_hero_deploy_state(self, now: float | None = None) -> None:
-        now = time.perf_counter() if now is None else float(now)
-        previous_mode = int(self._last_deploy_mode)
-        mock_status = self.hero_deploy_ui.sync(self.state.deploy_mode, now)
-        if mock_status is not None:
-            if int(mock_status) != int(self.state.deploy_mode):
-                self.state.deploy_status_revision += 1
-            self.state.deploy_mode = int(mock_status)
-            self.state.deploy_status_at = now
-        revision = int(self.state.deploy_status_revision)
-        current_mode = int(self.state.deploy_mode)
-        status_changed = current_mode != previous_mode
-        if revision != self._last_deploy_status_revision or status_changed:
-            self._last_deploy_status_revision = revision
-            self.invalidate_transient_overlay_scene()
-        if status_changed and current_mode == 1:
-            # The judge-system acknowledgement is authoritative.  Stop the
-            # normal webcam sampler and make the Apple-island/
-            # AndroidLiquidGlass console the locked foreground workspace.
-            self._camera_activation.pause_admitted_capture()
-            self.local_vision._set_input_source(("inactive", "deploy"))
-            self._hero_native_wait_started = now
-            if self.economy_phase != EconomyScenePhase.CLOSED:
-                self._economy_generation += 1
-                self.economy_visible = False
-                self.economy_phase = EconomyScenePhase.CLOSED
-                self._economy_closing_generation = None
-                self._economy_restore_pending_generation = None
-                self._economy_close_finalized = True
-                self.economy_island.progress = 0.0
-                self.economy_island.target = 0.0
-                self.economy_island.velocity = 0.0
-                self._economy_pending_overlay = None
-            if self.gui_visible:
-                self.set_clickgui_visible(False, announce=False, play_sound=False)
-            self.close_match_chat(clear=False)
-            self.cancel_quick_action_wheel()
-            self.overlay_coordinator.request_modal(OverlayKind.HERO_DEPLOY)
-            self.hero_deploy_ui.open(now)
-            self.consume_hero_native_video_frame()
-            self.play_gui_transition_sound("expand")
-            self.frame_scheduler.force()
-        elif status_changed and current_mode == 0:
-            # Preserve the normal frame cache but resume its producer only
-            # after the authoritative 1->0 acknowledgement.
-            self.hero_deploy_ui.close(now)
-            self.overlay_coordinator.close_modal(OverlayKind.HERO_DEPLOY)
-            self.ensure_camera_started()
-            self.play_gui_transition_sound("collapse")
-            self.frame_scheduler.force()
-        self._last_deploy_mode = current_mode
-        if self.hero_deploy_ui.pending_mode is None:
-            if self.hero_deploy_video_cut_active():
-                self.state.hero_lob_status = "DEPLOYED / VIDEO CUT"
-            elif self.state.hero_lob_status.startswith("DEPLOY "):
-                self.state.hero_lob_status = "DEPLOY MODE EXITED"
-        elif self.hero_deploy_ui.last_error:
-            self.state.hero_lob_status = f"BLOCKED: {self.hero_deploy_ui.last_error}"
-
     def update_auto_spin_guard(self, now: float | None = None) -> None:
         now = time.perf_counter() if now is None else float(now)
         feature = self.registry.get("AutoSpinOnHit")
@@ -345,67 +185,6 @@ class VideoBackendMixin:
         )
         self.state.events.appendleft(message)
         self.toast(message)
-
-    def draw_hero_deploy_interface(self, p: QPainter, width: int, height: int, now: float) -> None:
-        if not self.hero_deploy_ui.render_visible:
-            if self.hero_deploy_video_cut_active():
-                banner = QRectF(width * 0.5 - 150.0, 12.0, 300.0, 32.0)
-                self.draw_hud_liquid_glass(p, banner, 16.0, surface="LensIsland")
-                rounded_rect(p, banner, 16.0, color("#000000", 0.08), color("#ffffff", 0.13), 0.8)
-                icon = QRectF(banner.left() + 5.0, banner.top() + 4.0, 24.0, 24.0)
-                self.draw_dynamic_island_icon(p, icon, "success", QColor("#62e6ad"), 1.0)
-                self.draw_glass_text(
-                    p,
-                    banner.adjusted(34.0, 0.0, -10.0, 0.0),
-                    hero_text("DEPLOYED · VIDEO CUT · K TO OPEN", chinese_enabled(self.registry)),
-                    self.font("poppins_bold", 7.5),
-                    QColor("#f4fbff"),
-                    Qt.AlignmentFlag.AlignCenter,
-                )
-                self.add_hotspot(banner, "hero_deploy_open", tooltip=hero_text("Open Hero deploy console", chinese_enabled(self.registry)))
-            return
-        module = self.registry.get("HeroLob")
-        solution, readiness = HeroLobPlanner.preview_from_state(
-            self.state,
-            module,
-            hero_range_profile=self.hero_range_profile_selected(),
-        )
-        self.gpu_compositor.push_glass_owner(GlassOwner.HERO_DEPLOY)
-        try:
-            targets = self.hero_deploy_renderer.draw(
-                p,
-                width,
-                height,
-                state=self.state,
-                module=module,
-                interface=self.hero_deploy_ui,
-                solution=solution,
-                readiness=readiness,
-                now=now,
-                font_factory=self.font,
-                glass_drawer=self.draw_hud_liquid_glass,
-                text_drawer=self.draw_glass_text,
-                island_icon_drawer=self.draw_dynamic_island_icon,
-                pointer=self.hover_point,
-                registry=self.registry,
-            )
-        finally:
-            self.gpu_compositor.pop_glass_owner()
-        for target in targets:
-            if target.enabled:
-                self.add_hotspot(target.rect, target.action, tooltip=target.tooltip)
-        layout = self.hero_deploy_renderer.layout(width, height, self.hero_deploy_ui.progress)
-        if (
-            self.hero_deploy_ui.visible
-            and layout.interactive
-            and not self.hero_deploy_video_cut_active()
-            and self.hero_deploy_ui.pending_mode is None
-        ):
-            self.add_hotspot(
-                layout.close_button,
-                "hero_deploy_close",
-                tooltip=hero_text("Close Hero deploy controls", chinese_enabled(self.registry)),
-            )
 
     def hero_lob_preview(self, *, announce: bool = True) -> tuple[Any, Any]:
         module = self.registry.get("HeroLob")
@@ -484,8 +263,6 @@ class VideoBackendMixin:
         local = self.local_vision
         if os.environ.get("POLAR_DISABLE_LOCAL_CAPTURE", "").lower() in ("1", "true", "yes"):
             key = ("inactive", "disabled")
-        elif self.hero_deploy_video_cut_active():
-            key = ("inactive", "deploy")
         elif normalized_mode == "synthetic":
             key = ("inactive", "synthetic")
         elif normalized_mode == "webcam":
@@ -498,9 +275,6 @@ class VideoBackendMixin:
         return local, key
 
     def draw_video(self, p: QPainter, width: int, height: int) -> None:
-        if self.hero_deploy_video_cut_active():
-            self.draw_hero_native_background(p, width, height)
-            return
         source = self.registry.get("CameraFeed")
         source_setting = source.get_setting("Source") if source else None
         use_camera = source_setting is None or source_setting.value == "Webcam"
@@ -554,7 +328,8 @@ class VideoBackendMixin:
         owners = selection.workers()
         try:
             source_mode = self.setting_mode(self.registry.get("CameraFeed"), "Source", "")
-            self.backend.set_active_video_source(source_mode)
+            self.backend.configure_video_source(source_mode, legacy_channel=int(self.get_setting_number(
+                self.registry.get("CameraFeed"), "Legacy Channel", 1)))
         except Exception:
             # A failed source transition must not leave old inference or input
             # workers active. Preserve the source error for profile rollback;
@@ -606,7 +381,7 @@ class VideoBackendMixin:
     def on_captured_camera_frame(self, frame: CapturedFrame) -> None:
         local = self.local_vision
         token = local._capture_input_token("webcam")
-        if token is None or self.hero_deploy_video_cut_active():
+        if token is None:
             return
         source = self.setting_mode(self.registry.get("CameraFeed"), "Source", "Webcam")
         if source != "Webcam" or not self.camera_worker.running or self.camera_worker.latest_frame() is not frame:
@@ -614,93 +389,7 @@ class VideoBackendMixin:
         if self._vision_source in ("Local", "Auto"):
             local._submit_for_input(token, frame.sequence, frame.width, frame.height, frame.bgr)
 
-    def consume_hero_native_video_frame(self) -> bool:
-        """Read only the judge-system CustomByteBlock/0x0310 decoder."""
-
-        bgr, frame_at, frame_source = self.backend.latest_video_frame(
-            0.65,
-            "Native 0x0310",
-        )
-        if frame_at <= self._hero_native_video_at:
-            return False
-        try:
-            source = bgr
-            bgr = source.copy() if source is not None else None
-        except Exception:
-            bgr = None
-        if bgr is None or getattr(bgr, "ndim", 0) != 3 or int(bgr.shape[2]) < 3:
-            return False
-        height, width = int(bgr.shape[0]), int(bgr.shape[1])
-        if width <= 0 or height <= 0:
-            return False
-        image = QImage(
-            bgr.data,
-            width,
-            height,
-            int(bgr.strides[0]),
-            QImage.Format.Format_BGR888,
-        ).copy()
-        self._hero_native_video_at = float(frame_at)
-        self._hero_native_sequence += 1
-        self._hero_native_source = str(frame_source)
-        self.hero_native_image = image
-        self.hero_native_pixmap = QPixmap.fromImage(image)
-        self._gpu_background_key = None
-        self._gpu_blur_source_key = None
-        self._gpu_background_changed = True
-        return True
-
-    def hero_native_frame_state(self, now: float | None = None) -> str:
-        now = time.perf_counter() if now is None else float(now)
-        if self.hero_native_image is None or self.hero_native_image.isNull():
-            return "waiting"
-        if self._hero_native_video_at <= 0.0 or now - self._hero_native_video_at > 0.65:
-            return "lost"
-        return "live"
-
-    def draw_hero_native_background(
-        self,
-        painter: QPainter,
-        width: int,
-        height: int,
-        *,
-        now: float | None = None,
-    ) -> str:
-        """Draw the sole deployed video source with explicit loss states."""
-
-        state = self.hero_native_frame_state(now)
-        canvas = QRectF(0.0, 0.0, float(width), float(height))
-        painter.fillRect(canvas, QColor("#02070b"))
-        image = self.hero_native_image
-        if state == "live" and image is not None and not image.isNull():
-            target = self._aspect_fit_image_rect(image, width, height)
-            painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
-            painter.drawImage(target, image, QRectF(image.rect()))
-            if not self.gpu_compositor.available:
-                self.liquid_glass.update("hud", image, target)
-            return state
-
-        painter.setPen(QColor("#b9d7e5"))
-        status = (
-            "WAITING FOR NATIVE 0x0310 COMPRESSED VIDEO"
-            if state == "waiting"
-            else "NATIVE 0x0310 VIDEO LOST · NO CAMERA FALLBACK"
-        )
-        painter.setFont(self.font("poppins_bold", 10.0))
-        painter.drawText(canvas, Qt.AlignmentFlag.AlignCenter, hero_text(status, chinese_enabled(self.registry)))
-        return state
-
     def consume_capture_frame(self) -> None:
-        if (
-            self.hero_deploy_video_cut_active()
-            or self.hero_deploy_ui.render_visible
-            or self.hero_deploy_ui.pending_mode is not None
-        ):
-            self.consume_hero_native_video_frame()
-        if self.hero_deploy_video_cut_active():
-            # Authoritative DeployModeStatusSync=1 owns the sole video path.
-            # Do not even query webcam/UDP/synthetic normal-feed sources.
-            return
         camera_module = self.registry.get("CameraFeed")
         source_mode = self.setting_mode(camera_module, "Source", "Webcam")
         normalized_mode = source_mode.strip().lower()
@@ -841,10 +530,14 @@ class VideoBackendMixin:
         painter.setFont(self.font("poppins_bold", 10.0))
         source = self.setting_mode(self.registry.get("CameraFeed"), "Source", "Webcam")
         notice = video_source_notice(source, chinese=chinese_enabled(self.registry))
+        if str(source).strip().lower() == "legacy vt02 udp":
+            status = self.backend.video_receiver_status()
+            if status.get("error"):
+                notice = "旧图传接收端：" + status["error"]
         painter.drawText(
             canvas,
             Qt.AlignmentFlag.AlignCenter,
-            notice or hero_text("VIDEO SIGNAL LOST · WAITING FOR FRESH DECODED FRAME", chinese_enabled(self.registry)),
+            notice or ui_label("VIDEO SIGNAL LOST · WAITING FOR FRESH DECODED FRAME", chinese_enabled(self.registry)),
         )
 
     def video_source_recovery_notice(self) -> VideoRecoveryNotice | None:
@@ -1388,23 +1081,13 @@ _QUALNAME_PINNED_MEMBERS = (
     VideoBackendMixin.assign_minecraft_function_slot,
     VideoBackendMixin.activate_minecraft_function_slot,
     VideoBackendMixin.hero_range_profile_selected,
-    VideoBackendMixin.hero_deploy_video_cut_active,
-    VideoBackendMixin.hero_deploy_uses_mock_transport,
-    VideoBackendMixin.open_hero_deploy_interface,
-    VideoBackendMixin.close_hero_deploy_interface,
-    VideoBackendMixin.send_hero_deploy_request,
-    VideoBackendMixin.update_hero_deploy_state,
     VideoBackendMixin.update_auto_spin_guard,
-    VideoBackendMixin.draw_hero_deploy_interface,
     VideoBackendMixin.hero_lob_preview,
     VideoBackendMixin.update_hero_lob_guard,
     VideoBackendMixin.ensure_camera_started,
     VideoBackendMixin.draw_video,
     VideoBackendMixin.refresh_vision_runtime,
     VideoBackendMixin.on_captured_camera_frame,
-    VideoBackendMixin.consume_hero_native_video_frame,
-    VideoBackendMixin.hero_native_frame_state,
-    VideoBackendMixin.draw_hero_native_background,
     VideoBackendMixin.consume_capture_frame,
     VideoBackendMixin.consume_backend_video_frame,
     VideoBackendMixin.normal_backend_video_fresh,

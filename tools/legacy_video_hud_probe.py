@@ -68,6 +68,7 @@ def main() -> None:
                 "hud_sequence": sequence,
                 "hud_image": bool(image is not None and not image.isNull()),
                 "decoder_health": stats["h265_decoder_health"],
+                "legacy_receiver": stats.get("legacy_receiver"),
             }
             if ready:
                 first_live = now if first_live is None else first_live

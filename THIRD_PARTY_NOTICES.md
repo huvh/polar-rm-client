@@ -1,11 +1,24 @@
 # 第三方实现参考
 
+## 本机 Endfield 设置页适配
+
+- 按用户要求，从 `W:\yj games\Arknights Endfield` 只读提取设置页 prefab、14 张纹理、10 组原始动画及 `defaultfont_cn.ttf`，用于视频、音频、游戏、键位、准星和 HUD 六页的本地适配。20 个源分包的偏移、MD5、SHA-256 与逐对象来源保存在 `rm_client/ui/endfield/settings/assets/PROVENANCE.json`。
+- Qt 表现层采样本体进退、切页、页签闪动、下拉和双选项切换曲线，偏好草稿和事务仍由客户端持有。游戏场景模糊和专有 shader 未嵌入 Qt；背景和控件材质由 Qt 适配，不宣称运行原游戏渲染器。
+- 游戏 UI、动画、字体及商标权利归 HYPERGRYPH 等相应权利人，不因本项目源码许可获得再分发授权。本次未发布资源或推送仓库，运行时不再依赖游戏安装目录和离线解包工具。
+
+## 本机 Endfield Wiki 终端适配
+
+- 2026-10-24 按用户提供的 `C:\endfield_ui\Endfield_Wiki_UI` 及本机游戏资源只读导出，准备终端所需的几何图标、编号、背景装饰和 24 组动画曲线；运行文件位于 `rm_client/ui/endfield/wiki/assets`。逐项原始路径、包名、对象 ID、输出哈希及灰色材质适配记录在 `PROVENANCE.json`。
+- 终端保留 RoboMaster 原有六分类、模块/设置 ID 和动作路由；未导入游戏玩法、百科条目或游戏进程。运行时不依赖 Unity、EndfieldStudio、UnityPy 或游戏安装目录。
+- 提取使用 EIHRTeam/EndfieldStudio 的离线 `original --full` 输出，曲线解码使用 UnityPy；这些工具不进入客户端运行环境。文字使用包内附有 OFL 的 Noto Sans SC，同既有 Endfield 包版本一致。新增导航 SVG 为本项目代码绘制资源。
+- 游戏素材及动画数据权利归各自权利人；本项目代码许可不授予这些素材的再分发权。此次仅完成用户授权的本地适配，没有发布素材或推送仓库。
+
 ## EndfieldHUD 与随源 Esc 运行包
 
 - 可选 Windows Esc 菜单使用 [DDDuoDuo/EndfieldHUD](https://github.com/DDDuoDuo/EndfieldHUD) 的原生场景与渲染器；构建固定到 `cdbd4f573c8fa3b9c2048fa3d1b089e69196537b`。上游采用 MIT License，原始授权全文保留在 `licenses/EndfieldHUD-LICENSE.txt`。
-- 按仓库维护者于 2026-10-22 明确要求，完整菜单运行包的 55 个文件位于 `assets/endfield_pack` 并纳入 Git：包括所需原始图片/字体/场景数据、经校验的 Windows x64 原生适配 DLL、三个 RM 2027 场地预览与网格，以及原始许可/来源/哈希清单。不自动下载、安装或运行游戏，不打包用户配置、日志、整个游戏或上游 exe。
+- 按仓库维护者于 2026-10-22 明确要求，完整菜单运行包位于 `rm_client/ui/endfield/menu/assets`，由完整性清单记录全部文件：包括所需原始图片/字体/场景数据、经校验的 Windows x64 原生适配 DLL、三个 RM 2027 场地预览与网格，以及原始许可/来源/哈希清单。不自动下载、安装或运行游戏，不打包用户配置、日志、整个游戏或上游 exe。
 - 个人覆盖包、启动画面和可选语音仍保留在被忽略的 `user_data/endfield_pack`。普通菜单不依赖这些可选文件。字体的 OFL、上游 MIT/CREDITS 和官方模型来源随包保存；分发边界见 `licenses/Endfield-Menu-PACK-NOTICE.md`。
-- 开源渲染器的 MIT 授权不授予终末地游戏素材的再分发权。游戏素材的版权、商标及其他权利仍归各权利人；Windows 资源缺失时保留准备诊断；完整的本地准备流程见 `docs/ENDFIELD_PACK_SETUP.md`，不以空清单或更换菜单代替资源。接入范围与限制见 `docs/ENDFIELD_SOURCE_PORT.md`。
+- 开源渲染器的 MIT 授权不授予终末地游戏素材的再分发权。游戏素材的版权、商标及其他权利仍归各权利人；Windows 资源缺失时保留准备诊断；完整的本地准备流程见 `docs/endfield/PACK_SETUP.md`，不以空清单或更换菜单代替资源。接入范围与限制见 `docs/endfield/SOURCE_PORT.md`。
 
 ## AndroidLiquidGlass-kmp
 
@@ -46,6 +59,12 @@
 - 资源只用于本地 Minecraft 战斗 HUD 预设；相关商标、视觉资源和其他权利归 Mojang/Microsoft 及各自权利人所有。本项目未打包完整 Minecraft 客户端或游戏代码。
 - 视觉修订另取本地 JAR 的两张 bitmap 字体表/provider 配置及九个伤害类别物品纹理；额外 13 个原始资源的哈希/来源记录在 `assets/minecraft_hud/presentation_manifest.json`。Steve 皮肤及人物预览已删除。Mod 图标为项目原创的功能性像素物品，不是以上原版物品的替代名称。
 - `unifont.zip` 来自本机 Minecraft asset index 29，SHA-1 为 `ccd5ac4767ce0a9c71d1dd62f2dc25449789b5dd`。其中字体版本为 GNU Unifont 17.0.01，原始授权全文保留在压缩包及 `assets/minecraft_hud/UNIFONT_LICENSE.txt`：编译字体采用 SIL OFL 1.1 和 GPL（带字体嵌入例外），具体适用条款以该授权全文为准。字体未修改。
+
+## Endfield 游戏公告页
+
+- 更新日志使用游戏 `WebviewConfig/BulletinConfig.bin` 中 `targets.game.entry` 指向的官方公告页静态资源。版权归 HYPERGRYPH；保留原脚本版权头，不将它们纳入本项目原创代码许可。
+- `rm_client/ui/endfield/changelog/assets/PROVENANCE.json` 记录官方资源 URL、原始 SHA-256 和本地适配后的 SHA-256。适配限于资源地址、日志数据接口与终端标签文案；布局、组件和 CSS 动画沿用原页。
+- HarmonyOS Sans 的四个 WOFF2 字体逐字节取自本机游戏 `sdkresources/font`，未修改。该本地资源包不依赖游戏运行、登录态或账号凭据。
 
 ## RoboMaster 学生客户端 UI 参考
 

@@ -22,7 +22,6 @@ class QualificationCommand(Enum):
     OBSERVE_ZERO = "Observe Firmware Zero"
     FIRMWARE_ZERO = "Record Firmware Zero Test"
     LOSS_RECOVERY = "Run Loss Recovery Test"
-    HERO = "Record Hero Test"
     ECONOMY = "Record Economy Test"
     PRM1_VISION_SCHEMA = "Review PRM1 Vision Schema"
     PRM1_VISION_BENCH = "Run PRM1 Vision Bench"
@@ -45,7 +44,6 @@ class ConfigCommandKind(Enum):
     PROFILE = "profile"
     CALIBRATION = "calibration"
     ELIMINATION = "elimination"
-    DEPLOY = "deploy"
     LOB = "lob"
     SOUND_IMPORT = "sound_import"
     SOUND_PREVIEW = "sound_preview"
@@ -72,7 +70,6 @@ _GROUPS = {
     ),
     ConfigCommandKind.CALIBRATION: ("Capture Chessboard", "Solve Calibration", "Export Tongji YAML"),
     ConfigCommandKind.ELIMINATION: ("Preview FX", "Test Elimination"),
-    ConfigCommandKind.DEPLOY: ("Open Deploy Interface",),
     ConfigCommandKind.LOB: (
         "Calibrate Lob Yaw", "Calibrate Lob Pitch", "Confirm Relocalization", "Invalidate Relocalization",
         "Preview Lob", "Arm Assisted Lob", "Disarm Assisted Lob",

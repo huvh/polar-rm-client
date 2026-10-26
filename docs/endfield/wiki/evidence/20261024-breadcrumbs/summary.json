@@ -1,0 +1,40 @@
+{
+  "status": "PASS",
+  "regression_tests": 79,
+  "resource_files": 114,
+  "source_bundles": 3,
+  "desktop100": "PASS",
+  "desktop150": "PASS",
+  "desktop100_counter_unit": "nine-slice draw layers including optional white hover overlay",
+  "actual_black_backgrounds": [
+    {
+      "page": "home",
+      "black_backgrounds": 0,
+      "highlight_overlays": 0
+    },
+    {
+      "page": "movement",
+      "black_backgrounds": 1,
+      "highlight_overlays": 0
+    },
+    {
+      "page": "movement_parent_hover",
+      "black_backgrounds": 1,
+      "highlight_overlays": 1
+    },
+    {
+      "page": "movement_switched_module",
+      "black_backgrounds": 1,
+      "highlight_overlays": 0
+    },
+    {
+      "page": "returned_home",
+      "black_backgrounds": 0,
+      "highlight_overlays": 0
+    }
+  ],
+  "corner_inner_red_150": [
+    238,
+    57
+  ]
+}

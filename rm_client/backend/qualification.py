@@ -40,7 +40,6 @@ CORE_TESTS = (
     "field_signoff",
 )
 DYNAMIC_TESTS = frozenset(CORE_TESTS + (
-    "hero_deploy_status_test",
     "dt7_link_test",
     "dt7_robot_safety_test",
     "economy_live_test",
@@ -48,7 +47,6 @@ DYNAMIC_TESTS = frozenset(CORE_TESTS + (
     "prm1_spin_bench_test",
 ))
 OPTIONAL_TESTS = (
-    "hero_deploy_status_test",
     "dt7_link_test",
     "dt7_robot_safety_test",
     "economy_live_test",
@@ -91,7 +89,6 @@ class TestStatus(str, Enum):
 class Capability(str, Enum):
     CORE_KMC = "core_kmc"
     DT7_CONTROL = "dt7_control"
-    HERO = "hero"
     ECONOMY = "economy"
     PRM1_VISION = "prm1_vision"
     PRM1_SPIN = "prm1_spin"
@@ -619,13 +616,12 @@ class QualificationManager:
     def _refresh_authorizations(self) -> None:
         if self.session is None:
             return
+        self.session.authorizations.pop("hero", None)
         core, reason = self.core_ready()
         mapping = {
             Capability.CORE_KMC.value: core,
             Capability.DT7_CONTROL.value: core and self.test_passed("dt7_link_test")
             and self.test_passed("dt7_robot_safety_test"),
-            Capability.HERO.value: core and self.session.robot_id in {"1", "101"}
-            and self.test_passed("hero_deploy_status_test"),
             Capability.ECONOMY.value: core and self.test_passed("economy_live_test"),
             # PRM1 can never inherit core authorization. It needs a reviewed
             # schema/bench record tied to this exact firmware hash.

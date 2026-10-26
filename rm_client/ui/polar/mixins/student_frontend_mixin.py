@@ -21,17 +21,12 @@ class StudentFrontendMixin:
             self.open_economy_workspace("ammo")
             self.student_reload_expanded = True
             return
-        if self.hero_deploy_video_cut_active():
-            self.open_hero_deploy_interface()
-            return
         if self.economy_phase.value != "closed":
             self._student_pending_panel = panel
             self._economy_pending_overlay = OverlayKind.STUDENT
             if self.economy_phase.value != "closing":
                 self.close_economy_workspace(play_sound=False)
             return
-        if self.hero_deploy_ui.visible:
-            self.close_hero_deploy_interface(force=True)
         if self.gui_visible:
             self.set_clickgui_visible(False, announce=False, play_sound=False)
         self.close_match_chat(clear=False)

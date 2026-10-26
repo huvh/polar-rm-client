@@ -1861,6 +1861,23 @@ class JelloClickGuiRenderer:
         alpha: float,
     ) -> None:
         draw_list = self.build(host, state, width, height, alpha)
+        self.paint_commands_compat(painter, draw_list, width, height)
+
+    def paint_commands_compat(self, painter: QPainter, draw_list: ClickGuiDrawList,
+                              width: int, height: int) -> None:
+        """按同一指令集绘制 CPU 兼容帧，包含覆盖层的当前页面磨砂。"""
+        if draw_list.frosted_background is not None:
+            from .clickgui_frost import raster_frost
+            background = QImage(width, height, QImage.Format.Format_ARGB32_Premultiplied)
+            background.fill(Qt.GlobalColor.transparent)
+            background_painter = QPainter(background)
+            self.paint_commands_compat(background_painter, draw_list.frosted_background, width, height)
+            background_painter.end()
+            painter.drawImage(QPointF(0, 0), background)
+            painter.save()
+            painter.setOpacity(draw_list.frost_amount)
+            painter.drawImage(QPointF(0, 0), raster_frost(background, draw_list.frost_radius))
+            painter.restore()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         painter.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
@@ -1919,11 +1936,43 @@ class JelloClickGuiRenderer:
                 else:
                     painter.drawText(payload.rect, int(payload.alignment), payload.text)
             elif isinstance(payload, GpuImage):
-                image = self._compat_images.get(payload.source)
+                key = (payload.source, payload.tint.rgb())
+                image = self._compat_images.get(key)
                 if image is None:
                     image = QImage(payload.source)
-                    self._compat_images[payload.source] = image
+                    if not image.isNull() and payload.tint.rgb() != QColor("#ffffff").rgb():
+                        original = image
+                        image = original.convertToFormat(QImage.Format.Format_ARGB32_Premultiplied)
+                        tint_painter = QPainter(image)
+                        tint_painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Multiply)
+                        tint_painter.fillRect(image.rect(), QColor.fromRgb(payload.tint.rgb()))
+                        tint_painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_DestinationIn)
+                        tint_painter.drawImage(QPointF(0, 0), original)
+                        tint_painter.end()
+                    self._compat_images[key] = image
                 if not image.isNull():
+                    if payload.softness_y > 0 and payload.rect.height() > 0:
+                        # 与 GPU 的 RectMask2D 纵向软边一致，避免兼容路径退回整列硬切。
+                        image = image.scaled(max(2, math.ceil(payload.rect.width())),
+                                             max(2, math.ceil(payload.rect.height())),
+                                             Qt.AspectRatioMode.IgnoreAspectRatio,
+                                             Qt.TransformationMode.SmoothTransformation)
+                        image = image.convertToFormat(QImage.Format.Format_ARGB32_Premultiplied).copy()
+                        edge = (payload.softness_y * .5 + 1) / payload.rect.height()
+                        gradient = QLinearGradient(0, 0, 0, image.height())
+                        gradient.setColorAt(0, QColor(0, 0, 0, 0))
+                        gradient.setColorAt(min(.5, edge), QColor.fromRgbF(0, 0, 0, min(1, .5 / edge)))
+                        gradient.setColorAt(max(.5, 1 - edge), QColor.fromRgbF(0, 0, 0, min(1, .5 / edge)))
+                        gradient.setColorAt(1, QColor(0, 0, 0, 0))
+                        mask_painter = QPainter(image)
+                        mask_painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_DestinationIn)
+                        mask_painter.fillRect(image.rect(), gradient)
+                        mask_painter.end()
+                    if payload.rotation_degrees:
+                        center = payload.rect.center()
+                        painter.translate(center)
+                        painter.rotate(payload.rotation_degrees)
+                        painter.translate(-center)
                     painter.setRenderHint(
                         QPainter.RenderHint.SmoothPixmapTransform,
                         not payload.nearest,

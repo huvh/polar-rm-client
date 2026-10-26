@@ -1,0 +1,34 @@
+{
+  "installed_game": "W:/yj games/Arknights Endfield",
+  "verified_core_bundles": [
+    {
+      "bundle": "Data/Bundles/Windows/main/07884537aa88f59ae576eabf.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 400968937,
+      "length": 7488,
+      "sha256": "11a6cc518d368639b330e0e04739d24ff40733cdecad48fa0f750b716e11b9d6"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/1c2508325848fea60fb8bea7.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 610127221,
+      "length": 12498,
+      "sha256": "f05afb397b30d9277da5ac3f7c7d4b8b0b3ac4c2c8eabc0bfca436ee86e3e188"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/1fb36cdf60b99286e5a1a648.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 451919192,
+      "length": 8432,
+      "sha256": "a72bc90a73a7e203dda8b0800a440ca65b843d19f002f94e07cbb21a2b7dd971"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/772440749121a3ba7270ee1e.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 377708611,
+      "length": 7215,
+      "sha256": "bd2112c4afe87a2866469a2761e762123c0f1947c124799e572f7f7e3dd4898a"
+    }
+  ],
+  "keyboard_layout": "Client physical QWERTY adaptation; no complete keyboard prefab found in the decoded game UI manifest. Uses original game key icons, settings materials and button/popup clips."
+}

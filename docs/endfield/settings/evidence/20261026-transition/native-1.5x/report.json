@@ -1,0 +1,1046 @@
+{
+  "scope": "actual PolarRMWindow, shared GL contexts, active QApplication.exec and production open_settings_center; inert transports",
+  "cases": [
+    {
+      "size": [
+        1225,
+        704
+      ],
+      "samples": [
+        {
+          "phase": "snapshot",
+          "dialog": [
+            1225,
+            704
+          ],
+          "minimum_row_width": 1102,
+          "controls": 11,
+          "snapshot": true,
+          "close": [
+            1154,
+            12,
+            30,
+            30
+          ]
+        },
+        {
+          "phase": "settled",
+          "dialog": [
+            1225,
+            704
+          ],
+          "minimum_row_width": 1102,
+          "controls": 11,
+          "snapshot": true,
+          "close": [
+            1154,
+            12,
+            30,
+            30
+          ]
+        },
+        {
+          "phase": "snapshot",
+          "dialog": [
+            1280,
+            707
+          ],
+          "minimum_row_width": 1155,
+          "controls": 11,
+          "snapshot": true,
+          "close": [
+            1208,
+            12,
+            30,
+            30
+          ]
+        }
+      ],
+      "pages": [
+        {
+          "page": "视频",
+          "capture": "1225x704_page_0.png",
+          "rows": 11
+        },
+        {
+          "page": "音频",
+          "capture": "1225x704_page_1.png",
+          "rows": 14
+        },
+        {
+          "page": "游戏",
+          "capture": "1225x704_page_2.png",
+          "rows": 33
+        },
+        {
+          "page": "键盘 / 鼠标",
+          "capture": "1225x704_page_3.png",
+          "rows": 91
+        },
+        {
+          "page": "准星",
+          "capture": "1225x704_page_4.png",
+          "rows": 31
+        },
+        {
+          "page": "界面 / HUD",
+          "capture": "1225x704_page_5.png",
+          "rows": 82
+        }
+      ],
+      "opened_fullscreen": false,
+      "geometry": [
+        {
+          "phase": "opened",
+          "fullscreen": false,
+          "host": [
+            5,
+            21,
+            1225,
+            704
+          ],
+          "settings": [
+            5,
+            21,
+            1225,
+            704
+          ],
+          "dpr": 1.5,
+          "capture": "case_0_opened.png"
+        },
+        {
+          "phase": "f11_once",
+          "fullscreen": true,
+          "host": [
+            1,
+            1,
+            1584,
+            720
+          ],
+          "settings": [
+            1,
+            1,
+            1584,
+            720
+          ],
+          "dpr": 1.5,
+          "capture": "case_0_f11_once.png",
+          "transition": {
+            "dispatch_ms": 117.73,
+            "calls": [
+              {
+                "method": "apply_layout_scale",
+                "ms": 250.0
+              },
+              {
+                "method": "settle_layout",
+                "ms": 21.29
+              }
+            ],
+            "paints": [
+              {
+                "window": "settings",
+                "ms": 4.78,
+                "covered": false
+              },
+              {
+                "window": "settings",
+                "ms": 24.78,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 36.22,
+                "covered": true
+              },
+              {
+                "window": "settings",
+                "ms": 462.58,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 483.82,
+                "covered": true
+              },
+              {
+                "window": "settings",
+                "ms": 581.8,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 598.74,
+                "covered": true
+              },
+              {
+                "window": "settings",
+                "ms": 635.83,
+                "covered": true
+              }
+            ]
+          }
+        },
+        {
+          "phase": "f11_twice",
+          "fullscreen": false,
+          "host": [
+            5,
+            21,
+            1225,
+            704
+          ],
+          "settings": [
+            5,
+            21,
+            1225,
+            704
+          ],
+          "dpr": 1.5,
+          "capture": "case_0_f11_twice.png",
+          "transition": {
+            "dispatch_ms": 116.56,
+            "calls": [
+              {
+                "method": "apply_layout_scale",
+                "ms": 197.44
+              },
+              {
+                "method": "settle_layout",
+                "ms": 14.92
+              }
+            ],
+            "paints": [
+              {
+                "window": "settings",
+                "ms": 10.57,
+                "covered": false
+              },
+              {
+                "window": "settings",
+                "ms": 41.43,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 45.84,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 119.29,
+                "covered": true
+              },
+              {
+                "window": "settings",
+                "ms": 457.92,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 473.91,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 516.16,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 542.09,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 563.58,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 583.0,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 604.4,
+                "covered": true
+              },
+              {
+                "window": "settings",
+                "ms": 626.25,
+                "covered": true
+              }
+            ]
+          }
+        },
+        {
+          "phase": "rapid_four_toggles",
+          "fullscreen": false,
+          "host": [
+            5,
+            21,
+            1225,
+            704
+          ],
+          "settings": [
+            5,
+            21,
+            1225,
+            704
+          ],
+          "dpr": 1.5,
+          "capture": "case_0_rapid_four_toggles.png",
+          "transition": {
+            "dispatch_ms": 432.64,
+            "calls": [
+              {
+                "method": "apply_layout_scale",
+                "ms": 1.07
+              },
+              {
+                "method": "settle_layout",
+                "ms": 7.57
+              }
+            ],
+            "paints": [
+              {
+                "window": "settings",
+                "ms": 7.55,
+                "covered": false
+              },
+              {
+                "window": "settings",
+                "ms": 32.98,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 39.8,
+                "covered": true
+              },
+              {
+                "window": "settings",
+                "ms": 130.52,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 136.22,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 158.42,
+                "covered": true
+              },
+              {
+                "window": "settings",
+                "ms": 235.9,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 244.98,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 273.89,
+                "covered": true
+              },
+              {
+                "window": "settings",
+                "ms": 347.9,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 353.69,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 372.99,
+                "covered": true
+              },
+              {
+                "window": "settings",
+                "ms": 472.06,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 488.84,
+                "covered": true
+              },
+              {
+                "window": "settings",
+                "ms": 563.86,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 581.31,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 606.73,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 636.82,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 655.05,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 671.14,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 691.89,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 710.86,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 730.77,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 752.75,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 773.96,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 791.03,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 810.16,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 828.45,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 848.72,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 869.83,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 886.56,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 900.53,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 920.5,
+                "covered": true
+              },
+              {
+                "window": "settings",
+                "ms": 941.4,
+                "covered": true
+              }
+            ]
+          }
+        },
+        {
+          "phase": "applied_fullscreen",
+          "fullscreen": true,
+          "host": [
+            1,
+            1,
+            1584,
+            720
+          ],
+          "settings": [
+            1,
+            1,
+            1584,
+            720
+          ],
+          "dpr": 1.5,
+          "capture": "case_0_applied_fullscreen.png"
+        },
+        {
+          "phase": "applied_windowed",
+          "fullscreen": false,
+          "host": [
+            5,
+            21,
+            1280,
+            707
+          ],
+          "settings": [
+            5,
+            21,
+            1280,
+            707
+          ],
+          "dpr": 1.5,
+          "capture": "case_0_applied_windowed.png"
+        }
+      ]
+    },
+    {
+      "size": [
+        1225,
+        704
+      ],
+      "samples": [
+        {
+          "phase": "snapshot",
+          "dialog": [
+            1584,
+            720
+          ],
+          "minimum_row_width": 1457,
+          "controls": 11,
+          "snapshot": true,
+          "close": [
+            1511,
+            12,
+            30,
+            30
+          ]
+        },
+        {
+          "phase": "settled",
+          "dialog": [
+            1584,
+            720
+          ],
+          "minimum_row_width": 1457,
+          "controls": 11,
+          "snapshot": false,
+          "close": [
+            1511,
+            12,
+            30,
+            30
+          ]
+        },
+        {
+          "phase": "snapshot",
+          "dialog": [
+            1280,
+            707
+          ],
+          "minimum_row_width": 1155,
+          "controls": 11,
+          "snapshot": true,
+          "close": [
+            1208,
+            12,
+            30,
+            30
+          ]
+        }
+      ],
+      "pages": [
+        {
+          "page": "视频",
+          "capture": "1225x704_page_0.png",
+          "rows": 11
+        },
+        {
+          "page": "音频",
+          "capture": "1225x704_page_1.png",
+          "rows": 14
+        },
+        {
+          "page": "游戏",
+          "capture": "1225x704_page_2.png",
+          "rows": 33
+        },
+        {
+          "page": "键盘 / 鼠标",
+          "capture": "1225x704_page_3.png",
+          "rows": 91
+        },
+        {
+          "page": "准星",
+          "capture": "1225x704_page_4.png",
+          "rows": 31
+        },
+        {
+          "page": "界面 / HUD",
+          "capture": "1225x704_page_5.png",
+          "rows": 82
+        }
+      ],
+      "opened_fullscreen": true,
+      "geometry": [
+        {
+          "phase": "opened",
+          "fullscreen": true,
+          "host": [
+            1,
+            1,
+            1584,
+            720
+          ],
+          "settings": [
+            1,
+            1,
+            1584,
+            720
+          ],
+          "dpr": 1.5,
+          "capture": "case_1_opened.png"
+        },
+        {
+          "phase": "f11_once",
+          "fullscreen": false,
+          "host": [
+            5,
+            21,
+            1225,
+            704
+          ],
+          "settings": [
+            5,
+            21,
+            1225,
+            704
+          ],
+          "dpr": 1.5,
+          "capture": "case_1_f11_once.png",
+          "transition": {
+            "dispatch_ms": 102.01,
+            "calls": [
+              {
+                "method": "apply_layout_scale",
+                "ms": 211.76
+              },
+              {
+                "method": "settle_layout",
+                "ms": 18.86
+              }
+            ],
+            "paints": [
+              {
+                "window": "settings",
+                "ms": 7.89,
+                "covered": false
+              },
+              {
+                "window": "settings",
+                "ms": 28.15,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 33.58,
+                "covered": true
+              },
+              {
+                "window": "settings",
+                "ms": 396.67,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 413.99,
+                "covered": true
+              },
+              {
+                "window": "settings",
+                "ms": 470.32,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 481.71,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 497.87,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 519.94,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 546.81,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 569.61,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 582.89,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 601.21,
+                "covered": true
+              },
+              {
+                "window": "settings",
+                "ms": 616.39,
+                "covered": true
+              }
+            ]
+          }
+        },
+        {
+          "phase": "f11_twice",
+          "fullscreen": true,
+          "host": [
+            1,
+            1,
+            1584,
+            720
+          ],
+          "settings": [
+            1,
+            1,
+            1584,
+            720
+          ],
+          "dpr": 1.5,
+          "capture": "case_1_f11_twice.png",
+          "transition": {
+            "dispatch_ms": 110.45,
+            "calls": [
+              {
+                "method": "apply_layout_scale",
+                "ms": 255.45
+              },
+              {
+                "method": "settle_layout",
+                "ms": 16.06
+              }
+            ],
+            "paints": [
+              {
+                "window": "settings",
+                "ms": 7.86,
+                "covered": false
+              },
+              {
+                "window": "settings",
+                "ms": 37.37,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 43.77,
+                "covered": true
+              },
+              {
+                "window": "settings",
+                "ms": 446.78,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 461.19,
+                "covered": true
+              },
+              {
+                "window": "settings",
+                "ms": 550.83,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 565.86,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 598.88,
+                "covered": true
+              },
+              {
+                "window": "settings",
+                "ms": 627.22,
+                "covered": true
+              }
+            ]
+          }
+        },
+        {
+          "phase": "rapid_four_toggles",
+          "fullscreen": true,
+          "host": [
+            1,
+            1,
+            1584,
+            720
+          ],
+          "settings": [
+            1,
+            1,
+            1584,
+            720
+          ],
+          "dpr": 1.5,
+          "capture": "case_1_rapid_four_toggles.png",
+          "transition": {
+            "dispatch_ms": 451.35,
+            "calls": [
+              {
+                "method": "apply_layout_scale",
+                "ms": 0.53
+              },
+              {
+                "method": "settle_layout",
+                "ms": 6.62
+              }
+            ],
+            "paints": [
+              {
+                "window": "settings",
+                "ms": 8.95,
+                "covered": false
+              },
+              {
+                "window": "settings",
+                "ms": 38.44,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 44.09,
+                "covered": true
+              },
+              {
+                "window": "settings",
+                "ms": 124.18,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 138.68,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 164.41,
+                "covered": true
+              },
+              {
+                "window": "settings",
+                "ms": 236.95,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 244.37,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 269.91,
+                "covered": true
+              },
+              {
+                "window": "settings",
+                "ms": 343.38,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 374.73,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 398.28,
+                "covered": true
+              },
+              {
+                "window": "settings",
+                "ms": 486.76,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 501.63,
+                "covered": true
+              },
+              {
+                "window": "settings",
+                "ms": 589.19,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 605.44,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 622.96,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 645.14,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 666.03,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 686.06,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 709.44,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 735.29,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 755.34,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 776.84,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 798.38,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 822.21,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 839.62,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 859.81,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 882.03,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 902.26,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 922.46,
+                "covered": true
+              },
+              {
+                "window": "host",
+                "ms": 942.56,
+                "covered": true
+              },
+              {
+                "window": "settings",
+                "ms": 965.82,
+                "covered": true
+              }
+            ]
+          }
+        },
+        {
+          "phase": "applied_fullscreen",
+          "fullscreen": true,
+          "host": [
+            1,
+            1,
+            1584,
+            720
+          ],
+          "settings": [
+            1,
+            1,
+            1584,
+            720
+          ],
+          "dpr": 1.5,
+          "capture": "case_1_applied_fullscreen.png"
+        },
+        {
+          "phase": "applied_windowed",
+          "fullscreen": false,
+          "host": [
+            5,
+            21,
+            1280,
+            707
+          ],
+          "settings": [
+            5,
+            21,
+            1280,
+            707
+          ],
+          "dpr": 1.5,
+          "capture": "case_1_applied_windowed.png"
+        }
+      ]
+    }
+  ],
+  "modal_loop_level": 2,
+  "dpr": 1.5,
+  "status": "PASS"
+}

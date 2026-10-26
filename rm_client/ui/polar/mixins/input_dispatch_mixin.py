@@ -214,6 +214,9 @@ def _on_action_jello_toggle_language(self, payload: Any, point: QPointF, button:
 def _on_action_jello_open_settings(self, payload: Any, point: QPointF, button: int, rect: QRectF) -> None:
     module = self.registry.get(str(payload))
     if module is not None:
+        from rm_client.ui.endfield.wiki import prepare_module_selection
+        if prepare_module_selection(self, module, point, button, rect):
+            return
         self.selected_module = module
         self.prewarm_jello_module_resources(module)
         self.jello_state.open_settings(module.name)
@@ -262,32 +265,6 @@ def _on_action_jello_dismiss_background(self, payload: Any, point: QPointF, butt
 
 def _on_action_jello_noop(self, payload: Any, point: QPointF, button: int, rect: QRectF) -> None:
     return
-
-
-def _on_action_hero_deploy_open(self, payload: Any, point: QPointF, button: int, rect: QRectF) -> None:
-    self.open_hero_deploy_interface()
-
-
-def _on_action_hero_deploy_enter(self, payload: Any, point: QPointF, button: int, rect: QRectF) -> None:
-    now = time.perf_counter()
-    if self.hero_deploy_ui.arm_confirmation(1, now):
-        self.send_hero_deploy_request(1)
-    else:
-        self.toast("Confirm ENTER deploy mode within 3 seconds")
-    self.frame_scheduler.force()
-
-
-def _on_action_hero_deploy_exit(self, payload: Any, point: QPointF, button: int, rect: QRectF) -> None:
-    now = time.perf_counter()
-    if self.hero_deploy_ui.arm_confirmation(0, now):
-        self.send_hero_deploy_request(0)
-    else:
-        self.toast("Confirm EXIT deploy mode within 3 seconds")
-    self.frame_scheduler.force()
-
-
-def _on_action_hero_deploy_close(self, payload: Any, point: QPointF, button: int, rect: QRectF) -> None:
-    self.close_hero_deploy_interface()
 
 
 def _on_action_hero_lob_preview(self, payload: Any, point: QPointF, button: int, rect: QRectF) -> None:
@@ -408,7 +385,7 @@ def _on_action_startup_open_config(self, payload: Any, point: QPointF, button: i
     self.startup_step = "done"
     self.set_clickgui_visible(True, announce=False)
     if config_module:
-        self.jello_state.open_settings(config_module.name)
+        self.dispatch("jello_open_settings", config_module.name, point, button, rect)
     self.toast("ConfigManager opened from launcher")
 
 
@@ -544,10 +521,6 @@ _DISPATCH_HANDLERS = {
     "jello_return": _on_action_jello_return,
     "jello_noop": _on_action_jello_noop,
     "jello_dismiss_background": _on_action_jello_dismiss_background,
-    "hero_deploy_open": _on_action_hero_deploy_open,
-    "hero_deploy_enter": _on_action_hero_deploy_enter,
-    "hero_deploy_exit": _on_action_hero_deploy_exit,
-    "hero_deploy_close": _on_action_hero_deploy_close,
     "hero_lob_preview": _on_action_hero_lob_preview,
     "hero_lob_arm": _on_action_hero_lob_arm,
     "hero_lob_disarm": _on_action_hero_lob_disarm,
@@ -593,6 +566,19 @@ class InputDispatchMixin:
     _jello_background_press = PointerField("background_press")
     _jello_background_dragged = PointerField("background_dragged")
     _jello_background_release_owned = PointerField("background_release_owned")
+
+    def inputMethodEvent(self, event) -> None:
+        from rm_client.ui.endfield.wiki import handle_wiki_input_method
+        if handle_wiki_input_method(self, event):
+            return
+        super().inputMethodEvent(event)
+
+    def inputMethodQuery(self, query):
+        from rm_client.ui.endfield.wiki import wiki_input_method_query
+        handled, value = wiki_input_method_query(self, query)
+        if handled:
+            return value
+        return super().inputMethodQuery(query)
 
     @property
     def pointer_interaction(self) -> PointerInteraction:
@@ -769,6 +755,9 @@ class InputDispatchMixin:
                 # release even when that dispatch or command publication fails.
                 self.pointer_interaction.own_release()
                 self._control_mouse_point = None
+        from rm_client.ui.endfield.wiki import handle_list_pointer
+        if handle_list_pointer(self, event, "press"):
+            return
         hotspot = topmost_hotspot(self.hotspots, point, button=button)
         if hotspot is not None:
             self.dispatch(hotspot.action, hotspot.payload, point, button, hotspot.rect)
@@ -793,6 +782,9 @@ class InputDispatchMixin:
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
         if self._lifecycle_owns_input():
             event.accept()
+            return
+        from rm_client.ui.endfield.wiki import handle_list_pointer
+        if handle_list_pointer(self, event, "move"):
             return
         if self.pointer_interaction.track_owned_pointer(event.position()):
             event.accept()
@@ -876,6 +868,9 @@ class InputDispatchMixin:
             event.accept()
             return
         interaction = self.pointer_interaction
+        from rm_client.ui.endfield.wiki import handle_list_pointer
+        if handle_list_pointer(self, event, "release"):
+            return
         if interaction.background_release_owned and event.button() == Qt.MouseButton.LeftButton:
             point = event.position()
             target = topmost_hotspot(self.hotspots, point, button=1)
@@ -925,13 +920,10 @@ class InputDispatchMixin:
             else:
                 module = self.registry.get(name)
                 if module is not None:
-                    if module.name == "HeroLob" and module.enabled:
-                        self.open_hero_deploy_interface()
-                    else:
-                        self.registry.toggle_module(module, source="clickgui")
-                        self.selected_module = module
-                        self.toast(f"{module.name} {'enabled' if module.enabled else 'disabled'}")
-                        self.auto_save_config()
+                    self.registry.toggle_module(module, source="clickgui")
+                    self.selected_module = module
+                    self.toast(f"{module.name} {'enabled' if module.enabled else 'disabled'}")
+                    self.auto_save_config()
             self.invalidate_gui_cache()
             self.frame_scheduler.force()
         elif drag and drag.get("type") in {"old_panel", "polar_window"}:
@@ -1005,6 +997,10 @@ class InputDispatchMixin:
         scroll = scroll_target_at(self.gui_scroll_viewports, point) if gui_visible else None
         if scroll is not None:
             key, maximum = scroll.key, scroll.maximum
+            from rm_client.ui.endfield.wiki import EndfieldWikiState
+            if isinstance(self.jello_state, EndfieldWikiState):
+                self.jello_state.focus_index = -1
+                self.jello_state.list_fling = None
             if scroll.is_jello:
                 # Sigma's literal 35-pixel step differs from retained Polar's
                 # 28. Preserve the second live angle read on this path.
@@ -1014,10 +1010,14 @@ class InputDispatchMixin:
                     0.0, min(maximum, self.jello_state.dropdown_scroll + jello_delta)
                 )
             elif scroll.family is ScrollFamily.JELLO_PANEL:
+                from rm_client.ui.endfield.wiki import note_wiki_wheel
+                note_wiki_wheel(self,key,jello_delta,maximum)
                 current = float(self.jello_state.panel_scroll.get(key, 0.0))
                 self.jello_state.panel_scroll[key] = max(0.0, min(maximum, current + jello_delta))
                 self.jello_state.mark_scroll(f"panel:{key}")
             elif scroll.family is ScrollFamily.JELLO_SETTINGS:
+                from rm_client.ui.endfield.wiki import note_wiki_wheel
+                note_wiki_wheel(self,key,jello_delta,maximum,settings=True)
                 self.jello_state.scroll_settings_by(key, jello_delta, maximum)
                 self.jello_state.mark_scroll(f"settings:{key}")
             elif scroll.family is ScrollFamily.LEGACY_PANEL:
@@ -1045,6 +1045,8 @@ class InputDispatchMixin:
         # A keyboard navigation/close action supersedes a pending mouse click,
         # but the GUI still owns that click's eventual motion and release.
         self.pointer_interaction.cancel_background_press()
+        if not event.isAutoRepeat():
+            getattr(self, "_wiki_key_releases", set()).discard(event.key())
         if not self.escape_menu_visible and not event.isAutoRepeat():
             # A new physical press supersedes any menu key-up lost on focus
             # change; its later release must reach the normal control owner.
@@ -1077,6 +1079,9 @@ class InputDispatchMixin:
         if self.pointer_interaction.binding_module is not None:
             self.handle_keybind_event(event)
             return
+        from rm_client.ui.endfield.wiki import handle_wiki_key
+        if handle_wiki_key(self, event):
+            return
         if self.home_visible and self.wallpaper_picker_visible:
             if event.key() == Qt.Key.Key_Escape:
                 self.set_wallpaper_picker_visible(False)
@@ -1085,30 +1090,6 @@ class InputDispatchMixin:
             if self.handle_startup_key(event):
                 return
         key_name = self.key_name(event)
-        hero_module = self.registry.get("HeroLob")
-        hero_key = bool(
-            hero_module
-            and hero_module.keybind != "None"
-            and self.keybind_matches(hero_module.keybind, key_name, event)
-        )
-        if self.hero_deploy_ui.visible:
-            if event.key() == Qt.Key.Key_F8 or self.is_right_shift_event(event):
-                self.close_hero_deploy_interface(force=True)
-                self.set_clickgui_visible(True)
-            elif event.key() == Qt.Key.Key_Escape or (hero_key and not event.isAutoRepeat()):
-                self.close_hero_deploy_interface()
-            event.accept()
-            return
-        if hero_key and not event.isAutoRepeat() and not self.home_visible:
-            if int(self.state.deploy_mode) == 1:
-                self.open_hero_deploy_interface()
-            elif hero_module is not None and not hero_module.enabled:
-                self.registry.toggle_module(hero_module, source="keybind")
-                self.auto_save_config()
-            else:
-                self.open_hero_deploy_interface()
-            event.accept()
-            return
         if self.handle_student_key(event, True):
             event.accept()
             return
@@ -1254,6 +1235,12 @@ class InputDispatchMixin:
         if self._lifecycle_owns_input():
             event.accept()
             return
+        wiki_pending = getattr(self, "_wiki_key_releases", set())
+        if event.key() in wiki_pending:
+            if not event.isAutoRepeat():
+                wiki_pending.discard(event.key())
+            event.accept()
+            return
         pending = getattr(self, "_escape_menu_key_releases", set())
         if event.key() in pending:
             if not event.isAutoRepeat():
@@ -1340,7 +1327,6 @@ class InputDispatchMixin:
             and not self.gui_visible
             and getattr(getattr(self, "gui_timeline", None), "progress", 0.0) <= 0.0
             and not self.economy_visible
-            and not self.hero_deploy_ui.visible
             and not self.match_chat.input_open
             and not self.quick_action_wheel.active
             and not self.overlay_coordinator.blocks_combat_input
@@ -1425,6 +1411,9 @@ class InputDispatchMixin:
             if action != "select_scenario" or changing_profile or closing:
                 return
         if self.handle_student_action(action, payload, point):
+            return
+        from rm_client.ui.endfield.wiki import handle_wiki_action
+        if handle_wiki_action(self, action, payload, button):
             return
         if action in _GUI_CACHE_INVALIDATE_ACTIONS:
             self.invalidate_gui_cache()

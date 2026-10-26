@@ -1,0 +1,231 @@
+{
+  "platform": "windows",
+  "dpr": 1.0,
+  "cases": [
+    {
+      "size": [
+        1000,
+        620
+      ],
+      "page": "视频",
+      "rows": 11,
+      "capture": "1000x620_page_0.png"
+    },
+    {
+      "size": [
+        1000,
+        620
+      ],
+      "page": "音频",
+      "rows": 14,
+      "capture": "1000x620_page_1.png"
+    },
+    {
+      "size": [
+        1000,
+        620
+      ],
+      "page": "游戏",
+      "rows": 33,
+      "capture": "1000x620_page_2.png"
+    },
+    {
+      "size": [
+        1000,
+        620
+      ],
+      "page": "键盘 / 鼠标",
+      "rows": 91,
+      "capture": "1000x620_page_3.png"
+    },
+    {
+      "size": [
+        1000,
+        620
+      ],
+      "page": "准星",
+      "rows": 31,
+      "capture": "1000x620_page_4.png"
+    },
+    {
+      "size": [
+        1000,
+        620
+      ],
+      "page": "界面 / HUD",
+      "rows": 82,
+      "capture": "1000x620_page_5.png"
+    },
+    {
+      "size": [
+        1280,
+        720
+      ],
+      "page": "视频",
+      "rows": 11,
+      "capture": "1280x720_page_0.png"
+    },
+    {
+      "size": [
+        1280,
+        720
+      ],
+      "page": "音频",
+      "rows": 14,
+      "capture": "1280x720_page_1.png"
+    },
+    {
+      "size": [
+        1280,
+        720
+      ],
+      "page": "游戏",
+      "rows": 33,
+      "capture": "1280x720_page_2.png"
+    },
+    {
+      "size": [
+        1280,
+        720
+      ],
+      "page": "键盘 / 鼠标",
+      "rows": 91,
+      "capture": "1280x720_page_3.png"
+    },
+    {
+      "size": [
+        1280,
+        720
+      ],
+      "page": "准星",
+      "rows": 31,
+      "capture": "1280x720_page_4.png"
+    },
+    {
+      "size": [
+        1280,
+        720
+      ],
+      "page": "界面 / HUD",
+      "rows": 82,
+      "capture": "1280x720_page_5.png"
+    },
+    {
+      "size": [
+        1920,
+        1080
+      ],
+      "page": "视频",
+      "rows": 11,
+      "capture": "1920x1080_page_0.png"
+    },
+    {
+      "size": [
+        1920,
+        1080
+      ],
+      "page": "音频",
+      "rows": 14,
+      "capture": "1920x1080_page_1.png"
+    },
+    {
+      "size": [
+        1920,
+        1080
+      ],
+      "page": "游戏",
+      "rows": 33,
+      "capture": "1920x1080_page_2.png"
+    },
+    {
+      "size": [
+        1920,
+        1080
+      ],
+      "page": "键盘 / 鼠标",
+      "rows": 91,
+      "capture": "1920x1080_page_3.png"
+    },
+    {
+      "size": [
+        1920,
+        1080
+      ],
+      "page": "准星",
+      "rows": 31,
+      "capture": "1920x1080_page_4.png"
+    },
+    {
+      "size": [
+        1920,
+        1080
+      ],
+      "page": "界面 / HUD",
+      "rows": 82,
+      "capture": "1920x1080_page_5.png"
+    },
+    {
+      "size": [
+        2560,
+        1440
+      ],
+      "page": "视频",
+      "rows": 11,
+      "capture": "2560x1440_page_0.png"
+    },
+    {
+      "size": [
+        2560,
+        1440
+      ],
+      "page": "音频",
+      "rows": 14,
+      "capture": "2560x1440_page_1.png"
+    },
+    {
+      "size": [
+        2560,
+        1440
+      ],
+      "page": "游戏",
+      "rows": 33,
+      "capture": "2560x1440_page_2.png"
+    },
+    {
+      "size": [
+        2560,
+        1440
+      ],
+      "page": "键盘 / 鼠标",
+      "rows": 91,
+      "capture": "2560x1440_page_3.png"
+    },
+    {
+      "size": [
+        2560,
+        1440
+      ],
+      "page": "准星",
+      "rows": 31,
+      "capture": "2560x1440_page_4.png"
+    },
+    {
+      "size": [
+        2560,
+        1440
+      ],
+      "page": "界面 / HUD",
+      "rows": 82,
+      "capture": "2560x1440_page_5.png"
+    }
+  ],
+  "scope": "native Qt preferences with inert device adapters; no external-window screenshot or game process",
+  "gl_backdrop": {
+    "valid_context": true,
+    "cached_size": [
+      320,
+      180
+    ]
+  },
+  "status": "PASS"
+}

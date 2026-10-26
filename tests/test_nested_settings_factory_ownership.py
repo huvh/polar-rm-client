@@ -21,6 +21,8 @@ from rm_client.ui import cs2_settings_center as settings
 from rm_client.ui import cs2_video_settings as video
 from rm_client.ui import jello_keybinds as keyboard
 from rm_client.ui import jello_widgets as widgets
+from rm_client.ui.endfield.settings import shell as endfield_widgets
+from rm_client.ui.endfield.keybinds import dialog as endfield_keyboard
 
 
 def flush():
@@ -56,7 +58,7 @@ class NestedSettingsFactoryOwnershipTests(unittest.TestCase):
                 self.assertEqual(dialog.objectName(), 'JelloVideoSettings')
                 captured.append((dialog, dialog.findChildren(QWidget)))
                 raise error
-            with patch.object(widgets, 'apply_jello_widgets', side_effect=fail):
+            with patch.object(endfield_widgets, 'apply_settings_widgets', side_effect=fail):
                 with self.assertRaises(RuntimeError) as raised:
                     settings.open_settings_center(self.host)
             self.assertIs(raised.exception, error)
@@ -73,14 +75,14 @@ class NestedSettingsFactoryOwnershipTests(unittest.TestCase):
                 raise OSError('injected deletion adapter failure')
             dialog.deleteLater = retire_then_fail
             raise error
-        with patch.object(widgets, 'apply_jello_widgets', side_effect=fail):
+        with patch.object(endfield_widgets, 'apply_settings_widgets', side_effect=fail):
             with self.assertRaises(RuntimeError) as raised:
                 video.open_video_settings(self.host, embedded=True)
         self.assertIs(raised.exception, error)
         self.check_retired(captured[0], [])
 
     def test_keyboard_factory_failure_retires_only_its_acquired_tree(self):
-        for site in ('install_estop_shortcut', 'apply_jello_widgets'):
+        for site in ('install_estop_shortcut', 'apply_settings_widgets'):
             for _ in range(2):
                 with self.subTest(site=site):
                     captured = []
@@ -88,7 +90,7 @@ class NestedSettingsFactoryOwnershipTests(unittest.TestCase):
                     def fail(dialog, *args):
                         captured.append((dialog, dialog.findChildren(QWidget)))
                         raise error
-                    with patch.object(keyboard, site, side_effect=fail):
+                    with patch.object(endfield_keyboard, site, side_effect=fail):
                         with self.assertRaises(RuntimeError) as raised:
                             keyboard.open_keyboard_manager(self.host)
                     self.assertIs(raised.exception, error)
@@ -105,7 +107,7 @@ class NestedSettingsFactoryOwnershipTests(unittest.TestCase):
                 raise OSError('injected deletion adapter failure')
             dialog.deleteLater = retire_then_fail
             raise error
-        with patch.object(keyboard, 'apply_jello_widgets', side_effect=fail):
+        with patch.object(endfield_keyboard, 'apply_settings_widgets', side_effect=fail):
             with self.assertRaises(RuntimeError) as raised:
                 keyboard.build_keyboard_manager(self.host)
         self.assertIs(raised.exception, error)
@@ -122,7 +124,8 @@ class NestedSettingsFactoryOwnershipTests(unittest.TestCase):
         self.assertTrue(isValid(dialog))
         self.assertIs(dialog.parent(), self.sibling)
         self.assertTrue(dialog.session.entries)
-        self.assertTrue(isValid(dialog.canvas))
+        self.assertTrue(isValid(dialog.keyboard))
+        self.assertEqual(len(dialog.keyboard.keys),84)
         dialog.deleteLater()
         flush()
         self.assertEqual(self.host.findChildren(QDialog), [self.sibling])

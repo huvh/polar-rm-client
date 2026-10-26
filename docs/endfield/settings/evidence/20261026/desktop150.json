@@ -1,0 +1,69 @@
+{
+  "platform": "windows",
+  "dpr": 1.5,
+  "cases": [
+    {
+      "size": [
+        1280,
+        720
+      ],
+      "page": "视频",
+      "rows": 11,
+      "capture": "1280x720_page_0.png"
+    },
+    {
+      "size": [
+        1280,
+        720
+      ],
+      "page": "音频",
+      "rows": 14,
+      "capture": "1280x720_page_1.png"
+    },
+    {
+      "size": [
+        1280,
+        720
+      ],
+      "page": "游戏",
+      "rows": 33,
+      "capture": "1280x720_page_2.png"
+    },
+    {
+      "size": [
+        1280,
+        720
+      ],
+      "page": "键盘 / 鼠标",
+      "rows": 91,
+      "capture": "1280x720_page_3.png"
+    },
+    {
+      "size": [
+        1280,
+        720
+      ],
+      "page": "准星",
+      "rows": 31,
+      "capture": "1280x720_page_4.png"
+    },
+    {
+      "size": [
+        1280,
+        720
+      ],
+      "page": "界面 / HUD",
+      "rows": 82,
+      "capture": "1280x720_page_5.png"
+    }
+  ],
+  "scope": "native Qt preferences with inert device adapters; no external-window screenshot or game process",
+  "gl_backdrop": {
+    "valid_context": true,
+    "cached_size": [
+      480,
+      270
+    ]
+  },
+  "status": "PASS"
+}

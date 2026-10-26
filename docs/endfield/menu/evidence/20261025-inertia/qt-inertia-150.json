@@ -1,0 +1,29 @@
+{
+  "dpr": 1.5,
+  "dragged": {
+    "position": 0.8500956655632995,
+    "velocity": -0.7444127549314336,
+    "hidden_length": 475.3488252162931,
+    "dragging": 1.0,
+    "coasting": 0.0,
+    "rate": 0.13500000536441803
+  },
+  "released": {
+    "position": 0.8256712057692044,
+    "velocity": -0.634722908756883,
+    "hidden_length": 475.3488252162931,
+    "dragging": 0.0,
+    "coasting": 1.0,
+    "rate": 0.13500000536441803
+  },
+  "coasting": {
+    "position": 0.7444674977978757,
+    "velocity": -0.4712947876466486,
+    "hidden_length": 475.3488252162931,
+    "dragging": 0.0,
+    "coasting": 1.0,
+    "rate": 0.13500000536441803
+  },
+  "status": "PASS",
+  "uses_shipped_pack": true
+}

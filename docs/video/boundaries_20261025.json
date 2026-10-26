@@ -1,0 +1,618 @@
+{
+  "date": "2026-10-25",
+  "scope": "图传接口、VT02 适配、Wiki 输入法与专项归档",
+  "main_regression": {
+    "run_id": "0b51a61d1ffd463ca83b9564dc49f0e2",
+    "counts": {
+      "PASS": 52,
+      "SKIP": 0,
+      "INCOMPLETE": 1,
+      "FAIL": 0
+    },
+    "tests_run": 605,
+    "tests_passed": 604,
+    "tests_skipped": 1,
+    "results": [
+      {
+        "path": "tests/endfield/wiki/test_ime.py",
+        "status": "PASS",
+        "tests_run": 3,
+        "skipped": 0,
+        "detail": "3 unittest tests passed"
+      },
+      {
+        "path": "tests/endfield/wiki/test_terminal.py",
+        "status": "PASS",
+        "tests_run": 63,
+        "skipped": 0,
+        "detail": "63 unittest tests passed"
+      },
+      {
+        "path": "tests/test_angle_port_admission_characterization.py",
+        "status": "PASS",
+        "tests_run": 5,
+        "skipped": 0,
+        "detail": "5 unittest tests passed"
+      },
+      {
+        "path": "tests/test_backend_composite_shutdown_retry.py",
+        "status": "PASS",
+        "tests_run": 1,
+        "skipped": 0,
+        "detail": "1 unittest tests passed"
+      },
+      {
+        "path": "tests/test_backend_video_source_nonblocking.py",
+        "status": "PASS",
+        "tests_run": 14,
+        "skipped": 0,
+        "detail": "14 unittest tests passed"
+      },
+      {
+        "path": "tests/test_camera_input_handoff.py",
+        "status": "PASS",
+        "tests_run": 25,
+        "skipped": 0,
+        "detail": "25 unittest tests passed"
+      },
+      {
+        "path": "tests/test_clickgui_background_dismiss.py",
+        "status": "PASS",
+        "tests_run": 14,
+        "skipped": 0,
+        "detail": "14 unittest tests passed"
+      },
+      {
+        "path": "tests/test_configuration_commands.py",
+        "status": "PASS",
+        "tests_run": 28,
+        "skipped": 0,
+        "detail": "28 unittest tests passed"
+      },
+      {
+        "path": "tests/test_constructor_admission_matrix.py",
+        "status": "PASS",
+        "tests_run": 5,
+        "skipped": 0,
+        "detail": "5 unittest tests passed"
+      },
+      {
+        "path": "tests/test_controller_angle_admission.py",
+        "status": "PASS",
+        "tests_run": 3,
+        "skipped": 0,
+        "detail": "3 unittest tests passed"
+      },
+      {
+        "path": "tests/test_controller_angle_exception_admission.py",
+        "status": "PASS",
+        "tests_run": 3,
+        "skipped": 0,
+        "detail": "3 unittest tests passed"
+      },
+      {
+        "path": "tests/test_controller_angle_integration.py",
+        "status": "PASS",
+        "tests_run": 20,
+        "skipped": 0,
+        "detail": "20 unittest tests passed"
+      },
+      {
+        "path": "tests/test_controller_angle_receipt_boundary.py",
+        "status": "PASS",
+        "tests_run": 12,
+        "skipped": 0,
+        "detail": "12 unittest tests passed"
+      },
+      {
+        "path": "tests/test_controller_angle_safety_review.py",
+        "status": "PASS",
+        "tests_run": 24,
+        "skipped": 0,
+        "detail": "24 unittest tests passed"
+      },
+      {
+        "path": "tests/test_decoder_lifecycle_quality.py",
+        "status": "PASS",
+        "tests_run": 14,
+        "skipped": 0,
+        "detail": "14 unittest tests passed"
+      },
+      {
+        "path": "tests/test_decoder_owner_prefix.py",
+        "status": "PASS",
+        "tests_run": 5,
+        "skipped": 0,
+        "detail": "5 unittest tests passed"
+      },
+      {
+        "path": "tests/test_hero_deployment_removed.py",
+        "status": "PASS",
+        "tests_run": 3,
+        "skipped": 0,
+        "detail": "3 unittest tests passed"
+      },
+      {
+        "path": "tests/test_legacy_intra_refresh.py",
+        "status": "PASS",
+        "tests_run": 6,
+        "skipped": 0,
+        "detail": "6 unittest tests passed"
+      },
+      {
+        "path": "tests/test_legacy_video_bridge.py",
+        "status": "INCOMPLETE",
+        "tests_run": 17,
+        "skipped": 1,
+        "detail": "1 unittest tests skipped"
+      },
+      {
+        "path": "tests/test_modal_input_epoch.py",
+        "status": "PASS",
+        "tests_run": 5,
+        "skipped": 0,
+        "detail": "5 unittest tests passed"
+      },
+      {
+        "path": "tests/test_native_video_activation.py",
+        "status": "PASS",
+        "tests_run": 5,
+        "skipped": 0,
+        "detail": "5 unittest tests passed"
+      },
+      {
+        "path": "tests/test_normal_video_timeline.py",
+        "status": "PASS",
+        "tests_run": 18,
+        "skipped": 0,
+        "detail": "18 unittest tests passed"
+      },
+      {
+        "path": "tests/test_normal_video_timeline_contract.py",
+        "status": "PASS",
+        "tests_run": 30,
+        "skipped": 0,
+        "detail": "30 unittest tests passed"
+      },
+      {
+        "path": "tests/test_official_profile_preset.py",
+        "status": "PASS",
+        "tests_run": 14,
+        "skipped": 0,
+        "detail": "14 unittest tests passed"
+      },
+      {
+        "path": "tests/test_settings_audit_quality.py",
+        "status": "PASS",
+        "tests_run": 7,
+        "skipped": 0,
+        "detail": "7 unittest tests passed"
+      },
+      {
+        "path": "tests/test_test_registry.py",
+        "status": "PASS",
+        "tests_run": 44,
+        "skipped": 0,
+        "detail": "44 unittest tests passed"
+      },
+      {
+        "path": "tests/test_transport_safety_regressions.py",
+        "status": "PASS",
+        "tests_run": 36,
+        "skipped": 0,
+        "detail": "36 unittest tests passed"
+      },
+      {
+        "path": "tests/test_transport_start_admission_matrix.py",
+        "status": "PASS",
+        "tests_run": 2,
+        "skipped": 0,
+        "detail": "2 unittest tests passed"
+      },
+      {
+        "path": "tests/test_udp_codec_evidence.py",
+        "status": "PASS",
+        "tests_run": 11,
+        "skipped": 0,
+        "detail": "11 unittest tests passed"
+      },
+      {
+        "path": "tests/test_udp_constructor_admission_audit.py",
+        "status": "PASS",
+        "tests_run": 1,
+        "skipped": 0,
+        "detail": "1 unittest tests passed"
+      },
+      {
+        "path": "tests/test_udp_h264_dispatch.py",
+        "status": "PASS",
+        "tests_run": 12,
+        "skipped": 0,
+        "detail": "12 unittest tests passed"
+      },
+      {
+        "path": "tests/test_udp_h264_hud_handoff.py",
+        "status": "PASS",
+        "tests_run": 1,
+        "skipped": 0,
+        "detail": "1 unittest tests passed"
+      },
+      {
+        "path": "tests/test_udp_ingress_evidence.py",
+        "status": "PASS",
+        "tests_run": 6,
+        "skipped": 0,
+        "detail": "6 unittest tests passed"
+      },
+      {
+        "path": "tests/test_udp_receiver_admission.py",
+        "status": "PASS",
+        "tests_run": 3,
+        "skipped": 0,
+        "detail": "3 unittest tests passed"
+      },
+      {
+        "path": "tests/test_udp_stop_nonblocking.py",
+        "status": "PASS",
+        "tests_run": 3,
+        "skipped": 0,
+        "detail": "3 unittest tests passed"
+      },
+      {
+        "path": "tests/test_video_close_ownership.py",
+        "status": "PASS",
+        "tests_run": 8,
+        "skipped": 0,
+        "detail": "8 unittest tests passed"
+      },
+      {
+        "path": "tests/test_video_generation_selection.py",
+        "status": "PASS",
+        "tests_run": 3,
+        "skipped": 0,
+        "detail": "3 unittest tests passed"
+      },
+      {
+        "path": "tests/test_video_reconnect.py",
+        "status": "PASS",
+        "tests_run": 6,
+        "skipped": 0,
+        "detail": "6 unittest tests passed"
+      },
+      {
+        "path": "tests/test_video_recovery.py",
+        "status": "PASS",
+        "tests_run": 6,
+        "skipped": 0,
+        "detail": "6 unittest tests passed"
+      },
+      {
+        "path": "tests/test_video_recovery_admission.py",
+        "status": "PASS",
+        "tests_run": 4,
+        "skipped": 0,
+        "detail": "4 unittest tests passed"
+      },
+      {
+        "path": "tests/test_video_source_retry_admission.py",
+        "status": "PASS",
+        "tests_run": 2,
+        "skipped": 0,
+        "detail": "2 unittest tests passed"
+      },
+      {
+        "path": "tests/test_video_source_snapshot.py",
+        "status": "PASS",
+        "tests_run": 5,
+        "skipped": 0,
+        "detail": "5 unittest tests passed"
+      },
+      {
+        "path": "tests/test_video_source_snapshot_evidence.py",
+        "status": "PASS",
+        "tests_run": 3,
+        "skipped": 0,
+        "detail": "3 unittest tests passed"
+      },
+      {
+        "path": "tests/test_video_stop_nonblocking.py",
+        "status": "PASS",
+        "tests_run": 7,
+        "skipped": 0,
+        "detail": "7 unittest tests passed"
+      },
+      {
+        "path": "tests/test_window_api_contract.py",
+        "status": "PASS",
+        "tests_run": 41,
+        "skipped": 0,
+        "detail": "41 unittest tests passed"
+      },
+      {
+        "path": "tests/test_window_focus_loss.py",
+        "status": "PASS",
+        "tests_run": 4,
+        "skipped": 0,
+        "detail": "4 unittest tests passed"
+      },
+      {
+        "path": "tests/test_window_text_editing.py",
+        "status": "PASS",
+        "tests_run": 3,
+        "skipped": 0,
+        "detail": "3 unittest tests passed"
+      },
+      {
+        "path": "tests/test_window_video_recovery.py",
+        "status": "PASS",
+        "tests_run": 9,
+        "skipped": 0,
+        "detail": "9 unittest tests passed"
+      },
+      {
+        "path": "tests/video/test_legacy_angle_egress.py",
+        "status": "PASS",
+        "tests_run": 16,
+        "skipped": 0,
+        "detail": "16 unittest tests passed"
+      },
+      {
+        "path": "tests/video/test_legacy_receiver_control.py",
+        "status": "PASS",
+        "tests_run": 13,
+        "skipped": 0,
+        "detail": "13 unittest tests passed"
+      },
+      {
+        "path": "tests/video/test_legacy_video_latency.py",
+        "status": "PASS",
+        "tests_run": 8,
+        "skipped": 0,
+        "detail": "8 unittest tests passed"
+      },
+      {
+        "path": "tests/video/test_public_controls.py",
+        "status": "PASS",
+        "tests_run": 2,
+        "skipped": 0,
+        "detail": "2 unittest tests passed"
+      },
+      {
+        "path": "tests/video/test_video_package.py",
+        "status": "PASS",
+        "tests_run": 2,
+        "skipped": 0,
+        "detail": "2 unittest tests passed"
+      }
+    ],
+    "source_stability": {
+      "schema_version": 1,
+      "status": "PASS",
+      "detail": "Declared verification source inputs have identical start/end fingerprints",
+      "scope": {
+        "directories": [
+          "rm_client",
+          "tests",
+          "tools",
+          "configs"
+        ],
+        "suffixes": [
+          ".bat",
+          ".c",
+          ".cfg",
+          ".cpp",
+          ".h",
+          ".hpp",
+          ".ini",
+          ".json",
+          ".ps1",
+          ".py",
+          ".spec",
+          ".toml",
+          ".yaml",
+          ".yml"
+        ],
+        "all_file_directories": [
+          "tests/fixtures"
+        ],
+        "root_files": [
+          "main.py",
+          "requirements*.txt"
+        ],
+        "exclusions": [
+          "hidden directories",
+          "__pycache__"
+        ],
+        "limits": "Start/end comparison only; includes all internal tests/fixtures files; excludes assets outside that fixture directory, external fixtures, installed packages and transient edits restored between captures."
+      },
+      "before": {
+        "status": "available",
+        "sha256": "5619c3cafc6de6845fc2922d821526fab94662c26bb722aab3e34226bbed246d",
+        "file_count": 949
+      },
+      "after": {
+        "status": "available",
+        "sha256": "5619c3cafc6de6845fc2922d821526fab94662c26bb722aab3e34226bbed246d",
+        "file_count": 949
+      }
+    }
+  },
+  "final_adapter_regression": {
+    "run_id": "365a21c52f1e44dc801f9ae5d441d120",
+    "counts": {
+      "PASS": 2,
+      "SKIP": 0,
+      "INCOMPLETE": 0,
+      "FAIL": 0
+    },
+    "tests_run": 32,
+    "tests_passed": 32,
+    "tests_skipped": 0,
+    "results": [
+      {
+        "path": "tests/test_configuration_commands.py",
+        "status": "PASS",
+        "tests_run": 28,
+        "skipped": 0,
+        "detail": "28 unittest tests passed"
+      },
+      {
+        "path": "tests/test_window_focus_loss.py",
+        "status": "PASS",
+        "tests_run": 4,
+        "skipped": 0,
+        "detail": "4 unittest tests passed"
+      }
+    ],
+    "source_stability": {
+      "schema_version": 1,
+      "status": "PASS",
+      "detail": "Declared verification source inputs have identical start/end fingerprints",
+      "scope": {
+        "directories": [
+          "rm_client",
+          "tests",
+          "tools",
+          "configs"
+        ],
+        "suffixes": [
+          ".bat",
+          ".c",
+          ".cfg",
+          ".cpp",
+          ".h",
+          ".hpp",
+          ".ini",
+          ".json",
+          ".ps1",
+          ".py",
+          ".spec",
+          ".toml",
+          ".yaml",
+          ".yml"
+        ],
+        "all_file_directories": [
+          "tests/fixtures"
+        ],
+        "root_files": [
+          "main.py",
+          "requirements*.txt"
+        ],
+        "exclusions": [
+          "hidden directories",
+          "__pycache__"
+        ],
+        "limits": "Start/end comparison only; includes all internal tests/fixtures files; excludes assets outside that fixture directory, external fixtures, installed packages and transient edits restored between captures."
+      },
+      "before": {
+        "status": "available",
+        "sha256": "ffdd869c39b537297788359c4a4d357c0fa6589ea1dfbf3b724a692087cc7e7f",
+        "file_count": 949
+      },
+      "after": {
+        "status": "available",
+        "sha256": "ffdd869c39b537297788359c4a4d357c0fa6589ea1dfbf3b724a692087cc7e7f",
+        "file_count": 949
+      }
+    }
+  },
+  "verification_sequence": "Main regression covered 53 suites. A final on_module_toggled call was changed from the private method to its tested public wrapper; its obsolete mock fixture was removed, then configuration and focus suites reran against the final source. Each run separately records stable start/end fingerprints.",
+  "quality": {
+    "gate": {
+      "baseline_revision": "d64f1528e2e1864ef369537c026b6d3f7127f590",
+      "status": "PASS",
+      "violations": []
+    },
+    "summary": {
+      "decisions": 15148,
+      "files": 272,
+      "functions": 3793,
+      "historical_ui_functions": 50,
+      "historical_ui_modules": 1,
+      "import_edges": 751,
+      "parsed_files": 272,
+      "statements": 41517
+    },
+    "source_tree_sha256": "fc293ca2a456aedf50c64880854e086cfa86744ea5cc2630db7694d2d061ff7f"
+  },
+  "benchmark": {
+    "scope": "Local H.264 input to BGR publication, 1280x720@60; excludes RF, capture and display",
+    "baseline": {
+      "backend": "ffmpeg-mjpeg",
+      "frames_sent": 60,
+      "frames_decoded": 59,
+      "first_frame_ms": 53.86,
+      "steady_median_ms": 23.0,
+      "steady_p95_ms": 24.12,
+      "input_dropped": 0,
+      "pipe_output_bytes": 3886514
+    },
+    "optimized": {
+      "backend": "pyav-bgr",
+      "frames_sent": 60,
+      "frames_decoded": 59,
+      "first_frame_ms": 23.04,
+      "steady_median_ms": 20.75,
+      "steady_p95_ms": 21.76,
+      "input_dropped": 0,
+      "pipe_output_bytes": 0
+    }
+  },
+  "pure_protocol_ast_parity": [
+    "angle_payload unchanged",
+    "vt02_encoder_payload unchanged"
+  ],
+  "migrations": [
+    [
+      "controller_angles.py:angle_payload",
+      "controller_angle_protocol.py"
+    ],
+    [
+      "controller_angles.py:vt02_encoder_payload, fixed wire sequence",
+      "video/angle_protocol.py"
+    ],
+    [
+      "InputDispatchMixin input method policy",
+      "ui/endfield/wiki/ime.py"
+    ],
+    [
+      "tools/benchmark_legacy_video_decode.py",
+      "tools/video/benchmark_decode.py; old CLI forwards"
+    ],
+    [
+      "tests/test_legacy_angle_egress.py",
+      "tests/video/test_legacy_angle_egress.py"
+    ],
+    [
+      "tests/test_legacy_receiver_control.py",
+      "tests/video/test_legacy_receiver_control.py"
+    ],
+    [
+      "tests/test_legacy_video_latency.py",
+      "tests/video/test_legacy_video_latency.py"
+    ],
+    [
+      "tests/test_video_package.py",
+      "tests/video/test_video_package.py"
+    ],
+    [
+      "docs/legacy_angle_link.md",
+      "docs/video/angle_link.md; old document links onward"
+    ],
+    [
+      "docs/legacy_video_latency_20261022.md",
+      "docs/video/latency_20261022.md; old document links onward"
+    ],
+    [
+      "reports/legacy_video_latency_20261022.json",
+      "reports/video/legacy_video_latency_20261022.json"
+    ]
+  ],
+  "limitations": [
+    "One optional Npcap BPF check skipped; aggregate main report remains INCOMPLETE",
+    "No live wireless/display measurement or full EXE packaging",
+    "No Git staging, commit, push or merge; upstream fetch only",
+    "No deletion of user data, dependencies or historical evidence"
+  ],
+  "full_logs": "tmp/video-boundaries/logs and final-adapter-logs (ignored)"
+}

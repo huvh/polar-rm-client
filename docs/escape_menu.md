@@ -1,7 +1,7 @@
 # Jello Esc menu
 
 On the unobstructed main HUD, Esc opens a second-level Jello menu. Esc closes
-it. Existing keybind capture, search/chat, student panels, Hero, Economy, and
+it. Existing keybind capture, search/chat, student panels, Economy, and
 ClickGUI keep their existing first refusal on Esc. Arrow keys or Tab select;
 Enter/Space activates. Pointer activation requires press and release on the
 same row, preventing stale HUD hotspots from receiving clicks.
@@ -40,3 +40,7 @@ its inert background and lack of GPU blur; it is not a live hardware screenshot.
 The offscreen capture verifies only emergency-card layout and input. It cannot
 demonstrate the live Jello GPU backdrop, GPU compositing or hardware frame pacing;
 those require a real OpenGL driver/display and remain unverified here.
+
+## 菜单精简（2026-10-25）
+
+Windows 原生 Esc 菜单保留左侧更新日志与一个声音设置入口。右侧更新日志、重复声音入口及英雄部署已移除，剩余条目连续排列。英雄部署控制台、快捷键特殊处理、发送接口、资格检查和自动图传切换一并删除；`DeployModeStatusSync` 仅保留官方遥测解码，旧部署指令在统一发送门禁中拒绝。独立的 `HeroLob` 弹道预览及标定保持可用。
