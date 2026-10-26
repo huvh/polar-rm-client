@@ -68,7 +68,7 @@ class UdpH264DispatchTests(unittest.TestCase):
         self.assertTrue(self.backend.h265_recovery.blocked)
 
     def test_missing_ffmpeg_is_visible_without_fresh_frame(self):
-        with patch('rm_client.backend.video_backend.resolve_ffmpeg_executable', return_value=None):
+        with patch('rm_client.backend.video.decoder.resolve_ffmpeg_executable', return_value=None):
             self.backend._on_assembled_frame(H264)
         self.assertEqual(self.backend.codec, 'h264')
         self.assertEqual(self.backend.decoder_backend, 'none')
@@ -116,7 +116,7 @@ class UdpH264DispatchTests(unittest.TestCase):
 
     def test_codec_admission_failure_retains_owner_and_can_retry(self):
         old = self.backend.h265_decoder
-        with patch('rm_client.backend.video_backend.ContinuousMjpegDecoder', side_effect=OSError('constructor rejected')):
+        with patch('rm_client.backend.video.udp.ContinuousMjpegDecoder', side_effect=OSError('constructor rejected')):
             self.backend._on_assembled_frame(H264)
         self.assertIs(self.backend.h265_decoder, old)
         self.assertIn('constructor rejected', self.backend.last_error)
@@ -174,7 +174,7 @@ class UdpH264DispatchTests(unittest.TestCase):
         def decode(payload):
             self.backend._on_assembled_frame(H264)
             return image
-        with patch('rm_client.backend.video_backend._decode_jpeg_bgr', side_effect=decode), \
+        with patch('rm_client.backend.video.udp._decode_jpeg_bgr', side_effect=decode), \
              patch.object(ContinuousMjpegDecoder, 'start', return_value=False):
             self.backend._on_assembled_frame(b'\xff\xd8synthetic routing only')
         self.assertEqual(self.backend.codec, 'h264')

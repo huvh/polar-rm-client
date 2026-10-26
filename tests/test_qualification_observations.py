@@ -9,14 +9,14 @@ from rm_client.configuration.commands import (
     ConfigCommandKind, QualificationCommand, resolve_config_command, resolve_qualification_command,
 )
 from rm_client.qualification_observations import (
-    economy_evidence, estop_evidence, firmware_zero_evidence, hero_evidence,
+    economy_evidence, estop_evidence, firmware_zero_evidence,
     recovery_evidence, soak_evidence, video_evidence,
 )
 
 
 class CommandSelectionTests(unittest.TestCase):
     def test_qualification_vocabulary_resolves_exactly_to_its_existing_kind(self):
-        self.assertEqual(len(QualificationCommand), 23)
+        self.assertEqual(len(QualificationCommand), 22)
         for command in QualificationCommand:
             selected = resolve_config_command(command.value)
             self.assertIs(selected.kind, ConfigCommandKind.QUALIFICATION)
@@ -81,11 +81,6 @@ class QualificationObservationTests(unittest.TestCase):
                        {"reconnected_locked_at": 10}, {"control_locked": False}):
             self.assertFalse(recovery_evidence(**(values | change)).passed)
 
-    def test_hero_requires_two_new_revisions_fresh_status_and_stowed_mode(self):
-        values = dict(revision=4, baseline_revision=2, observed_at=11, baseline_at=10, deploy_mode=0)
-        self.assertTrue(hero_evidence(**values).passed)
-        for change in ({"revision": 3}, {"observed_at": 10}, {"deploy_mode": 1}):
-            self.assertFalse(hero_evidence(**(values | change)).passed)
 
     def test_economy_requires_successful_real_request_real_transport_and_new_status(self):
         values = dict(succeeded=True, request_is_mock=False, request_at=100, baseline_at=100,

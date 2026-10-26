@@ -1,0 +1,83 @@
+{
+  "status": "PASS",
+  "direct_entries": [
+    {
+      "module": "TacticalMap",
+      "category": "Strategy"
+    },
+    {
+      "module": "MatchReadiness",
+      "category": "System"
+    },
+    {
+      "module": "Scenario",
+      "category": "System"
+    }
+  ],
+  "plain_icon_alpha": [
+    {
+      "at_ms": 50.0,
+      "alpha": 0
+    },
+    {
+      "at_ms": 100.0,
+      "alpha": 0
+    },
+    {
+      "at_ms": 200.0,
+      "alpha": 0
+    },
+    {
+      "at_ms": 240.0,
+      "alpha": 0
+    },
+    {
+      "at_ms": 333.3333333333333,
+      "alpha": 0
+    },
+    {
+      "at_ms": 400.0,
+      "alpha": 0
+    },
+    {
+      "at_ms": 450.0,
+      "alpha": 0
+    },
+    {
+      "at_ms": 550.0,
+      "alpha": 0
+    },
+    {
+      "at_ms": 650.0,
+      "alpha": 0
+    },
+    {
+      "at_ms": 733.333333,
+      "alpha": 0
+    },
+    {
+      "at_ms": 750.0,
+      "alpha": 0
+    },
+    {
+      "at_ms": 850.0,
+      "alpha": 0
+    }
+  ],
+  "terminal_exit_target": "escape_menu",
+  "escape_native": {
+    "ready": true,
+    "phase": 1,
+    "error": "",
+    "stats": {
+      "frames": 256.0,
+      "last_ms": 4.511900002398761,
+      "textures": 56.0,
+      "meshes": 57.0,
+      "owners": 1.0
+    },
+    "capture": "terminal_exit_native.png"
+  },
+  "gui_gpu_error": "",
+  "compositor_error": ""
+}

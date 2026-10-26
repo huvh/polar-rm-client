@@ -1,0 +1,51 @@
+{
+  "installed_game_prefab": "assets/beyond/dynamicassets/gameplay/ui/prefabs/common/watchpanel_pc.prefab",
+  "installed_game_node": "canvas_watch/RightBottomNode/ScrollView",
+  "component": 8334246054411398359,
+  "settings": {
+    "m_Inertia": 1,
+    "m_DecelerationRate": 0.13500000536441803,
+    "m_Elasticity": 0.10000000149011612,
+    "m_MovementType": 1,
+    "m_Vertical": 1,
+    "m_Horizontal": 0
+  },
+  "fresh_game_bundle": [
+    {
+      "bundle": "Data/Bundles/Windows/main/4fd3da1d1aa231e3aa5d874e.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\92C494C114F7F9676F38CCD679DE5BE6.chk",
+      "offset": 849114741,
+      "length": 199994,
+      "md5": "50d37d4cf2402fd524e81644509ac9fe",
+      "sha256": "5abdc5be55480fb925416738890ad6d12ba28bbb53594f04df91d135f591a835"
+    }
+  ],
+  "fresh_extraction": "endfield-dump original --bundle-name 4fd3da1d1aa231e3aa5d874e --block Bundle --full; 3298 objects, 0 failures",
+  "runtime_component": {
+    "node": "WatchPanel_PC/Content/WatchNode/canvas_watch/RightBottomNode/ScrollView",
+    "id": "CAB-194e41a66c2317b9df19269f505210be:8334246054411398359",
+    "settings": {
+      "m_Inertia": 1,
+      "m_DecelerationRate": 0.13500000536441803,
+      "m_Elasticity": 0.10000000149011612,
+      "m_MovementType": 1,
+      "m_Vertical": 1,
+      "m_Horizontal": 0
+    },
+    "mounted_document_sha256": "0eeafc7134021530c9571b5b7ca900c03684e30b7e34d12f66cb61a6a0b8c318"
+  },
+  "reference_algorithm": "https://github.com/Unity-Technologies/uGUI/blob/main/com.unity.ugui/Runtime/UGUI/UI/Core/ScrollRect.cs#L793-L848",
+  "adaptation": "native adapter estimates normalized drag velocity with deltaTime*10 smoothing, applies rate**deltaTime and 1 source unit/s cutoff; exact existing camera conversion sends momentum into retained SourceWatchSession",
+  "edge_boundary": "existing source session continues to own elastic overscroll and return; this change supplies free drag momentum, not a replacement for the engine custom UIScrollRect implementation",
+  "lifecycle": [
+    "new press",
+    "wheel",
+    "keyboard navigation",
+    "pause",
+    "resize",
+    "close",
+    "language/context rebuild"
+  ],
+  "upstream_reference_checkout_untouched": true,
+  "runtime_game_dependency": false
+}

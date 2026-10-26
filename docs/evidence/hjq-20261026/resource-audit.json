@@ -1,0 +1,71 @@
+{
+  "status": "PASS",
+  "scope": "manifest/source/mesh validation only; no GPU or hardware qualification",
+  "current_native_build": "build_831506e45160efe8",
+  "packages": {
+    "menu": {
+      "path": "rm_client/ui/endfield/menu/assets",
+      "files": 55,
+      "bytes": 61441817,
+      "integrity": {
+        "status": "PACK_VALID",
+        "files": 54,
+        "maps": {
+          "RMUC7v7": 118677,
+          "RMUL3v3": 8971,
+          "RMUL1v1": 4860
+        },
+        "binary_sha256": "61279dce265adb19c2a4411873e5072f5f2c5ed8a767e22f842aa77bfd17dc15",
+        "optional_boot": false,
+        "optional_audio": false,
+        "native_render_verified": false,
+        "limits": "Integrity/source check only; run python -m tools.endfield.verify_pack_runtime for owned D3D rendering. No hardware/match qualification."
+      }
+    },
+    "wiki": {
+      "path": "rm_client/ui/endfield/wiki/assets",
+      "files": 250,
+      "bytes": 22061025,
+      "integrity": {
+        "status": "PASS",
+        "root": "D:\\StandardRobot++\\polar-rm-client\\rm_client\\ui\\endfield\\wiki\\assets",
+        "files": 250,
+        "images": 244,
+        "clips": 29,
+        "bytes": 22025050
+      }
+    },
+    "settings": {
+      "path": "rm_client/ui/endfield/settings/assets",
+      "files": 19,
+      "bytes": 8460630,
+      "integrity": 18
+    },
+    "keybinds": {
+      "path": "rm_client/ui/endfield/keybinds/assets",
+      "files": 90,
+      "bytes": 431127,
+      "integrity": 86
+    },
+    "changelog": {
+      "path": "rm_client/ui/endfield/changelog/assets",
+      "files": 21,
+      "bytes": 10428549,
+      "integrity": {
+        "status": "PASS",
+        "files": 20
+      }
+    }
+  },
+  "reference_packages": {
+    "assets/endfield_settings": {
+      "hashed_entries": 22,
+      "role": "offline source/importer regression reference"
+    },
+    "assets/cs2_scoreboard_source": {
+      "hashed_entries": 14,
+      "role": "offline source/importer regression reference"
+    }
+  },
+  "local_only": "Python environment, personal profiles and imported media are not application source changes"
+}

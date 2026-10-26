@@ -91,6 +91,7 @@ class MqttEndpointAdmissionTests(unittest.TestCase):
         with patch.object(serial_ports, 'port_snapshot', return_value=[]):
             self.registry = build_default_registry()
         self.module = self.registry.get('MQTTLink')
+        self.module.enabled = True
         self.host = self.module.get_setting('Host')
         self.port = self.module.get_setting('Port')
         self.backend = self.manager.mqtt
@@ -107,6 +108,65 @@ class MqttEndpointAdmissionTests(unittest.TestCase):
 
     def endpoint(self):
         return self.backend.host, self.backend.port
+
+    def test_disabled_mqtt_stops_once_and_cannot_revoke_a_later_angle_arm(self):
+        from rm_client.backend.controller_angles import AngleRelayConfig
+        from rm_client.protocol import RefereeFrameCodec
+        self.backend.start()
+        old = self.backend.client
+        self.module.enabled = False
+        self.sync()
+        self.assertTrue(self.backend.wait_stopped(2))
+        self.assertEqual(old.stops, 1)
+        relay = self.manager.controller_angles
+        relay.start_workers = False
+        clock = [1.0]
+        relay.time_fn = lambda: clock[0]
+        config = AngleRelayConfig(True, 'COM13', 'Stub', True, True, 'Legacy Receiver')
+        relay.configure(config, True)
+        codec = RefereeFrameCodec()
+        relay.feed(codec.encode(0x0302, bytes(30), seq=1))
+        self.assertTrue(relay.arm()[0])
+        for sequence in range(2, 15):
+            self.sync()
+            self.manager.tick()
+            clock[0] += .034
+            relay.configure(config, True)
+            relay.feed(codec.encode(0x0302, bytes(30), seq=sequence))
+            self.assertTrue(relay.pump()[0])
+            self.assertTrue(relay.stats()['armed'])
+        self.assertEqual(old.stops, 1)
+        self.assertEqual(len(self.clients), 1)
+        self.assertFalse(self.backend._started)
+
+    def test_scenario_captures_mqtt_autoconnect_without_starting_disabled_module(self):
+        auto = self.module.get_setting('Auto Connect')
+        for enabled, automatic, expected in ((False, True, False), (True, False, False),
+                                             (True, True, True)):
+            self.module.enabled, auto.value = enabled, automatic
+            request = self.manager._scenario_request('LabDebug', start=True,
+                registry=self.registry, robot_id=None, synchronous_start=False)
+            self.module.enabled = not enabled
+            self.assertEqual(request.mqtt_autostart, expected)
+        cli = self.manager._scenario_request('LabDebug', start=True,
+            registry=None, robot_id=None, synchronous_start=True)
+        self.assertTrue(cli.mqtt_autostart)
+
+    def test_autoconnect_starts_once_and_disabling_cancels_reconnect(self):
+        self.module.get_setting('Auto Connect').value = True
+        self.sync()
+        old = self.backend.client
+        self.assertIsNotNone(old)
+        self.sync()
+        self.assertIs(self.backend.client, old)
+        self.backend._schedule_reconnect('test failure')
+        self.module.enabled = False
+        self.sync()
+        self.assertTrue(self.backend.wait_stopped(2))
+        self.backend._next_reconnect_at = 0
+        self.backend.poll_connection()
+        self.assertFalse(self.backend._reconnect_required)
+        self.assertEqual(len(self.clients), 1)
 
     def test_reported_malformed_ports_are_repaired_once_and_repeat_safely(self):
         for raw in ('not-a-port', '3333.0', 3333.5, float('inf')):

@@ -48,14 +48,13 @@ class OverlayScene:
     def draws_clickgui(self, *, home_visible: bool) -> bool:
         return not home_visible and not self.escape_active
 
-    def glass_owners(self, *, radial_visible: bool, hero_visible: bool) -> frozenset[GlassOwner]:
+    def glass_owners(self, *, radial_visible: bool) -> frozenset[GlassOwner]:
         if self.escape_active:
             return frozenset()
         return frozenset(owner for active, owner in (
             (self.economy_active, GlassOwner.ECONOMY),
             (self.clickgui_active, GlassOwner.CLICKGUI),
             (radial_visible, GlassOwner.RADIAL),
-            (hero_visible, GlassOwner.HERO_DEPLOY),
         ) if active)
 
 

@@ -11,9 +11,18 @@ tests/fixtures/** -text
 
 # Verified native menu packs are byte-addressed, including JSON/shader/licenses.
 # Git newline conversion must not corrupt a transferred pack's file hashes.
-assets/endfield_pack/** -text -whitespace
-assets/endfield_settings/** -text -whitespace
+rm_client/ui/endfield/menu/assets/** -text -whitespace
 
-# Original CS2 exports are hash-addressed vendor evidence. Keep original line
-# endings/trailing whitespace; do not silently reformat copied CSS/XML/TS/SVG.
+# Wiki images, curves, fonts and licenses share a byte-addressed runtime manifest.
+rm_client/ui/endfield/wiki/assets/** -text -whitespace
+
+# Official announcement page resources and game SDK fonts use byte-addressed provenance.
+rm_client/ui/endfield/changelog/assets/** -text -whitespace
+
+# Settings and standalone keyboard assets include byte-addressed JSON curves.
+rm_client/ui/endfield/settings/assets/** -text -whitespace
+rm_client/ui/endfield/keybinds/assets/** -text -whitespace
+
+# Original CS2 exports are hash-addressed vendor evidence.
 assets/cs2_scoreboard_source/** -text -whitespace
+assets/endfield_settings/** -text -whitespace

@@ -93,24 +93,8 @@ def _distance_label(raw_text, registry):
 
 
 def _display_armor_points(host, points, result, width, height):
-    """Video projection for drawing only; keep the FOV/selector contract intact.
-
-    Normal camera video fills the canvas. Native Hero video is aspect-fit;
-    YOLO/bridge quads are already in source pixels, not the model's 640 pad.
-    Both CPU logical HUD sizes and GPU canvas sizes use this same mapping.
-    """
-    native_cut = getattr(host, "hero_deploy_video_cut_active", None)
-    if native_cut is None or not native_cut():
-        return host.armor_esp_points(points, result, width, height)
-    source_w = max(1.0, float(result.source_width))
-    source_h = max(1.0, float(result.source_height))
-    scale = min(width / source_w, height / source_h)
-    left = (width - source_w * scale) * 0.5
-    top = (height - source_h * scale) * 0.5
-    # Native 0x0310 is drawn unmirrored by draw_hero_native_background;
-    # CameraFeed's mirror setting only applies to the normal video path.
-    return [QPointF(left + x * scale, top + y * scale)
-            for x, y in points]
+    """按正常图传投影绘制装甲板轮廓。"""
+    return host.armor_esp_points(points, result, width, height)
 
 
 class EspWireframeMixin:

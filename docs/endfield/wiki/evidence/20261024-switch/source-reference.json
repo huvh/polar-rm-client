@@ -1,0 +1,69 @@
+{
+  "origin": "read-only local game files",
+  "call_chain": [
+    "WikiGroupCtrl._SetSelectedIndex",
+    "WikiGroupCtrl._RefreshScrollListCenter",
+    "ItemScrollListCenter.UpdateCount",
+    "ItemBig._animationIn"
+  ],
+  "lua_source": "C:\\Temp\\codex-wiki-interaction-source\\Data\\LuaScripts\\UI\\Panels\\WikiGroup\\WikiGroupCtrl.lua",
+  "lua_sha256": "ed4ef82009d8397f262daea453a101cdcce2321ac059cf930908d7d42783b740",
+  "prefab_source": "assets/beyond/dynamicassets/gameplay/ui/prefabs/wiki/wikigrouppanel.prefab",
+  "item_big_gameobject": {
+    "m_FileID": 0,
+    "m_PathID": -391061441933747433
+  },
+  "animation_pointer": {
+    "m_FileID": 23,
+    "m_PathID": 1847661073427808780
+  },
+  "external_file": {
+    "fileName": "CAB-78d92be8479259eeb8dec10606c248b2",
+    "pathName": "archive:/CAB-78d92be8479259eeb8dec10606c248b2/CAB-78d92be8479259eeb8dec10606c248b2",
+    "type": 0,
+    "guid": "00000000-0000-0000-0000-000000000000"
+  },
+  "resolved_animation": {
+    "status": "exported",
+    "source": "Bundle/Data/Bundles/Windows/main/c5b8c4a00d7b1fa1209a2683.ab/CAB-78d92be8479259eeb8dec10606c248b2/1847661073427808780",
+    "block": "Bundle",
+    "source_path": "Data/Bundles/Windows/main/c5b8c4a00d7b1fa1209a2683.ab",
+    "serialized_file": "CAB-78d92be8479259eeb8dec10606c248b2",
+    "path_id": 1847661073427808780,
+    "class_id": 74,
+    "type": "AnimationClip",
+    "name": "itembigleft_in",
+    "original_path": "assets/beyond/dynamicassets/gameplay/ui/animations/common/itembigleft_in.anim",
+    "path_source": "container",
+    "parent_asset_path": "assets/beyond/dynamicassets/gameplay/ui/animations/common/itembigleft_in.anim",
+    "source_offset": 25128,
+    "source_size": 2636,
+    "output_path": "assets/beyond/dynamicassets/gameplay/ui/animations/common/itembigleft_in.anim.AnimationClip.raw",
+    "raw_path": "assets/beyond/dynamicassets/gameplay/ui/animations/common/itembigleft_in.anim.AnimationClip.raw",
+    "metadata_path": "assets/beyond/dynamicassets/gameplay/ui/animations/common/itembigleft_in.anim.AnimationClip.metadata.json",
+    "details_path": null,
+    "decode_error": null,
+    "raw_only_reason": null
+  },
+  "raw_clip_sha256": "6b933c1cc80737f60122ad8e3dae55696aabe6eca07920b7125bf71f30808916",
+  "incoming": {
+    "clip": "itembigleft_in",
+    "position_path": "AnimationNode",
+    "x": [
+      -20,
+      0
+    ],
+    "alpha": [
+      0,
+      1
+    ],
+    "duration_seconds": 0.3333333333333333
+  },
+  "outgoing_adaptation": {
+    "clip": "wiki_group_out",
+    "path": "NotchNode/Main/Center/ItemScrollListCenter",
+    "attribute": "m_Alpha",
+    "duration_seconds": 0.16666666666666666,
+    "note": "Retain old terminal settings during the fade, while native UpdateCount recycles its old cells. Incoming and outgoing run together; no native ItemBig switchout is claimed."
+  }
+}

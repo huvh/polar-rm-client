@@ -92,7 +92,8 @@ def _annual_2027():
                     or any(char not in '0123456789abcdef' for char in digest)):
                 raise ValueError('Rule source lacks official-document integrity evidence')
         for key,facts in book['modes'].items():
-            if key in result:raise ValueError('Duplicate annual match mode')
+            if key in result:
+                raise ValueError('Duplicate annual match mode')
             duration=facts.get('duration_sec')
             size=facts.get('field_size_m')
             if duration is not None and (type(duration) is not int or duration<=0):
@@ -116,7 +117,8 @@ def competition_rules(season,match_mode) -> CompetitionRules:
         # These are compatibility settings from the old client, NOT a claim
         # that every historical rule formula was independently re-certified.
         legacy={'RMUC7v7':(420,(28.0,15.0)), 'RMUL3v3':(300,(12.0,8.0))}
-        if match_mode not in legacy:raise UnsupportedRules(f'No 2026 rules for {match_mode!r}')
+        if match_mode not in legacy:
+            raise UnsupportedRules(f'No 2026 rules for {match_mode!r}')
         duration,size=legacy[match_mode]
         return CompetitionRules(year,match_mode,'legacy-client-baseline','',(),
             _freeze({'duration_sec':duration,'field_size_m':size}))

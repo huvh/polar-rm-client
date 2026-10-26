@@ -71,6 +71,8 @@ def launch_qt_application(window_factory: Callable[[], QWidget]) -> None:
     app = QApplication.instance()
     owns_app = app is None
     if app is None:
+        # 原公告页与主 HUD 的 OpenGL 控件共用 Qt 全局上下文。
+        QApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
         surface = QSurfaceFormat()
         surface.setVersion(3, 3)
         surface.setProfile(QSurfaceFormat.OpenGLContextProfile.CoreProfile)

@@ -46,7 +46,7 @@ class NativeVideoActivationTests(unittest.TestCase):
     def test_both_callers_keep_alias_deploy_and_auto_boundaries(self):
         for source in ('native', 'native 0x0310', '0x0310', 'auto', 'udp hevc', '', 'Native'):
             for mode in (0, 1, 2, '1'):
-                expected = source in ('native', 'native 0x0310', '0x0310') or mode in (1, '1')
+                expected = source in ('native', 'native 0x0310', '0x0310')
                 for caller in ('recovery', 'chunk'):
                     with self.subTest(source=source, mode=mode, caller=caller):
                         state = NS(deploy_mode=mode)
@@ -61,8 +61,8 @@ class NativeVideoActivationTests(unittest.TestCase):
     def test_chunk_uses_supplied_state_not_managers_stale_state(self):
         for current, supplied in ((0, 1), (1, 0)):
             manager = self.manager('udp hevc', NS(deploy_mode=current))
-            self.assertEqual(self.recovery_selected(manager), current == 1)
-            self.assertEqual(self.chunk_selected(manager, NS(deploy_mode=supplied)), supplied == 1)
+            self.assertEqual(self.recovery_selected(manager), False)
+            self.assertEqual(self.chunk_selected(manager, NS(deploy_mode=supplied)), False)
 
     def test_absent_state_and_missing_deploy_mode_remain_unselected(self):
         for state in (None, NS()):
@@ -79,9 +79,9 @@ class NativeVideoActivationTests(unittest.TestCase):
                     invoke = lambda: (self.recovery_selected(manager) if caller == 'recovery'
                                       else self.chunk_selected(manager, state))
                     self.assertTrue(invoke())
+                    manager.native_decoder.health.reset_mock()
                     manager._active_video_source = 'auto'
-                    with self.assertRaises(error):
-                        invoke()
+                    self.assertFalse(invoke())
 
     def test_source_failure_gate_precedes_activation_and_malformed_state(self):
         manager = self.manager('auto', NS(deploy_mode='broken'))

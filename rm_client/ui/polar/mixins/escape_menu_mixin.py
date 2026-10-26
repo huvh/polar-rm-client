@@ -18,7 +18,7 @@ from PySide6.QtGui import QColor, QFont, QPainter, QPen
 from ...jello_locale import chinese_enabled, ui_label
 from ...fonts import draw_ui_text, has_cjk
 from ...cs2_assets import local_cs2_assets
-from .endfield_menu_mixin import EndfieldMenuMixin
+from rm_client.ui.endfield.menu.mixin import EndfieldMenuMixin
 
 
 def _menu_font(size, *, bold=False):

@@ -74,8 +74,10 @@ def endfield_font(pixels=26, *, bold=False):
 def tinted_sprite(name, color):
     """Immutable source alpha, tinted once; never rebuild textures during motion."""
     image = resources()[1][name].copy()
-    p=QPainter(image);p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
-    p.fillRect(image.rect(),QColor(color));p.end()
+    p=QPainter(image)
+    p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
+    p.fillRect(image.rect(),QColor(color))
+    p.end()
     return image
 
 
@@ -85,9 +87,11 @@ def nine_slice(p, image, rect, border=20, scale=1.0):
     if isinstance(border, dict):
         left,bottom,right,top=(float(border[k]) for k in ("x","y","z","w"))
     else:
-        left=right=min(border,iw/2);bottom=top=min(border,ih/2)
+        left=right=min(border,iw/2)
+        bottom=top=min(border,ih/2)
     factor=min(scale,rect.width()/max(1,left+right),rect.height()/max(1,top+bottom))
-    sx=(0,left,iw-right,iw);sy=(0,top,ih-bottom,ih)
+    sx=(0,left,iw-right,iw)
+    sy=(0,top,ih-bottom,ih)
     dx=(rect.left(),rect.left()+left*factor,rect.right()-right*factor,rect.right())
     dy=(rect.top(),rect.top()+top*factor,rect.bottom()-bottom*factor,rect.bottom())
     for y in range(3):
@@ -108,8 +112,10 @@ class EndfieldSettingRow(QWidget):
     def __init__(self,label,control,scale,parent):
         super().__init__(parent)
         self.label,self.control,self.scale=label,control,scale
-        label.setParent(self);control.setParent(self)
-        label.setMinimumWidth(0);control.setMinimumHeight(0)
+        label.setParent(self)
+        control.setParent(self)
+        label.setMinimumWidth(0)
+        control.setMinimumHeight(0)
         self.setMinimumHeight(round(130*scale))
         self.setMaximumHeight(round(130*scale))
         for widget in (control, *control.findChildren(QWidget)):
@@ -121,14 +127,18 @@ class EndfieldSettingRow(QWidget):
         return super().eventFilter(watched,event)
 
     def enterEvent(self,event):
-        super().enterEvent(event); self.update()
+        super().enterEvent(event)
+        self.update()
 
     def leaveEvent(self,event):
-        super().leaveEvent(event); self.update()
+        super().leaveEvent(event)
+        self.update()
 
     def resizeEvent(self,event):
         super().resizeEvent(event)
-        s=self.scale;w=self.width();h=self.height()
+        s=self.scale
+        w=self.width()
+        h=self.height()
         self.label.setGeometry(round(68*s),round(h/2-36*s),max(60,round(w-720*s)),round(72*s))
         control_height=max(round(76*s),self.control.fontMetrics().height()+8)
         spin=getattr(self.control,'spin',None)
@@ -139,10 +149,12 @@ class EndfieldSettingRow(QWidget):
         self.control.setGeometry(round(w-620*s),round((h-control_height)/2),round(515*s),control_height)
 
     def paintEvent(self,event):
-        p=QPainter(self);p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p=QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
         s=self.scale
         area=QRectF(10*s,15*s,self.width()-90*s,100*s)
-        p.setOpacity(.4);source_slice(p,'row_bg',area,s)
+        p.setOpacity(.4)
+        source_slice(p,'row_bg',area,s)
         p.setOpacity(.149)
         p.drawImage(QRectF(20*s,19*s,470*s,92*s),resources()[1]['deco_settings_bg_contour'])
         p.setOpacity(.10)
@@ -151,7 +163,8 @@ class EndfieldSettingRow(QWidget):
         if self.underMouse() or (focus is not None and self.isAncestorOf(focus)):
             # Source selection is an outlined row, never a flashing fill or
             # a layout-size change. The bounded halo needs no idle timer.
-            p.setOpacity(1);p.setBrush(Qt.BrushStyle.NoBrush)
+            p.setOpacity(1)
+            p.setBrush(Qt.BrushStyle.NoBrush)
             for width, alpha in ((9,18),(5,45),(1.5,240)):
                 p.setPen(QPen(QColor(255,241,0,alpha),max(1,width*s)))
                 p.drawRect(area.adjusted(0,-4*s,0,4*s))
@@ -160,65 +173,85 @@ class EndfieldSettingRow(QWidget):
 
 class EndfieldRowsLayout(QVBoxLayout):
     def __init__(self,parent,scale=1.0):
-        super().__init__(parent);self.scale=scale
-        self.setContentsMargins(0,0,0,0);self.setSpacing(0)
+        super().__init__(parent)
+        self.scale=scale
+        self.setContentsMargins(0,0,0,0)
+        self.setSpacing(0)
         self.setAlignment(Qt.AlignmentFlag.AlignTop)
 
     def addRow(self,label,control=None):
         if control is None:
             self.addWidget(label)
             return
-        if isinstance(label,str):label=QLabel(label)
+        if isinstance(label,str):
+            label=QLabel(label)
         label.setWordWrap(True)
         self.addWidget(EndfieldSettingRow(label,control,self.scale,self.parentWidget()))
 
     def insertRow(self,index,label,control):
-        if isinstance(label,str):label=QLabel(label)
+        if isinstance(label,str):
+            label=QLabel(label)
         label.setWordWrap(True)
         self.insertWidget(index,EndfieldSettingRow(label,control,self.scale,self.parentWidget()))
 
 
 class EndfieldActionButton(QPushButton):
     def paintEvent(self,event):
-        p=QPainter(self);p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p=QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
         s=self.height()/96
         area=QRectF(self.rect()).adjusted(2,2,-2,-2)
         p.setOpacity(1 if self.isEnabled() else .35)
         source_slice(p,'button_bg',area,s,'#fff100' if self.underMouse() else '#f2f1ef')
-        p.setFont(endfield_font(28*s));p.setPen(QColor('#444444'))
-        p.drawText(area,Qt.AlignmentFlag.AlignCenter,self.text());p.end()
+        p.setFont(endfield_font(28*s))
+        p.setPen(QColor('#444444'))
+        p.drawText(area,Qt.AlignmentFlag.AlignCenter,self.text())
+        p.end()
 
 
 class EndfieldSectionHeader(QWidget):
     def __init__(self,text,parent=None):
-        super().__init__(parent);self.text=text;self.scale=.5
+        super().__init__(parent)
+        self.text=text
+        self.scale=.5
     def paintEvent(self,event):
-        p=QPainter(self);s=self.scale
+        p=QPainter(self)
+        s=self.scale
         p.fillRect(QRectF(0,10*s,8*s,self.height()-20*s),QColor(YELLOW))
-        p.setFont(endfield_font(30*s));p.setPen(QColor(YELLOW))
+        p.setFont(endfield_font(30*s))
+        p.setPen(QColor(YELLOW))
         p.drawText(QRectF(20*s,0,self.width(),self.height()),Qt.AlignmentFlag.AlignVCenter,self.text)
         x=min(self.width()-10,round((self.fontMetrics().horizontalAdvance(self.text)+70*s)))
-        p.setPen(QPen(QColor(170,173,171,100),1));p.drawLine(x,self.height()-4,self.width(),self.height()-4);p.end()
+        p.setPen(QPen(QColor(170,173,171,100),1))
+        p.drawLine(x,self.height()-4,self.width(),self.height()-4)
+        p.end()
 
 
 class EndfieldLoadBars(QWidget):
     """Source load-bar presentation; unavailable hardware data stays unknown."""
     def __init__(self,parent=None):
-        super().__init__(parent);self.scale=.5
+        super().__init__(parent)
+        self.scale=.5
         self.setToolTip('未接入硬件采集时显示“未采集”，不会伪造设备负载或显存读数。')
     def paintEvent(self,event):
-        p=QPainter(self);s=self.scale
+        p=QPainter(self)
+        s=self.scale
         p.setFont(endfield_font(30*s))
         for i,title in enumerate(('设备负载','预计显存占用')):
             rect=QRectF(0,i*82*s,self.width(),72*s)
-            p.setOpacity(.4);source_slice(p,'row_bg',rect,s);p.setOpacity(1)
-            p.setPen(QColor(WHITE));p.drawText(rect.adjusted(58*s,0,0,0),Qt.AlignmentFlag.AlignVCenter,title)
-            p.setPen(QColor('#a8aaa8'));p.drawText(rect.adjusted(300*s,0,0,0),Qt.AlignmentFlag.AlignVCenter,'未采集')
+            p.setOpacity(.4)
+            source_slice(p,'row_bg',rect,s)
+            p.setOpacity(1)
+            p.setPen(QColor(WHITE))
+            p.drawText(rect.adjusted(58*s,0,0,0),Qt.AlignmentFlag.AlignVCenter,title)
+            p.setPen(QColor('#a8aaa8'))
+            p.drawText(rect.adjusted(300*s,0,0,0),Qt.AlignmentFlag.AlignVCenter,'未采集')
             gauge=QRectF(rect.right()-720*s,rect.center().y()-5*s,660*s,10*s)
             p.fillRect(gauge,QColor(180,183,180,50))
             p.setPen(QPen(QColor('#8b8d8b'),1))
             for n in range(6):
-                x=gauge.left()+gauge.width()*n/5;p.drawLine(QPointF(x,gauge.top()-2*s),QPointF(x,gauge.bottom()+2*s))
+                x=gauge.left()+gauge.width()*n/5
+                p.drawLine(QPointF(x,gauge.top()-2*s),QPointF(x,gauge.bottom()+2*s))
         p.end()
 
 
@@ -243,7 +276,8 @@ def capture_settings_backdrop(host):
             host.makeCurrent()
             try:
                 candidate = compositor.treated_blur_fbo.toImage()
-                if not candidate.isNull():image = candidate
+                if not candidate.isNull():
+                    image = candidate
             finally:host.doneCurrent()
         except Exception:
             logging.getLogger(__name__).exception('Could not reuse Esc world backdrop')
@@ -258,7 +292,8 @@ class EndfieldPageTransition(QObject):
         self._page = self._effect = None
         self.motion = QVariantAnimation(self)
         self.motion.setDuration(round(1000*20/60))
-        self.motion.setStartValue(0.0);self.motion.setEndValue(20/60)
+        self.motion.setStartValue(0.0)
+        self.motion.setEndValue(20/60)
         self.motion.valueChanged.connect(self._step)
         self.motion.finished.connect(self.cancel)
 
@@ -279,7 +314,8 @@ class EndfieldPageTransition(QObject):
         self.motion.stop()
         page,self._page = self._page,None
         self._effect = None
-        if page is not None:page.setGraphicsEffect(None)
+        if page is not None:
+            page.setGraphicsEffect(None)
 
 
 class EndfieldDialog(JelloDialog):
@@ -290,7 +326,8 @@ class EndfieldDialog(JelloDialog):
         self._world_backdrop = getattr(parent,'_endfield_settings_backdrop',None)
         if self._world_backdrop is None and parent is not None:
             self._world_backdrop = capture_settings_backdrop(parent)
-        if parent is not None:parent._endfield_settings_backdrop = None
+        if parent is not None:
+            parent._endfield_settings_backdrop = None
         self.timeline = JelloReversibleAnimation(25 / 60, 10 / 60)
         self.panel.setObjectName("EndfieldPanel")
         self.panel.setStyleSheet("QWidget#EndfieldPanel {background:transparent;}")
@@ -359,7 +396,8 @@ class EndfieldCheckBox(QCheckBox):
     def _toggle(self, checked):
         self._motion.stop()
         if not self.isVisible():
-            self._value = float(checked);self.update()
+            self._value = float(checked)
+            self.update()
             return
         self._motion_from,self._motion_to = self._value,float(checked)
         self._motion.setStartValue(0.0)
@@ -377,7 +415,8 @@ class EndfieldCheckBox(QCheckBox):
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         p.setPen(Qt.PenStyle.NoPen)
         rect = QRectF(self.rect()).adjusted(1, 2, -1, -2)
-        p.setBrush(QColor("#626262")); p.drawRoundedRect(rect, rect.height()/2, rect.height()/2)
+        p.setBrush(QColor("#626262"))
+        p.drawRoundedRect(rect, rect.height()/2, rect.height()/2)
         half = rect.width()/2
         selected = QRectF(rect.left()+(1-self._value)*half,rect.top(),half,rect.height())
         source_slice(p,'toggle_bg',selected,self.height()/78,WHITE)
@@ -386,7 +425,9 @@ class EndfieldCheckBox(QCheckBox):
             p.setPen(QColor(INK if abs(self._value-(1-i)) < .5 else "#cccccc"))
             p.drawText(QRectF(rect.left()+i*half,rect.top(),half,rect.height()), Qt.AlignmentFlag.AlignCenter, text)
         if self.hasFocus():
-            p.setPen(QPen(QColor(YELLOW), 1)); p.setBrush(Qt.BrushStyle.NoBrush); p.drawRect(rect)
+            p.setPen(QPen(QColor(YELLOW), 1))
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.drawRect(rect)
         p.end()
 
 
@@ -403,10 +444,12 @@ class EndfieldComboBox(QComboBox):
             'border:1px solid #999999;selection-background-color:#fff100;'
             'selection-color:#212121;outline:0;padding:4px;}')
     def paintEvent(self, event):
-        p = QPainter(self); p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
         rect = QRectF(self.rect()).adjusted(.5,.5,-.5,-.5)
         source_slice(p,'toggle_bg',rect,self.height()/78,'#ffffff' if self.underMouse() else '#eeeeee')
-        p.setFont(self.font()); p.setPen(QColor('#444444'))
+        p.setFont(self.font())
+        p.setPen(QColor('#444444'))
         text_rect = rect.adjusted(18,0,-42,0)
         p.drawText(text_rect, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
                    self.fontMetrics().elidedText(self.currentText(), Qt.TextElideMode.ElideRight, max(1,round(text_rect.width()))))
@@ -417,10 +460,12 @@ class EndfieldComboBox(QComboBox):
 
 class EndfieldCloseButton(QPushButton):
     def paintEvent(self, event):
-        p = QPainter(self);p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
         area = QRectF(self.rect())
         p.setOpacity(.8 if self.underMouse() else 1)
-        p.drawImage(area,resources()[1]['close']);p.end()
+        p.drawImage(area,resources()[1]['close'])
+        p.end()
 
 
 class EndfieldTabBar(QTabBar):
@@ -429,22 +474,26 @@ class EndfieldTabBar(QTabBar):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.scale = 1.0
-        self.setExpanding(False); self.setDrawBase(False)
+        self.setExpanding(False)
+        self.setDrawBase(False)
         self.setMouseTracking(True)
         resources()
         self._icons = []
         for name in self.ICONS:
             normal = resources()[1][name]
             selected = normal.copy()
-            p = QPainter(selected);p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
-            p.fillRect(selected.rect(),QColor(INK));p.end()
+            p = QPainter(selected)
+            p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
+            p.fillRect(selected.rect(),QColor(INK))
+            p.end()
             self._icons.append((normal, selected))
 
     def tabSizeHint(self, index):
         return QSize(round(168*self.scale),round(100*self.scale))
 
     def paintEvent(self, event):
-        p = QPainter(self); p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
         s = self.scale
         for i in range(self.count()):
             rect = QRectF(self.tabRect(i)).adjusted(1,0,-1,0)
@@ -499,8 +548,10 @@ def apply_endfield_widgets(widget, *, scale=None, stylesheet=True):
     scale = scale if scale is not None else settings_scale(widget.width(),widget.height())
     widget.setFont(endfield_font(26*scale))
     palette = widget.palette()
-    for role in (QPalette.ColorRole.Window, QPalette.ColorRole.Base): palette.setColor(role,QColor("#303234"))
-    for role in (QPalette.ColorRole.WindowText,QPalette.ColorRole.Text,QPalette.ColorRole.ButtonText): palette.setColor(role,QColor(WHITE))
+    for role in (QPalette.ColorRole.Window, QPalette.ColorRole.Base):
+        palette.setColor(role,QColor("#303234"))
+    for role in (QPalette.ColorRole.WindowText,QPalette.ColorRole.Text,QPalette.ColorRole.ButtonText):
+        palette.setColor(role,QColor(WHITE))
     widget.setPalette(palette)
     if stylesheet:
         widget.setStyleSheet(theme_stylesheet(scale))

@@ -9,13 +9,13 @@ import sys
 import threading
 from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from rm_client.backend.controller_angles import (
     AngleRelayConfig, ControllerAngleRelay, angle_payload, ANGLE_BOUNDS,
-    explicit_port, port_key,
+    explicit_port, port_key, LEGACY_ANGLE_ROUTES,
 )
 from rm_client.backend.cc_link import CustomControllerLink, decode_cc_frame
 from rm_client.backend.device_egress_settings import CustomControllerSettings, EgressPermissions
@@ -31,7 +31,7 @@ def manager_method(name="_sync_controller_angles"):
                   and n.name == name)
     env = dict(Any=object, AngleRelayConfig=AngleRelayConfig, replace=replace,
                PortReservation=PortReservation, first_port_conflict=first_port_conflict,
-               explicit_port=explicit_port, port_key=port_key,
+               explicit_port=explicit_port, port_key=port_key, LEGACY_ANGLE_ROUTES=LEGACY_ANGLE_ROUTES,
                CustomControllerSettings=CustomControllerSettings, EgressPermissions=EgressPermissions)
     exec(compile(ast.Module(body=[method], type_ignores=[]), "manager-angle-method", "exec"), env)
     return env[name]
@@ -96,6 +96,60 @@ class ControllerAngleIntegrationTests(unittest.TestCase):
         self.assertFalse(self.link.arm()[0])
         self.assertIn("controller_angles", self.manager.state.backend_stats)
 
+    def test_startup_auto_arm_waits_for_gates_and_a_later_source_frame(self):
+        from rm_client.backend.cc_link import encode_cc_frame
+        self.setting(self.angles, "Angle Auto Arm", True)
+        self.enable(mock=True)
+        self.assertFalse(self.link.armed)
+        self.link.feed(encode_cc_frame(0x0302, bytes(30), 1))
+        self.setting(self.robot, "Allow Drive", False)
+        self.sync(self.manager, self.registry)
+        self.assertFalse(self.link.armed)
+        self.setting(self.robot, "Allow Drive", True)
+        self.assertTrue(self.sync(self.manager, self.registry)["armed"])
+        self.assertFalse(self.link.pump()[0])
+        self.link.feed(encode_cc_frame(0x0302, bytes(30), 2))
+        self.assertTrue(self.link.pump()[0])
+        self.link.disarm()
+        self.assertFalse(self.sync(self.manager, self.registry)["armed"])
+
+    def test_startup_auto_arm_does_not_override_estop_or_running_timeout(self):
+        from rm_client.backend.cc_link import encode_cc_frame
+        self.setting(self.angles, "Angle Auto Arm", True)
+        self.enable(mock=True)
+        self.link.feed(encode_cc_frame(0x0302, bytes(30), 1))
+        self.manager.safety.estop_active = True
+        self.sync(self.manager, self.registry)
+        self.manager.safety.estop_active = False
+        self.assertFalse(self.sync(self.manager, self.registry)["armed"])
+        self.assertTrue(self.link.arm()[0])
+        self.link.stats(now=self.link.time_fn() + .4)
+        self.link.feed(encode_cc_frame(0x0302, bytes(30), 2))
+        self.assertFalse(self.sync(self.manager, self.registry)["armed"])
+
+    def test_new_process_can_auto_arm_again_from_saved_configuration(self):
+        from rm_client.backend.cc_link import encode_cc_frame
+        self.setting(self.angles, "Angle Auto Arm", True)
+        for _ in range(2):
+            self.link.close()
+            self.link = ControllerAngleRelay(start_workers=False)
+            self.manager.controller_angles = self.link
+            self.enable(mock=True)
+            self.link.feed(encode_cc_frame(0x0302, bytes(30), 1))
+            self.assertTrue(self.sync(self.manager, self.registry)["armed"])
+
+    def test_scenario_activation_restores_startup_wait_after_initial_teardown(self):
+        from rm_client.backend.cc_link import encode_cc_frame
+        from rm_client.backend.manager import BackendManager
+        self.setting(self.angles, "Angle Auto Arm", True)
+        self.enable(mock=True)
+        self.link.close()  # 场景启动先急停并关闭旧资源。
+        self.link.prepare_startup_arm()
+        BackendManager._request_device_neutral(self.manager, "video settings applied")
+        self.sync(self.manager, self.registry)
+        self.link.feed(encode_cc_frame(0x0302, bytes(30), 1))
+        self.assertTrue(self.sync(self.manager, self.registry)["armed"])
+
     def test_existing_human_gates_all_required(self):
         self.enable()
         for field in ("module", "drive", "estop"):
@@ -158,6 +212,36 @@ class ControllerAngleIntegrationTests(unittest.TestCase):
         self.assertIn("NEW", setting.options)
         self.assertIn("ABSENT_RX", setting.options)
         self.assertNotIn("Auto", setting.options)
+
+    def test_profile_load_preserves_angle_ports_before_usb_enumeration(self):
+        from rm_client.configuration.registry import apply_profile_modules, prepare_registry_modules
+        for name in ("Angle RX Port", "Angle TX Port"):
+            setting = self.angles.get_setting(name)
+            setting.options = ["Stub"]
+            setting.value = "Stub"
+        data = {"modules": {"ControllerAngles": {"settings": {
+            "Angle RX Port": "COM13", "Angle TX Port": "COM14"}}}}
+        apply_profile_modules(self.registry, prepare_registry_modules(self.registry, data))
+        for name, port in (("Angle RX Port", "COM13"), ("Angle TX Port", "COM14")):
+            setting = self.angles.get_setting(name)
+            self.assertEqual(setting.value, port)
+            self.assertIn(port, setting.options)
+        with patch("rm_client.serial_ports.port_choices", return_value=["Stub"]), \
+                patch("rm_client.serial_ports.rc_port_choices", return_value=["Auto"]):
+            refresh_port_options(self.registry)
+        self.assertEqual(self.angles.get_setting("Angle RX Port").value, "COM13")
+
+    def test_absent_port_preservation_does_not_admit_auto_or_unknown_output_route(self):
+        from rm_client.configuration.registry import apply_profile_modules
+        rx = self.angles.get_setting("Angle RX Port")
+        rx.options, rx.value = ["Stub"], "Stub"
+        output = self.angles.get_setting("Angle Output")
+        original_output = output.value
+        apply_profile_modules(self.registry, {"ControllerAngles": {"settings": {
+            "Angle RX Port": "Auto", "Angle Output": "unsupported route"}}})
+        self.assertEqual(rx.value, "Stub")
+        self.assertNotIn("Auto", rx.options)
+        self.assertEqual(output.value, original_output)
 
     def test_existing_keymouse_emits_0306_unchanged(self):
         cc = CustomControllerLink(mock_output=True)
@@ -224,16 +308,42 @@ class ControllerAngleIntegrationTests(unittest.TestCase):
         from rm_client.backend.cc_link import encode_cc_frame
         self.link.feed(encode_cc_frame(0x0302, bytes(30), 1))
         self.manager._sync_controller_angles = lambda registry: self.sync(self.manager, registry)
+        from rm_client.backend.manager import BackendManager
+        from types import MethodType
+        for name in ("sync_controller_angles", "arm_controller_angles", "disarm_controller_angles",
+                     "controller_angle_snapshot"):
+            setattr(self.manager, name, MethodType(getattr(BackendManager, name), self.manager))
+        self.manager.video_receiver_status = lambda: {}
         messages = []
+        dialogs = []
+
+        def show_modal(parent, title, body):
+            # 模态窗口在实机触发失焦；成功授权路径不得再次进入此处。
+            self.link.disarm("window focus lost")
+            dialogs.append(body)
+
+        env["QMessageBox"] = SimpleNamespace(information=show_modal)
+        self.manager.field_log = SimpleNamespace(emit=Mock())
         window = env["ConfigActionsMixin"]()
         window.backend, window.registry, window.toast = self.manager, self.registry, messages.append
         window.handle_student_config_action = lambda action: False
         window.handle_config_action("Arm Angle Forward")
         self.assertTrue(self.link.armed)
-        window.handle_config_action("Show Angle Status")
-        self.assertIn("真发=0", messages[-1])
+        self.assertEqual(dialogs, [])
+        self.assertIn("角度转发已授权：", messages[-1])
+        self.manager.field_log.emit.assert_called_once()
+        event = self.manager.field_log.emit.call_args
+        self.assertEqual(event.args, ("controller_angle_arm",))
+        self.assertTrue(event.kwargs["success"])
+        self.assertTrue(event.kwargs["status"]["armed"])
+        self.assertEqual(event.kwargs["status"]["received"], 1)
+        self.assertEqual(event.kwargs["reason"], self.link.stats()["last_error"])
         window.handle_config_action("Disarm Angle Forward")
         self.assertFalse(self.link.armed)
+        window.handle_config_action("Show Angle Status")
+        self.assertEqual(len(dialogs), 1)
+        self.assertIn("真实转发=0", dialogs[-1])
+        self.assertIn("有效接收=1", dialogs[-1])
 
 
 if __name__ == "__main__":

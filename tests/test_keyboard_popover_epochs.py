@@ -20,6 +20,7 @@ from PySide6.QtWidgets import QDialog
 from shiboken6 import isValid
 from test_cs2_settings_center import APP, Host
 from rm_client.ui import jello_keybinds as keyboard
+from legacy_keyboard_fixture import legacy_keyboard_dialog
 
 
 def flush():
@@ -31,7 +32,7 @@ def flush():
 class KeyboardPopoverEpochTests(unittest.TestCase):
     def setUp(self):
         self.host = Host()
-        self.dialog = keyboard.build_keyboard_manager(self.host)
+        self.dialog = legacy_keyboard_dialog(self.host)
         self.dialog.show()
         self.dialog.timeline.reset(1)
         self.dialog._advance()

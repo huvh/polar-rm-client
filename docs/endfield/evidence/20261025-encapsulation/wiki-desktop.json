@@ -1,0 +1,1255 @@
+{
+  "python": "3.11.9 (tags/v3.11.9:de54cf5, Apr  2 2024, 10:12:12) [MSC v.1938 64 bit (AMD64)]",
+  "PySide6": "6.12.0",
+  "scope": "real Windows/OpenGL, temporary profile, inert transport starts",
+  "breadcrumbs": [
+    {
+      "page": "home",
+      "black_backgrounds": 0,
+      "highlight_overlays": 0
+    },
+    {
+      "page": "movement",
+      "black_backgrounds": 1,
+      "highlight_overlays": 0
+    },
+    {
+      "page": "movement_parent_hover",
+      "black_backgrounds": 1,
+      "highlight_overlays": 1
+    },
+    {
+      "page": "movement_switched_module",
+      "black_backgrounds": 1,
+      "highlight_overlays": 0
+    },
+    {
+      "page": "returned_home",
+      "black_backgrounds": 0,
+      "highlight_overlays": 0
+    }
+  ],
+  "hover_input": "production Qt mouse adapter on owned native OpenGL window",
+  "hover_first_frame_ms": 16.329899997799657,
+  "hover_sample_elapsed_ms": 230.48159999598283,
+  "hover_background_rgb": [
+    17,
+    17,
+    17
+  ],
+  "hover_pointer": [
+    209.0,
+    354.0
+  ],
+  "hover_target": [
+    129.33333333333331,
+    90.66666666666666,
+    158.66666666666666,
+    526.6666666666666
+  ],
+  "hover_mask_progress": 1.0,
+  "motion_frames": [
+    {
+      "event": "home_select",
+      "at_ms": 50.0
+    },
+    {
+      "event": "home_select",
+      "at_ms": 100.0
+    },
+    {
+      "event": "home_select",
+      "at_ms": 200.0
+    },
+    {
+      "event": "home_select",
+      "at_ms": 240.0
+    },
+    {
+      "event": "home_select",
+      "at_ms": 333.3333333333333
+    },
+    {
+      "event": "home_select",
+      "at_ms": 400.0
+    },
+    {
+      "event": "home_select",
+      "at_ms": 450.0
+    },
+    {
+      "event": "home_select",
+      "at_ms": 550.0
+    },
+    {
+      "event": "home_select",
+      "at_ms": 650.0
+    },
+    {
+      "event": "home_select",
+      "at_ms": 733.333333
+    },
+    {
+      "event": "home_select",
+      "at_ms": 750.0
+    },
+    {
+      "event": "home_select",
+      "at_ms": 850.0
+    },
+    {
+      "event": "enter_movement",
+      "at_ms": 80.0
+    },
+    {
+      "event": "enter_movement",
+      "at_ms": 250.0
+    },
+    {
+      "event": "enter_movement",
+      "at_ms": 450.0
+    },
+    {
+      "event": "enter_movement",
+      "at_ms": 800.0
+    },
+    {
+      "event": "switch_module",
+      "at_ms": 50.0
+    },
+    {
+      "event": "switch_module",
+      "at_ms": 120.0
+    },
+    {
+      "event": "switch_module",
+      "at_ms": 220.0
+    },
+    {
+      "event": "switch_module",
+      "at_ms": 340.0
+    },
+    {
+      "event": "search_over_module",
+      "at_ms": 80.0
+    },
+    {
+      "event": "search_over_module",
+      "at_ms": 250.0
+    },
+    {
+      "event": "search_over_module",
+      "at_ms": 500.0
+    },
+    {
+      "event": "search_return",
+      "at_ms": 80.0
+    },
+    {
+      "event": "search_return",
+      "at_ms": 240.0
+    },
+    {
+      "event": "category_return",
+      "at_ms": 80.0
+    },
+    {
+      "event": "category_return",
+      "at_ms": 240.0
+    },
+    {
+      "event": "category_return",
+      "at_ms": 900.0
+    },
+    {
+      "event": "search_switch",
+      "at_ms": 50.0
+    },
+    {
+      "event": "search_switch",
+      "at_ms": 80.0
+    },
+    {
+      "event": "search_switch",
+      "at_ms": 160.0
+    },
+    {
+      "event": "search_switch",
+      "at_ms": 260.0
+    },
+    {
+      "event": "search_switch",
+      "at_ms": 380.0
+    }
+  ],
+  "block_frames": [
+    {
+      "at_ms": 50.0,
+      "markers": [
+        {
+          "rect": [
+            142.05184033177812,
+            341.37065837221354,
+            26.645930533955415,
+            6.3950233281493
+          ],
+          "color": "#4a4a4a",
+          "alpha": 0
+        },
+        {
+          "rect": [
+            251.83307413167444,
+            341.37065837221354,
+            26.645930533955415,
+            6.3950233281493
+          ],
+          "color": "#4a4a4a",
+          "alpha": 0
+        },
+        {
+          "rect": [
+            209.3586323421876,
+            52.80456194919647,
+            4.263348885432866,
+            4.263348885432866
+          ],
+          "color": "#060606",
+          "alpha": 47
+        },
+        {
+          "rect": [
+            203.71135210571282,
+            52.80456194919647,
+            4.263348885432866,
+            4.263348885432866
+          ],
+          "color": "#060606",
+          "alpha": 47
+        }
+      ]
+    },
+    {
+      "at_ms": 100.0,
+      "markers": [
+        {
+          "rect": [
+            142.05184033177812,
+            341.37065837221354,
+            26.645930533955415,
+            6.3950233281493
+          ],
+          "color": "#4a4a4a",
+          "alpha": 255
+        },
+        {
+          "rect": [
+            251.83307413167444,
+            341.37065837221354,
+            26.645930533955415,
+            6.3950233281493
+          ],
+          "color": "#4a4a4a",
+          "alpha": 255
+        },
+        {
+          "rect": [
+            232.72064471821025,
+            52.80456194919647,
+            4.263348885432866,
+            4.263348885432866
+          ],
+          "color": "#060606",
+          "alpha": 145
+        },
+        {
+          "rect": [
+            180.3493397296902,
+            52.80456194919647,
+            4.263348885432866,
+            4.263348885432866
+          ],
+          "color": "#060606",
+          "alpha": 145
+        }
+      ]
+    },
+    {
+      "at_ms": 200.0,
+      "markers": [
+        {
+          "rect": [
+            142.05184033177812,
+            341.37065837221354,
+            26.645930533955415,
+            6.3950233281493
+          ],
+          "color": "#727272",
+          "alpha": 255
+        },
+        {
+          "rect": [
+            251.83307413167444,
+            341.37065837221354,
+            26.645930533955415,
+            6.3950233281493
+          ],
+          "color": "#727272",
+          "alpha": 255
+        },
+        {
+          "rect": [
+            271.74436735001666,
+            52.80456194919647,
+            4.263348885432866,
+            4.263348885432866
+          ],
+          "color": "#060606",
+          "alpha": 255
+        },
+        {
+          "rect": [
+            141.32561709788374,
+            52.80456194919647,
+            4.263348885432866,
+            4.263348885432866
+          ],
+          "color": "#060606",
+          "alpha": 255
+        }
+      ]
+    },
+    {
+      "at_ms": 240.0,
+      "markers": [
+        {
+          "rect": [
+            142.05184033177812,
+            341.37065837221354,
+            26.645930533955415,
+            6.3950233281493
+          ],
+          "color": "#727272",
+          "alpha": 255
+        },
+        {
+          "rect": [
+            251.83307413167444,
+            341.37065837221354,
+            26.645930533955415,
+            6.3950233281493
+          ],
+          "color": "#727272",
+          "alpha": 255
+        },
+        {
+          "rect": [
+            278.1779703202122,
+            52.80456194919647,
+            4.263348885432866,
+            4.263348885432866
+          ],
+          "color": "#060606",
+          "alpha": 255
+        },
+        {
+          "rect": [
+            134.89201412768827,
+            52.80456194919647,
+            4.263348885432866,
+            4.263348885432866
+          ],
+          "color": "#060606",
+          "alpha": 255
+        }
+      ]
+    },
+    {
+      "at_ms": 333.3333333333333,
+      "markers": [
+        {
+          "rect": [
+            142.05184033177812,
+            341.37065837221354,
+            26.645930533955415,
+            6.3950233281493
+          ],
+          "color": "#727272",
+          "alpha": 255
+        },
+        {
+          "rect": [
+            251.83307413167444,
+            341.37065837221354,
+            26.645930533955415,
+            6.3950233281493
+          ],
+          "color": "#727272",
+          "alpha": 255
+        },
+        {
+          "rect": [
+            286.60124983347725,
+            52.80456194919647,
+            4.263348885432866,
+            4.263348885432866
+          ],
+          "color": "#060606",
+          "alpha": 255
+        },
+        {
+          "rect": [
+            126.46873461442318,
+            52.80456194919647,
+            4.263348885432866,
+            4.263348885432866
+          ],
+          "color": "#060606",
+          "alpha": 255
+        }
+      ]
+    },
+    {
+      "at_ms": 400.0,
+      "markers": [
+        {
+          "rect": [
+            142.05184033177812,
+            341.37065837221354,
+            9.165843487166189,
+            6.3950233281493
+          ],
+          "color": "#727272",
+          "alpha": 255
+        },
+        {
+          "rect": [
+            269.31316117846364,
+            341.37065837221354,
+            9.165843487166189,
+            6.3950233281493
+          ],
+          "color": "#727272",
+          "alpha": 255
+        },
+        {
+          "rect": [
+            289.4175007178639,
+            52.80456194919647,
+            4.263348885432866,
+            4.263348885432866
+          ],
+          "color": "#060606",
+          "alpha": 255
+        },
+        {
+          "rect": [
+            123.65248373003655,
+            52.80456194919647,
+            4.263348885432866,
+            4.263348885432866
+          ],
+          "color": "#060606",
+          "alpha": 255
+        }
+      ]
+    },
+    {
+      "at_ms": 450.0,
+      "markers": [
+        {
+          "rect": [
+            142.05184033177812,
+            341.37065836953803,
+            7.460860549507516,
+            6.3950233281493
+          ],
+          "color": "#727272",
+          "alpha": 255
+        },
+        {
+          "rect": [
+            271.01814411612236,
+            341.3706583762849,
+            7.460860549507516,
+            6.3950233281493
+          ],
+          "color": "#727272",
+          "alpha": 255
+        },
+        {
+          "rect": [
+            290.4312762004646,
+            52.80456194919647,
+            4.263348885432866,
+            4.263348885432866
+          ],
+          "color": "#060606",
+          "alpha": 255
+        },
+        {
+          "rect": [
+            122.63870824743586,
+            52.80456194919647,
+            4.263348885432866,
+            4.263348885432866
+          ],
+          "color": "#060606",
+          "alpha": 255
+        }
+      ]
+    },
+    {
+      "at_ms": 550.0,
+      "markers": [
+        {
+          "rect": [
+            142.05184033177812,
+            299.3437958202419,
+            7.460860549507516,
+            6.3950233281493
+          ],
+          "color": "#727272",
+          "alpha": 255
+        },
+        {
+          "rect": [
+            271.01814411612236,
+            405.32457964695305,
+            7.460860549507516,
+            6.3950233281493
+          ],
+          "color": "#727272",
+          "alpha": 255
+        },
+        {
+          "rect": [
+            290.7361327112493,
+            52.80456194919647,
+            4.263348885432866,
+            4.263348885432866
+          ],
+          "color": "#060606",
+          "alpha": 255
+        },
+        {
+          "rect": [
+            122.33385173665113,
+            52.80456194919647,
+            4.263348885432866,
+            4.263348885432866
+          ],
+          "color": "#060606",
+          "alpha": 255
+        }
+      ]
+    },
+    {
+      "at_ms": 650.0,
+      "markers": [
+        {
+          "rect": [
+            142.05184033177812,
+            283.0569652125148,
+            7.460860549507516,
+            6.3950233281493
+          ],
+          "color": "#727272",
+          "alpha": 255
+        },
+        {
+          "rect": [
+            271.01814411612236,
+            430.10888709349433,
+            7.460860549507516,
+            6.3950233281493
+          ],
+          "color": "#727272",
+          "alpha": 255
+        },
+        {
+          "rect": [
+            290.7361327112493,
+            52.80456194919647,
+            4.263348885432866,
+            4.263348885432866
+          ],
+          "color": "#060606",
+          "alpha": 255
+        },
+        {
+          "rect": [
+            122.33385173665113,
+            52.80456194919647,
+            4.263348885432866,
+            4.263348885432866
+          ],
+          "color": "#060606",
+          "alpha": 255
+        }
+      ]
+    },
+    {
+      "at_ms": 733.333333,
+      "markers": [
+        {
+          "rect": [
+            142.05184033177812,
+            280.1505043956873,
+            7.460860549507516,
+            6.3950233281493
+          ],
+          "color": "#727272",
+          "alpha": 255
+        },
+        {
+          "rect": [
+            271.01814411612236,
+            434.53176224953614,
+            7.460860549507516,
+            6.3950233281493
+          ],
+          "color": "#727272",
+          "alpha": 255
+        },
+        {
+          "rect": [
+            290.7361327112493,
+            52.80456194919647,
+            4.263348885432866,
+            4.263348885432866
+          ],
+          "color": "#060606",
+          "alpha": 255
+        },
+        {
+          "rect": [
+            122.33385173665113,
+            52.80456194919647,
+            4.263348885432866,
+            4.263348885432866
+          ],
+          "color": "#060606",
+          "alpha": 255
+        }
+      ]
+    },
+    {
+      "at_ms": 750.0,
+      "markers": [
+        {
+          "rect": [
+            142.05184033177812,
+            280.08501814411613,
+            7.460860549507516,
+            6.3950233281493
+          ],
+          "color": "#727272",
+          "alpha": 255
+        },
+        {
+          "rect": [
+            271.01814411612236,
+            434.63141524105754,
+            7.460860549507516,
+            6.3950233281493
+          ],
+          "color": "#727272",
+          "alpha": 255
+        },
+        {
+          "rect": [
+            290.7361327112493,
+            52.80456194919647,
+            4.263348885432866,
+            4.263348885432866
+          ],
+          "color": "#060606",
+          "alpha": 255
+        },
+        {
+          "rect": [
+            122.33385173665113,
+            52.80456194919647,
+            4.263348885432866,
+            4.263348885432866
+          ],
+          "color": "#060606",
+          "alpha": 255
+        }
+      ]
+    },
+    {
+      "at_ms": 850.0,
+      "markers": [
+        {
+          "rect": [
+            142.05184033177812,
+            280.08501814411613,
+            7.460860549507516,
+            6.3950233281493
+          ],
+          "color": "#727272",
+          "alpha": 255
+        },
+        {
+          "rect": [
+            271.01814411612236,
+            434.63141524105754,
+            7.460860549507516,
+            6.3950233281493
+          ],
+          "color": "#727272",
+          "alpha": 255
+        },
+        {
+          "rect": [
+            290.7361327112493,
+            52.80456194919647,
+            4.263348885432866,
+            4.263348885432866
+          ],
+          "color": "#060606",
+          "alpha": 255
+        },
+        {
+          "rect": [
+            122.33385173665113,
+            52.80456194919647,
+            4.263348885432866,
+            4.263348885432866
+          ],
+          "color": "#060606",
+          "alpha": 255
+        }
+      ]
+    }
+  ],
+  "plain_icon_alpha": [
+    {
+      "at_ms": 50.0,
+      "alpha": 0
+    },
+    {
+      "at_ms": 100.0,
+      "alpha": 0
+    },
+    {
+      "at_ms": 200.0,
+      "alpha": 0
+    },
+    {
+      "at_ms": 240.0,
+      "alpha": 0
+    },
+    {
+      "at_ms": 333.3333333333333,
+      "alpha": 0
+    },
+    {
+      "at_ms": 400.0,
+      "alpha": 0
+    },
+    {
+      "at_ms": 450.0,
+      "alpha": 0
+    },
+    {
+      "at_ms": 550.0,
+      "alpha": 0
+    },
+    {
+      "at_ms": 650.0,
+      "alpha": 0
+    },
+    {
+      "at_ms": 733.333333,
+      "alpha": 0
+    },
+    {
+      "at_ms": 750.0,
+      "alpha": 0
+    },
+    {
+      "at_ms": 850.0,
+      "alpha": 0
+    }
+  ],
+  "soft_mask_50ms_edge_center_rgb": [
+    226,
+    112
+  ],
+  "block_final_pixel_red": [
+    114,
+    114,
+    6,
+    6
+  ],
+  "canvas_scaling": [
+    {
+      "size": [
+        1000,
+        620
+      ],
+      "device_pixel_ratio": 1.0,
+      "scale": 0.5208333333333334
+    },
+    {
+      "size": [
+        1920,
+        1080
+      ],
+      "device_pixel_ratio": 1.0,
+      "scale": 1.0
+    },
+    {
+      "size": [
+        2560,
+        1440
+      ],
+      "device_pixel_ratio": 1.0,
+      "scale": 1.3333333333333333
+    }
+  ],
+  "fullscreen": {
+    "size": [
+      1920,
+      1080
+    ],
+    "scale": 1.0,
+    "device_pixel_ratio": 1.0
+  },
+  "background_frames": [
+    {
+      "event": "enter_movement",
+      "at_ms": 80.0,
+      "clip": "wiki_uideco_grouppanel_in",
+      "projection": [
+        960.0,
+        543.6603900922435,
+        0.9931389773631277,
+        1.0
+      ],
+      "deco_alpha": 0.087091198767478,
+      "bottom_alpha": 0.025878529192888036
+    },
+    {
+      "event": "enter_movement",
+      "at_ms": 250.0,
+      "clip": "wiki_uideco_grouppanel_in",
+      "projection": [
+        960.0,
+        595.5129063926744,
+        0.8959467986196819,
+        1.0000000000000002
+      ],
+      "deco_alpha": 0.5062500050291414,
+      "bottom_alpha": 0.21600000901222258
+    },
+    {
+      "event": "enter_movement",
+      "at_ms": 450.0,
+      "clip": "wiki_uideco_grouppanel_in",
+      "projection": [
+        960.0,
+        619.4600221967759,
+        0.8510604068747383,
+        1.0
+      ],
+      "deco_alpha": 0.6000000238418579,
+      "bottom_alpha": 0.5598720191831039
+    },
+    {
+      "event": "enter_movement",
+      "at_ms": 800.0,
+      "clip": "wiki_uideco_grouppanel_in",
+      "projection": [
+        960.0,
+        628.8687956870654,
+        0.8334246341086399,
+        1.0
+      ],
+      "deco_alpha": 0.6000000238418579,
+      "bottom_alpha": 0.9953280052742408
+    },
+    {
+      "event": "switch_module",
+      "at_ms": 50.0,
+      "clip": "wiki_uideco_grouppanel_in",
+      "projection": [
+        960.0,
+        628.9175189118077,
+        0.8333333074632621,
+        1.0
+      ],
+      "deco_alpha": 0.6000000238418579,
+      "bottom_alpha": 1.0
+    },
+    {
+      "event": "switch_module",
+      "at_ms": 120.0,
+      "clip": "wiki_uideco_grouppanel_in",
+      "projection": [
+        960.0,
+        628.9175189118077,
+        0.8333333074632621,
+        1.0
+      ],
+      "deco_alpha": 0.6000000238418579,
+      "bottom_alpha": 1.0
+    },
+    {
+      "event": "switch_module",
+      "at_ms": 220.0,
+      "clip": "wiki_uideco_grouppanel_in",
+      "projection": [
+        960.0,
+        628.9175189118077,
+        0.8333333074632621,
+        1.0
+      ],
+      "deco_alpha": 0.6000000238418579,
+      "bottom_alpha": 1.0
+    },
+    {
+      "event": "switch_module",
+      "at_ms": 340.0,
+      "clip": "wiki_uideco_grouppanel_in",
+      "projection": [
+        960.0,
+        628.9175189118077,
+        0.8333333074632621,
+        1.0
+      ],
+      "deco_alpha": 0.6000000238418579,
+      "bottom_alpha": 1.0
+    },
+    {
+      "event": "search_over_module",
+      "at_ms": 80.0,
+      "clip": "wiki_uideco_grouppanel_in",
+      "projection": [
+        960.0,
+        628.9175189118077,
+        0.8333333074632621,
+        1.0
+      ],
+      "deco_alpha": 0.6000000238418579,
+      "bottom_alpha": 1.0
+    },
+    {
+      "event": "search_over_module",
+      "at_ms": 250.0,
+      "clip": "wiki_uideco_grouppanel_in",
+      "projection": [
+        960.0,
+        628.9175189118077,
+        0.8333333074632621,
+        1.0
+      ],
+      "deco_alpha": 0.6000000238418579,
+      "bottom_alpha": 1.0
+    },
+    {
+      "event": "search_over_module",
+      "at_ms": 500.0,
+      "clip": "wiki_uideco_grouppanel_in",
+      "projection": [
+        960.0,
+        628.9175189118077,
+        0.8333333074632621,
+        1.0
+      ],
+      "deco_alpha": 0.6000000238418579,
+      "bottom_alpha": 1.0
+    },
+    {
+      "event": "search_return",
+      "at_ms": 80.0,
+      "clip": "wiki_uideco_grouppanel_in",
+      "projection": [
+        960.0,
+        628.9175189118077,
+        0.8333333074632621,
+        1.0
+      ],
+      "deco_alpha": 0.6000000238418579,
+      "bottom_alpha": 1.0
+    },
+    {
+      "event": "search_return",
+      "at_ms": 240.0,
+      "clip": "wiki_uideco_grouppanel_in",
+      "projection": [
+        960.0,
+        628.9175189118077,
+        0.8333333074632621,
+        1.0
+      ],
+      "deco_alpha": 0.6000000238418579,
+      "bottom_alpha": 1.0
+    },
+    {
+      "event": "category_return",
+      "at_ms": 80.0,
+      "clip": "wiki_uideco_grouppanel_out",
+      "projection": [
+        960.0,
+        625.2571288195644,
+        0.8401943301001347,
+        1.0
+      ],
+      "deco_alpha": 0.51290882507438,
+      "bottom_alpha": 0.8548480078220254
+    },
+    {
+      "event": "category_return",
+      "at_ms": 240.0,
+      "clip": "wiki_uideco_in",
+      "projection": [
+        960.0,
+        540.0,
+        1.0,
+        1.0
+      ],
+      "deco_alpha": 0.6000000238418579,
+      "bottom_alpha": 0.0
+    },
+    {
+      "event": "category_return",
+      "at_ms": 900.0,
+      "clip": "wiki_uideco_in",
+      "projection": [
+        960.0,
+        540.0,
+        1.0,
+        1.0
+      ],
+      "deco_alpha": 0.6000000238418579,
+      "bottom_alpha": 0.0
+    },
+    {
+      "event": "search_switch",
+      "at_ms": 50.0,
+      "clip": "wiki_uideco_in",
+      "projection": [
+        960.0,
+        540.0,
+        1.0,
+        1.0
+      ],
+      "deco_alpha": 0.6000000238418579,
+      "bottom_alpha": 0.0
+    },
+    {
+      "event": "search_switch",
+      "at_ms": 80.0,
+      "clip": "wiki_uideco_in",
+      "projection": [
+        960.0,
+        540.0,
+        1.0,
+        1.0
+      ],
+      "deco_alpha": 0.6000000238418579,
+      "bottom_alpha": 0.0
+    },
+    {
+      "event": "search_switch",
+      "at_ms": 160.0,
+      "clip": "wiki_uideco_in",
+      "projection": [
+        960.0,
+        540.0,
+        1.0,
+        1.0
+      ],
+      "deco_alpha": 0.6000000238418579,
+      "bottom_alpha": 0.0
+    },
+    {
+      "event": "search_switch",
+      "at_ms": 260.0,
+      "clip": "wiki_uideco_in",
+      "projection": [
+        960.0,
+        540.0,
+        1.0,
+        1.0
+      ],
+      "deco_alpha": 0.6000000238418579,
+      "bottom_alpha": 0.0
+    },
+    {
+      "event": "search_switch",
+      "at_ms": 380.0,
+      "clip": "wiki_uideco_in",
+      "projection": [
+        960.0,
+        540.0,
+        1.0,
+        1.0
+      ],
+      "deco_alpha": 0.6000000238418579,
+      "bottom_alpha": 0.0
+    }
+  ],
+  "group_page_has_no_home_text_stream": true,
+  "group_fullscreen": {
+    "size": [
+      1920,
+      1080
+    ],
+    "scale": 1.0
+  },
+  "breadcrumb_corner_inner_red": [
+    237,
+    57
+  ],
+  "gpu_frost_passes": 286,
+  "search_row_style": {
+    "selected_rgb": "#3f3f3f",
+    "normal_rgb": "#b2b2b2",
+    "hover_rgb": "#9e9e9e",
+    "radius": 2.6666666666666665
+  },
+  "search_hover_after_click_without_scroll": true,
+  "search_switch_frames": [
+    {
+      "at_ms": 50.0,
+      "titles": [
+        {
+          "text": "受击自动小陀螺",
+          "x": 1110.0,
+          "alpha": 0.7839933037757874
+        },
+        {
+          "text": "小陀螺",
+          "x": 1092.766553559772,
+          "alpha": 0.06074616685509682
+        }
+      ],
+      "detail_targets": [
+        "SpinMode"
+      ]
+    },
+    {
+      "at_ms": 80.0,
+      "titles": [
+        {
+          "text": "受击自动小陀螺",
+          "x": 1110.0,
+          "alpha": 0.529991626739502
+        },
+        {
+          "text": "小陀螺",
+          "x": 1099.3753997705642,
+          "alpha": 0.14515908062458038
+        }
+      ],
+      "detail_targets": [
+        "SpinMode"
+      ]
+    },
+    {
+      "at_ms": 160.0,
+      "titles": [
+        {
+          "text": "受击自动小陀螺",
+          "x": 1110.0,
+          "alpha": 0.004669260699301958
+        },
+        {
+          "text": "小陀螺",
+          "x": 1107.0543901687365,
+          "alpha": 0.47000840306282043
+        }
+      ],
+      "detail_targets": [
+        "SpinMode"
+      ]
+    },
+    {
+      "at_ms": 260.0,
+      "titles": [
+        {
+          "text": "小陀螺",
+          "x": 1109.6194002724267,
+          "alpha": 0.8760967254638672
+        }
+      ],
+      "detail_targets": [
+        "SpinMode"
+      ]
+    },
+    {
+      "at_ms": 380.0,
+      "titles": [
+        {
+          "text": "小陀螺",
+          "x": 1110.0,
+          "alpha": 1.0
+        }
+      ],
+      "detail_targets": [
+        "SpinMode"
+      ]
+    }
+  ],
+  "vertical_drag": {
+    "selected_unchanged": true,
+    "scroll": 100.0
+  },
+  "overscroll": [
+    {
+      "edge": "top",
+      "pull": -70.89514066496169,
+      "after_100ms": -28.783841823742343,
+      "settled": 0
+    },
+    {
+      "edge": "bottom",
+      "pull": 70.89514066496169,
+      "after_100ms": 28.783841823742343,
+      "settled": 0
+    }
+  ],
+  "search_frost_radius": 48.0,
+  "direct_entries": [
+    {
+      "module": "TacticalMap",
+      "category": "Strategy"
+    },
+    {
+      "module": "MatchReadiness",
+      "category": "System"
+    },
+    {
+      "module": "Scenario",
+      "category": "System"
+    }
+  ],
+  "terminal_exit_target": "escape_menu",
+  "escape_native": {
+    "ready": true,
+    "phase": 1,
+    "error": "",
+    "stats": {
+      "frames": 82.0,
+      "last_ms": 15.769799996633083,
+      "textures": 56.0,
+      "meshes": 57.0,
+      "owners": 1.0
+    },
+    "capture": "terminal_exit_native.png"
+  },
+  "modules": 74,
+  "category_layout": "left: category modules; right: selected module settings",
+  "source_game_bundles": 90,
+  "settings": 473,
+  "dpr": 1.0,
+  "gl": 4,
+  "gui_gpu_error": "",
+  "compositor_error": "",
+  "layout_ms": 1.5395999944303185,
+  "status": "PASS"
+}

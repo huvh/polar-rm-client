@@ -153,7 +153,8 @@ class Cs2Assets:
             washed = image.copy()
             p = QPainter(washed)
             try:
-                wash = QColor(color); wash.setAlpha(255)
+                wash = QColor(color)
+                wash.setAlpha(255)
                 p.setCompositionMode(QPainter.CompositionMode_Multiply)
                 p.fillRect(washed.rect(), wash)
                 p.setCompositionMode(QPainter.CompositionMode_DestinationIn)

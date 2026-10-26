@@ -458,10 +458,12 @@ class MinecraftCombatHudRenderer:
             mode=getattr(state,'match_mode','')
             if mode.startswith('RMUL'):
                 texts=[line for line in texts if not line.startswith(('§fBase:','§fPost:'))]
-            if mode=='RMUL1v1':texts=[line for line in texts if not line.startswith('§fGold:')]
+            if mode=='RMUL1v1':
+                texts=[line for line in texts if not line.startswith('§fGold:')]
             if mode=='RMUL3v3':
                 texts.insert(7,f"§fControl: §a{state.ally_victory_points} §7/ §c{state.enemy_victory_points}")
-            if mode=='RMUC7v7':texts.insert(7,'§fControl: §7AWAITING 2027 FEED')
+            if mode=='RMUC7v7':
+                texts.insert(7,'§fControl: §7AWAITING 2027 FEED')
             texts.insert(2,'§6RULES PREVIEW / WIRE LOCKED')
         return tuple((text,QColor("#ffffff")) for text in texts)
 

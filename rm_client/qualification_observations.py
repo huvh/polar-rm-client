@@ -53,12 +53,6 @@ def recovery_evidence(*, reconnect_count: int, baseline_reconnect_count: int,
     return _runtime_evidence("loss_recovery_test", passed)
 
 
-def hero_evidence(*, revision: int, baseline_revision: int, observed_at: float,
-                  baseline_at: float, deploy_mode: int) -> QualificationEvidence:
-    passed = revision >= baseline_revision + 2 and observed_at > baseline_at and deploy_mode == 0
-    return _runtime_evidence("hero_deploy_status_test", passed)
-
-
 def economy_evidence(*, succeeded: bool, request_is_mock: bool, request_at: float,
                      baseline_at: float, revision: int, baseline_revision: int,
                      transport_is_mock: bool) -> QualificationEvidence:

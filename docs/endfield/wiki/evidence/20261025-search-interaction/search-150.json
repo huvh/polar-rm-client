@@ -1,0 +1,26 @@
+{
+  "dpr": 1.5,
+  "scope": "actual Windows/OpenGL search, inert transport starts",
+  "clicks": [
+    {
+      "selected": "AutoSpinOnHit",
+      "hover_rgb": "#9e9e9e",
+      "scroll": 0
+    },
+    {
+      "selected": "SpinMode",
+      "hover_rgb": "#9e9e9e",
+      "scroll": 0
+    },
+    {
+      "selected": "AutoSpinOnHit",
+      "hover_rgb": "#9e9e9e",
+      "scroll": 0
+    }
+  ],
+  "status": "PASS",
+  "modules": 74,
+  "settings": 473,
+  "gui_gpu_error": "",
+  "compositor_error": ""
+}

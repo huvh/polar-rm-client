@@ -168,10 +168,12 @@ def match_mode_config(key: str, season=2026) -> MatchModeConfig:
     field=FieldLayout(key,rules.title+' · 规则图示（未标定）',
         rules.facts.get('field_asset') or illustrations.get(key,''),
         width,height,mirror_for_blue=False,zones=[],positions_calibrated=False)
-    enabled=set(base.enabled_modules);disabled=set(base.disabled_modules)
+    enabled=set(base.enabled_modules)
+    disabled=set(base.disabled_modules)
     for feature,module in (('hero_deploy','HeroLob'),('rune','EnergyAutoAim'),
                            ('base','BaseOutpostStatus'),('control_points','VictoryPointStatus')):
-        if rules.features.get(feature) is False:disabled.add(module)
+        if rules.features.get(feature) is False:
+            disabled.add(module)
         elif rules.features.get(feature) is True:
             disabled.discard(module)
             enabled.add(module)
@@ -210,7 +212,8 @@ class MatchModeManager:
         self._set_setting(registry, "MatchMode", "Mode", config.key)
         module=registry.get('MatchMode')
         setting=module.get_setting('Mode') if module else None
-        if setting is not None:setting.options=list(self.mode_keys)
+        if setting is not None:
+            setting.options=list(self.mode_keys)
         self._set_setting(registry, "TacticalMap", "Map Size", config.default_map_size)
         self._set_setting(registry, "TacticalMap", "Official Map", config.field.title)
         self._set_setting(registry, "HUD", "Right Display", config.default_right_display)

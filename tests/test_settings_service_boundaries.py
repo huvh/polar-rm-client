@@ -192,7 +192,7 @@ class SettingsServiceBoundaryTests(unittest.TestCase):
             assert host.registry.get("TacticalMap").keybind == "F10"
             host.auto_save_config.assert_called_once_with()
             dialog.show()
-            QTest.keyClick(dialog.canvas, Qt.Key.Key_F12)
+            QTest.keyClick(dialog.search, Qt.Key.Key_F12)
             host.backend.trigger_estop.assert_called_once_with()
             assert "rm_client.ui.cs2_settings_center" not in sys.modules
             dialog.hide()

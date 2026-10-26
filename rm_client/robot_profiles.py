@@ -78,7 +78,8 @@ def profiles_for_match(match_mode: str, *, season=2026) -> tuple[RobotProfile, .
 
 def profile_by_key(match_mode: str, key: str, *, season=2026) -> RobotProfile:
     profiles = profiles_for_match(match_mode,season=season)
-    if not profiles:raise ValueError(f'No reviewed roles for {season} {match_mode}')
+    if not profiles:
+        raise ValueError(f'No reviewed roles for {season} {match_mode}')
     return next((profile for profile in profiles if profile.key == key), profiles[0])
 
 
@@ -94,8 +95,10 @@ def resolve_performance(
     season=2026,
 ) -> RobotPerformance:
     year=validate_season(season)
-    if infantry_chassis is None:infantry_chassis='Health' if year==2027 else 'Power'
-    if infantry_shooter is None:infantry_shooter='Cooling' if year==2027 else 'Burst'
+    if infantry_chassis is None:
+        infantry_chassis='Health' if year==2027 else 'Power'
+    if infantry_shooter is None:
+        infantry_shooter='Cooling' if year==2027 else 'Burst'
     if year==2027:
         rules=competition_rules(2027,match_mode)
         if profile_key not in rules.performance:
@@ -118,8 +121,10 @@ def resolve_performance(
             values={name:rows[level-1] for name,rows in (*chassis.items(),*shooter.items())}
             values['projectile']='17mm'
         if profile_key=='Sentinel' and rules.facts.get('sentinel_control_modes'):
-            try:values=rules.facts['sentinel_control_modes'][sentinel_control]
-            except KeyError as error:raise ValueError('Unreviewed 2027 sentry control mode') from error
+            try:
+                values=rules.facts['sentinel_control_modes'][sentinel_control]
+            except KeyError as error:
+                raise ValueError('Unreviewed 2027 sentry control mode') from error
         required=('max_health','power_limit_w','heat_limit','cooling_rate','projectile')
         if values is None:
             return RobotPerformance(0,0,0,0,'None',False,2027,
@@ -128,7 +133,8 @@ def resolve_performance(
         # Installation/assembly must be an observation, not a legacy selector.
         known=all(values.get(name) is not None for name in relevant)
         note=('2027未配置发射机构；热量/冷却不适用' if values.get('projectile')=='None' else '')
-        if not known:note='仅2027已核实基础项；未核实值不可使用2026表填充'
+        if not known:
+            note='仅2027已核实基础项；未核实值不可使用2026表填充'
         ammo=rules.facts.get('initial_ammo',{}).get(profile_key)
         return RobotPerformance(*(values.get(name) or ("None" if name=='projectile' else 0) for name in required),known,2027,note,ammo)
     if match_mode == "RMUL3v3":

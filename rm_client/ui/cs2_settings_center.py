@@ -1,15 +1,13 @@
-"""Endfield settings presentation backed by actual RM client preferences.
+"""Endfield 设置中心，沿用既有偏好草稿、事务与输入安全服务。
 
-The historical module/API names stay compatible. Source art and scalar curves
-are data, never game code. Vehicle authorization switches are deliberately
-excluded: a preferences page must never act as an Arm shortcut.
+历史模块路径保留供旧调用者使用；表现层资源来自本机游戏只读导出。
 """
 from __future__ import annotations
 
 import logging
 
-from PySide6.QtCore import Qt, QEvent, QObject, QEventLoop, QTimer
-from PySide6.QtGui import QFont, QKeySequence, QShortcut
+from PySide6.QtCore import Qt, QEvent, QObject, QEventLoop
+from PySide6.QtGui import QFont, QKeySequence, QShortcut, QResizeEvent, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFormLayout, QGroupBox,
     QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPushButton, QScrollArea,
@@ -21,14 +19,13 @@ from ..configuration.registry import SettingId
 from ..configuration.transactions import ConfigurationApplyError, apply_configuration_transaction
 from ..emergency_actions import request_emergency_stop
 from ..model import CONTROL_SLOT_ORDER, build_default_registry, Setting
+from ..module_settings import CONTROL_BIND_OPTIONS
 from .jello_locale import module_label, option_label, setting_label
-from .endfield_settings_theme import (
-    EndfieldDialog, EndfieldCheckBox as QCheckBox, EndfieldComboBox as QComboBox,
-    EndfieldTabBar, EndfieldCloseButton, EndfieldActionButton, EndfieldRowsLayout, EndfieldSettingRow, EndfieldSectionHeader, EndfieldLoadBars, EndfieldPageTransition, settings_scale, apply_endfield_widgets,
-)
+from .endfield.settings.shell import EndfieldSettingsDialog as JelloDialog, apply_settings_widgets as apply_jello_widgets
+from .endfield.settings.widgets import EndfieldCheckBox as QCheckBox, EndfieldComboBox as QComboBox, SettingsTabBar, add_setting_row
 from .settings_preparation import SettingsBuildQueue
 from .preference_draft import PreferenceDraft
-from .jello_scroll import JelloScrollArea
+from .endfield.settings.scroll import EndfieldScrollArea as JelloScrollArea
 # Keep historical imports working while both dialogs use shared services.
 from .settings_application import (
     PAGES, settings_specs, preference_capabilities, validate_draft, apply_registry_draft,
@@ -89,20 +86,17 @@ class BindingControl(QWidget):
 class NumberControl(QWidget):
     def __init__(self, setting, parent=None):
         super().__init__(parent)
-        row = QVBoxLayout(self); row.setContentsMargins(0, 0, 0, 0); row.setSpacing(0)
+        row = QHBoxLayout(self); row.setContentsMargins(0, 0, 0, 0)
         self.spin = QDoubleSpinBox()
         self.spin.setRange(float(setting.min_value), float(setting.max_value))
         self.spin.setSingleStep(float(setting.step))
         self.spin.setDecimals(0 if setting.step >= 1 else 2)
         self.spin.setSuffix(setting.unit)
         self.spin.setValue(float(setting.value))
-        self.spin.setFixedWidth(70)
-        self.spin.setButtonSymbols(QDoubleSpinBox.ButtonSymbols.NoButtons)
-        self.spin.setStyleSheet("QDoubleSpinBox {background:transparent;border:0;padding:0;min-height:0;}")
+        self.spin.setMinimumWidth(110)
         self.slider = QSlider(Qt.Orientation.Horizontal)
         self.slider.setRange(0, 1000)
-        self.slider.setFixedHeight(14)
-        row.addWidget(self.spin,0,Qt.AlignmentFlag.AlignLeft); row.addWidget(self.slider,1)
+        row.addWidget(self.slider, 1); row.addWidget(self.spin)
         low, high = self.spin.minimum(), self.spin.maximum()
         def update_slider(value):
             self.slider.blockSignals(True)
@@ -121,7 +115,6 @@ class RegistrySettingsPage(JelloScrollArea):
     def __init__(self, host, page, defaults, *, deferred=False):
         super().__init__()
         self.host, self.page, self.defaults = host, page, defaults
-        self.theme_scale = settings_scale(host.width(),host.height())
         self.controls, self.toggle_controls, self.module_bind_controls = {}, {}, {}
         self.audio_controls = {}
         self._draft = PreferenceDraft()
@@ -129,8 +122,9 @@ class RegistrySettingsPage(JelloScrollArea):
         self.setWidgetResizable(True)
         self.content = QWidget(); self.setWidget(self.content)
         root = QVBoxLayout(self.content); root.setSpacing(22)
+        root.setContentsMargins(0,0,8,0)
         self.loading = QLabel("正在准备设置…")
-        root.addWidget(EndfieldSectionHeader(page)); root.addWidget(self.loading)
+        root.addWidget(self.loading)
         self.content.setEnabled(False)
         self.builder = SettingsBuildQueue(self, self._build_rows())
         self.builder.finished.connect(self._finish_build)
@@ -157,8 +151,8 @@ class RegistrySettingsPage(JelloScrollArea):
             from ..audio_preferences import current_audio
             from PySide6.QtMultimedia import QMediaDevices
             prefs = current_audio()
-            box = QGroupBox("音频输出"); apply_endfield_widgets(box, stylesheet=False); root.addWidget(box)
-            form = EndfieldRowsLayout(box, self.theme_scale); self.groups.append((box, []))
+            box = QGroupBox("音频输出"); apply_jello_widgets(box, stylesheet=False); root.addWidget(box)
+            form = QFormLayout(box); form.setSpacing(17); self.groups.append((box, []))
             yield
             device = QComboBox(); device.addItem("系统默认设备", "default")
             for item in QMediaDevices.audioOutputs(): device.addItem(item.description(), bytes(item.id()).hex())
@@ -177,8 +171,9 @@ class RegistrySettingsPage(JelloScrollArea):
         for module, settings, toggle in settings_specs(host.registry, page):
             title = module_label(module.name, True)
             if module.name == "RobotLink": title = "鼠标设置与驾驶键位"
-            box = QGroupBox(title); apply_endfield_widgets(box, stylesheet=False); root.addWidget(box)
-            form = EndfieldRowsLayout(box, self.theme_scale)
+            box = QGroupBox(title); apply_jello_widgets(box, stylesheet=False); root.addWidget(box)
+            form = QFormLayout(box); form.setSpacing(17)
+            form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
             self.groups.append((box, []))
             yield
             if toggle:
@@ -207,14 +202,14 @@ class RegistrySettingsPage(JelloScrollArea):
             from .jello_keybinds import open_keyboard_manager
             keyboard_button = QPushButton("Open Keybind Manager / 打开键盘绑定管理器")
             keyboard_button.clicked.connect(lambda: open_keyboard_manager(host,self))
-            apply_endfield_widgets(keyboard_button, stylesheet=False)
+            apply_jello_widgets(keyboard_button, stylesheet=False)
             root.insertWidget(0,keyboard_button)
             note = QLabel("驾驶键发送的仍是官方协议槽位；不会改固件。鼠标倍率只作用于本客户端输入，不修改NUC自瞄或DT7原始输入。\n"
                           "F7事件菜单、Esc菜单、F11全屏、F12急停、RightShift/Tab等界面保留键不能用作驾驶键。已有快捷键与驾驶键的历史重叠保留；新绑定会检查冲突。")
-            apply_endfield_widgets(note, stylesheet=False)
+            apply_jello_widgets(note, stylesheet=False)
             note.setWordWrap(True); root.insertWidget(0, note)
-            box = QGroupBox("模块快捷键"); apply_endfield_widgets(box, stylesheet=False); root.addWidget(box)
-            form = EndfieldRowsLayout(box, self.theme_scale); self.groups.append((box, []))
+            box = QGroupBox("模块快捷键"); apply_jello_widgets(box, stylesheet=False); root.addWidget(box)
+            form = QFormLayout(box); form.setSpacing(15); self.groups.append((box, []))
             yield
             for module in host.registry.modules:
                 if module.name in ("ClickGui", "MatchReadiness"): continue
@@ -226,13 +221,10 @@ class RegistrySettingsPage(JelloScrollArea):
         yield
 
     def add_row(self, form, module, title, widget, original=""):
-        scale = self.theme_scale
-        label = QLabel(title); label.setMinimumWidth(round(620*scale)); label.setWordWrap(True)
-        widget.setMaximumWidth(round(515*scale))
-        widget.setMinimumHeight(round(72*scale))
-        apply_endfield_widgets(label, stylesheet=False)
-        apply_endfield_widgets(widget, stylesheet=False)
-        form.addRow(label, widget)
+        label = QLabel(title)
+        apply_jello_widgets(label, stylesheet=False)
+        apply_jello_widgets(widget, stylesheet=False)
+        add_setting_row(form, label, widget)
         record = (label, widget, f"{module} {title} {original}".casefold())
         self.search_rows.append(record); self.groups[-1][1].append(record)
 
@@ -240,16 +232,16 @@ class RegistrySettingsPage(JelloScrollArea):
         query = query.strip().casefold()
         self._query = query
         from ..rules.presentation import visible_rule_settings
-        unavailable=set()
-        for (name,key),widget in self.controls.items():
-            module=self.host.registry.get(name)
-            if module and key not in {item.name for item in visible_rule_settings(self.host.registry,module)}:
+        unavailable = set()
+        for (name, key), widget in self.controls.items():
+            module = self.host.registry.get(name)
+            if module and key not in {item.name for item in visible_rule_settings(self.host.registry, module)}:
                 unavailable.add(widget)
         for label, widget, text in self.search_rows:
             visible = (not query or query in text) and widget not in unavailable
+            label.parentWidget().setVisible(visible)
             if label.isHidden() == visible: label.setVisible(visible)
             if widget.isHidden() == visible: widget.setVisible(visible)
-            if isinstance(widget.parentWidget(), EndfieldSettingRow): widget.parentWidget().setVisible(visible)
         for group, rows in self.groups:
             visible = not query or any(query in text for _, _, text in rows)
             if group.isHidden() == visible: group.setVisible(visible)
@@ -306,18 +298,19 @@ class RegistrySettingsPage(JelloScrollArea):
                     if live is None:
                         continue
                     value = live.value
-                    if isinstance(widget,QComboBox):
-                        choices=[widget.itemData(i) for i in range(widget.count())]
-                        if choices!=list(live.options):
+                    if isinstance(widget, QComboBox):
+                        choices = [widget.itemData(i) for i in range(widget.count())]
+                        if choices != list(live.options):
                             widget.blockSignals(True)
                             widget.clear()
-                            for option in live.options:widget.addItem(option_label(option,True),option)
+                            for option in live.options:
+                                widget.addItem(option_label(option, True), option)
                             widget.blockSignals(False)
                 else:
                     value = module.enabled if kind == "toggle" else module.keybind
             self._set_widget_value(widget, value)
             self._draft.follow_live(key, self._widget_value(widget))
-        self.filter(getattr(self,'_query',''))
+        self.filter(getattr(self, "_query", ""))
 
     def apply_draft(self):
         if not self.builder.ready:
@@ -380,7 +373,7 @@ class CrosshairSettingsPage(JelloScrollArea):
         # to this page even if it is closed before the attachment step.
         self.destroyed.connect(self.editor.deleteLater)
         yield True
-        apply_endfield_widgets(self.editor)
+        apply_jello_widgets(self.editor)
         yield True
         self.setWidget(self.editor)
         self.editor.show()
@@ -403,32 +396,8 @@ class CrosshairSettingsPage(JelloScrollArea):
             self.editor.display_scale.setValue(default_scale)
 
 
-class SettingsDialog(EndfieldDialog):
-    """Client-modal input without disabling the host's native close button.
-
-    Keep the existing synchronous caller/finally contract, but do not use
-    QDialog.exec(): its system modality disables the owner's title-bar X.
-    This local loop owns no devices; an admitted host shutdown ends it before
-    retiring the host, even while the search field owns focus or IME input.
-    """
-    def __init__(self,host):
-        super().__init__(host)
-        self._host_geometry_timer = QTimer(self)
-        self._host_geometry_timer.setSingleShot(True)
-        self._host_geometry_timer.timeout.connect(self._follow_host_geometry)
-        host.installEventFilter(self)
-
-    def eventFilter(self,watched,event):
-        if watched is self.parentWidget() and event.type() in (QEvent.Type.Resize,QEvent.Type.Move,QEvent.Type.WindowStateChange):
-            if self.isVisible():self._host_geometry_timer.start(0)
-        return super().eventFilter(watched,event)
-
-    def _follow_host_geometry(self):
-        host=self.parentWidget()
-        if not self.isVisible() or bool(getattr(getattr(host,'_window_lifecycle',None),'closing',False)):
-            return
-        self.resize(host.size());self.move(host.mapToGlobal(host.rect().topLeft()))
-
+class SettingsDialog(JelloDialog):
+    """由客户端输入锁维持设置会话，宿主标题栏关闭仍交给正常关机流程。"""
     def exec(self):
         host = self.parentWidget()
         if bool(getattr(getattr(host, "_window_lifecycle", None), "closing", False)):
@@ -439,8 +408,6 @@ class SettingsDialog(EndfieldDialog):
         try:
             self.setWindowModality(Qt.WindowModality.NonModal)
             self.show()
-            # A synchronous Show callback can already admit host shutdown.
-            # quit() before exec() does not latch a future QEventLoop exit.
             if self.isVisible():
                 loop.exec()
             return self.result()
@@ -451,11 +418,10 @@ class SettingsDialog(EndfieldDialog):
             loop.deleteLater()
 
     def close_for_shutdown(self):
-        # Only called AFTER the host's close/save admission. Ordinary Return /
-        # Esc still uses the authored exit; app exit must not wait on that
-        # animation or leave a settings window keeping the process alive.
-        self._transition_timer.stop()
-        self._host_geometry_timer.stop()
+        """宿主已准许关机后，立即结束会话，跳过普通返回的退场动画。"""
+        self._timer.stop()
+        self._resize_timer.stop()
+        self._enter_pending = False
         errors = []
         for builder in self.findChildren(SettingsBuildQueue):
             try:
@@ -466,67 +432,36 @@ class SettingsDialog(EndfieldDialog):
         if errors:
             raise errors[0]
 
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        if hasattr(self, "tabs"):
-            self._resize_theme()
-
-    def _resize_theme(self):
-        self.theme_scale = settings_scale(self.width(),self.height())
-        self.tabs.tabBar().scale = self.theme_scale
-        self.tabs.tabBar().updateGeometry()
-        self.panel.layout().setContentsMargins(0,0,0,round(65*self.theme_scale))
-        apply_endfield_widgets(self, scale=self.theme_scale)
-        for page in self.pages.values():
-            page.theme_scale=self.theme_scale
-            page.content.setMaximumWidth(16777215)
-            page.content.layout().setContentsMargins(round(159*self.theme_scale), round(62*self.theme_scale),round(157*self.theme_scale),0)
-            page.setAlignment(Qt.AlignmentFlag.AlignTop)
-            for label, widget, _ in page.search_rows:
-                label.setMinimumWidth(0)
-                widget.setMaximumWidth(round(515*self.theme_scale))
-                widget.setMinimumHeight(round(72*self.theme_scale))
-        video = self.tabs.widget(0)
-        video.layout().setContentsMargins(round(159*self.theme_scale),round(24*self.theme_scale),round(157*self.theme_scale),0)
-        for widget in video.controls.values():
-            widget.setMaximumWidth(round(515*self.theme_scale))
-            widget.setMinimumHeight(round(72*self.theme_scale))
-        self.tabs.cornerWidget(Qt.Corner.TopRightCorner).setFixedSize(round(78*self.theme_scale),round(78*self.theme_scale))
-        self.tabs.cornerWidget(Qt.Corner.TopLeftCorner).setContentsMargins(round(65*self.theme_scale),0,0,0)
-        for row in self.findChildren(EndfieldSettingRow):
-            row.scale=self.theme_scale
-            row.setFixedHeight(round(130*self.theme_scale))
-        for button in (self.reset_button,self.apply_button):
-            button.setFixedSize(round(402*self.theme_scale),round(96*self.theme_scale))
-        self.section_label.hide()
-        for header in self.findChildren(EndfieldSectionHeader):
-            header.scale=self.theme_scale;header.setFixedHeight(round(62*self.theme_scale))
-        for load in self.findChildren(EndfieldLoadBars):
-            load.scale=self.theme_scale;load.setFixedHeight(round(164*self.theme_scale))
-        for layout in self.findChildren(EndfieldRowsLayout):layout.scale=self.theme_scale
-
 
 def build_settings_center(host):
     """Non-modal construction for visual/regression tests; open owns input lock."""
     from .cs2_video_settings import open_video_settings
     dialog = SettingsDialog(host)
     try:
-        dialog.setWindowTitle("POLAR · 终末地设置")
-        dialog.setObjectName("JelloSettingsCenter")  # Stable automation identity, not visual branding.
-        dialog.setProperty("presentationTheme", "Endfield")
+        dialog.setWindowTitle("POLAR · Endfield 设置")
+        dialog.setObjectName("JelloSettingsCenter")  # 稳定的历史对象ID，供已有启动入口使用。
+        screen = host.screen()
+        available = screen.availableGeometry() if screen else host.rect()
+        dialog.resize(max(720, host.width()), max(540, host.height()))
         dialog.setMinimumSize(720, 540)
-        dialog.resize(host.size())
-        dialog.move(host.mapToGlobal(host.rect().topLeft()))
+        center = host.mapToGlobal(host.rect().center())
+        dialog.move(max(available.left(), min(center.x() - dialog.width() // 2, available.right() - dialog.width())),
+                    max(available.top(), min(center.y() - dialog.height() // 2, available.bottom() - dialog.height())))
         root = dialog.panel.layout()
-        title = QLabel("设置"); title.setMinimumWidth(150)
+        dialog.heading = QLabel("//设置", dialog.panel)
+        dialog.close_button = QPushButton(dialog.panel)
+        from .endfield.settings.resources import ASSETS
+        from PySide6.QtCore import QSize
+        dialog.close_button.setObjectName("EndfieldSettingsClose")
+        dialog.close_button.setIcon(QIcon(str(ASSETS / "close.png")))
+        dialog.close_button.setIconSize(QSize(40,40))
+        dialog.close_button.setAccessibleName("关闭设置")
+        dialog.close_button.setToolTip("返回 · Esc")
+        dialog.close_button.clicked.connect(dialog.reject)
         search = QLineEdit(); search.setPlaceholderText("搜索鼠标、键位、声音、HUD…")
-        search.setMaximumWidth(370); search.hide()
+        search.setMaximumWidth(370)
         tabs = QTabWidget(); tabs.setObjectName("SettingsTabs"); root.addWidget(tabs, 1)
-        tabs.setTabBar(EndfieldTabBar(tabs))
-        tabs.setCornerWidget(title, Qt.Corner.TopLeftCorner)
-        close = EndfieldCloseButton(); close.setToolTip("Esc 返回")
-        close.setFixedWidth(58); close.clicked.connect(dialog.reject)
-        tabs.setCornerWidget(close, Qt.Corner.TopRightCorner)
+        tabs.setTabBar(SettingsTabBar(tabs))
         video = open_video_settings(host, embedded=True); tabs.addTab(video, "视频")
         defaults = build_default_registry()
         # Lightweight shells preserve tab identity and drafts. Only the selected
@@ -537,22 +472,28 @@ def build_settings_center(host):
             pages[page] = widget; tabs.addTab(widget, page)
         crosshair_scroll = CrosshairSettingsPage(host)
         tabs.insertTab(4, crosshair_scroll, "准星")
+        for index in range(tabs.count()):
+            tabs.setTabToolTip(index, tabs.tabText(index))
+            tabs.tabBar().setAccessibleName("设置分类 · Q / E 切换")
         deferred_pages = (*pages.values(), crosshair_scroll)
         search.textChanged.connect(lambda text: [page.filter(text) for page in pages.values()])
         status = QLabel("F12 急停始终有效 · 设置不暂停裁判监测 · 返回后不会自动恢复操控")
-        status.setWordWrap(True); root.addWidget(status); status.hide()
+        status.setProperty("hint",True)
+        status.setWordWrap(True)
+        info = QHBoxLayout(); info.addWidget(status, 1); info.addWidget(search); root.addLayout(info)
         row = QHBoxLayout(); root.addLayout(row)
-        reset = EndfieldActionButton("恢复默认设置"); row.addStretch(); row.addWidget(reset); row.addWidget(search)
-        apply = EndfieldActionButton("保存设置"); back = QPushButton("返回")
+        reset_hint = QLabel("重置当前分类设置"); row.addWidget(reset_hint); row.addStretch()
+        reset = QPushButton("重置设置  ⟳"); row.addWidget(reset)
+        apply = QPushButton("应用当前页"); back = QPushButton("返回")
         apply.setProperty("primary",True)
-        row.addWidget(apply); back.hide()
+        row.addWidget(apply); row.addWidget(back)
         def apply_current():
             widget = tabs.currentWidget()
             try:
                 widget.apply_draft()
-                status.setText("当前页已应用；操控保持锁定，重新驾驶前需人工确认。视频重启项另有标注。"); status.show()
+                status.setText("当前页已应用；操控保持锁定，重新驾驶前需人工确认。视频重启项另有标注。")
             except (OSError, ValueError, TypeError) as exc:
-                status.setText("未完整应用：" + str(exc)); status.show()
+                status.setText("未完整应用：" + str(exc))
         def reset_current():
             widget = tabs.currentWidget()
             if QMessageBox.question(dialog, "恢复默认", "只恢复当前页的编辑值，点击应用后才生效。继续？") == QMessageBox.StandardButton.Yes:
@@ -568,9 +509,7 @@ def build_settings_center(host):
             ready = builder is None or builder.ready
             apply.setEnabled(ready); reset.setEnabled(ready)
         tabs.currentChanged.connect(current_changed)
-        dialog.page_transition = EndfieldPageTransition(dialog)
-        tabs.currentChanged.connect(lambda _: dialog.page_transition.start(tabs.currentWidget()))
-        dialog.finished.connect(dialog.page_transition.cancel)
+        tabs.currentChanged.connect(dialog.animate_page)
         for page in deferred_pages:
             page.builder.finished.connect(current_changed)
             dialog.finished.connect(page.builder.cancel)
@@ -578,12 +517,12 @@ def build_settings_center(host):
 
         dialog.search, dialog.status, dialog.apply_button = search, status, apply
         dialog.reset_button = reset
-        dialog.find_shortcut = QShortcut(QKeySequence("Ctrl+F"), dialog)
-        dialog.find_shortcut.activated.connect(lambda: (search.show(), search.setFocus()))
-        dialog.section_label = QLabel("性能与画面", dialog.panel)
-        dialog.section_label.setStyleSheet("color:#fff100;background:transparent;")
-        tabs.currentChanged.connect(lambda i: dialog.section_label.setText(tabs.tabText(i)))
-        dialog._resize_theme()
+        dialog.install_header()
+        apply_jello_widgets(dialog)
+        for button in dialog.findChildren(QPushButton):
+            button.setAutoDefault(False)
+            button.setDefault(False)
+        dialog.apply_layout_scale()
         dialog.estop_shortcut = install_estop_shortcut(dialog, host)
         return dialog
     except Exception as error:
@@ -608,8 +547,6 @@ def open_settings_center(host):
     if existing is not None:
         existing.raise_()
         existing.activateWindow()
-        return
-    if bool(getattr(getattr(host, "_window_lifecycle", None), "closing", False)):
         return
     host.backend.lock_control("settings opened")
     host.control.release_all(host.state, host.registry)

@@ -6,7 +6,8 @@ def visible_rule_settings(registry,module):
     match=registry.get('MatchMode')
     setting=match.get_setting('Season') if match else None
     season=validate_season(setting.value if setting else 2026)
-    if season!=2027 or module.name!='RobotProfile':return module.settings
+    if season!=2027 or module.name!='RobotProfile':
+        return module.settings
     mode=match.get_setting('Mode')
     role=module.get_setting('Role')
     role=str(role.value) if role else ''
@@ -19,7 +20,8 @@ def visible_rule_settings(registry,module):
         rules=competition_rules(2027,mode.value)
         if role.startswith('Infantry') and rules.facts.get('infantry_levels'):
             allowed.update({'Level','Infantry Chassis','Infantry Shooter'})
-        if role=='Sentinel' and rules.facts.get('sentinel_control_modes'):allowed.add('Sentinel Control')
+        if role=='Sentinel' and rules.facts.get('sentinel_control_modes'):
+            allowed.add('Sentinel Control')
     return [item for item in module.settings if item.name in allowed]
 
 

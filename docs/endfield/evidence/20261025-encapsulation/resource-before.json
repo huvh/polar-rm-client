@@ -1,0 +1,1234 @@
+{
+  "rm_client/ui/endfield_wiki/assets/back.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/back.png",
+    "sha256": "7afe5cb5a6097ef166b96f1e6c2141a1513cb43d083baf5e4bb98d472b87f7ff"
+  },
+  "rm_client/ui/endfield_wiki/assets/background.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/background.png",
+    "sha256": "775b6a1fa549b3165ddce2d04735ac0ca7b92a488b3966d580086a4b42c893d0"
+  },
+  "rm_client/ui/endfield_wiki/assets/chevron.svg": {
+    "to": "rm_client/ui/endfield/wiki/assets/chevron.svg",
+    "sha256": "69d9ca2b7f8e5a15b24abf141e0157532d84438cb5c0f74679107210f032d902"
+  },
+  "rm_client/ui/endfield_wiki/assets/close.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/close.png",
+    "sha256": "3ae945fe5ad24f7d06210aeac689a51b518228e2b4561e6083b1474faace8eb4"
+  },
+  "rm_client/ui/endfield_wiki/assets/Combat.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/Combat.png",
+    "sha256": "3b0c903306c5702a7f914577aa19103c44b30ad24b4bbf8fb086aaf52969143d"
+  },
+  "rm_client/ui/endfield_wiki/assets/CombatDeco.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/CombatDeco.png",
+    "sha256": "09237d89042bb67e87e19c7b46bb7e83ffb434e3d620dc41eb97c993710a8724"
+  },
+  "rm_client/ui/endfield_wiki/assets/CombatFlash.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/CombatFlash.png",
+    "sha256": "44b6cc6633452d26659aad5cab95ae99282f38054086fb5bde8cbc6444d34763"
+  },
+  "rm_client/ui/endfield_wiki/assets/CombatGrid.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/CombatGrid.png",
+    "sha256": "18d4702968216bf8bc8eddfcdb2117376518e91ab66ee37958fb585e68eba4dc"
+  },
+  "rm_client/ui/endfield_wiki/assets/CombatSelected.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/CombatSelected.png",
+    "sha256": "bcf088d94594790cf19e3d5c997f1516900cf14aaac0a8df0932cad4b8812380"
+  },
+  "rm_client/ui/endfield_wiki/assets/folder.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/folder.png",
+    "sha256": "4c2ece8cdbea132902291305bbff0372745dd576d5c3fb98c5f5ed62e351850f"
+  },
+  "rm_client/ui/endfield_wiki/assets/home_blackmask.svg": {
+    "to": "rm_client/ui/endfield/wiki/assets/home_blackmask.svg",
+    "sha256": "415816c9f8a40505afd3b8dad871e4e895d8b2575864c0a44a21ab89557e9f73"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_2362060993574631798.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_2362060993574631798.png",
+    "sha256": "b57d3580ca6b0d4ab17c233498f790429420c992c8664eb53557f0b889a43d84"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_3245403157506364159.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_3245403157506364159.png",
+    "sha256": "9fbe0ccef746f5f90295919e88307e1df03cfbc48367c391adad364fec551e1f"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_3245403157506364159_00.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_3245403157506364159_00.png",
+    "sha256": "be02c150551ab45c1b17b45ec91e053557941021a4761428e8959e499dd25cf1"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_3245403157506364159_01.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_3245403157506364159_01.png",
+    "sha256": "b80ad65af18e7e47b69a6ddc20508a97531b0eeb4e31ab3dbd1d93b29a20963e"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_3245403157506364159_02.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_3245403157506364159_02.png",
+    "sha256": "abc3d9e1dbf915e969652b4df2981ae164335a153add980ca940abe0abc617a4"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_3245403157506364159_10.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_3245403157506364159_10.png",
+    "sha256": "d8044a3923d288e7284cd8c339e22f4de63bc7658559f64b2728670e5d1550d3"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_3245403157506364159_11.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_3245403157506364159_11.png",
+    "sha256": "e44fe88396070626b1e73ee3f820dad230f9b084d6a64c4dfc54d4cd60b22056"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_3245403157506364159_12.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_3245403157506364159_12.png",
+    "sha256": "5c7d8a27acc17c29a9ddc4ecd01fc1b0a01cceaca8f496fc5e1ddf27ce17ec55"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_3245403157506364159_20.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_3245403157506364159_20.png",
+    "sha256": "a3c265e295073f5fdecd9d38ede73667a684ce7a37d763416e97bb71658caeb0"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_3245403157506364159_21.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_3245403157506364159_21.png",
+    "sha256": "71c61d5ad7957cafd2a9538a0ca212deb79e5c98ce1a852d7a6e608860d9536c"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_3245403157506364159_22.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_3245403157506364159_22.png",
+    "sha256": "d443f7478e9af63ec9311264ff3d6ffb002a8030d2574e65d4ee6ff6b26e1550"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_3621961782078699894.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_3621961782078699894.png",
+    "sha256": "3cb16728b2e476db32de03bb4a50fcac88fb628c28bc6b18d9085e9aa69bc9d8"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_4266081714907267545.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_4266081714907267545.png",
+    "sha256": "b2456adc1298cdfcbef7cd347617535e8e8a6b3e94dd5e2bbb48dc1fcc9975ff"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_6138533081307049689.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_6138533081307049689.png",
+    "sha256": "f4229ab871e103b04d627f1b41c7f3ae569b2f326c0f3a671001e8a8633e067c"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_6221897133431460607.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_6221897133431460607.png",
+    "sha256": "56e85bd6046566fe880d446ec7d358a12ee36679737deec13fd4c2b547b8a843"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_6221897133431460607_00.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_6221897133431460607_00.png",
+    "sha256": "8ac699dd6c4bd0604b4023a2c6a303b9b74590ea048e13aeda3a3272a732ce74"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_6221897133431460607_01.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_6221897133431460607_01.png",
+    "sha256": "c42d843878da6c834aeb510212e38164a524834eec09dc7cc8b469e30793993b"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_6221897133431460607_02.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_6221897133431460607_02.png",
+    "sha256": "056ce7e7ec297c400a2a16c3b8e0fef19a192e1c5350c6deb54e4a8505abf67b"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_6221897133431460607_10.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_6221897133431460607_10.png",
+    "sha256": "a49801c0c03ef2d2f77b5c4c295786375206a5f4bbdee5eb2a6827bbff9351f8"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_6221897133431460607_11.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_6221897133431460607_11.png",
+    "sha256": "637304643a1b6fdb33c5e7260be4361b03977f813ff189bfd7ad1de3ea2bf889"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_6221897133431460607_12.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_6221897133431460607_12.png",
+    "sha256": "3e37c532f4e1757bd074d4ef77a3dad6234107fcde84a92a06355df115e729af"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_6221897133431460607_20.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_6221897133431460607_20.png",
+    "sha256": "b42749e3c02842e79573396e8d3a9983203c04a7f093e1c6cebd388e837bc493"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_6221897133431460607_21.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_6221897133431460607_21.png",
+    "sha256": "f53dcb6c753d6c58e66daed624106376da67da57c99d94f03cad63dc0c24a9cc"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_6221897133431460607_22.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_6221897133431460607_22.png",
+    "sha256": "4a52e08e7f16fcfbc21626e5379c509c2f5dbdf5f6384c718dca8ad8ae161cd9"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_6919589133121176025.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_6919589133121176025.png",
+    "sha256": "508e92238640e05034d4f6ac7d906a3288e82dbe047b7e8f55ff4d993a7523ef"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_6919589133121176025_00.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_6919589133121176025_00.png",
+    "sha256": "d5a51b6aed15684ec8c123e30fe5703155359d6543b6d7b47cb5766ef44939de"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_6919589133121176025_01.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_6919589133121176025_01.png",
+    "sha256": "f9cd14267465cf42282993d2aa8e6cdae13b26b561f38ae38d33358f832e7771"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_6919589133121176025_02.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_6919589133121176025_02.png",
+    "sha256": "d5a51b6aed15684ec8c123e30fe5703155359d6543b6d7b47cb5766ef44939de"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_6919589133121176025_10.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_6919589133121176025_10.png",
+    "sha256": "5d36521f8bb3c67bf34e967676d29e3d2bd504f4e80ef55d06f3d010b4cfd879"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_6919589133121176025_11.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_6919589133121176025_11.png",
+    "sha256": "803f3b73e9e4960c1b25d25b1dcb493de6cb51a001fbcc7f604e4dfe62c8c26e"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_6919589133121176025_12.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_6919589133121176025_12.png",
+    "sha256": "5d36521f8bb3c67bf34e967676d29e3d2bd504f4e80ef55d06f3d010b4cfd879"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_6919589133121176025_20.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_6919589133121176025_20.png",
+    "sha256": "d5a51b6aed15684ec8c123e30fe5703155359d6543b6d7b47cb5766ef44939de"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_6919589133121176025_21.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_6919589133121176025_21.png",
+    "sha256": "f9cd14267465cf42282993d2aa8e6cdae13b26b561f38ae38d33358f832e7771"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_6919589133121176025_22.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_6919589133121176025_22.png",
+    "sha256": "d5a51b6aed15684ec8c123e30fe5703155359d6543b6d7b47cb5766ef44939de"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_7100914836220351231.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_7100914836220351231.png",
+    "sha256": "f40f3b69b9392a64d7cc475947314fb6c0b1525be41c21fe1414b13db81e22eb"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_7237588209860362713.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_7237588209860362713.png",
+    "sha256": "c6c044292dc73b75a458ea7be4f188d36b82d1d8df940f6a0af4ae122d096e93"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_7260221034527420121.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_7260221034527420121.png",
+    "sha256": "f4b003410705ec1bdbad39853afedc991687c1e7803e38480451c297cebd8381"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_7541986568038728153.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_7541986568038728153.png",
+    "sha256": "12651118cf6a6b6a560be28646ffa17e0fcec1fdbfb9709a9e2db1d4ddd82846"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_7772655589163495129.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_7772655589163495129.png",
+    "sha256": "966f4c471135e2d9509cd5473b1c0e086d0094cb08f66934f3f309013b809df5"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_81881175782212057.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_81881175782212057.png",
+    "sha256": "1c474811a006a1fe814c12c4019df7187f48a98ffe956cb3eca6a056937e6b4e"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_8977526844047954687.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_8977526844047954687.png",
+    "sha256": "ec1bef9d6fd8d89a3816bd06a7ffe0940f713b85e6a6d19386064dc2fe5e6238"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_8977526844047954687_00.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_8977526844047954687_00.png",
+    "sha256": "9002e58571af28b07574bd1ff62819a98315a6c8842e1c9769f958b4eb9be8d2"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_8977526844047954687_01.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_8977526844047954687_01.png",
+    "sha256": "731432cbe50aec86bf4baa3cf8c6586800df94ca3f3e899a44dbb11076e6dfe6"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_8977526844047954687_02.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_8977526844047954687_02.png",
+    "sha256": "3ab0eade4ccd221b29d053c5ee2e4265a8e1701e2366f8450e420361a7004721"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_8977526844047954687_10.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_8977526844047954687_10.png",
+    "sha256": "c60e2a990210c10c4968e369ecc788f77e8ef70b1272fa0907cffeb4d9fad7ab"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_8977526844047954687_11.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_8977526844047954687_11.png",
+    "sha256": "e2719552d5c97f5279c1da9f4a1663f7a2c0f309d488a1a2b3a964c1174cb8d1"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_8977526844047954687_12.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_8977526844047954687_12.png",
+    "sha256": "9b0d07b16b0ec537d00d828f09a1f4abe7561516b0d103b3a6dceece5110848f"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_8977526844047954687_20.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_8977526844047954687_20.png",
+    "sha256": "02d9fbdc348187e5f3e52a72030e1e764fa0bc7d75178a7b4cb040cfa9cd13b8"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_8977526844047954687_21.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_8977526844047954687_21.png",
+    "sha256": "e593b26f4bfa7eeff5a7bd2ce93a7f5b960a2c76369b2cb71e5a911f0c2a3d60"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_8977526844047954687_22.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_8977526844047954687_22.png",
+    "sha256": "0bb100e0a0a3b55f5fb24b5b64d4969a8bbdd4d865400e86f7e2bc0cbae426bc"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_n2271108492306083073.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_n2271108492306083073.png",
+    "sha256": "335f5bf2061f878604c78cb1bc3f6249ec6488a3e17722716d58a48576ade9fd"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_n2749888157589934375.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_n2749888157589934375.png",
+    "sha256": "2e876dc243488c152dc53a74fa28b460354c9081f64227ca88d44eaed6e2d213"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_n48604112704302337.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_n48604112704302337.png",
+    "sha256": "6c96a2b7db45bf785323f4400c9bd315c34b6981e7578c27cd55cc415bbff84d"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_n6343399618886731402.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_n6343399618886731402.png",
+    "sha256": "4da97b08c82d707e5847a9fcd8ebc045a2d946ab46a1758f30c07d1dc892d432"
+  },
+  "rm_client/ui/endfield_wiki/assets/layer_n7952900164215946791.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/layer_n7952900164215946791.png",
+    "sha256": "69ecbe832f066e7b664feb37ccc626e85ebf53c61b6b0492c55bb732e1b1d5f4"
+  },
+  "rm_client/ui/endfield_wiki/assets/layout.json": {
+    "to": "rm_client/ui/endfield/wiki/assets/layout.json",
+    "sha256": "b8dca86e01496b24720f8d26d568bf346ddf6108ed3bb328e6002fe8eb97ef4c"
+  },
+  "rm_client/ui/endfield_wiki/assets/line.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/line.png",
+    "sha256": "9d3b26c37a04407ca0e5176657b2e1676b2b5d447ac0fd4d7ab5c84f6f330dd4"
+  },
+  "rm_client/ui/endfield_wiki/assets/logo.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/logo.png",
+    "sha256": "480167143f265a1fcb2a994caca5185be1174f6ba162e303cc121f8c6d35d273"
+  },
+  "rm_client/ui/endfield_wiki/assets/module_building_assemble.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/module_building_assemble.png",
+    "sha256": "c2607debf47c9b0501c8e6d0ac0fe40f9688c87647989eaf197c28e897233483"
+  },
+  "rm_client/ui/endfield_wiki/assets/module_building_assemble_selected.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/module_building_assemble_selected.png",
+    "sha256": "1ec772f63282ea0ad6c6e3a7098ce500e14006b10336b630824353e621c22cb8"
+  },
+  "rm_client/ui/endfield_wiki/assets/module_building_battle.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/module_building_battle.png",
+    "sha256": "cc667a6d5e87ade1ea601573bed68e9a718e30a79388b288a0debc4e44c9d8cc"
+  },
+  "rm_client/ui/endfield_wiki/assets/module_building_battle_selected.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/module_building_battle_selected.png",
+    "sha256": "47e066ff90e6cd6468951f72e19c3e206077d23916872c20d9c75b75378a6700"
+  },
+  "rm_client/ui/endfield_wiki/assets/module_building_electric.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/module_building_electric.png",
+    "sha256": "6c824532c006fb6c3818f1c1774adfea738eb05086243c52c5277fc9a928b84e"
+  },
+  "rm_client/ui/endfield_wiki/assets/module_building_electric_selected.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/module_building_electric_selected.png",
+    "sha256": "c31661d57b2909eb1b4c315ff8064d307873997d4814023e049f855065a88a53"
+  },
+  "rm_client/ui/endfield_wiki/assets/module_building_logistic.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/module_building_logistic.png",
+    "sha256": "61e0494309365d6069ae8ddb924c2ea00c01d2abbfd35741b07824669058d41b"
+  },
+  "rm_client/ui/endfield_wiki/assets/module_building_logistic_selected.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/module_building_logistic_selected.png",
+    "sha256": "51bc1a81fcab215d8ff07be31657a0325135fbe1654ed8e949c4451b0ff59f14"
+  },
+  "rm_client/ui/endfield_wiki/assets/module_deco.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/module_deco.png",
+    "sha256": "64b161b5efc6c2cfc452925ccfaf5dd12606dc68e1657eb4bed577509bf54efb"
+  },
+  "rm_client/ui/endfield_wiki/assets/module_guide_adventure.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/module_guide_adventure.png",
+    "sha256": "ec701597dc7b471cd4d9412765c1ee7b13320900309920fa845546a4eb2c417e"
+  },
+  "rm_client/ui/endfield_wiki/assets/module_guide_adventure_selected.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/module_guide_adventure_selected.png",
+    "sha256": "0483d0513947b60aab94796c38775c69a0886d9dfd7950d7ba9cf05eb1ede7e9"
+  },
+  "rm_client/ui/endfield_wiki/assets/module_guide_all.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/module_guide_all.png",
+    "sha256": "0355a53e10dbb3ea50e4e5bd957e6a1ccdc634756b812097c332994f0cc97f39"
+  },
+  "rm_client/ui/endfield_wiki/assets/module_guide_all_selected.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/module_guide_all_selected.png",
+    "sha256": "97bdde0117f0a1cfd8cfadd55274dab6cf9c888d27f0c13f6161c6d96bfe97d2"
+  },
+  "rm_client/ui/endfield_wiki/assets/module_guide_battle.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/module_guide_battle.png",
+    "sha256": "f7a7c50103d3fec79a8545f1bb1d0d48a6307931ed305f77307cbe6d8f4f1558"
+  },
+  "rm_client/ui/endfield_wiki/assets/module_guide_battle_selected.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/module_guide_battle_selected.png",
+    "sha256": "507a401b50f8791aab4b635f17556373261e5eb95aeb8216d3cb4580d405df2c"
+  },
+  "rm_client/ui/endfield_wiki/assets/module_guide_system.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/module_guide_system.png",
+    "sha256": "7b6ab4203b424ec14a282faa21882ac79593b8be1e819a04acb8ac7ac6182594"
+  },
+  "rm_client/ui/endfield_wiki/assets/module_guide_system_selected.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/module_guide_system_selected.png",
+    "sha256": "cc443318e3780e343f255a434a418c6dfc4b892ba87c05950ac8245af8814294"
+  },
+  "rm_client/ui/endfield_wiki/assets/module_item_material.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/module_item_material.png",
+    "sha256": "65cbfc719abe7602b1fa1b1ed591d104f3ca6664dbef81c06e8ec7f808b79867"
+  },
+  "rm_client/ui/endfield_wiki/assets/module_item_material_selected.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/module_item_material_selected.png",
+    "sha256": "7163a82739c336ba6ab5f818ea945a1108f34729e24daabe204b16b3ab9306fb"
+  },
+  "rm_client/ui/endfield_wiki/assets/module_item_nature.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/module_item_nature.png",
+    "sha256": "4f1915dca103ecbeffd60bd4cdeeb1c575283bf9be9347664cd27ab9c30c656f"
+  },
+  "rm_client/ui/endfield_wiki/assets/module_item_nature_selected.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/module_item_nature_selected.png",
+    "sha256": "999cd8d3d4a927b9a09cb98a4a71b092ada2a595f2c9a4855fe0761794b1c33f"
+  },
+  "rm_client/ui/endfield_wiki/assets/module_item_portable_device.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/module_item_portable_device.png",
+    "sha256": "5fcd596c08f469e19ab6b6d9ef06e3b122fc2b7994e980e0ef10dc9ef6865ae7"
+  },
+  "rm_client/ui/endfield_wiki/assets/module_item_portable_device_selected.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/module_item_portable_device_selected.png",
+    "sha256": "032e912ffbac2ce53f07808b568aca07d147e51145df68dc1c60f642c65a7598"
+  },
+  "rm_client/ui/endfield_wiki/assets/module_item_special.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/module_item_special.png",
+    "sha256": "242ea9bb82ba58b330a21e2fb1e141d9c6890520f613f7cf1b0790cfc342b468"
+  },
+  "rm_client/ui/endfield_wiki/assets/module_item_special_selected.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/module_item_special_selected.png",
+    "sha256": "6efc99d94e6c1f1d3e2363eac8f6560fb9eda8c8a60fa96685321159a1801697"
+  },
+  "rm_client/ui/endfield_wiki/assets/module_item_usable.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/module_item_usable.png",
+    "sha256": "277882621264b8d4f226071f1ca8eab485c7c2ac5bc5fe586a49a85777e1d0c7"
+  },
+  "rm_client/ui/endfield_wiki/assets/module_item_usable_selected.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/module_item_usable_selected.png",
+    "sha256": "a1ce473194d787a6607cb4d4c85819572e32e25cfae1b6a75eef938adf67deee"
+  },
+  "rm_client/ui/endfield_wiki/assets/module_selected_bg.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/module_selected_bg.png",
+    "sha256": "0cd1a4b5cff8e4edb4c4a3661bd03db04d2b25d33955e4f4f289421d7f68e628"
+  },
+  "rm_client/ui/endfield_wiki/assets/module_weapon_lance.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/module_weapon_lance.png",
+    "sha256": "8da16ec6337e998afa9596a6b62fb7d1aeccac4f9f457b9e104475f175ae9887"
+  },
+  "rm_client/ui/endfield_wiki/assets/module_weapon_lance_selected.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/module_weapon_lance_selected.png",
+    "sha256": "ff7316dc28919002f612e8a1ff49e7684889cc0e4c3d9aed57a0ac4dfa67f437"
+  },
+  "rm_client/ui/endfield_wiki/assets/Movement.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/Movement.png",
+    "sha256": "a69fa216fdd4981c5491b780bb74c7e90f76d6d7c2d136cd043549713ecfe38d"
+  },
+  "rm_client/ui/endfield_wiki/assets/MovementDeco.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/MovementDeco.png",
+    "sha256": "b029adb8d88c928d44220cd4dd1db3c45f5df1df58a752233782346e0eda7575"
+  },
+  "rm_client/ui/endfield_wiki/assets/MovementFlash.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/MovementFlash.png",
+    "sha256": "7bb4bc4d9955c6dec63592c71550a9bc512416323f7b3400db66746ea79e84d7"
+  },
+  "rm_client/ui/endfield_wiki/assets/MovementGrid.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/MovementGrid.png",
+    "sha256": "72b7f3144e6c00829cdeb179cc949c17c421ef0b0d14e0602187f5df5260d381"
+  },
+  "rm_client/ui/endfield_wiki/assets/MovementSelected.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/MovementSelected.png",
+    "sha256": "3ee87ec7ac2c59a1cab75ed5877861ba56d770bf0940aea669a5a3b23ebdf138"
+  },
+  "rm_client/ui/endfield_wiki/assets/number1.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/number1.png",
+    "sha256": "78ef102fc0339852c79ef122ee097db64baf43ed5a0832d138be91a7f1522996"
+  },
+  "rm_client/ui/endfield_wiki/assets/number2.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/number2.png",
+    "sha256": "61a98610d1a1f2304c227abb8989cddbeb42f61f7f15172242f8dab9ea5a5d16"
+  },
+  "rm_client/ui/endfield_wiki/assets/number3.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/number3.png",
+    "sha256": "e61a5986cbf0174022e0614e8cfe38c6dda579698ef606dd1f7e8c6652f80324"
+  },
+  "rm_client/ui/endfield_wiki/assets/number4.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/number4.png",
+    "sha256": "f78a862f8e2ca256d39fda9ebd27072b20c0557d7fbd19ce23e64d78e5fde583"
+  },
+  "rm_client/ui/endfield_wiki/assets/number5.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/number5.png",
+    "sha256": "9e7986e80f268540e160d4efc1416767c3c60507fc12b618300efd063b658159"
+  },
+  "rm_client/ui/endfield_wiki/assets/number6.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/number6.png",
+    "sha256": "f909322bd090367f04ca2c85dd35fc9b868d804639abd7c557703e0b8d7534b5"
+  },
+  "rm_client/ui/endfield_wiki/assets/path_arrow.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/path_arrow.png",
+    "sha256": "d1d814e0db8da8fc5694ee336e0a66684d0585123e53be5e30184a60f3ab4881"
+  },
+  "rm_client/ui/endfield_wiki/assets/path_bg_00.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/path_bg_00.png",
+    "sha256": "dbcad0bf6bf2b5006b93cfe7860741a28b76a4b40a6f5c199635ee0e48293fce"
+  },
+  "rm_client/ui/endfield_wiki/assets/path_bg_01.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/path_bg_01.png",
+    "sha256": "77431ef01f5a4260016799232c3151ea7ba6b0fc74d740bbad7fdd7d8f5ab50a"
+  },
+  "rm_client/ui/endfield_wiki/assets/path_bg_02.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/path_bg_02.png",
+    "sha256": "1cd212bf67ae824ceee1716a7310c92c0e288d7d2ffffe84fac6ee4fd8ac9151"
+  },
+  "rm_client/ui/endfield_wiki/assets/path_bg_10.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/path_bg_10.png",
+    "sha256": "afc560823f7014b60e6c5884054ec8b6caf170d3d5de4580a992ffd794381f61"
+  },
+  "rm_client/ui/endfield_wiki/assets/path_bg_11.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/path_bg_11.png",
+    "sha256": "d5a51b6aed15684ec8c123e30fe5703155359d6543b6d7b47cb5766ef44939de"
+  },
+  "rm_client/ui/endfield_wiki/assets/path_bg_12.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/path_bg_12.png",
+    "sha256": "3ae86244d59b4a030aad6dddb0a500fbbf12966b270fa4f148152e70942284f4"
+  },
+  "rm_client/ui/endfield_wiki/assets/path_bg_20.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/path_bg_20.png",
+    "sha256": "577b102b64bd79666e3b73220b115153568d23431c1780f1a6ba5a5fb8874a19"
+  },
+  "rm_client/ui/endfield_wiki/assets/path_bg_21.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/path_bg_21.png",
+    "sha256": "49b4c3f67b8bc88ae319eac507e36e7e3c4534e6e56a6eb3cfe150b6ec32f6e8"
+  },
+  "rm_client/ui/endfield_wiki/assets/path_bg_22.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/path_bg_22.png",
+    "sha256": "a37654eb7e0cde56c83ae301d439510964a4c857479b473d9a68028ead4231bf"
+  },
+  "rm_client/ui/endfield_wiki/assets/path_parent.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/path_parent.png",
+    "sha256": "41108013a81ac72c839bca13dc39e980cfb659ccc5c5817075a454a5f4b10672"
+  },
+  "rm_client/ui/endfield_wiki/assets/PROVENANCE.json": {
+    "to": "rm_client/ui/endfield/wiki/assets/PROVENANCE.json",
+    "sha256": "f0dca57dd1cf9004772d7e11b60a94bf0f8ee67ae6f06b4aa5b120db1002c5e6"
+  },
+  "rm_client/ui/endfield_wiki/assets/Render.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/Render.png",
+    "sha256": "2213e70316d3f6f9240df9a7821121d39fdcc7e54e54e706593c49053b0e5211"
+  },
+  "rm_client/ui/endfield_wiki/assets/RenderDeco.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/RenderDeco.png",
+    "sha256": "cf1b65915bc01bac8d7e88bc5203c0dd1efcea8df8ca96316bdb37e1558b80b1"
+  },
+  "rm_client/ui/endfield_wiki/assets/RenderFlash.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/RenderFlash.png",
+    "sha256": "d32001b45aa9f7d871b60de18f0df38ba55df091d37d992ab8a94c82cef4e513"
+  },
+  "rm_client/ui/endfield_wiki/assets/RenderGrid.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/RenderGrid.png",
+    "sha256": "b8f83aab25c9e1b91b7e2f4a211827895db33d3468f568f63c935ea1cf9448e7"
+  },
+  "rm_client/ui/endfield_wiki/assets/RenderSelected.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/RenderSelected.png",
+    "sha256": "badaa50946790a3d56349011be62c888a60aabeb01a9e3043874a8bfd5dc5f15"
+  },
+  "rm_client/ui/endfield_wiki/assets/ring.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/ring.png",
+    "sha256": "b1a3e8aceeb88715a3e37cc87eede337f4b10368560dd4b3faac319e4becd966"
+  },
+  "rm_client/ui/endfield_wiki/assets/RUNTIME_MANIFEST.json": {
+    "to": "rm_client/ui/endfield/wiki/assets/RUNTIME_MANIFEST.json",
+    "sha256": "88ab44bd97faa20807157d17e905fa7685e8f19b79366267d5f737f346dc9764"
+  },
+  "rm_client/ui/endfield_wiki/assets/scene_DecoDeco1.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/scene_DecoDeco1.png",
+    "sha256": "db09e0821c5017e59026ce9f9786a245b6f59c7c5ac14db3bea8edfff8b17ca8"
+  },
+  "rm_client/ui/endfield_wiki/assets/scene_DecoDeco2.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/scene_DecoDeco2.png",
+    "sha256": "4bf2464c3afaf2cb0babe44d5a574af3b4364028ce8e1d1d7289fe6484c4d885"
+  },
+  "rm_client/ui/endfield_wiki/assets/scene_DecoDeco2_1.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/scene_DecoDeco2_1.png",
+    "sha256": "4bf2464c3afaf2cb0babe44d5a574af3b4364028ce8e1d1d7289fe6484c4d885"
+  },
+  "rm_client/ui/endfield_wiki/assets/scene_DecoDeco3.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/scene_DecoDeco3.png",
+    "sha256": "bb091a9cf91d0bb5b895b1916c3850cc2de4613a5f30f1e4462c4cc46fb65674"
+  },
+  "rm_client/ui/endfield_wiki/assets/scene_DecoDeco4.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/scene_DecoDeco4.png",
+    "sha256": "fb90b1ea7f8b29f53c43de2c365a9c5867fa3bcf1447371d67dfe76860e33a15"
+  },
+  "rm_client/ui/endfield_wiki/assets/scene_DecoDecoLogo.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/scene_DecoDecoLogo.png",
+    "sha256": "480167143f265a1fcb2a994caca5185be1174f6ba162e303cc121f8c6d35d273"
+  },
+  "rm_client/ui/endfield_wiki/assets/scene_DecoDecoMap.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/scene_DecoDecoMap.png",
+    "sha256": "81affc5062b587824622e0777e958947da5b70aa41cb89de15a8c1ff2d80f063"
+  },
+  "rm_client/ui/endfield_wiki/assets/scene_DecoDecoRing.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/scene_DecoDecoRing.png",
+    "sha256": "f5a325f89d3c3df1ed93da74684e99755db7eab4121f2faafb33bd4afbba8a49"
+  },
+  "rm_client/ui/endfield_wiki/assets/scene_DecoDecoRing_2.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/scene_DecoDecoRing_2.png",
+    "sha256": "609cfdbba85d6bba0ae99af5ed9cf629ce2c445ce50fb694734df540c4a5c6b5"
+  },
+  "rm_client/ui/endfield_wiki/assets/scene_DecoDot1.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/scene_DecoDot1.png",
+    "sha256": "b1a3e8aceeb88715a3e37cc87eede337f4b10368560dd4b3faac319e4becd966"
+  },
+  "rm_client/ui/endfield_wiki/assets/scene_DecoDot2.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/scene_DecoDot2.png",
+    "sha256": "a440f8b8f3079552196fddbc656058071a4558e663f0dc631dd90d0393c94fa6"
+  },
+  "rm_client/ui/endfield_wiki/assets/scene_white_ground.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/scene_white_ground.png",
+    "sha256": "4131e068b69a1a025d5f7f5d1be56c449d47a230bb5ed77d971af97a6fcf2a04"
+  },
+  "rm_client/ui/endfield_wiki/assets/search.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/search.png",
+    "sha256": "a2548ab8678c6177c378f7b7fb4a979cc74b6346761251b15afa44ffda8d1547"
+  },
+  "rm_client/ui/endfield_wiki/assets/selected_disc.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/selected_disc.png",
+    "sha256": "8c5a3da17b7b296934e82c2a0f8176fedd0a5be4c8e931dfd5152fdf8b6dc3eb"
+  },
+  "rm_client/ui/endfield_wiki/assets/selected_symbol1.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/selected_symbol1.png",
+    "sha256": "d538b63117126a9cb0350889b9287a4c38082926e8cac3f808b7ee9137773c02"
+  },
+  "rm_client/ui/endfield_wiki/assets/selected_symbol2.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/selected_symbol2.png",
+    "sha256": "ff6ab2fab474b0959b44e4ab05665de0d2575b82a99a4c72c47e3c280f9c09b4"
+  },
+  "rm_client/ui/endfield_wiki/assets/selected_symbol3.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/selected_symbol3.png",
+    "sha256": "f220337287c8239e7d722fb05dced5a340457c6f3ce1260277eb0498f89873e9"
+  },
+  "rm_client/ui/endfield_wiki/assets/selected_symbol4.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/selected_symbol4.png",
+    "sha256": "4eb6608aa49394dffcaf54f6424edce23d3c6644e56dfff3c596f8f1e3823cf1"
+  },
+  "rm_client/ui/endfield_wiki/assets/select_background.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/select_background.png",
+    "sha256": "3260987e8cf2b705062d638e7e80316b1cf64734ac9db2034ea3a790039eb154"
+  },
+  "rm_client/ui/endfield_wiki/assets/settings.svg": {
+    "to": "rm_client/ui/endfield/wiki/assets/settings.svg",
+    "sha256": "cede8d6acb926291b862b4cba4890e27698bae3fb907585df5125d76882cc960"
+  },
+  "rm_client/ui/endfield_wiki/assets/Strategy.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/Strategy.png",
+    "sha256": "fa9064c6b29b5edf170154a305aa3471570e658f2a4198921e1616a6cd2114fd"
+  },
+  "rm_client/ui/endfield_wiki/assets/StrategyDeco.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/StrategyDeco.png",
+    "sha256": "32ab433febff7d57aadd99d2af9fb7086efa4f19ff8cb5bd4728bee0dea8d80c"
+  },
+  "rm_client/ui/endfield_wiki/assets/StrategyFlash.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/StrategyFlash.png",
+    "sha256": "1fa958bfe0c7821920892edf3ae2618ed2e8b110dc6508c9cb5070e58e38229e"
+  },
+  "rm_client/ui/endfield_wiki/assets/StrategyGrid.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/StrategyGrid.png",
+    "sha256": "13cab6b28fa4cfdf08c3e3dc85b52ac250fcaa386143a988a322477d8ab432c1"
+  },
+  "rm_client/ui/endfield_wiki/assets/StrategySelected.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/StrategySelected.png",
+    "sha256": "1a2a76d70fc5507ebecbc9ebc6152cb709ef65017bb008bb39e7854f9e1cf4ba"
+  },
+  "rm_client/ui/endfield_wiki/assets/System.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/System.png",
+    "sha256": "b709538c3d56ba0af2c4e4688880cc1e34f3c4b70894b90c24adfc8b02053737"
+  },
+  "rm_client/ui/endfield_wiki/assets/SystemDeco.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/SystemDeco.png",
+    "sha256": "adc0fdda2ec16b63747972f925495df56517619bf158db85f4d2bc1570be8b76"
+  },
+  "rm_client/ui/endfield_wiki/assets/SystemFlash.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/SystemFlash.png",
+    "sha256": "63df2c888409ed4748fa364f1be534b40f462563895ba6fe4ea6039c85af568e"
+  },
+  "rm_client/ui/endfield_wiki/assets/SystemGrid.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/SystemGrid.png",
+    "sha256": "34b040a2e8590f91e0ad645441c641f326139e90d81d85af86e0c0b140d9f647"
+  },
+  "rm_client/ui/endfield_wiki/assets/SystemSelected.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/SystemSelected.png",
+    "sha256": "a05ce95e8f83fa0fe052f3395c339b656786d5211def3d9d4dab430ee94a21a5"
+  },
+  "rm_client/ui/endfield_wiki/assets/topdeco.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/topdeco.png",
+    "sha256": "a6c10ee73b81cd2843b9e03bb554ec3af269fb40c8d922a85d8fc449c53425ff"
+  },
+  "rm_client/ui/endfield_wiki/assets/topgrid.svg": {
+    "to": "rm_client/ui/endfield/wiki/assets/topgrid.svg",
+    "sha256": "9e663c15c70f6a9589bbcb1e700e4c6bec6a292aa82abf520935cd0a61577692"
+  },
+  "rm_client/ui/endfield_wiki/assets/triangle.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/triangle.png",
+    "sha256": "513246ddb2d7afd1d7e43efc91ca2f27b5142d1195c193ed7e76d22533e959a4"
+  },
+  "rm_client/ui/endfield_wiki/assets/Vision.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/Vision.png",
+    "sha256": "3d19436c2d25c267e1f997a83b5a2fb9ce79878dbe20d4891ad0dc1e5aa7bbcc"
+  },
+  "rm_client/ui/endfield_wiki/assets/VisionDeco.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/VisionDeco.png",
+    "sha256": "92e0f956bd8ef1edb59e507071b25a561c26401ec2116ec5bc384bbc018eb00a"
+  },
+  "rm_client/ui/endfield_wiki/assets/VisionFlash.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/VisionFlash.png",
+    "sha256": "8853cd33f5c976c3697084f6f80365351a71bc060e4d2e69e9f809994f832118"
+  },
+  "rm_client/ui/endfield_wiki/assets/VisionGrid.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/VisionGrid.png",
+    "sha256": "f6700f3a03f4c96bb09113e281db490b660d103a9ea929e3f7e443eebb630b36"
+  },
+  "rm_client/ui/endfield_wiki/assets/VisionSelected.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/VisionSelected.png",
+    "sha256": "8e778f1289e72e83daa13c917ea92707020b95830cdd3659869c34fb00c64f74"
+  },
+  "rm_client/ui/endfield_wiki/assets/fonts/manifest.json": {
+    "to": "rm_client/ui/endfield/wiki/assets/fonts/manifest.json",
+    "sha256": "4867a7e5d0027db8a315a61ed7ee7d3d2c718138232c559ed6bff1be58b13ab3"
+  },
+  "rm_client/ui/endfield_wiki/assets/fonts/NotoSansSC-OFL.txt": {
+    "to": "rm_client/ui/endfield/wiki/assets/fonts/NotoSansSC-OFL.txt",
+    "sha256": "1c05c68c34f9708415aada51f17e1b0092d2cea709bf4a94cd38114f9e73d7d9"
+  },
+  "rm_client/ui/endfield_wiki/assets/fonts/NotoSansSC.ttf": {
+    "to": "rm_client/ui/endfield/wiki/assets/fonts/NotoSansSC.ttf",
+    "sha256": "a3041811a78c361b1de50f953c805e0244951c21c5bd412f7232ef0d899af0da"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/000.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/000.png",
+    "sha256": "fb2f05be2b70c0d99ddc79c389e110b897d536c37733f5949d2dff1637e021b6"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/001.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/001.png",
+    "sha256": "34195669a43a81613f278ddc9f60918549bdbece2d97f4f0af8528af69073e9b"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/002.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/002.png",
+    "sha256": "ece1a56627f0419f4211c21b1ddc3827d103972e7bba59e7f41c81a628b0bb90"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/003.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/003.png",
+    "sha256": "ff7986852a78db5c3438540077122508619ef392ed4a743bc3170943fc2b6903"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/004.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/004.png",
+    "sha256": "5e5574f48f6dfe0fa7ab0a32425335634220b40908fd3624536ff5a6fe015e9d"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/005.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/005.png",
+    "sha256": "7f303c8659c878ca4f60b0c5093a10c46f8ddb0dfaa058106e593b6722929c96"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/006.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/006.png",
+    "sha256": "4fbd8ec2750072e9c9e01f4486023eea4b3c1cf14d8451175d875a4bdc49c802"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/007.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/007.png",
+    "sha256": "379787ecadabd5828a98892f068c280f82c07c924cf8c57449104299d574ece1"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/008.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/008.png",
+    "sha256": "c0a170c95374f951d3360839cc8661b7413f30571c9e858644a996c209f618c4"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/009.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/009.png",
+    "sha256": "d1a71164d82afd09f0da1d3a2ea95620560fe2deceef1a66ed1058ebc03d3dd2"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/010.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/010.png",
+    "sha256": "626e6d1b9921e4fd00eede1f020750679360aadb6b56051bcfd5bc4c6725a44e"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/011.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/011.png",
+    "sha256": "da7f4235c91ffc86d2ed2d72b3c2df9f7971183008b1fdbdf9440204d1b847b2"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/012.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/012.png",
+    "sha256": "48d69dc2938a716e1b184ff5c0dd70fa35b15ec1f346372bb9c1e5dfb0f7d49b"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/013.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/013.png",
+    "sha256": "319d3147ce437564eb42a31645945f51b360d0ccd0fd9ef18a3e5853d7bac570"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/014.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/014.png",
+    "sha256": "f892865c64254e42b2138f777d770529d7609cabf56ea57c302c04fe74c639d2"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/015.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/015.png",
+    "sha256": "086f6119c7bc3d4e01d5088ae529855c17e23edf5a9e949328615ea49665aef0"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/016.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/016.png",
+    "sha256": "3054faca594dd6525a18fd64fe7e55ca96c5cc558214dc99b538bc5b901c55bd"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/017.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/017.png",
+    "sha256": "bf6695cee1504f68e60c11c42304a068404a5c86d46f3161570b97b79f83f144"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/018.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/018.png",
+    "sha256": "42d2967a60d7042896ee080f0db22d20f37641cf7c4c6380f5d19bf6f58f22a4"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/019.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/019.png",
+    "sha256": "f9ade27cd7dfbcd03844dc82bcbcee8ae510e5fe4a47ff489ae70805052a9b48"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/020.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/020.png",
+    "sha256": "980ee38b5e5f6f84a4a51606248628370dc1fd0176e77731800bce3733553192"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/021.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/021.png",
+    "sha256": "59b434a37885cdac5d45aff6ba3e1c7021d85a990546fe31e26eab5912ad509a"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/022.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/022.png",
+    "sha256": "2ef7cda32f6fedc338feb633c4f1c1a17723ab5f976e5b812194dbb64a604cc9"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/023.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/023.png",
+    "sha256": "fa4f119562e6c96c957385f61a6acb09a4b597cdbc809b3bd98a3ebbf5def143"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/024.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/024.png",
+    "sha256": "683c71e09eb806c05397d97ec5161e1b48267502f0d3905ba08f2149240cce60"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/025.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/025.png",
+    "sha256": "952899a244afc72e5cb8647395de3790fbc66f2df81d41acaa3d0df6a7baf829"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/026.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/026.png",
+    "sha256": "9d42fd8043b0178d10206460505105b9ca986ae54292f76ce226d55adc88ff7a"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/027.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/027.png",
+    "sha256": "90e7fb81b779c02d17f10f842973df949b8b573f67b57c3eb1a907aafbe1c82a"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/028.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/028.png",
+    "sha256": "4a2e137a6a4ae96ac8f057e3afa47a75f2f17ea43a4d67a10e412d94c0ba99d8"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/029.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/029.png",
+    "sha256": "4f4d16be082cbd1617100fbd4d24f87a119d7e4aea95d5294d19b56d4a47f0da"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/030.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/030.png",
+    "sha256": "a09541a6ad09b8923c4102a25d0fa7fbcd984aea40dfaef2d10077bf6c95d6a1"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/031.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/031.png",
+    "sha256": "9fffa45c4774be14cae0b428967e46515db27829ed0608ddbc4cb55f27aaaafa"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/032.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/032.png",
+    "sha256": "6225585e31391b25ad8deb7ff7c6eae60fa9cbe179a09fd91007ae8abb1843e6"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/033.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/033.png",
+    "sha256": "7d5631f43fb1bfba9cfff82911210245dde9778885a12b7765c1c768fb191d3d"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/034.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/034.png",
+    "sha256": "f175970557df0cf774713fa0ba06159a59382ffbb55a5d3527f106db11876909"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/035.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/035.png",
+    "sha256": "aa62b693e34b9b0bc6e6fb286498075e39f0a6b9f52d8e71d99cbb2f61a13044"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/036.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/036.png",
+    "sha256": "d50fe372352886caccab7417d198b0f8eee5ee18287795a88171c799d04376b8"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/037.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/037.png",
+    "sha256": "3ed00a6843ec29c91bd3c9c7d4ea518addedd1f8c417c165d4759e7c40bab507"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/038.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/038.png",
+    "sha256": "ca7a3286c69c7f93355ba9bc4d9092036a80a18b01c55b8de681831e4e767ad6"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/039.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/039.png",
+    "sha256": "0950b885e80e6c45cf59a77e1806bfad958e6ab987fa6e5b80ce632f0f31b74d"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/040.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/040.png",
+    "sha256": "9a45c4c84119ff0393fe6e8416cb035cc9c295fbdca7c43e3944093ece32b32a"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/041.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/041.png",
+    "sha256": "a0eb265d140759f9118963121307074c64f5c0c9f741e59a1fb2a885b1c3a87a"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/042.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/042.png",
+    "sha256": "7ce2cfa75c91966dee38cef13f67876b6b0d32762d0ae66fef2c40c9c791a865"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/043.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/043.png",
+    "sha256": "84d357b69d9fa44177b7a37d981c113b6489c5a93b654ac3d3f35b65a75a33f0"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/044.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/044.png",
+    "sha256": "60f50395607f8a720552de18181ed647921fb20e13d63925c5f9b476ac6cb652"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/045.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/045.png",
+    "sha256": "8e3f10379e554b7bb0a4bcfe935890d23de17725ee2bc4f09b74b3e5a71402e4"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/046.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/046.png",
+    "sha256": "195d2da80598fcc1e30ea6ce9c1f6296424409b9897ed6fcef2ad9df98540217"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/047.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/047.png",
+    "sha256": "70c6b7cfa089c534aff772a06ba672a3f0bd8de70d84db7f4f01167491f47c45"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/048.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/048.png",
+    "sha256": "fafeb98ddcc1489d64a857545f2a693a11b70fa7fe2c14f13886e2c00f8ba1ef"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/049.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/049.png",
+    "sha256": "f54c8d9a79fb550935022170e761f3b8223108b4bcdbecf9d10c964b3bb58403"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/050.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/050.png",
+    "sha256": "7b84bff2eb01de924272cf7f394004eb06297ae1eaaae36a3be44d1f6d77a0d1"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/051.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/051.png",
+    "sha256": "7213973ae1b69ad20eddd472fa43cc96249baa04fb9fb24fb4df51460fc49dfc"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/052.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/052.png",
+    "sha256": "8a639f1f0d4545344b465a9afb0e930b89999db53f6aa24d76bcd681867ba941"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/053.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/053.png",
+    "sha256": "1f89b4349343f410e000cd7f6aa21579177d191e0566d66f2e4073f166d26d28"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/054.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/054.png",
+    "sha256": "de8d23e34a1fe634ad37bbb765c2a83e24c26a6eca49b776969913a005b5b4cd"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/055.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/055.png",
+    "sha256": "a6ce1a1727da011585a60dd6cd84a15b3761a6b138ec02d58880cc0cea93a62e"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/056.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/056.png",
+    "sha256": "0d4eca0b050bb7629aa9dff281e9204c9ed7581041bda108b3bd2ef01e70ec43"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/057.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/057.png",
+    "sha256": "21c1abd853d1b79fdd1e949960763349cf21609f2243b844a1158d77d6aaab86"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/058.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/058.png",
+    "sha256": "198fa88fb270ac90b6811cbf32494cf0646734d4340d6ba880469c00f990a7e1"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/059.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/059.png",
+    "sha256": "aa5ac5a2f2e3ed921106c5450093b39f65677b502656fefa046cb933e2043341"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/060.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/060.png",
+    "sha256": "9e92c402af19b0fdd8257fa5ca1d536fb1c45268d6bb8bf5f587663a86393430"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/061.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/061.png",
+    "sha256": "a3370100db120e0546e724af6383e555d0d1d1ff3368ddca924bfa5f89d1201d"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/062.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/062.png",
+    "sha256": "2d934380af546a7208f7aae06692a1b0714b0cf5b1ce511f192cec446976f424"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/063.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/063.png",
+    "sha256": "5ae20596acfbb86d37183e794fb6f6f628a1c598e7440ffca61a70739a33d785"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/064.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/064.png",
+    "sha256": "9d8a8712b57ffafd0f1db8019aa0b9e2b46789f9acbafec60dd0001dbe3eaa3f"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/065.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/065.png",
+    "sha256": "483bf5e59a31820e29afe6a24b19010167f9323c2e9e7cb69014bb2a8459d0bc"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/066.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/066.png",
+    "sha256": "becca2bd42010a4e824a86197787eb4e138c865d26bcd01afff9ab076157e142"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/067.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/067.png",
+    "sha256": "5af43df81c6238b4bf64e8400abc7672a7fa8e194b5fe27d23b57e4cc34b4a01"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/068.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/068.png",
+    "sha256": "fe3851fc91c47d61e267756a8ffd9c4ddd4d98ed1eb06c4f5762a7d084600460"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/069.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/069.png",
+    "sha256": "f58b020d168d5ece288d14e058983c3f6ecfb62c4ea4d936d302bf0450aa1f57"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/070.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/070.png",
+    "sha256": "46f58142109b9344991c44f0bbf22aab70aa3006285f9f26e5ed8c7a4a41b2a6"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/071.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/071.png",
+    "sha256": "67f166e2722bbebe34645ed2dd935e5fb196fb027f84c5b7a0080eefbe8a8d68"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/072.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/072.png",
+    "sha256": "25f194a9bff3fce9f8322d595a7bf707e8b84b52980e23ce7284700e093b0041"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/073.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/073.png",
+    "sha256": "67986a6d4fa709fdaa2dc1d7691a1b252a3bff991e4d75c800b51f5df33aa05c"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/074.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/074.png",
+    "sha256": "a6dc12a6e292307f5eb12ebb1d6d0e64ddc47946fabea16f1774bd5d60cae5b9"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/075.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/075.png",
+    "sha256": "26ad1f8ca5558d8973b0165b77df4809f7cc6feed396d1ce2820978b74ac248c"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/076.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/076.png",
+    "sha256": "415b8574162a8f8e7cdb96cc94b32dd96938850ac418171acb9b8e2e0dfbe2c4"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/077.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/077.png",
+    "sha256": "65584f54d799a9198f7ef8dbbdf21db3bd8c1613ab23670b27d1368b3e32a764"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/078.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/078.png",
+    "sha256": "4ec2d540886509f98ad7492c9dbe4331a327f53254fe92778a32b7bc892a18bc"
+  },
+  "rm_client/ui/endfield_wiki/assets/waves/079.png": {
+    "to": "rm_client/ui/endfield/wiki/assets/waves/079.png",
+    "sha256": "0ba683491c149cc8fa6168dcaa273815c3a4fca7e10d2def13fe25b9025e7491"
+  },
+  "assets/endfield_pack/ENDFIELD_PACK_MANIFEST.json": {
+    "to": "rm_client/ui/endfield/menu/assets/ENDFIELD_PACK_MANIFEST.json",
+    "sha256": "75a6bb9360f30e24eb9ef1016ca18c6931d0fc839b19cd792d6161ae26d3c3b8"
+  },
+  "assets/endfield_pack/licenses/EndfieldHUD-CREDITS.md": {
+    "to": "rm_client/ui/endfield/menu/assets/licenses/EndfieldHUD-CREDITS.md",
+    "sha256": "04d0752b9f78d3b2b8b88513a6be89401ddd21f5b4894e68d96dc83b2f1a804f"
+  },
+  "assets/endfield_pack/licenses/EndfieldHUD-LICENSE": {
+    "to": "rm_client/ui/endfield/menu/assets/licenses/EndfieldHUD-LICENSE",
+    "sha256": "f8ad1cefdf9375f999fd2688c9d1f9cd6c27f6adf31380c8342af2778491d638"
+  },
+  "assets/endfield_pack/licenses/SOURCES.json": {
+    "to": "rm_client/ui/endfield/menu/assets/licenses/SOURCES.json",
+    "sha256": "63eedcd6a2b4e95833b7c0c2cbd00f51a1e9072c853135d5cd00a42d0375a1de"
+  },
+  "assets/endfield_pack/maps/RMUC7v7.efmesh": {
+    "to": "rm_client/ui/endfield/menu/assets/maps/RMUC7v7.efmesh",
+    "sha256": "30b307cb07d11bc5387de7cd8569949bfe5f6c0a99dbfcb4ca98b80645b67fa2"
+  },
+  "assets/endfield_pack/maps/RMUC7v7.json": {
+    "to": "rm_client/ui/endfield/menu/assets/maps/RMUC7v7.json",
+    "sha256": "fa4a36dc134000818db273952e3880fc23cac186158ef9e992043d7662e94f7a"
+  },
+  "assets/endfield_pack/maps/RMUC7v7.png": {
+    "to": "rm_client/ui/endfield/menu/assets/maps/RMUC7v7.png",
+    "sha256": "c9cbf04bfeea7dc42de90879c0306815e443b223ff7e382bead6c00b19187888"
+  },
+  "assets/endfield_pack/maps/RMUL1v1.efmesh": {
+    "to": "rm_client/ui/endfield/menu/assets/maps/RMUL1v1.efmesh",
+    "sha256": "0bb4bca290a37ff1ddde9c90fbb70a1d8170175a340663fba537b9a6f8bfd8f7"
+  },
+  "assets/endfield_pack/maps/RMUL1v1.json": {
+    "to": "rm_client/ui/endfield/menu/assets/maps/RMUL1v1.json",
+    "sha256": "6bf5f42ead13a6fe1ea5a32418d6d639edbaf0417fdb102fbf34ae22492b211c"
+  },
+  "assets/endfield_pack/maps/RMUL1v1.png": {
+    "to": "rm_client/ui/endfield/menu/assets/maps/RMUL1v1.png",
+    "sha256": "447fc19a30b15f074ab78d3277c2a92008e4891cba821e67d7703ab3870d213b"
+  },
+  "assets/endfield_pack/maps/RMUL3v3.efmesh": {
+    "to": "rm_client/ui/endfield/menu/assets/maps/RMUL3v3.efmesh",
+    "sha256": "75c2b2af6edb32bf38ad5867fc5f1546388b21f3bd7fa0575932e24cafdfb247"
+  },
+  "assets/endfield_pack/maps/RMUL3v3.json": {
+    "to": "rm_client/ui/endfield/menu/assets/maps/RMUL3v3.json",
+    "sha256": "0bd2cbf9e583b37aa52e370f393a771dede7fa0eb75e0f3e9983ed22b10c68b6"
+  },
+  "assets/endfield_pack/maps/RMUL3v3.png": {
+    "to": "rm_client/ui/endfield/menu/assets/maps/RMUL3v3.png",
+    "sha256": "4dcf2cab017f2f8ce56629f3058db4a71b7efffe4640cafb066f5864dca1d661"
+  },
+  "assets/endfield_pack/native_renderer/CURRENT.json": {
+    "to": "rm_client/ui/endfield/menu/assets/native_renderer/CURRENT.json",
+    "sha256": "ed83d3ab0baebd27c25f20e7153eeb30588ee09a728fa22cffc6a23882780bf1"
+  },
+  "assets/endfield_pack/native_renderer/build_53c48e410da9f131/BUILD_MANIFEST.json": {
+    "to": "rm_client/ui/endfield/menu/assets/native_renderer/build_53c48e410da9f131/BUILD_MANIFEST.json",
+    "sha256": "7f11fbf3b781713713a32991543e39356bc36f077b7fa511222f1daeeff4a86a"
+  },
+  "assets/endfield_pack/native_renderer/build_53c48e410da9f131/EndfieldHUD-MIT-LICENSE.txt": {
+    "to": "rm_client/ui/endfield/menu/assets/native_renderer/build_53c48e410da9f131/EndfieldHUD-MIT-LICENSE.txt",
+    "sha256": "f8ad1cefdf9375f999fd2688c9d1f9cd6c27f6adf31380c8342af2778491d638"
+  },
+  "assets/endfield_pack/native_renderer/build_53c48e410da9f131/polar_endfield.dll": {
+    "to": "rm_client/ui/endfield/menu/assets/native_renderer/build_53c48e410da9f131/polar_endfield.dll",
+    "sha256": "cc45f496848279df5c369c3e20c8a991fae9fd5a043b4366fcc8130aca5b1d3e"
+  },
+  "assets/endfield_pack/native_renderer/build_58a4d44ef8b653f7/BUILD_MANIFEST.json": {
+    "to": "rm_client/ui/endfield/menu/assets/native_renderer/build_58a4d44ef8b653f7/BUILD_MANIFEST.json",
+    "sha256": "0f495611816a8f79a691b1cd3f364eee41b288a2417187f88b3782a0c24971c7"
+  },
+  "assets/endfield_pack/native_renderer/build_58a4d44ef8b653f7/EndfieldHUD-MIT-LICENSE.txt": {
+    "to": "rm_client/ui/endfield/menu/assets/native_renderer/build_58a4d44ef8b653f7/EndfieldHUD-MIT-LICENSE.txt",
+    "sha256": "f8ad1cefdf9375f999fd2688c9d1f9cd6c27f6adf31380c8342af2778491d638"
+  },
+  "assets/endfield_pack/native_renderer/build_58a4d44ef8b653f7/polar_endfield.dll": {
+    "to": "rm_client/ui/endfield/menu/assets/native_renderer/build_58a4d44ef8b653f7/polar_endfield.dll",
+    "sha256": "096ac7eaa09a635a64c8014b6f87119188917254e5008296368306825eb18162"
+  },
+  "assets/endfield_pack/native_source_runtime/SOURCE_RUNTIME_MANIFEST.json": {
+    "to": "rm_client/ui/endfield/menu/assets/native_source_runtime/SOURCE_RUNTIME_MANIFEST.json",
+    "sha256": "7361a97dd8e9596b042960337f33e166d6c47cef63308fbd637e6fe1a07be110"
+  },
+  "assets/endfield_pack/native_source_runtime/fonts/manifest.json": {
+    "to": "rm_client/ui/endfield/menu/assets/native_source_runtime/fonts/manifest.json",
+    "sha256": "6f1db043b53a2e85e1e26b240aa11e2a78401bc673394cf416beb01752cbf04a"
+  },
+  "assets/endfield_pack/native_source_runtime/fonts/NotoSansKR-OFL.txt": {
+    "to": "rm_client/ui/endfield/menu/assets/native_source_runtime/fonts/NotoSansKR-OFL.txt",
+    "sha256": "1c05c68c34f9708415aada51f17e1b0092d2cea709bf4a94cd38114f9e73d7d9"
+  },
+  "assets/endfield_pack/native_source_runtime/fonts/NotoSansKR.ttf": {
+    "to": "rm_client/ui/endfield/menu/assets/native_source_runtime/fonts/NotoSansKR.ttf",
+    "sha256": "194018e6b2b293a7964f037b25c0249ce1418bc9ab3c971060a03aa57861e252"
+  },
+  "assets/endfield_pack/native_source_runtime/fonts/NotoSansSC-OFL.txt": {
+    "to": "rm_client/ui/endfield/menu/assets/native_source_runtime/fonts/NotoSansSC-OFL.txt",
+    "sha256": "1c05c68c34f9708415aada51f17e1b0092d2cea709bf4a94cd38114f9e73d7d9"
+  },
+  "assets/endfield_pack/native_source_runtime/fonts/NotoSansSC.ttf": {
+    "to": "rm_client/ui/endfield/menu/assets/native_source_runtime/fonts/NotoSansSC.ttf",
+    "sha256": "a3041811a78c361b1de50f953c805e0244951c21c5bd412f7232ef0d899af0da"
+  },
+  "assets/endfield_pack/native_source_runtime/resources/licenses/webview2/LICENSE.txt": {
+    "to": "rm_client/ui/endfield/menu/assets/native_source_runtime/resources/licenses/webview2/LICENSE.txt",
+    "sha256": "0af8f1b807512aae39c2ac1aa4d0cae65cabecb6fd554b8439a5162a0d6eca55"
+  },
+  "assets/endfield_pack/native_source_runtime/resources/licenses/webview2/NOTICE.txt": {
+    "to": "rm_client/ui/endfield/menu/assets/native_source_runtime/resources/licenses/webview2/NOTICE.txt",
+    "sha256": "106423785c5b7eba0a8e61d1837f2132e9c828e20ad530f565d981c1df60dd90"
+  },
+  "assets/endfield_pack/native_source_runtime/resources/shell/catalog.ehscene": {
+    "to": "rm_client/ui/endfield/menu/assets/native_source_runtime/resources/shell/catalog.ehscene",
+    "sha256": "64852432949d3354e50c43ebb983cfa5afcf5dae29a4512879aca974902a9ba8"
+  },
+  "assets/endfield_pack/native_source_runtime/resources/shell/cursor.png": {
+    "to": "rm_client/ui/endfield/menu/assets/native_source_runtime/resources/shell/cursor.png",
+    "sha256": "d479751c9298b9ec582dcaddb393e4f4e92c7e66511a6db19ed2e666ac9b8789"
+  },
+  "assets/endfield_pack/native_source_runtime/resources/shell/hud.hlsl": {
+    "to": "rm_client/ui/endfield/menu/assets/native_source_runtime/resources/shell/hud.hlsl",
+    "sha256": "76771df9eb308710771fc14032c912162c05e856b1b4373c6c7003091c9c176e"
+  },
+  "assets/endfield_pack/native_source_runtime/resources/shell/watch-blur.json": {
+    "to": "rm_client/ui/endfield/menu/assets/native_source_runtime/resources/shell/watch-blur.json",
+    "sha256": "87767f77fe5845150e0dc675771cc6adc792075cbbd8fb6d41f405e6db931464"
+  },
+  "assets/endfield_pack/native_source_runtime/resources/shell/runtime-input/runtime-input.json": {
+    "to": "rm_client/ui/endfield/menu/assets/native_source_runtime/resources/shell/runtime-input/runtime-input.json",
+    "sha256": "1a7b8d20520b5f553fede34ad3e61beab66a734fcc3191d09efe6f83819bc664"
+  },
+  "assets/endfield_pack/native_source_runtime/resources/shell/runtime-input/parts/chrome.json": {
+    "to": "rm_client/ui/endfield/menu/assets/native_source_runtime/resources/shell/runtime-input/parts/chrome.json",
+    "sha256": "d86b428439a1e91b60dc02f284e1feb0e95ce2fe6996db60b3e5ef361507c3a6"
+  },
+  "assets/endfield_pack/native_source_runtime/resources/shell/runtime-input/parts/controllerTransitions.json": {
+    "to": "rm_client/ui/endfield/menu/assets/native_source_runtime/resources/shell/runtime-input/parts/controllerTransitions.json",
+    "sha256": "7d7b9b5c5629297d24ace81574eb1442b0dbad5874cb91961db58ad4b03da8f6"
+  },
+  "assets/endfield_pack/native_source_runtime/resources/shell/runtime-input/parts/frameBuilder.json": {
+    "to": "rm_client/ui/endfield/menu/assets/native_source_runtime/resources/shell/runtime-input/parts/frameBuilder.json",
+    "sha256": "059bce5df4b5785746796cfaa37d784446a1b2e7c82ca62e3e4e7e9c94c47f0f"
+  },
+  "assets/endfield_pack/native_source_runtime/resources/shell/runtime-input/parts/library.ehanim": {
+    "to": "rm_client/ui/endfield/menu/assets/native_source_runtime/resources/shell/runtime-input/parts/library.ehanim",
+    "sha256": "762cf845f19fd62387a62ad1eea433e7bb956000c2ccf98e345b5ced93b9b5b9"
+  },
+  "assets/endfield_pack/native_source_runtime/resources/shell/runtime-input/parts/mountedDocument.json": {
+    "to": "rm_client/ui/endfield/menu/assets/native_source_runtime/resources/shell/runtime-input/parts/mountedDocument.json",
+    "sha256": "0eeafc7134021530c9571b5b7ca900c03684e30b7e34d12f66cb61a6a0b8c318"
+  },
+  "assets/endfield_pack/native_source_runtime/resources/shell/runtime-input/parts/nativeBottom.json": {
+    "to": "rm_client/ui/endfield/menu/assets/native_source_runtime/resources/shell/runtime-input/parts/nativeBottom.json",
+    "sha256": "8a818378e182a494f1eac88a23112f674fe25fd4a658e7cda6ac6215fe3c8749"
+  },
+  "assets/endfield_pack/native_source_runtime/resources/shell/runtime-input/parts/nativeTop.json": {
+    "to": "rm_client/ui/endfield/menu/assets/native_source_runtime/resources/shell/runtime-input/parts/nativeTop.json",
+    "sha256": "6ca24647747400fa7e77546c11b7f6995fd22d8ae292f4462776b1b058108fc1"
+  },
+  "assets/endfield_pack/native_source_runtime/resources/shell/runtime-input/parts/runtimeRoot.json": {
+    "to": "rm_client/ui/endfield/menu/assets/native_source_runtime/resources/shell/runtime-input/parts/runtimeRoot.json",
+    "sha256": "3fa05ffdebf8bf55c84bb48599019b36b7192f8cb706d39634f6bb4850b4197c"
+  },
+  "assets/endfield_pack/native_source_runtime/resources/shell/runtime-input/parts/scene.json": {
+    "to": "rm_client/ui/endfield/menu/assets/native_source_runtime/resources/shell/runtime-input/parts/scene.json",
+    "sha256": "fcfe466bc8c70eb458e8a2e6d98504d1ca8801afba13e3efb16294f29bb88ff0"
+  },
+  "assets/endfield_pack/native_source_runtime/resources/shell/runtime-input/raster/0c12af2efa8990d09f93a5520dd969269f6e913a89b433c2358a8a8e508467e1.png": {
+    "to": "rm_client/ui/endfield/menu/assets/native_source_runtime/resources/shell/runtime-input/raster/0c12af2efa8990d09f93a5520dd969269f6e913a89b433c2358a8a8e508467e1.png",
+    "sha256": "0c12af2efa8990d09f93a5520dd969269f6e913a89b433c2358a8a8e508467e1"
+  },
+  "assets/endfield_pack/native_source_runtime/resources/shell/runtime-input/raster/1af11ea867000cc042076c8e57093c2c9a426c00d64cb388b2139fce87b0c29a.png": {
+    "to": "rm_client/ui/endfield/menu/assets/native_source_runtime/resources/shell/runtime-input/raster/1af11ea867000cc042076c8e57093c2c9a426c00d64cb388b2139fce87b0c29a.png",
+    "sha256": "1af11ea867000cc042076c8e57093c2c9a426c00d64cb388b2139fce87b0c29a"
+  },
+  "assets/endfield_pack/native_source_runtime/resources/shell/runtime-input/raster/2a66dfdbe2ff7172760d9d7677de6d605009411aa34e675442fbae8d47d52723.png": {
+    "to": "rm_client/ui/endfield/menu/assets/native_source_runtime/resources/shell/runtime-input/raster/2a66dfdbe2ff7172760d9d7677de6d605009411aa34e675442fbae8d47d52723.png",
+    "sha256": "2a66dfdbe2ff7172760d9d7677de6d605009411aa34e675442fbae8d47d52723"
+  },
+  "assets/endfield_pack/native_source_runtime/resources/shell/runtime-input/raster/3cd913622a8a2386e3ddc7bd74f97e4c5d32ec9ee63dc9d2dc0033db7f933f76.png": {
+    "to": "rm_client/ui/endfield/menu/assets/native_source_runtime/resources/shell/runtime-input/raster/3cd913622a8a2386e3ddc7bd74f97e4c5d32ec9ee63dc9d2dc0033db7f933f76.png",
+    "sha256": "3cd913622a8a2386e3ddc7bd74f97e4c5d32ec9ee63dc9d2dc0033db7f933f76"
+  },
+  "assets/endfield_pack/native_source_runtime/resources/shell/runtime-input/raster/46e015a307a6b73dd9478e9b67bc21ad54b3e1483da15b2e6443368ad880e1d8.png": {
+    "to": "rm_client/ui/endfield/menu/assets/native_source_runtime/resources/shell/runtime-input/raster/46e015a307a6b73dd9478e9b67bc21ad54b3e1483da15b2e6443368ad880e1d8.png",
+    "sha256": "46e015a307a6b73dd9478e9b67bc21ad54b3e1483da15b2e6443368ad880e1d8"
+  },
+  "assets/endfield_pack/native_source_runtime/resources/shell/runtime-input/raster/5c3a623c7b7991118b38c434f92d8db2c6723b831a92a5d11d6b585b845581fc.png": {
+    "to": "rm_client/ui/endfield/menu/assets/native_source_runtime/resources/shell/runtime-input/raster/5c3a623c7b7991118b38c434f92d8db2c6723b831a92a5d11d6b585b845581fc.png",
+    "sha256": "5c3a623c7b7991118b38c434f92d8db2c6723b831a92a5d11d6b585b845581fc"
+  },
+  "assets/endfield_pack/native_source_runtime/resources/shell/runtime-input/raster/6a21c099ac58166d3f1e28008f7f0d8cfdf84e5df2f1f3eec5b3e4c43888c0f9.png": {
+    "to": "rm_client/ui/endfield/menu/assets/native_source_runtime/resources/shell/runtime-input/raster/6a21c099ac58166d3f1e28008f7f0d8cfdf84e5df2f1f3eec5b3e4c43888c0f9.png",
+    "sha256": "6a21c099ac58166d3f1e28008f7f0d8cfdf84e5df2f1f3eec5b3e4c43888c0f9"
+  },
+  "assets/endfield_pack/native_source_runtime/resources/shell/runtime-input/raster/6ce4c279e35365aad94faf74dff1376fc77801db7d87049f65bc7a09cf7d2f72.png": {
+    "to": "rm_client/ui/endfield/menu/assets/native_source_runtime/resources/shell/runtime-input/raster/6ce4c279e35365aad94faf74dff1376fc77801db7d87049f65bc7a09cf7d2f72.png",
+    "sha256": "6ce4c279e35365aad94faf74dff1376fc77801db7d87049f65bc7a09cf7d2f72"
+  },
+  "assets/endfield_pack/native_source_runtime/resources/shell/runtime-input/raster/8482ae6ac80a9195ea78786f463fd3efd652c5c8ce5331445bf3ea81222c83ce.png": {
+    "to": "rm_client/ui/endfield/menu/assets/native_source_runtime/resources/shell/runtime-input/raster/8482ae6ac80a9195ea78786f463fd3efd652c5c8ce5331445bf3ea81222c83ce.png",
+    "sha256": "8482ae6ac80a9195ea78786f463fd3efd652c5c8ce5331445bf3ea81222c83ce"
+  },
+  "assets/endfield_pack/native_source_runtime/resources/shell/runtime-input/raster/84f47f1eb35224762220e96d583a3241de7c599bff5c730e34ffbbfd7561c9c0.png": {
+    "to": "rm_client/ui/endfield/menu/assets/native_source_runtime/resources/shell/runtime-input/raster/84f47f1eb35224762220e96d583a3241de7c599bff5c730e34ffbbfd7561c9c0.png",
+    "sha256": "84f47f1eb35224762220e96d583a3241de7c599bff5c730e34ffbbfd7561c9c0"
+  },
+  "assets/endfield_pack/native_source_runtime/resources/shell/runtime-input/raster/884a46ec23d4f4f40c9faf807b60d5d11a7f469a07f726aa1701378dc4218f04.png": {
+    "to": "rm_client/ui/endfield/menu/assets/native_source_runtime/resources/shell/runtime-input/raster/884a46ec23d4f4f40c9faf807b60d5d11a7f469a07f726aa1701378dc4218f04.png",
+    "sha256": "884a46ec23d4f4f40c9faf807b60d5d11a7f469a07f726aa1701378dc4218f04"
+  },
+  "assets/endfield_pack/native_source_runtime/resources/shell/runtime-input/raster/a3d30ab72b11be44d91823c5d60780f2c3cf138905d1429a3a58cd9eb6d51991.png": {
+    "to": "rm_client/ui/endfield/menu/assets/native_source_runtime/resources/shell/runtime-input/raster/a3d30ab72b11be44d91823c5d60780f2c3cf138905d1429a3a58cd9eb6d51991.png",
+    "sha256": "a3d30ab72b11be44d91823c5d60780f2c3cf138905d1429a3a58cd9eb6d51991"
+  },
+  "assets/endfield_pack/native_source_runtime/resources/shell/runtime-input/raster/bd49b2a3c77e4fb72c90800df25b7045b4e3616c3068f0ad4666e36763e75b01.png": {
+    "to": "rm_client/ui/endfield/menu/assets/native_source_runtime/resources/shell/runtime-input/raster/bd49b2a3c77e4fb72c90800df25b7045b4e3616c3068f0ad4666e36763e75b01.png",
+    "sha256": "bd49b2a3c77e4fb72c90800df25b7045b4e3616c3068f0ad4666e36763e75b01"
+  },
+  "assets/endfield_pack/native_source_runtime/resources/shell/runtime-input/raster/c1801a116429fb004d1b5062e15e02b4fcbf8949cdb23fbcefada0673760b9d9.png": {
+    "to": "rm_client/ui/endfield/menu/assets/native_source_runtime/resources/shell/runtime-input/raster/c1801a116429fb004d1b5062e15e02b4fcbf8949cdb23fbcefada0673760b9d9.png",
+    "sha256": "c1801a116429fb004d1b5062e15e02b4fcbf8949cdb23fbcefada0673760b9d9"
+  },
+  "assets/endfield_pack/native_source_runtime/resources/shell/runtime-input/raster/dd546686ff63f9f93bcc64fdd3e653dacb3a91b9068369efd57de3ce8be9f3ac.png": {
+    "to": "rm_client/ui/endfield/menu/assets/native_source_runtime/resources/shell/runtime-input/raster/dd546686ff63f9f93bcc64fdd3e653dacb3a91b9068369efd57de3ce8be9f3ac.png",
+    "sha256": "dd546686ff63f9f93bcc64fdd3e653dacb3a91b9068369efd57de3ce8be9f3ac"
+  },
+  "assets/endfield_pack/native_source_runtime/resources/shell/runtime-input/raster/ee67a8ee0d29f7fa0a96931c7a1c1036bfe5e0da070cb79ae3e583ee3720d1e4.png": {
+    "to": "rm_client/ui/endfield/menu/assets/native_source_runtime/resources/shell/runtime-input/raster/ee67a8ee0d29f7fa0a96931c7a1c1036bfe5e0da070cb79ae3e583ee3720d1e4.png",
+    "sha256": "ee67a8ee0d29f7fa0a96931c7a1c1036bfe5e0da070cb79ae3e583ee3720d1e4"
+  }
+}

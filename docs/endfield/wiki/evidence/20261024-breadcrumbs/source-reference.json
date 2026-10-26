@@ -1,0 +1,165 @@
+{
+  "origin": "read-only current installed game; fresh WikiTop.lua original export: 1 file, 0 failures",
+  "lua_source": "Data/LuaScripts/UI/Widgets/WikiTop.lua",
+  "lua_sha256": "7cda64913280d30bda7b146e8cacd944f4e294db704624e59367f7d96e91eb62",
+  "lua_rule_lines": [
+    "        local folder = self.m_folderPath[folderIndex]",
+    "        local isCurrent = index == folderCount",
+    "        folderCell.bgImg.gameObject:SetActive(not isCurrent)",
+    "        folderCell.arrowImg.gameObject:SetActive(not isCurrent)",
+    "        folderCell.stateController:SetState(isCurrent and \"current\" or \"normal\")",
+    "        local folderName",
+    "        if folder.nameKey ~= nil then",
+    "            folderName = Language[folder.nameKey]",
+    "        end",
+    "        if folderName == nil and args.wikiEntryShowData then",
+    "            if args.wikiEntryShowData.wikiEntryData.refItemId and not string.isEmpty(args.wikiEntryShowData.wikiEntryData.refItemId) then",
+    "                folderName = Tables.itemTable[args.wikiEntryShowData.wikiEntryData.refItemId].name",
+    "            elseif args.wikiEntryShowData.wikiEntryData.refMonsterTemplateId and not string.isEmpty(args.wikiEntryShowData.wikiEntryData.refMonsterTemplateId) then",
+    "                folderName = Tables.enemyTemplateDisplayInfoTable[args.wikiEntryShowData.wikiEntryData.refMonsterTemplateId].name",
+    "            end",
+    "        end",
+    "        folderCell.nameTxt.text = folderName",
+    "        folderCell.nameTxt.color = isCurrent and folderCell.config.COLOR_CURRENT or folderCell.config.COLOR_PARENT",
+    "        folderCell.btn.onClick:RemoveAllListeners()",
+    "        folderCell.btn.gameObject:GetComponent(typeof(CS.Beyond.UI.NonDrawingGraphic)).raycastTarget = not isCurrent",
+    "        if not isCurrent then",
+    "            folderCell.btn.onClick:AddListener(function()"
+  ],
+  "verified_game_bundles": [
+    {
+      "bundle": "Data/Bundles/Windows/main/a9f7f5d0de6474ea55142bdf.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 172142829,
+      "length": 4670,
+      "md5": "7688d537742652146d60e638e953e0e8",
+      "sha256": "6a2af67e68e7f26375f5454b7c2da449b5fc9f635e7c2814d910c4c5af6a0260"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/f69405ec73bc25900d5caa36.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 173770169,
+      "length": 4704,
+      "md5": "1f71c55d71ce9cf4b42b927a69a7c8af",
+      "sha256": "4c62ad76910bcf0c1edc9490121279876f753df405d0e90b335d019f674d1f7f"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/d182f559c71ffd7bbe82edea.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\FCC20C36ADBBD4D50AEC8A24F57459AA.chk",
+      "offset": 145216531,
+      "length": 37896,
+      "md5": "aa799ce1d68fe3d86400285f1cb33eb1",
+      "sha256": "95d7fb113ef16c41de025d31aec0dcc4159b44499df41457e5b49085a2e63b9e"
+    }
+  ],
+  "breadcrumb_layout": {
+    "slices": [
+      [
+        "path_bg_00",
+        "path_bg_01",
+        "path_bg_02"
+      ],
+      [
+        "path_bg_10",
+        "path_bg_11",
+        "path_bg_12"
+      ],
+      [
+        "path_bg_20",
+        "path_bg_21",
+        "path_bg_22"
+      ]
+    ],
+    "border": [
+      7,
+      8,
+      8,
+      7
+    ],
+    "sprite_size": [
+      16,
+      16
+    ],
+    "background": {
+      "position": {
+        "x": 0.0,
+        "y": 0.0
+      },
+      "size_delta": {
+        "x": 0.0,
+        "y": -12.0
+      },
+      "color": {
+        "r": 0.2235294133424759,
+        "g": 0.2235294133424759,
+        "b": 0.2235294133424759,
+        "a": 1.0
+      }
+    },
+    "highlight": {
+      "position": {
+        "x": 0.0,
+        "y": 2.0
+      },
+      "size_delta": {
+        "x": 0.0,
+        "y": -10.0
+      },
+      "color": {
+        "r": 1.0,
+        "g": 1.0,
+        "b": 1.0,
+        "a": 0.250980406999588
+      }
+    },
+    "padding": {
+      "current": {
+        "m_Left": 0,
+        "m_Right": 0,
+        "m_Top": 2,
+        "m_Bottom": 0
+      },
+      "normal": {
+        "m_Left": 20,
+        "m_Right": 20,
+        "m_Top": 2,
+        "m_Bottom": 0
+      }
+    },
+    "spacing": 38.5,
+    "font_size": 26.0,
+    "current_color": {
+      "r": 0.22352942824363708,
+      "g": 0.2196078598499298,
+      "b": 0.2196078598499298,
+      "a": 1.0
+    },
+    "parent_color": {
+      "r": 1.0,
+      "g": 1.0,
+      "b": 1.0,
+      "a": 1.0
+    }
+  },
+  "state_padding": [
+    {
+      "name": "current",
+      "padding": {
+        "m_Left": 0,
+        "m_Right": 0,
+        "m_Top": 2,
+        "m_Bottom": 0
+      }
+    },
+    {
+      "name": "normal",
+      "padding": {
+        "m_Left": 20,
+        "m_Right": 20,
+        "m_Top": 2,
+        "m_Bottom": 0
+      }
+    }
+  ],
+  "rule": "Only ancestor pages have background and outgoing arrow; selected module belongs to current two-pane page."
+}

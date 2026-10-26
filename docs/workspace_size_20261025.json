@@ -1,0 +1,230 @@
+{
+  "measured_date": "2026-10-25",
+  "units": "MiB = 1048576 bytes; logical file payloads, not compressed downloads or GitHub repository storage",
+  "upstream": {
+    "url": "https://github.com/lulunomaro/polar-rm-client",
+    "commit": "a22104c48653ae178209af0c4cb289f4ea65ea8c",
+    "files": 4455,
+    "bytes": 158181912
+  },
+  "local_HEAD": {
+    "commit": "10fefb35cf286058f13d50e56862a46fe0bd142e",
+    "files": 4359,
+    "bytes": 144773991
+  },
+  "working_git_visible": {
+    "files": 4925,
+    "bytes": 249101588
+  },
+  "working_vs_upstream_delta_bytes": 90919676,
+  "working_vs_upstream_percent": 57.48,
+  "comparison_groups": {
+    "upstream": {
+      "groups": {
+        "other": 75273619,
+        "endfield_runtime": 61429498,
+        "docs_and_reports": 21478795
+      },
+      "types": {
+        "(no extension)": 215306,
+        ".md": 2352421,
+        ".svg": 24257,
+        ".css": 110431,
+        ".json": 22001732,
+        ".ts": 224278,
+        ".xml": 389680,
+        ".png": 12100516,
+        ".wav": 1276620,
+        ".otf": 595336,
+        ".efmesh": 15901392,
+        ".txt": 1447711,
+        ".dll": 2232832,
+        ".ttf": 38626692,
+        ".ehscene": 8364314,
+        ".hlsl": 9162,
+        ".ehanim": 1991308,
+        ".ogg": 4104756,
+        ".zip": 1559654,
+        ".h264": 44832,
+        ".hevc": 36619,
+        ".mp3": 228165,
+        ".mp4": 25860264,
+        ".log": 3744508,
+        ".py": 10821549,
+        ".gz": 941674,
+        ".sha256": 304,
+        ".cpp": 43736,
+        ".spec": 2541,
+        ".ps1": 39332,
+        ".service": 796,
+        ".h": 28454,
+        ".patch": 16581,
+        ".bin": 2836140,
+        ".bat": 8019
+      }
+    },
+    "local": {
+      "groups": {
+        "docs_and_reports": 85793282,
+        "other": 62450335,
+        "endfield_runtime": 100868743
+      },
+      "types": {
+        ".log": 3798556,
+        ".py": 10948555,
+        ".ogg": 4104756,
+        ".md": 2341782,
+        ".json": 52310493,
+        ".gz": 941674,
+        ".png": 45302834,
+        ".txt": 1470985,
+        "(no extension)": 217288,
+        ".sha256": 306,
+        ".wav": 1276620,
+        ".svg": 21543,
+        ".cpp": 49915,
+        ".patch": 16941,
+        ".dll": 8971776,
+        ".h": 29032,
+        ".gif": 1328867,
+        ".ttf": 48095788,
+        ".mp3": 241165,
+        ".service": 813,
+        ".zip": 1559654,
+        ".otf": 369312,
+        ".bin": 2836140,
+        ".inc": 2868,
+        ".woff2": 9003736,
+        ".xml": 362164,
+        ".bat": 8224,
+        ".spec": 2801,
+        ".js": 1167865,
+        ".html": 1505,
+        ".css": 78332,
+        ".ps1": 42179,
+        ".mp4": 25860264,
+        ".efmesh": 15901392,
+        ".hlsl": 9162,
+        ".ehscene": 8364314,
+        ".h264": 44832,
+        ".ehanim": 1991308,
+        ".hevc": 36619
+      }
+    }
+  },
+  "disk": {
+    "totals": {
+      "tracked": 83796734,
+      "untracked": 165304854,
+      "ignored": 5320629248,
+      "git_metadata": 150129509
+    },
+    "top": {
+      "(root files)": {
+        "bytes": 294025,
+        "files": 34,
+        "tracked": 292489,
+        "untracked": 1390,
+        "ignored": 146
+      },
+      "同济自瞄": {
+        "bytes": 3198702,
+        "files": 3,
+        "tracked": 3198702
+      },
+      "user_data": {
+        "bytes": 413432013,
+        "files": 181,
+        "ignored": 413432013
+      },
+      "tools": {
+        "bytes": 2634018,
+        "files": 208,
+        "tracked": 1549217,
+        "untracked": 219872,
+        "ignored": 864929
+      },
+      "tmp": {
+        "bytes": 3615107775,
+        "files": 31554,
+        "ignored": 3615107775
+      },
+      "tests": {
+        "bytes": 10547461,
+        "files": 632,
+        "tracked": 7703547,
+        "untracked": 165874,
+        "ignored": 2678040
+      },
+      "rm_client": {
+        "bytes": 111073220,
+        "files": 892,
+        "tracked": 3852568,
+        "ignored": 6281548,
+        "untracked": 100939104
+      },
+      "reports": {
+        "bytes": 721700,
+        "files": 103,
+        "tracked": 721088,
+        "untracked": 612
+      },
+      "native": {
+        "bytes": 36688,
+        "files": 2,
+        "untracked": 36688
+      },
+      "licenses": {
+        "bytes": 47537,
+        "files": 6,
+        "tracked": 47537
+      },
+      "docs": {
+        "bytes": 85690083,
+        "files": 3104,
+        "tracked": 21130094,
+        "untracked": 63941314,
+        "ignored": 618675
+      },
+      "configs": {
+        "bytes": 24768,
+        "files": 4,
+        "tracked": 24768
+      },
+      "calibrations": {
+        "bytes": 0,
+        "files": 1,
+        "tracked": 0
+      },
+      "bin": {
+        "bytes": 36226560,
+        "files": 1,
+        "ignored": 36226560
+      },
+      "assets": {
+        "bytes": 45276724,
+        "files": 394,
+        "tracked": 45276724
+      },
+      ".venv": {
+        "bytes": 1245419562,
+        "files": 8415,
+        "ignored": 1245419562
+      },
+      ".git": {
+        "bytes": 150129509,
+        "files": 1608,
+        "git_metadata": 150129509
+      }
+    }
+  },
+  "branch_divergence": {
+    "local_only_commits": 2,
+    "upstream_only_commits": 7
+  },
+  "limits": [
+    "Working Git-visible set includes untracked files; it is not a proposed commit.",
+    "Initial disk scan precedes upstream fetch and this small refactor; transient reports can grow afterwards.",
+    "Identical blob IDs across renamed paths are recognized as existing content, not new source implementation."
+  ]
+}

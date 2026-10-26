@@ -20,7 +20,7 @@ class InputFixtureAudioIsolationTests(unittest.TestCase):
                 window = fixture.window
                 self.assertIsInstance(window.ui_audio.pool, QObject)
                 window.economy_visible = False
-                window.open_hero_deploy_interface()
+                window.play_gui_transition_sound("expand")
                 effect.assert_not_called()
                 player.assert_not_called()
                 output.assert_not_called()

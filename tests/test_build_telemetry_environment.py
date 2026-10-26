@@ -62,7 +62,7 @@ class FreezeEnvironmentTests(unittest.TestCase):
                     env=environment, capture_output=True, text=True, timeout=15, check=False,
                 )
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(json.loads(result.stdout), [["hook-import", "true"], ["cv2", "true"], ["openvino", "true"]])
+                self.assertEqual(json.loads(result.stdout), [["hook-import", "true"], ["cv2", "true"], ["openvino", "true"], ["av", "true"]])
                 self.assertEqual(dict(os.environ), original)
 
     def test_release_launcher_scopes_and_restores_freezing_environment(self):

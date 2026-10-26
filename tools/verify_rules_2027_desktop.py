@@ -79,7 +79,7 @@ def run(out):
                     assert window.state.match_duration_sec==({'RMUC7v7':420,'RMUL3v3':300,'RMUL1v1':120}[key])
                     assert not window.match_mode_manager.current.field.positions_calibrated
                     assert window.official_map_image(window.match_mode_manager.current) is not None
-                    assert not window.open_hero_deploy_interface()
+                    assert not hasattr(window, "open_hero_deploy_interface")
                     text=' '.join(line for line,_ in MinecraftCombatHudRenderer.scoreboard_lines(window.state))
                     if key.startswith('RMUL'):assert 'Base:' not in text and 'Shield:' not in text
                     if key=='RMUL3v3':

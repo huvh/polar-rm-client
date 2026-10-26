@@ -203,9 +203,6 @@ class TopMatchBarController:
             return False
         if owner.menu_overlay_active():
             return False
-        hero = getattr(owner, "hero_deploy_ui", None)
-        if hero is not None and bool(getattr(hero, "active", False)):
-            return False
         coordinator = getattr(owner, "overlay_coordinator", None)
         if coordinator is not None and getattr(coordinator, "modal", None) is not None:
             return False

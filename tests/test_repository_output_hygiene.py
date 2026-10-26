@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class RepositoryOutputHygieneTests(unittest.TestCase):
-    def test_documented_verification_environment_is_local_but_evidence_is_visible(self):
+    def test_environments_outputs_and_evidence_are_all_visible_to_git(self):
         # Git is already a source-verification prerequisite; do not skip silently.
         git = shutil.which('git')
         self.assertIsNotNone(git, 'Git is required to verify repository ignore behavior')
@@ -25,6 +25,11 @@ class RepositoryOutputHygieneTests(unittest.TestCase):
                 'tests/baselines/verification.png',
                 'docs/evidence/verification/result.json',
                 'requirements-verification-linux-cp312.txt',
+                '.venv/Lib/site-packages/example.py',
+                'tmp/game-export/example.raw',
+                'user_data/profile.json',
+                'bin/ffmpeg.exe',
+                'logs/client.log',
             ]
             result = subprocess.run(
                 [git, '-c', 'core.excludesFile=', '-C', str(root),
@@ -33,7 +38,8 @@ class RepositoryOutputHygieneTests(unittest.TestCase):
                 timeout=15, check=False,
             )
             self.assertIn(result.returncode, (0, 1), result.stderr)
-            self.assertEqual(result.stdout.decode('utf-8').splitlines(), candidates[:3])
+            self.assertEqual(result.returncode,1,result.stderr)
+            self.assertEqual(result.stdout.decode('utf-8').splitlines(),[])
 
 
 if __name__ == '__main__':

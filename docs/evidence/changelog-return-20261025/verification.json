@@ -1,0 +1,130 @@
+{
+  "scope": "Windows real desktop composition with inert device transports",
+  "root_cause": "WebEngine native ancestor propagation replaced the main HWND while DirectComposition retained the old HWND",
+  "results": [
+    {
+      "status": "PASS",
+      "roundtrips": 6,
+      "fullscreen": true,
+      "display_checks": [
+        {
+          "round": 0,
+          "before": 3700,
+          "after": 3513
+        },
+        {
+          "round": 1,
+          "before": 3515,
+          "after": 3515
+        },
+        {
+          "round": 2,
+          "before": 3514,
+          "after": 3513
+        },
+        {
+          "round": 3,
+          "before": 3513,
+          "after": 3514
+        },
+        {
+          "round": 4,
+          "before": 3514,
+          "after": 3513
+        },
+        {
+          "round": 5,
+          "before": 3513,
+          "after": 3511
+        }
+      ],
+      "cancel_loading": false,
+      "hwnds": [
+        655996
+      ]
+    },
+    {
+      "status": "PASS",
+      "roundtrips": 6,
+      "fullscreen": false,
+      "display_checks": [
+        {
+          "round": 0,
+          "before": 2564,
+          "after": 2419
+        },
+        {
+          "round": 1,
+          "before": 2419,
+          "after": 2425
+        },
+        {
+          "round": 2,
+          "before": 2424,
+          "after": 2423
+        },
+        {
+          "round": 3,
+          "before": 2423,
+          "after": 2423
+        },
+        {
+          "round": 4,
+          "before": 2423,
+          "after": 2424
+        },
+        {
+          "round": 5,
+          "before": 2424,
+          "after": 2425
+        }
+      ],
+      "cancel_loading": false,
+      "hwnds": [
+        4261782
+      ]
+    },
+    {
+      "status": "PASS",
+      "roundtrips": 2,
+      "fullscreen": false,
+      "display_checks": [
+        {
+          "round": 0,
+          "before": 2564,
+          "after": 2420
+        },
+        {
+          "round": 1,
+          "before": 2419,
+          "after": 2424
+        }
+      ],
+      "cancel_loading": false,
+      "hwnds": [
+        10357888
+      ]
+    },
+    {
+      "status": "PASS",
+      "roundtrips": 2,
+      "fullscreen": true,
+      "display_checks": [
+        {
+          "round": 0,
+          "before": 3703,
+          "after": 3515
+        },
+        {
+          "round": 1,
+          "before": 3517,
+          "after": 3540
+        }
+      ],
+      "cancel_loading": true,
+      "hwnds": [
+        12126042
+      ]
+    }
+  ]
+}

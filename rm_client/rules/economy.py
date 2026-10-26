@@ -8,7 +8,8 @@ def rule_economy_cards(state):
     role=getattr(state,'robot_profile','')
     cards=[]
     for row in rules.facts.get('economy_catalogue',()):
-        if role not in row.get('roles',(role,)):continue
+        if role not in row.get('roles',(role,)):
+            continue
         cost=row.get('cost')
         cards.append(EconomyOffer(key=f'2027_{row["key"]}',category=row['category'],
             title=row['title'],short_title=row['title'],description=row['description'],unit=row['unit'],

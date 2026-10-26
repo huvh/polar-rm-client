@@ -57,13 +57,6 @@ class ClickGuiShortcutRepeatTests(unittest.TestCase):
     def test_right_shift_repeats_do_not_reverse_the_physical_toggle(self):
         self.check_toggle(Qt.Key.Key_Shift)
 
-    def test_hero_to_clickgui_transition_does_not_bounce_on_f8_repeat(self):
-        self.host.hero_deploy_ui.visible = True
-        self.key(Qt.Key.Key_F8)
-        self.assertFalse(self.host.hero_deploy_ui.visible)
-        self.assertTrue(self.host.gui_visible)
-        self.key(Qt.Key.Key_F8, repeat=True)
-        self.assertTrue(self.host.gui_visible)
 
     def test_repeat_keeps_pending_background_release_owned_without_dismissal(self):
         self.key(Qt.Key.Key_F8)

@@ -1,0 +1,18 @@
+{
+  "status": "PASS",
+  "tests": {
+    "test_original_changelog": 5,
+    "test_endfield_changelog": 3,
+    "test_qt_launch_abort": 7,
+    "test_endfield_menu": 11,
+    "test_escape_menu": 13
+  },
+  "total": 39,
+  "windows_ui": "PASS: real PolarRMWindow with inert device fixtures, default Windows renderer, original font faces loaded, zero remote requests and no JS errors",
+  "assets": {
+    "status": "PASS",
+    "files": 20
+  },
+  "release_script_syntax": "PASS",
+  "full_exe_build": "not run"
+}

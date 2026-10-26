@@ -1,6 +1,6 @@
 # 模块 ↔ 后端实现 对照（通俗版，脚本生成）
 
-> 生成命令：`python tools/module_backend_map.py`（本文件即其输出，改代码后重跑即可）
+> 生成命令：`python tools/module_backend_map.py`（更新自动段；第 4 节已有人工内容原样保留）
 > 
 > **怎么读**：一行 = 一个模块。`附近出现的段字段`=模块名附近 8 行内数到的段字段（**弱证据，只用来指路**，见第 4 节）
 > `其它通路`=官方裁判 / MQTT / 本地视觉 / 串口这几条非段通路；`上行`=它会不会往车里发东西；`主要落点`=可直接点开核对的文件
@@ -13,7 +13,7 @@
 | **队内 0x5A 下行** | 咱们自己电控板通过 USB 线/图传吐出的 15 个自定义段 | 队内 StandardRobot++ 固件（`usb_task.c`） | 依赖它的模块只能靠官方数据或干脆空着 |
 | **官方裁判协议** | 裁判系统发给机器人的标准报文（血量、比分、伤害、增益…） | 赛场裁判系统 + `backend/protocol.py` | 战况类模块全瞎 |
 | **MQTT / 图传** | 官方云端那套（PRM1） | `backend/mqtt_backend.py` | 远程指挥类模块不可用 |
-| **本地视觉** | 同济视觉 / NUC 那一路识别结果 | `backend/video_backend.py` | 视觉自瞄退化成只看血量 |
+| **本地视觉** | 同济视觉 / NUC 那一路识别结果 | `backend/video/`（兼容入口 `backend/video_backend.py`） | 视觉自瞄退化成只看血量 |
 | **上行（客户端发出去）** | 0x01 控制指令、0x02 调参、0x03 虚拟遥控器键位、0x04 底盘自转与云台直控 | 只有插了 USB 线（或走通图传）才到得了车 | 只能看不能开 |
 
 ## 1. 74 个模块逐个对照
@@ -29,7 +29,7 @@
 | **ArmorAutoAim** | 开 | 7 | — | 本地视觉(同济)x5、MQTT/图传x1 | — | `rm_client/ui/polar/renderers/esp_wireframe.py`、`rm_client/ui/polar_app.py` |
 | **EnergyAutoAim** | 关 | 7 | — | 本地视觉(同济)x2、官方裁判协议x1 | — | `rm_client/backend/readiness.py`、`rm_client/ui/polar_app.py` |
 | **ArmorLock** | 关 | 3 | — | — | — | `rm_client/ui/minecraft_hud.py`、`rm_client/ui/polar/renderers/module_list.py` |
-| **HeroLob** | 关 | 26 | — | 官方裁判协议x2 | — | `rm_client/ui/polar/mixins/video_backend_mixin.py`、`rm_client/ui/polar/mixins/config_actions_mixin.py` |
+| **HeroLob** | 关 | 25 | — | — | — | `rm_client/configuration/registry.py`、`rm_client/ui/endfield/changelog/content.py` |
 | **FireControlStub** | 关 | 3 | — | — | — | （当前搜索未找到名字证据，需核查通用或动态消费者） |
 | **FrictionWheel** | 关 | 3 | — | 本地视觉(同济)x2 | — | `rm_client/ui/polar/renderers/module_list.py`、`rm_client/ui/minecraft_hud.py` |
 | **LockState** | 开 | 3 | — | — | — | `rm_client/ui/polar/renderers/esp_wireframe.py`、`rm_client/ui/polar/renderers/module_list.py` |
@@ -38,17 +38,17 @@
 
 | 模块 | 开关 | 设置项 | 附近出现的段字段（弱证据） | 其它通路 | 上行 | 主要落点 |
 |---|---|---:|---|---|---|---|
-| **SpinMode** | 开 | 4 | 0x08 裁判警告 RefereeWarning x4 | 官方裁判协议x4、本地视觉(同济)x4、MQTT/图传x1 | — | `rm_client/auto_spin.py`、`rm_client/ui/polar/mixins/config_actions_mixin.py` |
+| **SpinMode** | 开 | 4 | 0x08 裁判警告 RefereeWarning x4 | 本地视觉(同济)x4、官方裁判协议x3、MQTT/图传x1 | — | `rm_client/auto_spin.py`、`rm_client/ui/polar/mixins/config_actions_mixin.py` |
 | **AutoSpinOnHit** | 关 | 8 | — | — | — | `rm_client/ui/polar/mixins/video_backend_mixin.py`、`rm_client/ui/polar/renderers/module_list.py` |
 | **ChassisAssist** | 关 | 3 | — | 本地视觉(同济)x2 | — | `rm_client/control.py`、`rm_client/ui/polar/renderers/module_list.py` |
-| **PowerGuard** | 关 | 3 | — | 本地视觉(同济)x2 | — | `rm_client/ui/polar/renderers/tactical_map.py`、`rm_client/ui/polar/renderers/module_list.py` |
+| **PowerGuard** | 关 | 3 | — | MQTT/图传x2、本地视觉(同济)x2、官方裁判协议x1 | — | `rm_client/ui/polar/renderers/tactical_map.py`、`rm_client/ui/endfield/lifecycle.py` |
 
 ### 分类 Vision（8 个）
 
 | 模块 | 开关 | 设置项 | 附近出现的段字段（弱证据） | 其它通路 | 上行 | 主要落点 |
 |---|---|---:|---|---|---|---|
-| **CameraFeed** | 开 | 5 | — | 本地视觉(同济)x4 | — | `rm_client/ui/polar/mixins/video_backend_mixin.py`、`rm_client/backend/manager.py` |
-| **TongjiVisionBridge** | 开 | 9 | — | 本地视觉(同济)x5、MQTT/图传x2、官方裁判协议x1 | — | `rm_client/ui/polar/mixins/video_backend_mixin.py`、`rm_client/ui/polar_app.py` |
+| **CameraFeed** | 开 | 6 | — | 本地视觉(同济)x6 | — | `rm_client/ui/polar/mixins/video_backend_mixin.py`、`rm_client/backend/manager.py` |
+| **TongjiVisionBridge** | 开 | 9 | — | 本地视觉(同济)x5、MQTT/图传x2、官方裁判协议x1 | — | `rm_client/ui/polar/mixins/video_backend_mixin.py`、`rm_client/ui/polar/window_assembly.py` |
 | **CameraCalibration** | 开 | 7 | — | — | — | `rm_client/ui/polar/mixins/config_actions_mixin.py` |
 | **Armor3DESP** | 开 | 8 | — | — | — | `rm_client/ui/polar/renderers/esp_wireframe.py`、`rm_client/configuration/migrations.py` |
 | **RobotOverlay** | 开 | 12 | — | 本地视觉(同济)x1 | — | `rm_client/ui/polar/renderers/esp_wireframe.py`、`rm_client/ui/polar/mixins/video_backend_mixin.py` |
@@ -64,10 +64,10 @@
 | **TacticalMap** | 开 | 10 | — | — | — | `rm_client/ui/polar/renderers/tactical_map.py`、`rm_client/ui/minecraft_hud.py` |
 | **SentinelCommand** | 关 | 2 | — | — | — | （当前搜索未找到名字证据，需核查通用或动态消费者） |
 | **AirSupport** | 关 | 2 | — | — | — | （当前搜索未找到名字证据，需核查通用或动态消费者） |
-| **MatchTimer** | 开 | 3 | — | — | — | `rm_client/ui/polar/renderers/tactical_map.py`、`rm_client/ui/polar_app.py` |
+| **MatchTimer** | 开 | 3 | — | — | — | `rm_client/ui/polar/renderers/tactical_map.py`、`rm_client/ui/endfield/menu/mixin.py` |
 | **BaseOutpostStatus** | 开 | 4 | — | — | — | `rm_client/ui/polar/renderers/tactical_map.py` |
 | **VictoryPointStatus** | 关 | 3 | — | — | — | `rm_client/ui/polar/renderers/tactical_map.py` |
-| **EconomyPanel** | 开 | 7 | — | MQTT/图传x4、官方裁判协议x1、本地视觉(同济)x1 | — | `rm_client/ui/polar/renderers/tactical_map.py`、`rm_client/scenarios.py` |
+| **EconomyPanel** | 开 | 7 | — | MQTT/图传x5、官方裁判协议x2、本地视觉(同济)x1 | — | `rm_client/ui/polar/renderers/tactical_map.py`、`rm_client/scenarios.py` |
 | **ProjectileShop** | 开 | 3 | 0x08 裁判警告 RefereeWarning x12、0x0A 本体状态 RobotStatus（热量/电容/转速） x6 | MQTT/图传x4、官方裁判协议x1、本地视觉(同济)x1 | — | `rm_client/ui/polar/renderers/tactical_map.py`、`rm_client/scenarios.py` |
 | **MatchChat** | 开 | 4 | — | 官方裁判协议x4、本地视觉(同济)x4 | — | `rm_client/ui/polar_app.py`、`rm_client/ui/polar/mixins/video_backend_mixin.py` |
 | **BuffStatus** | 开 | 3 | — | — | — | `rm_client/ui/polar/renderers/module_list.py` |
@@ -86,21 +86,21 @@
 
 | 模块 | 开关 | 设置项 | 附近出现的段字段（弱证据） | 其它通路 | 上行 | 主要落点 |
 |---|---|---:|---|---|---|---|
-| **Scenario** | 开 | 5 | 0x0A 本体状态 RobotStatus（热量/电容/转速） x3 | MQTT/图传x2 | — | `rm_client/scenarios.py`、`rm_client/ui/polar/renderers/startup_scene.py` |
+| **Scenario** | 开 | 5 | 0x0A 本体状态 RobotStatus（热量/电容/转速） x3 | MQTT/图传x3、官方裁判协议x1 | — | `rm_client/scenarios.py`、`rm_client/ui/polar/renderers/startup_scene.py` |
 | **StartupVisual** | 开 | 10 | — | — | — | `rm_client/ui/polar/renderers/startup_scene.py`、`rm_client/ui/polar/mixins/persistence_mixin.py` |
 | **MatchMode** | 开 | 3 | 0x08 裁判警告 RefereeWarning x3 | MQTT/图传x2 | — | `rm_client/ui/polar/mixins/persistence_mixin.py`、`rm_client/configuration/effects.py` |
-| **RobotProfile** | 开 | 6 | 0x0A 本体状态 RobotStatus（热量/电容/转速） x9、0x08 裁判警告 RefereeWarning x7 | 官方裁判协议x6、MQTT/图传x1 | — | `rm_client/robot_profiles.py`、`rm_client/ui/polar/mixins/persistence_mixin.py` |
-| **AllianceProfile** | 开 | 2 | 0x0A 本体状态 RobotStatus（热量/电容/转速） x2 | MQTT/图传x2 | — | `rm_client/configuration/migrations.py`、`rm_client/ui/polar/renderers/tactical_map.py` |
+| **RobotProfile** | 开 | 6 | 0x0A 本体状态 RobotStatus（热量/电容/转速） x9、0x08 裁判警告 RefereeWarning x7 | 官方裁判协议x5、MQTT/图传x1 | — | `rm_client/robot_profiles.py`、`rm_client/ui/polar/mixins/persistence_mixin.py` |
+| **AllianceProfile** | 开 | 2 | — | MQTT/图传x2 | — | `rm_client/ui/polar/renderers/tactical_map.py`、`rm_client/configuration/migrations.py` |
 | **ConfigManager** | 开 | 6 | — | — | — | `rm_client/ui/polar/mixins/persistence_mixin.py`、`rm_client/configuration/effects.py` |
 | **EmergencyStop** | 开 | 2 | — | — | — | （当前搜索未找到名字证据，需核查通用或动态消费者） |
 | **MatchReadiness** | 开 | 1 | — | 本地视觉(同济)x1 | — | `rm_client/configuration/preferences.py`、`rm_client/ui/cs2_settings_center.py` |
-| **AudioFeedback** | 开 | 13 | — | — | — | `rm_client/ui/polar/mixins/config_actions_mixin.py`、`rm_client/ui/polar/mixins/persistence_mixin.py` |
+| **AudioFeedback** | 开 | 13 | — | MQTT/图传x2、官方裁判协议x1 | — | `rm_client/ui/polar/mixins/config_actions_mixin.py`、`rm_client/ui/polar/mixins/persistence_mixin.py` |
 | **QuickActionWheel** | 开 | 14 | 0x08 裁判警告 RefereeWarning x3 | — | — | `rm_client/configuration/wheel.py`、`rm_client/ui/polar_app.py` |
-| **MQTTLink** | 关 | 4 | — | 官方裁判协议x5、MQTT/图传x1 | — | `rm_client/backend/manager.py`、`rm_client/scenarios.py` |
+| **MQTTLink** | 关 | 4 | — | 官方裁判协议x7、MQTT/图传x1 | — | `rm_client/backend/manager.py`、`rm_client/scenarios.py` |
 | **UDPVideo** | 关 | 3 | — | — | — | `rm_client/backend/manager.py`、`rm_client/scenarios.py` |
 | **SerialBridge** | 关 | 3 | — | 官方裁判协议x3、MQTT/图传x3、本地视觉(同济)x3 | — | `rm_client/scenarios.py`、`rm_client/backend/manager.py` |
-| **ControllerAngles** | 关 | 8 | — | MQTT/图传x1 | — | `rm_client/backend/manager.py`、`rm_client/configuration/effects.py` |
-| **RobotLink** | 关 | 47 | — | MQTT/图传x8、本地视觉(同济)x5、官方裁判协议x3 | — | `rm_client/ui/polar/mixins/config_actions_mixin.py`、`rm_client/backend/manager.py` |
+| **ControllerAngles** | 关 | 10 | — | 官方裁判协议x1 | — | `rm_client/configuration/registry.py`、`rm_client/backend/manager.py` |
+| **RobotLink** | 关 | 47 | — | MQTT/图传x7、本地视觉(同济)x5、官方裁判协议x2 | — | `rm_client/ui/polar/mixins/config_actions_mixin.py`、`rm_client/backend/manager.py` |
 | **JumpPTEWheelLES** | 开 | 4 | — | — | — | （当前搜索未找到名字证据，需核查通用或动态消费者） |
 
 ### 分类 Render（18 个）
@@ -109,13 +109,13 @@
 |---|---|---:|---|---|---|---|
 | **EliminationFX** | 开 | 28 | — | 本地视觉(同济)x4、官方裁判协议x1、MQTT/图传x1 | — | `rm_client/ui/polar/mixins/video_backend_mixin.py`、`rm_client/configuration/migrations.py` |
 | **LiquidTacticalMap** | 开 | 5 | — | — | — | `rm_client/ui/polar_app.py` |
-| **TopMatchBar** | 开 | 10 | — | MQTT/图传x2 | — | `rm_client/ui/top_match_bar_controller.py`、`rm_client/ui/cs2_settings_center.py` |
+| **TopMatchBar** | 开 | 10 | — | MQTT/图传x2 | — | `rm_client/ui/top_match_bar_controller.py`、`rm_client/ui/settings_application.py` |
 | **ThermalPowerPanel** | 开 | 3 | — | — | — | `rm_client/ui/polar/renderers/tactical_map.py` |
-| **BuffTimeline** | 开 | 3 | 0x0A 本体状态 RobotStatus（热量/电容/转速） x3 | — | — | `rm_client/ui/polar/renderers/tactical_map.py`、`rm_client/ui/polar_app.py` |
-| **HUD** | 开 | 23 | 0x0A 本体状态 RobotStatus（热量/电容/转速） x10、0x0D 增益 Buff x6 | 官方裁判协议x5、本地视觉(同济)x5、MQTT/图传x1 | — | `rm_client/ui/polar_app.py`、`rm_client/ui/polar/renderers/module_list.py` |
+| **BuffTimeline** | 开 | 3 | 0x0A 本体状态 RobotStatus（热量/电容/转速） x4 | — | — | `rm_client/ui/polar/renderers/tactical_map.py`、`rm_client/ui/polar_app.py` |
+| **HUD** | 开 | 23 | 0x0A 本体状态 RobotStatus（热量/电容/转速） x10、0x0D 增益 Buff x6 | 本地视觉(同济)x5、官方裁判协议x4、MQTT/图传x1 | — | `rm_client/ui/polar_app.py`、`rm_client/ui/polar/renderers/module_list.py` |
 | **UIScale** | 开 | 8 | — | — | — | `rm_client/ui/polar/mixins/persistence_mixin.py`、`rm_client/ui/polar_app.py` |
 | **Crosshair** | 开 | 41 | — | — | — | `rm_client/cs2_crosshair.py`、`rm_client/ui/polar_app.py` |
-| **CombatTargetHUD** | 开 | 3 | — | — | — | `rm_client/ui/polar/renderers/combat_target_hud.py`、`rm_client/ui/cs2_settings_center.py` |
+| **CombatTargetHUD** | 开 | 3 | — | — | — | `rm_client/ui/polar/renderers/combat_target_hud.py`、`rm_client/ui/settings_application.py` |
 | **MinecraftCombatHUD** | 关 | 11 | — | — | — | `rm_client/ui/polar/mixins/video_backend_mixin.py`、`rm_client/ui/student_panels.py` |
 | **ChassisGimbalIndicator** | 开 | 5 | — | — | — | `rm_client/ui/polar_app.py` |
 | **ClickGui** | 关 | 6 | — | 本地视觉(同济)x2、官方裁判协议x1 | — | `rm_client/ui/polar_app.py`、`rm_client/ui/jello_clickgui.py` |
@@ -173,6 +173,7 @@ AST 结构度量仍保留这些函数和复杂度，设置孤儿审计的口径�
 2. 通用字段名（如 `energy`、`heat`）在多个段里都有，出现次数会被各段都记一份；
 3. `—` 不等于"这个模块一定没用"，只等于"在它自己那几行代码附近没找到这类关键字"；
 4. 真要改某个模块，先看第 1 列模块名在 `polar_app.py` / `ui/` 里的实现，别看这张表。
+
 ## 4. 人工维护的链路索引与验证范围
 
 本节于 2026-10-16 更新源码索引。自动生成的名字命中不证明功能接线完成；下面列出可检查的代码入口，不代表实机链路已经验收。使用函数名定位，避免重构后旧行号误导。

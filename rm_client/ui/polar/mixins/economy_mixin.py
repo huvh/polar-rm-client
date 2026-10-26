@@ -266,8 +266,6 @@ class EconomyMixin:
                     self.set_clickgui_visible(True)
                 elif pending_overlay == OverlayKind.CHAT:
                     self.open_match_chat()
-                elif pending_overlay == OverlayKind.HERO_DEPLOY:
-                    self.open_hero_deploy_interface()
                 elif pending_overlay == OverlayKind.STUDENT:
                     panel = self._student_pending_panel
                     self._student_pending_panel = None
@@ -284,13 +282,7 @@ class EconomyMixin:
             _open_v2_economy_dialog(self, "CommonCommand")
             return
         self.close_student_panel(immediate=True)
-        if self.hero_deploy_video_cut_active():
-            self.open_hero_deploy_interface()
-            self.toast("Exit Hero deploy mode before opening Economy")
-            return
         now = time.perf_counter()
-        if self.hero_deploy_ui.visible:
-            self.close_hero_deploy_interface(force=True)
         offers = self.economy_offers()
         categories = self.economy_categories(offers)
         if category in categories:

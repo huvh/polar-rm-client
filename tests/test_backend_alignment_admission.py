@@ -28,21 +28,6 @@ class QualificationRoleTests(unittest.TestCase):
             q=self.manager(robot)
             self.assertTrue(q.core_ready()[0]); self.assertIn('core_kmc',q.capabilities())
             self.assertNotIn('hero',q.capabilities())
-    def test_hero_is_role_specific_and_still_requires_own_evidence(self):
-        for robot in ('1','101'):
-            self.assertNotIn('hero',self.manager(robot).capabilities())
-            self.assertIn('hero',self.manager(robot,True).capabilities())
-        self.assertNotIn('hero',self.manager('3',True).capabilities())
-    def test_hero_record_remains_signed_and_dynamic(self):
-        self.assertNotIn('hero_deploy_status_test',CORE_TESTS)
-        self.assertIn('hero_deploy_status_test',OPTIONAL_TESTS)
-        self.assertIn('hero_deploy_status_test',DYNAMIC_TESTS)
-        q=self.manager('1',True)
-        before=q._technical_digest(); q.session.tests['hero_deploy_status_test'].notes='changed'
-        self.assertNotEqual(before,q._technical_digest()); self.assertFalse(q.core_ready()[0])
-    def test_role_change_cannot_retain_hero_capability(self):
-        q=self.manager('1',True); self.assertIn('hero',q.capabilities())
-        q.session.robot_id='3'; self.assertNotIn('hero',q.capabilities())
     def test_profile_support_uses_real_publish_contract(self):
         self.assertTrue(core_profile_support(DEFAULT_PROFILE)[0])
         self.assertFalse(core_profile_support(STUDENT_PREVIEW_PROFILE)[0])
@@ -68,14 +53,6 @@ class ReadinessProfileTests(unittest.TestCase):
         self.assertNotIn('protocol_v1_3_1',gates)
         self.assertFalse(gates['referee_protocol'].passed)
         self.assertIn(STUDENT_PREVIEW_PROFILE,gates['referee_protocol'].detail)
-    def test_hero_hardware_gate_only_required_for_hero(self):
-        state=RobotState()
-        for rid in (2,3,6,8):
-            state.robot_id=rid
-            self.assertFalse(self.gates(state)['hero_deploy_status_test'].required)
-        for rid in (1,101):
-            state.robot_id=rid
-            self.assertTrue(self.gates(state)['hero_deploy_status_test'].required)
 
 class ArmRaceTests(unittest.TestCase):
     def host(self):

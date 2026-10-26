@@ -36,7 +36,7 @@ class VideoReconnectTests(unittest.TestCase):
             sender.bind(('127.0.0.1', 0))
             self.addCleanup(sender.close)
         image = NS(shape=(2, 2, 3))
-        with patch('rm_client.backend.video_backend._decode_jpeg_bgr', return_value=image):
+        with patch('rm_client.backend.video.udp._decode_jpeg_bgr', return_value=image):
             receiver.start()
             self.wait(lambda: receiver.ingress_stats()['listening'])
             address = receiver.ingress_stats()['bound_address']

@@ -1,0 +1,352 @@
+{
+  "scope": "actual owned D3D menu; no game/device I/O",
+  "pack": {
+    "status": "PACK_VALID",
+    "files": 54,
+    "maps": {
+      "RMUC7v7": 118677,
+      "RMUL3v3": 8971,
+      "RMUL1v1": 4860
+    },
+    "binary_sha256": "cb2523924a387dd2f3316a439ceac490baf96dd4f9fac49975506e75ba091142",
+    "optional_boot": false,
+    "optional_audio": false,
+    "native_render_verified": false,
+    "limits": "Integrity/source check only; run verify_endfield_pack_runtime.py for owned D3D rendering. No hardware/match qualification."
+  },
+  "cases": [
+    {
+      "scenario": "coast",
+      "physical_size": [
+        1280,
+        720
+      ],
+      "initial": {
+        "position": 1.0,
+        "velocity": 0.0,
+        "hidden_length": 600.1503289252594,
+        "dragging": 0.0,
+        "coasting": 0.0,
+        "rate": 0.13500000536441803
+      },
+      "dragged": {
+        "position": 0.8804697441103956,
+        "velocity": -0.662585321080936,
+        "hidden_length": 600.1503289252594,
+        "dragging": 1.0,
+        "coasting": 0.0,
+        "rate": 0.13500000536441803
+      },
+      "released": {
+        "position": 0.8688171776245796,
+        "velocity": -0.5555999363626358,
+        "hidden_length": 600.1503289252594,
+        "dragging": 0.0,
+        "coasting": 1.0,
+        "rate": 0.13500000536441803
+      },
+      "first": {
+        "position": 0.8259692994967912,
+        "velocity": -0.4685058081787706,
+        "hidden_length": 600.1503289252594,
+        "dragging": 0.0,
+        "coasting": 1.0,
+        "rate": 0.13500000536441803
+      },
+      "second": {
+        "position": 0.7661716901528447,
+        "velocity": -0.3471596579338803,
+        "hidden_length": 600.1503289252594,
+        "dragging": 0.0,
+        "coasting": 1.0,
+        "rate": 0.13500000536441803
+      },
+      "elapsed": 0.15131429999746615,
+      "expected_velocity": -0.3460366069204188,
+      "final": {
+        "position": 0.5959847832366414,
+        "velocity": 0.0,
+        "hidden_length": 600.1503289252594,
+        "dragging": 0.0,
+        "coasting": 0.0,
+        "rate": 0.13500000536441803
+      },
+      "stats": {
+        "frames": 367.0,
+        "last_ms": 0.356399999873247,
+        "textures": 56.0,
+        "meshes": 57.0,
+        "owners": 1.0
+      },
+      "result": "PASS"
+    },
+    {
+      "scenario": "regrab",
+      "physical_size": [
+        1280,
+        720
+      ],
+      "initial": {
+        "position": 1.0,
+        "velocity": 0.0,
+        "hidden_length": 600.1503289252594,
+        "dragging": 0.0,
+        "coasting": 0.0,
+        "rate": 0.13500000536441803
+      },
+      "dragged": {
+        "position": 0.895487294484265,
+        "velocity": -0.6299969882657306,
+        "hidden_length": 600.1503289252594,
+        "dragging": 1.0,
+        "coasting": 0.0,
+        "rate": 0.13500000536441803
+      },
+      "released": {
+        "position": 0.8718529496986513,
+        "velocity": -0.5711744196071842,
+        "hidden_length": 600.1503289252594,
+        "dragging": 0.0,
+        "coasting": 1.0,
+        "rate": 0.13500000536441803
+      },
+      "held": {
+        "position": 0.8718529496986513,
+        "velocity": 0.0,
+        "hidden_length": 600.1503289252594,
+        "dragging": 0.0,
+        "coasting": 0.0,
+        "rate": 0.13500000536441803
+      },
+      "final": {
+        "position": -0.17605733568867146,
+        "velocity": 0.0,
+        "hidden_length": 600.1503289252594,
+        "dragging": 0.0,
+        "coasting": 0.0,
+        "rate": 0.13500000536441803
+      },
+      "stats": {
+        "frames": 164.0,
+        "last_ms": 3.389599994989112,
+        "textures": 56.0,
+        "meshes": 57.0,
+        "owners": 1.0
+      },
+      "result": "PASS"
+    },
+    {
+      "scenario": "hold",
+      "physical_size": [
+        1280,
+        720
+      ],
+      "initial": {
+        "position": 1.0,
+        "velocity": 0.0,
+        "hidden_length": 600.1503289252594,
+        "dragging": 0.0,
+        "coasting": 0.0,
+        "rate": 0.13500000536441803
+      },
+      "dragged": {
+        "position": 0.895487294484265,
+        "velocity": -0.5767335951924117,
+        "hidden_length": 600.1503289252594,
+        "dragging": 1.0,
+        "coasting": 0.0,
+        "rate": 0.13500000536441803
+      },
+      "released": {
+        "position": 0.8804697441103956,
+        "velocity": 0.0,
+        "hidden_length": 600.1503289252594,
+        "dragging": 0.0,
+        "coasting": 0.0,
+        "rate": 0.13500000536441803
+      },
+      "final": {
+        "position": 0.8804697441103956,
+        "velocity": 0.0,
+        "hidden_length": 600.1503289252594,
+        "dragging": 0.0,
+        "coasting": 0.0,
+        "rate": 0.13500000536441803
+      },
+      "stats": {
+        "frames": 219.0,
+        "last_ms": 3.5928000070271082,
+        "textures": 56.0,
+        "meshes": 57.0,
+        "owners": 1.0
+      },
+      "result": "PASS"
+    },
+    {
+      "scenario": "pause",
+      "physical_size": [
+        1920,
+        1080
+      ],
+      "initial": {
+        "position": 1.0,
+        "velocity": 0.0,
+        "hidden_length": 600.1503289252594,
+        "dragging": 0.0,
+        "coasting": 0.0,
+        "rate": 0.13500000536441803
+      },
+      "dragged": {
+        "position": 0.8954872942117403,
+        "velocity": -0.6015911468319841,
+        "hidden_length": 600.1503289252594,
+        "dragging": 1.0,
+        "coasting": 0.0,
+        "rate": 0.13500000536441803
+      },
+      "released": {
+        "position": 0.8717617039404637,
+        "velocity": -0.5819131850604029,
+        "hidden_length": 600.1503289252594,
+        "dragging": 0.0,
+        "coasting": 1.0,
+        "rate": 0.13500000536441803
+      },
+      "paused": {
+        "position": 0.8717617039404637,
+        "velocity": 0.0,
+        "hidden_length": 600.1503289252594,
+        "dragging": 0.0,
+        "coasting": 0.0,
+        "rate": 0.13500000536441803
+      },
+      "final": {
+        "position": 0.8717617039404637,
+        "velocity": 0.0,
+        "hidden_length": 600.1503289252594,
+        "dragging": 0.0,
+        "coasting": 0.0,
+        "rate": 0.13500000536441803
+      },
+      "stats": {
+        "frames": 154.0,
+        "last_ms": 3.0582999970647506,
+        "textures": 56.0,
+        "meshes": 57.0,
+        "owners": 1.0
+      },
+      "result": "PASS"
+    },
+    {
+      "scenario": "boundary",
+      "physical_size": [
+        1920,
+        1080
+      ],
+      "initial": {
+        "position": 1.0,
+        "velocity": 0.0,
+        "hidden_length": 600.1503289252594,
+        "dragging": 0.0,
+        "coasting": 0.0,
+        "rate": 0.13500000536441803
+      },
+      "dragged": {
+        "position": 0.26125441059579485,
+        "velocity": -4.7279280552359015,
+        "hidden_length": 600.1503289252594,
+        "dragging": 1.0,
+        "coasting": 0.0,
+        "rate": 0.13500000536441803
+      },
+      "released": {
+        "position": 0.20236644507287016,
+        "velocity": -3.7531685712447818,
+        "hidden_length": 600.1503289252594,
+        "dragging": 0.0,
+        "coasting": 1.0,
+        "rate": 0.13500000536441803
+      },
+      "settled": {
+        "position": 0.0,
+        "velocity": 0.0,
+        "hidden_length": 600.1503289252594,
+        "dragging": 0.0,
+        "coasting": 0.0,
+        "rate": 0.13500000536441803
+      },
+      "final": {
+        "position": 0.0,
+        "velocity": 0.0,
+        "hidden_length": 600.1503289252594,
+        "dragging": 0.0,
+        "coasting": 0.0,
+        "rate": 0.13500000536441803
+      },
+      "stats": {
+        "frames": 223.0,
+        "last_ms": 0.4365999993751757,
+        "textures": 56.0,
+        "meshes": 57.0,
+        "owners": 1.0
+      },
+      "result": "PASS"
+    },
+    {
+      "scenario": "close",
+      "physical_size": [
+        1280,
+        720
+      ],
+      "initial": {
+        "position": 1.0,
+        "velocity": 0.0,
+        "hidden_length": 600.1503289252594,
+        "dragging": 0.0,
+        "coasting": 0.0,
+        "rate": 0.13500000536441803
+      },
+      "dragged": {
+        "position": 0.8804697441103956,
+        "velocity": -0.6908603209802581,
+        "hidden_length": 600.1503289252594,
+        "dragging": 1.0,
+        "coasting": 0.0,
+        "rate": 0.13500000536441803
+      },
+      "released": {
+        "position": 0.8648303455188275,
+        "velocity": -0.5899773937619944,
+        "hidden_length": 600.1503289252594,
+        "dragging": 0.0,
+        "coasting": 1.0,
+        "rate": 0.13500000536441803
+      },
+      "reopened": {
+        "position": 0.8648303455188275,
+        "velocity": 0.0,
+        "hidden_length": 600.1503289252594,
+        "dragging": 0.0,
+        "coasting": 0.0,
+        "rate": 0.13500000536441803
+      },
+      "final": {
+        "position": 0.8648303455188275,
+        "velocity": 0.0,
+        "hidden_length": 600.1503289252594,
+        "dragging": 0.0,
+        "coasting": 0.0,
+        "rate": 0.13500000536441803
+      },
+      "stats": {
+        "frames": 245.0,
+        "last_ms": 0.5554999952437356,
+        "textures": 56.0,
+        "meshes": 57.0,
+        "owners": 1.0
+      },
+      "result": "PASS"
+    }
+  ],
+  "status": "PASS"
+}

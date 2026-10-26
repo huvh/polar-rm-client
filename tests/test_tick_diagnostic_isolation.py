@@ -12,7 +12,7 @@ import rm_client
 ROOT = Path(rm_client.__file__).resolve().parent.parent
 from rm_client.ui.polar.tick_controller import RuntimeTickPlan, TickDiagnostics, TickStageRunner
 
-LATER = ['backend.apply', 'backend.readiness', 'hero.deploy', 'hero.lob', 'guard placeholder',
+LATER = ['backend.apply', 'backend.readiness', 'hero.lob', 'guard placeholder',
          'official.consume', 'official.apply', 'fx.hit_info', 'vision.sync', 'vision.events',
          'registry', 'mqtt.link', 'polar.link']
 
@@ -50,7 +50,7 @@ class RuntimeFixture:
                   registry=NS(tick=record('registry'), get=lambda _: None), control=object())
         host.backend = NS(tick=fail, apply_updates=record('backend.apply'),
             field_log=NS(emit=emitter), sync_mqtt_link=record('mqtt.link'), tick_polar_link=record('polar.link'))
-        for attr, name in (('update_backend_readiness', 'backend.readiness'), ('update_hero_deploy_state', 'hero.deploy'),
+        for attr, name in (('update_backend_readiness', 'backend.readiness'),
             ('update_hero_lob_guard', 'hero.lob'), ('update_auto_spin_guard', 'guard placeholder'),
             ('consume_official_messages', 'official.consume'), ('apply_official_state', 'official.apply'),
             ('update_elimination_hit_info', 'fx.hit_info'), ('sync_tongji_vision_state', 'vision.sync'),

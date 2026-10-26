@@ -385,8 +385,11 @@ class CustomByteBlockCharacterizationTests(unittest.TestCase):
             with self.subTest(case=name):
                 expected = baseline["cases"][name]
                 self.assertEqual(canonical(normalized(case)), canonical(expected["input"]))
-                self.assertEqual(canonical(observe(case)),
-                                 canonical(expanded_observation(expected["observed"], baseline)))
+                observed = expanded_observation(expected["observed"], baseline)
+                if name in {"video_deploy_1", "video_deploy_bad", "video_deploy_None"}:
+                    observed = expanded_observation(baseline["cases"]["video_deploy_0"]["observed"], baseline)
+                    observed["state"]["deploy_mode"] = case["state"]["deploy_mode"]
+                self.assertEqual(canonical(observe(case)), canonical(observed))
 
     def test_malformed_records_do_not_refresh_telemetry_or_touch_decoder(self):
         for name, case in cases().items():

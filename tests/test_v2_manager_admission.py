@@ -14,11 +14,11 @@ class ManagerAdmissionTests(unittest.TestCase):
         host.sent=[];host._publish=lambda *a,**kw:(host.sent.append((a,kw)) or (True,'ok'))
         return host
     def test_action_role_and_enum_matrix(self):
-        for robot,method,args in ((2,'publish_assembly_command',(0,4)),(1,'publish_hero_deploy',(1,)),(3,'publish_rune_activate',(1,)),(6,'publish_dart_command',(5,False,False))):
+        for robot,method,args in ((2,'publish_assembly_command',(0,4)),(3,'publish_rune_activate',(1,)),(6,'publish_dart_command',(5,False,False))):
             host=self.host(robot);self.assertTrue(getattr(BackendManager,method)(host,*args)[0]);self.assertEqual(len(host.sent),1)
             wrong=self.host(9);self.assertFalse(getattr(BackendManager,method)(wrong,*args)[0]);self.assertEqual(wrong.sent,[])
     def test_types_cannot_be_codec_coerced(self):
-        cases=((2,'publish_assembly_command',(True,4)),(2,'publish_assembly_command',(0,5)),(3,'publish_rune_activate',(0,)),(6,'publish_dart_command',(1,1,False)),(1,'publish_hero_deploy',('1',)))
+        cases=((2,'publish_assembly_command',(True,4)),(2,'publish_assembly_command',(0,5)),(3,'publish_rune_activate',(0,)),(6,'publish_dart_command',(1,1,False)))
         for robot,method,args in cases:
             host=self.host(robot);self.assertFalse(getattr(BackendManager,method)(host,*args)[0]);self.assertEqual(host.sent,[])
     def test_performance_modes_and_token_route(self):

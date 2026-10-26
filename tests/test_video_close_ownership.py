@@ -81,7 +81,7 @@ class VideoCloseOwnershipTests(unittest.TestCase):
         for _ in range(50):
             decoder.stop()
         self.assertEqual(decoder._retired_sessions, [session])
-        with patch("rm_client.backend.video_backend.subprocess.Popen") as spawn, patch.dict(
+        with patch("rm_client.backend.video.decoder.subprocess.Popen") as spawn, patch.dict(
                 sys.modules, {"cv2": SimpleNamespace(), "numpy": SimpleNamespace()}):
             self.assertFalse(decoder.start())
             self.assertFalse(decoder.restart())
@@ -140,8 +140,8 @@ class VideoCloseOwnershipTests(unittest.TestCase):
             if not release.wait(2):
                 raise TimeoutError("test spawn not released")
             return proc
-        with patch("rm_client.backend.video_backend.resolve_ffmpeg_executable", return_value="ffmpeg"), patch(
-                "rm_client.backend.video_backend.subprocess.Popen", side_effect=spawn), patch.dict(
+        with patch("rm_client.backend.video.decoder.resolve_ffmpeg_executable", return_value="ffmpeg"), patch(
+                "rm_client.backend.video.decoder.subprocess.Popen", side_effect=spawn), patch.dict(
                 sys.modules, {"cv2": SimpleNamespace(), "numpy": SimpleNamespace()}):
             starter = threading.Thread(target=decoder.start)
             starter.start()

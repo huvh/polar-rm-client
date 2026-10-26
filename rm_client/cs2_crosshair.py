@@ -270,8 +270,10 @@ def _create_editor(host, *, embedded=False):
     )
     from .ui.cs2_assets import local_cs2_assets
     if embedded:
-        from .ui.endfield_settings_theme import EndfieldCheckBox as QCheckBox
-        from .ui.endfield_settings_theme import EndfieldComboBox as QComboBox
+        from .ui.endfield.settings.widgets import EndfieldCheckBox as QCheckBox
+        from .ui.endfield.settings.widgets import EndfieldComboBox as QComboBox
+        from .ui.endfield.settings.widgets import add_setting_row
+        from .ui.endfield.settings.scroll import EndfieldScrollArea as QScrollArea
     from .ui.jello_locale import chinese_enabled, setting_label
     chinese = chinese_enabled(host.registry)
     label = lambda value: setting_label(value, chinese)
@@ -430,7 +432,10 @@ def _create_editor(host, *, embedded=False):
             self.display_scale.setSuffix(' ×')
             self.display_scale.setValue(display_scale_from_module(host.registry.get('Crosshair')))
             self.display_scale.valueChanged.connect(self.refresh)
-            display_form.addRow(label('Crosshair Scale'), self.display_scale)
+            if embedded:
+                add_setting_row(display_form, label('Crosshair Scale'), self.display_scale)
+            else:
+                display_form.addRow(label('Crosshair Scale'), self.display_scale)
             display_note = QLabel('CS样式采用2×本地显示基准；将整体大小设为0.5×可恢复原参考尺寸。\n同时缩放长度、间距、粗细和描边，不影响自瞄FOV；不修改导入或导出的分享码。')
             display_note.setWordWrap(True)
             display_form.addRow(display_note)
@@ -483,7 +488,10 @@ def _create_editor(host, *, embedded=False):
                     field_label.setMinimumWidth(160)
                     field_label.setMaximumWidth(200)
                     field_label.setToolTip(label(name))
-                    form.addRow(field_label, control)
+                    if embedded:
+                        add_setting_row(form, field_label, control)
+                    else:
+                        form.addRow(field_label, control)
                 groups.addWidget(group)
             groups.addStretch()
             self.preview_panel = QWidget()

@@ -86,7 +86,7 @@ class SettingsHostCloseTests(unittest.TestCase):
             dialog.search.setText('键位')
             dialog.close_for_shutdown()
             self.assertFalse(dialog.isVisible())
-            self.assertFalse(dialog._transition_timer.isActive())
+            self.assertFalse(dialog._timer.isActive())
             self.assertTrue(all(page.builder.cancelled for page in (*dialog.pages.values(), dialog.crosshair)))
         self.run_dialog(dialog, inspect)
         self.assertIsNone(self.host._settings_session)
@@ -151,7 +151,7 @@ class ProductionSettingsCloseTests(unittest.TestCase):
                 window.close()
             self.assertTrue(window._window_lifecycle.closing)
             self.assertFalse(dialog.isVisible())
-            self.assertFalse(dialog._transition_timer.isActive())
+            self.assertFalse(dialog._timer.isActive())
         self.enter(inspect)
 
     def test_refused_host_close_keeps_settings_and_search_draft(self):

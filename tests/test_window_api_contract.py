@@ -75,7 +75,8 @@ class WindowContractTests(unittest.TestCase):
         self.assertEqual(set(retired), {"_field_frame_times_ms", "_last_field_frame_log_at"})
         protected = window_contract.protected_names(self.baseline, self.contract)
         public = {name for name in self.baseline["members"] if not name.startswith("_")}
-        self.assertEqual({name for name in protected if not name.startswith("_")}, public)
+        self.assertEqual({name for name in protected if not name.startswith("_")},
+                         public - set(self.contract.get("removed_feature_members", {})))
         self.assertTrue({"_last_present_time", "_ui_tick_stages"} <= protected)
         for name, evidence in retired.items():
             with self.subTest(name=name):

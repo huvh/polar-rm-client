@@ -1,0 +1,898 @@
+{
+  "date": "2026-10-25",
+  "scope": "图传后端封装、兼容入口、调用/测试桩/发布收集接入；离线回归与本地录制回放",
+  "regression": {
+    "run_id": "4442b5f82a454ec288bdb664911536a8",
+    "counts": {
+      "PASS": 42,
+      "SKIP": 0,
+      "INCOMPLETE": 1,
+      "FAIL": 0
+    },
+    "aggregate_status": "INCOMPLETE",
+    "tests_run": 419,
+    "tests_passed": 418,
+    "tests_skipped": 1,
+    "failures": 0,
+    "skip_reason": "Npcap absent from Windows System32/Npcap; offline native BPF compiler/filter check skipped",
+    "results": [
+      {
+        "id": "tests/test_angle_port_admission_characterization",
+        "path": "tests/test_angle_port_admission_characterization.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "5 unittest tests passed",
+        "tests_run": 5,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 0.688,
+        "expected_failures": 0
+      },
+      {
+        "id": "tests/test_backend_composite_shutdown_retry",
+        "path": "tests/test_backend_composite_shutdown_retry.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "1 unittest tests passed",
+        "tests_run": 1,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 0.719,
+        "expected_failures": 0
+      },
+      {
+        "id": "tests/test_backend_video_source_nonblocking",
+        "path": "tests/test_backend_video_source_nonblocking.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "14 unittest tests passed",
+        "tests_run": 14,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 1.968,
+        "expected_failures": 0
+      },
+      {
+        "id": "tests/test_camera_input_handoff",
+        "path": "tests/test_camera_input_handoff.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "25 unittest tests passed",
+        "tests_run": 25,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 0.86,
+        "expected_failures": 0
+      },
+      {
+        "id": "tests/test_configuration_commands",
+        "path": "tests/test_configuration_commands.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "28 unittest tests passed",
+        "tests_run": 28,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 0.984,
+        "expected_failures": 0
+      },
+      {
+        "id": "tests/test_constructor_admission_matrix",
+        "path": "tests/test_constructor_admission_matrix.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "5 unittest tests passed",
+        "tests_run": 5,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 0.922,
+        "expected_failures": 0
+      },
+      {
+        "id": "tests/test_controller_angle_admission",
+        "path": "tests/test_controller_angle_admission.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "3 unittest tests passed",
+        "tests_run": 3,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 0.484,
+        "expected_failures": 0
+      },
+      {
+        "id": "tests/test_controller_angle_exception_admission",
+        "path": "tests/test_controller_angle_exception_admission.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "3 unittest tests passed",
+        "tests_run": 3,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 0.485,
+        "expected_failures": 0
+      },
+      {
+        "id": "tests/test_controller_angle_integration",
+        "path": "tests/test_controller_angle_integration.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "20 unittest tests passed",
+        "tests_run": 20,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 1.047,
+        "expected_failures": 0
+      },
+      {
+        "id": "tests/test_controller_angle_receipt_boundary",
+        "path": "tests/test_controller_angle_receipt_boundary.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "12 unittest tests passed",
+        "tests_run": 12,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 0.937,
+        "expected_failures": 0
+      },
+      {
+        "id": "tests/test_controller_angle_safety_review",
+        "path": "tests/test_controller_angle_safety_review.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "24 unittest tests passed",
+        "tests_run": 24,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 0.594,
+        "expected_failures": 0
+      },
+      {
+        "id": "tests/test_decoder_lifecycle_quality",
+        "path": "tests/test_decoder_lifecycle_quality.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "14 unittest tests passed",
+        "tests_run": 14,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 1.281,
+        "expected_failures": 0
+      },
+      {
+        "id": "tests/test_decoder_owner_prefix",
+        "path": "tests/test_decoder_owner_prefix.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "5 unittest tests passed",
+        "tests_run": 5,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 0.656,
+        "expected_failures": 0
+      },
+      {
+        "id": "tests/test_hero_deployment_removed",
+        "path": "tests/test_hero_deployment_removed.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "3 unittest tests passed",
+        "tests_run": 3,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 1.329,
+        "expected_failures": 0
+      },
+      {
+        "id": "tests/test_legacy_angle_egress",
+        "path": "tests/test_legacy_angle_egress.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "16 unittest tests passed",
+        "tests_run": 16,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 1.203,
+        "expected_failures": 0
+      },
+      {
+        "id": "tests/test_legacy_intra_refresh",
+        "path": "tests/test_legacy_intra_refresh.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "6 unittest tests passed",
+        "tests_run": 6,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 5.328,
+        "expected_failures": 0
+      },
+      {
+        "id": "tests/test_legacy_receiver_control",
+        "path": "tests/test_legacy_receiver_control.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "13 unittest tests passed",
+        "tests_run": 13,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 1.563,
+        "expected_failures": 0
+      },
+      {
+        "id": "tests/test_legacy_video_bridge",
+        "path": "tests/test_legacy_video_bridge.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "INCOMPLETE",
+        "detail": "1 unittest tests skipped",
+        "tests_run": 17,
+        "checks_passed": 0,
+        "skipped": 1,
+        "returncode": 0,
+        "duration_s": 2.234,
+        "expected_failures": 0
+      },
+      {
+        "id": "tests/test_legacy_video_latency",
+        "path": "tests/test_legacy_video_latency.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "8 unittest tests passed",
+        "tests_run": 8,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 1.609,
+        "expected_failures": 0
+      },
+      {
+        "id": "tests/test_native_video_activation",
+        "path": "tests/test_native_video_activation.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "5 unittest tests passed",
+        "tests_run": 5,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 0.594,
+        "expected_failures": 0
+      },
+      {
+        "id": "tests/test_normal_video_timeline",
+        "path": "tests/test_normal_video_timeline.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "18 unittest tests passed",
+        "tests_run": 18,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 0.516,
+        "expected_failures": 0
+      },
+      {
+        "id": "tests/test_normal_video_timeline_contract",
+        "path": "tests/test_normal_video_timeline_contract.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "30 unittest tests passed",
+        "tests_run": 30,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 11.015,
+        "expected_failures": 0
+      },
+      {
+        "id": "tests/test_official_profile_preset",
+        "path": "tests/test_official_profile_preset.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "14 unittest tests passed",
+        "tests_run": 14,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 4.344,
+        "expected_failures": 0
+      },
+      {
+        "id": "tests/test_transport_safety_regressions",
+        "path": "tests/test_transport_safety_regressions.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "36 unittest tests passed",
+        "tests_run": 36,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 1.109,
+        "expected_failures": 0
+      },
+      {
+        "id": "tests/test_transport_start_admission_matrix",
+        "path": "tests/test_transport_start_admission_matrix.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "2 unittest tests passed",
+        "tests_run": 2,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 0.766,
+        "expected_failures": 0
+      },
+      {
+        "id": "tests/test_udp_codec_evidence",
+        "path": "tests/test_udp_codec_evidence.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "11 unittest tests passed",
+        "tests_run": 11,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 1.969,
+        "expected_failures": 0
+      },
+      {
+        "id": "tests/test_udp_constructor_admission_audit",
+        "path": "tests/test_udp_constructor_admission_audit.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "1 unittest tests passed",
+        "tests_run": 1,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 0.469,
+        "expected_failures": 0
+      },
+      {
+        "id": "tests/test_udp_h264_dispatch",
+        "path": "tests/test_udp_h264_dispatch.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "12 unittest tests passed",
+        "tests_run": 12,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 2.109,
+        "expected_failures": 0
+      },
+      {
+        "id": "tests/test_udp_h264_hud_handoff",
+        "path": "tests/test_udp_h264_hud_handoff.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "1 unittest tests passed",
+        "tests_run": 1,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 3.5,
+        "expected_failures": 0
+      },
+      {
+        "id": "tests/test_udp_ingress_evidence",
+        "path": "tests/test_udp_ingress_evidence.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "6 unittest tests passed",
+        "tests_run": 6,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 0.484,
+        "expected_failures": 0
+      },
+      {
+        "id": "tests/test_udp_receiver_admission",
+        "path": "tests/test_udp_receiver_admission.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "3 unittest tests passed",
+        "tests_run": 3,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 0.719,
+        "expected_failures": 0
+      },
+      {
+        "id": "tests/test_udp_stop_nonblocking",
+        "path": "tests/test_udp_stop_nonblocking.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "3 unittest tests passed",
+        "tests_run": 3,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 0.469,
+        "expected_failures": 0
+      },
+      {
+        "id": "tests/test_video_close_ownership",
+        "path": "tests/test_video_close_ownership.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "8 unittest tests passed",
+        "tests_run": 8,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 2.265,
+        "expected_failures": 0
+      },
+      {
+        "id": "tests/test_video_generation_selection",
+        "path": "tests/test_video_generation_selection.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "3 unittest tests passed",
+        "tests_run": 3,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 3.438,
+        "expected_failures": 0
+      },
+      {
+        "id": "tests/test_video_package",
+        "path": "tests/test_video_package.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "2 unittest tests passed",
+        "tests_run": 2,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 0.594,
+        "expected_failures": 0
+      },
+      {
+        "id": "tests/test_video_reconnect",
+        "path": "tests/test_video_reconnect.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "6 unittest tests passed",
+        "tests_run": 6,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 1.015,
+        "expected_failures": 0
+      },
+      {
+        "id": "tests/test_video_recovery",
+        "path": "tests/test_video_recovery.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "6 unittest tests passed",
+        "tests_run": 6,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 0.375,
+        "expected_failures": 0
+      },
+      {
+        "id": "tests/test_video_recovery_admission",
+        "path": "tests/test_video_recovery_admission.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "4 unittest tests passed",
+        "tests_run": 4,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 1.313,
+        "expected_failures": 0
+      },
+      {
+        "id": "tests/test_video_source_retry_admission",
+        "path": "tests/test_video_source_retry_admission.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "2 unittest tests passed",
+        "tests_run": 2,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 1.156,
+        "expected_failures": 0
+      },
+      {
+        "id": "tests/test_video_source_snapshot",
+        "path": "tests/test_video_source_snapshot.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "5 unittest tests passed",
+        "tests_run": 5,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 1.078,
+        "expected_failures": 0
+      },
+      {
+        "id": "tests/test_video_source_snapshot_evidence",
+        "path": "tests/test_video_source_snapshot_evidence.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "3 unittest tests passed",
+        "tests_run": 3,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 0.812,
+        "expected_failures": 0
+      },
+      {
+        "id": "tests/test_video_stop_nonblocking",
+        "path": "tests/test_video_stop_nonblocking.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "7 unittest tests passed",
+        "tests_run": 7,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 0.688,
+        "expected_failures": 0
+      },
+      {
+        "id": "tests/test_window_video_recovery",
+        "path": "tests/test_window_video_recovery.py",
+        "category": "offline",
+        "evidence": "offline assertions only; no physical hardware qualification",
+        "status": "PASS",
+        "detail": "9 unittest tests passed",
+        "tests_run": 9,
+        "checks_passed": 0,
+        "skipped": 0,
+        "returncode": 0,
+        "duration_s": 5.937,
+        "expected_failures": 0
+      }
+    ],
+    "source_stability": {
+      "schema_version": 1,
+      "status": "PASS",
+      "detail": "Declared verification source inputs have identical start/end fingerprints",
+      "scope": {
+        "directories": [
+          "rm_client",
+          "tests",
+          "tools",
+          "configs"
+        ],
+        "suffixes": [
+          ".bat",
+          ".c",
+          ".cfg",
+          ".cpp",
+          ".h",
+          ".hpp",
+          ".ini",
+          ".json",
+          ".ps1",
+          ".py",
+          ".spec",
+          ".toml",
+          ".yaml",
+          ".yml"
+        ],
+        "all_file_directories": [
+          "tests/fixtures"
+        ],
+        "root_files": [
+          "main.py",
+          "requirements*.txt"
+        ],
+        "exclusions": [
+          "hidden directories",
+          "__pycache__"
+        ],
+        "limits": "Start/end comparison only; includes all internal tests/fixtures files; excludes assets outside that fixture directory, external fixtures, installed packages and transient edits restored between captures."
+      },
+      "before": {
+        "status": "available",
+        "sha256": "aca2e9512a8daa19989dd4080dcecf7ecb90a08fdf0c4e695753cf8938a8c09e",
+        "file_count": 941
+      },
+      "after": {
+        "status": "available",
+        "sha256": "aca2e9512a8daa19989dd4080dcecf7ecb90a08fdf0c4e695753cf8938a8c09e",
+        "file_count": 941
+      }
+    }
+  },
+  "quality": {
+    "summary": {
+      "decisions": 15145,
+      "files": 269,
+      "functions": 3782,
+      "historical_ui_functions": 50,
+      "historical_ui_modules": 1,
+      "import_edges": 744,
+      "parsed_files": 269,
+      "statements": 41501
+    },
+    "gate": {
+      "baseline_revision": "d64f1528e2e1864ef369537c026b6d3f7127f590",
+      "status": "PASS",
+      "violations": []
+    },
+    "source_tree_sha256": "6336c8b3f94e22c6c4c422f2bafa18b647e10731801fd46ddf4b061b07245206"
+  },
+  "definition_parity": {
+    "original_definitions": 22,
+    "new_definitions": 22,
+    "missing": [],
+    "changed": []
+  },
+  "migration": [
+    {
+      "symbol": "_AngleWrite",
+      "from": [
+        "rm_client/backend/legacy_angle_egress.py"
+      ],
+      "to": "rm_client/backend/video/angle_egress.py",
+      "line": 13
+    },
+    {
+      "symbol": "LegacyAngleEgress",
+      "from": [
+        "rm_client/backend/legacy_angle_egress.py"
+      ],
+      "to": "rm_client/backend/video/angle_egress.py",
+      "line": 23
+    },
+    {
+      "symbol": "iter_annexb_nal_units",
+      "from": [
+        "rm_client/backend/video_backend.py"
+      ],
+      "to": "rm_client/backend/video/annexb.py",
+      "line": 5
+    },
+    {
+      "symbol": "has_complete_annexb_recovery",
+      "from": [
+        "rm_client/backend/video_backend.py"
+      ],
+      "to": "rm_client/backend/video/annexb.py",
+      "line": 28
+    },
+    {
+      "symbol": "AnnexBRecoveryGate",
+      "from": [
+        "rm_client/backend/video_backend.py"
+      ],
+      "to": "rm_client/backend/video/annexb.py",
+      "line": 43
+    },
+    {
+      "symbol": "resolve_ffmpeg_executable",
+      "from": [
+        "rm_client/backend/video_backend.py"
+      ],
+      "to": "rm_client/backend/video/codec.py",
+      "line": 12
+    },
+    {
+      "symbol": "_decode_jpeg_bgr",
+      "from": [
+        "rm_client/backend/video_backend.py"
+      ],
+      "to": "rm_client/backend/video/codec.py",
+      "line": 26
+    },
+    {
+      "symbol": "detect_frame_codec",
+      "from": [
+        "rm_client/backend/video_backend.py"
+      ],
+      "to": "rm_client/backend/video/codec.py",
+      "line": 39
+    },
+    {
+      "symbol": "consume_mjpeg_stream",
+      "from": [
+        "rm_client/backend/video_backend.py"
+      ],
+      "to": "rm_client/backend/video/codec.py",
+      "line": 77
+    },
+    {
+      "symbol": "_TimedDecoderInput",
+      "from": [
+        "rm_client/backend/video_backend.py"
+      ],
+      "to": "rm_client/backend/video/decoder.py",
+      "line": 19
+    },
+    {
+      "symbol": "_DecoderSession",
+      "from": [
+        "rm_client/backend/video_backend.py"
+      ],
+      "to": "rm_client/backend/video/decoder.py",
+      "line": 25
+    },
+    {
+      "symbol": "ContinuousMjpegDecoder",
+      "from": [
+        "rm_client/backend/video_backend.py"
+      ],
+      "to": "rm_client/backend/video/decoder.py",
+      "line": 38
+    },
+    {
+      "symbol": "discover_receiver_port",
+      "from": [
+        "rm_client/backend/legacy_receiver.py"
+      ],
+      "to": "rm_client/backend/video/receiver.py",
+      "line": 15
+    },
+    {
+      "symbol": "LegacyReceiverControl",
+      "from": [
+        "rm_client/backend/legacy_receiver.py"
+      ],
+      "to": "rm_client/backend/video/receiver.py",
+      "line": 25
+    },
+    {
+      "symbol": "_crc",
+      "from": [
+        "rm_client/backend/legacy_angle_egress.py",
+        "rm_client/backend/legacy_receiver.py"
+      ],
+      "to": "rm_client/backend/video/receiver_protocol.py",
+      "line": 19
+    },
+    {
+      "symbol": "encode_receiver_command",
+      "from": [
+        "rm_client/backend/legacy_receiver.py"
+      ],
+      "to": "rm_client/backend/video/receiver_protocol.py",
+      "line": 28
+    },
+    {
+      "symbol": "channel_payload",
+      "from": [
+        "rm_client/backend/legacy_receiver.py"
+      ],
+      "to": "rm_client/backend/video/receiver_protocol.py",
+      "line": 42
+    },
+    {
+      "symbol": "ReceiverFrame",
+      "from": [
+        "rm_client/backend/legacy_receiver.py"
+      ],
+      "to": "rm_client/backend/video/receiver_protocol.py",
+      "line": 51
+    },
+    {
+      "symbol": "ReceiverFrameParser",
+      "from": [
+        "rm_client/backend/legacy_receiver.py"
+      ],
+      "to": "rm_client/backend/video/receiver_protocol.py",
+      "line": 62
+    },
+    {
+      "symbol": "status_parameters",
+      "from": [
+        "rm_client/backend/legacy_receiver.py"
+      ],
+      "to": "rm_client/backend/video/receiver_protocol.py",
+      "line": 96
+    },
+    {
+      "symbol": "encode_receiver_angles",
+      "from": [
+        "rm_client/backend/legacy_angle_egress.py"
+      ],
+      "to": "rm_client/backend/video/receiver_protocol.py",
+      "line": 107
+    },
+    {
+      "symbol": "RmVideoBackend",
+      "from": [
+        "rm_client/backend/video_backend.py"
+      ],
+      "to": "rm_client/backend/video/udp.py",
+      "line": 18
+    }
+  ],
+  "runtime": {
+    "python": "3.11.9",
+    "PyAV": "18.1.0",
+    "OpenCV": "5.0.0",
+    "location": "ignored temporary verification venv; existing project venv unchanged",
+    "encoding": "PYTHONUTF8=1",
+    "legacy_capture": "local private recording, not included"
+  },
+  "additional_checks": [
+    "PyInstaller spec syntax PASS; lazy package submodules explicitly collected",
+    "git diff --check PASS for task files",
+    "module/backend map regenerated",
+    "duplicate receiver CRC implementation consolidated without AST changes"
+  ],
+  "limitations": [
+    "No new live receiver/wireless/display latency measurement",
+    "No full portable EXE build",
+    "No firmware update or actuator operation",
+    "No Git staging, commit or push"
+  ],
+  "full_logs": "tmp/video-encapsulation/final-logs (local, ignored)"
+}

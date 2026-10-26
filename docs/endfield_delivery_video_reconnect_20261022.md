@@ -3,7 +3,7 @@
 ## Esc：代码和运行资源是两个交付物
 
 后续交付更新：维护者已要求将完整运行包纳入 Git，当前 main 的
-`assets/endfield_pack` 包含全部菜单必需文件。正常拉取无需再私下迁移；下面保留
+`rm_client/ui/endfield/menu/assets` 包含全部菜单必需文件。正常拉取无需再私下迁移；下面保留
 原故障原因、路径优先级及私有覆盖包的迁移办法。此前验证报告保持当时快照。
 
 截图中的 `native_renderer/BUILD_MANIFEST.json` 不存在，表示另一台电脑没有完整
@@ -14,8 +14,8 @@
 
 1. 有 `CURRENT.json` 或旧版 `BUILD_MANIFEST.json` 的显式本地包：
    `user_data/endfield_pack/`。损坏的本地清单保留诊断，不静默覆盖。
-2. 否则使用只读随附包：源码的 `assets/endfield_pack/`；便携版的
-   `resources/assets/endfield_pack/`。空的本地目录不会遮蔽随附包。
+2. 否则使用只读随附包：源码的 `rm_client/ui/endfield/menu/assets/`；便携版的
+   `resources/assets/endfield/menu/`。空的本地目录不会遮蔽随附包。
 
 启动语音、启动画面等可选导入仍单独保留在用户目录，不复制个人配置或游戏安装树。
 菜单渲染器、动画、镜头、材质和场地网格不改造；不在 paint/tick 下载、扫描或复制资源。
@@ -26,18 +26,18 @@
 
 ```powershell
 $AppPy = (Resolve-Path .venv/Scripts/python.exe).Path
-& $AppPy tools/prepare_endfield_pack.py export `
-    --pack user_data/endfield_pack --out tmp_menu_transfer/assets/endfield_pack
-& $AppPy tools/prepare_endfield_pack.py check --pack tmp_menu_transfer/assets/endfield_pack
+& $AppPy tools/endfield/prepare_pack.py export `
+    --pack user_data/endfield_pack --out tmp_menu_transfer/rm_client/ui/endfield/menu/assets
+& $AppPy tools/endfield/prepare_pack.py check --pack tmp_menu_transfer/rm_client/ui/endfield/menu/assets
 ```
 
-把导出的整个 `assets/endfield_pack/` 复制到另一台电脑客户端根目录的 `assets/`
+把导出的整个 `rm_client/ui/endfield/menu/assets/` 复制到另一台电脑客户端根目录的 `assets/`
 下面。便携版复制到 `resources/assets/` 下面。必须保留整个目录层级，不只复制 DLL
 或清单；关闭客户端后操作，完成后重启。从源码启动时可再次执行：
 
 ```powershell
-& $AppPy tools/prepare_endfield_pack.py check --pack assets/endfield_pack
-& $AppPy tools/verify_endfield_desktop.py --out tmp_menu_desktop --cycles 3
+& $AppPy tools/endfield/prepare_pack.py check --pack rm_client/ui/endfield/menu/assets
+& $AppPy tools/endfield/verify_desktop.py --out tmp_menu_desktop --cycles 3
 ```
 
 第二条不再注入测试包，直接验证真实窗口的默认路径选择、独立临时用户目录和原生菜单。
@@ -50,7 +50,7 @@ $AppPy = (Resolve-Path .venv/Scripts/python.exe).Path
 
 私有迁移/导出不是第三方素材公开再分发授权。公开素材提交需另外确认，完整来源和
 许可证必须保留；本地运行包与本轮测试截图不可作为个人数据全量上传的借口。
-从原始固定输入构建的完整说明仍见 [资源准备](ENDFIELD_PACK_SETUP.md)。
+从原始固定输入构建的完整说明仍见 [资源准备](endfield/PACK_SETUP.md)。
 
 ## 图传：先退休旧所有者，再建立新代际
 

@@ -311,7 +311,8 @@ class Cs2ScoreboardRenderer:
                 events = buckets.get((index, alliance), ())
                 if events:
                     # Two bands use the source 20px result glyph and .4 wash.
-                    color = QColor(tint); color.setAlphaF(.4)
+                    color = QColor(tint)
+                    color.setAlphaF(.4)
                     self._icon(p, 'kill_flag', QRectF(x+3, y+dy, 14, 20), color)
         label = ('装甲血量归零观测' if chinese else 'OBSERVED HP LOSSES') if history else (
             '暂无已确认战况' if chinese else 'NO OBSERVED LOSSES')
@@ -495,7 +496,8 @@ class Cs2ScoreboardRenderer:
                     image = QImage(math.ceil(width*scale*density), math.ceil(24*scale*density),
                                    QImage.Format_ARGB32_Premultiplied)
                     image.setDevicePixelRatio(density)
-                    image.setDotsPerMeterX(dpi[0]); image.setDotsPerMeterY(dpi[1])
+                    image.setDotsPerMeterX(dpi[0])
+                    image.setDotsPerMeterY(dpi[1])
                     image.fill(Qt.transparent)
                     ink = QPainter(image)
                     try:
@@ -518,7 +520,7 @@ def tab_scoreboard_active(host):
     module = host.registry.get('TacticalMap')
     return bool(module is not None and module.enabled and not host.home_visible
                 and not host.menu_overlay_active() and not host.student_ui.visible
-                and not host.hero_deploy_ui.active and host.tactical_map_hold_amount() > 0)
+                and not getattr(getattr(host, "hero_deploy_ui", None), "active", False) and host.tactical_map_hold_amount() > 0)
 
 
 def prepare_tab_layout(host, width, height, now, *, include_map=True):

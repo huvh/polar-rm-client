@@ -95,8 +95,8 @@ class NativeConstructorMatrixTests(unittest.TestCase):
                         constructed.append(worker)
                         return worker
                     try:
-                        with patch('rm_client.backend.video_backend.resolve_ffmpeg_executable', return_value='ffmpeg'), \
-                                patch('rm_client.backend.video_backend.subprocess.Popen', return_value=process), \
+                        with patch('rm_client.backend.video.decoder.resolve_ffmpeg_executable', return_value='ffmpeg'), \
+                                patch('rm_client.backend.video.decoder.subprocess.Popen', return_value=process), \
                                 patch.object(threading, 'Thread', construct):
                             self.assertFalse(decoder.start())
                         self.assertFalse(decoder.available)
@@ -104,7 +104,7 @@ class NativeConstructorMatrixTests(unittest.TestCase):
                         self.assertEqual(decoder.cleanup_complete, not failed_close)
                         if failed_close:
                             self.assertIs(decoder._retired_sessions[0].proc, process)
-                            with patch('rm_client.backend.video_backend.subprocess.Popen') as spawn:
+                            with patch('rm_client.backend.video.decoder.subprocess.Popen') as spawn:
                                 self.assertFalse(decoder.start())
                             spawn.assert_not_called()
                             with self.assertRaisesRegex(RuntimeError, 'pipe close failed'):

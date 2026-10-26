@@ -1,0 +1,438 @@
+{
+  "origin": "read-only installed game EndfieldStudio original --full; export failures=0",
+  "nodes": [
+    {
+      "path": "GameSettingPanel/Main/ContentNode/SettingListNode/ScrollView",
+      "transform": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 1903948918707663318
+        },
+        "m_LocalRotation": {
+          "x": -0.0,
+          "y": -0.0,
+          "z": -0.0,
+          "w": 1.0
+        },
+        "m_LocalPosition": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "m_LocalScale": {
+          "x": 1.0,
+          "y": 1.0,
+          "z": 1.0
+        },
+        "m_Children": [
+          {
+            "m_FileID": 0,
+            "m_PathID": -5076566794175958570
+          },
+          {
+            "m_FileID": 0,
+            "m_PathID": 2877038240762835414
+          },
+          {
+            "m_FileID": 0,
+            "m_PathID": 2984796805735330262
+          }
+        ],
+        "m_Father": {
+          "m_FileID": 0,
+          "m_PathID": -8170922474431827498
+        },
+        "m_AnchorMin": {
+          "x": 0.0,
+          "y": 0.0
+        },
+        "m_AnchorMax": {
+          "x": 0.0,
+          "y": 0.0
+        },
+        "m_AnchoredPosition": {
+          "x": 0.0,
+          "y": 0.0
+        },
+        "m_SizeDelta": {
+          "x": 0.0,
+          "y": 0.0
+        },
+        "m_Pivot": {
+          "x": 0.5,
+          "y": 0.5
+        }
+      },
+      "components": [
+        {},
+        {},
+        {
+          "m_Color": {
+            "r": 1.0,
+            "g": 1.0,
+            "b": 1.0,
+            "a": 0.0
+          },
+          "m_Sprite": {
+            "m_FileID": 0,
+            "m_PathID": 1660267235368898380
+          },
+          "imgRefPath": ""
+        },
+        {
+          "m_MovementType": 1,
+          "m_Elasticity": 0.10000000149011612,
+          "m_Inertia": 1,
+          "m_DecelerationRate": 0.13500000536441803,
+          "m_ScrollSensitivity": 45.0
+        },
+        {},
+        {},
+        {},
+        {}
+      ]
+    },
+    {
+      "path": "GameSettingPanel/Main/TabsPC",
+      "transform": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": -7828666100907953706
+        },
+        "m_LocalRotation": {
+          "x": -0.0,
+          "y": -0.0,
+          "z": -0.0,
+          "w": 1.0
+        },
+        "m_LocalPosition": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "m_LocalScale": {
+          "x": 1.0,
+          "y": 1.0,
+          "z": 1.0
+        },
+        "m_Children": [
+          {
+            "m_FileID": 0,
+            "m_PathID": 4680740131988386262
+          }
+        ],
+        "m_Father": {
+          "m_FileID": 0,
+          "m_PathID": 1358596818007765462
+        },
+        "m_AnchorMin": {
+          "x": 0.5,
+          "y": 1.0
+        },
+        "m_AnchorMax": {
+          "x": 0.5,
+          "y": 1.0
+        },
+        "m_AnchoredPosition": {
+          "x": 0.0,
+          "y": 0.0
+        },
+        "m_SizeDelta": {
+          "x": 1200.0,
+          "y": 100.0
+        },
+        "m_Pivot": {
+          "x": 0.5,
+          "y": 1.0
+        }
+      },
+      "components": [
+        {},
+        {},
+        {},
+        {}
+      ]
+    },
+    {
+      "path": "GameSettingItemCellV2/Content/ContentNode/Bg/DecoR",
+      "transform": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": -8116450437737703103
+        },
+        "m_LocalRotation": {
+          "x": -0.0,
+          "y": -0.0,
+          "z": -0.0,
+          "w": 1.0
+        },
+        "m_LocalPosition": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "m_LocalScale": {
+          "x": 1.0,
+          "y": 1.0,
+          "z": 1.0
+        },
+        "m_Children": [],
+        "m_Father": {
+          "m_FileID": 0,
+          "m_PathID": 4102188094564243777
+        },
+        "m_AnchorMin": {
+          "x": 0.0,
+          "y": 0.5
+        },
+        "m_AnchorMax": {
+          "x": 0.0,
+          "y": 0.5
+        },
+        "m_AnchoredPosition": {
+          "x": 262.0,
+          "y": 0.0
+        },
+        "m_SizeDelta": {
+          "x": 470.0,
+          "y": 92.0
+        },
+        "m_Pivot": {
+          "x": 0.5,
+          "y": 0.5
+        }
+      },
+      "components": [
+        {},
+        {},
+        {
+          "m_Color": {
+            "r": 1.0,
+            "g": 1.0,
+            "b": 1.0,
+            "a": 0.14901961386203766
+          },
+          "m_Sprite": {
+            "m_FileID": 11,
+            "m_PathID": -53105069028401676
+          },
+          "imgRefPath": ""
+        }
+      ]
+    },
+    {
+      "path": "GameSettingItemCellV2/Content/ContentNode/Bg/DecoL",
+      "transform": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 6136660500352375105
+        },
+        "m_LocalRotation": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0,
+          "w": 1.0
+        },
+        "m_LocalPosition": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "m_LocalScale": {
+          "x": 1.0,
+          "y": 1.0,
+          "z": 1.0
+        },
+        "m_Children": [],
+        "m_Father": {
+          "m_FileID": 0,
+          "m_PathID": 4102188094564243777
+        },
+        "m_AnchorMin": {
+          "x": 1.0,
+          "y": 0.5
+        },
+        "m_AnchorMax": {
+          "x": 1.0,
+          "y": 0.5
+        },
+        "m_AnchoredPosition": {
+          "x": -6.0,
+          "y": 0.0
+        },
+        "m_SizeDelta": {
+          "x": 996.0,
+          "y": 89.14700317382812
+        },
+        "m_Pivot": {
+          "x": 1.0,
+          "y": 0.5
+        }
+      },
+      "components": [
+        {},
+        {},
+        {
+          "m_Color": {
+            "r": 1.0,
+            "g": 1.0,
+            "b": 1.0,
+            "a": 0.20000000298023224
+          },
+          "m_Sprite": {
+            "m_FileID": 0,
+            "m_PathID": 0
+          },
+          "imgRefPath": "Assets/Beyond/Arts/UI/Sprites/Settings/deco_settings_mask_texture.png"
+        }
+      ]
+    },
+    {
+      "path": "GameSettingItemCellV2/Content/ContentNode/Bg",
+      "transform": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 1137524221254080833
+        },
+        "m_LocalRotation": {
+          "x": -0.0,
+          "y": -0.0,
+          "z": -0.0,
+          "w": 1.0
+        },
+        "m_LocalPosition": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "m_LocalScale": {
+          "x": 1.0,
+          "y": 1.0,
+          "z": 1.0
+        },
+        "m_Children": [
+          {
+            "m_FileID": 0,
+            "m_PathID": 2301054271371516225
+          },
+          {
+            "m_FileID": 0,
+            "m_PathID": 8688670722431818049
+          },
+          {
+            "m_FileID": 0,
+            "m_PathID": 3451033851438668097
+          }
+        ],
+        "m_Father": {
+          "m_FileID": 0,
+          "m_PathID": 5064164698940938561
+        },
+        "m_AnchorMin": {
+          "x": 0.0,
+          "y": 0.0
+        },
+        "m_AnchorMax": {
+          "x": 1.0,
+          "y": 1.0
+        },
+        "m_AnchoredPosition": {
+          "x": -25.0,
+          "y": 0.0
+        },
+        "m_SizeDelta": {
+          "x": -69.99980163574219,
+          "y": -10.000000953674316
+        },
+        "m_Pivot": {
+          "x": 0.5,
+          "y": 0.5
+        }
+      },
+      "components": [
+        {},
+        {},
+        {
+          "m_Color": {
+            "r": 1.0,
+            "g": 1.0,
+            "b": 1.0,
+            "a": 0.4000000059604645
+          },
+          "m_Sprite": {
+            "m_FileID": 6,
+            "m_PathID": 148237939410474912
+          },
+          "imgRefPath": ""
+        }
+      ]
+    },
+    {
+      "path": "GameSettingItemCellV2/Content/ContentNode/Bg/DecoR02",
+      "transform": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": -4476591533829088959
+        },
+        "m_LocalRotation": {
+          "x": -0.0,
+          "y": -0.0,
+          "z": -0.0,
+          "w": 1.0
+        },
+        "m_LocalPosition": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "m_LocalScale": {
+          "x": 1.0,
+          "y": 1.0,
+          "z": 1.0
+        },
+        "m_Children": [],
+        "m_Father": {
+          "m_FileID": 0,
+          "m_PathID": 4102188094564243777
+        },
+        "m_AnchorMin": {
+          "x": 0.0,
+          "y": 0.5
+        },
+        "m_AnchorMax": {
+          "x": 0.0,
+          "y": 0.5
+        },
+        "m_AnchoredPosition": {
+          "x": 5.0,
+          "y": 0.0
+        },
+        "m_SizeDelta": {
+          "x": 127.0,
+          "y": 92.0
+        },
+        "m_Pivot": {
+          "x": 0.0,
+          "y": 0.5
+        }
+      },
+      "components": [
+        {},
+        {},
+        {
+          "m_Color": {
+            "r": 1.0,
+            "g": 1.0,
+            "b": 1.0,
+            "a": 0.10196078568696976
+          },
+          "m_Sprite": {
+            "m_FileID": 9,
+            "m_PathID": 3562985801208137512
+          },
+          "imgRefPath": ""
+        }
+      ]
+    }
+  ]
+}

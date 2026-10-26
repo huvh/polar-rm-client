@@ -350,11 +350,6 @@ class WindowCameraRuntimeTests(WindowVisionRuntimeFixture):
         with patch.dict(os.environ, {'POLAR_DISABLE_LOCAL_CAPTURE': '0'}):
             self.assert_prompt_revocation(self.window.ensure_camera_started)
 
-    def test_deploy_acknowledgement_revokes_camera_without_waiting(self):
-        self.window._last_deploy_mode = 0
-        self.window.state.deploy_mode = 1
-        self.window.state.deploy_status_revision += 1
-        self.assert_prompt_revocation(self.window.update_hero_deploy_state)
 
     def test_reconfigure_retains_old_owner_then_starts_only_latest_camera_settings(self):
         release, thread, calls = self.hold_camera()

@@ -124,7 +124,7 @@
 - `codec_field_test`、`estop_robot_test`、`command_ack_test`、`control_heartbeat_test`。
 - `robot_firmware_schema`：固件正确解析 `PRM1 kind=1`，并证明 fire 位保持 0。
 - `spin_firmware_schema`：固件正确解析 `PRM1 kind=2`，并证明启停、方向、速度和失联超时归零。
-- `projectile_hit_spin_test`、`hero_deploy_status_test`、`hero_lob_live_test`。
+- `projectile_hit_spin_test`、`hero_lob_live_test`。
 - `loss_recovery_test`、`latency_soak_test`、`field_signoff`。
 
 软件测试通过不能替代上述现场证据。

@@ -1,0 +1,248 @@
+{
+  "scope": "owned Windows GPU + inert transports; NOT real match validation",
+  "cycles": 3,
+  "pack_selection": "production-default",
+  "private_pack_present": false,
+  "uses_shipped_pack": true,
+  "initial": {
+    "frames": 231.0,
+    "last_ms": 4.707200001575984,
+    "textures": 56.0,
+    "meshes": 57.0,
+    "owners": 1.0
+  },
+  "display_hz": 199.999,
+  "dpr": 1.5,
+  "native_window_composition": {
+    "render_owners": 1,
+    "visible_native_children": 0
+  },
+  "esc_backdrop": {
+    "empty_combat_layers_alpha_max": {
+      "overlay": 0,
+      "vision": 0,
+      "dynamic": 0,
+      "target": 0,
+      "hud_glass": 0,
+      "glass": 0
+    },
+    "world_edge_energy": 1.6308093070983887,
+    "gaussian_edge_energy_after_undoing_dim": 0.32762980461120605,
+    "kernel": "endfield_gaussian",
+    "radius_dp": 10.0,
+    "dim_alpha": 0.42
+  },
+  "fullscreen_hover": [
+    {
+      "button": 2,
+      "stationary": true,
+      "duplicate_moves": true,
+      "initial": {
+        "code": 2,
+        "changes": 1
+      },
+      "final": {
+        "code": 2,
+        "changes": 1
+      },
+      "samples": [
+        {
+          "code": 2,
+          "changes": 1
+        },
+        {
+          "code": 2,
+          "changes": 1
+        },
+        {
+          "code": 2,
+          "changes": 1
+        },
+        {
+          "code": 2,
+          "changes": 1
+        },
+        {
+          "code": 2,
+          "changes": 1
+        },
+        {
+          "code": 2,
+          "changes": 1
+        },
+        {
+          "code": 2,
+          "changes": 1
+        },
+        {
+          "code": 2,
+          "changes": 1
+        },
+        {
+          "code": 2,
+          "changes": 1
+        },
+        {
+          "code": 2,
+          "changes": 1
+        },
+        {
+          "code": 2,
+          "changes": 1
+        },
+        {
+          "code": 2,
+          "changes": 1
+        }
+      ]
+    },
+    {
+      "button": 6,
+      "stationary": true,
+      "duplicate_moves": true,
+      "initial": {
+        "code": 6,
+        "changes": 2
+      },
+      "final": {
+        "code": 6,
+        "changes": 2
+      },
+      "samples": [
+        {
+          "code": 6,
+          "changes": 2
+        },
+        {
+          "code": 6,
+          "changes": 2
+        },
+        {
+          "code": 6,
+          "changes": 2
+        },
+        {
+          "code": 6,
+          "changes": 2
+        },
+        {
+          "code": 6,
+          "changes": 2
+        },
+        {
+          "code": 6,
+          "changes": 2
+        },
+        {
+          "code": 6,
+          "changes": 2
+        },
+        {
+          "code": 6,
+          "changes": 2
+        },
+        {
+          "code": 6,
+          "changes": 2
+        },
+        {
+          "code": 6,
+          "changes": 2
+        },
+        {
+          "code": 6,
+          "changes": 2
+        },
+        {
+          "code": 6,
+          "changes": 2
+        }
+      ]
+    },
+    {
+      "button": 5,
+      "stationary": true,
+      "duplicate_moves": true,
+      "initial": {
+        "code": 5,
+        "changes": 3
+      },
+      "final": {
+        "code": 5,
+        "changes": 3
+      },
+      "samples": [
+        {
+          "code": 5,
+          "changes": 3
+        },
+        {
+          "code": 5,
+          "changes": 3
+        },
+        {
+          "code": 5,
+          "changes": 3
+        },
+        {
+          "code": 5,
+          "changes": 3
+        },
+        {
+          "code": 5,
+          "changes": 3
+        },
+        {
+          "code": 5,
+          "changes": 3
+        },
+        {
+          "code": 5,
+          "changes": 3
+        },
+        {
+          "code": 5,
+          "changes": 3
+        },
+        {
+          "code": 5,
+          "changes": 3
+        },
+        {
+          "code": 5,
+          "changes": 3
+        },
+        {
+          "code": 5,
+          "changes": 3
+        },
+        {
+          "code": 5,
+          "changes": 3
+        }
+      ]
+    }
+  ],
+  "baseline": {
+    "frames": 2533.0,
+    "last_ms": 3.874599999107886,
+    "textures": 56.0,
+    "meshes": 57.0,
+    "owners": 1.0
+  },
+  "final": {
+    "frames": 3212.0,
+    "last_ms": 4.733599998871796,
+    "textures": 56.0,
+    "meshes": 57.0,
+    "owners": 1.0
+  },
+  "fullscreen_preserved": true,
+  "actual_source_hit": true,
+  "texture_growth": 0,
+  "synthetic_hud_frame_ms_p95": 189.82049999613082,
+  "synthetic_hud_fps": 17.006007679768683,
+  "result": "PASS",
+  "native_error": "",
+  "retired": true
+}

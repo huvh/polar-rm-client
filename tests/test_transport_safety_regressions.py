@@ -49,7 +49,7 @@ def isolated(path, name, *, owner=None, namespace=None):
     return env[name]
 
 
-AnnexBRecoveryGate = isolated("rm_client/backend/video_backend.py", "AnnexBRecoveryGate")
+AnnexBRecoveryGate = isolated("rm_client/backend/video/annexb.py", "AnnexBRecoveryGate")
 Bridge = isolated("tools/car_bridge/bridge_server.py", "Bridge", namespace={
     "socket": socket, "threading": threading, "time": time, "READ_SIZE": 4096,
 })
@@ -350,9 +350,9 @@ class TransportSafetyTests(unittest.TestCase):
             self.assertEqual(state.map_markers[-1]["kind"], expected)
 
     def test_video_gap_resets_gate_before_feeding_more_interframes(self):
-        callback = isolated("rm_client/backend/video_backend.py", "_on_assembled_frame",
+        callback = isolated("rm_client/backend/video/udp.py", "_on_assembled_frame",
             owner="RmVideoBackend", namespace={"time": time,
-            "detect_frame_codec": isolated("rm_client/backend/video_backend.py", "detect_frame_codec")})
+            "detect_frame_codec": isolated("rm_client/backend/video/codec.py", "detect_frame_codec")})
         queued = []
         backend = SimpleNamespace(_lock=threading.Lock(), _assembler=SimpleNamespace(sequence_discontinuities=0),
             ingress_mode="shark-framed",
@@ -518,7 +518,7 @@ class TransportSafetyTests(unittest.TestCase):
             if name == "cv2":
                 raise ModuleNotFoundError("test: cv2 is unavailable")
             return original_import(name, *args, **kwargs)
-        start = isolated("rm_client/backend/video_backend.py", "start", owner="ContinuousMjpegDecoder")
+        start = isolated("rm_client/backend/video/decoder.py", "start", owner="ContinuousMjpegDecoder")
         decoder = SimpleNamespace(_running=False, _proc=None, available=True, last_error="")
         with patch("builtins.__import__", side_effect=missing_cv2):
             self.assertFalse(start(decoder))

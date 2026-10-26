@@ -1,0 +1,1 @@
+Original Arknights: Endfield key icons and animation data, extracted read-only from the user's installed game for local adaptation. Copyright belongs to their owners including HYPERGRYPH; excluded from the project's source-code license.

@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import QRectF, Qt, QTimer
-from PySide6.QtWidgets import QFileDialog, QInputDialog
+from PySide6.QtWidgets import QFileDialog, QInputDialog, QMessageBox
 
 from ...jello_locale import chinese_enabled, ui_text
 
@@ -35,7 +35,7 @@ from ....referee_profiles import V2_PROFILE
 from ....model import PRIMARY_GUI_MODE, Module, Setting
 from ....qualification_observations import (
     QualificationEvidence, economy_evidence, v2_air_evidence, estop_evidence, firmware_zero_evidence,
-    hero_evidence, recovery_evidence, soak_evidence, video_evidence,
+    recovery_evidence, soak_evidence, video_evidence,
 )
 from ...overlay_coordinator import OverlayKind
 
@@ -144,7 +144,7 @@ class ConfigActionsMixin:
             self.auto_save_config()
 
     def _sync_controller_angle_setting(self, setting: Setting) -> None:
-        self.backend._sync_controller_angles(self.registry)
+        self.backend.sync_controller_angles(self.registry)
 
     def _close_disabled_output_gate(self, setting: Setting) -> None:
         # A falling gate neutralizes pending inputs even outside a modal menu.
@@ -268,7 +268,6 @@ class ConfigActionsMixin:
             ConfigCommandKind.PROFILE: self._apply_profile_command,
             ConfigCommandKind.CALIBRATION: self.handle_calibration_action,
             ConfigCommandKind.ELIMINATION: self._preview_elimination_command,
-            ConfigCommandKind.DEPLOY: self._open_deploy_command,
             ConfigCommandKind.LOB: self._apply_lob_command,
         }
         if command.kind is ConfigCommandKind.SOUND_IMPORT:
@@ -311,27 +310,53 @@ class ConfigActionsMixin:
         handlers[action_name]()
 
     def _apply_angle_command(self, action_name: str) -> None:
-        status = self.backend._sync_controller_angles(self.registry)
-        link = self.backend.controller_angles
+        status = self.backend.sync_controller_angles(self.registry)
         if action_name == "Disarm Angle Forward":
-            link.disarm()
+            self.backend.disarm_controller_angles()
             self.toast("角度转发已锁定；车端独立超时仍必须有效")
         elif action_name == "Arm Angle Forward":
-            if not link.config.mock_output:
+            if not status["mock_output"]:
                 answer, accepted = QInputDialog.getText(
                     self, "实体控制器角度转发", "确认机械臂已支撑隔离、0x0302 接收与独立超时已验证。\n"
-                    "本次会向官方选手端发送真实关节目标。输入 ARM 授权本次进程：")
+                    "本次会经所选出口发送真实角度目标。输入 ARM 授权本次进程：")
                 if not accepted or answer.strip() != "ARM":
                     return
             # The dialog never authorizes cached input. Recheck gates and wait
             # for another fresh source frame after the operator's confirmation.
-            self.backend._sync_controller_angles(self.registry)
-            ok, why = link.arm()
-            self.toast(("角度转发已授权：" if ok else "角度转发未授权：") + why)
+            ok, why = self.backend.arm_controller_angles(self.registry)
+            status = self.backend.controller_angle_snapshot()["angles"]
+            self.backend.field_log.emit("controller_angle_arm", status=status, success=ok, reason=why)
+            if ok:
+                # 授权后不能再打开模态窗口：它会触发主窗口失焦并立即撤销刚建立的授权。
+                self.toast("角度转发已授权：" + why)
+            else:
+                self._show_angle_diagnostic("角度转发未授权：" + why)
         else:
-            self.toast(f"角度有效={status['valid']} 已授权={status['armed']} "
-                       f"真发={status['forwarded']} mock={status['mock_forwarded']}；"
-                       f"{status['last_error']}")
+            self._show_angle_diagnostic()
+
+    def _show_angle_diagnostic(self, message: str = "") -> None:
+        """显示当前收发快照并留存本地证据，避免设置弹层遮住短暂提示。"""
+        snapshot = self.backend.controller_angle_snapshot()
+        status, radio = snapshot["angles"], snapshot["receiver"]
+        angles = status.get("angles_rad")
+        angle_text = ", ".join(f"{value:.5f}" for value in angles) if angles else "无有效角度"
+        details = (
+            f"{message}\n\n" if message else ""
+        ) + (
+            f"接收口：{status['rx_port']}，已连接={status['connected']}\n"
+            f"出口：{status['output_route']}\n"
+            f"角度有效={status['valid']}，已授权={status['armed']}\n"
+            f"有效接收={status['received']}，拒收={status['rejected']}\n"
+            f"角度(rad)：{angle_text}\n"
+            f"真实转发={status['forwarded']}，模拟转发={status['mock_forwarded']}\n"
+            f"图传串口：{radio.get('port', '')}，就绪={radio.get('ready', False)}\n"
+            f"图传完整写入={radio.get('angle_packets_written', 0)}\n"
+            f"角度状态：{status['last_error']}\n"
+            f"图传错误：{radio.get('angle_error') or radio.get('error', '')}\n\n"
+            "以上是本次点击时的快照；车端到达以 C 板 radio_rx_count 为准。"
+        )
+        self.backend.field_log.emit("controller_angle_status", status=status, receiver=radio)
+        QMessageBox.information(self, "角度链路状态", details)
 
     def _apply_profile_command(self, action_name: str) -> None:
         handlers = {
@@ -346,9 +371,6 @@ class ConfigActionsMixin:
 
     def _preview_elimination_command(self, action_name: str) -> None:
         self.preview_elimination_fx(single=action_name == "Test Elimination")
-
-    def _open_deploy_command(self, action_name: str) -> None:
-        self.open_hero_deploy_interface()
 
     def _preview_ui_sound(self, slot: str) -> None:
         audio = self.registry.get("AudioFeedback")
@@ -466,7 +488,7 @@ class ConfigActionsMixin:
     def _execute_qualification_command(self, command: QualificationCommand | None) -> QualificationRefresh:
         if command in {
             QualificationCommand.ESTOP, QualificationCommand.FIRMWARE_ZERO,
-            QualificationCommand.LOSS_RECOVERY, QualificationCommand.HERO, QualificationCommand.ECONOMY,
+            QualificationCommand.LOSS_RECOVERY, QualificationCommand.ECONOMY,
         }:
             self._record_runtime_qualification(command)
             return QualificationRefresh.REQUIRED
@@ -621,7 +643,6 @@ class ConfigActionsMixin:
             QualificationCommand.ESTOP: self._observe_estop_evidence,
             QualificationCommand.FIRMWARE_ZERO: self._observe_firmware_zero_evidence,
             QualificationCommand.LOSS_RECOVERY: self._observe_recovery_evidence,
-            QualificationCommand.HERO: self._observe_hero_evidence,
             QualificationCommand.ECONOMY: self._observe_economy_evidence,
         }
         evidence = observers[command](self._qualification_baseline())
@@ -650,11 +671,6 @@ class ConfigActionsMixin:
             reconnected_locked_at=float(safety.get("mqtt_reconnected_locked_at", 0.0)),
             baseline_at=float(baseline.get("captured_at_perf", 0.0)),
             control_locked=self.backend.safety.control_state.value == "LOCKED")
-
-    def _observe_hero_evidence(self, baseline: dict) -> QualificationEvidence:
-        return hero_evidence(revision=self.state.deploy_status_revision,
-            baseline_revision=int(baseline.get("deploy_revision", 0)), observed_at=self.state.deploy_status_at,
-            baseline_at=float(baseline.get("captured_at_perf", 0.0)), deploy_mode=int(self.state.deploy_mode))
 
     def _observe_economy_evidence(self, baseline: dict) -> QualificationEvidence:
         if self.backend.referee.profile_id == V2_PROFILE:
@@ -1029,7 +1045,7 @@ class ConfigActionsMixin:
         if self.reject_pending_configuration_edit():
             return
         if module.name in {"ControllerAngles", "RobotLink"}:
-            self.backend._sync_controller_angles(self.registry)
+            self.backend.sync_controller_angles(self.registry)
         if module.name == "RobotLink" and not enabled:
             self.backend.lock_control("RobotLink disabled")
             self.control.release_all(self.state, self.registry)
@@ -1055,20 +1071,8 @@ class ConfigActionsMixin:
                 elif str(preset.value) == "Minecraft 1.21.11":
                     preset.value = "Polar"
             self.invalidate_transient_overlay_scene()
-        elif module.name == "HeroLob":
-            if enabled and not self.home_visible:
-                self.open_hero_deploy_interface()
-            elif not enabled:
-                self.state.hero_lob_armed = False
-                if int(self.state.deploy_mode) == 1:
-                    # Deployment is an acknowledged referee state. Never hide
-                    # its explicit EXIT control merely because the helper
-                    # module was switched off.
-                    self.hero_deploy_ui.open(time.perf_counter())
-                    self.overlay_coordinator.request_modal(OverlayKind.HERO_DEPLOY)
-                    self.toast("HeroLob disabled; explicitly EXIT deploy mode")
-                else:
-                    self.close_hero_deploy_interface(force=True)
+        elif module.name == "HeroLob" and not enabled:
+            self.state.hero_lob_armed = False
         elif module.name == "SpinMode":
             if not str(source).startswith("auto_hit"):
                 self.auto_spin.operator_override()

@@ -1,0 +1,14 @@
+{
+  "status": "PASS",
+  "scope": "final search dimensions, source placeholder, real IME and search button, Windows/OpenGL",
+  "dpr": 1.5,
+  "search_rect": [
+    934.9333333333332,
+    15.466666666666665,
+    265.6,
+    26.666666666666664
+  ],
+  "gpu_frost_passes": 20,
+  "gpu_error": "",
+  "compositor_error": ""
+}

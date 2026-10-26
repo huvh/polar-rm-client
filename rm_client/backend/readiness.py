@@ -16,7 +16,7 @@ from typing import Any, Mapping
 
 from .qualification import core_profile_support
 from .referee.registry import get_profile
-from .video_backend import resolve_ffmpeg_executable
+from .video import resolve_ffmpeg_executable
 from ..runtime_paths import RuntimePaths
 
 
@@ -292,14 +292,6 @@ def audit_backend(
             "optional robot firmware parses PRM1 kind=2 enable/disable, direction and speed with a watchdog timeout",
             True,
             required=False,
-        ),
-        ReadinessGate(
-            "hero_deploy_status_test",
-            bool(evidence.get("hero_deploy_status_test", False))
-            and float(getattr(state, "deploy_status_at", 0.0) or 0.0) > 0.0,
-            "Hero enter/exit command and DeployModeStatusSync/video-cut lifecycle validated on field hardware",
-            True,
-            required=str(getattr(state, "robot_id", "")) in {"1", "101"},
         ),
         ReadinessGate("loss_recovery_test", bool(evidence.get("loss_recovery_test", False)), "MQTT/video/decoder loss and reconnect drill", True),
         ReadinessGate(

@@ -14,6 +14,56 @@ class WindowFocusLossTests(unittest.TestCase):
     setUp = configuration_tests.WindowConfigurationTransactionTests.setUp
     close_window = configuration_tests.WindowConfigurationTransactionTests.close_window
 
+    def test_encoder_forwarding_survives_focus_loss_but_operator_lock_still_revokes(self):
+        from rm_client.backend.controller_angles import ControllerAngleRelay, AngleRelayConfig
+        from rm_client.backend.cc_link import encode_cc_frame
+        window = self.window
+        relay = ControllerAngleRelay(start_workers=False)
+        self.addCleanup(relay.close)
+        window.backend.controller_angles = relay
+        config = AngleRelayConfig(True, "COM13", "COM14", True, True, auto_arm=True)
+        relay.configure(config, True)
+        relay.feed(encode_cc_frame(0x0302, bytes(30), 1))
+        self.assertTrue(relay.arm_on_startup()[0])
+        window.control.key_state["W"] = True
+        with patch.object(window.backend.mqtt, "publish_estop_zero", return_value=(True, "")):
+            window.focusOutEvent(QFocusEvent(QEvent.Type.FocusOut))
+        self.assertFalse(any(window.control.key_state.values()))
+        self.assertEqual(window.backend.safety.control_state.value, "LOCKED")
+        self.assertTrue(relay.armed)
+        relay.feed(encode_cc_frame(0x0302, bytes(30), 2))
+        self.assertTrue(relay.pump()[0])
+        window.backend.lock_control("menu dialog opened")
+        self.assertTrue(relay.armed)
+        window.backend.lock_control("operator lock")
+        self.assertFalse(relay.armed)
+
+    def test_real_scenario_startup_can_auto_arm_after_transition_and_video_selection(self):
+        from rm_client.backend.controller_angles import ControllerAngleRelay
+        from rm_client.backend.cc_link import encode_cc_frame
+        window = self.window
+        relay = ControllerAngleRelay(start_workers=False)
+        self.addCleanup(relay.close)
+        window.backend.controller_angles = relay
+        angles = window.registry.get("ControllerAngles")
+        robot = window.registry.get("RobotLink")
+        angles.enabled = robot.enabled = True
+        for name, value in (("Angle RX Port", "COM13"), ("Angle TX Port", "COM14"),
+                            ("Forward Angles", True), ("Angle Mock Writes", True),
+                            ("Angle Auto Arm", True)):
+            angles.get_setting(name).value = value
+        robot.get_setting("Port").value = "Stub"
+        robot.get_setting("Allow Drive").value = True
+        window.backend._sync_controller_angles(window.registry)
+        window.backend.apply_scenario("LabDebug", start=False, registry=window.registry)
+        window.backend.lock_control("video settings applied")
+        relay.feed(encode_cc_frame(0x0302, bytes(30), 1))
+        status = window.backend._sync_controller_angles(window.registry)
+        self.assertTrue(status["armed"])
+        self.assertFalse(relay.pump()[0])
+        relay.feed(encode_cc_frame(0x0302, bytes(30), 2))
+        self.assertTrue(relay.pump()[0])
+
     def test_failed_reset_revokes_real_qualification_and_attempts_both_neutral_links(self):
         window = self.window
         window.backend.begin_qualification({"kmc_heartbeat"})

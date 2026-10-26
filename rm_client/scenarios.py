@@ -24,6 +24,7 @@ class ConnectionProfile:
     polar_port: str = "Stub"
     polar_baud: int = 115200
     polar_send_hz: float = 50.0
+    legacy_video_channel: int = 1
 
 
 @dataclass

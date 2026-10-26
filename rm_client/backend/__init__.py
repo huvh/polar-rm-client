@@ -7,7 +7,7 @@ _EXPORTS = {
     "ControlState": ("safety", "ControlState"),
     "QualificationToken": ("safety", "QualificationToken"),
     "RmMqttBackend": ("mqtt_backend", "RmMqttBackend"),
-    "RmVideoBackend": ("video_backend", "RmVideoBackend"),
+    "RmVideoBackend": ("video", "RmVideoBackend"),
     "RmSerialBackend": ("serial_backend", "RmSerialBackend"),
     "BackendReadinessReport": ("readiness", "BackendReadinessReport"),
     "ReadinessGate": ("readiness", "ReadinessGate"),

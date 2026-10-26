@@ -187,13 +187,6 @@
       "tests/test_fullscreen_composition.py:248",
       "tests/test_gpu_warmup_budget.py:100"
     ],
-    "_hero_native_sequence": [
-      "tests/test_background_display_locale.py:119",
-      "tests/test_background_display_locale.py:172"
-    ],
-    "_hero_native_video_at": [
-      "tests/smoke_test.py:3612"
-    ],
     "_hud_static_defer_since": [
       "tests/test_background_display_locale.py:98"
     ],
@@ -436,7 +429,6 @@
     "clear_normal_backend_video_frame": "()",
     "closeEvent": "(event)",
     "close_economy_workspace": "(*, play_sound=True)",
-    "close_hero_deploy_interface": "(*, force=False)",
     "close_match_chat": "(*, clear=False)",
     "close_student_panel": "(immediate=False)",
     "combat_control_input_allowed": "()",
@@ -449,7 +441,6 @@
     "constrain_prediction_geometry": "(front, back, reference)",
     "consume_backend_video_frame": "()",
     "consume_capture_frame": "()",
-    "consume_hero_native_video_frame": "()",
     "consume_official_messages": "()",
     "crosshair_color": "()",
     "crosshair_primitives": "(style, cx, cy, size)",
@@ -497,8 +488,6 @@
     "draw_gimbal_turret_direction": "(p, center, size, yaw_deg, alert)",
     "draw_glass_text": "(p, rect, text, font, c, flags=<PySide6.QtCore.Qt.AlignmentFlag: 129>)",
     "draw_gui_cached_layer": "(painter, rect, key, build)",
-    "draw_hero_deploy_interface": "(p, width, height, now)",
-    "draw_hero_native_background": "(painter, width, height, *, now=None)",
     "draw_hud_gpu_background": "()",
     "draw_hud_liquid_glass": "(p, rect, radius, *, surface='MainGlass', hover=0.0, clip_rect=None)",
     "draw_image_cover": "(p, rect, image)",
@@ -671,10 +660,7 @@
     "has_valid_combat_target": "(result)",
     "heat_display_color": "(ratio)",
     "heat_over_warn": "()",
-    "hero_deploy_uses_mock_transport": "()",
-    "hero_deploy_video_cut_active": "()",
     "hero_lob_preview": "(*, announce=True)",
-    "hero_native_frame_state": "(now=None)",
     "hero_range_profile_selected": "()",
     "high_res_optimize": "(width=None, height=None)",
     "hud_accent": "()",
@@ -748,7 +734,6 @@
     "on_tick": "()",
     "open_economy_workspace": "(category=None)",
     "open_event_command_menu": "()",
-    "open_hero_deploy_interface": "()",
     "open_legacy_clickgui": "(mode)",
     "open_match_chat": "()",
     "open_student_panel": "(panel)",
@@ -814,7 +799,6 @@
     "seed_match_state": "(config)",
     "select_economy_offer": "(key)",
     "send_economy_request": "(request)",
-    "send_hero_deploy_request": "(mode)",
     "set_clickgui_visible": "(visible, *, announce=True, play_sound=True)",
     "set_escape_menu_visible": "(visible)",
     "set_wallpaper_picker_visible": "(visible)",
@@ -868,7 +852,6 @@
     "update_auto_spin_guard": "(now=None)",
     "update_backend_readiness": "(now=None, *, force=False)",
     "update_elimination_hit_info": "()",
-    "update_hero_deploy_state": "(now=None)",
     "update_hero_lob_guard": "()",
     "update_hud_liquid_source": "(image)",
     "update_student_frontend": "(dt)",
@@ -914,5 +897,91 @@
   "schema_version": 1,
   "source_git_tree": "46333e99db86988f503b4ff31cd651d0e07eed86",
   "source_local_revision": "da91fc54b97caffd8f76b1aba86f88105d3c0379",
-  "source_revision": "d64f1528e2e1864ef369537c026b6d3f7127f590"
+  "source_revision": "d64f1528e2e1864ef369537c026b6d3f7127f590",
+  "removed_feature_members": {
+    "close_hero_deploy_interface": {
+      "feature": "Hero deployment",
+      "reason": "User requested complete removal of deployment UI and control routes; retain independent lob preview.",
+      "removed_at": "2026-10-25",
+      "behavior_test": "tests/test_hero_deployment_removed.py"
+    },
+    "consume_hero_native_video_frame": {
+      "feature": "Hero deployment",
+      "reason": "User requested complete removal of deployment UI and control routes; retain independent lob preview.",
+      "removed_at": "2026-10-25",
+      "behavior_test": "tests/test_hero_deployment_removed.py"
+    },
+    "draw_hero_deploy_interface": {
+      "feature": "Hero deployment",
+      "reason": "User requested complete removal of deployment UI and control routes; retain independent lob preview.",
+      "removed_at": "2026-10-25",
+      "behavior_test": "tests/test_hero_deployment_removed.py"
+    },
+    "draw_hero_native_background": {
+      "feature": "Hero deployment",
+      "reason": "User requested complete removal of deployment UI and control routes; retain independent lob preview.",
+      "removed_at": "2026-10-25",
+      "behavior_test": "tests/test_hero_deployment_removed.py"
+    },
+    "hero_deploy_renderer": {
+      "feature": "Hero deployment",
+      "reason": "User requested complete removal of deployment UI and control routes; retain independent lob preview.",
+      "removed_at": "2026-10-25",
+      "behavior_test": "tests/test_hero_deployment_removed.py"
+    },
+    "hero_deploy_ui": {
+      "feature": "Hero deployment",
+      "reason": "User requested complete removal of deployment UI and control routes; retain independent lob preview.",
+      "removed_at": "2026-10-25",
+      "behavior_test": "tests/test_hero_deployment_removed.py"
+    },
+    "hero_deploy_uses_mock_transport": {
+      "feature": "Hero deployment",
+      "reason": "User requested complete removal of deployment UI and control routes; retain independent lob preview.",
+      "removed_at": "2026-10-25",
+      "behavior_test": "tests/test_hero_deployment_removed.py"
+    },
+    "hero_deploy_video_cut_active": {
+      "feature": "Hero deployment",
+      "reason": "User requested complete removal of deployment UI and control routes; retain independent lob preview.",
+      "removed_at": "2026-10-25",
+      "behavior_test": "tests/test_hero_deployment_removed.py"
+    },
+    "hero_native_frame_state": {
+      "feature": "Hero deployment",
+      "reason": "User requested complete removal of deployment UI and control routes; retain independent lob preview.",
+      "removed_at": "2026-10-25",
+      "behavior_test": "tests/test_hero_deployment_removed.py"
+    },
+    "hero_native_image": {
+      "feature": "Hero deployment",
+      "reason": "User requested complete removal of deployment UI and control routes; retain independent lob preview.",
+      "removed_at": "2026-10-25",
+      "behavior_test": "tests/test_hero_deployment_removed.py"
+    },
+    "hero_native_pixmap": {
+      "feature": "Hero deployment",
+      "reason": "User requested complete removal of deployment UI and control routes; retain independent lob preview.",
+      "removed_at": "2026-10-25",
+      "behavior_test": "tests/test_hero_deployment_removed.py"
+    },
+    "open_hero_deploy_interface": {
+      "feature": "Hero deployment",
+      "reason": "User requested complete removal of deployment UI and control routes; retain independent lob preview.",
+      "removed_at": "2026-10-25",
+      "behavior_test": "tests/test_hero_deployment_removed.py"
+    },
+    "send_hero_deploy_request": {
+      "feature": "Hero deployment",
+      "reason": "User requested complete removal of deployment UI and control routes; retain independent lob preview.",
+      "removed_at": "2026-10-25",
+      "behavior_test": "tests/test_hero_deployment_removed.py"
+    },
+    "update_hero_deploy_state": {
+      "feature": "Hero deployment",
+      "reason": "User requested complete removal of deployment UI and control routes; retain independent lob preview.",
+      "removed_at": "2026-10-25",
+      "behavior_test": "tests/test_hero_deployment_removed.py"
+    }
+  }
 }

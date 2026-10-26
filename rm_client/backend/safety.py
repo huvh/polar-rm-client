@@ -290,12 +290,10 @@ class OfficialSafety:
     def _capability_for(name: str, intent: str) -> str:
         if name == "DT7KeyboardMouseControl":
             return "dt7_control"
-        if intent in {"prm1_vision", "prm1_spin", "hero", "economy", "core_kmc"}:
+        if intent in {"prm1_vision", "prm1_spin", "economy", "core_kmc"}:
             return intent
         if name == "KeyboardMouseControl":
             return "core_kmc"
-        if name == "HeroDeployModeEventCommand":
-            return "hero"
         if name == "CommonCommand":
             return "economy"
         return "core_kmc"
@@ -310,6 +308,8 @@ class OfficialSafety:
     ) -> tuple[bool, str]:
         name = str(topic).strip().rstrip("/").rsplit("/", 1)[-1]
         current = time.perf_counter() if now is None else float(now)
+        if name == "HeroDeployModeEventCommand":
+            return self._deny("Hero deployment has been removed")
         if self.estop_active or self.control_state == ControlState.ESTOP:
             return self._deny("E-stop active; only the dedicated zero KMC bypass is allowed")
         # DT7 is an independent transport, not MQTT. Its explicit Real TX

@@ -94,7 +94,8 @@ class PersistenceMixin:
                              if season==2027 else {})
             for name,value in values.items():
                 item=module.get_setting(name)
-                if item is not None:item.value=value
+                if item is not None:
+                    item.value=value
             self._rule_role_preferences=cache
         if season!=getattr(self.state,'rules_season',2026) and any(
                 bool(getattr(owner,flag,False))
@@ -223,12 +224,18 @@ class PersistenceMixin:
             self.state.control_score_max=points or 0
             self.state.control_score_title=rules.facts.get('score_title','控制度')
             self.state.ally_victory_points=self.state.enemy_victory_points=points or 0
-            self.state.control_owner='NEUTRAL';self.state.control_progress=0
+            self.state.control_owner='NEUTRAL'
+            self.state.control_progress=0
             self.state.control_zones=[{'index':index,'owner':None,'progress':None,'observed':False}
                 for index in range(int(rules.facts.get('control',{}).get('zone_count',0)))]
             # No stale 2026 opponent, buffs or geometry survives a season switch.
-            self.state.robot_rows=[];self.state.map_robots=[];self.state.map_markers=[];self.state.buff_rows=[]
-            self.state.student_ui_data={};self.state.performance_sync={};self.state.robot_statics={}
+            self.state.robot_rows=[]
+            self.state.map_robots=[]
+            self.state.map_markers=[]
+            self.state.buff_rows=[]
+            self.state.student_ui_data={}
+            self.state.performance_sync={}
+            self.state.robot_statics={}
             self.state.small_buff=self.state.large_buff=False
             # A rule preview is not an observation. Retire the old demo target;
             # independently received, calibrated vision may repopulate it later.
@@ -252,7 +259,8 @@ class PersistenceMixin:
             return
         if config.key == "RMUL3v3":
             self.state.control_zones=[]
-            self.state.control_score_max=200;self.state.control_score_title='VP'
+            self.state.control_score_max=200
+            self.state.control_score_title='VP'
             self.state.ally_victory_points = 200
             self.state.enemy_victory_points = 200
             self.state.control_owner = "NEUTRAL"
@@ -265,7 +273,8 @@ class PersistenceMixin:
             # Do not retain the 2027 10000/1000 maxima when returning to the
             # historical client baseline. This is display seeding, not telemetry.
             self.state.control_zones=[]
-            self.state.control_score_max=200;self.state.control_score_title='VP'
+            self.state.control_score_max=200
+            self.state.control_score_title='VP'
             self.state.base_max_health=self.state.enemy_base_max_health=5000
             self.state.outpost_max_health=self.state.enemy_outpost_max_health=1500
             self.state.base_health = self.state.base_max_health
@@ -836,7 +845,8 @@ class PersistenceMixin:
         match = self.registry.get("MatchMode")
         season=validate_season(self.setting_mode(match,'Season','2026'))
         selected_mode=self.setting_mode(match,'Mode','RMUC7v7')
-        if season==2026 and selected_mode not in match_modes_for_season(season):selected_mode='RMUL3v3'
+        if season==2026 and selected_mode not in match_modes_for_season(season):
+            selected_mode='RMUL3v3'
         self.match_mode_manager.set_mode(selected_mode,season=season)
         self.match_mode_manager.apply_to_registry(self.registry)
         self.backend.set_rule_season(season)

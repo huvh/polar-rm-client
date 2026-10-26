@@ -269,9 +269,9 @@ class WindowVideoRecoveryTests(unittest.TestCase):
         decoder = backend.native_decoder
         process = PipeHeldProcess()
         with (
-            patch('rm_client.backend.video_backend.subprocess.Popen', return_value=process),
-            patch('rm_client.backend.video_backend.resolve_ffmpeg_executable', return_value='ffmpeg'),
-            patch('rm_client.backend.video_backend.os.read', side_effect=process.read),
+            patch('rm_client.backend.video.decoder.subprocess.Popen', return_value=process),
+            patch('rm_client.backend.video.decoder.resolve_ffmpeg_executable', return_value='ffmpeg'),
+            patch('rm_client.backend.video.decoder.os.read', side_effect=process.read),
         ):
             try:
                 self.assertTrue(decoder.start())

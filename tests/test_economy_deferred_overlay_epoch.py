@@ -164,7 +164,7 @@ class EconomyDeferredOverlayEpochTests(unittest.TestCase):
         self.assertEqual(host.overlay_coordinator.modal,OverlayKind.ECONOMY)
 
     def test_current_generation_delivers_each_supported_overlay(self):
-        for kind in [OverlayKind.CLICKGUI,OverlayKind.CHAT,OverlayKind.HERO_DEPLOY,OverlayKind.STUDENT]:
+        for kind in [OverlayKind.CLICKGUI,OverlayKind.CHAT,OverlayKind.STUDENT]:
             with self.subTest(kind=kind):
                 host=fixture(); host.open_economy_workspace(); host.close_economy_workspace()
                 generation=host._economy_generation
@@ -175,14 +175,14 @@ class EconomyDeferredOverlayEpochTests(unittest.TestCase):
                 self.assertEqual(len(host.callbacks),1)
                 deliver(host)
                 expected={OverlayKind.CLICKGUI:'jello-session',OverlayKind.CHAT:'open-chat',
-                          OverlayKind.HERO_DEPLOY:'open-hero',OverlayKind.STUDENT:('open-student','inventory')}[kind]
+                          OverlayKind.STUDENT:('open-student','inventory')}[kind]
                 self.assertEqual(host.trace.count(expected),1)
                 self.assertEqual(host.callbacks,[])
                 self.assertIsNone(host._economy_pending_overlay)
                 if kind==OverlayKind.STUDENT:self.assertIsNone(host._student_pending_panel)
 
     def test_new_generation_cancels_each_old_overlay_without_consuming_new_student_intent(self):
-        for kind in [OverlayKind.CLICKGUI,OverlayKind.CHAT,OverlayKind.HERO_DEPLOY,OverlayKind.STUDENT]:
+        for kind in [OverlayKind.CLICKGUI,OverlayKind.CHAT,OverlayKind.STUDENT]:
             with self.subTest(kind=kind):
                 host=fixture(); host.open_economy_workspace(); host.close_economy_workspace()
                 host._economy_pending_overlay=kind

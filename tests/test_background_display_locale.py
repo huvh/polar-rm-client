@@ -23,7 +23,7 @@ from PySide6.QtGui import QColor, QFont, QImage, QPainter
 from PySide6.QtWidgets import QApplication
 
 from rm_client.model import build_default_registry
-from rm_client.ui.hero_locale import hero_text
+from rm_client.ui.jello_locale import ui_label
 from rm_client.ui.jello_locale import chinese_enabled
 from rm_client.ui.cs2_video_settings import smooth_video
 from rm_client.ui import gpu_frame_compositor as gpu
@@ -34,7 +34,7 @@ def production_methods(texts):
     for path, class_name, names in (
         (ROOT / "rm_client/ui/polar_app.py", "PolarRMWindow", {"paint_gpu_background", "gpu_static_ui_key", "_should_defer_hud_static_rebuild"}),
         (ROOT / "rm_client/ui/polar/mixins/video_backend_mixin.py", "VideoBackendMixin",
-         {"draw_hero_native_background", "draw_backend_video_lost"}),
+         {"draw_backend_video_lost"}),
     ):
         tree = ast.parse(path.read_text(encoding="utf-8-sig"))
         owner = next(node for node in tree.body
@@ -62,7 +62,7 @@ def production_methods(texts):
         ast.ClassDef(name="WindowMethods", bases=[], keywords=[], body=methods, decorator_list=[]),
     ], type_ignores=[])
     scope = dict(QRectF=QRectF, Qt=Qt, QColor=QColor, QPainter=RecordingPainter,
-                 time=time, chinese_enabled=chinese_enabled, hero_text=hero_text, smooth_video=smooth_video)
+                 time=time, chinese_enabled=chinese_enabled, ui_label=ui_label, video_source_notice=lambda _source, **_kwargs: "", smooth_video=smooth_video)
     exec(compile(ast.fix_missing_locations(module), "background_display_methods", "exec"), scope)
     scope["WindowMethods"].painter_type = RecordingPainter
     return scope["WindowMethods"]
@@ -116,8 +116,6 @@ class BackgroundDisplayLocaleTests(unittest.TestCase):
     def test_text_bearing_background_and_blur_caches_follow_language(self):
         cases = (
             (False, "lost", "VIDEO SIGNAL LOST · WAITING FOR FRESH DECODED FRAME"),
-            (True, "waiting", "WAITING FOR NATIVE 0x0310 COMPRESSED VIDEO"),
-            (True, "lost", "NATIVE 0x0310 VIDEO LOST · NO CAMERA FALLBACK"),
         )
         for hero, phase, english in cases:
             with self.subTest(hero=hero, phase=phase):
@@ -160,7 +158,7 @@ class BackgroundDisplayLocaleTests(unittest.TestCase):
                 blur_keys = []
                 images = []
                 for index, (locale, expected) in enumerate((
-                    ("English", english), ("简体中文", hero_text(english, True)),
+                    ("English", english), ("简体中文", ui_label(english, True)),
                     ("English", english),
                 ), 1):
                     language.value = locale

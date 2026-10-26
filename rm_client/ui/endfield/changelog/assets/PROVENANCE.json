@@ -1,0 +1,127 @@
+{
+  "origin": "Game WebviewConfig/BulletinConfig.bin -> targets.game.entry; official static page",
+  "entry": "https://ef-webview.hypergryph.com/page/game_bulletin",
+  "files": [
+    {
+      "output": "142.9fc0c7.js",
+      "source": "https://web.hycdn.cn/endfield/webview/_bulletin/142.9fc0c7.js",
+      "source_sha256": "aa086bef9f7d18b4afd2fffda272e281e4a35f17c657ca540478f7466d840690",
+      "sha256": "1786c839eba222b4bd60a59bb15543b149103b484560c6e806c7d7b08c4195e7"
+    },
+    {
+      "output": "268.3c6a84.js",
+      "source": "https://web.hycdn.cn/endfield/webview/_bulletin/268.3c6a84.js",
+      "source_sha256": "7d81880e14dd7729bc3700af5c794d68480adb533d0611a21eda506928b8fc63",
+      "sha256": "8eb58a13d9fc50c92559b803c3407ad841cf0b1a5a50ee142691d5de7f2970a3"
+    },
+    {
+      "output": "820.62066a.js",
+      "source": "https://web.hycdn.cn/endfield/webview/_bulletin/820.62066a.js",
+      "source_sha256": "a4f61793d246797bfa24188cb1a9a1fcbb9c4217be1197936963b568ae1c4ddc",
+      "sha256": "8b4d7d81be3a39c4bf0c345ff0d94784409b7ba2c85decd1e2d53ee15f0946a7"
+    },
+    {
+      "output": "assets/audio/toggle_top.faff85.mp3",
+      "source": "https://web.hycdn.cn/endfield/webview/_bulletin/assets/audio/toggle_top.faff85.mp3",
+      "source_sha256": "cc1b80921dfd702313b4064245a7fb23b251441cbebab33e59db6cf0eb12cec5",
+      "sha256": "cc1b80921dfd702313b4064245a7fb23b251441cbebab33e59db6cf0eb12cec5"
+    },
+    {
+      "output": "assets/img/bulletin-item-active.63a42f.png",
+      "source": "https://web.hycdn.cn/endfield/webview/_bulletin/assets/img/bulletin-item-active.63a42f.png",
+      "source_sha256": "98819be6054a1657cb6533cd232e6138a8c65191ea40a67830cbd9ecc95731db",
+      "sha256": "98819be6054a1657cb6533cd232e6138a8c65191ea40a67830cbd9ecc95731db"
+    },
+    {
+      "output": "assets/img/bulletin-type-active.2283cd.png",
+      "source": "https://web.hycdn.cn/endfield/webview/_bulletin/assets/img/bulletin-type-active.2283cd.png",
+      "source_sha256": "93b04c6028946727bed9c3e6b63e2f383778dbbaadc5b59cb57d41639d166eda",
+      "sha256": "93b04c6028946727bed9c3e6b63e2f383778dbbaadc5b59cb57d41639d166eda"
+    },
+    {
+      "output": "assets/img/content-header.d11fe7.png",
+      "source": "https://web.hycdn.cn/endfield/webview/_bulletin/assets/img/content-header.d11fe7.png",
+      "source_sha256": "0f6ff09b86396f10857139936adbb492ee00f7618c8b85f73cf89732379ab26a",
+      "sha256": "0f6ff09b86396f10857139936adbb492ee00f7618c8b85f73cf89732379ab26a"
+    },
+    {
+      "output": "assets/img/header-dark.a3ae69.png",
+      "source": "https://web.hycdn.cn/endfield/webview/_bulletin/assets/img/header-dark.a3ae69.png",
+      "source_sha256": "c4f7344fa78a58a8adca4049b4a055fbb53141127df5d6b5e61aa5eb68c58f13",
+      "sha256": "c4f7344fa78a58a8adca4049b4a055fbb53141127df5d6b5e61aa5eb68c58f13"
+    },
+    {
+      "output": "assets/img/header.493954.png",
+      "source": "https://web.hycdn.cn/endfield/webview/_bulletin/assets/img/header.493954.png",
+      "source_sha256": "165fd02d3dfbab226ed0c78da9ef358375ff70ed21c07b9b3356b396f276ba29",
+      "sha256": "165fd02d3dfbab226ed0c78da9ef358375ff70ed21c07b9b3356b396f276ba29"
+    },
+    {
+      "output": "assets/img/r1.357b04.svg",
+      "source": "https://web.hycdn.cn/endfield/webview/_bulletin/assets/img/r1.357b04.svg",
+      "source_sha256": "9a914d0ad742dfad39d25a365c9bb8b8ba509a273dbefab88c38d6dd7a440b4c",
+      "sha256": "9a914d0ad742dfad39d25a365c9bb8b8ba509a273dbefab88c38d6dd7a440b4c"
+    },
+    {
+      "output": "assets/img/rb.c60178.svg",
+      "source": "https://web.hycdn.cn/endfield/webview/_bulletin/assets/img/rb.c60178.svg",
+      "source_sha256": "1319b3bc07b10d1100bc9be0873fcc9ed56577977bc08bbdc115616337124261",
+      "sha256": "1319b3bc07b10d1100bc9be0873fcc9ed56577977bc08bbdc115616337124261"
+    },
+    {
+      "output": "commons.29f297.js",
+      "source": "https://web.hycdn.cn/endfield/webview/_bulletin/commons.29f297.js",
+      "source_sha256": "2c5f6da2024c3a8f8ea40f660fcaefd4344fa056faf3febd305fb39048969ef0",
+      "sha256": "9e08d2f9dd2b4ba4199a3d4383f66952def5bc8cb32baa5f5ae6523d4964d83f"
+    },
+    {
+      "output": "commons.8113a7.css",
+      "source": "https://web.hycdn.cn/endfield/webview/_bulletin/commons.8113a7.css",
+      "source_sha256": "72209682c81b3d4e4c6d2165ec258386a99f1a23731cacf406479d850a7b53aa",
+      "sha256": "6ac7e5a20f6fce730e55021b8213b709ae4d47131a59a2b223647e190ec5dff4"
+    },
+    {
+      "output": "game.451b84.js",
+      "source": "https://web.hycdn.cn/endfield/webview/_bulletin/game.451b84.js",
+      "source_sha256": "85ee10247b7008cb26610ff78ec53f317680f1dbe0cf84ed474704ef23ab5be3",
+      "sha256": "d4d8274219c71ce1cd55b0e9feb4217104ee4590d2a25652207e1ff757712a88"
+    },
+    {
+      "output": "index.html",
+      "source": "https://ef-webview.hypergryph.com/page/game_bulletin",
+      "source_sha256": "884ab794b026507de7853d18c7dfc271092dd78785281c2d97f1782e7f7284d2",
+      "sha256": "ad53b639ef9538dbcfc2e8f6fb2ecd42cdc79bba52ffbbbef5579d88dfb18436"
+    },
+    {
+      "output": "fonts/HarmonyOS_Sans_Medium.woff2",
+      "source": "game/sdkresources/font/HarmonyOS_Sans_Medium.woff2",
+      "source_sha256": "0a07b647ed1ab189975c04dd77d5a44af0018667731144b86e12ea987bb10b15",
+      "sha256": "0a07b647ed1ab189975c04dd77d5a44af0018667731144b86e12ea987bb10b15"
+    },
+    {
+      "output": "fonts/HarmonyOS_Sans_Bold.woff2",
+      "source": "game/sdkresources/font/HarmonyOS_Sans_Bold.woff2",
+      "source_sha256": "ec41579967546cbbb294616cc24011cf993edbc5166d4a9102eb3ee4f1260af9",
+      "sha256": "ec41579967546cbbb294616cc24011cf993edbc5166d4a9102eb3ee4f1260af9"
+    },
+    {
+      "output": "fonts/HarmonyOS_Sans_SC_Medium.woff2",
+      "source": "game/sdkresources/font/HarmonyOS_Sans_SC_Medium.woff2",
+      "source_sha256": "2402beaeb6813ff143665de9da56e56e3f2b03dc4814bab87ca6e30b9b7f5fac",
+      "sha256": "2402beaeb6813ff143665de9da56e56e3f2b03dc4814bab87ca6e30b9b7f5fac"
+    },
+    {
+      "output": "fonts/HarmonyOS_Sans_SC_Bold.woff2",
+      "source": "game/sdkresources/font/HarmonyOS_Sans_SC_Bold.woff2",
+      "source_sha256": "16bb07870bee433a6597e4f13f0e5b08ddffd13ad9d4363364c4c9f84dd6baec",
+      "sha256": "16bb07870bee433a6597e4f13f0e5b08ddffd13ad9d4363364c4c9f84dd6baec"
+    },
+    {
+      "output": "adapter.js",
+      "source": "client local content/close adapter",
+      "source_sha256": "87ba427cd287239a663b1d91a9cfcbdc2abf68f72095cf193f084b828b1388f5",
+      "sha256": "87ba427cd287239a663b1d91a9cfcbdc2abf68f72095cf193f084b828b1388f5"
+    }
+  ],
+  "adaptation": "Relative local URLs, local changelog data port, client tab labels only. Original components, styles, dimensions and CSS motion retained."
+}

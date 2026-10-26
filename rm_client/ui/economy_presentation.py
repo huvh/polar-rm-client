@@ -23,7 +23,8 @@ def offer_price_text(offer: EconomyOffer) -> str:
 
 
 def offer_detail_price_text(offer: EconomyOffer, mock_mode: bool) -> str:
-    if is_rule_reference(offer):return f'{offer.unit}  ·  {offer_price_text(offer)}  ·  未接入2027裁判'
+    if is_rule_reference(offer):
+        return f'{offer.unit}  ·  {offer_price_text(offer)}  ·  未接入2027裁判'
     tag='预计价格' if offer.estimated else ('模拟请求' if mock_mode else '裁判系统')
     return f'{offer.unit}  ·  {offer.cost} 金币  ·  {tag}'
 

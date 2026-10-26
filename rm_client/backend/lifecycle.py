@@ -28,6 +28,7 @@ class ScenarioRequest:
     polar_tcp_port: int
     preserve_estop: bool
     synchronous_start: bool = False
+    mqtt_autostart: bool = True
 
 
 @dataclass(frozen=True, slots=True)

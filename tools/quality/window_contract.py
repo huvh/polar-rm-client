@@ -90,6 +90,15 @@ def load_contract(path: Path, baseline: dict) -> dict:
         if not isinstance(evidence, list) or not evidence or not all(isinstance(item, str) and ":" in item for item in evidence):
             raise ValueError(f"Private member lacks caller evidence: {name}")
     validate_private_retirements(contract, baseline)
+    for name, evidence in contract.get("removed_feature_members", {}).items():
+        if name not in baseline["members"] or name.startswith("_"):
+            raise ValueError(f"Invalid removed feature member: {name}")
+        if not isinstance(evidence, dict) or not all(
+            isinstance(evidence.get(key), str) and evidence[key].strip()
+            for key in ("feature", "reason", "removed_at", "behavior_test")
+        ):
+            raise ValueError(f"Removed feature lacks evidence: {name}")
+        date.fromisoformat(evidence["removed_at"])
     expected_python = {name for name in protected_names(baseline, contract)
                        if baseline["members"][name]["kind"] in PYTHON_CALLABLE_KINDS}
     if set(contract["python_signatures"]) != expected_python:
@@ -103,7 +112,8 @@ def load_contract(path: Path, baseline: dict) -> dict:
 
 
 def protected_names(baseline: dict, contract: dict) -> set[str]:
-    return {name for name in baseline["members"] if not name.startswith("_")} | set(contract["private_members"])
+    public = {name for name in baseline["members"] if not name.startswith("_")}
+    return (public - set(contract.get("removed_feature_members", {}))) | set(contract["private_members"])
 
 
 def compatibility_snapshots(baseline: dict, current: dict, contract: dict) -> tuple[dict, dict]:

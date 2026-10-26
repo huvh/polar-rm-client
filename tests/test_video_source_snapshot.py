@@ -131,8 +131,8 @@ class VideoSourceSnapshotTests(unittest.TestCase):
             if not release.wait(2):
                 raise TimeoutError('test spawn not released')
             return proc
-        with patch('rm_client.backend.video_backend.subprocess.Popen', side_effect=spawn), \
-             patch('rm_client.backend.video_backend.resolve_ffmpeg_executable', return_value='ffmpeg'):
+        with patch('rm_client.backend.video.decoder.subprocess.Popen', side_effect=spawn), \
+             patch('rm_client.backend.video.decoder.resolve_ffmpeg_executable', return_value='ffmpeg'):
             starter = threading.Thread(target=decoder.start)
             starter.start()
             try:

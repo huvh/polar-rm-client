@@ -1,0 +1,50 @@
+{
+  "status": "PASS",
+  "fullscreen": true,
+  "dpr": 1.5,
+  "cases": [
+    {
+      "action": 2,
+      "close": "back",
+      "escape": true,
+      "requested": true,
+      "phase": 1
+    },
+    {
+      "action": 2,
+      "close": "close",
+      "escape": true,
+      "requested": true,
+      "phase": 1
+    },
+    {
+      "action": 2,
+      "close": "escape",
+      "escape": true,
+      "requested": true,
+      "phase": 1
+    },
+    {
+      "action": 5,
+      "close": "back",
+      "escape": true,
+      "requested": true,
+      "phase": 1
+    },
+    {
+      "action": 5,
+      "close": "close",
+      "escape": true,
+      "requested": true,
+      "phase": 1
+    },
+    {
+      "action": 5,
+      "close": "escape",
+      "escape": true,
+      "requested": true,
+      "phase": 1
+    }
+  ],
+  "scope": "real D3D menu and production modals; source semantic actions injected; Qt control clicks; inert transports; owned renderer capture"
+}

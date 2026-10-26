@@ -98,7 +98,7 @@ class UdpCodecEvidenceTests(unittest.TestCase):
                     self.addCleanup(backend.stop)
                     with patch.object(ContinuousMjpegDecoder, 'start', admit), \
                          patch.object(ContinuousMjpegDecoder, 'write', return_value=True), \
-                         patch('rm_client.backend.video_backend._decode_jpeg_bgr', wraps=_decode_jpeg_bgr) as decode:
+                         patch('rm_client.backend.video.udp._decode_jpeg_bgr', wraps=_decode_jpeg_bgr) as decode:
                         backend._on_assembled_frame(stream)
                         old = backend.h265_decoder
                         backend._on_assembled_frame(prefix + self.jpeg)
@@ -129,7 +129,7 @@ class UdpCodecEvidenceTests(unittest.TestCase):
         with patch.object(ContinuousMjpegDecoder, 'start', admit), \
              patch.object(ContinuousMjpegDecoder, 'write', return_value=True) as write:
             self.backend._on_assembled_frame(H264)
-            with patch('rm_client.backend.video_backend._decode_jpeg_bgr', return_value=np.zeros((2, 2, 3))) as decode:
+            with patch('rm_client.backend.video.udp._decode_jpeg_bgr', return_value=np.zeros((2, 2, 3))) as decode:
                 self.backend._on_assembled_frame(self.jpeg[:-2])
             decode.assert_not_called()
             self.assertEqual(self.backend.codec, 'h264')
@@ -152,7 +152,7 @@ class UdpCodecEvidenceTests(unittest.TestCase):
                     self.backend._on_assembled_frame(self.jpeg, self.backend._video_generation)
                 except BaseException as exc:
                     errors.append(exc)
-            with patch('rm_client.backend.video_backend._decode_jpeg_bgr', side_effect=delayed_decode):
+            with patch('rm_client.backend.video.udp._decode_jpeg_bgr', side_effect=delayed_decode):
                 worker = threading.Thread(target=receive)
                 worker.start()
                 try:
@@ -182,7 +182,7 @@ class UdpCodecEvidenceTests(unittest.TestCase):
             self.backend._on_assembled_frame(H264)
             generation = self.backend._video_generation
             self.backend.request_stop()
-            with patch('rm_client.backend.video_backend._decode_jpeg_bgr') as decode:
+            with patch('rm_client.backend.video.udp._decode_jpeg_bgr') as decode:
                 self.backend._on_assembled_frame(self.jpeg, generation)
             decode.assert_not_called()
             self.assertIsNone(self.backend.latest_bgr)

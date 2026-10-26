@@ -15,11 +15,12 @@ import shutil
 import struct
 import tempfile
 import zlib
+import sys
 
-try:  # Both `python tools/...py` and `from tools import ...`.
-    from .prepare_endfield_boot import decode
-except ImportError:
-    from prepare_endfield_boot import decode
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+from tools.endfield.prepare_boot import decode
 
 
 PREFAB = "assets/beyond/dynamicassets/gameplay/ui/prefabs/settings/gamesettingpanel.prefab"

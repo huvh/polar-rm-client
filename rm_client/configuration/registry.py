@@ -112,8 +112,12 @@ def profile_setting_value(module_name: str, setting: SettingPort, value: Any) ->
         # Preserve an unknown annual schema so backend validation can fail
         # closed instead of silently replacing it with this year's protocol.
         protocol_profile = (module_name, setting.name) in {
-            ("MQTTLink", "Referee Profile"),("MatchMode", "Season")}
-        if protocol_profile or not setting.options or value in setting.options:
+            ("MQTTLink", "Referee Profile"), ("MatchMode", "Season")}
+        # 串口枚举可能晚于配置加载；保留已指定的角度端口，不能静默改成 Stub。
+        saved_angle_port = (module_name == "ControllerAngles"
+                            and setting.name in {"Angle RX Port", "Angle TX Port"}
+                            and bool(value.strip()) and value.strip().lower() != "auto")
+        if protocol_profile or saved_angle_port or not setting.options or value in setting.options:
             return value
         return setting.value
     return value
@@ -132,6 +136,10 @@ def _apply_module(module: ModulePort, data: dict[str, Any]) -> None:
         setting = module.get_setting(str(name))
         if setting is not None and setting.kind != "action_group":
             setting.value = profile_setting_value(module.name, setting, value)
+            if (module.name == "ControllerAngles"
+                    and setting.name in {"Angle RX Port", "Angle TX Port"}
+                    and setting.value not in setting.options):
+                setting.options = [*setting.options, setting.value]
 
 
 def _synchronize_legacy_alliance(registry: RegistryPort) -> None:

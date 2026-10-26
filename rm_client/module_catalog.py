@@ -12,6 +12,7 @@ from dataclasses import dataclass, replace
 from typing import Iterable
 
 from .crosshair_profile import FIELDS as CROSSHAIR_FIELDS
+from .video_sources import VIDEO_SOURCE_CHOICES
 from .module_settings import (
     CONTROL_BIND_OPTIONS, CONTROL_SLOT_ORDER, HUD_MODES, LEGACY_GUI_MODES,
     MODULE_LIST_STYLES, TACTICAL_MAP_STATUS_DISPLAYS, Module, ModuleRegistry,
@@ -179,7 +180,6 @@ def default_modules(choices: CatalogChoices) -> list[Module]:
                         "Observe Firmware Zero",
                         "Record Firmware Zero Test",
                         "Run Loss Recovery Test",
-                        "Record Hero Test",
                         "Record Economy Test",
                         "Review PRM1 Vision Schema",
                         "Run PRM1 Vision Bench",
@@ -343,7 +343,6 @@ def default_modules(choices: CatalogChoices) -> list[Module]:
                 action_setting("Calibrate Lob Pitch", "Store the operator-confirmed iterative pitch calibration."),
                 action_setting("Confirm Relocalization", "Confirm radar/map relocalization after every reset."),
                 action_setting("Invalidate Relocalization", "Fail closed after a localisation discontinuity."),
-                action_setting("Open Deploy Interface", "Open the dedicated deployment/lob operator console."),
                 action_setting("Preview Lob", "Calculate yaw, pitch and flight time without sending a command."),
                 action_setting("Arm Assisted Lob", "Arm decision support only; no fire command is emitted."),
                 action_setting("Disarm Assisted Lob"),
@@ -424,14 +423,15 @@ def default_modules(choices: CatalogChoices) -> list[Module]:
             "Vision",
             "None",
             [
-                mode_setting("Source", "Webcam", ["Webcam", "Shark UDP", "UDP HEVC", "Legacy VT02 UDP", "Legacy Official Bridge", "Native 0x0310", "Synthetic"]),
+                mode_setting("Source", "Webcam", list(VIDEO_SOURCE_CHOICES)),
+                number_setting("Legacy Channel", 1, 1, 6, 1, "", "旧接收端信道，与发送端一致；只配置接收端，不修改发送端或 C 板。"),
                 number_setting("Camera ID", 0, 0, 5, 1),
                 number_setting("Capture Width", 960, 320, 1920, 16, "px"),
                 number_setting("Capture Height", 540, 240, 1080, 16, "px"),
                 bool_setting("Mirror", False),
             ],
             enabled=True,
-            description="使用电脑摄像头作为当前机器人图传。",
+            description="选择电脑摄像头、旧图传或其他视频源。新图传仅提供暂未实现的占位选项。",
         ),
         Module(
             "TongjiVisionBridge",
@@ -824,14 +824,16 @@ def default_modules(choices: CatalogChoices) -> list[Module]:
             [
                 mode_setting("Angle RX Port", "Stub", ["Stub"] + [p for p in choices.angle_rx_ports if p not in {"Stub", "Auto"}]),
                 mode_setting("Angle TX Port", "Stub", ["Stub"] + [p for p in choices.angle_tx_ports if p not in {"Stub", "Auto"}]),
+                mode_setting("Angle Output", "Official Client Serial", ["Official Client Serial", "Legacy Receiver", "VT02 Encoder"]),
                 bool_setting("Forward Angles", False),
                 bool_setting("Angle Mock Writes", True),
+                bool_setting("Angle Auto Arm", False, "加载配置后等待新鲜角度和出口就绪再自动授权；切换窗口不撤销角度授权。急停、手动撤销或运行中断流后仍需手动授权。"),
                 action_setting("Arm Angle Forward", "只授权本次进程。需新鲜六轴数据、RobotLink 和 Allow Drive；断流后必须重新授权。"),
                 action_setting("Disarm Angle Forward", "停止角度转发，等待车端独立超时；不发送全零目标角度。"),
                 action_setting("Show Angle Status", "显示六轴角度接收有效性、转发状态和拦截原因。"),
                 action_setting("Rescan Serial Ports", "重新扫描显式 RX/TX 串口；不会自动选择设备。"),
             ],
-            description="工程实体控制器六轴角度：A5/0x0302/30 字节，115200。默认关闭及 mock；300ms 独立超时。",
+            description="A5/0x0302/30 字节角度，RX 115200。可经官方选手端串口或旧图传接收端直发；300ms 独立超时。",
         ),
         Module(
             "RobotLink",

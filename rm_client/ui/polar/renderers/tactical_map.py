@@ -845,7 +845,8 @@ class TacticalMapMixin:
         self.draw_map_zones(p, field_rect, config.field, compact=compact)
         if self.setting_bool(module, "Map Marks", True):
             self.draw_map_markers(p, field_rect, config.field, compact=compact)
-        if config.field.positions_calibrated:draw_radar_overlay(self, p, field_rect, config.field, compact=compact)
+        if config.field.positions_calibrated:
+            draw_radar_overlay(self, p, field_rect, config.field, compact=compact)
         if self.setting_bool(module, "Robot Dots", True):
             self.draw_map_robots(p, field_rect, config.field, compact=compact)
         draw_penalty_strip(self, p, field_rect, compact=compact)
@@ -1177,7 +1178,8 @@ class TacticalMapMixin:
         self.draw_map_zones(p, field_rect, config.field, compact=compact, detail_progress=hold_amount)
         if self.setting_bool(module, "Map Marks", True):
             self.draw_map_markers(p, field_rect, config.field, compact=compact, detail_progress=hold_amount)
-        if config.field.positions_calibrated:draw_radar_overlay(self, p, field_rect, config.field, compact=compact, detail_progress=hold_amount)
+        if config.field.positions_calibrated:
+            draw_radar_overlay(self, p, field_rect, config.field, compact=compact, detail_progress=hold_amount)
         if self.setting_bool(module, "Robot Dots", True):
             self.draw_liquid_map_robots(p, field_rect, config.field, compact=compact, detail_progress=hold_amount)
         draw_penalty_strip(self, p, field_rect, compact=compact)
@@ -1219,7 +1221,8 @@ class TacticalMapMixin:
         compact: bool = False,
         detail_progress: float | None = None,
     ) -> None:
-        if not getattr(field,'positions_calibrated',True):return
+        if not getattr(field,'positions_calibrated',True):
+            return
         robots = list(self.state.map_robots)
         if not robots:
             return
@@ -1849,7 +1852,8 @@ class TacticalMapMixin:
         return layer
 
     def official_map_image(self, config: MatchModeConfig) -> QImage | None:
-        if not config.field.asset_path:return None
+        if not config.field.asset_path:
+            return None
         path = self.paths.resource_root / config.field.asset_path
         key = str(path)
         if key not in self.map_images:
@@ -1919,7 +1923,8 @@ class TacticalMapMixin:
             rounded_rect(p, zone_rect, 3, with_alpha(fill, fill_alpha), color("#ffffff", border_alpha))
 
     def draw_map_robots(self, p: QPainter, rect: QRectF, field: FieldLayout, compact: bool = False) -> None:
-        if not getattr(field,'positions_calibrated',True):return
+        if not getattr(field,'positions_calibrated',True):
+            return
         now = time.perf_counter()
         font = self.font("poppins_medium", 6.8)
         for index, robot in enumerate(self.state.map_robots):
@@ -1956,7 +1961,8 @@ class TacticalMapMixin:
         compact: bool = False,
         detail_progress: float | None = None,
     ) -> None:
-        if not getattr(field,'positions_calibrated',True):return
+        if not getattr(field,'positions_calibrated',True):
+            return
         now = time.perf_counter()
         detail = (0.0 if compact else 1.0) if detail_progress is None else max(0.0, min(1.0, detail_progress))
         font = self.font("poppins_medium", 6.5)

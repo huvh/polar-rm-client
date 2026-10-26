@@ -1,0 +1,153 @@
+{
+  "scope": "reuse existing game clips for both category settings and search preview; runtime resources unchanged",
+  "authored_clips": [
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/animations/wiki/wiki_group_out.anim",
+      "clip": "wiki_group_out",
+      "object": 4523027925299860854,
+      "serialized_file": "CAB-1eabb4a63723d3c7f439a7a4ca873fc5",
+      "bundle": "Data/Bundles/Windows/main/44a30cc704d3830fec1db7b8.ab"
+    },
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/animations/wiki/wiki_group_leftcellselect.anim",
+      "clip": "wiki_group_leftcellselect",
+      "object": 404207974926365279,
+      "serialized_file": "CAB-ac945e2d266fa010a3dfe4d2ae27b9a8",
+      "bundle": "Data/Bundles/Windows/main/c0da235cd970366f7b874710.ab"
+    },
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/animations/wiki/wiki_group_leftcellselect_out.anim",
+      "clip": "wiki_group_leftcellselect_out",
+      "object": 6605659185851778968,
+      "serialized_file": "CAB-589744d509912ad058312641a15db577",
+      "bundle": "Data/Bundles/Windows/main/efda56a538bdb8efcdd5c008.ab"
+    },
+    {
+      "source": "assets/beyond/dynamicassets/gameplay/ui/animations/common/itembigleft_in.anim",
+      "clip": "itembigleft_in",
+      "object": 1847661073427808780,
+      "serialized_file": "CAB-78d92be8479259eeb8dec10606c248b2",
+      "bundle": "Data/Bundles/Windows/main/c5b8c4a00d7b1fa1209a2683.ab"
+    }
+  ],
+  "body_in_tracks": [
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.0,
+            "value": -20.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 3,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.3333333432674408,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 3,
+            "inWeight": 1.0,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_AnchoredPosition.x",
+      "path": "AnimationNode",
+      "classID": 224,
+      "script": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      }
+    },
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.0,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.3333333432674408,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_Alpha",
+      "path": "",
+      "classID": 225,
+      "script": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      }
+    }
+  ],
+  "body_out_tracks": [
+    {
+      "curve": {
+        "m_Curve": [
+          {
+            "time": 0.0,
+            "value": 1.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          },
+          {
+            "time": 0.1666666716337204,
+            "value": 0.0,
+            "inSlope": 0.0,
+            "outSlope": 0.0,
+            "weightedMode": 0,
+            "inWeight": 0.3333333432674408,
+            "outWeight": 0.3333333432674408
+          }
+        ],
+        "m_PreInfinity": 2,
+        "m_PostInfinity": 2,
+        "m_RotationOrder": 4
+      },
+      "attribute": "m_Alpha",
+      "path": "NotchNode/Main/Center/ItemScrollListCenter",
+      "classID": 225,
+      "script": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      }
+    }
+  ],
+  "runtime_manifest_sha256": "88ab44bd97faa20807157d17e905fa7685e8f19b79366267d5f737f346dc9764",
+  "regression_before_fix": {
+    "test": "test_search_click_release_keeps_hover_live_without_scrolling",
+    "observed": "background_release_owned=True after real Qt mouseClick completed; assertion False failed"
+  },
+  "cause": "list selects on release; wiki action reacquired release ownership and swallowed subsequent mouse moves before hover_point update",
+  "fix": "finish the owned release after the delayed list action, while preserving any successor drag capture",
+  "selection": "mouse and keyboard share select_search; rapid clicks retain first outgoing source and same clock, repeated selection does not restart; query changes reset old preview",
+  "shared_rendering": [
+    "renderer._row_pose",
+    "renderer._selected_row_background",
+    "renderer._switch_content"
+  ],
+  "functional_scope": "preview selection never edits Module/Setting values; outgoing preview publishes no detail hotspot; original detail route retained"
+}

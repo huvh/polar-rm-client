@@ -1,0 +1,979 @@
+{
+  "basis": "read-only installed Endfield bundles, source prefab instance override retained",
+  "scroll_rects": [
+    {
+      "path": "WikiGroupPanel/NotchNode/Main/Left/ScrollListLeft",
+      "properties": {
+        "m_MovementType": 2,
+        "m_Elasticity": 0.10000000149011612,
+        "m_Inertia": 1,
+        "m_DecelerationRate": 0.13500000536441803,
+        "_enableOverScrollEffect": 0
+      }
+    },
+    {
+      "path": "WikiGroupPanel/NotchNode/Main/Center/ItemScrollListCenter",
+      "properties": {
+        "m_MovementType": 2,
+        "m_Elasticity": 0.10000000149011612,
+        "m_Inertia": 1,
+        "m_DecelerationRate": 0.13500000536441803,
+        "_enableOverScrollEffect": 0
+      }
+    },
+    {
+      "path": "WikiGroupPanel/NotchNode/Main/Center/MonsterScrollListCenter",
+      "properties": {
+        "m_MovementType": 1,
+        "m_Elasticity": 0.10000000149011612,
+        "m_Inertia": 1,
+        "m_DecelerationRate": 0.13500000536441803,
+        "_enableOverScrollEffect": 0
+      }
+    }
+  ],
+  "terminal_adaptation": "elastic boundary feedback requested for directory and setting wheels; position remains bounded, presentation offset springs back with .1 second elasticity",
+  "ground": {
+    "frames": [
+      "wave_000",
+      "wave_001",
+      "wave_002",
+      "wave_003",
+      "wave_004",
+      "wave_005",
+      "wave_006",
+      "wave_007",
+      "wave_008",
+      "wave_009",
+      "wave_010",
+      "wave_011",
+      "wave_012",
+      "wave_013",
+      "wave_014",
+      "wave_015",
+      "wave_016",
+      "wave_017",
+      "wave_018",
+      "wave_019",
+      "wave_020",
+      "wave_021",
+      "wave_022",
+      "wave_023",
+      "wave_024",
+      "wave_025",
+      "wave_026",
+      "wave_027",
+      "wave_028",
+      "wave_029",
+      "wave_030",
+      "wave_031",
+      "wave_032",
+      "wave_033",
+      "wave_034",
+      "wave_035",
+      "wave_036",
+      "wave_037",
+      "wave_038",
+      "wave_039",
+      "wave_040",
+      "wave_041",
+      "wave_042",
+      "wave_043",
+      "wave_044",
+      "wave_045",
+      "wave_046",
+      "wave_047",
+      "wave_048",
+      "wave_049",
+      "wave_050",
+      "wave_051",
+      "wave_052",
+      "wave_053",
+      "wave_054",
+      "wave_055",
+      "wave_056",
+      "wave_057",
+      "wave_058",
+      "wave_059",
+      "wave_060",
+      "wave_061",
+      "wave_062",
+      "wave_063",
+      "wave_064",
+      "wave_065",
+      "wave_066",
+      "wave_067",
+      "wave_068",
+      "wave_069",
+      "wave_070",
+      "wave_071",
+      "wave_072",
+      "wave_073",
+      "wave_074",
+      "wave_075",
+      "wave_076",
+      "wave_077",
+      "wave_078",
+      "wave_079"
+    ],
+    "fps": 8,
+    "period": 10,
+    "rect": [
+      0,
+      540,
+      1920,
+      540
+    ],
+    "source_uniforms": {
+      "intensity": 0.699999988079071,
+      "offsetZ": 0.4000000059604645,
+      "fov": 24.0,
+      "lensShift": 0.07000000029802322,
+      "mainSpeed": 0.20000000298023224,
+      "tintAlpha": 1.100000023841858
+    },
+    "camera_position": {
+      "x": 0.0,
+      "y": 1.0,
+      "z": 8.0
+    },
+    "instance_transform": {
+      "m_GameObject": {
+        "m_FileID": 0,
+        "m_PathID": 3677212965765452387
+      },
+      "m_LocalRotation": {
+        "x": 0.5,
+        "y": 0.5,
+        "z": -0.5,
+        "w": 0.5
+      },
+      "m_LocalPosition": {
+        "x": 0.0,
+        "y": -1.600000023841858,
+        "z": 0.0
+      },
+      "m_LocalScale": {
+        "x": 2.0,
+        "y": 2.0,
+        "z": 1.0
+      },
+      "m_Children": [],
+      "m_Father": {
+        "m_FileID": 0,
+        "m_PathID": -2109323813779074461
+      }
+    },
+    "parent_scale": 1.600000023841858
+  },
+  "text": {
+    "path": "BgNode/Deco1",
+    "name": "Deco1",
+    "active": true,
+    "transform": {
+      "m_AnchorMin": {
+        "x": 0.0,
+        "y": 0.0
+      },
+      "m_AnchorMax": {
+        "x": 0.0,
+        "y": 0.0
+      },
+      "m_AnchoredPosition": {
+        "x": 113.0,
+        "y": 125.0
+      },
+      "m_SizeDelta": {
+        "x": 173.0,
+        "y": 70.0
+      },
+      "m_Pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "color": {
+      "r": 1.0,
+      "g": 1.0,
+      "b": 1.0,
+      "a": 0.6980392336845398
+    },
+    "alpha": 1,
+    "mask": false,
+    "solid": false,
+    "loop": null,
+    "children": [],
+    "image": "layer_2362060993574631798",
+    "size": [
+      256,
+      64
+    ],
+    "uv_scroll": [
+      0.0,
+      -0.10000000149011612
+    ]
+  },
+  "source_files": [
+    {
+      "output": "layer_2362060993574631798.png",
+      "source": "assets/beyond/arts/effects/ui/sprites/common/t_ui_deco_factravelpole_text02.png",
+      "texture_name": "T_ui_deco_factravelpole_text02",
+      "bundle": "Data/Bundles/Windows/main/18aa19cb6c2860c230b319ca.ab",
+      "object": -2543661712004359687,
+      "sha256": "b57d3580ca6b0d4ab17c233498f790429420c992c8664eb53557f0b889a43d84",
+      "adaptation": "source text alpha and black material intensity; runtime UV scroll",
+      "dependencies": [
+        {
+          "source": "assets/beyond/arts/effects/ui/material/common/m_fx_text_scroll_blcak.mat",
+          "bundle": "Data/Bundles/Windows/main/20630c5d60fe3097ffc92ed7.ab",
+          "object": -1185827249841981678
+        }
+      ]
+    },
+    {
+      "output": "waves/000.png",
+      "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+      "texture_name": "Wiki ground projection",
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "object": 374149229920228294,
+      "sha256": "b6b6896f28c1f5e22b32ded7b2cba9c19812f067680b64d63b6c7f56948971c1",
+      "dependencies": [
+        {
+          "source": "assets/beyond/arts/effects/ui/wiki/material/m_fxui_wiki_white_ground_01.mat",
+          "bundle": "Data/Bundles/Windows/main/6cc705dd584657a06dc2efa6.ab",
+          "object": -5611585278553019446
+        },
+        {
+          "source": "assets/beyond/dynamicassets/gameplay/prefabs/wiki/wikicameragroup.prefab",
+          "bundle": "Data/Bundles/Windows/main/a703d3a5a244009679486067.ab",
+          "object": 8843913985749677385
+        },
+        {
+          "source": "assets/beyond/arts/effects/commonassets/arts/s_model/s_fx_ground_fj_02.fbx",
+          "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+          "object": 374149229920228294
+        },
+        {
+          "source": "assets/beyond/dynamicassets/gameplay/prefabs/wiki/wikimodelshow.prefab",
+          "bundle": "Data/Bundles/Windows/main/b9aac4d23920f68201638f45.ab",
+          "object": 8179581310422553187
+        },
+        {
+          "source": "assets/beyond/arts/effects/commonassets/arts/t_texture/mask/linemask/t_fx_mask_1123_m.png",
+          "bundle": "Data/Bundles/Windows/main/88dae96a7bf9c7a2dc98e83e.ab",
+          "object": 6509367021810203110
+        },
+        {
+          "source": "assets/beyond/arts/effects/commonassets/arts/t_texture/mask/linemask/t_fx_mask_1124_m.png",
+          "bundle": "Data/Bundles/Windows/main/3f9ea6a6404e9888c40f34eb.ab",
+          "object": 4414360980966126031
+        },
+        {
+          "source": "assets/beyond/arts/effects/commonassets/arts/t_texture/mask/noise/t_fx_flow_904_m.png",
+          "bundle": "Data/Bundles/Windows/main/d4540c857e15dc556b9aa0cd.ab",
+          "object": 701954606319280908
+        }
+      ],
+      "adaptation": "source mesh/UVs, actual instance transform, Main camera and noise displacement; bottom grey projection"
+    }
+  ],
+  "verified_game_bundles": [
+    {
+      "bundle": "Data/Bundles/Windows/main/9cb527d9924ad9aeffb3a577.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\1D1687FD22E1DA19349E550B959537C5.chk",
+      "offset": 1001949269,
+      "length": 384149,
+      "md5": "0e46805360b2fcd3b80b5161a3709495",
+      "sha256": "f223a87af8861d0d193f9c4e6ab7dfab54e032fe1de9fc47716ad79f94d78211"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/30439e8d4200f7eff2f0f655.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\377F7FCF37D850664E4738D8778846B3.chk",
+      "offset": 159516413,
+      "length": 648016,
+      "md5": "0f81e9c1347d25de87b43a5055e6ba3c",
+      "sha256": "c5f79deab0797bc970e3a32feb1342bd520bbcd0e8815f7a9de4353d16704fbf"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/011befa5bd9c60075359ba4a.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 771207870,
+      "length": 20532,
+      "md5": "f7a96e4e17858c34d2098f46d14c7fc0",
+      "sha256": "88c6854d02e30eb299fdb9981fe323eddb9e5cd091aaf627ca1468f139717fc7"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/029f922b04dba498e73c70fd.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 173491131,
+      "length": 4699,
+      "md5": "6f4dfab0ee02e0d922faba3051082691",
+      "sha256": "be161661c1119329fd91ae6cdea637c3bc2241f08214f1a50d88e1ee35f2beb8"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/0a88759b1f9e8a6ff4613361.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 173403002,
+      "length": 4697,
+      "md5": "9c8804bb786265fa0b8fc9cd998f340b",
+      "sha256": "63535a980089e682fbf4a39e801b43e7464218efc34563ec2b578827408377d6"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/11e8c5a6e27f3bb382cf589a.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 810132664,
+      "length": 22745,
+      "md5": "6ef98c00b61d4958b8e8ce6107701230",
+      "sha256": "a13e1ee29fa90489ae71b0f2aa60fccdbc7bf6d2bfaa3182771cd8394b2d857f"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/17cf448a64807db830bc2a2d.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 173308605,
+      "length": 4695,
+      "md5": "1902d1488f888ead46456dfbfbd37eb6",
+      "sha256": "289c70f5e5f96bc7af43a5438be5c8afc7d1c5a17252e4d5141811e5dec21e18"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/1878515ec0a820afb9f6c084.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 228358177,
+      "length": 5636,
+      "md5": "5364c049434ad1535f2e297137fd5e37",
+      "sha256": "2c6217d4deec86c00b0a5d9ef3d5a77b4f5b1000565b412dc4df9c87b204dfd9"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/18aa19cb6c2860c230b319ca.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 555271666,
+      "length": 10430,
+      "md5": "643546d7f345150849d2a4de5344aaee",
+      "sha256": "40944a07e5dba11fd80ea28d053674b586e5f38ac2d6633d80a701a66d71cef1"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/20630c5d60fe3097ffc92ed7.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 172664429,
+      "length": 6628,
+      "md5": "5e9d1d1f3b90876fca1bc92f9577acd6",
+      "sha256": "a625c7e1532969d3d8e6cec4db695f80723ce1fc5964c612853f88135292161b"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/27a4bc4846057f4d2c980d92.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 400507553,
+      "length": 7482,
+      "md5": "0928b899418cfbaaedc41794c4b5719c",
+      "sha256": "17140ee4e528eb809e93fc51ad8a819c68ffd1a6871edf9afd8a625a4d67b51a"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/2dd54a01358dbc155fbb3b7c.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 432235149,
+      "length": 7873,
+      "md5": "49914c10bd87dad7b913f5eaec745068",
+      "sha256": "90609a084381a38c5595abbb6e58f6ba9feaf6bba318f4af21e6972ae6fe1073"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/3266c3c07f89561a998faef8.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 173200520,
+      "length": 4693,
+      "md5": "117d7a2b7e6410afa792a0aec1041028",
+      "sha256": "030dec6572b4da1360e882150e8e3da6d2e43fb1c02c2b2cfb684bf5da37b185"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/37c15bbf7d903af6bb68d427.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 524672069,
+      "length": 9802,
+      "md5": "2953d0f1a03b58398cc799c831791036",
+      "sha256": "ec7682f2508b1a84ac28225ee19f244c4c06ed93a5eaf19c197e6f67feb36989"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/3c1d50294761ab51275aa56f.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 411443565,
+      "length": 7617,
+      "md5": "d620f895fde4079d983997c22e41ecdb",
+      "sha256": "70c3597354b3c13b484fffa2052b86f320d117aae0450d0fac7eb2b26eacd344"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/3ed0724ec3f690b425c1aedf.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 437936738,
+      "length": 7980,
+      "md5": "64db1508c3bb3c480959f5d6423893ae",
+      "sha256": "a23039dd65f92c94c90b6bae5b7f2d94f8e7cea0bd789585e3426e529f91ca27"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/44a30cc704d3830fec1db7b8.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 408145900,
+      "length": 7582,
+      "md5": "45c12fcb8a94388ed99055f6237e637c",
+      "sha256": "8b8fc366d6f287a5dd543792b5b109d3dca3fd7bd1883b26e78836a9c91f9489"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/4934b7a29a1b5595b26bc663.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 175759901,
+      "length": 4748,
+      "md5": "da42eea89b79cef2203e8871d566f2c2",
+      "sha256": "71a67705b16e7601425c52b33a3509b82bd30011de555080ebfe870afb04f31c"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/547092113aebd0c9c400d00e.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 398892856,
+      "length": 7456,
+      "md5": "101261b6bb8703c01905096f3ab3116b",
+      "sha256": "31a1677d2ad9b1a5d2171e5ad90b7514643790e4571fb663df0eabde6aa0b045"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/59f8a3a6f754f1db73e20eab.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 174401769,
+      "length": 4720,
+      "md5": "d5beb7881d1a96f8588823cc3af1b3d7",
+      "sha256": "76576c284bcc1932047b793e6a2b7d87ede2b6d27c722c889fdf40c0e171b766"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/5c6a82f826f5822440bfacf8.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 410595791,
+      "length": 7608,
+      "md5": "af1f494ed15d3811a92a5a155595a469",
+      "sha256": "f5efde5d60fc698791e4c5f6389fc61954e7d45b77c539695fec5eca766bdfeb"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/5d48047cd5001975ed1bf0c8.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 445263423,
+      "length": 8100,
+      "md5": "a34842060d40ef58fc0fb4e68d336379",
+      "sha256": "3e26b258fbd2fd7f9c1ba859492e5cd824feb1f5508cc02e6b7f2548036a579b"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/5dd6ffed2ef5a22ce1b3e032.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 240872948,
+      "length": 5806,
+      "md5": "f0645e45400e07229b046b5912b5ff49",
+      "sha256": "e0c1f5dbc08617f801482634b159d4dda13ac864e0b2686e4aa3deeb9bafe38c"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/5fa0ec4ba04bfb57c350876d.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 408535889,
+      "length": 7586,
+      "md5": "ad91346a1eb28fe406bc03973a3dff95",
+      "sha256": "d8357681c33fb9f853b597373de710b6f6d89e132d4d5cd9703ec07f0ba2f66c"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/5fa98bafa12916987e863326.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 201182961,
+      "length": 5114,
+      "md5": "284b2960b357ba1e93a910560a255baa",
+      "sha256": "c9c742c9b7b792d1c12a4e3d5f4bf507ee9384d5ee2e9ab7b4dded1c85b83d7e"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/67a04e23b78b7c360e81c22b.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 350507645,
+      "length": 6430,
+      "md5": "bc88a07a9094575829af45b22ce274b1",
+      "sha256": "fef9150449425f2f427710713ecad99cdc7dc3360d947c4721cafc48b0b6cf69"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/6a3a1286662f5a331aa51c31.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 742759883,
+      "length": 18584,
+      "md5": "4a5844958aaeb8db7cd1d397b2109b9d",
+      "sha256": "9d46efcf10b407fcfcc1db756faec57d0162a778b0cf52f402217a7376497cfa"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/6db3742971c940012250e16d.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 397666735,
+      "length": 7438,
+      "md5": "84e4d7ed4b93283efa06f39cc8dce524",
+      "sha256": "d314101e09ab816ee5d619dc4897dc8daf10a0d7eacae693398c9351d2c76505"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/70c82e6e1b0c9026026659e3.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 448618615,
+      "length": 8171,
+      "md5": "d4d71eff473072ea46395fcd139a1150",
+      "sha256": "229b42df7c4ce58a3152841956d4ebcfeeea5b014da5aefdf67dc72957a072e1"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/71c797d99f868642661064e0.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 203008949,
+      "length": 5163,
+      "md5": "9b83cb68006345f2d74810ae1a1e5fe8",
+      "sha256": "1acd2f92de4733781fbfe9fadcb16b06b755dc6656d4f862dfadba7d818a438a"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/81bda4d86ab0f7075a2272fb.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 211938838,
+      "length": 5371,
+      "md5": "739908c676669ac0349c7dbb2fb52da4",
+      "sha256": "6bb67c1a49c5339cbdc3b191ddaf5e2e71a4a85535a7892f8b6ad5bae9cefb9b"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/88dae96a7bf9c7a2dc98e83e.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 870880795,
+      "length": 26880,
+      "md5": "393e4103d0dbc12842b40e0c78f4bf4c",
+      "sha256": "1dcac74ae35ace0b6c7ac063129febc083abab007558c3ac4e8cacb2c5106c6a"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/89b5b8a0d7ea851d63859468.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 171864876,
+      "length": 4662,
+      "md5": "a12f1d9f81af8ef6e9d07b69236e67a1",
+      "sha256": "8ab3440afad263b2f5b15ad7769ab5e92b37439cd137ffd2750de82df1291b5b"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/8b1b3daffd9f56287ecf9221.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 196506351,
+      "length": 5012,
+      "md5": "38e16562c4c9e0ec6c5f736c23ab26a8",
+      "sha256": "54e4e1bfe40274b4dc8b894c1fc8c427d5bb75820fbd212e6134126f6cd3c497"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/8ddb4252d9150657bef961c0.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 173067504,
+      "length": 4689,
+      "md5": "d015bec899900b34225209148b14783c",
+      "sha256": "62488ffdad7fa8a2659c2878de8c84e5e198d0606855e62fb6c79b2de0718700"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/9065ec054321fb394bf17d97.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 412568197,
+      "length": 7630,
+      "md5": "b8c8b36901dcbd0ae6530c039206ada3",
+      "sha256": "a4932235ca051c263cb59cbf854c8dfd5c88145910d516d49e13e8bb403117a1"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/96b6b9070f4392f2ac954567.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 254511636,
+      "length": 5953,
+      "md5": "4e4d50735dd992da0b459699ea660ba8",
+      "sha256": "b8dd7098cff4886baa231dd17e74a2bbf6601a71c66521229b9a59aeaf2daef2"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/9c27bc07a57d2787a4943f86.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 407241863,
+      "length": 7570,
+      "md5": "c43068b964bd42a41581c3f63a821b8e",
+      "sha256": "3eb326671f1a118a2286181b196238bde2ae0b972d4fd42dd9dab2381f4d1f67"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/9c8db74934fc35562f2877ee.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 848737172,
+      "length": 25897,
+      "md5": "de65c6924c0f6d14e6156052bbde4cc6",
+      "sha256": "32eb47fd9891a7481511de4c22c7c0e45a62229550dac4f99347dc0af339340f"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/9d8dbdb8d1fa36a894e78754.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 412482844,
+      "length": 7629,
+      "md5": "c6e83a9d8f6cc127b06dc4db2555cffa",
+      "sha256": "ee3749c12b7f083ef55a63a85b0e479841ff34b5d9c2bf0ac25e60a7bead6bc5"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/9f08f0fac840f1107beaa926.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 441745917,
+      "length": 8049,
+      "md5": "bf7319bc157ac0833e10bd57c49da828",
+      "sha256": "2468cbb951ed03c8ec84f2375f9c1ff769dbf886d54e22e9f2199b264486a5e2"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/a4fe02f7a8166ffaaf934c6f.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 342643930,
+      "length": 6201,
+      "md5": "ac7f7dbeaad725c6a74745855e68924e",
+      "sha256": "b92fa1baf647332c4e99bf5606b0bd609cf8f401c2eb0773b072745ee14cecab"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/a703d3a5a244009679486067.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 406010506,
+      "length": 7554,
+      "md5": "a46271005a128c11c2214b2fb7073d0c",
+      "sha256": "64cd9004affa934640809d04b9404bcc047a4c64059afcaa49306e3fc2abf8f6"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/a9f7f5d0de6474ea55142bdf.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 172142829,
+      "length": 4670,
+      "md5": "7688d537742652146d60e638e953e0e8",
+      "sha256": "6a2af67e68e7f26375f5454b7c2da449b5fc9f635e7c2814d910c4c5af6a0260"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/ab318adafe06d18f06890279.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 196777690,
+      "length": 5020,
+      "md5": "233245ec3422f6347f0d4d16648ce2f7",
+      "sha256": "69ef20e7a76a17dd939b2fb215bb57c7c191fb73ad3a0bb7c2cb12f6e92a6360"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/b67c3f760e777d88084d3db8.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 413417157,
+      "length": 7641,
+      "md5": "2b75bc3431736ded12b613be9684bb2d",
+      "sha256": "59646818e8057bdf33c1f1c6ae3c1a5cd9cc8bc4d03f3991e9faf30d4064d9f9"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/b9aac4d23920f68201638f45.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 918436737,
+      "length": 30776,
+      "md5": "d3d1ac1027586394f77837198d881397",
+      "sha256": "e5e03b396c0c55ec061fd3fe9d604b111fa2d7a5d7a64b9b711ede449fdbdc00"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/bbc58f81c67588461582a141.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 429713157,
+      "length": 7834,
+      "md5": "2b1b82357b584f2551fe79c872ba8009",
+      "sha256": "3d31448727e11a484fa62aabf5ca526c5406252877d131787ede084a211056a7"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/c0da235cd970366f7b874710.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 426765611,
+      "length": 7796,
+      "md5": "06cce80c0c8abfe316dd5e18198fdd5c",
+      "sha256": "e3aebce0668ce1d82e76c5a85bee47778482a422b70e0e2c4d3d9199ded4e3f5"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/c5b8c4a00d7b1fa1209a2683.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 382459263,
+      "length": 7258,
+      "md5": "d90a1773a7a6e4b3f13ff0ee15e9aaf4",
+      "sha256": "1113ed5dd714a82ff13e11e2b43043328e140b63c346e7855b372b2baf1b5d49"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/c64a8190250f18c870597c20.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 173939087,
+      "length": 4708,
+      "md5": "5e9504460d0fb79d87897eb2078b7bef",
+      "sha256": "c8accc14c0ae64ec5839e1a51556d885bd8eee6bee4a5596e8d7b95ea4967b8a"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/c658c284fd5072c66e5bed4c.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 410619551,
+      "length": 7608,
+      "md5": "5f92125689f73498216353ef4f82a3c4",
+      "sha256": "768d76c71ddae0d05e2e8e288ebf6b6e9dd263e89092f1110ae1b9ac12f620e7"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/cfa1ea74db3ea511ff0135b7.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 191931012,
+      "length": 4913,
+      "md5": "bb198359575bcf242ba9a1a891332fd1",
+      "sha256": "10ab375c0079ac3463583bca787b375bd706bdd37b60487843d8e3501d997b15"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/d10df5ac6c46f6114e3ac8ac.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 190030955,
+      "length": 4893,
+      "md5": "ac6367e95e20801f48c4049c632ab286",
+      "sha256": "89d2a6dad9804e5fa4824113d68d685d14362ca353cb4ec17b665cedd7543de0"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/d622cb72f425732b1cc1e390.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 688722559,
+      "length": 16012,
+      "md5": "83598e0821ca921fdaa4327f2c99494c",
+      "sha256": "ea58679c9e6bb19cf009787e8be8aefc7bc26050d5e188a6b6a0e2315e2abc20"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/d66d9cd17a7b245b7c5e4a55.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 173722915,
+      "length": 4703,
+      "md5": "c1135c16453f919a2f76274006d02373",
+      "sha256": "58fef6643f8c167c4a871c53d8fc1d70e129821e502e4ed3377d543e2d0fb17b"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/dba594d5236698a731036b04.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 613394250,
+      "length": 12637,
+      "md5": "503992e4a50130ef17de3d4bd2a49ae9",
+      "sha256": "dc5b9dff4c894db1a8d0a40db425531ef90d5f9485005ff11d7bc8f063526ad0"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/dd3944072033d23d3f5efaa7.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 416403148,
+      "length": 7677,
+      "md5": "4a900ad6ac932c460861ad13bf3f9319",
+      "sha256": "bac9be1dd1fe1ac7f1bf3e408e4911cca0b4a962d06de488e3459d682a366de0"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/e0f4c090768b78ffb972b3e0.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 617257019,
+      "length": 12792,
+      "md5": "2b0a4b73a744f332fb70ff05ee95f4c0",
+      "sha256": "56d652a84ff5847feb0b682c5c8719b2715b6d183c2b0de0feb3d44bff90f3e6"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/e538f051f33899c77bf3deec.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 410173317,
+      "length": 7602,
+      "md5": "8bbbd6e64a0112fff6eb49dcfb22d472",
+      "sha256": "da5da88bab75d2998d89b6acdb9d8dd3523fb3b4fa75bc7ec151cd3c907ec8a4"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/e7a9a2777d11a247eef23bf6.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 806005047,
+      "length": 22921,
+      "md5": "c713780c95e8f7fb773e9e3aa1ea6785",
+      "sha256": "d9b44ad752ea5f843e62b1b24ab349345ed8db91f8ea81d7a334994ba5de7695"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/ea979c4ab431d79ddb90b0fe.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 234679765,
+      "length": 5718,
+      "md5": "358cd6c1fad733131623467a5873e118",
+      "sha256": "c99696f365e545677e1f6c3d1b5451565184ca878d63c260ea331a498e832acd"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/ead05b0a8ba8c89838c58841.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 172128820,
+      "length": 4669,
+      "md5": "9a18a47fd04d109ea1b693ddce0ac992",
+      "sha256": "96a63fbd60926a746929c3fefc172b8364eb6af5df30ed9b75d9d116d33bc4c9"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/ed0d941b8cd49ea0b68a440d.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 173853450,
+      "length": 4706,
+      "md5": "0bfbce32f71b76b2ccbc7f441c0a509d",
+      "sha256": "22bf3c923b34f751f670951a813771fb0ec118d98041237da0386e854621074d"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/efda56a538bdb8efcdd5c008.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 411727864,
+      "length": 7620,
+      "md5": "30a4bf367b43b3f4a5809fdfa9efd9b1",
+      "sha256": "44e3145d08cbd07cb9624d0e763779f3d094ff7263711610e080634b132e4399"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/f1047eb9664e3ffa1081dcab.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 213674904,
+      "length": 5403,
+      "md5": "83049a1e9b923b06ef910f80565e0053",
+      "sha256": "353002b89c3b083a0c1577be8869298ec544e0606ec81b4769f5d8d7e0182a22"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/f51d450f06ba83256d8ae4ef.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 400546216,
+      "length": 7482,
+      "md5": "e4b638e5d624d9509673507def980018",
+      "sha256": "4a4026e5a7f4357231714d15f6cb68949429810538d10ffea73ee781e18dd3fd"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/f69405ec73bc25900d5caa36.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 173770169,
+      "length": 4704,
+      "md5": "1f71c55d71ce9cf4b42b927a69a7c8af",
+      "sha256": "4c62ad76910bcf0c1edc9490121279876f753df405d0e90b335d019f674d1f7f"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/f8ae5ed540ab02faccd58958.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 462069426,
+      "length": 8589,
+      "md5": "a1393d311194103f167091c5e6b92fff",
+      "sha256": "95722ea7f6c3bbee4c144c3557673e3dea27e5b105387fce35ff1f15e59ff2a6"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/f8ba548c55ef58fd05b2663d.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\849A069068610108190BA5411D121F07.chk",
+      "offset": 188511435,
+      "length": 4870,
+      "md5": "557ad24fe5880cbd6d11cee7f96f196f",
+      "sha256": "e61c14e4039e226789fd5574a424d270b286c5f93a62c0b751103653213ce3f7"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/039a5ee8ae9433eb916ae884.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\92C494C114F7F9676F38CCD679DE5BE6.chk",
+      "offset": 195773474,
+      "length": 125568,
+      "md5": "7870b48d57f1b2ce1a5a53f446f1aa78",
+      "sha256": "61362ec3927f7bc866948effaaef778773ab61f1fd87d1fdcaee557cbbcd4522"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/153e58c9909b262eb5211004.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\92C494C114F7F9676F38CCD679DE5BE6.chk",
+      "offset": 265294452,
+      "length": 131372,
+      "md5": "975a92e6422266c4f47ac1225ba709ef",
+      "sha256": "b63f06c577399eda75aa8d702df7d18bfde53ada33ad3a445274de74b2867350"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/32e937d83577e27d21be65b7.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\92C494C114F7F9676F38CCD679DE5BE6.chk",
+      "offset": 839107162,
+      "length": 174232,
+      "md5": "d6d5dbad37abccd16cfe2580e3733019",
+      "sha256": "99730c04d1cf60a888c6abf6e574cdaa3526f3d1e4d9736a6cdb3802639e724d"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/4da9bf14b200c39c07b8b00c.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\92C494C114F7F9676F38CCD679DE5BE6.chk",
+      "offset": 55997755,
+      "length": 117338,
+      "md5": "c5a29ed5709412370b193c5b8db84451",
+      "sha256": "62b1838e3aebf2b3b367ba80c02fdafe7966a6ea43c73539c7df50034412ff6e"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/be59018e8020ebbcf3367f99.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\92C494C114F7F9676F38CCD679DE5BE6.chk",
+      "offset": 1118032094,
+      "length": 211774,
+      "md5": "b1196049a39720c8bb03f4090ecdcfa9",
+      "sha256": "6237f196f6ca1baf5333b95e865b4650a97bf8b929a55ccbb2ecebddddff3c46"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/0a3b6ed7f7d54e5248c25726.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\D01EA7B1D94F0F1ACFE28BC672B2FA55.chk",
+      "offset": 30795708,
+      "length": 4553,
+      "md5": "59e10557f3f69f96293b3e230b12c001",
+      "sha256": "54668f0f359bb696814e6b48bf6b31bec30dc270d1d60496bc7a21bca7dcdd02"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/58f48a3147b03992072cc8b1.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\D01EA7B1D94F0F1ACFE28BC672B2FA55.chk",
+      "offset": 33549840,
+      "length": 4796,
+      "md5": "e4870d552a198b96e09e79a08d957da5",
+      "sha256": "2e26a176c030b6c2f6d7ba523c83547b7bc20467b0365b4620d78950e85e5c13"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/8ded53537439bc5f03140db3.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\ECB3C91B337A9E53290BA5F98F537B1C.chk",
+      "offset": 937196506,
+      "length": 987648,
+      "md5": "7e0b9ce077957d87ce3a8263a83041d6",
+      "sha256": "0efea8cef92b3a3ee2c4a209a9fddd3a6dfbec53fcfda07a3debe6baaef8e4b3"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/09ff4bfb7f822708352ba64f.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\FCC20C36ADBBD4D50AEC8A24F57459AA.chk",
+      "offset": 286868953,
+      "length": 54012,
+      "md5": "d913bf34c38f2702b1912858c44f8be3",
+      "sha256": "a67ea71f3bc4d0d3d30b5cbc96e86caaf0d702a31f4be12f2e0711e2360bc369"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/139c0a8c0fd4cd177d62460f.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\FCC20C36ADBBD4D50AEC8A24F57459AA.chk",
+      "offset": 843267903,
+      "length": 85957,
+      "md5": "67a73fed6f05ec22dd159bea4a16a2cb",
+      "sha256": "95352384826c73e3afcc8c9a3b8e9ae1d2151737af4c8fb186a7c5131ebc7597"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/3f9ea6a6404e9888c40f34eb.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\FCC20C36ADBBD4D50AEC8A24F57459AA.chk",
+      "offset": 41839111,
+      "length": 32137,
+      "md5": "92d713a21ca2f64dae5e817451034bcd",
+      "sha256": "b34f8efc59ad6c5e8fc659f6074de6eff3a03ea34af3d3825ae77719534a8181"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/4c6e163bfe2002674dccaac3.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\FCC20C36ADBBD4D50AEC8A24F57459AA.chk",
+      "offset": 389038476,
+      "length": 47914,
+      "md5": "523bcb5c915eb4f70513dd29c12d32c5",
+      "sha256": "0c793ea55681abdf50345cf61142bf73b3ebecd1e54494f82ff97e0b6caad699"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/55b96badcaf644f16f90aa06.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\FCC20C36ADBBD4D50AEC8A24F57459AA.chk",
+      "offset": 13238205,
+      "length": 31261,
+      "md5": "440e11538f759e32cdad57b25fdfa74d",
+      "sha256": "4e1b63706145eeb648cc93551128afe586a482487158983844611618f3b01380"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/5f4b6fb64338c4bb0c87a10f.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\FCC20C36ADBBD4D50AEC8A24F57459AA.chk",
+      "offset": 51409616,
+      "length": 32517,
+      "md5": "fc1086409b208326fb7c5328f8faf2b6",
+      "sha256": "9cabc63d6214613835003898f66aaca1eb643e354a06d468112bb7e78f16ef22"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/6cc705dd584657a06dc2efa6.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\FCC20C36ADBBD4D50AEC8A24F57459AA.chk",
+      "offset": 27168196,
+      "length": 32887,
+      "md5": "34e86d849f9591240d05faa3bc96386b",
+      "sha256": "5ce47ecef5ca9fe484fc04aa5817723938d4e7824b674f2343eb451558fbab11"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/d182f559c71ffd7bbe82edea.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\FCC20C36ADBBD4D50AEC8A24F57459AA.chk",
+      "offset": 145216531,
+      "length": 37896,
+      "md5": "aa799ce1d68fe3d86400285f1cb33eb1",
+      "sha256": "95d7fb113ef16c41de025d31aec0dcc4159b44499df41457e5b49085a2e63b9e"
+    },
+    {
+      "bundle": "Data/Bundles/Windows/main/d4540c857e15dc556b9aa0cd.ab",
+      "chunk": "W:\\yj games\\Arknights Endfield\\Endfield_Data\\StreamingAssets\\VFS\\7064D8E2\\FCC20C36ADBBD4D50AEC8A24F57459AA.chk",
+      "offset": 555110946,
+      "length": 5882,
+      "md5": "e4dde7114beee2ff92ce2bf149dfc9eb",
+      "sha256": "99da47c11d4630f5148dd06699cb789b64b32a47ce725e01c5b56c29a7bf738f"
+    }
+  ],
+  "rendering_limits": "Source mesh/noise/lens projected offline, sampled at 8Hz and continuously interpolated; bottom grey tone replaces game scene lighting/postprocessing. The engine-specific character doughnut vertex effect is not embedded."
+}
