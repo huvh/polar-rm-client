@@ -60,6 +60,7 @@ _GROUPS = {
     ConfigCommandKind.EDITOR: (
         "Open Keybind Manager", "Open Crosshair Editor", "Import Crosshair Code",
         "Import Crosshair File", "Crosshair Import Details",
+        "Match Team Identities",
     ),
     ConfigCommandKind.QUALIFICATION: tuple(command.value for command in QualificationCommand),
     ConfigCommandKind.SAFETY: ("Trigger E-Stop", "Release E-Stop"),

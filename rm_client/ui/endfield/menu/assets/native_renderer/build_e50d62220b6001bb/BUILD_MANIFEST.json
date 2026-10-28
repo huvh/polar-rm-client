@@ -2,10 +2,10 @@
   "scope": "retained source renderer with RM content adapter",
   "reference_repository": "https://github.com/DDDuoDuo/EndfieldHUD",
   "reference_commit": "cdbd4f573c8fa3b9c2048fa3d1b089e69196537b",
-  "binary_sha256": "c6b65039111cb750bd1d7d1f4cf537cc8fdf4ba8030d38461cd87f8a195704c0",
-  "adapter_sha256": "65994449a68ffa60fdba6983b59e6f6cd50c9e34a8dbee04745532423a16fac8",
+  "binary_sha256": "343dfb738a1ad17b44563431d299062cbf8a329446688ecf22460eafac3f9fec",
+  "adapter_sha256": "e50d62220b6001bb85e3e265c6e42634539aee2c4a5f772b5a1bf91747932b14",
   "adapter_sources": {
-    "native/endfield/bridge.cpp": "b369a38a2cde64d64a5e15e54830538439d622a1705d15e784d6d55c33946000",
+    "native/endfield/bridge.cpp": "0906c7df49fb0c5965b92cb530c21acb0bf75cc77c192d3ba893ef6b90b2efaa",
     "native/endfield/catalog_extension.inc": "45b122f36513f49228ff287366792ba05b4f86e77459ed43086408b113e6fe0c"
   },
   "compiler": "clang version 19.1.7 (https://github.com/ziglang/zig-bootstrap de1b01a8c1dddf75a560123ac1c2ab182b4830da)\nTarget: x86_64-unknown-windows-gnu\nThread model: posix",

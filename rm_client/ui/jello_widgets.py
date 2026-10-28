@@ -13,6 +13,7 @@ from PySide6.QtWidgets import QDialog, QVBoxLayout, QWidget, QCheckBox, QComboBo
 from ..runtime_paths import RuntimePaths
 from .fonts import FontBook, has_cjk, cjk_ui_font
 from .jello_clickgui import JelloMainTimeline, JelloReversibleAnimation
+from .jello.resources import JelloResources
 
 _book = None
 
@@ -49,10 +50,10 @@ def ease_out_back(raw):
 
 @lru_cache(maxsize=1)
 def shadow_images():
-    root = RuntimePaths.discover().asset("jello")
+    resources = JelloResources(RuntimePaths.discover().jello_pack)
     names = ("shadow_corner", "shadow_corner_2", "shadow_corner_3", "shadow_corner_4",
              "shadow_left", "shadow_right", "shadow_top", "shadow_bottom")
-    return {name: QImage(str(root / (name + ".png"))) for name in names}
+    return {name: QImage(str(resources.image(name + ".png"))) for name in names}
 
 
 def draw_shadow(painter, rect, radius=20, alpha=.35):
@@ -133,7 +134,7 @@ def apply_jello_widgets(widget, scope=None, *, stylesheet=True):
 
 @lru_cache(maxsize=1)
 def check_image():
-    return QImage(str(RuntimePaths.discover().asset("jello","check.png")))
+    return QImage(str(JelloResources(RuntimePaths.discover().jello_pack).image("check.png")))
 
 
 class JelloCheckBox(QCheckBox):

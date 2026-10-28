@@ -43,6 +43,7 @@
 - 随项目保存的原始资源仅包括 Helvetica Neue Light/Medium 字体、Options/勾选/滚动条端帽/八方向阴影图片，以及 `activate`、`deactivate` 等八个短 UI 音效；相关权利归各自权利人所有。
 - 未迁移音乐播放器、小游戏、音乐、游戏逻辑或其他 Sigma 运行时代码与资源。
 - 新增的 `Jello-Regular.ttf` 为原始 JAR 的 `regular.ttf`（SHA-256 `462fa16c0bccee134ac8dcd5b0d5cbc4e992d5d32de620ce290ba784ba46638a`），用于键盘已绑定键的原版排版。字体权利归原权利人，不因本项目提交而变成开源授权。
+- Jello UI 现按功能封装于 `rm_client/ui/jello/`：24 个已有图片/字体/短音效资源逐文件保持原始字节，迁移前位置及哈希见 `JELLO_RESOURCES.json`。路径重组不改变第三方权利或再分发条件。
 
 ## CS2 随源素材与可选本机覆盖包
 

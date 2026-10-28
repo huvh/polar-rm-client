@@ -312,9 +312,10 @@ def test_audio_feedback_and_kill_sound_mapping() -> None:
     polar_ui_root = ROOT / "assets" / "ui_sounds" / "polar_ui"
     for name in ("module_toggle.wav", "action_success.wav", "panel_transition.wav"):
         assert (polar_ui_root / name).stat().st_size > 0
-    jello_root = ROOT / "assets" / "ui_sounds" / "jello"
+    from rm_client.ui.jello.resources import JelloResources
+    jello_resources = JelloResources.for_workspace(ROOT)
     for name in UiAudioManager.JELLO_SOUNDS:
-        asset = ROOT / "assets" / "ui_sounds" / name
+        asset = jello_resources.sound(Path(name).name)
         assert asset.is_file() and asset.stat().st_size > 0
 
     class FakePool:
@@ -3106,7 +3107,8 @@ def test_ordered_gpu_commands_and_line_only_vision_batch() -> None:
     commands = ClickGuiDrawList()
     commands.rect(QRectF(0, 0, 100, 40), 12, QColor(12, 20, 30, 180))
     commands.text(QRectF(8, 4, 84, 24), "POLAR-RM", QFont("Arial", 12), QColor("white"))
-    commands.image(QRectF(72, 4, 20, 15), ROOT / "assets" / "jello" / "options.png")
+    from rm_client.ui.jello.resources import JelloResources
+    commands.image(QRectF(72, 4, 20, 15), JelloResources.for_workspace(ROOT).image("options.png"))
     commands.rect(QRectF(8, 32, 32, 2), 1, QColor(90, 160, 255, 255))
     assert [command.sequence for command in commands.commands] == [0, 1, 2, 3]
     assert [type(command.payload) for command in commands.commands] == [GpuRect, GpuText, GpuImage, GpuRect]

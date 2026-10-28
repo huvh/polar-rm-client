@@ -17,6 +17,7 @@ LANGUAGE_CHINESE = "简体中文"
 
 # Crosshair editor/import identifiers only; persisted protocol keys stay English.
 _CROSSHAIR_ZH = {
+    "Match Team Identities": "比赛队伍资料 / 校徽",
     "Crosshair Scale": "准星整体大小",
     "Open Crosshair Editor": "打开CS准星编辑器", "Import Crosshair Code": "导入准星代码 / 文本",
     "Import Crosshair File": "导入准星文件", "Crosshair Import Details": "准星导入参数与限制",

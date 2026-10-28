@@ -162,7 +162,8 @@ class MinecraftFusionTests(unittest.TestCase):
         scope.update(math=math, **{name: getattr(QtGui, name) for name in
             ("QFontMetricsF", "QImage", "QTransform", "QPainter", "QColor")},
             QRectF=QtCore.QRectF, QPointF=QtCore.QPointF, Qt=QtCore.Qt)
-        font_id = QtGui.QFontDatabase.addApplicationFont(str(ROOT / "assets/fonts/Jello-Helvetica-Neue-Light.ttf"))
+        from rm_client.ui.jello.resources import JelloResources
+        font_id = QtGui.QFontDatabase.addApplicationFont(str(JelloResources.for_workspace(ROOT).font("Jello-Helvetica-Neue-Light.ttf")))
         self.assertGreaterEqual(font_id, 0)
         family = QtGui.QFontDatabase.applicationFontFamilies(font_id)[0]
         def font(_key, points):

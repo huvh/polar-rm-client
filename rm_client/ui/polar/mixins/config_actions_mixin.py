@@ -278,6 +278,10 @@ class ConfigActionsMixin:
             handlers[command.kind](command.name)
 
     def _open_configuration_editor(self, action_name: str) -> None:
+        if action_name == "Match Team Identities":
+            from ...match_team_editor import open_match_team_editor
+            open_match_team_editor(self)
+            return
         if action_name == "Open Keybind Manager":
             from ...jello_keybinds import open_keyboard_manager
             open_keyboard_manager(self)
